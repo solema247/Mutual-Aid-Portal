@@ -13,7 +13,7 @@ export async function POST(request: Request) {
     const { data, error } = await supabase
       .from('donor_forecasts')
       .upsert(forecasts, {
-        onConflict: 'donor_id,month',
+        onConflict: 'donor_id,cluster_id,state_id,month',
         ignoreDuplicates: false
       })
 
@@ -21,6 +21,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ success: true, data })
   } catch (error) {
+    console.error('Error upserting forecasts:', error)
     return NextResponse.json(
       { error: 'Error upserting forecasts' },
       { status: 500 }

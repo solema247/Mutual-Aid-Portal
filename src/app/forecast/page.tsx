@@ -1,7 +1,6 @@
 'use client'
 
-import React from 'react'
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -13,65 +12,146 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Label } from '@/components/ui/label'
+import { CollapsibleRow } from '@/components/ui/collapsible'
 
-type MonthlyAmount = {
-  month: string
-  amount: string
+const MONTHS = ['May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
+const YEAR = '2025'
+
+type ForecastData = {
+  country: {
+    [month: string]: string
+  }
+  states: {
+    [stateId: string]: {
+      [month: string]: string
+    }
+  }
 }
-
-const MONTHS = [
-  'January', 'February', 'March', 'April', 
-  'May', 'June', 'July', 'August',
-  'September', 'October', 'November', 'December'
-]
 
 export default function ForecastPage() {
   const [donors, setDonors] = useState<{ id: string; name: string }[]>([])
-  const [selectedDonor, setSelectedDonor] = useState<string | null>(null)
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString())
-  const [monthlyAmounts, setMonthlyAmounts] = useState<MonthlyAmount[]>(
-    MONTHS.map((_, index) => ({
-      month: `${selectedYear}-${String(index + 1).padStart(2, '0')}`,
-      amount: ''
-    }))
-  )
+  const [clusters, setClusters] = useState<{ id: string; name: string }[]>([])
+  const [states, setStates] = useState<{ id: string; state_name: string }[]>([])
+  const [selectedDonor, setSelectedDonor] = useState<string>('')
+  const [selectedCluster, setSelectedCluster] = useState<string>('')
+  const [forecastData, setForecastData] = useState<ForecastData>({
+    country: {},
+    states: {}
+  })
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    const fetchDonors = async () => {
+    const fetchData = async () => {
       try {
-        const { data, error } = await supabase.from('donors').select('id, name')
-        if (error) throw error
-        setDonors(data)
+        const [donorsRes, clustersRes, statesRes] = await Promise.all([
+          supabase.from('donors').select('id, name'),
+          supabase.from('aid_clusters').select('id, name'),
+          supabase.from('states')
+            .select('id, state_name')
+            .order('state_name')
+        ])
+
+        if (donorsRes.error) throw donorsRes.error
+        if (clustersRes.error) throw clustersRes.error
+        if (statesRes.error) throw statesRes.error
+
+        // Get unique states
+        const uniqueStates = Array.from(
+          new Map(statesRes.data.map(state => [state.state_name, state]))
+          .values()
+        )
+
+        setDonors(donorsRes.data)
+        setClusters(clustersRes.data)
+        setStates(uniqueStates)
+
+        // Initialize forecast data
+        const initialData: ForecastData = {
+          country: {},
+          states: {}
+        }
+        
+        // Initialize country level data
+        MONTHS.forEach(month => {
+          const monthKey = `${YEAR}-${String(MONTHS.indexOf(month) + 5).padStart(2, '0')}`
+          initialData.country[monthKey] = ''
+        })
+
+        // Initialize state level data
+        uniqueStates.forEach(state => {
+          initialData.states[state.id] = {}
+          MONTHS.forEach(month => {
+            const monthKey = `${YEAR}-${String(MONTHS.indexOf(month) + 5).padStart(2, '0')}`
+            initialData.states[state.id][monthKey] = ''
+          })
+        })
+
+        setForecastData(initialData)
       } catch (err) {
-        console.error('Error fetching donors:', err)
-        setError('Failed to load donors. Please try again later.')
+        console.error('Error fetching data:', err)
+        setError('Failed to load data. Please try again later.')
       }
     }
-    fetchDonors()
+
+    fetchData()
   }, [])
 
-  const handleAmountChange = (monthIndex: number, value: string) => {
-    setMonthlyAmounts(prev => prev.map((item, index) => 
-      index === monthIndex ? { ...item, amount: value } : item
-    ))
+  const handleCountryAmountChange = (month: string, value: string) => {
+    setForecastData(prev => ({
+      ...prev,
+      country: {
+        ...prev.country,
+        [month]: value
+      }
+    }))
+  }
+
+  const handleStateAmountChange = (stateId: string, month: string, value: string) => {
+    setForecastData(prev => ({
+      ...prev,
+      states: {
+        ...prev.states,
+        [stateId]: {
+          ...prev.states[stateId],
+          [month]: value
+        }
+      }
+    }))
   }
 
   const handleSubmit = async () => {
     try {
+      if (!selectedDonor) throw new Error('Please select a donor')
+      if (!selectedCluster) throw new Error('Please select a cluster')
+
       setError(null)
       setIsSubmitting(true)
 
-      if (!selectedDonor) throw new Error('Please select a donor')
-      
-      const forecasts = monthlyAmounts
-        .filter(({ amount }) => amount !== '')
-        .map(({ month, amount }) => ({
-          donor_id: selectedDonor,
-          month: new Date(`${month}-01`).toISOString(),
-          amount: parseFloat(amount)
-        }))
+      const forecasts = [
+        // Country level forecasts
+        ...Object.entries(forecastData.country)
+          .filter(([_, amount]) => amount !== '')
+          .map(([month, amount]) => ({
+            donor_id: selectedDonor,
+            cluster_id: selectedCluster,
+            state_id: null, // null for country level
+            month: new Date(`${month}-01`).toISOString(),
+            amount: parseFloat(amount)
+          })),
+        // State level forecasts
+        ...Object.entries(forecastData.states).flatMap(([stateId, months]) =>
+          Object.entries(months)
+            .filter(([_, amount]) => amount !== '')
+            .map(([month, amount]) => ({
+              donor_id: selectedDonor,
+              cluster_id: selectedCluster,
+              state_id: stateId,
+              month: new Date(`${month}-01`).toISOString(),
+              amount: parseFloat(amount)
+            }))
+        )
+      ]
 
       if (forecasts.length === 0) {
         throw new Error('Please enter at least one forecast amount')
@@ -85,13 +165,10 @@ export default function ForecastPage() {
 
       if (!response.ok) throw new Error('Failed to submit forecasts')
 
-      setSelectedDonor(null)
-      setMonthlyAmounts(MONTHS.map((_, index) => ({
-        month: `${selectedYear}-${String(index + 1).padStart(2, '0')}`,
-        amount: ''
-      })))
       alert('Forecasts submitted successfully!')
-      
+      setSelectedDonor('')
+      setSelectedCluster('')
+      setForecastData({ country: {}, states: {} })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An unexpected error occurred')
     } finally {
@@ -115,47 +192,98 @@ export default function ForecastPage() {
       )}
 
       <div className="space-y-6">
-        <div className="space-y-2">
-          <Label htmlFor="donor">Donor</Label>
-          <Select value={selectedDonor || undefined} onValueChange={setSelectedDonor}>
-            <SelectTrigger id="donor">
-              <SelectValue placeholder="Select a donor" />
-            </SelectTrigger>
-            <SelectContent>
-              {donors.map((donor) => (
-                <SelectItem key={donor.id} value={donor.id}>
-                  {donor.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="donor">Donor</Label>
+            <Select value={selectedDonor} onValueChange={setSelectedDonor}>
+              <SelectTrigger id="donor">
+                <SelectValue placeholder="Select a donor" />
+              </SelectTrigger>
+              <SelectContent>
+                {donors.map((donor) => (
+                  <SelectItem key={donor.id} value={donor.id}>
+                    {donor.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="cluster">Cluster</Label>
+            <Select value={selectedCluster} onValueChange={setSelectedCluster}>
+              <SelectTrigger id="cluster">
+                <SelectValue placeholder="Select a cluster" />
+              </SelectTrigger>
+              <SelectContent>
+                {clusters.map((cluster) => (
+                  <SelectItem key={cluster.id} value={cluster.id}>
+                    {cluster.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
 
         <div className="space-y-4">
-          <Label>Monthly Forecasts for {selectedYear}</Label>
-          <div className="w-full space-y-4">
-            {[0, 1, 2].map((row) => (
-              <div key={row} className="grid grid-cols-4 gap-4">
-                {MONTHS.slice(row * 4, (row + 1) * 4).map((month, idx) => (
+          <Label>Monthly Forecasts for {YEAR}</Label>
+          
+          {/* Country Level Forecasts */}
+          <CollapsibleRow title="Country Level" variant="primary">
+            <div className="grid grid-cols-4 gap-4 pt-2">
+              {MONTHS.map((month) => {
+                const monthKey = `${YEAR}-${String(MONTHS.indexOf(month) + 5).padStart(2, '0')}`
+                return (
                   <div key={month} className="space-y-2">
                     <Label className="text-sm text-center block">
-                      {month.substring(0, 3)}
+                      {month}
                     </Label>
                     <Input
-                      id={`amount-${row * 4 + idx}`}
                       type="number"
-                      value={monthlyAmounts[row * 4 + idx].amount}
-                      onChange={(e) => handleAmountChange(row * 4 + idx, e.target.value)}
+                      value={forecastData.country[monthKey] || ''}
+                      onChange={(e) => handleCountryAmountChange(monthKey, e.target.value)}
                       placeholder="0"
                       min="0"
                       step="0.01"
-                      className="w-full text-right"
+                      className="text-right"
                     />
                   </div>
-                ))}
-              </div>
-            ))}
-          </div>
+                )}
+              )}
+            </div>
+          </CollapsibleRow>
+
+          {/* State Level Forecasts */}
+          <CollapsibleRow title="State Level" variant="primary">
+            <div className="space-y-2">
+              {states.map((state) => (
+                <CollapsibleRow key={state.id} title={state.state_name}>
+                  <div className="grid grid-cols-4 gap-4 pt-2">
+                    {MONTHS.map((month) => {
+                      const monthKey = `${YEAR}-${String(MONTHS.indexOf(month) + 5).padStart(2, '0')}`
+                      return (
+                        <div key={month} className="space-y-2">
+                          <Label className="text-sm text-center block">
+                            {month}
+                          </Label>
+                          <Input
+                            type="number"
+                            value={forecastData.states[state.id]?.[monthKey] || ''}
+                            onChange={(e) => handleStateAmountChange(state.id, monthKey, e.target.value)}
+                            placeholder="0"
+                            min="0"
+                            step="0.01"
+                            className="text-right"
+                          />
+                        </div>
+                      )}
+                    )}
+                  </div>
+                </CollapsibleRow>
+              ))}
+            </div>
+          </CollapsibleRow>
         </div>
 
         <Button 
