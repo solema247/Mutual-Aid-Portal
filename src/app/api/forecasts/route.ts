@@ -7,16 +7,16 @@ export async function POST(request: Request) {
     const forecasts = await request.json()
     const supabase = createRouteHandlerClient({ cookies })
 
-    // Insert forecasts with new fields
+    // Upsert forecasts with conflict handling - removed cluster_id from conflict key
     const { data, error } = await supabase
       .from('donor_forecasts')
-      .insert(forecasts.map((forecast: any) => ({
+      .upsert(forecasts.map((forecast: any) => ({
         donor_id: forecast.donor_id,
         cluster_id: forecast.cluster_id,
         state_id: forecast.state_id,
         month: forecast.month,
         amount: forecast.amount,
-        // New fields
+        // Additional fields
         localities: forecast.localities,
         org_name: forecast.org_name,
         intermediary: forecast.intermediary,
@@ -24,7 +24,10 @@ export async function POST(request: Request) {
         source: forecast.source,
         receiving_mag: forecast.receiving_mag,
         state_name: forecast.state_name
-      })))
+      })), {
+        onConflict: 'donor_id,state_name,month',
+        ignoreDuplicates: false
+      })
 
     if (error) {
       console.error('Supabase error:', error)
