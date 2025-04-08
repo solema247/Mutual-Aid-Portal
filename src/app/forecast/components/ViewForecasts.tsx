@@ -16,7 +16,7 @@ export function ViewForecasts() {
             </div>
           )}
           <iframe
-            src="https://lookerstudio.google.com/embed/reporting/d638c09b-13b6-46c5-83de-c929043f79d7/page/BR1FF"
+            src="https://lookerstudio.google.com/embed/reporting/d638c09b-13b6-46c5-83de-c929043f79d7/page/BR1FF?embedded=true&rm=minimal"
             frameBorder="0"
             style={{
               width: '100%',
