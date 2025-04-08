@@ -199,35 +199,66 @@ export default function ForecastPage() {
   }
 
   const handleDownloadTemplate = () => {
-    // Get logged in donor name
-    const loggedInDonor = JSON.parse(localStorage.getItem('donor') || '{}')
-    const donorName = loggedInDonor.donors?.name || ''
+    // Sample data rows with realistic values
+    const sampleRows = [
+      {
+        Month: 'Jan-25',
+        State: 'Kassala',
+        Amount: '$ 20,000',
+        Localities: '',
+        'Org Name': 'P2H',
+        Intermediary: 'LoHub',
+        'Transfer Method': 'Hawala',
+        Source: 'Private',
+        'Receiving MAG': 'ERR'
+      },
+      {
+        Month: 'Jan-25',
+        State: 'North Darfur',
+        Amount: '$ 5,961',
+        Localities: '',
+        'Org Name': 'P2H',
+        Intermediary: 'LoHub',
+        'Transfer Method': 'Hawala',
+        Source: 'Private',
+        'Receiving MAG': 'ERR'
+      },
+      {
+        Month: 'Feb-25',
+        State: 'Khartoum',
+        Amount: '$ 51,500',
+        Localities: '',
+        'Org Name': 'P2H',
+        Intermediary: 'LoHub',
+        'Transfer Method': 'Hawala',
+        Source: 'Private',
+        'Receiving MAG': 'ERR'
+      },
+      {
+        Month: 'Mar-25',
+        State: 'Sinar',
+        Amount: '$ 43,000',
+        Localities: '',
+        'Org Name': 'P2H',
+        Intermediary: 'LoHub',
+        'Transfer Method': 'Hawala',
+        Source: 'Private',
+        'Receiving MAG': 'ERR'
+      }
+    ]
 
-    // Create rows for all months for Sudan (country-level)
-    const countryRows = MONTHS.map(month => [
-      donorName,                                                         // donor_name
-      'All',                                                            // cluster_name
-      'All',                                                            // state_name (All for country-level)
-      `${YEAR}-${String(MONTHS.indexOf(month) + 5).padStart(2, '0')}-01`, // month
-      '0.00'                                                            // amount
-    ])
-
-    // Create rows for all months for each state
-    const stateRows = states.flatMap(state => 
-      MONTHS.map(month => [
-        donorName,                                                         // donor_name
-        'All',                                                            // cluster_name
-        state.state_name,                                                 // state_name
-        `${YEAR}-${String(MONTHS.indexOf(month) + 5).padStart(2, '0')}-01`, // month
-        '0.00'                                                            // amount
-      ])
-    )
-
-    // Combine country and state rows
-    const sampleRows = [...countryRows, ...stateRows]
-    
     const csvContent = Papa.unparse({
-      fields: ['donor_name', 'cluster_name', 'state_name', 'month', 'amount'],
+      fields: [
+        'Month',
+        'State',
+        'Amount',
+        'Localities',
+        'Org Name',
+        'Intermediary',
+        'Transfer Method',
+        'Source',
+        'Receiving MAG'
+      ],
       data: sampleRows
     })
 
@@ -374,7 +405,7 @@ export default function ForecastPage() {
 
       {/* Donor Display - Always visible */}
       <div className="space-y-2">
-        <Label htmlFor="donor">Donor</Label>
+        <Label htmlFor="donor">Partner</Label>
         <div className="h-9 px-3 py-1 rounded-md border bg-muted/50 flex items-center">
           {donors[0]?.name}
         </div>

@@ -105,14 +105,14 @@ export default function LoginPage() {
         <CardHeader className="space-y-1">
           <CardTitle className="text-2xl font-bold">Login</CardTitle>
           <CardDescription>
-            Access the LCC portal
+            Access Mutual Aid Sudan Portal
           </CardDescription>
         </CardHeader>
 
         <Tabs defaultValue="err" className="w-full">
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="err">ERR Staff</TabsTrigger>
-            <TabsTrigger value="donor">Donor</TabsTrigger>
+            <TabsTrigger value="donor">Partner</TabsTrigger>
           </TabsList>
 
           <TabsContent value="err">
