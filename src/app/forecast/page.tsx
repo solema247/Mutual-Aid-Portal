@@ -32,12 +32,16 @@ type ForecastData = {
 }
 
 type CSVRow = {
-  donor_name: string
-  cluster_name: string
-  state_name: string
-  month: string
-  amount: string
-  [key: string]: string // All fields are strings in CSV
+  Month: string
+  State: string
+  Amount: string
+  Localities: string
+  'Org Name': string
+  Intermediary: string
+  'Transfer Method': string
+  Source: string
+  'Receiving MAG': string
+  [key: string]: string
 }
 
 export default function ForecastPage() {
@@ -243,11 +247,44 @@ export default function ForecastPage() {
       const file = event.target.files?.[0]
       if (!file) return
 
+      // Helper function for fuzzy state matching
+      const findMatchingState = (stateName: string) => {
+        const normalizedInput = stateName.toLowerCase().trim()
+        
+        // Try exact match first
+        const exactMatch = states.find(s => 
+          s.state_name.toLowerCase() === normalizedInput
+        )
+        if (exactMatch) return exactMatch
+
+        // Try substring matches
+        const substringMatch = states.find(s => {
+          const dbState = s.state_name.toLowerCase()
+          return dbState.includes(normalizedInput) || normalizedInput.includes(dbState)
+        })
+        return substringMatch || null
+      }
+
+      // Helper function to clean amount strings
+      const cleanAmount = (amount: string): number => {
+        // Remove currency symbols, commas, spaces and any other non-numeric chars except decimal point
+        const cleaned = amount.replace(/[^0-9.-]/g, '')
+        
+        // Parse the cleaned string to float
+        const parsed = parseFloat(cleaned)
+        
+        // Return 0 if parsing failed
+        return isNaN(parsed) ? 0 : parsed
+      }
+
       Papa.parse<CSVRow>(file, {
         header: true,
         complete: async (results) => {
           // Validate required columns
-          const requiredColumns = ['donor_name', 'cluster_name', 'state_name', 'month', 'amount']
+          const requiredColumns = [
+            'Month', 'State', 'Amount', 'Localities', 'Org Name', 
+            'Intermediary', 'Transfer Method', 'Source', 'Receiving MAG'
+          ]
           const headers = Object.keys(results.data[0] || {})
           const missingColumns = requiredColumns.filter(col => !headers.includes(col))
 
@@ -256,30 +293,36 @@ export default function ForecastPage() {
             return
           }
 
-          // Convert names to IDs and validate
+          // Parse and validate each row
           const forecasts = results.data
-            .filter(row => row.donor_name && row.cluster_name && row.state_name && row.month && row.amount)
+            .filter(row => row.Month && row.State && row.Amount) // Filter out empty rows
             .map(row => {
-              // Find matching IDs
-              const donor = donors.find(d => d.name.toLowerCase() === row.donor_name.toLowerCase())
-              const cluster = clusters.find(c => c.name.toLowerCase() === row.cluster_name.toLowerCase())
-              const state = row.state_name.toLowerCase() === 'all' 
-                ? null 
-                : states.find(s => s.state_name.toLowerCase() === row.state_name.toLowerCase())
+              // Parse month (e.g. "Jan-25" to "2025-01-01")
+              const [month, year] = row.Month.split('-')
+              const monthNum = new Date(Date.parse(month + " 1, 2000")).getMonth() + 1
+              const fullYear = '20' + year
+              const isoDate = `${fullYear}-${String(monthNum).padStart(2, '0')}-01`
 
-              // Validation errors
-              if (!donor) throw new Error(`Unknown donor: ${row.donor_name}`)
-              if (!cluster) throw new Error(`Unknown cluster: ${row.cluster_name}`)
-              if (row.state_name.toLowerCase() !== 'all' && !state) {
-                throw new Error(`Unknown state: ${row.state_name}`)
-              }
+              // Try to find matching state using fuzzy matching
+              const matchingState = findMatchingState(row.State)
 
+              // Clean and parse amount
+              const cleanedAmount = cleanAmount(row.Amount)
+
+              // Create forecast object
               return {
-                donor_id: donor.id,
-                cluster_id: cluster.id,
-                state_id: state?.id || null,
-                month: new Date(row.month).toISOString(),
-                amount: parseFloat(row.amount)
+                donor_id: donors[0].id,
+                cluster_id: selectedCluster || null,
+                state_id: matchingState?.id || null,
+                state_name: row.State, // Always store original state name
+                month: new Date(isoDate).toISOString(),
+                amount: cleanedAmount,
+                localities: row.Localities,
+                org_name: row['Org Name'],
+                intermediary: row.Intermediary,
+                transfer_method: row['Transfer Method'],
+                source: row.Source,
+                receiving_mag: row['Receiving MAG']
               }
             })
 
@@ -288,7 +331,7 @@ export default function ForecastPage() {
             return
           }
 
-          // Submit using existing API endpoint
+          // Submit forecasts
           setIsSubmitting(true)
           setError(null)
 
