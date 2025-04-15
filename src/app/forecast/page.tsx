@@ -41,6 +41,7 @@ type CSVRow = {
   'Transfer Method': string
   Source: string
   'Receiving MAG': string
+  Status: string
   [key: string]: string
 }
 
@@ -56,6 +57,7 @@ export default function ForecastPage() {
   })
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [selectedFile, setSelectedFile] = useState<File | null>(null)
 
   useEffect(() => {
     const fetchData = async () => {
@@ -273,117 +275,150 @@ export default function ForecastPage() {
     document.body.removeChild(link)
   }
 
-  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (file) {
+      setSelectedFile(file)
+      setError(null)
+    }
+  }
+
+  const handleFileUpload = async () => {
+    if (!selectedFile) {
+      setError('Please select a file first')
+      return
+    }
+
     try {
-      const file = event.target.files?.[0]
-      if (!file) return
+      setIsSubmitting(true)
+      setError(null)
 
-      // Helper function for fuzzy state matching
-      const findMatchingState = (stateName: string) => {
-        const normalizedInput = stateName.toLowerCase().trim()
-        
-        // Try exact match first
-        const exactMatch = states.find(s => 
-          s.state_name.toLowerCase() === normalizedInput
-        )
-        if (exactMatch) return exactMatch
-
-        // Try substring matches
-        const substringMatch = states.find(s => {
-          const dbState = s.state_name.toLowerCase()
-          return dbState.includes(normalizedInput) || normalizedInput.includes(dbState)
-        })
-        return substringMatch || null
-      }
-
-      // Helper function to clean amount strings
-      const cleanAmount = (amount: string): number => {
-        // Remove currency symbols, commas, spaces and any other non-numeric chars except decimal point
-        const cleaned = amount.replace(/[^0-9.-]/g, '')
-        
-        // Parse the cleaned string to float
-        const parsed = parseFloat(cleaned)
-        
-        // Return 0 if parsing failed
-        return isNaN(parsed) ? 0 : parsed
-      }
-
-      Papa.parse<CSVRow>(file, {
+      Papa.parse<CSVRow>(selectedFile, {
         header: true,
         complete: async (results) => {
-          // Validate required columns
-          const requiredColumns = [
-            'Month', 'State', 'Amount', 'Localities', 'Org Name', 
-            'Intermediary', 'Transfer Method', 'Source', 'Receiving MAG'
-          ]
-          const headers = Object.keys(results.data[0] || {})
-          const missingColumns = requiredColumns.filter(col => !headers.includes(col))
+          try {
+            // Validate required columns
+            const requiredColumns = [
+              'Month', 'State', 'Amount', 'Localities', 'Org Name', 
+              'Intermediary', 'Transfer Method', 'Source', 'Receiving MAG',
+              'Status'
+            ]
+            const headers = Object.keys(results.data[0] || {})
+            const missingColumns = requiredColumns.filter(col => !headers.includes(col))
 
-          if (missingColumns.length > 0) {
-            setError(`Missing required columns: ${missingColumns.join(', ')}`)
-            return
-          }
+            if (missingColumns.length > 0) {
+              setError(`Missing required columns: ${missingColumns.join(', ')}`)
+              return
+            }
 
-          // Parse and validate each row
-          const forecasts = results.data
-            .filter(row => row.Month && row.State && row.Amount) // Filter out empty rows
-            .map(row => {
-              // Parse month (e.g. "Jan-25" to "2025-01-01")
-              const [month, year] = row.Month.split('-')
-              const monthNum = new Date(Date.parse(month + " 1, 2000")).getMonth() + 1
-              const fullYear = '20' + year
-              const isoDate = `${fullYear}-${String(monthNum).padStart(2, '0')}-01`
+            // Parse and validate each row
+            const forecasts = results.data
+              .filter(row => row.Month && row.State && row.Amount)
+              .map(row => {
+                try {
+                  let dateObj: Date;
+                  
+                  // Check if the date is already in YYYY-MM-DD format
+                  if (row.Month.match(/^\d{4}-\d{2}-\d{2}$/)) {
+                    dateObj = new Date(row.Month);
+                  } else {
+                    // Parse MMM-YY format
+                    const [month, year] = row.Month.split('-')
+                    
+                    // Validate year format
+                    if (!year || year.length !== 2) {
+                      console.error('Invalid year format:', row.Month)
+                      return null
+                    }
 
-              // Try to find matching state using fuzzy matching
-              const matchingState = findMatchingState(row.State)
+                    // Map month names to numbers
+                    const monthMap: { [key: string]: string } = {
+                      'Jan': '01', 'Feb': '02', 'Mar': '03', 'Apr': '04',
+                      'May': '05', 'Jun': '06', 'Jul': '07', 'Aug': '08',
+                      'Sep': '09', 'Oct': '10', 'Nov': '11', 'Dec': '12'
+                    }
 
-              // Clean and parse amount
-              const cleanedAmount = cleanAmount(row.Amount)
+                    const monthNum = monthMap[month.substring(0, 3)]
+                    if (!monthNum) {
+                      console.error('Invalid month:', month)
+                      return null
+                    }
 
-              // Create forecast object
-              return {
-                donor_id: donors[0].id,
-                cluster_id: selectedCluster || null,
-                state_id: matchingState?.id || null,
-                state_name: row.State, // Always store original state name
-                month: new Date(isoDate).toISOString(),
-                amount: cleanedAmount,
-                localities: row.Localities,
-                org_name: row['Org Name'],
-                intermediary: row.Intermediary,
-                transfer_method: row['Transfer Method'],
-                source: row.Source,
-                receiving_mag: row['Receiving MAG']
-              }
+                    const fullYear = `20${year}`
+                    const isoDate = `${fullYear}-${monthNum}-01`
+                    dateObj = new Date(isoDate)
+                  }
+
+                  // Validate the date is valid
+                  if (isNaN(dateObj.getTime())) {
+                    console.error('Invalid date:', row.Month)
+                    return null
+                  }
+
+                  // Try to find matching state using fuzzy matching
+                  const matchingState = states.find(s => 
+                    s.state_name.toLowerCase() === row.State.toLowerCase()
+                  )
+
+                  // Clean and parse amount
+                  const cleanedAmount = parseFloat(row.Amount.replace(/[^0-9.-]/g, ''))
+
+                  console.log('Row Status:', row.Status)
+                  console.log('Processed Status:', row.Status?.toLowerCase().trim() === 'completed' || 
+                                 row.Status?.toLowerCase().trim() === 'complete' ? 'complete' : 'planned')
+
+                  return {
+                    donor_id: donors[0].id,
+                    cluster_id: selectedCluster || null,
+                    state_id: matchingState?.id || null,
+                    state_name: row.State,
+                    month: dateObj.toISOString(),
+                    amount: cleanedAmount,
+                    localities: row.Localities,
+                    org_name: row['Org Name'],
+                    intermediary: row.Intermediary,
+                    transfer_method: row['Transfer Method'],
+                    source: row.Source,
+                    receiving_mag: row['Receiving MAG'],
+                    status: row.Status?.toLowerCase().trim() === 'completed' || 
+                           row.Status?.toLowerCase().trim() === 'complete' ? 'complete' : 'planned'
+                  }
+                } catch (err) {
+                  console.error('Error processing row:', row, err)
+                  return null
+                }
+              })
+              .filter(forecast => forecast !== null)
+
+            if (forecasts.length === 0) {
+              setError('No valid forecast data found in CSV')
+              return
+            }
+
+            // Submit forecasts
+            const response = await fetch('/api/forecasts', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(forecasts)
             })
 
-          if (forecasts.length === 0) {
-            setError('No valid forecast data found in CSV')
-            return
+            if (!response.ok) throw new Error('Failed to submit forecasts')
+
+            alert('Forecasts uploaded successfully!')
+            setSelectedFile(null)
+          } catch (err) {
+            setError(err instanceof Error ? err.message : 'An unexpected error occurred')
+          } finally {
+            setIsSubmitting(false)
           }
-
-          // Submit forecasts
-          setIsSubmitting(true)
-          setError(null)
-
-          const response = await fetch('/api/forecasts', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(forecasts)
-          })
-
-          if (!response.ok) throw new Error('Failed to submit forecasts')
-
-          alert('Forecasts uploaded successfully!')
-          event.target.value = '' // Reset file input
         },
         error: (error) => {
           setError(`Error parsing CSV: ${error.message}`)
+          setIsSubmitting(false)
         }
       })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An unexpected error occurred')
-    } finally {
       setIsSubmitting(false)
     }
   }
@@ -516,7 +551,7 @@ export default function ForecastPage() {
               <div className="flex-1">
                 <FileInput
                   accept=".csv"
-                  onChange={handleFileUpload}
+                  onChange={handleFileSelect}
                   disabled={isSubmitting}
                 />
               </div>
@@ -524,8 +559,8 @@ export default function ForecastPage() {
 
             <Button 
               className="w-full" 
-              onClick={() => document.querySelector<HTMLInputElement>('input[type="file"]')?.click()}
-              disabled={isSubmitting}
+              onClick={handleFileUpload}
+              disabled={isSubmitting || !selectedFile}
             >
               {isSubmitting ? 'Uploading...' : 'Upload CSV'}
             </Button>

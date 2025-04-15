@@ -7,25 +7,36 @@ export async function POST(request: Request) {
     const forecasts = await request.json()
     const supabase = createRouteHandlerClient({ cookies })
 
-    // Upsert forecasts with conflict handling - removed cluster_id from conflict key
+    // Add logging before the upsert
+    console.log('Forecasts to insert:', forecasts.map(f => ({
+      state_name: f.state_name,
+      month: f.month,
+      status: f.status
+    })))
+
+    // Upsert forecasts with new conflict handling based on org_name, state_name, month
     const { data, error } = await supabase
       .from('donor_forecasts')
-      .upsert(forecasts.map((forecast: any) => ({
-        donor_id: forecast.donor_id,
-        cluster_id: forecast.cluster_id,
-        state_id: forecast.state_id,
-        month: forecast.month,
-        amount: forecast.amount,
-        // Additional fields
-        localities: forecast.localities,
-        org_name: forecast.org_name,
-        intermediary: forecast.intermediary,
-        transfer_method: forecast.transfer_method,
-        source: forecast.source,
-        receiving_mag: forecast.receiving_mag,
-        state_name: forecast.state_name
-      })), {
-        onConflict: 'donor_id,state_name,month',
+      .upsert(forecasts.map((forecast: any) => {
+        console.log('Processing forecast status:', forecast.status)
+        return {
+          donor_id: forecast.donor_id,
+          cluster_id: forecast.cluster_id,
+          state_id: forecast.state_id,
+          month: forecast.month,
+          amount: forecast.amount,
+          // Additional fields
+          localities: forecast.localities,
+          org_name: forecast.org_name,
+          intermediary: forecast.intermediary,
+          transfer_method: forecast.transfer_method,
+          source: forecast.source,
+          receiving_mag: forecast.receiving_mag,
+          state_name: forecast.state_name,
+          status: forecast.status === 'complete' ? 'complete' : 'planned'
+        }
+      }), {
+        onConflict: 'org_name,state_name,month',
         ignoreDuplicates: false
       })
 
