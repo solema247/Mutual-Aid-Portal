@@ -16,6 +16,7 @@ import { CollapsibleRow } from '@/components/ui/collapsible'
 import Papa from 'papaparse'
 import { FileInput } from '@/components/ui/file-input'
 import { ViewForecasts } from './components/ViewForecasts'
+import { useRouter } from 'next/navigation'
 
 const MONTHS = ['May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
 const YEAR = '2025'
@@ -46,6 +47,7 @@ type CSVRow = {
 }
 
 export default function ForecastPage() {
+  const router = useRouter()
   const [donors, setDonors] = useState<{ id: string; name: string }[]>([])
   const [clusters, setClusters] = useState<{ id: string; name: string }[]>([])
   const [states, setStates] = useState<{ id: string; state_name: string }[]>([])
@@ -427,7 +429,10 @@ export default function ForecastPage() {
     <div className="max-w-7xl mx-auto p-6 space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-semibold">Forecast Tool</h2>
-        <Button variant="outline" onClick={() => window.history.back()}>
+        <Button 
+          variant="outline" 
+          onClick={() => router.push('/')}
+        >
           Back
         </Button>
       </div>
