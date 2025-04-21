@@ -2,22 +2,32 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
 export async function middleware(req: NextRequest) {
-  const res = NextResponse.next()
-
-  // Check for authentication status in cookies
+  // Check for authentication cookie
   const isAuthenticated = req.cookies.get('isAuthenticated')
-  
-  console.log('Is authenticated:', isAuthenticated)
+  const userType = req.cookies.get('userType')
 
-  // If not authenticated and trying to access protected route, redirect to login
-  if (!isAuthenticated && 
-      !req.nextUrl.pathname.startsWith('/login') && 
-      !req.nextUrl.pathname.startsWith('/api/auth')) {
-    console.log('Redirecting to login - not authenticated')
+  // Allow login page access
+  if (req.nextUrl.pathname === '/login') {
+    if (isAuthenticated) {
+      return NextResponse.redirect(new URL('/', req.url))
+    }
+    return NextResponse.next()
+  }
+
+  // Require authentication for all other pages
+  if (!isAuthenticated) {
     return NextResponse.redirect(new URL('/login', req.url))
   }
 
-  return res
+  // Role-based access control
+  if (userType?.value === 'partner' && req.nextUrl.pathname.startsWith('/dashboard')) {
+    return NextResponse.redirect(new URL('/', req.url))
+  }
+  if (userType?.value === 'err' && req.nextUrl.pathname.startsWith('/forecast')) {
+    return NextResponse.redirect(new URL('/', req.url))
+  }
+
+  return NextResponse.next()
 }
 
 export const config = {

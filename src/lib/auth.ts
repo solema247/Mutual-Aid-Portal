@@ -6,12 +6,20 @@ export async function middleware(req: NextRequest) {
   const res = NextResponse.next()
   const supabase = createMiddlewareClient({ req, res })
 
-  const {
-    data: { session },
-  } = await supabase.auth.getSession()
+  // Refresh session if expired
+  const { data: { session } } = await supabase.auth.getSession()
 
-  // If no session and trying to access protected routes, redirect to login
-  if (!session && !req.nextUrl.pathname.startsWith('/login')) {
+  // Always allow login page
+  if (req.nextUrl.pathname === '/login') {
+    // If already authenticated, redirect to home
+    if (session) {
+      return NextResponse.redirect(new URL('/', req.url))
+    }
+    return res
+  }
+
+  // Require authentication for all other pages
+  if (!session) {
     return NextResponse.redirect(new URL('/login', req.url))
   }
 
@@ -20,14 +28,9 @@ export async function middleware(req: NextRequest) {
 
 export const config = {
   matcher: [
-    /*
-     * Match all request paths except:
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     * - public folder
-     * - login page
-     */
-    '/((?!_next/static|_next/image|favicon.ico|public|login).*)',
+    '/',
+    '/forecast/:path*',
+    '/dashboard/:path*',
+    '/((?!_next/static|_next/image|favicon.ico|public|login|api/auth).*)',
   ],
 } 

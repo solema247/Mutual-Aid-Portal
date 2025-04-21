@@ -25,8 +25,8 @@ export default function LoginPage() {
   const [errId, setErrId] = useState('')
   const [pin, setPin] = useState('')
 
-  // Donor login state
-  const [login, setLogin] = useState('')
+  // Partner login state
+  const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
 
   const handleErrLogin = async (e: React.FormEvent) => {
@@ -64,36 +64,47 @@ export default function LoginPage() {
     }
   }
 
-  const handleDonorLogin = async (e: React.FormEvent) => {
+  const handlePartnerLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
     setError(null)
 
     try {
-      const { data: donor, error: donorError } = await supabase
-        .from('donor_users')
-        .select('*, donors(name)')
-        .eq('login', login)
-        .single()
+      // Authenticate with Supabase
+      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+        email,
+        password
+      })
 
-      if (!donor || donor.password_hash !== password) {
-        setError('Invalid login or password')
+      if (authError) {
+        setError('Authentication failed')
         return
       }
 
-      // Store in localStorage
+      // Check donor_users relationship
+      const { data: donor, error: donorError } = await supabase
+        .from('donor_users')
+        .select('*, donors(name)')
+        .eq('id', authData.user?.id)
+        .single()
+
+      if (donorError || !donor) {
+        setError('User not found or not authorized')
+        return
+      }
+
+      // Set authentication state
       localStorage.setItem('donor', JSON.stringify(donor))
       localStorage.setItem('isAuthenticated', 'true')
-      
-      // Set cookies
       document.cookie = `isAuthenticated=true; path=/`
-      document.cookie = `userType=donor; path=/`
+      document.cookie = `userType=partner; path=/`
 
-      // Redirect to portal
+      // Redirect to home
       window.location.href = '/'
+
     } catch (err) {
       console.error('Login error:', err)
-      setError('Failed to login. Please try again.')
+      setError(err instanceof Error ? err.message : 'Login failed')
     } finally {
       setIsLoading(false)
     }
@@ -156,7 +167,7 @@ export default function LoginPage() {
           </TabsContent>
 
           <TabsContent value="donor">
-            <form onSubmit={handleDonorLogin}>
+            <form onSubmit={handlePartnerLogin}>
               <CardContent className="space-y-4">
                 {error && (
                   <div className="bg-destructive/15 text-destructive text-sm p-3 rounded-md">
@@ -164,11 +175,12 @@ export default function LoginPage() {
                   </div>
                 )}
                 <div className="space-y-2">
-                  <Label htmlFor="login">Login</Label>
+                  <Label htmlFor="email">Email</Label>
                   <Input
-                    id="login"
-                    value={login}
-                    onChange={(e) => setLogin(e.target.value)}
+                    id="email"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
                     required
                   />
                 </div>
