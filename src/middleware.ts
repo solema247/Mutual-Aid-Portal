@@ -6,9 +6,9 @@ export async function middleware(req: NextRequest) {
   const isAuthenticated = req.cookies.get('isAuthenticated')
   const userType = req.cookies.get('userType')
 
-  // Allow login page access
-  if (req.nextUrl.pathname === '/login') {
-    if (isAuthenticated) {
+  // Allow login and change-password pages access
+  if (req.nextUrl.pathname === '/login' || req.nextUrl.pathname === '/change-password') {
+    if (isAuthenticated && req.nextUrl.pathname === '/login') {
       return NextResponse.redirect(new URL('/', req.url))
     }
     return NextResponse.next()

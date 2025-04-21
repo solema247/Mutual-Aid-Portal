@@ -70,14 +70,27 @@ export default function LoginPage() {
     setError(null)
 
     try {
-      // Authenticate with Supabase
+      console.log('Starting login...')
+      
       const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
         email,
         password
       })
 
+      console.log('Auth result:', { authData, authError })
+
       if (authError) {
         setError('Authentication failed')
+        return
+      }
+
+      console.log('User metadata:', authData.user?.user_metadata)
+
+      // Check if temporary password
+      if (authData.user?.user_metadata?.is_temporary_password) {
+        console.log('Redirecting to change password...')
+        await new Promise(resolve => setTimeout(resolve, 1000)) // Delay to see logs
+        window.location.href = '/change-password'
         return
       }
 
@@ -87,6 +100,8 @@ export default function LoginPage() {
         .select('*, donors(name)')
         .eq('id', authData.user?.id)
         .single()
+
+      console.log('Donor check:', { donor, donorError })
 
       if (donorError || !donor) {
         setError('User not found or not authorized')
@@ -99,7 +114,8 @@ export default function LoginPage() {
       document.cookie = `isAuthenticated=true; path=/`
       document.cookie = `userType=partner; path=/`
 
-      // Redirect to home
+      console.log('Redirecting to home...')
+      await new Promise(resolve => setTimeout(resolve, 1000)) // Delay to see logs
       window.location.href = '/'
 
     } catch (err) {

@@ -32,18 +32,13 @@ export default function ChangePasswordPage() {
 
       if (updateError) throw updateError
 
-      // Update user metadata to remove temporary password flag
-      const { data: { user } } = await supabase.auth.getUser()
-      if (user) {
-        await supabase.auth.updateUser({
-          data: { 
-            ...user.user_metadata,
-            is_temporary_password: false 
-          }
-        })
-      }
+      // Update metadata flag
+      await supabase.auth.updateUser({
+        data: { is_temporary_password: false }
+      })
 
-      router.push('/')
+      // Redirect to forecast page
+      window.location.href = '/forecast'
     } catch (err) {
       console.error('Password change error:', err)
       setError(err instanceof Error ? err.message : 'Failed to update password')
