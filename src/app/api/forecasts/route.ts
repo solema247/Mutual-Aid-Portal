@@ -2,13 +2,21 @@ import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
 import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
 
+// Add type for forecast object
+interface Forecast {
+  state_name: string
+  month: string
+  status: string
+  // Add other forecast properties here
+}
+
 export async function POST(request: Request) {
   try {
-    const forecasts = await request.json()
+    const forecasts: Forecast[] = await request.json()
     const supabase = createRouteHandlerClient({ cookies })
 
     // Add logging before the upsert
-    console.log('Forecasts to insert:', forecasts.map(f => ({
+    console.log('Forecasts to insert:', forecasts.map((f: Forecast) => ({
       state_name: f.state_name,
       month: f.month,
       status: f.status
