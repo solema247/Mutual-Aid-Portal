@@ -72,6 +72,17 @@ type ForecastEntry = {
   status: 'planned' | 'complete'
 }
 
+// Update DonorData type to include user_id
+type DonorData = {
+  donor_id: string
+  user_id: string  // Add this field
+  donors: {
+    id: string
+    name: string
+    org_type: string
+  }
+}
+
 const parseDate = (dateStr: string): Date | null => {
   try {
     // Case 1: Already in YYYY-MM-DD format
@@ -127,7 +138,7 @@ const EntryFormRow = ({
   onDelete,
   onAdd,
   states, 
-  months 
+  months
 }: { 
   entry: ForecastEntry
   onChange: (entry: ForecastEntry) => void
@@ -138,14 +149,27 @@ const EntryFormRow = ({
 }) => {
   const [localEntry, setLocalEntry] = useState(entry)
 
-  // Remove handleBlur and update parent only when needed
-  const handleChange = (field: keyof ForecastEntry, value: string) => {
+  // Separate handlers for text inputs and select inputs
+  const handleTextChange = (field: keyof ForecastEntry, value: string) => {
     const updatedEntry = {
       ...localEntry,
       [field]: value
     }
     setLocalEntry(updatedEntry)
-    onChange(updatedEntry)  // Update parent state
+  }
+
+  const handleSelectChange = (field: keyof ForecastEntry, value: string) => {
+    const updatedEntry = {
+      ...localEntry,
+      [field]: value
+    }
+    setLocalEntry(updatedEntry)
+    onChange(updatedEntry) // Update parent immediately for select inputs
+  }
+
+  // Update parent when text input loses focus
+  const handleBlur = () => {
+    onChange(localEntry)
   }
 
   return (
@@ -153,9 +177,7 @@ const EntryFormRow = ({
       <td className="p-2">
         <Select 
           value={localEntry.month} 
-          onValueChange={(value) => {
-            handleChange('month', value)
-          }}
+          onValueChange={(value) => handleSelectChange('month', value)}
         >
           <SelectTrigger className="h-8">
             <SelectValue placeholder="Month" />
@@ -175,9 +197,7 @@ const EntryFormRow = ({
       <td className="p-2">
         <Select 
           value={localEntry.state}
-          onValueChange={(value) => {
-            handleChange('state', value)
-          }}
+          onValueChange={(value) => handleSelectChange('state', value)}
         >
           <SelectTrigger className="h-8">
             <SelectValue placeholder="State" />
@@ -196,37 +216,39 @@ const EntryFormRow = ({
           type="text"
           inputMode="numeric"
           value={localEntry.amount}
-          onChange={(e) => handleChange('amount', e.target.value.replace(/[^\d.]/g, ''))}
+          onChange={(e) => handleTextChange('amount', e.target.value.replace(/[^\d.]/g, ''))}
+          onBlur={handleBlur}
           className="h-8"
         />
       </td>
       <td className="p-2">
         <Input
           value={localEntry.localities}
-          onChange={(e) => handleChange('localities', e.target.value)}
+          onChange={(e) => handleTextChange('localities', e.target.value)}
+          onBlur={handleBlur}
           className="h-8"
         />
       </td>
       <td className="p-2">
         <Input
           value={localEntry.intermediary}
-          onChange={(e) => handleChange('intermediary', e.target.value)}
+          onChange={(e) => handleTextChange('intermediary', e.target.value)}
+          onBlur={handleBlur}
           className="h-8"
         />
       </td>
       <td className="p-2">
         <Input
           value={localEntry.transfer_method}
-          onChange={(e) => handleChange('transfer_method', e.target.value)}
+          onChange={(e) => handleTextChange('transfer_method', e.target.value)}
+          onBlur={handleBlur}
           className="h-8"
         />
       </td>
       <td className="p-2">
         <Select 
           value={localEntry.source}
-          onValueChange={(value) => {
-            handleChange('source', value)
-          }}
+          onValueChange={(value) => handleSelectChange('source', value)}
         >
           <SelectTrigger className="h-8">
             <SelectValue placeholder="Source" />
@@ -241,16 +263,15 @@ const EntryFormRow = ({
       <td className="p-2">
         <Input
           value={localEntry.receiving_mag}
-          onChange={(e) => handleChange('receiving_mag', e.target.value)}
+          onChange={(e) => handleTextChange('receiving_mag', e.target.value)}
+          onBlur={handleBlur}
           className="h-8"
         />
       </td>
       <td className="p-2">
         <Select 
           value={localEntry.status}
-          onValueChange={(value: 'planned' | 'complete') => {
-            handleChange('status', value)
-          }}
+          onValueChange={(value: 'planned' | 'complete') => handleSelectChange('status', value)}
         >
           <SelectTrigger className="h-8">
             <SelectValue placeholder="Status" />
@@ -299,7 +320,21 @@ export default function ForecastPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
-  const [entries, setEntries] = useState<ForecastEntry[]>([])
+  const [rows, setRows] = useState<ForecastEntry[]>(() => 
+    Array(5).fill(null).map(() => ({
+      id: crypto.randomUUID(),
+      month: '',
+      state: '',
+      amount: '',
+      localities: '',
+      org_name: '', 
+      intermediary: '',
+      transfer_method: '',
+      source: '',
+      receiving_mag: '',
+      status: 'planned'
+    }))
+  )
   const [currentEntry, setCurrentEntry] = useState<ForecastEntry>({
     id: crypto.randomUUID(),
     month: '',
@@ -314,14 +349,33 @@ export default function ForecastPage() {
     status: 'planned'
   })
   const [isFormOpen, setIsFormOpen] = useState(true)
+  const [donorOrgType, setDonorOrgType] = useState<string>('')
+  const [userId, setUserId] = useState<string>('')
 
   useEffect(() => {
     const fetchData = async () => {
       try {
         // Get logged in donor from localStorage
-        const loggedInDonor = JSON.parse(localStorage.getItem('donor') || '{}')
+        const loggedInDonor = JSON.parse(localStorage.getItem('donor') || '{}') as DonorData
         if (!loggedInDonor?.donor_id) {
           throw new Error('No donor information found')
+        }
+
+        // Set user ID from localStorage
+        if (loggedInDonor.user_id) {
+          setUserId(loggedInDonor.user_id)
+        }
+
+        // Fetch donor details including org_type
+        const { data: donorData, error: donorError } = await supabase
+          .from('donors')
+          .select('org_type')
+          .eq('id', loggedInDonor.donor_id)
+          .single()
+
+        if (donorError) throw donorError
+        if (donorData?.org_type) {
+          setDonorOrgType(donorData.org_type)
         }
 
         const [clustersRes, statesRes] = await Promise.all([
@@ -400,44 +454,114 @@ export default function ForecastPage() {
     }))
   }
 
-  const handleAddEntry = () => {
-    setEntries([...entries, currentEntry])
-    setCurrentEntry({
-      ...currentEntry,
+  const handleAddRow = () => {
+    setRows([...rows, {
       id: crypto.randomUUID(),
+      month: '',
+      state: '',
       amount: '',
-      localities: ''
-      // Keep other fields for convenience
-    })
+      localities: '',
+      org_name: '', 
+      intermediary: '',
+      transfer_method: '',
+      source: '',
+      receiving_mag: '',
+      status: 'planned'
+    }])
+  }
+
+  const handleDeleteRow = (id: string) => {
+    setRows(prev => prev.filter(row => row.id !== id))
+  }
+
+  const handleRowChange = (id: string, updatedEntry: ForecastEntry) => {
+    setRows(rows.map(row => 
+      row.id === id ? { ...updatedEntry, id } : row
+    ))
   }
 
   const handleSubmit = async () => {
     try {
-      const response = await fetch('/api/forecasts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(entries.map(entry => ({
+      // Validate donor ID first
+      if (!donors[0]?.id) {
+        setError('No donor ID found')
+        console.error('Missing donor ID:', donors)
+        return
+      }
+
+      // Get the rows data directly from the rows state
+      const validRows = rows.filter(row => 
+        row.month && row.state && row.amount // Only submit rows with required fields
+      )
+
+      if (validRows.length === 0) {
+        setError('No valid entries to submit. Please fill in at least Month, State and Amount.')
+        return
+      }
+
+      // Log the data being sent
+      const submissionData = validRows.map(entry => {
+        // Find state ID
+        const stateId = states.find(s => s.state_name === entry.state)?.id
+        if (!stateId) {
+          console.error('Could not find state ID for:', entry.state)
+        }
+
+        const data = {
           donor_id: donors[0].id,
-          state_id: states.find(s => s.state_name === entry.state)?.id,
+          state_id: stateId || null, // Make sure we don't send empty string
           state_name: entry.state,
           month: new Date(entry.month).toISOString(),
           amount: parseFloat(entry.amount),
-          localities: entry.localities,
-          org_name: entry.org_name,
-          intermediary: entry.intermediary,
-          transfer_method: entry.transfer_method,
-          source: entry.source,
-          receiving_mag: entry.receiving_mag,
-          status: entry.status
-        })))
+          localities: entry.localities || null, // Convert empty string to null
+          org_name: entry.org_name || donors[0].name,
+          intermediary: entry.intermediary || null,
+          transfer_method: entry.transfer_method || null,
+          source: entry.source || null,
+          receiving_mag: entry.receiving_mag || null,
+          status: entry.status || 'planned',
+          org_type: donorOrgType || null,
+          created_by: userId || null
+        }
+
+        console.log('Preparing submission row:', data)
+        return data
       })
 
-      if (!response.ok) throw new Error('Failed to submit forecasts')
-      
+      console.log('Full submission data:', submissionData)
+
+      const { data, error } = await supabase
+        .from('donor_forecasts')
+        .upsert(submissionData, {
+          onConflict: 'org_name,state_name,month',
+          ignoreDuplicates: false
+        })
+
+      if (error) {
+        console.error('Supabase error:', error)
+        throw new Error(error.message)
+      }
+
+      console.log('Submission response:', data)
       alert('Forecasts submitted successfully!')
-      setEntries([])
+      
+      // Reset form rows to initial state
+      setRows(Array(5).fill(null).map(() => ({
+        id: crypto.randomUUID(),
+        month: '',
+        state: '',
+        amount: '',
+        localities: '',
+        org_name: '', 
+        intermediary: '',
+        transfer_method: '',
+        source: '',
+        receiving_mag: '',
+        status: 'planned'
+      })))
       
     } catch (err) {
+      console.error('Submission error:', err)
       setError(err instanceof Error ? err.message : 'An unexpected error occurred')
     }
   }
@@ -730,51 +854,8 @@ export default function ForecastPage() {
     )
   }
 
-  // Update the form section
+  // Modify FormSection to be simpler
   const FormSection = () => {
-    // Initialize with 5 empty rows
-    const [rows, setRows] = useState<ForecastEntry[]>(() => 
-      Array(5).fill(null).map(() => ({
-        id: crypto.randomUUID(),
-        month: '',
-        state: '',
-        amount: '',
-        localities: '',
-        org_name: '', // Will be pre-filled from user data
-        intermediary: '',
-        transfer_method: '',
-        source: '',
-        receiving_mag: '',
-        status: 'planned'
-      }))
-    )
-
-    const handleAddRow = () => {
-      setRows([...rows, {
-        id: crypto.randomUUID(),
-        month: '',
-        state: '',
-        amount: '',
-        localities: '',
-        org_name: '', 
-        intermediary: '',
-        transfer_method: '',
-        source: '',
-        receiving_mag: '',
-        status: 'planned'
-      }])
-    }
-
-    const handleDeleteRow = (id: string) => {
-      setRows(rows.filter(row => row.id !== id))
-    }
-
-    const handleRowChange = (id: string, updatedEntry: ForecastEntry) => {
-      setRows(rows.map(row => 
-        row.id === id ? { ...updatedEntry, id } : row
-      ))
-    }
-
     return (
       <CollapsibleRow 
         title="Submit Forecast (Form)" 
