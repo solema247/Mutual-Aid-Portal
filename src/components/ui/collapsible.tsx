@@ -4,26 +4,42 @@ import * as React from "react"
 import * as CollapsiblePrimitive from "@radix-ui/react-collapsible"
 import { ChevronDown } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { useState } from "react"
 
 const Collapsible = CollapsiblePrimitive.Root
 const CollapsibleTrigger = CollapsiblePrimitive.Trigger
 const CollapsibleContent = CollapsiblePrimitive.Content
 
-function CollapsibleRow({
-  title,
-  children,
-  className,
-  variant = 'default'
-}: {
+interface CollapsibleRowProps {
   title: string
   children: React.ReactNode
+  variant?: "default" | "primary"
+  defaultOpen?: boolean
+  onOpenChange?: (open: boolean) => void
   className?: string
-  variant?: 'default' | 'primary'
-}) {
-  const [isOpen, setIsOpen] = React.useState(false)
+}
+
+const CollapsibleRow = ({ 
+  title, 
+  children, 
+  variant = "default",
+  defaultOpen,
+  onOpenChange,
+  className
+}: CollapsibleRowProps) => {
+  const [isOpen, setIsOpen] = useState(defaultOpen || false)
+
+  const handleOpenChange = (open: boolean) => {
+    setIsOpen(open)
+    onOpenChange?.(open)
+  }
 
   return (
-    <Collapsible open={isOpen} onOpenChange={setIsOpen} className={className}>
+    <Collapsible
+      open={isOpen}
+      onOpenChange={handleOpenChange}
+      className="w-full"
+    >
       <CollapsibleTrigger 
         className={cn(
           "flex w-full items-center justify-between rounded-md border px-4 py-2 font-medium",

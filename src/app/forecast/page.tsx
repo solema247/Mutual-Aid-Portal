@@ -24,8 +24,12 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
+import { Plus, Trash2 } from 'lucide-react'
 
-const MONTHS = ['May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
+const MONTHS = [
+  'January', 'February', 'March', 'April', 'May', 'June', 
+  'July', 'August', 'September', 'October', 'November', 'December'
+]
 const YEAR = '2025'
 
 type ForecastData = {
@@ -51,6 +55,21 @@ type CSVRow = {
   'Receiving MAG': string
   Status: string
   [key: string]: string
+}
+
+// Add new type for form entries
+type ForecastEntry = {
+  id: string
+  month: string
+  state: string
+  amount: string
+  localities: string
+  org_name: string
+  intermediary: string
+  transfer_method: string
+  source: string
+  receiving_mag: string
+  status: 'planned' | 'complete'
 }
 
 const parseDate = (dateStr: string): Date | null => {
@@ -101,6 +120,171 @@ const parseDate = (dateStr: string): Date | null => {
   }
 }
 
+// Create a new component for the form row
+const EntryFormRow = ({ 
+  entry, 
+  onChange, 
+  onDelete,
+  onAdd,
+  states, 
+  months 
+}: { 
+  entry: ForecastEntry
+  onChange: (entry: ForecastEntry) => void
+  onDelete: () => void
+  onAdd: () => void
+  states: { id: string; state_name: string }[]
+  months: string[]
+}) => {
+  const [localEntry, setLocalEntry] = useState(entry)
+
+  // Remove handleBlur and update parent only when needed
+  const handleChange = (field: keyof ForecastEntry, value: string) => {
+    const updatedEntry = {
+      ...localEntry,
+      [field]: value
+    }
+    setLocalEntry(updatedEntry)
+    onChange(updatedEntry)  // Update parent state
+  }
+
+  return (
+    <tr className="border-t">
+      <td className="p-2">
+        <Select 
+          value={localEntry.month} 
+          onValueChange={(value) => {
+            handleChange('month', value)
+          }}
+        >
+          <SelectTrigger className="h-8">
+            <SelectValue placeholder="Month" />
+          </SelectTrigger>
+          <SelectContent>
+            {months.map((month) => (
+              <SelectItem 
+                key={month} 
+                value={`${YEAR}-${String(months.indexOf(month) + 1).padStart(2, '0')}`}
+              >
+                {month} {YEAR}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </td>
+      <td className="p-2">
+        <Select 
+          value={localEntry.state}
+          onValueChange={(value) => {
+            handleChange('state', value)
+          }}
+        >
+          <SelectTrigger className="h-8">
+            <SelectValue placeholder="State" />
+          </SelectTrigger>
+          <SelectContent>
+            {states.map((state) => (
+              <SelectItem key={state.id} value={state.state_name}>
+                {state.state_name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </td>
+      <td className="p-2">
+        <Input
+          type="text"
+          inputMode="numeric"
+          value={localEntry.amount}
+          onChange={(e) => handleChange('amount', e.target.value.replace(/[^\d.]/g, ''))}
+          className="h-8"
+        />
+      </td>
+      <td className="p-2">
+        <Input
+          value={localEntry.localities}
+          onChange={(e) => handleChange('localities', e.target.value)}
+          className="h-8"
+        />
+      </td>
+      <td className="p-2">
+        <Input
+          value={localEntry.intermediary}
+          onChange={(e) => handleChange('intermediary', e.target.value)}
+          className="h-8"
+        />
+      </td>
+      <td className="p-2">
+        <Input
+          value={localEntry.transfer_method}
+          onChange={(e) => handleChange('transfer_method', e.target.value)}
+          className="h-8"
+        />
+      </td>
+      <td className="p-2">
+        <Select 
+          value={localEntry.source}
+          onValueChange={(value) => {
+            handleChange('source', value)
+          }}
+        >
+          <SelectTrigger className="h-8">
+            <SelectValue placeholder="Source" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="Private">Private</SelectItem>
+            <SelectItem value="UN">UN</SelectItem>
+            <SelectItem value="Governmental">Governmental</SelectItem>
+          </SelectContent>
+        </Select>
+      </td>
+      <td className="p-2">
+        <Input
+          value={localEntry.receiving_mag}
+          onChange={(e) => handleChange('receiving_mag', e.target.value)}
+          className="h-8"
+        />
+      </td>
+      <td className="p-2">
+        <Select 
+          value={localEntry.status}
+          onValueChange={(value: 'planned' | 'complete') => {
+            handleChange('status', value)
+          }}
+        >
+          <SelectTrigger className="h-8">
+            <SelectValue placeholder="Status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="planned">Planned</SelectItem>
+            <SelectItem value="complete">Complete</SelectItem>
+          </SelectContent>
+        </Select>
+      </td>
+      <td className="p-2">
+        <div className="flex items-center gap-1 justify-center">
+          <Button 
+            variant="ghost" 
+            size="icon"
+            onClick={onDelete}
+            className="h-8 w-8 text-destructive hover:text-destructive/80"
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+          <Button 
+            variant="ghost" 
+            size="icon"
+            onClick={onAdd}
+            className="h-8 w-8"
+          >
+            <Plus className="h-4 w-4" />
+          </Button>
+        </div>
+      </td>
+    </tr>
+  )
+}
+
 export default function ForecastPage() {
   const router = useRouter()
   const [donors, setDonors] = useState<{ id: string; name: string }[]>([])
@@ -115,6 +299,21 @@ export default function ForecastPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const [entries, setEntries] = useState<ForecastEntry[]>([])
+  const [currentEntry, setCurrentEntry] = useState<ForecastEntry>({
+    id: crypto.randomUUID(),
+    month: '',
+    state: '',
+    amount: '',
+    localities: '',
+    org_name: '', // Will be pre-filled from user data
+    intermediary: '',
+    transfer_method: '',
+    source: '',
+    receiving_mag: '',
+    status: 'planned'
+  })
+  const [isFormOpen, setIsFormOpen] = useState(true)
 
   useEffect(() => {
     const fetchData = async () => {
@@ -155,7 +354,7 @@ export default function ForecastPage() {
         
         // Initialize country level data
         MONTHS.forEach(month => {
-          const monthKey = `${YEAR}-${String(MONTHS.indexOf(month) + 5).padStart(2, '0')}`
+          const monthKey = `${YEAR}-${String(MONTHS.indexOf(month) + 1).padStart(2, '0')}`
           initialData.country[monthKey] = ''
         })
 
@@ -163,7 +362,7 @@ export default function ForecastPage() {
         uniqueStates.forEach(state => {
           initialData.states[state.id] = {}
           MONTHS.forEach(month => {
-            const monthKey = `${YEAR}-${String(MONTHS.indexOf(month) + 5).padStart(2, '0')}`
+            const monthKey = `${YEAR}-${String(MONTHS.indexOf(month) + 1).padStart(2, '0')}`
             initialData.states[state.id][monthKey] = ''
           })
         })
@@ -201,59 +400,45 @@ export default function ForecastPage() {
     }))
   }
 
+  const handleAddEntry = () => {
+    setEntries([...entries, currentEntry])
+    setCurrentEntry({
+      ...currentEntry,
+      id: crypto.randomUUID(),
+      amount: '',
+      localities: ''
+      // Keep other fields for convenience
+    })
+  }
+
   const handleSubmit = async () => {
     try {
-      if (!selectedDonor) throw new Error('Please select a donor')
-      if (!selectedCluster) throw new Error('Please select a cluster')
-
-      setError(null)
-      setIsSubmitting(true)
-
-      const forecasts = [
-        // Country level forecasts
-        ...Object.entries(forecastData.country)
-          .filter(([_, amount]) => amount !== '')
-          .map(([month, amount]) => ({
-            donor_id: selectedDonor,
-            cluster_id: selectedCluster,
-            state_id: null, // null for country level
-            month: new Date(`${month}-01`).toISOString(),
-            amount: parseFloat(amount)
-          })),
-        // State level forecasts
-        ...Object.entries(forecastData.states).flatMap(([stateId, months]) =>
-          Object.entries(months)
-            .filter(([_, amount]) => amount !== '')
-            .map(([month, amount]) => ({
-              donor_id: selectedDonor,
-              cluster_id: selectedCluster,
-              state_id: stateId,
-              month: new Date(`${month}-01`).toISOString(),
-              amount: parseFloat(amount)
-            }))
-        )
-      ]
-
-      if (forecasts.length === 0) {
-        throw new Error('Please enter at least one forecast amount')
-      }
-
       const response = await fetch('/api/forecasts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(forecasts)
+        body: JSON.stringify(entries.map(entry => ({
+          donor_id: donors[0].id,
+          state_id: states.find(s => s.state_name === entry.state)?.id,
+          state_name: entry.state,
+          month: new Date(entry.month).toISOString(),
+          amount: parseFloat(entry.amount),
+          localities: entry.localities,
+          org_name: entry.org_name,
+          intermediary: entry.intermediary,
+          transfer_method: entry.transfer_method,
+          source: entry.source,
+          receiving_mag: entry.receiving_mag,
+          status: entry.status
+        })))
       })
 
       if (!response.ok) throw new Error('Failed to submit forecasts')
-
+      
       alert('Forecasts submitted successfully!')
-      setSelectedDonor('')
-      setSelectedCluster('')
-      setForecastData({ country: {}, states: {} })
+      setEntries([])
+      
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An unexpected error occurred')
-    } finally {
-      setIsSubmitting(false)
     }
   }
 
@@ -362,7 +547,6 @@ export default function ForecastPage() {
 
                   return {
                     donor_id: donors[0].id,
-                    cluster_id: selectedCluster || null,
                     state_id: matchingState?.id || null,
                     state_name: row.State,
                     month: parsedDate.toISOString(),
@@ -546,6 +730,103 @@ export default function ForecastPage() {
     )
   }
 
+  // Update the form section
+  const FormSection = () => {
+    // Initialize with 5 empty rows
+    const [rows, setRows] = useState<ForecastEntry[]>(() => 
+      Array(5).fill(null).map(() => ({
+        id: crypto.randomUUID(),
+        month: '',
+        state: '',
+        amount: '',
+        localities: '',
+        org_name: '', // Will be pre-filled from user data
+        intermediary: '',
+        transfer_method: '',
+        source: '',
+        receiving_mag: '',
+        status: 'planned'
+      }))
+    )
+
+    const handleAddRow = () => {
+      setRows([...rows, {
+        id: crypto.randomUUID(),
+        month: '',
+        state: '',
+        amount: '',
+        localities: '',
+        org_name: '', 
+        intermediary: '',
+        transfer_method: '',
+        source: '',
+        receiving_mag: '',
+        status: 'planned'
+      }])
+    }
+
+    const handleDeleteRow = (id: string) => {
+      setRows(rows.filter(row => row.id !== id))
+    }
+
+    const handleRowChange = (id: string, updatedEntry: ForecastEntry) => {
+      setRows(rows.map(row => 
+        row.id === id ? { ...updatedEntry, id } : row
+      ))
+    }
+
+    return (
+      <CollapsibleRow 
+        title="Submit Forecast (Form)" 
+        variant="primary"
+        defaultOpen={isFormOpen}
+        onOpenChange={setIsFormOpen}
+      >
+        <div className="space-y-6 pt-4">
+          <div className="border rounded-lg overflow-hidden">
+            <table className="w-full text-sm">
+              <thead className="bg-muted">
+                <tr>
+                  <th className="p-2 text-left">Month <span className="text-red-500">*</span></th>
+                  <th className="p-2 text-left">State <span className="text-red-500">*</span></th>
+                  <th className="p-2 text-left">Amount <span className="text-red-500">*</span></th>
+                  <th className="p-2 text-left">Localities</th>
+                  <th className="p-2 text-left">Intermediary <span className="text-red-500">*</span></th>
+                  <th className="p-2 text-left">Transfer Method <span className="text-red-500">*</span></th>
+                  <th className="p-2 text-left">Source <span className="text-red-500">*</span></th>
+                  <th className="p-2 text-left">Receiving MAG <span className="text-red-500">*</span></th>
+                  <th className="p-2 text-left">Status <span className="text-red-500">*</span></th>
+                  <th className="p-2 w-20 text-center">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map(row => (
+                  <EntryFormRow
+                    key={row.id}
+                    entry={row}
+                    onChange={(updated) => handleRowChange(row.id, updated)}
+                    onDelete={() => handleDeleteRow(row.id)}
+                    onAdd={handleAddRow}
+                    states={states}
+                    months={MONTHS}
+                  />
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <Button 
+            onClick={handleSubmit} 
+            className="w-full"
+            disabled={rows.length === 0}
+          >
+            Submit All Entries
+          </Button>
+        </div>
+      </CollapsibleRow>
+    )
+  }
+
   return (
     <div className="max-w-7xl mx-auto p-6 space-y-6">
       <div className="flex items-center justify-between">
@@ -575,93 +856,7 @@ export default function ForecastPage() {
       {/* Submit Options Section */}
       <div className="space-y-4">
         {/* Manual Input Tool - renamed */}
-        <CollapsibleRow title="Submit Forecast (Form)" variant="primary">
-          <div className="space-y-6 pt-4">
-            <div className="space-y-2">
-              <Label htmlFor="cluster">Cluster</Label>
-              <Select value={selectedCluster} onValueChange={setSelectedCluster}>
-                <SelectTrigger id="cluster">
-                  <SelectValue placeholder="Select a cluster" />
-                </SelectTrigger>
-                <SelectContent>
-                  {clusters.map((cluster) => (
-                    <SelectItem key={cluster.id} value={cluster.id}>
-                      {cluster.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-4">
-              <Label>Monthly Forecasts for {YEAR}</Label>
-              
-              {/* Country Level Forecasts */}
-              <CollapsibleRow title="Country Level" variant="default">
-                <div className="grid grid-cols-4 gap-4 pt-2">
-                  {MONTHS.map((month) => {
-                    const monthKey = `${YEAR}-${String(MONTHS.indexOf(month) + 5).padStart(2, '0')}`
-                    return (
-                      <div key={month} className="space-y-2">
-                        <Label className="text-sm text-center block">
-                          {month}
-                        </Label>
-                        <Input
-                          type="number"
-                          value={forecastData.country[monthKey] || ''}
-                          onChange={(e) => handleCountryAmountChange(monthKey, e.target.value)}
-                          placeholder="0"
-                          min="0"
-                          step="0.01"
-                          className="text-right"
-                        />
-                      </div>
-                    )}
-                  )}
-                </div>
-              </CollapsibleRow>
-
-              {/* State Level Forecasts */}
-              <CollapsibleRow title="State Level" variant="default">
-                <div className="space-y-2">
-                  {states.map((state) => (
-                    <CollapsibleRow key={state.id} title={state.state_name}>
-                      <div className="grid grid-cols-4 gap-4 pt-2">
-                        {MONTHS.map((month) => {
-                          const monthKey = `${YEAR}-${String(MONTHS.indexOf(month) + 5).padStart(2, '0')}`
-                          return (
-                            <div key={month} className="space-y-2">
-                              <Label className="text-sm text-center block">
-                                {month}
-                              </Label>
-                              <Input
-                                type="number"
-                                value={forecastData.states[state.id]?.[monthKey] || ''}
-                                onChange={(e) => handleStateAmountChange(state.id, monthKey, e.target.value)}
-                                placeholder="0"
-                                min="0"
-                                step="0.01"
-                                className="text-right"
-                              />
-                            </div>
-                          )}
-                        )}
-                      </div>
-                    </CollapsibleRow>
-                  ))}
-                </div>
-              </CollapsibleRow>
-            </div>
-
-            <Button 
-              className="w-full" 
-              onClick={handleSubmit} 
-              disabled={isSubmitting}
-            >
-              {isSubmitting ? 'Submitting...' : 'Submit Manual Forecast'}
-            </Button>
-          </div>
-        </CollapsibleRow>
+        <FormSection />
 
         {/* CSV Upload - renamed */}
         <CollapsibleRow title="Submit Forecast (CSV Upload)" variant="primary">
