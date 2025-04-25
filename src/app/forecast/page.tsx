@@ -348,7 +348,6 @@ export default function ForecastPage() {
     receiving_mag: '',
     status: 'planned'
   })
-  const [isFormOpen, setIsFormOpen] = useState(true)
   const [donorOrgType, setDonorOrgType] = useState<string>('')
   const [userId, setUserId] = useState<string>('')
 
@@ -657,12 +656,10 @@ export default function ForecastPage() {
                     return null
                   }
 
-                  // Try to find matching state using fuzzy matching
                   const matchingState = states.find(s => 
                     s.state_name.toLowerCase() === row.State.toLowerCase()
                   )
 
-                  // Clean and parse amount
                   const cleanedAmount = parseFloat(row.Amount.replace(/[^0-9.-]/g, ''))
                   if (isNaN(cleanedAmount)) {
                     console.error('Invalid amount:', row.Amount)
@@ -675,16 +672,15 @@ export default function ForecastPage() {
                     state_name: row.State,
                     month: parsedDate.toISOString(),
                     amount: cleanedAmount,
-                    localities: row.Localities,
-                    org_name: row['Org Name'],
-                    intermediary: row.Intermediary,
-                    transfer_method: row['Transfer Method'],
-                    source: row.Source,
-                    receiving_mag: row['Receiving MAG'],
-                    status: row.Status ? (
-                      row.Status?.toLowerCase().trim() === 'completed' || 
-                      row.Status?.toLowerCase().trim() === 'complete' ? 'complete' : 'planned'
-                    ) : 'planned'
+                    localities: row.Localities || null,
+                    org_name: donors[0].name,
+                    intermediary: row.Intermediary || null,
+                    transfer_method: row['Transfer Method'] || null,
+                    source: row.Source || null,
+                    receiving_mag: row['Receiving MAG'] || null,
+                    status: row.Status?.toLowerCase().trim() === 'complete' ? 'complete' : 'planned',
+                    org_type: donorOrgType || null,
+                    created_by: userId || null
                   }
                 } catch (err) {
                   console.error('Error processing row:', row, err)
@@ -860,8 +856,7 @@ export default function ForecastPage() {
       <CollapsibleRow 
         title="Submit Forecast (Form)" 
         variant="primary"
-        defaultOpen={isFormOpen}
-        onOpenChange={setIsFormOpen}
+        defaultOpen={false}
       >
         <div className="space-y-6 pt-4">
           <div className="border rounded-lg overflow-hidden">
@@ -898,7 +893,7 @@ export default function ForecastPage() {
 
           <Button 
             onClick={handleSubmit} 
-            className="w-full"
+            className="w-full bg-[#007229] hover:bg-[#007229]/90 text-white"
             disabled={rows.length === 0}
           >
             Submit All Entries
@@ -940,7 +935,11 @@ export default function ForecastPage() {
         <FormSection />
 
         {/* CSV Upload - renamed */}
-        <CollapsibleRow title="Submit Forecast (CSV Upload)" variant="primary">
+        <CollapsibleRow 
+          title="Submit Forecast (CSV Upload)" 
+          variant="primary"
+          defaultOpen={false}
+        >
           <div className="space-y-4 pt-4">
             <UploadGuide />
             <div className="flex items-center gap-4">
@@ -961,7 +960,7 @@ export default function ForecastPage() {
             </div>
 
             <Button 
-              className="w-full" 
+              className="w-full bg-[#007229] hover:bg-[#007229]/90 text-white disabled:bg-[#007229] disabled:opacity-100" 
               onClick={handleFileUpload}
               disabled={isSubmitting || !selectedFile}
             >
