@@ -41,7 +41,7 @@ export async function POST(request: Request) {
           source: forecast.source,
           receiving_mag: forecast.receiving_mag,
           state_name: forecast.state_name,
-          status: forecast.status === 'complete' ? 'complete' : 'planned'
+          status: forecast.status || 'planned'
         }
       }), {
         onConflict: 'org_name,state_name,month',

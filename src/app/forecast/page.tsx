@@ -17,6 +17,13 @@ import Papa from 'papaparse'
 import { FileInput } from '@/components/ui/file-input'
 import { ViewForecasts } from './components/ViewForecasts'
 import { useRouter } from 'next/navigation'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
 
 const MONTHS = ['May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
 const YEAR = '2025'
@@ -44,6 +51,54 @@ type CSVRow = {
   'Receiving MAG': string
   Status: string
   [key: string]: string
+}
+
+const parseDate = (dateStr: string): Date | null => {
+  try {
+    // Case 1: Already in YYYY-MM-DD format
+    if (dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
+      const date = new Date(dateStr)
+      return new Date(date.getFullYear(), date.getMonth(), 1)
+    }
+
+    // Case 2: MMM-YY format (e.g., "Jan-25")
+    if (dateStr.match(/^[A-Za-z]{3}-\d{2}$/)) {
+      const [month, year] = dateStr.split('-')
+      const monthMap: { [key: string]: string } = {
+        'jan': '01', 'feb': '02', 'mar': '03', 'apr': '04',
+        'may': '05', 'jun': '06', 'jul': '07', 'aug': '08',
+        'sep': '09', 'oct': '10', 'nov': '11', 'dec': '12'
+      }
+      const monthNum = monthMap[month.toLowerCase()]
+      if (!monthNum) return null
+      return new Date(`20${year}-${monthNum}-01`)
+    }
+
+    // Case 3: MM/DD/YY or MM/DD/YYYY
+    if (dateStr.match(/^\d{1,2}\/\d{1,2}\/\d{2,4}$/)) {
+      const [month, _, year] = dateStr.split('/')
+      const fullYear = year.length === 2 ? `20${year}` : year
+      return new Date(`${fullYear}-${month.padStart(2, '0')}-01`)
+    }
+
+    // Case 4: DD-MMM-YYYY or DD-MMM-YY
+    if (dateStr.match(/^\d{1,2}-[A-Za-z]{3}-\d{2,4}$/)) {
+      const [_, month, year] = dateStr.split('-')
+      const monthMap: { [key: string]: string } = {
+        'jan': '01', 'feb': '02', 'mar': '03', 'apr': '04',
+        'may': '05', 'jun': '06', 'jul': '07', 'aug': '08',
+        'sep': '09', 'oct': '10', 'nov': '11', 'dec': '12'
+      }
+      const monthNum = monthMap[month.toLowerCase()]
+      if (!monthNum) return null
+      const fullYear = year.length === 2 ? `20${year}` : year
+      return new Date(`${fullYear}-${monthNum}-01`)
+    }
+
+    return null
+  } catch (err) {
+    return null
+  }
 }
 
 export default function ForecastPage() {
@@ -206,48 +261,16 @@ export default function ForecastPage() {
     // Sample data rows with realistic values
     const sampleRows = [
       {
-        Month: 'Jan-25',
+        Month: 'Jan-25',  // Use MMM-YY format
         State: 'Kassala',
         Amount: '$ 20,000',
-        Localities: '',
+        Localities: 'El Girba, Kassala City',
         'Org Name': 'P2H',
         Intermediary: 'LoHub',
         'Transfer Method': 'Hawala',
         Source: 'Private',
-        'Receiving MAG': 'ERR'
-      },
-      {
-        Month: 'Jan-25',
-        State: 'North Darfur',
-        Amount: '$ 5,961',
-        Localities: '',
-        'Org Name': 'P2H',
-        Intermediary: 'LoHub',
-        'Transfer Method': 'Hawala',
-        Source: 'Private',
-        'Receiving MAG': 'ERR'
-      },
-      {
-        Month: 'Feb-25',
-        State: 'Khartoum',
-        Amount: '$ 51,500',
-        Localities: '',
-        'Org Name': 'P2H',
-        Intermediary: 'LoHub',
-        'Transfer Method': 'Hawala',
-        Source: 'Private',
-        'Receiving MAG': 'ERR'
-      },
-      {
-        Month: 'Mar-25',
-        State: 'Sinar',
-        Amount: '$ 43,000',
-        Localities: '',
-        'Org Name': 'P2H',
-        Intermediary: 'LoHub',
-        'Transfer Method': 'Hawala',
-        Source: 'Private',
-        'Receiving MAG': 'ERR'
+        'Receiving MAG': 'ERR',
+        Status: 'complete'
       }
     ]
 
@@ -261,7 +284,8 @@ export default function ForecastPage() {
         'Intermediary',
         'Transfer Method',
         'Source',
-        'Receiving MAG'
+        'Receiving MAG',
+        'Status'
       ],
       data: sampleRows
     })
@@ -318,42 +342,9 @@ export default function ForecastPage() {
               .filter(row => row.Month && row.State && row.Amount)
               .map(row => {
                 try {
-                  let dateObj: Date;
-                  
-                  // Check if the date is already in YYYY-MM-DD format
-                  if (row.Month.match(/^\d{4}-\d{2}-\d{2}$/)) {
-                    dateObj = new Date(row.Month);
-                  } else {
-                    // Parse MMM-YY format
-                    const [month, year] = row.Month.split('-')
-                    
-                    // Validate year format
-                    if (!year || year.length !== 2) {
-                      console.error('Invalid year format:', row.Month)
-                      return null
-                    }
-
-                    // Map month names to numbers
-                    const monthMap: { [key: string]: string } = {
-                      'Jan': '01', 'Feb': '02', 'Mar': '03', 'Apr': '04',
-                      'May': '05', 'Jun': '06', 'Jul': '07', 'Aug': '08',
-                      'Sep': '09', 'Oct': '10', 'Nov': '11', 'Dec': '12'
-                    }
-
-                    const monthNum = monthMap[month.substring(0, 3)]
-                    if (!monthNum) {
-                      console.error('Invalid month:', month)
-                      return null
-                    }
-
-                    const fullYear = `20${year}`
-                    const isoDate = `${fullYear}-${monthNum}-01`
-                    dateObj = new Date(isoDate)
-                  }
-
-                  // Validate the date is valid
-                  if (isNaN(dateObj.getTime())) {
-                    console.error('Invalid date:', row.Month)
+                  const parsedDate = parseDate(row.Month)
+                  if (!parsedDate) {
+                    console.error('Invalid date format:', row.Month)
                     return null
                   }
 
@@ -364,17 +355,17 @@ export default function ForecastPage() {
 
                   // Clean and parse amount
                   const cleanedAmount = parseFloat(row.Amount.replace(/[^0-9.-]/g, ''))
-
-                  console.log('Row Status:', row.Status)
-                  console.log('Processed Status:', row.Status?.toLowerCase().trim() === 'completed' || 
-                                 row.Status?.toLowerCase().trim() === 'complete' ? 'complete' : 'planned')
+                  if (isNaN(cleanedAmount)) {
+                    console.error('Invalid amount:', row.Amount)
+                    return null
+                  }
 
                   return {
                     donor_id: donors[0].id,
                     cluster_id: selectedCluster || null,
                     state_id: matchingState?.id || null,
                     state_name: row.State,
-                    month: dateObj.toISOString(),
+                    month: parsedDate.toISOString(),
                     amount: cleanedAmount,
                     localities: row.Localities,
                     org_name: row['Org Name'],
@@ -382,19 +373,20 @@ export default function ForecastPage() {
                     transfer_method: row['Transfer Method'],
                     source: row.Source,
                     receiving_mag: row['Receiving MAG'],
-                    status: row.Status?.toLowerCase().trim() === 'completed' || 
-                           row.Status?.toLowerCase().trim() === 'complete' ? 'complete' : 'planned'
+                    status: row.Status ? (
+                      row.Status?.toLowerCase().trim() === 'completed' || 
+                      row.Status?.toLowerCase().trim() === 'complete' ? 'complete' : 'planned'
+                    ) : 'planned'
                   }
                 } catch (err) {
                   console.error('Error processing row:', row, err)
                   return null
                 }
               })
-              .filter(forecast => forecast !== null)
+              .filter((forecast): forecast is NonNullable<typeof forecast> => forecast !== null)
 
             if (forecasts.length === 0) {
-              setError('No valid forecast data found in CSV')
-              return
+              throw new Error('No valid forecast data found in CSV. Please check date formats (YYYY-MM-DD, MMM-YY, MM/DD/YY, DD-MMM-YY) and other required fields.')
             }
 
             // Submit forecasts
@@ -423,6 +415,135 @@ export default function ForecastPage() {
       setError(err instanceof Error ? err.message : 'An unexpected error occurred')
       setIsSubmitting(false)
     }
+  }
+
+  // Update the guide component to be collapsible
+  const UploadGuide = () => {
+    // Keep existing states from the parent component
+    const statesList = states.map(s => s.state_name).sort()
+
+    return (
+      <CollapsibleRow title="📝 CSV Upload Guide" variant="default">
+        <div className="pt-2">
+          <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
+            {/* Left Column */}
+            <div className="space-y-2">
+              <div className="space-y-1">
+                <div className="font-medium flex items-center gap-2">
+                  <span>📅</span> Month Format
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Use MMM-YY format (e.g., Jan-25). Month when disbursement is made/intended to MAG
+                </p>
+              </div>
+
+              <div className="space-y-1">
+                <div className="font-medium flex items-center gap-2">
+                  <span>🌍</span> State
+                  <Dialog>
+                    <DialogTrigger asChild>
+                      <button className="text-xs text-blue-500 hover:underline ml-2">
+                        View States List
+                      </button>
+                    </DialogTrigger>
+                    <DialogContent className="bg-white">
+                      <DialogHeader>
+                        <DialogTitle>Available States</DialogTitle>
+                      </DialogHeader>
+                      <div className="grid grid-cols-2 gap-2 max-h-[60vh] overflow-y-auto">
+                        {statesList.map((state) => (
+                          <div key={state} className="text-sm p-2 bg-gray-50 rounded border border-gray-100">
+                            {state}
+                          </div>
+                        ))}
+                      </div>
+                    </DialogContent>
+                  </Dialog>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Must match our state list exactly. State where MAG is operational
+                </p>
+              </div>
+
+              <div className="space-y-1">
+                <div className="font-medium flex items-center gap-2">
+                  <span>💰</span> Amount
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Numbers only or with currency symbol (e.g., 20000 or $20,000)
+                </p>
+              </div>
+
+              <div className="space-y-1">
+                <div className="font-medium flex items-center gap-2">
+                  <span>📍</span> Localities
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Optional free text. List of specific localities if applicable
+                </p>
+              </div>
+
+              <div className="space-y-1">
+                <div className="font-medium flex items-center gap-2">
+                  <span>🏢</span> Org Name
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Your organization name
+                </p>
+              </div>
+            </div>
+
+            {/* Right Column */}
+            <div className="space-y-2">
+              <div className="space-y-1">
+                <div className="font-medium flex items-center gap-2">
+                  <span>🤝</span> Intermediary
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Organization directing final disbursement. Entity collecting banking/transfer details
+                </p>
+              </div>
+
+              <div className="space-y-1">
+                <div className="font-medium flex items-center gap-2">
+                  <span>💳</span> Transfer Method
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  How funds are transferred internationally (e.g., Bankak, Hawala)
+                </p>
+              </div>
+
+              <div className="space-y-1">
+                <div className="font-medium flex items-center gap-2">
+                  <span>📊</span> Source
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Private, UN, or Governmental. General category of funding source
+                </p>
+              </div>
+
+              <div className="space-y-1">
+                <div className="font-medium flex items-center gap-2">
+                  <span>👥</span> Receiving MAG
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  MAG identifier or type. Use grouping/type if name cannot be shared
+                </p>
+              </div>
+
+              <div className="space-y-1">
+                <div className="font-medium flex items-center gap-2">
+                  <span>📊</span> Status
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  'planned' or 'complete'. Use planned for future, complete for past months
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </CollapsibleRow>
+    )
   }
 
   return (
@@ -545,6 +666,7 @@ export default function ForecastPage() {
         {/* CSV Upload - renamed */}
         <CollapsibleRow title="Submit Forecast (CSV Upload)" variant="primary">
           <div className="space-y-4 pt-4">
+            <UploadGuide />
             <div className="flex items-center gap-4">
               <Button
                 variant="outline"
