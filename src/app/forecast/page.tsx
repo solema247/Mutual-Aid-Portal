@@ -350,6 +350,7 @@ export default function ForecastPage() {
   })
   const [donorOrgType, setDonorOrgType] = useState<string>('')
   const [userId, setUserId] = useState<string>('')
+  const [lastUpload, setLastUpload] = useState<string | null>(null)
 
   useEffect(() => {
     const fetchData = async () => {
@@ -421,6 +422,21 @@ export default function ForecastPage() {
         })
 
         setForecastData(initialData)
+
+        // Fetch last upload timestamp
+        const { data: lastUploadData, error: lastUploadError } = await supabase
+          .from('donor_forecasts')
+          .select('created_at')
+          .eq('donor_id', loggedInDonor.donor_id)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single()
+
+        if (!lastUploadError && lastUploadData) {
+          // Format the date
+          const date = new Date(lastUploadData.created_at)
+          setLastUpload(date.toLocaleString())
+        }
       } catch (err) {
         console.error('Error fetching data:', err)
         setError('Failed to load data. Please try again later.')
@@ -927,6 +943,43 @@ export default function ForecastPage() {
         <div className="h-9 px-3 py-1 rounded-md border bg-muted/50 flex items-center">
           {donors[0]?.name}
         </div>
+      </div>
+
+      {/* Add this new explainer section */}
+      <div className="grid grid-cols-3 gap-4 p-4 bg-muted/20 rounded-lg">
+        <div className="space-y-2">
+          <div className="flex items-center gap-2 font-medium">
+            <span className="text-lg">📝</span>
+            Submit Forecast (Form)
+          </div>
+          <p className="text-sm text-muted-foreground">
+            Enter forecast data manually using an interactive form
+          </p>
+        </div>
+        <div className="space-y-2">
+          <div className="flex items-center gap-2 font-medium">
+            <span className="text-lg">📄</span>
+            Submit Forecast (CSV)
+          </div>
+          <p className="text-sm text-muted-foreground">
+            Upload multiple forecasts using a CSV file
+          </p>
+        </div>
+        <div className="space-y-2">
+          <div className="flex items-center gap-2 font-medium">
+            <span className="text-lg">📈</span>
+            View Forecasts
+          </div>
+          <p className="text-sm text-muted-foreground">
+            View and analyze submitted forecast data
+          </p>
+        </div>
+      </div>
+
+      {/* Last Upload Info */}
+      <div className="px-4 py-2 bg-muted/10 rounded-lg text-sm text-muted-foreground">
+        <span className="font-medium">Last Upload: </span>
+        {lastUpload ? lastUpload : 'No previous uploads'}
       </div>
 
       {/* Submit Options Section */}
