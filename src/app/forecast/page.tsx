@@ -25,6 +25,9 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Plus, Trash2 } from 'lucide-react'
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible'
+import { ChevronDown } from 'lucide-react'
+import { cn } from '@/lib/utils'
 
 const MONTHS = [
   'January', 'February', 'March', 'April', 'May', 'June', 
@@ -352,6 +355,11 @@ export default function ForecastPage() {
   const [userId, setUserId] = useState<string>('')
   const [lastUpload, setLastUpload] = useState<string | null>(null)
 
+  // Add state for form section open/close
+  const [isFormOpen, setIsFormOpen] = useState(false)
+  const [isCsvOpen, setIsCsvOpen] = useState(false)
+  const [isViewOpen, setIsViewOpen] = useState(false)
+
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -470,7 +478,7 @@ export default function ForecastPage() {
   }
 
   const handleAddRow = () => {
-    setRows([...rows, {
+    setRows(prev => [...prev, {
       id: crypto.randomUUID(),
       month: '',
       state: '',
@@ -866,58 +874,74 @@ export default function ForecastPage() {
     )
   }
 
-  // Modify FormSection to be simpler
-  const FormSection = () => {
+  // Update FormSection to accept and use isOpen prop
+  const FormSection = React.memo(({ isOpen, onOpenChange }: { isOpen: boolean; onOpenChange: (open: boolean) => void }) => {
     return (
-      <CollapsibleRow 
-        title="Submit Forecast (Form)" 
-        variant="primary"
-        defaultOpen={false}
+      <Collapsible
+        open={isOpen}
+        onOpenChange={onOpenChange}
+        className="w-full"
       >
-        <div className="space-y-6 pt-4">
-          <div className="border rounded-lg overflow-hidden">
-            <table className="w-full text-sm">
-              <thead className="bg-muted">
-                <tr>
-                  <th className="p-2 text-left">Month <span className="text-red-500">*</span></th>
-                  <th className="p-2 text-left">State <span className="text-red-500">*</span></th>
-                  <th className="p-2 text-left">Amount <span className="text-red-500">*</span></th>
-                  <th className="p-2 text-left">Localities</th>
-                  <th className="p-2 text-left">Intermediary <span className="text-red-500">*</span></th>
-                  <th className="p-2 text-left">Transfer Method <span className="text-red-500">*</span></th>
-                  <th className="p-2 text-left">Source <span className="text-red-500">*</span></th>
-                  <th className="p-2 text-left">Receiving MAG <span className="text-red-500">*</span></th>
-                  <th className="p-2 text-left">Status <span className="text-red-500">*</span></th>
-                  <th className="p-2 w-20 text-center">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map(row => (
-                  <EntryFormRow
-                    key={row.id}
-                    entry={row}
-                    onChange={(updated) => handleRowChange(row.id, updated)}
-                    onDelete={() => handleDeleteRow(row.id)}
-                    onAdd={handleAddRow}
-                    states={states}
-                    months={MONTHS}
-                  />
-                ))}
-              </tbody>
-            </table>
-          </div>
+        <CollapsibleTrigger 
+          className={cn(
+            "flex w-full items-center justify-between rounded-md border px-4 py-2 font-medium",
+            'bg-[#007229]/10 border-[#007229]/20 text-[#007229] hover:bg-[#007229]/20'
+          )}
+        >
+          <span>Submit Forecast (Form)</span>
+          <ChevronDown
+            className={cn("h-4 w-4 transition-transform", {
+              "transform rotate-180": isOpen,
+            })}
+          />
+        </CollapsibleTrigger>
+        <CollapsibleContent className="pt-2 pb-4">
+          <div className="space-y-6 pt-4">
+            <div className="border rounded-lg overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-muted">
+                  <tr>
+                    <th className="p-2 text-left">Month <span className="text-red-500">*</span></th>
+                    <th className="p-2 text-left">State <span className="text-red-500">*</span></th>
+                    <th className="p-2 text-left">Amount <span className="text-red-500">*</span></th>
+                    <th className="p-2 text-left">Localities</th>
+                    <th className="p-2 text-left">Intermediary <span className="text-red-500">*</span></th>
+                    <th className="p-2 text-left">Transfer Method <span className="text-red-500">*</span></th>
+                    <th className="p-2 text-left">Source <span className="text-red-500">*</span></th>
+                    <th className="p-2 text-left">Receiving MAG <span className="text-red-500">*</span></th>
+                    <th className="p-2 text-left">Status <span className="text-red-500">*</span></th>
+                    <th className="p-2 w-20 text-center">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map(row => (
+                    <EntryFormRow
+                      key={row.id}
+                      entry={row}
+                      onChange={(updated) => handleRowChange(row.id, updated)}
+                      onDelete={() => handleDeleteRow(row.id)}
+                      onAdd={handleAddRow}
+                      states={states}
+                      months={MONTHS}
+                    />
+                  ))}
+                </tbody>
+              </table>
+            </div>
 
-          <Button 
-            onClick={handleSubmit} 
-            className="w-full bg-[#007229] hover:bg-[#007229]/90 text-white"
-            disabled={rows.length === 0}
-          >
-            Submit All Entries
-          </Button>
-        </div>
-      </CollapsibleRow>
+            <Button 
+              onClick={handleSubmit} 
+              className="w-full bg-[#007229] hover:bg-[#007229]/90 text-white"
+              disabled={rows.length === 0}
+            >
+              Submit All Entries
+            </Button>
+          </div>
+        </CollapsibleContent>
+      </Collapsible>
     )
-  }
+  })
+  FormSection.displayName = 'FormSection'
 
   return (
     <div className="max-w-7xl mx-auto p-6 space-y-6">
@@ -984,47 +1008,80 @@ export default function ForecastPage() {
 
       {/* Submit Options Section */}
       <div className="space-y-4">
-        {/* Manual Input Tool - renamed */}
-        <FormSection />
+        <FormSection isOpen={isFormOpen} onOpenChange={setIsFormOpen} />
 
-        {/* CSV Upload - renamed */}
-        <CollapsibleRow 
-          title="Submit Forecast (CSV Upload)" 
-          variant="primary"
-          defaultOpen={false}
+        <Collapsible
+          open={isCsvOpen}
+          onOpenChange={setIsCsvOpen}
+          className="w-full"
         >
-          <div className="space-y-4 pt-4">
-            <UploadGuide />
-            <div className="flex items-center gap-4">
-              <Button
-                variant="outline"
-                onClick={handleDownloadTemplate}
-                className="whitespace-nowrap"
-              >
-                Download Template
-              </Button>
-              <div className="flex-1">
-                <FileInput
-                  accept=".csv"
-                  onChange={handleFileSelect}
-                  disabled={isSubmitting}
-                />
+          <CollapsibleTrigger 
+            className={cn(
+              "flex w-full items-center justify-between rounded-md border px-4 py-2 font-medium",
+              'bg-[#007229]/10 border-[#007229]/20 text-[#007229] hover:bg-[#007229]/20'
+            )}
+          >
+            <span>Submit Forecast (CSV Upload)</span>
+            <ChevronDown
+              className={cn("h-4 w-4 transition-transform", {
+                "transform rotate-180": isCsvOpen,
+              })}
+            />
+          </CollapsibleTrigger>
+          <CollapsibleContent className="pt-2 pb-4">
+            <div className="space-y-4 pt-4">
+              <UploadGuide />
+              <div className="flex items-center gap-4">
+                <Button
+                  variant="outline"
+                  onClick={handleDownloadTemplate}
+                  className="whitespace-nowrap"
+                >
+                  Download Template
+                </Button>
+                <div className="flex-1">
+                  <FileInput
+                    accept=".csv"
+                    onChange={handleFileSelect}
+                    disabled={isSubmitting}
+                  />
+                </div>
               </div>
+
+              <Button 
+                className="w-full bg-[#007229] hover:bg-[#007229]/90 text-white disabled:bg-[#007229] disabled:opacity-100" 
+                onClick={handleFileUpload}
+                disabled={isSubmitting || !selectedFile}
+              >
+                {isSubmitting ? 'Uploading...' : 'Upload CSV'}
+              </Button>
             </div>
+          </CollapsibleContent>
+        </Collapsible>
 
-            <Button 
-              className="w-full bg-[#007229] hover:bg-[#007229]/90 text-white disabled:bg-[#007229] disabled:opacity-100" 
-              onClick={handleFileUpload}
-              disabled={isSubmitting || !selectedFile}
-            >
-              {isSubmitting ? 'Uploading...' : 'Upload CSV'}
-            </Button>
-          </div>
-        </CollapsibleRow>
+        <Collapsible
+          open={isViewOpen}
+          onOpenChange={setIsViewOpen}
+          className="w-full"
+        >
+          <CollapsibleTrigger 
+            className={cn(
+              "flex w-full items-center justify-between rounded-md border px-4 py-2 font-medium",
+              'bg-[#007229]/10 border-[#007229]/20 text-[#007229] hover:bg-[#007229]/20'
+            )}
+          >
+            <span>View Forecasts</span>
+            <ChevronDown
+              className={cn("h-4 w-4 transition-transform", {
+                "transform rotate-180": isViewOpen,
+              })}
+            />
+          </CollapsibleTrigger>
+          <CollapsibleContent className="pt-2 pb-4">
+            <ViewForecasts />
+          </CollapsibleContent>
+        </Collapsible>
       </div>
-
-      {/* View Forecasts Section */}
-      <ViewForecasts />
     </div>
   )
 }

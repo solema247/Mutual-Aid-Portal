@@ -29,15 +29,11 @@ const CollapsibleRow = ({
 }: CollapsibleRowProps) => {
   const [isOpen, setIsOpen] = useState(defaultOpen || false)
 
-  const handleOpenChange = (open: boolean) => {
-    setIsOpen(open)
-    onOpenChange?.(open)
-  }
-
   return (
     <Collapsible
+      defaultOpen={defaultOpen}
       open={isOpen}
-      onOpenChange={handleOpenChange}
+      onOpenChange={setIsOpen}
       className="w-full"
     >
       <CollapsibleTrigger 
