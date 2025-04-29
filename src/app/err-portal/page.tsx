@@ -1,11 +1,15 @@
 'use client'
 
+import { useTranslation } from 'react-i18next'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { Button } from '@/components/ui/button'
+import LanguageSwitch from '@/components/LanguageSwitch'
+import '@/i18n/config'  // Update to use absolute path
 
 export default function ErrPortalPage() {
+  const { t } = useTranslation(['common', 'err'])
   const [isLoading, setIsLoading] = useState(true)
   const [user, setUser] = useState<any>(null)
 
@@ -21,6 +25,7 @@ export default function ErrPortalPage() {
 
   return (
     <div className="max-w-4xl mx-auto p-6">
+      <LanguageSwitch />
       <div className="text-center mb-12">
         <Image
           src="/logo.jpg"
@@ -30,8 +35,10 @@ export default function ErrPortalPage() {
           priority
           className="mx-auto mb-6"
         />
-        <h1 className="text-4xl font-bold mb-4">Mutual Aid Group Portal</h1>
-        <p className="text-xl mb-8">Welcome, {user?.name || 'ERR Staff'}</p>
+        <h1 className="text-4xl font-bold mb-4">{t('err:title')}</h1>
+        <p className="text-xl mb-8">
+          {t('err:welcome', { name: user?.name || t('login:err_staff') })}
+        </p>
       </div>
       
       <nav className="space-y-4">
@@ -39,10 +46,10 @@ export default function ErrPortalPage() {
           <Button className="w-full p-4" variant="outline">
             <div className="flex items-center gap-4 w-full">
               <div className="flex items-center gap-2">
-                📈 Dashboard
+                📈 {t('err:dashboard')}
               </div>
               <span className="text-sm text-muted-foreground">
-                View and manage ERR activities
+                {t('err:dashboard_desc')}
               </span>
             </div>
           </Button>
@@ -60,7 +67,7 @@ export default function ErrPortalPage() {
           window.location.href = '/login'
         }}
       >
-        🚪 Logout
+        🚪 {t('common:logout')}
       </Button>
     </div>
   )

@@ -1,0 +1,6 @@
+{
+  "title": "ERR Staff Portal",
+  "welcome": "Welcome, {{name}}",
+  "dashboard": "Dashboard",
+  "dashboard_desc": "View and manage ERR activities"
+} 

@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -13,9 +14,12 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { supabase } from '@/lib/supabaseClient'
 import Image from 'next/image'
+import LanguageSwitch from '@/components/LanguageSwitch'
+import '@/i18n/config'
 
 export default function LoginPage() {
   const router = useRouter()
+  const { t } = useTranslation(['login', 'common'])
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -126,6 +130,7 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4">
+      <LanguageSwitch />
       <div className="text-center mb-8">
         <Image
           src="/logo.jpg"
@@ -133,31 +138,34 @@ export default function LoginPage() {
           width={300}
           height={350}
           priority
-          style={{ margin: 'auto' }}
-          className="mb-6"
+          className="mx-auto mb-6"
         />
-        <h1 className="text-2xl font-bold mb-4">Mutual Aid Sudan Portal</h1>
+        <h1 className="text-2xl font-bold mb-4">{t('login:title')}</h1>
         <Button
           variant="outline"
           className="mb-8 border-2 rounded-full"
           onClick={() => window.open('https://lccsudan.org/', '_blank')}
         >
-          Visit LCC Sudan Website
+          {t('login:visit_lcc')}
         </Button>
       </div>
 
       <Card className="w-full max-w-md border-2 rounded-3xl">
         <CardHeader>
-          <h2 className="text-xl font-bold">Login</h2>
+          <h2 className="text-xl font-bold">{t('login:login_title')}</h2>
           <p className="text-sm text-muted-foreground">
-            Access Mutual Aid Sudan Portal
+            {t('login:access_text')}
           </p>
         </CardHeader>
 
         <Tabs defaultValue="err" className="w-full">
           <TabsList className="grid w-full grid-cols-2 mb-4">
-            <TabsTrigger value="err" className="rounded-full">ERR Staff</TabsTrigger>
-            <TabsTrigger value="donor" className="rounded-full">Partner</TabsTrigger>
+            <TabsTrigger value="err" className="rounded-full">
+              {t('login:err_staff')}
+            </TabsTrigger>
+            <TabsTrigger value="donor" className="rounded-full">
+              {t('login:partner')}
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="err">
@@ -169,7 +177,7 @@ export default function LoginPage() {
                   </div>
                 )}
                 <div className="space-y-2">
-                  <Label htmlFor="errId">ERR ID</Label>
+                  <Label htmlFor="errId">{t('login:err_id')}</Label>
                   <Input
                     id="errId"
                     value={errId}
@@ -179,7 +187,7 @@ export default function LoginPage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="pin">PIN</Label>
+                  <Label htmlFor="pin">{t('login:pin')}</Label>
                   <Input
                     id="pin"
                     type="password"
@@ -194,7 +202,7 @@ export default function LoginPage() {
                   className="w-full rounded-full mt-4"
                   disabled={isLoading}
                 >
-                  {isLoading ? 'Signing in...' : 'Sign in'}
+                  {isLoading ? t('login:signing_in') : t('login:sign_in')}
                 </Button>
               </CardContent>
             </form>
@@ -209,7 +217,7 @@ export default function LoginPage() {
                   </div>
                 )}
                 <div className="space-y-2">
-                  <Label htmlFor="email">Email</Label>
+                  <Label htmlFor="email">{t('login:email')}</Label>
                   <Input
                     id="email"
                     type="email"
@@ -220,7 +228,7 @@ export default function LoginPage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="password">Password</Label>
+                  <Label htmlFor="password">{t('login:password')}</Label>
                   <Input
                     id="password"
                     type="password"
@@ -235,7 +243,7 @@ export default function LoginPage() {
                   className="w-full rounded-full mt-4"
                   disabled={isLoading}
                 >
-                  {isLoading ? 'Signing in...' : 'Sign in'}
+                  {isLoading ? t('login:signing_in') : t('login:sign_in')}
                 </Button>
               </CardContent>
             </form>

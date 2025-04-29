@@ -1,11 +1,15 @@
 'use client'
 
+import { useTranslation } from 'react-i18next'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { Button } from '@/components/ui/button'
+import LanguageSwitch from '@/components/LanguageSwitch'
+import '@/i18n/config'
 
 export default function PartnerPortalPage() {
+  const { t } = useTranslation(['common', 'partner'])
   const [isLoading, setIsLoading] = useState(true)
   const [donor, setDonor] = useState<any>(null)
 
@@ -21,6 +25,7 @@ export default function PartnerPortalPage() {
 
   return (
     <div className="max-w-4xl mx-auto p-6">
+      <LanguageSwitch />
       <div className="text-center mb-12">
         <Image
           src="/logo.jpg"
@@ -30,8 +35,10 @@ export default function PartnerPortalPage() {
           priority
           className="mx-auto mb-6"
         />
-        <h1 className="text-4xl font-bold mb-4">Mutual Aid Partner Portal</h1>
-        <p className="text-xl mb-8">Welcome, {donor?.donors?.name || 'Partner'}</p>
+        <h1 className="text-4xl font-bold mb-4">{t('partner:title')}</h1>
+        <p className="text-xl mb-8">
+          {t('partner:welcome', { name: donor?.donors?.name || t('login:partner') })}
+        </p>
       </div>
       
       <nav className="space-y-4">
@@ -39,10 +46,10 @@ export default function PartnerPortalPage() {
           <Button className="w-full p-4" variant="outline">
             <div className="flex items-center gap-4 w-full">
               <div className="flex items-center gap-2">
-                📊 Forecasting Tool
+                📊 {t('partner:forecast')}
               </div>
               <span className="text-sm text-muted-foreground">
-                Plan and manage your forecasts
+                {t('partner:forecast_desc')}
               </span>
             </div>
           </Button>
@@ -60,7 +67,7 @@ export default function PartnerPortalPage() {
           window.location.href = '/login'
         }}
       >
-        🚪 Logout
+        🚪 {t('common:logout')}
       </Button>
     </div>
   )

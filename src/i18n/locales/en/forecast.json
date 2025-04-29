@@ -1,0 +1,78 @@
+{
+  "title": "Forecast Tool",
+  "back": "Back",
+  "partner": "Partner",
+  "sections": {
+    "form": {
+      "title": "Submit Forecast (Form)",
+      "description": "Enter forecast data manually using an interactive form",
+      "table": {
+        "month": "Month",
+        "state": "State",
+        "amount": "Amount",
+        "localities": "Localities",
+        "intermediary": "Intermediary",
+        "transfer_method": "Transfer Method",
+        "source": "Source",
+        "receiving_mag": "Receiving MAG",
+        "status": "Status",
+        "actions": "Actions"
+      },
+      "submit": "Submit All Entries"
+    },
+    "csv": {
+      "title": "Submit Forecast (CSV Upload)",
+      "description": "Upload multiple forecasts using a CSV file",
+      "guide": {
+        "title": "CSV Upload Guide",
+        "month": {
+          "title": "Month Format",
+          "desc": "Use MMM-YY format (e.g., Jan-25). Month when disbursement is made/intended to MAG"
+        },
+        "state": {
+          "title": "State",
+          "desc": "Must match our state list exactly. State where MAG is operational",
+          "view_list": "View States List",
+          "available_states": "Available States"
+        },
+        "amount": {
+          "title": "Amount",
+          "desc": "Numbers only or with currency symbol (e.g., 20000 or $20,000)"
+        },
+        "localities": {
+          "title": "Localities",
+          "desc": "Optional free text. List of specific localities if applicable"
+        },
+        "intermediary": {
+          "title": "Intermediary",
+          "desc": "Organization directing final disbursement. Entity collecting banking/transfer details"
+        },
+        "transfer": {
+          "title": "Transfer Method",
+          "desc": "How funds are transferred internationally (e.g., Bankak, Hawala)"
+        },
+        "source": {
+          "title": "Source",
+          "desc": "Private, UN, or Governmental. General category of funding source"
+        },
+        "mag": {
+          "title": "Receiving MAG",
+          "desc": "MAG identifier or type. Use grouping/type if name cannot be shared"
+        },
+        "status": {
+          "title": "Status",
+          "desc": "'planned' or 'complete'. Use planned for future, complete for past months"
+        }
+      },
+      "download_template": "Download Template",
+      "upload": "Upload CSV",
+      "uploading": "Uploading..."
+    },
+    "view": {
+      "title": "View Forecasts",
+      "description": "View and analyze submitted forecast data"
+    }
+  },
+  "last_upload": "Last Upload",
+  "no_uploads": "No previous uploads"
+} 

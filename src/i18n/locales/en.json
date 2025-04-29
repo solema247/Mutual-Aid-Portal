@@ -1,0 +1,31 @@
+{
+  "common": {
+    "logout": "Logout"
+  },
+  "login": {
+    "title": "Mutual Aid Sudan Portal",
+    "err_staff": "ERR Staff",
+    "partner": "Partner",
+    "visit_lcc": "Visit LCC Sudan Website",
+    "login_title": "Login",
+    "access_text": "Access Mutual Aid Sudan Portal",
+    "err_id": "ERR ID",
+    "pin": "PIN",
+    "email": "Email",
+    "password": "Password",
+    "sign_in": "Sign in",
+    "signing_in": "Signing in..."
+  },
+  "err_portal": {
+    "title": "Mutual Aid Group Portal",
+    "welcome": "Welcome, {{name}}",
+    "dashboard": "Dashboard",
+    "dashboard_desc": "View and manage ERR activities"
+  },
+  "partner_portal": {
+    "title": "Mutual Aid Partner Portal",
+    "welcome": "Welcome, {{name}}",
+    "forecast": "Forecasting Tool",
+    "forecast_desc": "Plan and manage your forecasts"
+  }
+} 

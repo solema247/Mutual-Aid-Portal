@@ -1,5 +1,6 @@
 'use client'
 
+import { useTranslation } from 'react-i18next'
 import React, { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import { Input } from '@/components/ui/input'
@@ -28,6 +29,8 @@ import { Plus, Trash2 } from 'lucide-react'
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible'
 import { ChevronDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import '@/i18n/config'
+import LanguageSwitch from '@/components/LanguageSwitch'
 
 const MONTHS = [
   'January', 'February', 'March', 'April', 'May', 'June', 
@@ -310,6 +313,7 @@ const EntryFormRow = ({
 }
 
 export default function ForecastPage() {
+  const { t } = useTranslation(['forecast', 'common'])
   const router = useRouter()
   const [donors, setDonors] = useState<{ id: string; name: string }[]>([])
   const [clusters, setClusters] = useState<{ id: string; name: string }[]>([])
@@ -359,6 +363,9 @@ export default function ForecastPage() {
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [isCsvOpen, setIsCsvOpen] = useState(false)
   const [isViewOpen, setIsViewOpen] = useState(false)
+
+  // Add this near the top of the component where other state variables are declared
+  const statesList = states.map(state => state.state_name)
 
   useEffect(() => {
     const fetchData = async () => {
@@ -876,6 +883,8 @@ export default function ForecastPage() {
 
   // Update FormSection to accept and use isOpen prop
   const FormSection = React.memo(({ isOpen, onOpenChange }: { isOpen: boolean; onOpenChange: (open: boolean) => void }) => {
+    const { t } = useTranslation(['forecast', 'common'])
+    
     return (
       <Collapsible
         open={isOpen}
@@ -888,7 +897,7 @@ export default function ForecastPage() {
             'bg-[#007229]/10 border-[#007229]/20 text-[#007229] hover:bg-[#007229]/20'
           )}
         >
-          <span>Submit Forecast (Form)</span>
+          <span>{t('forecast:sections.form.title')}</span>
           <ChevronDown
             className={cn("h-4 w-4 transition-transform", {
               "transform rotate-180": isOpen,
@@ -901,16 +910,16 @@ export default function ForecastPage() {
               <table className="w-full text-sm">
                 <thead className="bg-muted">
                   <tr>
-                    <th className="p-2 text-left">Month <span className="text-red-500">*</span></th>
-                    <th className="p-2 text-left">State <span className="text-red-500">*</span></th>
-                    <th className="p-2 text-left">Amount <span className="text-red-500">*</span></th>
-                    <th className="p-2 text-left">Localities</th>
-                    <th className="p-2 text-left">Intermediary <span className="text-red-500">*</span></th>
-                    <th className="p-2 text-left">Transfer Method <span className="text-red-500">*</span></th>
-                    <th className="p-2 text-left">Source <span className="text-red-500">*</span></th>
-                    <th className="p-2 text-left">Receiving MAG <span className="text-red-500">*</span></th>
-                    <th className="p-2 text-left">Status <span className="text-red-500">*</span></th>
-                    <th className="p-2 w-20 text-center">Actions</th>
+                    <th className="p-2 text-left">{t('forecast:sections.form.table.month')} <span className="text-red-500">*</span></th>
+                    <th className="p-2 text-left">{t('forecast:sections.form.table.state')} <span className="text-red-500">*</span></th>
+                    <th className="p-2 text-left">{t('forecast:sections.form.table.amount')} <span className="text-red-500">*</span></th>
+                    <th className="p-2 text-left">{t('forecast:sections.form.table.localities')}</th>
+                    <th className="p-2 text-left">{t('forecast:sections.form.table.intermediary')} <span className="text-red-500">*</span></th>
+                    <th className="p-2 text-left">{t('forecast:sections.form.table.transfer_method')} <span className="text-red-500">*</span></th>
+                    <th className="p-2 text-left">{t('forecast:sections.form.table.source')} <span className="text-red-500">*</span></th>
+                    <th className="p-2 text-left">{t('forecast:sections.form.table.receiving_mag')} <span className="text-red-500">*</span></th>
+                    <th className="p-2 text-left">{t('forecast:sections.form.table.status')} <span className="text-red-500">*</span></th>
+                    <th className="p-2 w-20 text-center">{t('forecast:sections.form.table.actions')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -934,7 +943,7 @@ export default function ForecastPage() {
               className="w-full bg-[#007229] hover:bg-[#007229]/90 text-white"
               disabled={rows.length === 0}
             >
-              Submit All Entries
+              {t('forecast:sections.form.submit')}
             </Button>
           </div>
         </CollapsibleContent>
@@ -945,13 +954,14 @@ export default function ForecastPage() {
 
   return (
     <div className="max-w-7xl mx-auto p-6 space-y-6">
+      <LanguageSwitch />
       <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-semibold">Forecast Tool</h2>
+        <h2 className="text-2xl font-semibold">{t('forecast:title')}</h2>
         <Button 
           variant="outline" 
           onClick={() => router.push('/')}
         >
-          Back
+          {t('forecast:back')}
         </Button>
       </div>
 
@@ -963,7 +973,7 @@ export default function ForecastPage() {
 
       {/* Donor Display - Always visible */}
       <div className="space-y-2">
-        <Label htmlFor="donor">Partner</Label>
+        <Label htmlFor="donor">{t('forecast:partner')}</Label>
         <div className="h-9 px-3 py-1 rounded-md border bg-muted/50 flex items-center">
           {donors[0]?.name}
         </div>
@@ -974,36 +984,36 @@ export default function ForecastPage() {
         <div className="space-y-2">
           <div className="flex items-center gap-2 font-medium">
             <span className="text-lg">📝</span>
-            Submit Forecast (Form)
+            {t('forecast:sections.form.title')}
           </div>
           <p className="text-sm text-muted-foreground">
-            Enter forecast data manually using an interactive form
+            {t('forecast:sections.form.description')}
           </p>
         </div>
         <div className="space-y-2">
           <div className="flex items-center gap-2 font-medium">
             <span className="text-lg">📄</span>
-            Submit Forecast (CSV)
+            {t('forecast:sections.csv.title')}
           </div>
           <p className="text-sm text-muted-foreground">
-            Upload multiple forecasts using a CSV file
+            {t('forecast:sections.csv.description')}
           </p>
         </div>
         <div className="space-y-2">
           <div className="flex items-center gap-2 font-medium">
             <span className="text-lg">📈</span>
-            View Forecasts
+            {t('forecast:sections.view.title')}
           </div>
           <p className="text-sm text-muted-foreground">
-            View and analyze submitted forecast data
+            {t('forecast:sections.view.description')}
           </p>
         </div>
       </div>
 
       {/* Last Upload Info */}
       <div className="px-4 py-2 bg-muted/10 rounded-lg text-sm text-muted-foreground">
-        <span className="font-medium">Last Upload: </span>
-        {lastUpload ? lastUpload : 'No previous uploads'}
+        <span className="font-medium">{t('forecast:last_upload')}: </span>
+        {lastUpload ? lastUpload : t('forecast:no_uploads')}
       </div>
 
       {/* Submit Options Section */}
@@ -1021,7 +1031,7 @@ export default function ForecastPage() {
               'bg-[#007229]/10 border-[#007229]/20 text-[#007229] hover:bg-[#007229]/20'
             )}
           >
-            <span>Submit Forecast (CSV Upload)</span>
+            <span>{t('forecast:sections.csv.title')}</span>
             <ChevronDown
               className={cn("h-4 w-4 transition-transform", {
                 "transform rotate-180": isCsvOpen,
@@ -1030,14 +1040,125 @@ export default function ForecastPage() {
           </CollapsibleTrigger>
           <CollapsibleContent className="pt-2 pb-4">
             <div className="space-y-4 pt-4">
-              <UploadGuide />
+              <CollapsibleRow title={t('forecast:sections.csv.guide.title')} variant="default">
+                <div className="pt-2">
+                  <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
+                    {/* Left Column */}
+                    <div className="space-y-2">
+                      <div className="space-y-1">
+                        <div className="font-medium flex items-center gap-2">
+                          <span>📅</span> {t('forecast:sections.csv.guide.month.title')}
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          {t('forecast:sections.csv.guide.month.desc')}
+                        </p>
+                      </div>
+
+                      <div className="space-y-1">
+                        <div className="font-medium flex items-center gap-2">
+                          <span>🌍</span> {t('forecast:sections.csv.guide.state.title')}
+                          <Dialog>
+                            <DialogTrigger asChild>
+                              <button className="text-xs text-blue-500 hover:underline ml-2">
+                                {t('forecast:sections.csv.guide.state.view_list')}
+                              </button>
+                            </DialogTrigger>
+                            <DialogContent className="bg-white">
+                              <DialogHeader>
+                                <DialogTitle>{t('forecast:sections.csv.guide.state.available_states')}</DialogTitle>
+                              </DialogHeader>
+                              <div className="grid grid-cols-2 gap-2 max-h-[60vh] overflow-y-auto">
+                                {states.map((state) => (
+                                  <div key={state.id} className="text-sm p-2 bg-gray-50 rounded border border-gray-100">
+                                    {state.state_name}
+                                  </div>
+                                ))}
+                              </div>
+                            </DialogContent>
+                          </Dialog>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          {t('forecast:sections.csv.guide.state.desc')}
+                        </p>
+                      </div>
+
+                      <div className="space-y-1">
+                        <div className="font-medium flex items-center gap-2">
+                          <span>💰</span> {t('forecast:sections.csv.guide.amount.title')}
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          {t('forecast:sections.csv.guide.amount.desc')}
+                        </p>
+                      </div>
+
+                      <div className="space-y-1">
+                        <div className="font-medium flex items-center gap-2">
+                          <span>📍</span> {t('forecast:sections.csv.guide.localities.title')}
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          {t('forecast:sections.csv.guide.localities.desc')}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Right Column */}
+                    <div className="space-y-2">
+                      <div className="space-y-1">
+                        <div className="font-medium flex items-center gap-2">
+                          <span>🤝</span> {t('forecast:sections.csv.guide.intermediary.title')}
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          {t('forecast:sections.csv.guide.intermediary.desc')}
+                        </p>
+                      </div>
+
+                      <div className="space-y-1">
+                        <div className="font-medium flex items-center gap-2">
+                          <span>💳</span> {t('forecast:sections.csv.guide.transfer.title')}
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          {t('forecast:sections.csv.guide.transfer.desc')}
+                        </p>
+                      </div>
+
+                      <div className="space-y-1">
+                        <div className="font-medium flex items-center gap-2">
+                          <span>📊</span> {t('forecast:sections.csv.guide.source.title')}
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          {t('forecast:sections.csv.guide.source.desc')}
+                        </p>
+                      </div>
+
+                      <div className="space-y-1">
+                        <div className="font-medium flex items-center gap-2">
+                          <span>👥</span> {t('forecast:sections.csv.guide.mag.title')}
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          {t('forecast:sections.csv.guide.mag.desc')}
+                        </p>
+                      </div>
+
+                      <div className="space-y-1">
+                        <div className="font-medium flex items-center gap-2">
+                          <span>📊</span> {t('forecast:sections.csv.guide.status.title')}
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          {t('forecast:sections.csv.guide.status.desc')}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </CollapsibleRow>
+
               <div className="flex items-center gap-4">
                 <Button
                   variant="outline"
                   onClick={handleDownloadTemplate}
                   className="whitespace-nowrap"
                 >
-                  Download Template
+                  {t('forecast:sections.csv.download_template')}
                 </Button>
                 <div className="flex-1">
                   <FileInput
@@ -1053,7 +1174,7 @@ export default function ForecastPage() {
                 onClick={handleFileUpload}
                 disabled={isSubmitting || !selectedFile}
               >
-                {isSubmitting ? 'Uploading...' : 'Upload CSV'}
+                {isSubmitting ? t('forecast:sections.csv.uploading') : t('forecast:sections.csv.upload')}
               </Button>
             </div>
           </CollapsibleContent>
@@ -1070,7 +1191,7 @@ export default function ForecastPage() {
               'bg-[#007229]/10 border-[#007229]/20 text-[#007229] hover:bg-[#007229]/20'
             )}
           >
-            <span>View Forecasts</span>
+            <span>{t('forecast:sections.view.title')}</span>
             <ChevronDown
               className={cn("h-4 w-4 transition-transform", {
                 "transform rotate-180": isViewOpen,
