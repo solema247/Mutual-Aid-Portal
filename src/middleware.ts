@@ -2,9 +2,22 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
 export async function middleware(req: NextRequest) {
-  // Check for authentication cookie
   const isAuthenticated = req.cookies.get('isAuthenticated')
   const userType = req.cookies.get('userType')
+  const path = req.nextUrl.pathname
+
+  // If trying to access root, redirect based on user type
+  if (path === '/') {
+    if (!isAuthenticated) {
+      return NextResponse.redirect(new URL('/login', req.url))
+    }
+    if (userType?.value === 'err') {
+      return NextResponse.redirect(new URL('/err-portal', req.url))
+    }
+    if (userType?.value === 'partner') {
+      return NextResponse.redirect(new URL('/partner-portal', req.url))
+    }
+  }
 
   // Allow login and change-password pages access
   if (req.nextUrl.pathname === '/login' || req.nextUrl.pathname === '/change-password') {
@@ -33,10 +46,10 @@ export async function middleware(req: NextRequest) {
 export const config = {
   matcher: [
     '/',
+    '/err-portal/:path*',
+    '/partner-portal/:path*',
     '/forecast/:path*',
     '/dashboard/:path*',
-    // Add other protected routes here
-    // Exclude auth-related paths
-    '/((?!_next/static|_next/image|favicon.ico|public|login|api/auth).*)',
+    '/((?!api|_next/static|_next/image|favicon.ico|logo.jpg).*)',
   ],
 } 

@@ -8,13 +8,11 @@ import { Label } from '@/components/ui/label'
 import {
   Card,
   CardContent,
-  CardDescription,
-  CardFooter,
   CardHeader,
-  CardTitle,
 } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { supabase } from '@/lib/supabaseClient'
+import Image from 'next/image'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -54,8 +52,8 @@ export default function LoginPage() {
       document.cookie = `isAuthenticated=true; path=/`
       document.cookie = `userType=err; path=/`
 
-      // Redirect to portal
-      window.location.href = '/'
+      // Redirect to ERR dashboard instead of root
+      window.location.href = '/err-portal'
     } catch (err) {
       console.error('Login error:', err)
       setError('Failed to login. Please try again.')
@@ -114,9 +112,9 @@ export default function LoginPage() {
       document.cookie = `isAuthenticated=true; path=/`
       document.cookie = `userType=partner; path=/`
 
-      console.log('Redirecting to home...')
+      console.log('Redirecting to forecast...')
       await new Promise(resolve => setTimeout(resolve, 1000)) // Delay to see logs
-      window.location.href = '/'
+      window.location.href = '/partner-portal'
 
     } catch (err) {
       console.error('Login error:', err)
@@ -127,24 +125,44 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader className="space-y-1">
-          <CardTitle className="text-2xl font-bold">Login</CardTitle>
-          <CardDescription>
+    <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4">
+      <div className="text-center mb-8">
+        <Image
+          src="/logo.jpg"
+          alt="LCC Sudan Logo"
+          width={300}
+          height={350}
+          priority
+          style={{ margin: 'auto' }}
+          className="mb-6"
+        />
+        <h1 className="text-2xl font-bold mb-4">Mutual Aid Sudan Portal</h1>
+        <Button
+          variant="outline"
+          className="mb-8 border-2 rounded-full"
+          onClick={() => window.open('https://lccsudan.org/', '_blank')}
+        >
+          Visit LCC Sudan Website
+        </Button>
+      </div>
+
+      <Card className="w-full max-w-md border-2 rounded-3xl">
+        <CardHeader>
+          <h2 className="text-xl font-bold">Login</h2>
+          <p className="text-sm text-muted-foreground">
             Access Mutual Aid Sudan Portal
-          </CardDescription>
+          </p>
         </CardHeader>
 
         <Tabs defaultValue="err" className="w-full">
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="err">ERR Staff</TabsTrigger>
-            <TabsTrigger value="donor">Partner</TabsTrigger>
+          <TabsList className="grid w-full grid-cols-2 mb-4">
+            <TabsTrigger value="err" className="rounded-full">ERR Staff</TabsTrigger>
+            <TabsTrigger value="donor" className="rounded-full">Partner</TabsTrigger>
           </TabsList>
 
           <TabsContent value="err">
             <form onSubmit={handleErrLogin}>
-              <CardContent className="space-y-4">
+              <CardContent className="space-y-4 px-6">
                 {error && (
                   <div className="bg-destructive/15 text-destructive text-sm p-3 rounded-md">
                     {error}
@@ -156,6 +174,7 @@ export default function LoginPage() {
                     id="errId"
                     value={errId}
                     onChange={(e) => setErrId(e.target.value)}
+                    className="rounded-full"
                     required
                   />
                 </div>
@@ -166,25 +185,24 @@ export default function LoginPage() {
                     type="password"
                     value={pin}
                     onChange={(e) => setPin(e.target.value)}
+                    className="rounded-full"
                     required
                   />
                 </div>
-              </CardContent>
-              <CardFooter>
                 <Button 
                   type="submit" 
-                  className="w-full"
+                  className="w-full rounded-full mt-4"
                   disabled={isLoading}
                 >
                   {isLoading ? 'Signing in...' : 'Sign in'}
                 </Button>
-              </CardFooter>
+              </CardContent>
             </form>
           </TabsContent>
 
           <TabsContent value="donor">
             <form onSubmit={handlePartnerLogin}>
-              <CardContent className="space-y-4">
+              <CardContent className="space-y-4 px-6">
                 {error && (
                   <div className="bg-destructive/15 text-destructive text-sm p-3 rounded-md">
                     {error}
@@ -197,6 +215,7 @@ export default function LoginPage() {
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
+                    className="rounded-full"
                     required
                   />
                 </div>
@@ -207,19 +226,18 @@ export default function LoginPage() {
                     type="password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
+                    className="rounded-full"
                     required
                   />
                 </div>
-              </CardContent>
-              <CardFooter>
                 <Button 
                   type="submit" 
-                  className="w-full"
+                  className="w-full rounded-full mt-4"
                   disabled={isLoading}
                 >
                   {isLoading ? 'Signing in...' : 'Sign in'}
                 </Button>
-              </CardFooter>
+              </CardContent>
             </form>
           </TabsContent>
         </Tabs>

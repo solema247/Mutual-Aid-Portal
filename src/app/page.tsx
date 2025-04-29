@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import Image from 'next/image'
 import { Button } from '@/components/ui/button'
 
 export default function Home() {
@@ -9,21 +10,23 @@ export default function Home() {
   const [userType, setUserType] = useState<'donor' | 'err' | null>(null)
 
   useEffect(() => {
-    // Check authentication status
-    const isAuthenticated = localStorage.getItem('isAuthenticated')
-    if (!isAuthenticated) {
-      window.location.href = '/login'
-      return
-    }
+    // Wrap in setTimeout to allow initial render
+    setTimeout(() => {
+      const isAuthenticated = localStorage.getItem('isAuthenticated')
+      if (!isAuthenticated) {
+        window.location.href = '/login'
+        return
+      }
 
-    // Determine user type
-    const donor = localStorage.getItem('donor')
-    const user = localStorage.getItem('user')
-    
-    if (donor) setUserType('donor')
-    if (user) setUserType('err')
-    
-    setIsLoading(false)
+      // Determine user type
+      const donor = localStorage.getItem('donor')
+      const user = localStorage.getItem('user')
+      
+      if (donor) setUserType('donor')
+      if (user) setUserType('err')
+      
+      setIsLoading(false)
+    }, 100)
   }, [])
 
   const handleLogout = () => {
@@ -43,7 +46,25 @@ export default function Home() {
 
   return (
     <div className="max-w-4xl mx-auto p-6">
-      <h1 className="text-3xl font-bold mb-6">Mutual Aid Sudan Portal</h1>
+      <div className="text-center mb-12">
+        <Image
+          src="/logo.jpg"
+          alt="LCC Sudan Logo"
+          width={163}
+          height={190}
+          priority
+          style={{ margin: 'auto' }}
+          unoptimized
+        />
+        <h1 className="text-4xl font-bold mb-4">Mutual Aid Sudan Portal</h1>
+        <Button
+          variant="outline"
+          className="mt-4"
+          onClick={() => window.open('https://lccsudan.org/', '_blank')}
+        >
+          Visit LCC Sudan Website
+        </Button>
+      </div>
       
       <nav className="space-y-4">
         {userType === 'donor' && (
