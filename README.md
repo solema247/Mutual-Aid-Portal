@@ -1,8 +1,30 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Sudan Mutual Aid Portal
+
+A modern web application built with Next.js that facilitates coordination and support for Emergency Response Rooms in Sudan. This platform connects aid providers, volunteers, and those in need during the ongoing humanitarian crisis.
+
+## Features
+
+- Real-time coordination between Emergency Response Rooms
+- Resource mapping and needs assessment tracking
+- Volunteer registration and management
+- Aid distribution coordination
+- Multi-language support (Arabic and English)
+- Secure communication channels
+- Resource allocation dashboard
 
 ## Getting Started
 
-First, run the development server:
+First, install the dependencies:
+
+```bash
+npm install
+# or
+yarn install
+# or
+pnpm install
+```
+
+Then, run the development server:
 
 ```bash
 npm run dev
@@ -10,27 +32,44 @@ npm run dev
 yarn dev
 # or
 pnpm dev
-# or
-bun dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Tech Stack
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- [Next.js](https://nextjs.org/) - React framework
+- [React](https://reactjs.org/) - UI library
+- [TypeScript](https://www.typescriptlang.org/) - Programming language
+- [Tailwind CSS](https://tailwindcss.com/) - CSS framework
+- Internationalization (i18n) support
+- Secure authentication and authorization
+- Real-time database integration
 
-## Learn More
+## Project Structure
 
-To learn more about Next.js, take a look at the following resources:
+```
+├── app/              # App router directory
+├── components/       # React components
+├── public/          # Static assets
+├── styles/          # Global styles
+├── locales/         # Translation files
+└── lib/             # Utility functions and shared logic
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Contributing
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Contributions are welcome! Please feel free to submit a Pull Request. We particularly welcome:
+- Arabic/English translations
+- Security improvements
+- Performance optimizations
+- Documentation in multiple languages
+- Bug fixes and feature enhancements
 
-## Deploy on Vercel
+## About
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+This project is a collaborative effort to support humanitarian aid coordination in Sudan. It aims to streamline the process of connecting resources with needs during the ongoing crisis, making aid distribution more efficient and effective.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
