@@ -1,14 +1,36 @@
+import { createMiddlewareClient } from '@supabase/auth-helpers-nextjs'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
 export async function middleware(req: NextRequest) {
+  const res = NextResponse.next()
+  const supabase = createMiddlewareClient({ req, res })
+  
+  // Check if this is a magic link sign in
+  const requestUrl = new URL(req.url)
+  const token = requestUrl.searchParams.get('token')
+  const type = requestUrl.searchParams.get('type')
+  
+  // Handle magic link authentication
+  if (token && type === 'magiclink') {
+    const { data: { session }, error } = await supabase.auth.verifyOtp({
+      token_hash: token,
+      type: 'magiclink'
+    })
+    
+    if (session && !error) {
+      return NextResponse.redirect(new URL('/change-password', req.url))
+    }
+  }
+
+  const { data: { session } } = await supabase.auth.getSession()
   const isAuthenticated = req.cookies.get('isAuthenticated')
   const userType = req.cookies.get('userType')
   const path = req.nextUrl.pathname
 
   // If trying to access root, redirect based on user type
   if (path === '/') {
-    if (!isAuthenticated) {
+    if (!session && !isAuthenticated) {
       return NextResponse.redirect(new URL('/login', req.url))
     }
     if (userType?.value === 'err') {
@@ -21,14 +43,14 @@ export async function middleware(req: NextRequest) {
 
   // Allow login and change-password pages access
   if (req.nextUrl.pathname === '/login' || req.nextUrl.pathname === '/change-password') {
-    if (isAuthenticated && req.nextUrl.pathname === '/login') {
+    if ((session || isAuthenticated) && req.nextUrl.pathname === '/login') {
       return NextResponse.redirect(new URL('/', req.url))
     }
-    return NextResponse.next()
+    return res
   }
 
   // Require authentication for all other pages
-  if (!isAuthenticated) {
+  if (!session && !isAuthenticated) {
     return NextResponse.redirect(new URL('/login', req.url))
   }
 
@@ -40,7 +62,7 @@ export async function middleware(req: NextRequest) {
     return NextResponse.redirect(new URL('/', req.url))
   }
 
-  return NextResponse.next()
+  return res
 }
 
 export const config = {
@@ -50,6 +72,7 @@ export const config = {
     '/partner-portal/:path*',
     '/forecast/:path*',
     '/dashboard/:path*',
+    '/change-password',
     '/((?!api|_next/static|_next/image|favicon.ico|logo.jpg).*)',
   ],
 } 

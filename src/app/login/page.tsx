@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
@@ -30,6 +30,24 @@ export default function LoginPage() {
   // Partner login state
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+
+  useEffect(() => {
+    const handleMagicLinkAuth = async () => {
+      const { data: { session }, error } = await supabase.auth.getSession()
+      
+      if (session && !error) {
+        // If we have a session after magic link auth, redirect to change password
+        window.location.href = '/change-password'
+        return
+      }
+    }
+    
+    // Check if we're coming from a magic link
+    const hash = window.location.hash
+    if (hash) {
+      handleMagicLinkAuth()
+    }
+  }, [])
 
   const handleErrLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -88,10 +106,8 @@ export default function LoginPage() {
 
       console.log('User metadata:', authData.user?.user_metadata)
 
-      // Check if temporary password
-      if (authData.user?.user_metadata?.is_temporary_password) {
+      if (!authData.user?.user_metadata?.has_changed_password) {
         console.log('Redirecting to change password...')
-        await new Promise(resolve => setTimeout(resolve, 1000)) // Delay to see logs
         window.location.href = '/change-password'
         return
       }

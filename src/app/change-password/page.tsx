@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -15,6 +15,18 @@ export default function ChangePasswordPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // Check if user is authenticated via magic link
+  useEffect(() => {
+    const checkSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        // If no session, redirect to login
+        window.location.href = '/login'
+      }
+    }
+    checkSession()
+  }, [])
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
@@ -27,18 +39,17 @@ export default function ChangePasswordPage() {
 
       // Update password
       const { error: updateError } = await supabase.auth.updateUser({
-        password: password
+        password: password,
+        data: { 
+          has_changed_password: true,
+          is_temporary_password: false  // Add this to remove the temporary flag
+        }
       })
 
       if (updateError) throw updateError
 
-      // Update metadata flag
-      await supabase.auth.updateUser({
-        data: { is_temporary_password: false }
-      })
-
-      // Redirect to forecast page
-      window.location.href = '/forecast'
+      // Redirect to partner portal
+      window.location.href = '/partner-portal'
     } catch (err) {
       console.error('Password change error:', err)
       setError(err instanceof Error ? err.message : 'Failed to update password')
