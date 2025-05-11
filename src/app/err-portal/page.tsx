@@ -2,11 +2,10 @@
 
 import { useTranslation } from 'react-i18next'
 import { useEffect, useState } from 'react'
-import Link from 'next/link'
 import Image from 'next/image'
-import { Button } from '@/components/ui/button'
-import LanguageSwitch from '@/components/LanguageSwitch'
-import '@/i18n/config'  // Update to use absolute path
+import Link from 'next/link'
+import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import '@/i18n/config'
 
 export default function ErrPortalPage() {
   const { t } = useTranslation(['common', 'err'])
@@ -23,9 +22,18 @@ export default function ErrPortalPage() {
 
   if (isLoading) return <div>Loading...</div>
 
+  // Only show room management for admin users
+  const isAdmin = user?.role === 'admin'
+
+  const handleLogout = () => {
+    localStorage.clear()
+    document.cookie = 'isAuthenticated=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT'
+    document.cookie = 'userType=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT'
+    window.location.href = '/login'
+  }
+
   return (
-    <div className="max-w-4xl mx-auto p-6">
-      <LanguageSwitch />
+    <div className="max-w-4xl mx-auto">
       <div className="text-center mb-12">
         <Image
           src="/logo.jpg"
@@ -40,35 +48,55 @@ export default function ErrPortalPage() {
           {t('err:welcome', { name: user?.name || t('login:err_staff') })}
         </p>
       </div>
-      
-      <nav className="space-y-4">
-        <Link href="/dashboard" className="block">
-          <Button className="w-full p-4" variant="outline">
-            <div className="flex items-center gap-4 w-full">
-              <div className="flex items-center gap-2">
-                📈 {t('err:dashboard')}
-              </div>
-              <span className="text-sm text-muted-foreground">
-                {t('err:dashboard_desc')}
-              </span>
-            </div>
-          </Button>
-        </Link>
-        {/* Add more tools/features as needed */}
-      </nav>
 
-      <Button 
-        className="w-full justify-start text-left mt-8" 
-        variant="outline"
-        onClick={() => {
-          localStorage.clear()
-          document.cookie = 'isAuthenticated=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT'
-          document.cookie = 'userType=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT'
-          window.location.href = '/login'
-        }}
-      >
-        🚪 {t('common:logout')}
-      </Button>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
+        {isAdmin && (
+          <Link href="/err-portal/room-management" className="block aspect-square">
+            <Card className="h-full hover:bg-muted/50 transition-colors">
+              <CardHeader className="h-full flex flex-col justify-center items-center text-center">
+                <span className="text-4xl mb-4">🏥</span>
+                <CardTitle className="text-xl">
+                  {t('err:room_management')}
+                </CardTitle>
+                <CardDescription className="mt-2">
+                  {t('err:room_management_desc')}
+                </CardDescription>
+              </CardHeader>
+            </Card>
+          </Link>
+        )}
+        
+        <Link href="/err-portal/dashboard" className="block aspect-square">
+          <Card className="h-full hover:bg-muted/50 transition-colors">
+            <CardHeader className="h-full flex flex-col justify-center items-center text-center">
+              <span className="text-4xl mb-4">📈</span>
+              <CardTitle className="text-xl">
+                {t('err:dashboard')}
+              </CardTitle>
+              <CardDescription className="mt-2">
+                {t('err:dashboard_desc')}
+              </CardDescription>
+            </CardHeader>
+          </Card>
+        </Link>
+
+        <button 
+          onClick={handleLogout}
+          className="block aspect-square"
+        >
+          <Card className="h-full hover:bg-muted/50 transition-colors">
+            <CardHeader className="h-full flex flex-col justify-center items-center text-center">
+              <span className="text-4xl mb-4">🚪</span>
+              <CardTitle className="text-xl">
+                {t('common:logout')}
+              </CardTitle>
+              <CardDescription className="mt-2">
+                {t('common:logout_desc')}
+              </CardDescription>
+            </CardHeader>
+          </Card>
+        </button>
+      </div>
     </div>
   )
 } 

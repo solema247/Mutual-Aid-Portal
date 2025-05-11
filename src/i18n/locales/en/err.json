@@ -2,5 +2,9 @@
   "title": "ERR Staff Portal",
   "welcome": "Welcome, {{name}}",
   "dashboard": "Dashboard",
-  "dashboard_desc": "View and manage ERR activities"
+  "dashboard_desc": "View ERR statistics and reports",
+  "navigation": "Navigation",
+  "home": "Home",
+  "room_management": "Room Management",
+  "room_management_desc": "Manage and approve ERR room requests"
 } 

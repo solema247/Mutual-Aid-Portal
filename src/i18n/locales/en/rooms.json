@@ -1,0 +1,16 @@
+{
+  "pending_rooms_title": "Pending Room Requests",
+  "active_rooms_title": "Active Rooms",
+  "inactive_rooms_title": "Inactive Rooms",
+  "loading": "Loading pending rooms...",
+  "no_pending_rooms": "No pending room requests",
+  "no_access": "You do not have permission to access this page",
+  "coming_soon": "This feature is coming soon...",
+  "name": "Room Name",
+  "type": "Type",
+  "state": "State",
+  "locality": "Locality",
+  "created_at": "Created",
+  "state_type": "State ERR",
+  "base_type": "Base ERR"
+} 

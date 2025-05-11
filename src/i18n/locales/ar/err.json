@@ -1,6 +1,10 @@
 {
-  "title": "بوابة موظفي ERR",
+  "title": "بوابة موظفي غرف الطوارئ",
   "welcome": "مرحباً، {{name}}",
   "dashboard": "لوحة المعلومات",
-  "dashboard_desc": "عرض وإدارة أنشطة ERR"
+  "dashboard_desc": "عرض إحصائيات وتقارير غرف الطوارئ",
+  "navigation": "التنقل",
+  "home": "الرئيسية",
+  "room_management": "إدارة الغرف",
+  "room_management_desc": "إدارة والموافقة على طلبات غرف الطوارئ"
 } 
