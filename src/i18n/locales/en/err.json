@@ -6,5 +6,7 @@
   "navigation": "Navigation",
   "home": "Home",
   "room_management": "Room Management",
-  "room_management_desc": "Manage and approve ERR room requests"
+  "room_management_desc": "Manage and approve ERR room requests",
+  "user_management": "User Management",
+  "user_management_desc": "Manage and approve ERR staff accounts"
 } 

@@ -6,5 +6,7 @@
   "navigation": "التنقل",
   "home": "الرئيسية",
   "room_management": "إدارة الغرف",
-  "room_management_desc": "إدارة والموافقة على طلبات غرف الطوارئ"
+  "room_management_desc": "إدارة والموافقة على طلبات غرف الطوارئ",
+  "user_management": "إدارة المستخدمين",
+  "user_management_desc": "إدارة والموافقة على حسابات موظفي غرف الطوارئ"
 } 

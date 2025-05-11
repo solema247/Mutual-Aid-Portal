@@ -9,6 +9,7 @@ import enForecast from './locales/en/forecast.json'
 import enErr from './locales/en/err.json'
 import enRooms from './locales/en/rooms.json'
 import enDashboard from './locales/en/dashboard.json'
+import enUsers from './locales/en/users.json'
 import arCommon from './locales/ar/common.json'
 import arLogin from './locales/ar/login.json'
 import arPartner from './locales/ar/partner.json'
@@ -16,6 +17,7 @@ import arForecast from './locales/ar/forecast.json'
 import arErr from './locales/ar/err.json'
 import arRooms from './locales/ar/rooms.json'
 import arDashboard from './locales/ar/dashboard.json'
+import arUsers from './locales/ar/users.json'
 
 const resources = {
   en: {
@@ -25,7 +27,8 @@ const resources = {
     forecast: enForecast,
     err: enErr,
     rooms: enRooms,
-    dashboard: enDashboard
+    dashboard: enDashboard,
+    users: enUsers
   },
   ar: {
     common: arCommon,
@@ -34,7 +37,8 @@ const resources = {
     forecast: arForecast,
     err: arErr,
     rooms: arRooms,
-    dashboard: arDashboard
+    dashboard: arDashboard,
+    users: arUsers
   }
 }
 
@@ -48,7 +52,7 @@ i18n
       escapeValue: false
     },
     // Add namespaces
-    ns: ['common', 'login', 'partner', 'forecast', 'err', 'rooms', 'dashboard'],
+    ns: ['common', 'login', 'partner', 'forecast', 'err', 'rooms', 'dashboard', 'users'],
     defaultNS: 'common'
   })
 
