@@ -40,16 +40,6 @@ export default function RoomManagementPage() {
       <div className="space-y-4">
         <RoomManagement />
 
-        {/* Add more collapsible sections as needed */}
-        <CollapsibleRow
-          title={t('rooms:active_rooms_title')}
-          defaultOpen={false}
-        >
-          <div className="p-4 text-muted-foreground">
-            {t('rooms:coming_soon')}
-          </div>
-        </CollapsibleRow>
-
         <CollapsibleRow
           title={t('rooms:inactive_rooms_title')}
           defaultOpen={false}

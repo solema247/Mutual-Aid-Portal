@@ -15,5 +15,10 @@
   "base_type": "Base ERR",
   "actions": "Actions",
   "accept": "Accept",
-  "decline": "Decline"
+  "decline": "Decline",
+  "search_placeholder": "Search rooms...",
+  "filter_by_type": "Filter by type",
+  "all_types": "All types",
+  "sort_asc": "Sort ascending",
+  "sort_desc": "Sort descending"
 } 

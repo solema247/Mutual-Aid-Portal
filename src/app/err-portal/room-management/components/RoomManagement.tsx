@@ -6,6 +6,7 @@ import { CollapsibleRow } from '@/components/ui/collapsible'
 import { PendingRoomListItem } from '@/app/api/rooms/types/rooms'
 import { getPendingRooms } from '@/app/api/rooms/utils/rooms'
 import PendingRoomsList from './PendingRoomsList'
+import ActiveRoomsList from './ActiveRoomsList'
 
 export default function RoomManagement() {
   const { t } = useTranslation(['rooms'])
@@ -40,21 +41,30 @@ export default function RoomManagement() {
   }, [])
 
   return (
-    <CollapsibleRow
-      title={t('rooms:pending_rooms_title')}
-      variant="primary"
-      defaultOpen={true}
-    >
-      <div className="space-y-4">
-        {error && (
-          <div className="text-destructive text-sm">{error}</div>
-        )}
-        <PendingRoomsList
-          rooms={pendingRooms}
-          isLoading={isLoading}
-          onUpdate={fetchPendingRooms}
-        />
-      </div>
-    </CollapsibleRow>
+    <div className="space-y-6">
+      <CollapsibleRow
+        title={t('rooms:pending_rooms_title')}
+        variant="primary"
+        defaultOpen={true}
+      >
+        <div className="space-y-4">
+          {error && (
+            <div className="text-destructive text-sm">{error}</div>
+          )}
+          <PendingRoomsList
+            rooms={pendingRooms}
+            isLoading={isLoading}
+            onUpdate={fetchPendingRooms}
+          />
+        </div>
+      </CollapsibleRow>
+
+      <CollapsibleRow
+        title={t('rooms:active_rooms_title')}
+        defaultOpen={false}
+      >
+        <ActiveRoomsList isLoading={false} />
+      </CollapsibleRow>
+    </div>
   )
 } 

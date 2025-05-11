@@ -15,5 +15,10 @@
   "base_type": "غرفة طوارئ قاعدية",
   "actions": "الإجراءات",
   "accept": "قبول",
-  "decline": "رفض"
+  "decline": "رفض",
+  "search_placeholder": "البحث في الغرف...",
+  "filter_by_type": "تصفية حسب النوع",
+  "all_types": "كل الأنواع",
+  "sort_asc": "ترتيب تصاعدي",
+  "sort_desc": "ترتيب تنازلي"
 } 

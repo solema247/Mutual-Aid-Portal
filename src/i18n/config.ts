@@ -17,30 +17,32 @@ import arErr from './locales/ar/err.json'
 import arRooms from './locales/ar/rooms.json'
 import arDashboard from './locales/ar/dashboard.json'
 
+const resources = {
+  en: {
+    common: enCommon,
+    login: enLogin,
+    partner: enPartner,
+    forecast: enForecast,
+    err: enErr,
+    rooms: enRooms,
+    dashboard: enDashboard
+  },
+  ar: {
+    common: arCommon,
+    login: arLogin,
+    partner: arPartner,
+    forecast: arForecast,
+    err: arErr,
+    rooms: arRooms,
+    dashboard: arDashboard
+  }
+}
+
 i18n
   .use(initReactI18next)
   .init({
-    resources: {
-      en: {
-        common: enCommon,
-        login: enLogin,
-        partner: enPartner,
-        forecast: enForecast,
-        err: enErr,
-        rooms: enRooms,
-        dashboard: enDashboard
-      },
-      ar: {
-        common: arCommon,
-        login: arLogin,
-        partner: arPartner,
-        forecast: arForecast,
-        err: arErr,
-        rooms: arRooms,
-        dashboard: arDashboard
-      }
-    },
-    lng: 'en', // default language
+    resources,
+    lng: typeof window !== 'undefined' ? window.localStorage.getItem('language') || 'en' : 'en',
     fallbackLng: 'en',
     interpolation: {
       escapeValue: false
