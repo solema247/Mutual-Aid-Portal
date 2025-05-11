@@ -38,13 +38,7 @@ export default function RoomManagementPage() {
       </div>
 
       <div className="space-y-4">
-        <CollapsibleRow
-          title={t('rooms:pending_rooms_title')}
-          variant="primary"
-          defaultOpen={true}
-        >
-          <RoomManagement />
-        </CollapsibleRow>
+        <RoomManagement />
 
         {/* Add more collapsible sections as needed */}
         <CollapsibleRow

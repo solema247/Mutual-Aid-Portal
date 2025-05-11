@@ -23,4 +23,28 @@ export async function getPendingRooms(): Promise<RoomWithState[]> {
   }
 
   return rooms || []
+}
+
+export async function approveRoom(roomId: string): Promise<void> {
+  const { error } = await supabase
+    .from('emergency_rooms')
+    .update({ status: 'active' })
+    .eq('id', roomId)
+
+  if (error) {
+    console.error('Error approving room:', error)
+    throw error
+  }
+}
+
+export async function declineRoom(roomId: string): Promise<void> {
+  const { error } = await supabase
+    .from('emergency_rooms')
+    .delete()
+    .eq('id', roomId)
+
+  if (error) {
+    console.error('Error declining room:', error)
+    throw error
+  }
 } 

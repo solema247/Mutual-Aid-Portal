@@ -13,28 +13,29 @@ export default function RoomManagement() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
-    async function fetchPendingRooms() {
-      try {
-        const rooms = await getPendingRooms()
-        const formattedRooms: PendingRoomListItem[] = rooms.map(room => ({
-          id: room.id,
-          name: room.name,
-          type: room.type as 'state' | 'base',
-          stateName: room.state?.state_name || '',
-          locality: room.state?.locality || '',
-          createdAt: new Date(room.created_at || '').toLocaleDateString(),
-          status: room.status as 'active' | 'inactive'
-        }))
-        setPendingRooms(formattedRooms)
-      } catch (err) {
-        setError('Failed to fetch pending rooms')
-        console.error(err)
-      } finally {
-        setIsLoading(false)
-      }
+  const fetchPendingRooms = async () => {
+    try {
+      setIsLoading(true)
+      const rooms = await getPendingRooms()
+      const formattedRooms: PendingRoomListItem[] = rooms.map(room => ({
+        id: room.id,
+        name: room.name,
+        type: room.type as 'state' | 'base',
+        stateName: room.state?.state_name || '',
+        locality: room.state?.locality || '',
+        createdAt: new Date(room.created_at || '').toLocaleDateString(),
+        status: room.status as 'active' | 'inactive'
+      }))
+      setPendingRooms(formattedRooms)
+    } catch (err) {
+      setError('Failed to fetch pending rooms')
+      console.error(err)
+    } finally {
+      setIsLoading(false)
     }
+  }
 
+  useEffect(() => {
     fetchPendingRooms()
   }, [])
 
@@ -51,6 +52,7 @@ export default function RoomManagement() {
         <PendingRoomsList
           rooms={pendingRooms}
           isLoading={isLoading}
+          onUpdate={fetchPendingRooms}
         />
       </div>
     </CollapsibleRow>

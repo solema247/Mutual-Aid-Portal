@@ -3,7 +3,12 @@ import { Database } from '@/lib/database.types'
 export type EmergencyRoom = Database['public']['Tables']['emergency_rooms']['Row']
 export type State = Database['public']['Tables']['states']['Row']
 
-export interface RoomWithState extends EmergencyRoom {
+export interface RoomWithState {
+  id: string
+  name: string
+  type: 'state' | 'base'
+  created_at: string
+  status: 'active' | 'inactive'
   state?: State
 }
 

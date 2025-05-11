@@ -12,5 +12,8 @@
   "locality": "Locality",
   "created_at": "Created",
   "state_type": "State ERR",
-  "base_type": "Base ERR"
+  "base_type": "Base ERR",
+  "actions": "Actions",
+  "accept": "Accept",
+  "decline": "Decline"
 } 
