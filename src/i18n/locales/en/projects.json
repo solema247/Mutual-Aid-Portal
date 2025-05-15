@@ -31,5 +31,18 @@
   "decline": "Decline Project",
   "err_id": "ERR ID",
   "date": "Date",
-  "officer": "Program Officer"
+  "officer": "Program Officer",
+  "feedback_history": "Feedback History",
+  "no_feedback_history": "No feedback history available",
+  "iteration": "Iteration",
+  "status_pending_changes": "Changes Requested",
+  "status_changes_submitted": "Changes Submitted",
+  "status_resolved": "Resolved",
+  "feedback_created_by": "Feedback by",
+  "feedback_addressed_by": "Addressed by",
+  "version": "Version",
+  "current_version": "Current Version",
+  "feedback_required": "Changes Required",
+  "feedback_tab": "Feedback History",
+  "details_tab": "Project Details"
 } 
