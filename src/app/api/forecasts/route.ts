@@ -44,7 +44,7 @@ export async function POST(request: Request) {
           status: forecast.status || 'planned'
         }
       }), {
-        onConflict: 'org_name,state_name,month,receiving_mag',
+        onConflict: 'org_name,state_name,month,receiving_mag,source',
         ignoreDuplicates: false
       })
 
