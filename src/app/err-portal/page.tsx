@@ -66,6 +66,20 @@ export default function ErrPortalPage() {
           </Link>
         )}
         
+        <Link href="/err-portal/project-management" className="block aspect-square">
+          <Card className="h-full hover:bg-muted/50 transition-colors">
+            <CardHeader className="h-full flex flex-col justify-center items-center text-center">
+              <span className="text-4xl mb-4">📋</span>
+              <CardTitle className="text-xl">
+                {t('err:project_management')}
+              </CardTitle>
+              <CardDescription className="mt-2">
+                {t('err:project_management_desc')}
+              </CardDescription>
+            </CardHeader>
+          </Card>
+        </Link>
+
         <Link href="/err-portal/dashboard" className="block aspect-square">
           <Card className="h-full hover:bg-muted/50 transition-colors">
             <CardHeader className="h-full flex flex-col justify-center items-center text-center">

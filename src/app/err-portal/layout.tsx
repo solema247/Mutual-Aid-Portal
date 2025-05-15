@@ -27,6 +27,11 @@ export default function ErrPortalLayout({
       icon: '👥'
     },
     {
+      href: '/err-portal/project-management',
+      label: t('err:project_management'),
+      icon: '📋'
+    },
+    {
       href: '/err-portal/dashboard',
       label: t('err:dashboard'),
       icon: '📈'
