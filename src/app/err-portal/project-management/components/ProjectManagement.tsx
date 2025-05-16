@@ -84,6 +84,7 @@ type ExpenseCategory = {
 export default function ProjectManagement() {
   const { t } = useTranslation(['projects', 'common'])
   const [projects, setProjects] = useState<Project[]>([])
+  const [allProjects, setAllProjects] = useState<Project[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedProject, setSelectedProject] = useState<Project | null>(null)
   const [currentStatus, setCurrentStatus] = useState<ProjectStatus>('new')
@@ -102,8 +103,14 @@ export default function ProjectManagement() {
   }, [])
 
   useEffect(() => {
-    fetchProjects()
-  }, [currentStatus])
+    fetchAllProjects()
+  }, [])
+
+  useEffect(() => {
+    if (allProjects.length > 0) {
+      filterProjectsByStatus()
+    }
+  }, [currentStatus, allProjects])
 
   useEffect(() => {
     if (selectedProject) {
@@ -163,39 +170,51 @@ export default function ProjectManagement() {
     }
   }
 
-  const fetchProjects = async () => {
+  const fetchAllProjects = async () => {
     try {
-      let query = supabase
+      const { data, error } = await supabase
         .from('err_projects')
         .select('*')
         .order('submitted_at', { ascending: false })
 
-      if (currentStatus === 'active') {
-        query = query.in('status', ['active', 'approved'])
-      } else if (currentStatus === 'new') {
-        query = query.in('status', ['new', 'pending'])
-      } else {
-        query = query.eq('status', currentStatus)
-      }
-
-      const { data, error } = await query
       if (error) throw error
-
-      setProjects(data || [])
+      setAllProjects(data || [])
+      setLoading(false)
     } catch (error) {
-      console.error('Error fetching projects:', error)
-    } finally {
+      console.error('Error fetching all projects:', error)
       setLoading(false)
     }
+  }
+
+  const filterProjectsByStatus = () => {
+    let filteredProjects: Project[] = []
+    
+    switch (currentStatus) {
+      case 'new':
+        filteredProjects = allProjects.filter(p => ['new', 'pending'].includes(p.status))
+        break
+      case 'feedback':
+        filteredProjects = allProjects.filter(p => p.status === 'feedback')
+        break
+      case 'active':
+        filteredProjects = allProjects.filter(p => ['active', 'approved'].includes(p.status))
+        break
+      case 'declined':
+        filteredProjects = allProjects.filter(p => p.status === 'declined')
+        break
+    }
+
+    setProjects(filteredProjects)
   }
 
   const handleFeedbackSubmit = async (feedbackText: string, action: 'approve' | 'feedback' | 'decline') => {
     if (!selectedProject || !user) return
 
     try {
-      const newStatus = action === 'approve' ? 'active' : action === 'decline' ? 'declined' : 'feedback'
+      const newStatus = action === 'approve' ? 'active' : 
+                       action === 'decline' ? 'declined' : 
+                       'feedback'
       
-      // Create new feedback entry
       const { data: feedbackData, error: feedbackError } = await supabase
         .from('project_feedback')
         .insert({
@@ -210,7 +229,6 @@ export default function ProjectManagement() {
 
       if (feedbackError) throw feedbackError
 
-      // Update project status and current feedback
       const { error: projectError } = await supabase
         .from('err_projects')
         .update({
@@ -223,7 +241,7 @@ export default function ProjectManagement() {
       if (projectError) throw projectError
 
       setIsDialogOpen(false)
-      fetchProjects()
+      fetchAllProjects()
     } catch (error) {
       console.error('Error submitting feedback:', error)
     }
@@ -248,16 +266,16 @@ export default function ProjectManagement() {
       <Tabs defaultValue="new" className="w-full" onValueChange={(value) => setCurrentStatus(value as ProjectStatus)}>
         <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="new">
-            {t('projects:status_new')} ({projects.filter(p => ['new', 'pending'].includes(p.status)).length})
+            {t('projects:status_new')} ({allProjects.filter(p => ['new', 'pending'].includes(p.status)).length})
           </TabsTrigger>
           <TabsTrigger value="feedback">
-            {t('projects:status_feedback')} ({projects.filter(p => p.status === 'feedback').length})
+            {t('projects:status_feedback')} ({allProjects.filter(p => p.status === 'feedback').length})
           </TabsTrigger>
           <TabsTrigger value="active">
-            {t('projects:status_active')} ({projects.filter(p => ['active', 'approved'].includes(p.status)).length})
+            {t('projects:status_active')} ({allProjects.filter(p => ['active', 'approved'].includes(p.status)).length})
           </TabsTrigger>
           <TabsTrigger value="declined">
-            {t('projects:status_declined')} ({projects.filter(p => p.status === 'declined').length})
+            {t('projects:status_declined')} ({allProjects.filter(p => p.status === 'declined').length})
           </TabsTrigger>
         </TabsList>
 
