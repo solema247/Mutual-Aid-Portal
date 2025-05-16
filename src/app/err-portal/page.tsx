@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import { Users } from 'lucide-react'
 import '@/i18n/config'
 
 interface User {
@@ -56,19 +57,35 @@ export default function ErrPortalPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
         {isAdmin && (
-          <Link href="/err-portal/room-management" className="block aspect-square">
-            <Card className="h-full hover:bg-muted/50 transition-colors">
-              <CardHeader className="h-full flex flex-col justify-center items-center text-center">
-                <span className="text-4xl mb-4">🤝</span>
-                <CardTitle className="text-xl">
-                  {t('err:room_management')}
-                </CardTitle>
-                <CardDescription className="mt-2">
-                  {t('err:room_management_desc')}
-                </CardDescription>
-              </CardHeader>
-            </Card>
-          </Link>
+          <>
+            <Link href="/err-portal/room-management" className="block aspect-square">
+              <Card className="h-full hover:bg-muted/50 transition-colors">
+                <CardHeader className="h-full flex flex-col justify-center items-center text-center">
+                  <span className="text-4xl mb-4">🤝</span>
+                  <CardTitle className="text-xl">
+                    {t('err:room_management')}
+                  </CardTitle>
+                  <CardDescription className="mt-2">
+                    {t('err:room_management_desc')}
+                  </CardDescription>
+                </CardHeader>
+              </Card>
+            </Link>
+
+            <Link href="/err-portal/user-management" className="block aspect-square">
+              <Card className="h-full hover:bg-muted/50 transition-colors">
+                <CardHeader className="h-full flex flex-col justify-center items-center text-center">
+                  <Users className="h-8 w-8 mb-4" />
+                  <CardTitle className="text-xl">
+                    {t('err:user_management')}
+                  </CardTitle>
+                  <CardDescription className="mt-2">
+                    {t('err:user_management_desc')}
+                  </CardDescription>
+                </CardHeader>
+              </Card>
+            </Link>
+          </>
         )}
         
         <Link href="/err-portal/project-management" className="block aspect-square">

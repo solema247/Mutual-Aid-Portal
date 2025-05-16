@@ -20,5 +20,9 @@
   "filter_by_type": "Filter by type",
   "all_types": "All types",
   "sort_asc": "Sort ascending",
-  "sort_desc": "Sort descending"
+  "sort_desc": "Sort descending",
+  "all_states": "All states",
+  "all_localities": "All localities",
+  "filter_by_state": "Filter by state",
+  "filter_by_locality": "Filter by locality"
 } 

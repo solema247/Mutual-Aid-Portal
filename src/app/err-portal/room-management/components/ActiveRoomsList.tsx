@@ -133,10 +133,10 @@ export default function ActiveRoomsList({ isLoading: initialLoading }: { isLoadi
           onValueChange={(value) => setSelectedState(value)}
         >
           <SelectTrigger className="w-[180px]">
-            <SelectValue placeholder="Filter by state" />
+            <SelectValue placeholder={t('rooms:filter_by_state')} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All states</SelectItem>
+            <SelectItem value="all">{t('rooms:all_states')}</SelectItem>
             {states.map((state) => (
               <SelectItem key={state.id} value={state.id}>{state.name}</SelectItem>
             ))}
@@ -149,10 +149,10 @@ export default function ActiveRoomsList({ isLoading: initialLoading }: { isLoadi
           disabled={localities.length === 0}
         >
           <SelectTrigger className="w-[180px]">
-            <SelectValue placeholder="Filter by locality" />
+            <SelectValue placeholder={t('rooms:filter_by_locality')} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All localities</SelectItem>
+            <SelectItem value="all">{t('rooms:all_localities')}</SelectItem>
             {localities.map((locality) => (
               <SelectItem key={locality} value={locality}>{locality}</SelectItem>
             ))}

@@ -15,6 +15,18 @@ export default function I18nProvider({
   useEffect(() => {
     // Initialize i18next on the client side
     setInstance(i18next)
+
+    // Set HTML dir attribute based on language
+    const handleLanguageChange = () => {
+      document.documentElement.dir = i18next.language === 'ar' ? 'rtl' : 'ltr'
+    }
+
+    i18next.on('languageChanged', handleLanguageChange)
+    handleLanguageChange() // Set initial direction
+
+    return () => {
+      i18next.off('languageChanged', handleLanguageChange)
+    }
   }, [])
 
   return (

@@ -2,6 +2,7 @@
 
 import { useTranslation } from 'react-i18next'
 import MainLayout from '@/components/layout/MainLayout'
+import { Users } from 'lucide-react'
 
 export default function ErrPortalLayout({
   children,
@@ -24,7 +25,7 @@ export default function ErrPortalLayout({
     {
       href: '/err-portal/user-management',
       label: t('err:user_management'),
-      icon: '👥'
+      icon: <Users className="h-5 w-5" />
     },
     {
       href: '/err-portal/project-management',

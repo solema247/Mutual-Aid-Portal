@@ -20,5 +20,9 @@
   "filter_by_type": "تصفية حسب النوع",
   "all_types": "كل الأنواع",
   "sort_asc": "ترتيب تصاعدي",
-  "sort_desc": "ترتيب تنازلي"
+  "sort_desc": "ترتيب تنازلي",
+  "all_states": "كل الولايات",
+  "all_localities": "كل المحليات",
+  "filter_by_state": "تصفية حسب الولاية",
+  "filter_by_locality": "تصفية حسب المحلية"
 } 
