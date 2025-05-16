@@ -24,6 +24,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  DialogFooter,
 } from "@/components/ui/dialog"
 import { Plus, Trash2 } from 'lucide-react'
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible'
@@ -87,6 +88,48 @@ type DonorData = {
     name: string
     org_type: string
   }
+}
+
+// Add this type definition near other interfaces
+interface DuplicateGroup {
+  key: string
+  entries: CSVRow[]
+  totalAmount: number
+}
+
+// Add this function to find duplicates
+function findDuplicates(data: CSVRow[]): DuplicateGroup[] {
+  const groups = new Map<string, CSVRow[]>()
+  
+  data.forEach(row => {
+    // Normalize the values to ensure consistent matching
+    const normalizedKey = [
+      row['Org Name']?.trim(),
+      row.State?.trim(),
+      row.Month?.trim(),
+      row['Receiving MAG']?.trim(),
+      row.Source?.trim(),
+      (row.Localities || '')?.trim(),
+      (row['Transfer Method'] || '')?.trim()
+    ].map(s => s?.toLowerCase()).join('|')
+
+    if (!groups.has(normalizedKey)) {
+      groups.set(normalizedKey, [])
+    }
+    groups.get(normalizedKey)!.push(row)
+  })
+
+  // Only return groups that have duplicates
+  return Array.from(groups.entries())
+    .filter(([_, rows]) => rows.length > 1)
+    .map(([key, rows]) => ({
+      key,
+      entries: rows,
+      totalAmount: rows.reduce((sum, row) => {
+        const amount = parseFloat(row.Amount.replace(/[^0-9.-]/g, ''))
+        return sum + (isNaN(amount) ? 0 : amount)
+      }, 0)
+    }))
 }
 
 const parseDate = (dateStr: string): Date | null => {
@@ -366,6 +409,13 @@ export default function ForecastPage() {
 
   // Add this near the top of the component where other state variables are declared
   const statesList = states.map(state => state.state_name)
+
+  // Add state for duplicate confirmation
+  const [duplicates, setDuplicates] = useState<DuplicateGroup[]>([])
+  const [showDuplicatesDialog, setShowDuplicatesDialog] = useState(false)
+
+  // Add state for storing all CSV data
+  const [csvData, setCsvData] = useState<CSVRow[]>([])
 
   useEffect(() => {
     const fetchData = async () => {
@@ -676,65 +726,20 @@ export default function ForecastPage() {
               return
             }
 
-            // Parse and validate each row
-            const forecasts = results.data
-              .filter(row => row.Month && row.State && row.Amount)
-              .map(row => {
-                try {
-                  const parsedDate = parseDate(row.Month)
-                  if (!parsedDate) {
-                    console.error('Invalid date format:', row.Month)
-                    return null
-                  }
+            // Store CSV data for later use
+            setCsvData(results.data)
 
-                  const matchingState = states.find(s => 
-                    s.state_name.toLowerCase() === row.State.toLowerCase()
-                  )
-
-                  const cleanedAmount = parseFloat(row.Amount.replace(/[^0-9.-]/g, ''))
-                  if (isNaN(cleanedAmount)) {
-                    console.error('Invalid amount:', row.Amount)
-                    return null
-                  }
-
-                  return {
-                    donor_id: donors[0].id,
-                    state_id: matchingState?.id || null,
-                    state_name: row.State,
-                    month: parsedDate.toISOString(),
-                    amount: cleanedAmount,
-                    localities: row.Localities || null,
-                    org_name: donors[0].name,
-                    intermediary: row.Intermediary || null,
-                    transfer_method: row['Transfer Method'] || null,
-                    source: row.Source || null,
-                    receiving_mag: row['Receiving MAG'] || null,
-                    status: row.Status?.toLowerCase().trim() === 'complete' ? 'complete' : 'planned',
-                    org_type: donorOrgType || null,
-                    created_by: userId || null
-                  }
-                } catch (err) {
-                  console.error('Error processing row:', row, err)
-                  return null
-                }
-              })
-              .filter((forecast): forecast is NonNullable<typeof forecast> => forecast !== null)
-
-            if (forecasts.length === 0) {
-              throw new Error('No valid forecast data found in CSV. Please check date formats (YYYY-MM-DD, MMM-YY, MM/DD/YY, DD-MMM-YY) and other required fields.')
+            // Check for duplicates before proceeding
+            const duplicateGroups = findDuplicates(results.data)
+            if (duplicateGroups.length > 0) {
+              setDuplicates(duplicateGroups)
+              setShowDuplicatesDialog(true)
+              setIsSubmitting(false)
+              return
             }
 
-            // Submit forecasts
-            const response = await fetch('/api/forecasts', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(forecasts)
-            })
-
-            if (!response.ok) throw new Error('Failed to submit forecasts')
-
-            alert('Forecasts uploaded successfully!')
-            setSelectedFile(null)
+            // If no duplicates, proceed with upload
+            await submitForecasts(results.data)
           } catch (err) {
             setError(err instanceof Error ? err.message : 'An unexpected error occurred')
           } finally {
@@ -749,6 +754,92 @@ export default function ForecastPage() {
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An unexpected error occurred')
       setIsSubmitting(false)
+    }
+  }
+
+  // Update the submitForecasts function to normalize the data before sending
+  const submitForecasts = async (data: CSVRow[]) => {
+    try {
+      console.log('Processing CSV rows:', data.length)
+      
+      const forecasts = data
+        .filter(row => {
+          // Log skipped rows for debugging
+          if (!row.Month || !row.State || !row.Amount) {
+            console.log('Skipping invalid row:', row)
+            return false
+          }
+          return true
+        })
+        .map(row => {
+          try {
+            const parsedDate = parseDate(row.Month?.trim())
+            if (!parsedDate) {
+              console.error('Invalid date format:', row.Month)
+              return null
+            }
+
+            const matchingState = states.find(s => 
+              s.state_name.toLowerCase() === row.State?.trim().toLowerCase()
+            )
+
+            const cleanedAmount = parseFloat(row.Amount.replace(/[^0-9.-]/g, ''))
+            if (isNaN(cleanedAmount)) {
+              console.error('Invalid amount:', row.Amount)
+              return null
+            }
+
+            const forecast = {
+              donor_id: donors[0].id,
+              state_id: matchingState?.id || null,
+              state_name: row.State?.trim(),
+              month: parsedDate.toISOString(),
+              amount: cleanedAmount,
+              localities: row.Localities?.trim() || null,
+              org_name: row['Org Name']?.trim(),
+              intermediary: row.Intermediary?.trim() || null,
+              transfer_method: row['Transfer Method']?.trim() || null,
+              source: row.Source?.trim() || null,
+              receiving_mag: row['Receiving MAG']?.trim() || null,
+              status: row.Status?.toLowerCase().trim() === 'complete' ? 'complete' : 'planned',
+              org_type: donorOrgType || null,
+              created_by: userId || null
+            }
+            
+            console.log('Processed forecast:', forecast)
+            return forecast
+          } catch (err) {
+            console.error('Error processing row:', row, err)
+            return null
+          }
+        })
+        .filter((forecast): forecast is NonNullable<typeof forecast> => forecast !== null)
+
+      console.log('Sending forecasts to backend:', forecasts.length)
+
+      if (forecasts.length === 0) {
+        throw new Error('No valid forecast data found in CSV. Please check date formats (YYYY-MM-DD, MMM-YY, MM/DD/YY, DD-MMM-YY) and other required fields.')
+      }
+
+      const response = await fetch('/api/forecasts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(forecasts)
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Failed to submit forecasts')
+      }
+
+      const result = await response.json()
+      console.log('Upload response:', result)
+
+      alert('Forecasts uploaded successfully!')
+      setSelectedFile(null)
+    } catch (err) {
+      console.error('Submission error:', err)
+      setError(err instanceof Error ? err.message : 'An unexpected error occurred')
     }
   }
 
@@ -951,6 +1042,73 @@ export default function ForecastPage() {
     )
   })
   FormSection.displayName = 'FormSection'
+
+  // Update DuplicatesDialog to use all CSV data
+  const DuplicatesDialog = () => (
+    <Dialog open={showDuplicatesDialog} onOpenChange={setShowDuplicatesDialog}>
+      <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Duplicate Entries Detected</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            The following entries have the same Organization, State, Month, Receiving MAG, Source, Localities, and Transfer Method. 
+            They will be combined into single entries with summed amounts. Please review and confirm:
+          </p>
+          {duplicates.map((group, i) => (
+            <div key={i} className="border rounded-lg p-4 space-y-2">
+              <div className="font-medium">
+                Group {i + 1} - Total Amount: ${group.totalAmount.toLocaleString()}
+              </div>
+              <table className="w-full text-sm">
+                <thead className="bg-muted">
+                  <tr>
+                    <th className="p-2 text-left">Month</th>
+                    <th className="p-2 text-left">State</th>
+                    <th className="p-2 text-left">Amount</th>
+                    <th className="p-2 text-left">Localities</th>
+                    <th className="p-2 text-left">Transfer Method</th>
+                    <th className="p-2 text-left">Receiving MAG</th>
+                    <th className="p-2 text-left">Source</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {group.entries.map((entry, j) => (
+                    <tr key={j} className="border-t">
+                      <td className="p-2">{entry.Month}</td>
+                      <td className="p-2">{entry.State}</td>
+                      <td className="p-2">{entry.Amount}</td>
+                      <td className="p-2">{entry.Localities || '-'}</td>
+                      <td className="p-2">{entry['Transfer Method'] || '-'}</td>
+                      <td className="p-2">{entry['Receiving MAG']}</td>
+                      <td className="p-2">{entry.Source}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ))}
+        </div>
+        <DialogFooter>
+          <Button
+            variant="outline"
+            onClick={() => setShowDuplicatesDialog(false)}
+          >
+            Cancel
+          </Button>
+          <Button 
+            onClick={async () => {
+              setShowDuplicatesDialog(false)
+              await submitForecasts(csvData)
+            }}
+            className="bg-[#007229] hover:bg-[#007229]/90 text-white"
+          >
+            Proceed with Combined Amounts
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
 
   return (
     <div className="max-w-7xl mx-auto p-6 space-y-6">
@@ -1203,6 +1361,7 @@ export default function ForecastPage() {
           </CollapsibleContent>
         </Collapsible>
       </div>
+      <DuplicatesDialog />
     </div>
   )
 }

@@ -11,6 +11,8 @@ interface Forecast {
   receiving_mag: string
   source: string
   amount: number
+  localities?: string | null
+  transfer_method?: string | null
   // Add other forecast properties here
 }
 
@@ -19,8 +21,27 @@ function consolidateForecasts(forecasts: Forecast[]): Forecast[] {
   const groupedForecasts = new Map<string, Forecast>()
 
   forecasts.forEach((forecast) => {
-    // Create a key from the fields that should be unique
-    const key = `${forecast.org_name}-${forecast.state_name}-${forecast.month}-${forecast.receiving_mag}-${forecast.source}`
+    // Normalize all fields that are part of the unique constraint
+    const normalizedFields = {
+      org_name: (forecast.org_name || '').trim().toLowerCase(),
+      state_name: (forecast.state_name || '').trim().toLowerCase(),
+      month: (forecast.month || '').trim(),
+      receiving_mag: (forecast.receiving_mag || '').trim().toLowerCase(),
+      source: (forecast.source || '').trim().toLowerCase(),
+      localities: (forecast.localities || '').trim().toLowerCase(),
+      transfer_method: (forecast.transfer_method || '').trim().toLowerCase()
+    }
+
+    // Create a key from all fields that should be unique
+    const key = [
+      normalizedFields.org_name,
+      normalizedFields.state_name,
+      normalizedFields.month,
+      normalizedFields.receiving_mag,
+      normalizedFields.source,
+      normalizedFields.localities,
+      normalizedFields.transfer_method
+    ].join('|')
 
     if (groupedForecasts.has(key)) {
       // If we already have this forecast, add the amounts
@@ -28,12 +49,25 @@ function consolidateForecasts(forecasts: Forecast[]): Forecast[] {
       existing.amount = (existing.amount || 0) + (forecast.amount || 0)
     } else {
       // If this is a new unique forecast, add it to the map
+      // Keep the original casing and whitespace in the stored forecast
       groupedForecasts.set(key, { ...forecast })
     }
   })
 
-  // Convert the map back to an array
-  return Array.from(groupedForecasts.values())
+  // Convert the map back to an array and log the results
+  const consolidated = Array.from(groupedForecasts.values())
+  console.log('Consolidated forecasts:', consolidated.map(f => ({
+    org_name: f.org_name,
+    state_name: f.state_name,
+    month: f.month,
+    receiving_mag: f.receiving_mag,
+    source: f.source,
+    localities: f.localities,
+    transfer_method: f.transfer_method,
+    amount: f.amount
+  })))
+
+  return consolidated
 }
 
 export async function POST(request: Request) {
@@ -74,7 +108,7 @@ export async function POST(request: Request) {
           status: forecast.status || 'planned'
         }
       }), {
-        onConflict: 'org_name,state_name,month,receiving_mag,source',
+        onConflict: 'org_name,state_name,month,receiving_mag,source,localities,transfer_method',
         ignoreDuplicates: false
       })
 
