@@ -7,7 +7,33 @@ interface Forecast {
   state_name: string
   month: string
   status: string
+  org_name: string
+  receiving_mag: string
+  source: string
+  amount: number
   // Add other forecast properties here
+}
+
+// Function to consolidate duplicate forecasts
+function consolidateForecasts(forecasts: Forecast[]): Forecast[] {
+  const groupedForecasts = new Map<string, Forecast>()
+
+  forecasts.forEach((forecast) => {
+    // Create a key from the fields that should be unique
+    const key = `${forecast.org_name}-${forecast.state_name}-${forecast.month}-${forecast.receiving_mag}-${forecast.source}`
+
+    if (groupedForecasts.has(key)) {
+      // If we already have this forecast, add the amounts
+      const existing = groupedForecasts.get(key)!
+      existing.amount = (existing.amount || 0) + (forecast.amount || 0)
+    } else {
+      // If this is a new unique forecast, add it to the map
+      groupedForecasts.set(key, { ...forecast })
+    }
+  })
+
+  // Convert the map back to an array
+  return Array.from(groupedForecasts.values())
 }
 
 export async function POST(request: Request) {
@@ -15,17 +41,21 @@ export async function POST(request: Request) {
     const forecasts: Forecast[] = await request.json()
     const supabase = createRouteHandlerClient({ cookies })
 
-    // Add logging before the upsert
-    console.log('Forecasts to insert:', forecasts.map((f: Forecast) => ({
+    // Consolidate duplicate forecasts before upserting
+    const consolidatedForecasts = consolidateForecasts(forecasts)
+
+    // Add logging for consolidated forecasts
+    console.log('Consolidated forecasts to insert:', consolidatedForecasts.map((f: Forecast) => ({
       state_name: f.state_name,
       month: f.month,
-      status: f.status
+      status: f.status,
+      amount: f.amount
     })))
 
-    // Upsert forecasts with new conflict handling based on org_name, state_name, month
+    // Upsert consolidated forecasts
     const { data, error } = await supabase
       .from('donor_forecasts')
-      .upsert(forecasts.map((forecast: any) => {
+      .upsert(consolidatedForecasts.map((forecast: any) => {
         console.log('Processing forecast status:', forecast.status)
         return {
           donor_id: forecast.donor_id,
