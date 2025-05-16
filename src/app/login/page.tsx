@@ -90,24 +90,17 @@ export default function LoginPage() {
     setError(null)
 
     try {
-      console.log('Starting login...')
-      
       const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
         email,
         password
       })
-
-      console.log('Auth result:', { authData, authError })
 
       if (authError) {
         setError('Authentication failed')
         return
       }
 
-      console.log('User metadata:', authData.user?.user_metadata)
-
       if (!authData.user?.user_metadata?.has_changed_password) {
-        console.log('Redirecting to change password...')
         window.location.href = '/change-password'
         return
       }
@@ -118,8 +111,6 @@ export default function LoginPage() {
         .select('*, donors(name)')
         .eq('id', authData.user?.id)
         .single()
-
-      console.log('Donor check:', { donor, donorError })
 
       if (donorError || !donor) {
         setError('User not found or not authorized')
@@ -132,12 +123,10 @@ export default function LoginPage() {
       document.cookie = `isAuthenticated=true; path=/`
       document.cookie = `userType=partner; path=/`
 
-      console.log('Redirecting to forecast...')
       await new Promise(resolve => setTimeout(resolve, 1000)) // Delay to see logs
       window.location.href = '/partner-portal'
 
     } catch (err) {
-      console.error('Login error:', err)
       setError(err instanceof Error ? err.message : 'Login failed')
     } finally {
       setIsLoading(false)

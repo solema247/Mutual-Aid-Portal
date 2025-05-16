@@ -760,13 +760,9 @@ export default function ForecastPage() {
   // Update the submitForecasts function to normalize the data before sending
   const submitForecasts = async (data: CSVRow[]) => {
     try {
-      console.log('Processing CSV rows:', data.length)
-      
       const forecasts = data
         .filter(row => {
-          // Log skipped rows for debugging
           if (!row.Month || !row.State || !row.Amount) {
-            console.log('Skipping invalid row:', row)
             return false
           }
           return true
@@ -775,7 +771,6 @@ export default function ForecastPage() {
           try {
             const parsedDate = parseDate(row.Month?.trim())
             if (!parsedDate) {
-              console.error('Invalid date format:', row.Month)
               return null
             }
 
@@ -785,7 +780,6 @@ export default function ForecastPage() {
 
             const cleanedAmount = parseFloat(row.Amount.replace(/[^0-9.-]/g, ''))
             if (isNaN(cleanedAmount)) {
-              console.error('Invalid amount:', row.Amount)
               return null
             }
 
@@ -796,7 +790,7 @@ export default function ForecastPage() {
               month: parsedDate.toISOString(),
               amount: cleanedAmount,
               localities: row.Localities?.trim() || null,
-              org_name: row['Org Name']?.trim(),
+              org_name: donors[0].name,
               intermediary: row.Intermediary?.trim() || null,
               transfer_method: row['Transfer Method']?.trim() || null,
               source: row.Source?.trim() || null,
@@ -806,16 +800,12 @@ export default function ForecastPage() {
               created_by: userId || null
             }
             
-            console.log('Processed forecast:', forecast)
             return forecast
           } catch (err) {
-            console.error('Error processing row:', row, err)
             return null
           }
         })
         .filter((forecast): forecast is NonNullable<typeof forecast> => forecast !== null)
-
-      console.log('Sending forecasts to backend:', forecasts.length)
 
       if (forecasts.length === 0) {
         throw new Error('No valid forecast data found in CSV. Please check date formats (YYYY-MM-DD, MMM-YY, MM/DD/YY, DD-MMM-YY) and other required fields.')
@@ -832,13 +822,10 @@ export default function ForecastPage() {
         throw new Error(errorData.error || 'Failed to submit forecasts')
       }
 
-      const result = await response.json()
-      console.log('Upload response:', result)
-
+      await response.json()
       alert('Forecasts uploaded successfully!')
       setSelectedFile(null)
     } catch (err) {
-      console.error('Submission error:', err)
       setError(err instanceof Error ? err.message : 'An unexpected error occurred')
     }
   }
