@@ -8,10 +8,17 @@ import { Button } from '@/components/ui/button'
 import LanguageSwitch from '@/components/LanguageSwitch'
 import '@/i18n/config'
 
+interface Donor {
+  id: string;
+  donors: {
+    name: string;
+  };
+}
+
 export default function PartnerPortalPage() {
   const { t } = useTranslation(['common', 'partner'])
   const [isLoading, setIsLoading] = useState(true)
-  const [donor, setDonor] = useState<any>(null)
+  const [donor, setDonor] = useState<Donor | null>(null)
 
   useEffect(() => {
     const donorData = localStorage.getItem('donor')

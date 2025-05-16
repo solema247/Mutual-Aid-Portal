@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -18,7 +17,6 @@ import LanguageSwitch from '@/components/LanguageSwitch'
 import '@/i18n/config'
 
 export default function LoginPage() {
-  const router = useRouter()
   const { t } = useTranslation(['login', 'common'])
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -55,7 +53,7 @@ export default function LoginPage() {
     setError(null)
 
     try {
-      const { data: user, error: userError } = await supabase
+      const { data: user } = await supabase
         .from('users')
         .select('*')
         .eq('err_id', errId)
@@ -76,8 +74,7 @@ export default function LoginPage() {
 
       // Redirect to ERR dashboard instead of root
       window.location.href = '/err-portal'
-    } catch (err) {
-      console.error('Login error:', err)
+    } catch {
       setError('Failed to login. Please try again.')
     } finally {
       setIsLoading(false)

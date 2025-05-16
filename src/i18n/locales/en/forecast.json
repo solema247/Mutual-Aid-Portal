@@ -61,7 +61,7 @@
         },
         "status": {
           "title": "Status",
-          "desc": "'planned' or 'complete'. Use planned for future, complete for past months"
+          "desc": "&apos;planned&apos; or &apos;complete&apos;. Use &apos;planned&apos; for future, &apos;complete&apos; for past months"
         }
       },
       "download_template": "Download Template",

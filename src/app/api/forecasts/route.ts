@@ -13,6 +13,12 @@ interface Forecast {
   amount: number
   localities?: string | null
   transfer_method?: string | null
+  donor_id?: string
+  cluster_id?: string
+  state_id?: string
+  intermediary?: string | null
+  org_type?: string | null
+  created_by?: string | null
   // Add other forecast properties here
 }
 
@@ -89,7 +95,7 @@ export async function POST(request: Request) {
     // Upsert consolidated forecasts
     const { data, error } = await supabase
       .from('donor_forecasts')
-      .upsert(consolidatedForecasts.map((forecast: any) => {
+      .upsert(consolidatedForecasts.map((forecast: Forecast) => {
         console.log('Processing forecast status:', forecast.status)
         return {
           donor_id: forecast.donor_id,
@@ -97,7 +103,6 @@ export async function POST(request: Request) {
           state_id: forecast.state_id,
           month: forecast.month,
           amount: forecast.amount,
-          // Additional fields
           localities: forecast.localities,
           org_name: forecast.org_name,
           intermediary: forecast.intermediary,

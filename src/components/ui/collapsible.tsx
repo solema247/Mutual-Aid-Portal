@@ -15,7 +15,6 @@ interface CollapsibleRowProps {
   children: React.ReactNode
   variant?: "default" | "primary"
   defaultOpen?: boolean
-  onOpenChange?: (open: boolean) => void
   className?: string
 }
 
@@ -24,7 +23,6 @@ const CollapsibleRow = ({
   children, 
   variant = "default",
   defaultOpen,
-  onOpenChange,
   className
 }: CollapsibleRowProps) => {
   const [isOpen, setIsOpen] = useState(defaultOpen || false)

@@ -1,8 +1,14 @@
 'use client'
 
 import { useTranslation } from 'react-i18next'
-import { useState, useEffect } from 'react'
-import { Select } from '@/components/ui/select'
+import { useState, useEffect, useCallback } from 'react'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { ActiveUserListItem } from '@/app/api/users/types/users'
 import { getActiveUsers, suspendUser, activateUser } from '@/app/api/users/utils/users'
 
@@ -16,17 +22,15 @@ export default function ActiveUsersList({ isLoading: initialLoading }: ActiveUse
   const [isLoading, setIsLoading] = useState(initialLoading)
   const [error, setError] = useState<string | null>(null)
   const [processingId, setProcessingId] = useState<string | null>(null)
-  const [totalUsers, setTotalUsers] = useState(0)
-  const [page, setPage] = useState(1)
   const [selectedRole, setSelectedRole] = useState<string>('all')
   const [selectedStatus, setSelectedStatus] = useState<'active' | 'suspended'>('active')
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
 
-  const fetchUsers = async () => {
+  const fetchUsers = useCallback(async () => {
     try {
       setIsLoading(true)
-      const { users: fetchedUsers, total } = await getActiveUsers({
-        page,
+      const { users: fetchedUsers } = await getActiveUsers({
+        page: 1,
         pageSize: 20,
         role: selectedRole === 'all' ? undefined : selectedRole as 'admin' | 'state_err' | 'base_err',
         status: selectedStatus,
@@ -44,18 +48,17 @@ export default function ActiveUsersList({ isLoading: initialLoading }: ActiveUse
       }))
 
       setUsers(formattedUsers)
-      setTotalUsers(total)
     } catch (err) {
       setError(t('common:error_fetching_data'))
       console.error(err)
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [selectedRole, selectedStatus, sortOrder, t])
 
   useEffect(() => {
     fetchUsers()
-  }, [page, selectedRole, selectedStatus, sortOrder])
+  }, [selectedRole, selectedStatus, sortOrder, fetchUsers])
 
   const handleStatusChange = async (userId: string, newStatus: 'active' | 'suspended') => {
     try {
@@ -91,23 +94,31 @@ export default function ActiveUsersList({ isLoading: initialLoading }: ActiveUse
         <Select
           value={selectedRole}
           onValueChange={setSelectedRole}
-          items={[
-            { value: 'all', label: t('users:all_roles') },
-            { value: 'admin', label: t('users:admin_role') },
-            { value: 'state_err', label: t('users:state_err_role') },
-            { value: 'base_err', label: t('users:base_err_role') }
-          ]}
-          placeholder={t('users:filter_by_role')}
-        />
+        >
+          <SelectTrigger className="w-[180px]">
+            <SelectValue placeholder={t('users:filter_by_role')} />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">{t('users:all_roles')}</SelectItem>
+            <SelectItem value="admin">{t('users:admin_role')}</SelectItem>
+            <SelectItem value="state_err">{t('users:state_err_role')}</SelectItem>
+            <SelectItem value="base_err">{t('users:base_err_role')}</SelectItem>
+          </SelectContent>
+        </Select>
+
         <Select
           value={selectedStatus}
           onValueChange={(value) => setSelectedStatus(value as 'active' | 'suspended')}
-          items={[
-            { value: 'active', label: t('users:active_status') },
-            { value: 'suspended', label: t('users:suspended_status') }
-          ]}
-          placeholder={t('users:filter_by_status')}
-        />
+        >
+          <SelectTrigger className="w-[180px]">
+            <SelectValue placeholder={t('users:filter_by_status')} />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="active">{t('users:active_status')}</SelectItem>
+            <SelectItem value="suspended">{t('users:suspended_status')}</SelectItem>
+          </SelectContent>
+        </Select>
+
         <button
           onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
           className="text-sm text-muted-foreground hover:text-foreground"

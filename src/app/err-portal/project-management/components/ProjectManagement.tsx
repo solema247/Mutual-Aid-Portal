@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import React, { useEffect, useState, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { supabase } from '@/lib/supabaseClient'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -81,6 +81,11 @@ type ExpenseCategory = {
   language: string
 }
 
+interface User {
+  id: string;
+  name: string;
+}
+
 export default function ProjectManagement() {
   const { t } = useTranslation(['projects', 'common'])
   const [projects, setProjects] = useState<Project[]>([])
@@ -91,9 +96,30 @@ export default function ProjectManagement() {
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [selectedTab, setSelectedTab] = useState<'details' | 'feedback'>('details')
   const [feedbackHistory, setFeedbackHistory] = useState<Feedback[]>([])
-  const [user, setUser] = useState<any>(null)
+  const [user, setUser] = useState<User | null>(null)
   const [activities, setActivities] = useState<ActivityName[]>([])
   const [expenses, setExpenses] = useState<ExpenseCategory[]>([])
+
+  const filterProjectsByStatus = useCallback(() => {
+    let filteredProjects: Project[] = []
+    
+    switch (currentStatus) {
+      case 'new':
+        filteredProjects = allProjects.filter(p => ['new', 'pending'].includes(p.status))
+        break
+      case 'feedback':
+        filteredProjects = allProjects.filter(p => p.status === 'feedback')
+        break
+      case 'active':
+        filteredProjects = allProjects.filter(p => ['active', 'approved'].includes(p.status))
+        break
+      case 'declined':
+        filteredProjects = allProjects.filter(p => p.status === 'declined')
+        break
+    }
+
+    setProjects(filteredProjects)
+  }, [currentStatus, allProjects])
 
   useEffect(() => {
     const userData = localStorage.getItem('user')
@@ -110,7 +136,7 @@ export default function ProjectManagement() {
     if (allProjects.length > 0) {
       filterProjectsByStatus()
     }
-  }, [currentStatus, allProjects])
+  }, [currentStatus, allProjects, filterProjectsByStatus])
 
   useEffect(() => {
     if (selectedProject) {
@@ -184,27 +210,6 @@ export default function ProjectManagement() {
       console.error('Error fetching all projects:', error)
       setLoading(false)
     }
-  }
-
-  const filterProjectsByStatus = () => {
-    let filteredProjects: Project[] = []
-    
-    switch (currentStatus) {
-      case 'new':
-        filteredProjects = allProjects.filter(p => ['new', 'pending'].includes(p.status))
-        break
-      case 'feedback':
-        filteredProjects = allProjects.filter(p => p.status === 'feedback')
-        break
-      case 'active':
-        filteredProjects = allProjects.filter(p => ['active', 'approved'].includes(p.status))
-        break
-      case 'declined':
-        filteredProjects = allProjects.filter(p => p.status === 'declined')
-        break
-    }
-
-    setProjects(filteredProjects)
   }
 
   const handleFeedbackSubmit = async (feedbackText: string, action: 'approve' | 'feedback' | 'decline') => {

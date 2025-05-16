@@ -1,6 +1,7 @@
 'use client'
 
 import { useTranslation } from 'react-i18next'
+import { useEffect } from 'react'
 
 type Feedback = {
   id: string
@@ -21,6 +22,10 @@ type FeedbackHistoryProps = {
 
 export default function FeedbackHistory({ projectId, feedbackHistory, className = '' }: FeedbackHistoryProps) {
   const { t } = useTranslation(['projects'])
+
+  useEffect(() => {
+    console.log(`Displaying feedback history for project ${projectId}`)
+  }, [projectId])
 
   const getStatusColor = (status: Feedback['feedback_status']) => {
     switch (status) {

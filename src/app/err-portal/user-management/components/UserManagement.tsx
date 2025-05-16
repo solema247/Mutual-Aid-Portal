@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { CollapsibleRow } from '@/components/ui/collapsible'
 import { PendingUserListItem } from '@/app/api/users/types/users'
@@ -14,7 +14,7 @@ export default function UserManagement() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  const fetchPendingUsers = async () => {
+  const fetchPendingUsers = useCallback(async () => {
     try {
       setIsLoading(true)
       const users = await getPendingUsers()
@@ -33,11 +33,11 @@ export default function UserManagement() {
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [t])
 
   useEffect(() => {
     fetchPendingUsers()
-  }, [])
+  }, [fetchPendingUsers])
 
   return (
     <div className="space-y-6">

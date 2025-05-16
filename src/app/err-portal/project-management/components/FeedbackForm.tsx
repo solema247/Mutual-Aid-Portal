@@ -21,6 +21,7 @@ export default function FeedbackForm({ projectId, onSubmit, className = '' }: Fe
       setIsSubmitting(true)
       await onSubmit(feedback, action)
       setFeedback('')
+      console.log(`Submitted feedback for project ${projectId}`)
     } catch (error) {
       console.error('Error submitting feedback:', error)
     } finally {

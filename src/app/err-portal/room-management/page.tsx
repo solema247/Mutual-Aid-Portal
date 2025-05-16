@@ -5,9 +5,13 @@ import { useTranslation } from 'react-i18next'
 import { CollapsibleRow } from '@/components/ui/collapsible'
 import RoomManagement from './components/RoomManagement'
 
+interface User {
+  role: string;
+}
+
 export default function RoomManagementPage() {
   const { t } = useTranslation(['rooms', 'err'])
-  const [user, setUser] = useState<any>(null)
+  const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {

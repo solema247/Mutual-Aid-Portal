@@ -7,10 +7,15 @@ import Link from 'next/link'
 import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import '@/i18n/config'
 
+interface User {
+  role: string;
+  name: string;
+}
+
 export default function ErrPortalPage() {
   const { t } = useTranslation(['common', 'err'])
   const [isLoading, setIsLoading] = useState(true)
-  const [user, setUser] = useState<any>(null)
+  const [user, setUser] = useState<User | null>(null)
 
   useEffect(() => {
     const userData = localStorage.getItem('user')

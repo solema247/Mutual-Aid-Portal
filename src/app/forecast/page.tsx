@@ -39,17 +39,6 @@ const MONTHS = [
 ]
 const YEAR = '2025'
 
-type ForecastData = {
-  country: {
-    [month: string]: string
-  }
-  states: {
-    [stateId: string]: {
-      [month: string]: string
-    }
-  }
-}
-
 type CSVRow = {
   Month: string
   State: string
@@ -97,12 +86,11 @@ interface DuplicateGroup {
   totalAmount: number
 }
 
-// Add this function to find duplicates
+// Update findDuplicates function to remove unused variables
 function findDuplicates(data: CSVRow[]): DuplicateGroup[] {
   const groups = new Map<string, CSVRow[]>()
   
   data.forEach(row => {
-    // Normalize the values to ensure consistent matching
     const normalizedKey = [
       row['Org Name']?.trim(),
       row.State?.trim(),
@@ -119,11 +107,10 @@ function findDuplicates(data: CSVRow[]): DuplicateGroup[] {
     groups.get(normalizedKey)!.push(row)
   })
 
-  // Only return groups that have duplicates
   return Array.from(groups.entries())
-    .filter(([_, rows]) => rows.length > 1)
-    .map(([key, rows]) => ({
-      key,
+    .filter(([, rows]) => rows.length > 1)
+    .map(([, rows]) => ({
+      key: rows[0].State + '-' + rows[0].Month,
       entries: rows,
       totalAmount: rows.reduce((sum, row) => {
         const amount = parseFloat(row.Amount.replace(/[^0-9.-]/g, ''))
@@ -155,14 +142,14 @@ const parseDate = (dateStr: string): Date | null => {
 
     // Case 3: MM/DD/YY or MM/DD/YYYY
     if (dateStr.match(/^\d{1,2}\/\d{1,2}\/\d{2,4}$/)) {
-      const [month, _, year] = dateStr.split('/')
+      const [month, , year] = dateStr.split('/')
       const fullYear = year.length === 2 ? `20${year}` : year
       return new Date(`${fullYear}-${month.padStart(2, '0')}-01`)
     }
 
     // Case 4: DD-MMM-YYYY or DD-MMM-YY
     if (dateStr.match(/^\d{1,2}-[A-Za-z]{3}-\d{2,4}$/)) {
-      const [_, month, year] = dateStr.split('-')
+      const [, month, year] = dateStr.split('-')
       const monthMap: { [key: string]: string } = {
         'jan': '01', 'feb': '02', 'mar': '03', 'apr': '04',
         'may': '05', 'jun': '06', 'jul': '07', 'aug': '08',
@@ -175,7 +162,7 @@ const parseDate = (dateStr: string): Date | null => {
     }
 
     return null
-  } catch (err) {
+  } catch {
     return null
   }
 }
@@ -359,14 +346,7 @@ export default function ForecastPage() {
   const { t } = useTranslation(['forecast', 'common'])
   const router = useRouter()
   const [donors, setDonors] = useState<{ id: string; name: string }[]>([])
-  const [clusters, setClusters] = useState<{ id: string; name: string }[]>([])
   const [states, setStates] = useState<{ id: string; state_name: string }[]>([])
-  const [selectedDonor, setSelectedDonor] = useState<string>('')
-  const [selectedCluster, setSelectedCluster] = useState<string>('')
-  const [forecastData, setForecastData] = useState<ForecastData>({
-    country: {},
-    states: {}
-  })
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
@@ -385,36 +365,14 @@ export default function ForecastPage() {
       status: 'planned'
     }))
   )
-  const [currentEntry, setCurrentEntry] = useState<ForecastEntry>({
-    id: crypto.randomUUID(),
-    month: '',
-    state: '',
-    amount: '',
-    localities: '',
-    org_name: '', // Will be pre-filled from user data
-    intermediary: '',
-    transfer_method: '',
-    source: '',
-    receiving_mag: '',
-    status: 'planned'
-  })
   const [donorOrgType, setDonorOrgType] = useState<string>('')
   const [userId, setUserId] = useState<string>('')
   const [lastUpload, setLastUpload] = useState<string | null>(null)
-
-  // Add state for form section open/close
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [isCsvOpen, setIsCsvOpen] = useState(false)
   const [isViewOpen, setIsViewOpen] = useState(false)
-
-  // Add this near the top of the component where other state variables are declared
-  const statesList = states.map(state => state.state_name)
-
-  // Add state for duplicate confirmation
-  const [duplicates, setDuplicates] = useState<DuplicateGroup[]>([])
   const [showDuplicatesDialog, setShowDuplicatesDialog] = useState(false)
-
-  // Add state for storing all CSV data
+  const [duplicateGroups, setDuplicateGroups] = useState<DuplicateGroup[]>([])
   const [csvData, setCsvData] = useState<CSVRow[]>([])
 
   useEffect(() => {
@@ -461,32 +419,7 @@ export default function ForecastPage() {
 
         // Set donor directly from localStorage
         setDonors([{ id: loggedInDonor.donor_id, name: loggedInDonor.donors.name }])
-        setSelectedDonor(loggedInDonor.donor_id)
-        setClusters(clustersRes.data)
         setStates(uniqueStates)
-
-        // Initialize forecast data
-        const initialData: ForecastData = {
-          country: {},
-          states: {}
-        }
-        
-        // Initialize country level data
-        MONTHS.forEach(month => {
-          const monthKey = `${YEAR}-${String(MONTHS.indexOf(month) + 1).padStart(2, '0')}`
-          initialData.country[monthKey] = ''
-        })
-
-        // Initialize state level data
-        uniqueStates.forEach(state => {
-          initialData.states[state.id] = {}
-          MONTHS.forEach(month => {
-            const monthKey = `${YEAR}-${String(MONTHS.indexOf(month) + 1).padStart(2, '0')}`
-            initialData.states[state.id][monthKey] = ''
-          })
-        })
-
-        setForecastData(initialData)
 
         // Fetch last upload timestamp
         const { data: lastUploadData, error: lastUploadError } = await supabase
@@ -510,29 +443,6 @@ export default function ForecastPage() {
 
     fetchData()
   }, [])
-
-  const handleCountryAmountChange = (month: string, value: string) => {
-    setForecastData(prev => ({
-      ...prev,
-      country: {
-        ...prev.country,
-        [month]: value
-      }
-    }))
-  }
-
-  const handleStateAmountChange = (stateId: string, month: string, value: string) => {
-    setForecastData(prev => ({
-      ...prev,
-      states: {
-        ...prev.states,
-        [stateId]: {
-          ...prev.states[stateId],
-          [month]: value
-        }
-      }
-    }))
-  }
 
   const handleAddRow = () => {
     setRows(prev => [...prev, {
@@ -560,89 +470,30 @@ export default function ForecastPage() {
     ))
   }
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setIsSubmitting(true)
+    setError(null)
+
     try {
-      // Validate donor ID first
-      if (!donors[0]?.id) {
-        setError('No donor ID found')
-        console.error('Missing donor ID:', donors)
-        return
-      }
-
-      // Get the rows data directly from the rows state
-      const validRows = rows.filter(row => 
-        row.month && row.state && row.amount // Only submit rows with required fields
-      )
-
-      if (validRows.length === 0) {
-        setError('No valid entries to submit. Please fill in at least Month, State and Amount.')
-        return
-      }
-
-      // Log the data being sent
-      const submissionData = validRows.map(entry => {
-        // Find state ID
-        const stateId = states.find(s => s.state_name === entry.state)?.id
-        if (!stateId) {
-          console.error('Could not find state ID for:', entry.state)
-        }
-
-        const data = {
-          donor_id: donors[0].id,
-          state_id: stateId || null, // Make sure we don't send empty string
-          state_name: entry.state,
-          month: new Date(entry.month).toISOString(),
-          amount: parseFloat(entry.amount),
-          localities: entry.localities || null, // Convert empty string to null
-          org_name: entry.org_name || donors[0].name,
-          intermediary: entry.intermediary || null,
-          transfer_method: entry.transfer_method || null,
-          source: entry.source || null,
-          receiving_mag: entry.receiving_mag || null,
-          status: entry.status || 'planned',
-          org_type: donorOrgType || null,
-          created_by: userId || null
-        }
-
-        console.log('Preparing submission row:', data)
-        return data
+      const response = await fetch('/api/forecasts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(rows)
       })
 
-      console.log('Full submission data:', submissionData)
-
-      const { data, error } = await supabase
-        .from('donor_forecasts')
-        .upsert(submissionData, {
-          onConflict: 'org_name,state_name,month',
-          ignoreDuplicates: false
-        })
-
-      if (error) {
-        console.error('Supabase error:', error)
-        throw new Error(error.message)
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Failed to submit forecasts')
       }
 
-      console.log('Submission response:', data)
+      await response.json()
       alert('Forecasts submitted successfully!')
-      
-      // Reset form rows to initial state
-      setRows(Array(5).fill(null).map(() => ({
-        id: crypto.randomUUID(),
-        month: '',
-        state: '',
-        amount: '',
-        localities: '',
-        org_name: '', 
-        intermediary: '',
-        transfer_method: '',
-        source: '',
-        receiving_mag: '',
-        status: 'planned'
-      })))
-      
+      setRows([])
     } catch (err) {
-      console.error('Submission error:', err)
-      setError(err instanceof Error ? err.message : 'An unexpected error occurred')
+      setError(err instanceof Error ? err.message : 'Failed to submit forecasts')
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
@@ -732,7 +583,7 @@ export default function ForecastPage() {
             // Check for duplicates before proceeding
             const duplicateGroups = findDuplicates(results.data)
             if (duplicateGroups.length > 0) {
-              setDuplicates(duplicateGroups)
+              setDuplicateGroups(duplicateGroups)
               setShowDuplicatesDialog(true)
               setIsSubmitting(false)
               return
@@ -740,8 +591,8 @@ export default function ForecastPage() {
 
             // If no duplicates, proceed with upload
             await submitForecasts(results.data)
-          } catch (err) {
-            setError(err instanceof Error ? err.message : 'An unexpected error occurred')
+          } catch (error) {
+            setError(error instanceof Error ? error.message : 'An unexpected error occurred')
           } finally {
             setIsSubmitting(false)
           }
@@ -751,8 +602,8 @@ export default function ForecastPage() {
           setIsSubmitting(false)
         }
       })
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An unexpected error occurred')
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'An unexpected error occurred')
       setIsSubmitting(false)
     }
   }
@@ -801,7 +652,8 @@ export default function ForecastPage() {
             }
             
             return forecast
-          } catch (err) {
+          } catch (error) {
+            console.error('Error processing forecast row:', error)
             return null
           }
         })
@@ -825,138 +677,9 @@ export default function ForecastPage() {
       await response.json()
       alert('Forecasts uploaded successfully!')
       setSelectedFile(null)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An unexpected error occurred')
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'An unexpected error occurred')
     }
-  }
-
-  // Update the guide component to be collapsible
-  const UploadGuide = () => {
-    // Keep existing states from the parent component
-    const statesList = states.map(s => s.state_name).sort()
-
-    return (
-      <CollapsibleRow title="📝 CSV Upload Guide" variant="default">
-        <div className="pt-2">
-          <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
-            {/* Left Column */}
-            <div className="space-y-2">
-              <div className="space-y-1">
-                <div className="font-medium flex items-center gap-2">
-                  <span>📅</span> Month Format
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Use MMM-YY format (e.g., Jan-25). Month when disbursement is made/intended to MAG
-                </p>
-              </div>
-
-              <div className="space-y-1">
-                <div className="font-medium flex items-center gap-2">
-                  <span>🌍</span> State
-                  <Dialog>
-                    <DialogTrigger asChild>
-                      <button className="text-xs text-blue-500 hover:underline ml-2">
-                        View States List
-                      </button>
-                    </DialogTrigger>
-                    <DialogContent className="bg-white">
-                      <DialogHeader>
-                        <DialogTitle>Available States</DialogTitle>
-                      </DialogHeader>
-                      <div className="grid grid-cols-2 gap-2 max-h-[60vh] overflow-y-auto">
-                        {statesList.map((state) => (
-                          <div key={state} className="text-sm p-2 bg-gray-50 rounded border border-gray-100">
-                            {state}
-                          </div>
-                        ))}
-                      </div>
-                    </DialogContent>
-                  </Dialog>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Must match our state list exactly. State where MAG is operational
-                </p>
-              </div>
-
-              <div className="space-y-1">
-                <div className="font-medium flex items-center gap-2">
-                  <span>💰</span> Amount
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Numbers only or with currency symbol (e.g., 20000 or $20,000)
-                </p>
-              </div>
-
-              <div className="space-y-1">
-                <div className="font-medium flex items-center gap-2">
-                  <span>📍</span> Localities
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Optional free text. List of specific localities if applicable
-                </p>
-              </div>
-
-              <div className="space-y-1">
-                <div className="font-medium flex items-center gap-2">
-                  <span>🏢</span> Org Name
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Your organization name
-                </p>
-              </div>
-            </div>
-
-            {/* Right Column */}
-            <div className="space-y-2">
-              <div className="space-y-1">
-                <div className="font-medium flex items-center gap-2">
-                  <span>🤝</span> Intermediary
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Organization directing final disbursement. Entity collecting banking/transfer details
-                </p>
-              </div>
-
-              <div className="space-y-1">
-                <div className="font-medium flex items-center gap-2">
-                  <span>💳</span> Transfer Method
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  How funds are transferred internationally (e.g., Bankak, Hawala)
-                </p>
-              </div>
-
-              <div className="space-y-1">
-                <div className="font-medium flex items-center gap-2">
-                  <span>📊</span> Source
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Private, UN, or Governmental. General category of funding source
-                </p>
-              </div>
-
-              <div className="space-y-1">
-                <div className="font-medium flex items-center gap-2">
-                  <span>👥</span> Receiving MAG
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  MAG identifier or type. Use grouping/type if name cannot be shared
-                </p>
-              </div>
-
-              <div className="space-y-1">
-                <div className="font-medium flex items-center gap-2">
-                  <span>📊</span> Status
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  'planned' or 'complete'. Use planned for future, complete for past months
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </CollapsibleRow>
-    )
   }
 
   // Update FormSection to accept and use isOpen prop
@@ -1042,7 +765,7 @@ export default function ForecastPage() {
             The following entries have the same Organization, State, Month, Receiving MAG, Source, Localities, and Transfer Method. 
             They will be combined into single entries with summed amounts. Please review and confirm:
           </p>
-          {duplicates.map((group, i) => (
+          {duplicateGroups.map((group, i) => (
             <div key={i} className="border rounded-lg p-4 space-y-2">
               <div className="font-medium">
                 Group {i + 1} - Total Amount: ${group.totalAmount.toLocaleString()}

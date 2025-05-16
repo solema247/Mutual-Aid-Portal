@@ -1,7 +1,7 @@
 'use client'
 
 import { useTranslation } from 'react-i18next'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import {
   Select,
   SelectContent,
@@ -15,29 +15,23 @@ import { getActiveRooms } from '@/app/api/rooms/utils/rooms'
 export default function ActiveRoomsList({ isLoading: initialLoading }: { isLoading: boolean }) {
   const { t } = useTranslation(['rooms'])
   const [rooms, setRooms] = useState<RoomWithState[]>([])
-  const [totalRooms, setTotalRooms] = useState(0)
   const [isLoading, setIsLoading] = useState(initialLoading)
   const [error, setError] = useState<string | null>(null)
-  const [currentPage, setCurrentPage] = useState(1)
   const [selectedType, setSelectedType] = useState<'all' | 'state' | 'base'>('all')
   const [selectedState, setSelectedState] = useState<string>('all')
   const [selectedLocality, setSelectedLocality] = useState<string>('all')
-  const [sortBy, setSortBy] = useState('created_at')
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
   const [states, setStates] = useState<{id: string, name: string, localities: string[]}[]>([])
   const [localities, setLocalities] = useState<string[]>([])
 
-  const fetchRooms = async () => {
+  const fetchRooms = useCallback(async () => {
     try {
       setIsLoading(true)
       setError(null)
       
-      const { rooms: fetchedRooms, total } = await getActiveRooms({
-        page: currentPage,
+      const { rooms: fetchedRooms } = await getActiveRooms({
+        page: 1,
         pageSize: 100,
-        type: selectedType === 'all' ? undefined : selectedType,
-        sortBy,
-        sortOrder
+        type: selectedType === 'all' ? undefined : selectedType
       })
       
       // Apply client-side filtering for state and locality
@@ -54,7 +48,7 @@ export default function ActiveRoomsList({ isLoading: initialLoading }: { isLoadi
           room => room.state?.locality === selectedLocality
         );
       }
-      
+
       // Extract unique states and localities for filters
       const uniqueStates = Array.from(
         new Set(
@@ -96,18 +90,17 @@ export default function ActiveRoomsList({ isLoading: initialLoading }: { isLoadi
       }
       
       setRooms(filteredRooms)
-      setTotalRooms(filteredRooms.length)
     } catch (err) {
       console.error('Error fetching active rooms:', err)
       setError('Failed to fetch rooms')
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [selectedType, selectedState, selectedLocality])
 
   useEffect(() => {
     fetchRooms()
-  }, [currentPage, selectedType, selectedState, selectedLocality, sortBy, sortOrder])
+  }, [fetchRooms])
 
   // Update localities when state changes
   useEffect(() => {
