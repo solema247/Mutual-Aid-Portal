@@ -8,5 +8,7 @@
   "room_management": "Room Management",
   "room_management_desc": "Manage and approve ERR room requests",
   "user_management": "User Management",
-  "user_management_desc": "Manage and approve ERR staff accounts"
+  "user_management_desc": "Manage and approve ERR staff accounts",
+  "project_management": "Project Management",
+  "project_management_desc": "Review and manage ERR project proposals"
 } 

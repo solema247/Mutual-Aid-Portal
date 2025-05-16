@@ -19,7 +19,7 @@ export default function ErrPortalLayout({
     {
       href: '/err-portal/room-management',
       label: t('err:room_management'),
-      icon: '🏥'
+      icon: '🤝'
     },
     {
       href: '/err-portal/user-management',

@@ -64,7 +64,7 @@ export default function Sidebar({ items }: SidebarProps) {
       {/* Desktop sidebar */}
       <div
         className={cn(
-          'hidden lg:flex h-screen flex-col border-r bg-background transition-all duration-300 ease-in-out',
+          'hidden lg:flex h-screen flex-col border-r rtl:border-l bg-background transition-all duration-300 ease-in-out',
           isExpanded ? 'w-64' : 'w-16'
         )}
         onMouseEnter={() => setIsExpanded(true)}
@@ -87,13 +87,18 @@ export default function Sidebar({ items }: SidebarProps) {
               key={item.href}
               href={item.href}
               className={cn(
-                'flex items-center gap-3 rounded-lg transition-all duration-300',
-                !isExpanded ? 'justify-center px-2 py-2' : 'px-3 py-2',
-                'text-muted-foreground hover:bg-muted hover:text-foreground',
+                'flex items-center rounded-lg transition-all duration-300',
+                !isExpanded 
+                  ? 'justify-center mx-0.5 w-9 h-9' 
+                  : 'gap-3 px-3',
+                'py-2 text-muted-foreground hover:bg-muted hover:text-foreground',
                 pathname === item.href && 'bg-muted text-foreground'
               )}
             >
-              <span className="text-xl">{item.icon}</span>
+              <span className={cn(
+                "text-xl",
+                !isExpanded && "flex items-center justify-center w-6 h-6"
+              )}>{item.icon}</span>
               <span className={cn(
                 'transition-all duration-300',
                 !isExpanded && 'w-0 overflow-hidden opacity-0'

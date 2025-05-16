@@ -59,7 +59,7 @@ export default function ErrPortalPage() {
           <Link href="/err-portal/room-management" className="block aspect-square">
             <Card className="h-full hover:bg-muted/50 transition-colors">
               <CardHeader className="h-full flex flex-col justify-center items-center text-center">
-                <span className="text-4xl mb-4">🏥</span>
+                <span className="text-4xl mb-4">🤝</span>
                 <CardTitle className="text-xl">
                   {t('err:room_management')}
                 </CardTitle>

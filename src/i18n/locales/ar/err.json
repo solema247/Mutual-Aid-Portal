@@ -8,5 +8,7 @@
   "room_management": "إدارة الغرف",
   "room_management_desc": "إدارة والموافقة على طلبات غرف الطوارئ",
   "user_management": "إدارة المستخدمين",
-  "user_management_desc": "إدارة والموافقة على حسابات موظفي غرف الطوارئ"
+  "user_management_desc": "إدارة والموافقة على حسابات موظفي غرف الطوارئ",
+  "project_management": "إدارة المشاريع",
+  "project_management_desc": "مراجعة وإدارة مقترحات مشاريع غرف الطوارئ"
 } 
