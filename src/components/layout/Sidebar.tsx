@@ -14,13 +14,13 @@ import {
   SheetTrigger,
 } from '@/components/ui/sheet'
 import { Menu, LogOut } from 'lucide-react'
-import { ReactNode } from 'react'
+import { ReactElement } from 'react'
 
 interface SidebarProps {
   items: {
     href: string
     label: string
-    icon: string | ReactNode
+    icon: string | ReactElement
   }[]
 }
 

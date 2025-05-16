@@ -1,6 +1,6 @@
 'use client'
 
-import { ReactNode } from 'react'
+import { ReactNode, ReactElement } from 'react'
 import Sidebar from './Sidebar'
 import LanguageSwitch from '@/components/LanguageSwitch'
 
@@ -9,7 +9,7 @@ interface MainLayoutProps {
   sidebarItems: {
     href: string
     label: string
-    icon: string
+    icon: string | ReactElement
   }[]
 }
 
