@@ -37,7 +37,7 @@ type PlannedActivity = {
   }[]
 }
 
-type ProjectStatus = 'new' | 'feedback' | 'active' | 'declined'
+type ProjectStatus = 'new' | 'feedback' | 'active' | 'declined' | 'draft' | 'pending' | 'approved'
 
 type Project = {
   id: string
@@ -108,7 +108,10 @@ export default function ProjectManagement() {
         filteredProjects = allProjects.filter(p => ['new', 'pending'].includes(p.status))
         break
       case 'feedback':
-        filteredProjects = allProjects.filter(p => p.status === 'feedback')
+        filteredProjects = allProjects.filter(p => 
+          p.status === 'feedback' || 
+          (p.status === 'draft' && p.current_feedback_id !== null)
+        )
         break
       case 'active':
         filteredProjects = allProjects.filter(p => ['active', 'approved'].includes(p.status))
@@ -274,7 +277,10 @@ export default function ProjectManagement() {
             {t('projects:status_new')} ({allProjects.filter(p => ['new', 'pending'].includes(p.status)).length})
           </TabsTrigger>
           <TabsTrigger value="feedback">
-            {t('projects:status_feedback')} ({allProjects.filter(p => p.status === 'feedback').length})
+            {t('projects:status_feedback')} ({allProjects.filter(p => 
+              p.status === 'feedback' || 
+              (p.status === 'draft' && p.current_feedback_id !== null)
+            ).length})
           </TabsTrigger>
           <TabsTrigger value="active">
             {t('projects:status_active')} ({allProjects.filter(p => ['active', 'approved'].includes(p.status)).length})
