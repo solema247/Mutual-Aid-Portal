@@ -56,7 +56,10 @@ function consolidateForecasts(forecasts: Forecast[]): Forecast[] {
     } else {
       // If this is a new unique forecast, add it to the map
       // Keep the original casing and whitespace in the stored forecast
-      groupedForecasts.set(key, { ...forecast })
+      groupedForecasts.set(key, { 
+        ...forecast,
+        org_type: forecast.org_type // Explicitly preserve org_type
+      })
     }
   })
 
@@ -81,38 +84,42 @@ export async function POST(request: Request) {
     const forecasts: Forecast[] = await request.json()
     const supabase = createRouteHandlerClient({ cookies })
 
+    // Add logging for incoming forecasts
+    console.log('Received forecasts:', forecasts.map(f => ({
+      donor_id: f.donor_id,
+      org_type: f.org_type,
+      org_name: f.org_name
+    })))
+
     // Consolidate duplicate forecasts before upserting
     const consolidatedForecasts = consolidateForecasts(forecasts)
 
     // Add logging for consolidated forecasts
-    console.log('Consolidated forecasts to insert:', consolidatedForecasts.map((f: Forecast) => ({
-      state_name: f.state_name,
-      month: f.month,
-      status: f.status,
-      amount: f.amount
+    console.log('Consolidated forecasts:', consolidatedForecasts.map(f => ({
+      donor_id: f.donor_id,
+      org_type: f.org_type,
+      org_name: f.org_name
     })))
 
     // Upsert consolidated forecasts
     const { data, error } = await supabase
       .from('donor_forecasts')
-      .upsert(consolidatedForecasts.map((forecast: Forecast) => {
-        console.log('Processing forecast status:', forecast.status)
-        return {
-          donor_id: forecast.donor_id,
-          cluster_id: forecast.cluster_id,
-          state_id: forecast.state_id,
-          month: forecast.month,
-          amount: forecast.amount,
-          localities: forecast.localities,
-          org_name: forecast.org_name,
-          intermediary: forecast.intermediary,
-          transfer_method: forecast.transfer_method,
-          source: forecast.source,
-          receiving_mag: forecast.receiving_mag,
-          state_name: forecast.state_name,
-          status: forecast.status || 'planned'
-        }
-      }), {
+      .upsert(consolidatedForecasts.map((forecast: Forecast) => ({
+        donor_id: forecast.donor_id,
+        cluster_id: forecast.cluster_id,
+        state_id: forecast.state_id,
+        month: forecast.month,
+        amount: forecast.amount,
+        localities: forecast.localities,
+        org_name: forecast.org_name,
+        intermediary: forecast.intermediary,
+        transfer_method: forecast.transfer_method,
+        source: forecast.source,
+        receiving_mag: forecast.receiving_mag,
+        state_name: forecast.state_name,
+        status: forecast.status || 'planned',
+        org_type: forecast.org_type
+      })), {
         onConflict: 'org_name,state_name,month,receiving_mag,source,localities,transfer_method',
         ignoreDuplicates: false
       })

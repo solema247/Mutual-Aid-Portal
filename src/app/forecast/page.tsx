@@ -673,6 +673,20 @@ export default function ForecastPage() {
   // Update the submitForecasts function to normalize the data before sending
   const submitForecasts = async (data: CSVRow[]) => {
     try {
+      // First, get the donor's org_type
+      const { data: donorData, error: donorError } = await supabase
+        .from('donors')
+        .select('org_type')
+        .eq('id', donors[0].id)
+        .single()
+
+      if (donorError) {
+        console.error('Error fetching donor:', donorError)
+        throw new Error(`Failed to fetch donor information: ${donorError.message}`)
+      }
+
+      console.log('Donor data fetched:', donorData)
+
       const forecasts = data
         .filter(row => {
           if (!row.Month || !row.State || !row.Amount) {
@@ -709,10 +723,11 @@ export default function ForecastPage() {
               source: row.Source?.trim() || null,
               receiving_mag: row['Receiving MAG']?.trim() || null,
               status: row.Status?.toLowerCase().trim() === 'complete' ? 'complete' : 'planned',
-              org_type: donorOrgType || null,
+              org_type: donorData?.org_type || null,
               created_by: userId || null
             }
             
+            console.log('Forecast being prepared:', forecast)
             return forecast
           } catch (error) {
             console.error('Error processing forecast row:', error)
