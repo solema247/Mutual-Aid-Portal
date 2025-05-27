@@ -32,6 +32,7 @@ import { ChevronDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import '@/i18n/config'
 import LanguageSwitch from '@/components/LanguageSwitch'
+import * as XLSX from 'xlsx'
 
 const MONTHS = [
   'January', 'February', 'March', 'April', 'May', 'June', 
@@ -119,8 +120,24 @@ function findDuplicates(data: CSVRow[]): DuplicateGroup[] {
     }))
 }
 
+// Add this helper function to convert Excel date numbers to date strings
+const convertExcelDate = (excelDate: number): string => {
+  // Excel dates are number of days since 1900-01-01 (except for the 1900 leap year bug)
+  const date = new Date((excelDate - 25569) * 86400 * 1000)
+  const month = date.getMonth() + 1
+  const year = date.getFullYear()
+  return `${month.toString().padStart(2, '0')}-${year}`
+}
+
+// Update the parseDate function to handle the new date format
 const parseDate = (dateStr: string): Date | null => {
   try {
+    // Add handling for MM-YYYY format from Excel conversion
+    if (dateStr.match(/^\d{2}-\d{4}$/)) {
+      const [month, year] = dateStr.split('-')
+      return new Date(parseInt(year), parseInt(month) - 1, 1)
+    }
+
     // Case 1: Already in YYYY-MM-DD format
     if (dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
       const date = new Date(dateStr)
@@ -498,44 +515,12 @@ export default function ForecastPage() {
   }
 
   const handleDownloadTemplate = () => {
-    // Sample data rows with realistic values
-    const sampleRows = [
-      {
-        Month: 'Jan-25',  // Use MMM-YY format
-        State: 'Kassala',
-        Amount: '$ 20,000',
-        Localities: 'El Girba, Kassala City',
-        'Org Name': 'P2H',
-        Intermediary: 'LoHub',
-        'Transfer Method': 'Hawala',
-        Source: 'Private',
-        'Receiving MAG': 'ERR',
-        Status: 'complete'
-      }
-    ]
-
-    const csvContent = Papa.unparse({
-      fields: [
-        'Month',
-        'State',
-        'Amount',
-        'Localities',
-        'Org Name',
-        'Intermediary',
-        'Transfer Method',
-        'Source',
-        'Receiving MAG',
-        'Status'
-      ],
-      data: sampleRows
-    })
-
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    // Create a link to the template file in public folder
     const link = document.createElement('a')
-    const url = URL.createObjectURL(blob)
-    link.setAttribute('href', url)
-    link.setAttribute('download', 'forecast_template.csv')
-    link.style.visibility = 'hidden'
+    link.href = '/templates/MAG Finance Forecast Template.xlsx'
+    link.download = 'MAG Finance Forecast Template.xlsx'
+    
+    // Trigger the download
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
@@ -559,53 +544,130 @@ export default function ForecastPage() {
       setIsSubmitting(true)
       setError(null)
 
-      Papa.parse<CSVRow>(selectedFile, {
-        header: true,
-        complete: async (results) => {
-          try {
-            // Validate required columns
-            const requiredColumns = [
-              'Month', 'State', 'Amount', 'Localities', 'Org Name', 
-              'Intermediary', 'Transfer Method', 'Source', 'Receiving MAG',
-              'Status'
-            ]
-            const headers = Object.keys(results.data[0] || {})
-            const missingColumns = requiredColumns.filter(col => !headers.includes(col))
+      const fileExtension = selectedFile.name.split('.').pop()?.toLowerCase()
 
-            if (missingColumns.length > 0) {
-              setError(`Missing required columns: ${missingColumns.join(', ')}`)
-              return
+      if (fileExtension === 'csv') {
+        // Wrap Papa.parse in a Promise to handle it consistently
+        await new Promise((resolve, reject) => {
+          Papa.parse<CSVRow>(selectedFile, {
+            header: true,
+            complete: async (results) => {
+              try {
+                await processFileData(results.data)
+                resolve(null)
+              } catch (error) {
+                reject(error)
+              }
+            },
+            error: (error) => {
+              reject(error)
             }
-
-            // Store CSV data for later use
-            setCsvData(results.data)
-
-            // Check for duplicates before proceeding
-            const duplicateGroups = findDuplicates(results.data)
-            if (duplicateGroups.length > 0) {
-              setDuplicateGroups(duplicateGroups)
-              setShowDuplicatesDialog(true)
-              setIsSubmitting(false)
-              return
+          })
+        })
+      } else if (fileExtension === 'xlsx' || fileExtension === 'xls') {
+        // Wrap FileReader in a Promise
+        const data = await new Promise((resolve, reject) => {
+          const reader = new FileReader()
+          reader.onload = (e) => {
+            try {
+              // Need to explicitly cast the result to ArrayBuffer
+              const arrayBuffer = e.target?.result as ArrayBuffer
+              resolve(arrayBuffer)
+            } catch (error) {
+              reject(error)
             }
-
-            // If no duplicates, proceed with upload
-            await submitForecasts(results.data)
-          } catch (error) {
-            setError(error instanceof Error ? error.message : 'An unexpected error occurred')
-          } finally {
-            setIsSubmitting(false)
           }
-        },
-        error: (error) => {
-          setError(`Error parsing CSV: ${error.message}`)
-          setIsSubmitting(false)
+          reader.onerror = () => reject(new Error('Failed to read Excel file'))
+          reader.readAsArrayBuffer(selectedFile)
+        })
+
+        // Add explicit type checking for the data
+        if (!data) {
+          throw new Error('Failed to read Excel file data')
         }
-      })
+
+        const workbook = XLSX.read(data, { type: 'array' })
+        
+        // Add error handling for missing worksheet
+        if (!workbook.Sheets || !workbook.Sheets['Forecast']) {
+          throw new Error('Could not find sheet named "Forecast" in the Excel file')
+        }
+
+        const worksheet = workbook.Sheets['Forecast']
+        const jsonData = XLSX.utils.sheet_to_json(worksheet)
+
+        // Add validation for empty Excel file
+        if (!Array.isArray(jsonData) || jsonData.length === 0) {
+          throw new Error('No data found in the Excel file')
+        }
+
+        // Add logging to debug the Excel data
+        console.log('Excel data:', jsonData)
+
+        const mappedData: CSVRow[] = jsonData.map((row: any) => {
+          console.log('Processing row:', row)
+          
+          // Convert Excel date number to proper date string
+          const monthValue = typeof row['Month'] === 'number' 
+            ? convertExcelDate(row['Month'])
+            : row['Month']?.toString() || ''
+
+          return {
+            Month: monthValue,
+            State: row['State']?.toString().trim() || '',
+            Amount: (row['Amount'] || '').toString(),
+            Localities: row['Localities']?.toString() || '',
+            'Org Name': row['Org Name']?.toString() || '',
+            Intermediary: row['Intermediary']?.toString() || '',
+            'Transfer Method': row['FSP']?.toString() || '',
+            Source: row['Funding Source']?.toString() || '',
+            'Receiving MAG': row['Receiving MAG']?.toString() || '',
+            Status: row['Status']?.toString() || 'planned'
+          }
+        })
+
+        // Add logging for mapped data
+        console.log('Mapped data:', mappedData)
+
+        await processFileData(mappedData)
+      } else {
+        throw new Error('Unsupported file type. Please upload a CSV or Excel file.')
+      }
     } catch (error) {
       setError(error instanceof Error ? error.message : 'An unexpected error occurred')
+    } finally {
       setIsSubmitting(false)
     }
+  }
+
+  // Add new helper function to process file data (reduces code duplication)
+  const processFileData = async (data: CSVRow[]) => {
+    // Validate required columns
+    const requiredColumns = [
+      'Month', 'State', 'Amount', 'Org Name', 
+      'Receiving MAG', 'Status'
+    ]
+    
+    const headers = Object.keys(data[0] || {})
+    const missingColumns = requiredColumns.filter(col => !headers.includes(col))
+
+    if (missingColumns.length > 0) {
+      throw new Error(`Missing required columns: ${missingColumns.join(', ')}`)
+    }
+
+    // Store data for later use
+    setCsvData(data)
+
+    // Check for duplicates before proceeding
+    const duplicateGroups = findDuplicates(data)
+    if (duplicateGroups.length > 0) {
+      setDuplicateGroups(duplicateGroups)
+      setShowDuplicatesDialog(true)
+      return
+    }
+
+    // If no duplicates, proceed with upload
+    await submitForecasts(data)
   }
 
   // Update the submitForecasts function to normalize the data before sending
@@ -861,10 +923,10 @@ export default function ForecastPage() {
         <div className="space-y-2">
           <div className="flex items-center gap-2 font-medium">
             <span className="text-lg">📄</span>
-            {t('forecast:sections.csv.title')}
+            {t('forecast:sections.file.title')}
           </div>
           <p className="text-sm text-muted-foreground">
-            {t('forecast:sections.csv.description')}
+            {t('forecast:sections.file.description')}
           </p>
         </div>
         <div className="space-y-2">
@@ -899,7 +961,7 @@ export default function ForecastPage() {
               'bg-[#007229]/10 border-[#007229]/20 text-[#007229] hover:bg-[#007229]/20'
             )}
           >
-            <span>{t('forecast:sections.csv.title')}</span>
+            <span>{t('forecast:sections.file.title')}</span>
             <ChevronDown
               className={cn("h-4 w-4 transition-transform", {
                 "transform rotate-180": isCsvOpen,
@@ -908,32 +970,32 @@ export default function ForecastPage() {
           </CollapsibleTrigger>
           <CollapsibleContent className="pt-2 pb-4">
             <div className="space-y-4 pt-4">
-              <CollapsibleRow title={t('forecast:sections.csv.guide.title')} variant="default">
+              <CollapsibleRow title={t('forecast:sections.file.guide.title')} variant="default">
                 <div className="pt-2">
                   <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
                     {/* Left Column */}
                     <div className="space-y-2">
                       <div className="space-y-1">
                         <div className="font-medium flex items-center gap-2">
-                          <span>📅</span> {t('forecast:sections.csv.guide.month.title')}
+                          <span>📅</span> {t('forecast:sections.file.guide.month.title')}
                         </div>
                         <p className="text-xs text-muted-foreground">
-                          {t('forecast:sections.csv.guide.month.desc')}
+                          {t('forecast:sections.file.guide.month.desc')}
                         </p>
                       </div>
 
                       <div className="space-y-1">
                         <div className="font-medium flex items-center gap-2">
-                          <span>🌍</span> {t('forecast:sections.csv.guide.state.title')}
+                          <span>🌍</span> {t('forecast:sections.file.guide.state.title')}
                           <Dialog>
                             <DialogTrigger asChild>
                               <button className="text-xs text-blue-500 hover:underline ml-2">
-                                {t('forecast:sections.csv.guide.state.view_list')}
+                                {t('forecast:sections.file.guide.state.view_list')}
                               </button>
                             </DialogTrigger>
                             <DialogContent className="bg-white">
                               <DialogHeader>
-                                <DialogTitle>{t('forecast:sections.csv.guide.state.available_states')}</DialogTitle>
+                                <DialogTitle>{t('forecast:sections.file.guide.state.available_states')}</DialogTitle>
                               </DialogHeader>
                               <div className="grid grid-cols-2 gap-2 max-h-[60vh] overflow-y-auto">
                                 {states.map((state) => (
@@ -946,25 +1008,25 @@ export default function ForecastPage() {
                           </Dialog>
                         </div>
                         <p className="text-xs text-muted-foreground">
-                          {t('forecast:sections.csv.guide.state.desc')}
+                          {t('forecast:sections.file.guide.state.desc')}
                         </p>
                       </div>
 
                       <div className="space-y-1">
                         <div className="font-medium flex items-center gap-2">
-                          <span>💰</span> {t('forecast:sections.csv.guide.amount.title')}
+                          <span>💰</span> {t('forecast:sections.file.guide.amount.title')}
                         </div>
                         <p className="text-xs text-muted-foreground">
-                          {t('forecast:sections.csv.guide.amount.desc')}
+                          {t('forecast:sections.file.guide.amount.desc')}
                         </p>
                       </div>
 
                       <div className="space-y-1">
                         <div className="font-medium flex items-center gap-2">
-                          <span>📍</span> {t('forecast:sections.csv.guide.localities.title')}
+                          <span>📍</span> {t('forecast:sections.file.guide.localities.title')}
                         </div>
                         <p className="text-xs text-muted-foreground">
-                          {t('forecast:sections.csv.guide.localities.desc')}
+                          {t('forecast:sections.file.guide.localities.desc')}
                         </p>
                       </div>
                     </div>
@@ -973,46 +1035,46 @@ export default function ForecastPage() {
                     <div className="space-y-2">
                       <div className="space-y-1">
                         <div className="font-medium flex items-center gap-2">
-                          <span>🤝</span> {t('forecast:sections.csv.guide.intermediary.title')}
+                          <span>🤝</span> {t('forecast:sections.file.guide.intermediary.title')}
                         </div>
                         <p className="text-xs text-muted-foreground">
-                          {t('forecast:sections.csv.guide.intermediary.desc')}
+                          {t('forecast:sections.file.guide.intermediary.desc')}
                         </p>
                       </div>
 
                       <div className="space-y-1">
                         <div className="font-medium flex items-center gap-2">
-                          <span>💳</span> {t('forecast:sections.csv.guide.transfer.title')}
+                          <span>💳</span> {t('forecast:sections.file.guide.transfer.title')}
                         </div>
                         <p className="text-xs text-muted-foreground">
-                          {t('forecast:sections.csv.guide.transfer.desc')}
+                          {t('forecast:sections.file.guide.transfer.desc')}
                         </p>
                       </div>
 
                       <div className="space-y-1">
                         <div className="font-medium flex items-center gap-2">
-                          <span>📊</span> {t('forecast:sections.csv.guide.source.title')}
+                          <span>📊</span> {t('forecast:sections.file.guide.source.title')}
                         </div>
                         <p className="text-xs text-muted-foreground">
-                          {t('forecast:sections.csv.guide.source.desc')}
+                          {t('forecast:sections.file.guide.source.desc')}
                         </p>
                       </div>
 
                       <div className="space-y-1">
                         <div className="font-medium flex items-center gap-2">
-                          <span>👥</span> {t('forecast:sections.csv.guide.mag.title')}
+                          <span>👥</span> {t('forecast:sections.file.guide.mag.title')}
                         </div>
                         <p className="text-xs text-muted-foreground">
-                          {t('forecast:sections.csv.guide.mag.desc')}
+                          {t('forecast:sections.file.guide.mag.desc')}
                         </p>
                       </div>
 
                       <div className="space-y-1">
                         <div className="font-medium flex items-center gap-2">
-                          <span>📊</span> {t('forecast:sections.csv.guide.status.title')}
+                          <span>📊</span> {t('forecast:sections.file.guide.status.title')}
                         </div>
                         <p className="text-xs text-muted-foreground">
-                          {t('forecast:sections.csv.guide.status.desc')}
+                          {t('forecast:sections.file.guide.status.desc')}
                         </p>
                       </div>
                     </div>
@@ -1026,11 +1088,11 @@ export default function ForecastPage() {
                   onClick={handleDownloadTemplate}
                   className="whitespace-nowrap"
                 >
-                  {t('forecast:sections.csv.download_template')}
+                  {t('forecast:sections.file.download_template')}
                 </Button>
                 <div className="flex-1">
                   <FileInput
-                    accept=".csv"
+                    accept=".csv,.xlsx,.xls"
                     onChange={handleFileSelect}
                     disabled={isSubmitting}
                   />
@@ -1042,7 +1104,7 @@ export default function ForecastPage() {
                 onClick={handleFileUpload}
                 disabled={isSubmitting || !selectedFile}
               >
-                {isSubmitting ? t('forecast:sections.csv.uploading') : t('forecast:sections.csv.upload')}
+                {isSubmitting ? t('forecast:sections.file.uploading') : t('forecast:sections.file.upload')}
               </Button>
             </div>
           </CollapsibleContent>

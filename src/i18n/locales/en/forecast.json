@@ -20,11 +20,11 @@
       },
       "submit": "Submit All Entries"
     },
-    "csv": {
-      "title": "Submit Forecast (CSV Upload)",
-      "description": "Upload multiple forecasts using a CSV file",
+    "file": {
+      "title": "Submit Forecast (File Upload)",
+      "description": "Upload multiple forecasts using an Excel file",
       "guide": {
-        "title": "CSV Upload Guide",
+        "title": "File Upload Guide",
         "month": {
           "title": "Month Format",
           "desc": "Use MMM-YY format (e.g., Jan-25). Month when disbursement is made/intended to MAG"
@@ -61,11 +61,11 @@
         },
         "status": {
           "title": "Status",
-          "desc": "&apos;planned&apos; or &apos;complete&apos;. Use &apos;planned&apos; for future, &apos;complete&apos; for past months"
+          "desc": "'planned' or 'complete'. Use 'planned' for future, 'complete' for past months"
         }
       },
       "download_template": "Download Template",
-      "upload": "Upload CSV",
+      "upload": "Upload File",
       "uploading": "Uploading..."
     },
     "view": {
