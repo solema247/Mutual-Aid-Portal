@@ -72,7 +72,9 @@ type ForecastEntry = {
 // Update DonorData type to include user_id
 type DonorData = {
   donor_id: string
-  user_id: string  // Add this field
+  user_id: string
+  code: string
+  org_type: string
   donors: {
     id: string
     name: string
@@ -87,25 +89,32 @@ interface DuplicateGroup {
   totalAmount: number
 }
 
-// Update findDuplicates function to remove unused variables
+// Function to consolidate duplicate forecasts
 function findDuplicates(data: CSVRow[]): DuplicateGroup[] {
   const groups = new Map<string, CSVRow[]>()
   
   data.forEach(row => {
-    const normalizedKey = [
-      row['Org Name']?.trim(),
-      row.State?.trim(),
-      row.Month?.trim(),
-      row['Receiving MAG']?.trim(),
-      row.Source?.trim(),
-      (row.Localities || '')?.trim(),
-      (row['Transfer Method'] || '')?.trim()
-    ].map(s => s?.toLowerCase()).join('|')
-
-    if (!groups.has(normalizedKey)) {
-      groups.set(normalizedKey, [])
+    const normalizedFields = {
+      state_name: (row.State || '').trim().toLowerCase(),
+      month: (row.Month || '').trim(),
+      receiving_mag: (row['Receiving MAG'] || '').trim().toLowerCase(),
+      source: (row.Source || '').trim().toLowerCase(),
+      transfer_method: (row['Transfer Method'] || '').trim().toLowerCase()
     }
-    groups.get(normalizedKey)!.push(row)
+
+    // Create a key from only the fields in our unique constraint
+    const key = [
+      normalizedFields.state_name,
+      normalizedFields.month,
+      normalizedFields.receiving_mag,
+      normalizedFields.source,
+      normalizedFields.transfer_method
+    ].join('|')
+
+    if (!groups.has(key)) {
+      groups.set(key, [])
+    }
+    groups.get(key)!.push(row)
   })
 
   return Array.from(groups.entries())
@@ -395,27 +404,31 @@ export default function ForecastPage() {
   useEffect(() => {
     const fetchData = async () => {
       try {
+        // Get current session
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+        if (sessionError) throw sessionError
+        if (!session?.user?.id) {
+          throw new Error('No authenticated user found')
+        }
+
+        // Set user ID from session
+        setUserId(session.user.id)
+
         // Get logged in donor from localStorage
         const loggedInDonor = JSON.parse(localStorage.getItem('donor') || '{}') as DonorData
         if (!loggedInDonor?.donor_id) {
           throw new Error('No donor information found')
         }
 
-        // Set user ID from localStorage
-        if (loggedInDonor.user_id) {
-          setUserId(loggedInDonor.user_id)
+        // Store complete donor info in localStorage
+        const updatedDonorInfo = {
+          ...loggedInDonor,
+          donor_code: loggedInDonor.code // Store at root level for easier access
         }
+        localStorage.setItem('donor', JSON.stringify(updatedDonorInfo))
 
-        // Fetch donor details including org_type
-        const { data: donorData, error: donorError } = await supabase
-          .from('donors')
-          .select('org_type')
-          .eq('id', loggedInDonor.donor_id)
-          .single()
-
-        if (donorError) throw donorError
-        if (donorData?.org_type) {
-          setDonorOrgType(donorData.org_type)
+        if (loggedInDonor.org_type) {
+          setDonorOrgType(loggedInDonor.org_type)
         }
 
         const [clustersRes, statesRes] = await Promise.all([
@@ -493,20 +506,43 @@ export default function ForecastPage() {
     setError(null)
 
     try {
-      const response = await fetch('/api/forecasts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(rows)
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || 'Failed to submit forecasts')
+      // Get current session
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+      if (sessionError) throw sessionError
+      if (!session?.user?.id) {
+        throw new Error('No authenticated user found')
       }
 
-      await response.json()
-      alert('Forecasts submitted successfully!')
-      setRows([])
+      // Get donor code from localStorage
+      const loggedInDonor = JSON.parse(localStorage.getItem('donor') || '{}')
+      if (!loggedInDonor?.donor_code) {
+        throw new Error('No donor code found')
+      }
+
+      // Add donor code and created_by to each forecast
+      const forecastsWithCode = rows.map(row => ({
+        ...row,
+        donor_code: loggedInDonor.donor_code,
+        created_by: session.user.id
+      }))
+      
+      console.log('Forecasts being sent to RPC:', forecastsWithCode)
+
+      const { data, error } = await supabase.rpc('insert_donor_forecast', {
+        p_forecasts: forecastsWithCode,
+        p_donor_code: loggedInDonor.donor_code
+      })
+
+      if (error) {
+        throw new Error(error.message || 'Failed to submit forecasts')
+      }
+
+      if (data?.success) {
+        alert('Forecasts submitted successfully!')
+        setRows([])
+      } else {
+        throw new Error(data?.error || 'Failed to submit forecasts')
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to submit forecasts')
     } finally {
@@ -673,10 +709,17 @@ export default function ForecastPage() {
   // Update the submitForecasts function to normalize the data before sending
   const submitForecasts = async (data: CSVRow[]) => {
     try {
-      // First, get the donor's org_type
+      // Get current session
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+      if (sessionError) throw sessionError
+      if (!session?.user?.id) {
+        throw new Error('No authenticated user found')
+      }
+
+      // Get the logged-in donor's information
       const { data: donorData, error: donorError } = await supabase
         .from('donors')
-        .select('org_type')
+        .select('org_type, code, name')
         .eq('id', donors[0].id)
         .single()
 
@@ -685,7 +728,9 @@ export default function ForecastPage() {
         throw new Error(`Failed to fetch donor information: ${donorError.message}`)
       }
 
-      console.log('Donor data fetched:', donorData)
+      if (!donorData.code || !donorData.name) {
+        throw new Error('Donor code or name not found in database')
+      }
 
       const forecasts = data
         .filter(row => {
@@ -696,7 +741,7 @@ export default function ForecastPage() {
         })
         .map(row => {
           try {
-            const parsedDate = parseDate(row.Month?.trim())
+            const parsedDate = parseDate(row.Month?.toString().trim())
             if (!parsedDate) {
               return null
             }
@@ -705,26 +750,28 @@ export default function ForecastPage() {
               s.state_name.toLowerCase() === row.State?.trim().toLowerCase()
             )
 
-            const cleanedAmount = parseFloat(row.Amount.replace(/[^0-9.-]/g, ''))
+            const cleanedAmount = parseFloat(row.Amount.toString().replace(/[^0-9.-]/g, ''))
             if (isNaN(cleanedAmount)) {
               return null
             }
 
+            // Always use the logged-in donor's name from the database
+            // This ensures consistent org_name for the unique constraint
             const forecast = {
-              donor_id: donors[0].id,
+              donor_code: donorData.code,
               state_id: matchingState?.id || null,
               state_name: row.State?.trim(),
-              month: parsedDate.toISOString(),
+              month: parsedDate.toISOString().split('T')[0],
               amount: cleanedAmount,
               localities: row.Localities?.trim() || null,
-              org_name: donors[0].name,
+              org_name: donorData.name,  // Use logged-in donor's name instead of Excel's Org Name
               intermediary: row.Intermediary?.trim() || null,
-              transfer_method: row['Transfer Method']?.trim() || null,
-              source: row.Source?.trim() || null,
+              transfer_method: (row['Transfer Method'] || row.FSP)?.trim() || null,  // Handle both column names
+              source: (row.Source || row['Funding Source'])?.trim() || null,  // Handle both column names
               receiving_mag: row['Receiving MAG']?.trim() || null,
               status: row.Status?.toLowerCase().trim() === 'complete' ? 'complete' : 'planned',
-              org_type: donorData?.org_type || null,
-              created_by: userId || null
+              org_type: donorData.org_type || null,
+              created_by: session.user.id  // Use session user ID
             }
             
             console.log('Forecast being prepared:', forecast)
@@ -737,23 +784,37 @@ export default function ForecastPage() {
         .filter((forecast): forecast is NonNullable<typeof forecast> => forecast !== null)
 
       if (forecasts.length === 0) {
-        throw new Error('No valid forecast data found in CSV. Please check date formats (YYYY-MM-DD, MMM-YY, MM/DD/YY, DD-MMM-YY) and other required fields.')
+        throw new Error('No valid forecast data found in CSV')
       }
 
-      const response = await fetch('/api/forecasts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(forecasts)
+      console.log('About to call RPC with forecasts:', forecasts)
+      console.log('Donor code being sent:', donorData.code)
+      
+      const { data: rpcData, error: rpcError } = await supabase.rpc('insert_donor_forecast', {
+        p_forecasts: forecasts,
+        p_donor_code: donorData.code
       })
+      
+      console.log('RPC Data:', rpcData)
+      console.log('RPC Error:', rpcError)
 
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || 'Failed to submit forecasts')
+      if (rpcError) {
+        console.error('Detailed RPC error:', {
+          message: rpcError.message,
+          details: rpcError.details,
+          hint: rpcError.hint,
+          code: rpcError.code
+        })
+        throw new Error(rpcError.message || 'Failed to submit forecasts')
       }
 
-      await response.json()
-      alert('Forecasts uploaded successfully!')
-      setSelectedFile(null)
+      if (rpcData?.success) {
+        alert('Forecasts uploaded successfully!')
+        setSelectedFile(null)
+      } else {
+        console.error('RPC returned failure:', rpcData)
+        throw new Error(rpcData?.error || 'Failed to submit forecasts')
+      }
     } catch (error) {
       setError(error instanceof Error ? error.message : 'An unexpected error occurred')
     }
@@ -839,7 +900,7 @@ export default function ForecastPage() {
         </DialogHeader>
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground">
-            The following entries have the same Organization, State, Month, Receiving MAG, Source, Localities, and Transfer Method. 
+            The following entries have the same State, Month, Receiving MAG, Source, and Transfer Method. 
             They will be combined into single entries with summed amounts. Please review and confirm:
           </p>
           {duplicateGroups.map((group, i) => (
