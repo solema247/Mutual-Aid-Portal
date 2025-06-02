@@ -300,12 +300,23 @@ const EntryFormRow = ({
         />
       </td>
       <td className="p-2">
-        <Input
+        <Select 
           value={localEntry.transfer_method}
-          onChange={(e) => handleTextChange('transfer_method', e.target.value)}
-          onBlur={handleBlur}
-          className="h-8"
-        />
+          onValueChange={(value) => handleSelectChange('transfer_method', value)}
+        >
+          <SelectTrigger className="h-8">
+            <SelectValue placeholder="Transfer Method" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="StoneX">StoneX</SelectItem>
+            <SelectItem value="Agent/Hawala">Agent/Hawala</SelectItem>
+            <SelectItem value="Bank Transfer">Bank Transfer</SelectItem>
+            <SelectItem value="DAL Group">DAL Group</SelectItem>
+            <SelectItem value="Blockchain eWallet">Blockchain eWallet</SelectItem>
+            <SelectItem value="Cashi">Cashi</SelectItem>
+            <SelectItem value="Other">Other</SelectItem>
+          </SelectContent>
+        </Select>
       </td>
       <td className="p-2">
         <Select 
@@ -316,19 +327,26 @@ const EntryFormRow = ({
             <SelectValue placeholder="Source" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="Private">Private</SelectItem>
-            <SelectItem value="UN">UN</SelectItem>
+            <SelectItem value="Private/Internal">Private/Internal</SelectItem>
+            <SelectItem value="SHF">SHF</SelectItem>
+            <SelectItem value="Other UN">Other UN</SelectItem>
             <SelectItem value="Governmental">Governmental</SelectItem>
           </SelectContent>
         </Select>
       </td>
       <td className="p-2">
-        <Input
+        <Select 
           value={localEntry.receiving_mag}
-          onChange={(e) => handleTextChange('receiving_mag', e.target.value)}
-          onBlur={handleBlur}
-          className="h-8"
-        />
+          onValueChange={(value) => handleSelectChange('receiving_mag', value)}
+        >
+          <SelectTrigger className="h-8">
+            <SelectValue placeholder="Receiving MAG" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="ERR">ERR</SelectItem>
+            <SelectItem value="Other MAG">Other MAG</SelectItem>
+          </SelectContent>
+        </Select>
       </td>
       <td className="p-2">
         <Select 
@@ -420,15 +438,36 @@ export default function ForecastPage() {
           throw new Error('No donor information found')
         }
 
-        // Store complete donor info in localStorage
+        // Fetch complete donor information including code
+        const { data: donorData, error: donorError } = await supabase
+          .from('donors')
+          .select('id, name, org_type, code')
+          .eq('id', loggedInDonor.donor_id)
+          .single()
+
+        if (donorError) {
+          console.error('Error fetching donor:', donorError)
+          throw new Error(`Failed to fetch donor information: ${donorError.message}`)
+        }
+
+        if (!donorData) {
+          throw new Error('Donor not found')
+        }
+
+        if (!donorData.code) {
+          throw new Error('Donor code not set in database')
+        }
+
+        // Update localStorage with complete donor info
         const updatedDonorInfo = {
           ...loggedInDonor,
-          donor_code: loggedInDonor.code // Store at root level for easier access
+          code: donorData.code,
+          org_type: donorData.org_type
         }
         localStorage.setItem('donor', JSON.stringify(updatedDonorInfo))
 
-        if (loggedInDonor.org_type) {
-          setDonorOrgType(loggedInDonor.org_type)
+        if (donorData.org_type) {
+          setDonorOrgType(donorData.org_type)
         }
 
         const [clustersRes, statesRes] = await Promise.all([
@@ -447,26 +486,39 @@ export default function ForecastPage() {
           .values()
         )
 
-        // Set donor directly from localStorage
-        setDonors([{ id: loggedInDonor.donor_id, name: loggedInDonor.donors.name }])
+        // Set donor information
+        setDonors([{ id: donorData.id, name: donorData.name }])
         setStates(uniqueStates)
 
-        // Fetch last upload timestamp
-        const { data: lastUploadData, error: lastUploadError } = await supabase
-          .from('donor_forecasts')
-          .select('created_at')
-          .eq('donor_id', loggedInDonor.donor_id)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .single()
+        try {
+          // Fetch last upload timestamp using RPC
+          const { data, error: lastUploadError } = await supabase
+            .rpc('get_last_upload_timestamp', {
+              p_donor_code: donorData.code
+            })
 
-        if (!lastUploadError && lastUploadData) {
-          // Format the date
-          const date = new Date(lastUploadData.created_at)
-          setLastUpload(date.toLocaleString())
+          if (lastUploadError) {
+            console.error('Error fetching last upload:', lastUploadError.message)
+            setLastUpload(null)
+          } else if (data && data.length > 0) {
+            // RPC returns an array with a single row
+            const timestamp = data[0]?.created_at
+            if (timestamp) {
+              const date = new Date(timestamp)
+              setLastUpload(date.toLocaleString())
+            } else {
+              setLastUpload(null)
+            }
+          } else {
+            console.log('No upload history found for donor:', donorData.code)
+            setLastUpload(null)
+          }
+        } catch (uploadErr) {
+          console.error('Error in last upload fetch:', uploadErr)
+          setLastUpload(null)
         }
       } catch (err) {
-        console.error('Error fetching data:', err)
+        console.error('Error fetching initial data:', err)
         setError('Failed to load data. Please try again later.')
       }
     }
@@ -506,38 +558,55 @@ export default function ForecastPage() {
     setError(null)
 
     try {
-      // Get current session
       const { data: { session }, error: sessionError } = await supabase.auth.getSession()
       if (sessionError) throw sessionError
       if (!session?.user?.id) {
         throw new Error('No authenticated user found')
       }
 
-      // Get donor code from localStorage
-      const loggedInDonor = JSON.parse(localStorage.getItem('donor') || '{}')
-      if (!loggedInDonor?.donor_code) {
-        throw new Error('No donor code found')
+      const { data: donorData, error: donorError } = await supabase
+        .from('donors')
+        .select('org_type, code, name')
+        .eq('id', donors[0].id)
+        .single()
+
+      if (donorError) {
+        console.error('Error fetching donor:', donorError)
+        throw new Error(`Failed to fetch donor information: ${donorError.message}`)
       }
 
-      // Add donor code and created_by to each forecast
-      const forecastsWithCode = rows.map(row => ({
-        ...row,
-        donor_code: loggedInDonor.donor_code,
-        created_by: session.user.id
-      }))
-      
-      console.log('Forecasts being sent to RPC:', forecastsWithCode)
+      if (!donorData.code || !donorData.name) {
+        throw new Error('Donor code or name not found in database')
+      }
+
+      const forecastsWithCode = rows.map(row => {
+        const monthDate = new Date(row.month + '-01')
+        if (isNaN(monthDate.getTime())) {
+          throw new Error(`Invalid month format: ${row.month}`)
+        }
+
+        return {
+          ...row,
+          month: monthDate.toISOString().split('T')[0],
+          donor_code: donorData.code,
+          created_by: session.user.id,
+          org_name: donorData.name,
+          org_type: donorData.org_type || null
+        }
+      })
 
       const { data, error } = await supabase.rpc('insert_donor_forecast', {
         p_forecasts: forecastsWithCode,
-        p_donor_code: loggedInDonor.donor_code
+        p_donor_code: donorData.code
       })
 
       if (error) {
+        console.error('Error submitting forecasts:', error.message)
         throw new Error(error.message || 'Failed to submit forecasts')
       }
 
       if (data?.success) {
+        console.log(`Successfully submitted ${forecastsWithCode.length} forecasts`)
         alert('Forecasts submitted successfully!')
         setRows([])
       } else {
@@ -583,7 +652,6 @@ export default function ForecastPage() {
       const fileExtension = selectedFile.name.split('.').pop()?.toLowerCase()
 
       if (fileExtension === 'csv') {
-        // Wrap Papa.parse in a Promise to handle it consistently
         await new Promise((resolve, reject) => {
           Papa.parse<CSVRow>(selectedFile, {
             header: true,
@@ -601,12 +669,10 @@ export default function ForecastPage() {
           })
         })
       } else if (fileExtension === 'xlsx' || fileExtension === 'xls') {
-        // Wrap FileReader in a Promise
         const data = await new Promise((resolve, reject) => {
           const reader = new FileReader()
           reader.onload = (e) => {
             try {
-              // Need to explicitly cast the result to ArrayBuffer
               const arrayBuffer = e.target?.result as ArrayBuffer
               resolve(arrayBuffer)
             } catch (error) {
@@ -617,14 +683,12 @@ export default function ForecastPage() {
           reader.readAsArrayBuffer(selectedFile)
         })
 
-        // Add explicit type checking for the data
         if (!data) {
           throw new Error('Failed to read Excel file data')
         }
 
         const workbook = XLSX.read(data, { type: 'array' })
         
-        // Add error handling for missing worksheet
         if (!workbook.Sheets || !workbook.Sheets['Forecast']) {
           throw new Error('Could not find sheet named "Forecast" in the Excel file')
         }
@@ -632,18 +696,11 @@ export default function ForecastPage() {
         const worksheet = workbook.Sheets['Forecast']
         const jsonData = XLSX.utils.sheet_to_json(worksheet)
 
-        // Add validation for empty Excel file
         if (!Array.isArray(jsonData) || jsonData.length === 0) {
           throw new Error('No data found in the Excel file')
         }
 
-        // Add logging to debug the Excel data
-        console.log('Excel data:', jsonData)
-
         const mappedData: CSVRow[] = jsonData.map((row: any) => {
-          console.log('Processing row:', row)
-          
-          // Convert Excel date number to proper date string
           const monthValue = typeof row['Month'] === 'number' 
             ? convertExcelDate(row['Month'])
             : row['Month']?.toString() || ''
@@ -662,9 +719,6 @@ export default function ForecastPage() {
           }
         })
 
-        // Add logging for mapped data
-        console.log('Mapped data:', mappedData)
-
         await processFileData(mappedData)
       } else {
         throw new Error('Unsupported file type. Please upload a CSV or Excel file.')
@@ -676,9 +730,7 @@ export default function ForecastPage() {
     }
   }
 
-  // Add new helper function to process file data (reduces code duplication)
   const processFileData = async (data: CSVRow[]) => {
-    // Validate required columns
     const requiredColumns = [
       'Month', 'State', 'Amount', 'Org Name', 
       'Receiving MAG', 'Status'
@@ -691,10 +743,8 @@ export default function ForecastPage() {
       throw new Error(`Missing required columns: ${missingColumns.join(', ')}`)
     }
 
-    // Store data for later use
     setCsvData(data)
 
-    // Check for duplicates before proceeding
     const duplicateGroups = findDuplicates(data)
     if (duplicateGroups.length > 0) {
       setDuplicateGroups(duplicateGroups)
@@ -702,21 +752,17 @@ export default function ForecastPage() {
       return
     }
 
-    // If no duplicates, proceed with upload
     await submitForecasts(data)
   }
 
-  // Update the submitForecasts function to normalize the data before sending
   const submitForecasts = async (data: CSVRow[]) => {
     try {
-      // Get current session
       const { data: { session }, error: sessionError } = await supabase.auth.getSession()
       if (sessionError) throw sessionError
       if (!session?.user?.id) {
         throw new Error('No authenticated user found')
       }
 
-      // Get the logged-in donor's information
       const { data: donorData, error: donorError } = await supabase
         .from('donors')
         .select('org_type, code, name')
@@ -755,29 +801,24 @@ export default function ForecastPage() {
               return null
             }
 
-            // Always use the logged-in donor's name from the database
-            // This ensures consistent org_name for the unique constraint
-            const forecast = {
+            return {
               donor_code: donorData.code,
               state_id: matchingState?.id || null,
               state_name: row.State?.trim(),
               month: parsedDate.toISOString().split('T')[0],
               amount: cleanedAmount,
               localities: row.Localities?.trim() || null,
-              org_name: donorData.name,  // Use logged-in donor's name instead of Excel's Org Name
+              org_name: donorData.name,
               intermediary: row.Intermediary?.trim() || null,
-              transfer_method: (row['Transfer Method'] || row.FSP)?.trim() || null,  // Handle both column names
-              source: (row.Source || row['Funding Source'])?.trim() || null,  // Handle both column names
+              transfer_method: (row['Transfer Method'] || row.FSP)?.trim() || null,
+              source: (row.Source || row['Funding Source'])?.trim() || null,
               receiving_mag: row['Receiving MAG']?.trim() || null,
               status: row.Status?.toLowerCase().trim() === 'complete' ? 'complete' : 'planned',
               org_type: donorData.org_type || null,
-              created_by: session.user.id  // Use session user ID
+              created_by: session.user.id
             }
-            
-            console.log('Forecast being prepared:', forecast)
-            return forecast
           } catch (error) {
-            console.error('Error processing forecast row:', error)
+            console.error('Error processing row:', error)
             return null
           }
         })
@@ -787,32 +828,21 @@ export default function ForecastPage() {
         throw new Error('No valid forecast data found in CSV')
       }
 
-      console.log('About to call RPC with forecasts:', forecasts)
-      console.log('Donor code being sent:', donorData.code)
-      
       const { data: rpcData, error: rpcError } = await supabase.rpc('insert_donor_forecast', {
         p_forecasts: forecasts,
         p_donor_code: donorData.code
       })
-      
-      console.log('RPC Data:', rpcData)
-      console.log('RPC Error:', rpcError)
 
       if (rpcError) {
-        console.error('Detailed RPC error:', {
-          message: rpcError.message,
-          details: rpcError.details,
-          hint: rpcError.hint,
-          code: rpcError.code
-        })
+        console.error('RPC error:', rpcError.message)
         throw new Error(rpcError.message || 'Failed to submit forecasts')
       }
 
       if (rpcData?.success) {
+        console.log(`Successfully processed ${rpcData.rows_affected} forecasts`)
         alert('Forecasts uploaded successfully!')
         setSelectedFile(null)
       } else {
-        console.error('RPC returned failure:', rpcData)
         throw new Error(rpcData?.error || 'Failed to submit forecasts')
       }
     } catch (error) {
@@ -853,7 +883,7 @@ export default function ForecastPage() {
                     <th className="p-2 text-left">{t('forecast:sections.form.table.state')} <span className="text-red-500">*</span></th>
                     <th className="p-2 text-left">{t('forecast:sections.form.table.amount')} <span className="text-red-500">*</span></th>
                     <th className="p-2 text-left">{t('forecast:sections.form.table.localities')}</th>
-                    <th className="p-2 text-left">{t('forecast:sections.form.table.intermediary')} <span className="text-red-500">*</span></th>
+                    <th className="p-2 text-left">{t('forecast:sections.form.table.intermediary')}</th>
                     <th className="p-2 text-left">{t('forecast:sections.form.table.transfer_method')} <span className="text-red-500">*</span></th>
                     <th className="p-2 text-left">{t('forecast:sections.form.table.source')} <span className="text-red-500">*</span></th>
                     <th className="p-2 text-left">{t('forecast:sections.form.table.receiving_mag')} <span className="text-red-500">*</span></th>
