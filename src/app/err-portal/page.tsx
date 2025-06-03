@@ -6,11 +6,16 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Users } from 'lucide-react'
+import { supabase } from '@/lib/supabaseClient'
 import '@/i18n/config'
 
 interface User {
+  id: string;
+  auth_user_id: string;
+  display_name: string;
   role: string;
-  name: string;
+  status: string;
+  err_id: string | null;
 }
 
 export default function ErrPortalPage() {
@@ -19,11 +24,45 @@ export default function ErrPortalPage() {
   const [user, setUser] = useState<User | null>(null)
 
   useEffect(() => {
-    const userData = localStorage.getItem('user')
-    if (userData) {
-      setUser(JSON.parse(userData))
+    const checkAuth = async () => {
+      try {
+        // Get the current session
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+        
+        if (sessionError || !session) {
+          window.location.href = '/login'
+          return
+        }
+
+        // Get user data from users table
+        const { data: userData, error: userError } = await supabase
+          .from('users')
+          .select('*')
+          .eq('auth_user_id', session.user.id)
+          .single()
+
+        if (userError || !userData) {
+          console.error('Error fetching user data:', userError)
+          window.location.href = '/login'
+          return
+        }
+
+        if (userData.status !== 'active') {
+          console.error('User account is not active')
+          window.location.href = '/login'
+          return
+        }
+
+        setUser(userData)
+      } catch (error) {
+        console.error('Auth check error:', error)
+        window.location.href = '/login'
+      } finally {
+        setIsLoading(false)
+      }
     }
-    setIsLoading(false)
+
+    checkAuth()
   }, [])
 
   if (isLoading) return <div>Loading...</div>
@@ -31,11 +70,16 @@ export default function ErrPortalPage() {
   // Only show room management for admin users
   const isAdmin = user?.role === 'admin'
 
-  const handleLogout = () => {
-    localStorage.clear()
-    document.cookie = 'isAuthenticated=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT'
-    document.cookie = 'userType=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT'
-    window.location.href = '/login'
+  const handleLogout = async () => {
+    try {
+      await supabase.auth.signOut()
+      localStorage.clear()
+      document.cookie = 'isAuthenticated=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT'
+      document.cookie = 'userType=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT'
+      window.location.href = '/login'
+    } catch (error) {
+      console.error('Logout error:', error)
+    }
   }
 
   return (
@@ -51,7 +95,7 @@ export default function ErrPortalPage() {
         />
         <h1 className="text-4xl font-bold mb-4">{t('err:title')}</h1>
         <p className="text-xl mb-8">
-          {t('err:welcome', { name: user?.name || t('login:err_staff') })}
+          {t('err:welcome', { name: user?.display_name || t('login:err_staff') })}
         </p>
       </div>
 

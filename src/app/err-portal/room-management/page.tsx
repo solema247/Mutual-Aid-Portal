@@ -4,9 +4,14 @@ import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { CollapsibleRow } from '@/components/ui/collapsible'
 import RoomManagement from './components/RoomManagement'
+import { supabase } from '@/lib/supabaseClient'
 
 interface User {
+  id: string;
+  auth_user_id: string;
+  display_name: string;
   role: string;
+  status: string;
 }
 
 export default function RoomManagementPage() {
@@ -15,11 +20,45 @@ export default function RoomManagementPage() {
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
-    const userData = localStorage.getItem('user')
-    if (userData) {
-      setUser(JSON.parse(userData))
+    const checkAuth = async () => {
+      try {
+        // Get the current session
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+        
+        if (sessionError || !session) {
+          window.location.href = '/login'
+          return
+        }
+
+        // Get user data from users table
+        const { data: userData, error: userError } = await supabase
+          .from('users')
+          .select('*')
+          .eq('auth_user_id', session.user.id)
+          .single()
+
+        if (userError || !userData) {
+          console.error('Error fetching user data:', userError)
+          window.location.href = '/login'
+          return
+        }
+
+        if (userData.status !== 'active') {
+          console.error('User account is not active')
+          window.location.href = '/login'
+          return
+        }
+
+        setUser(userData)
+      } catch (error) {
+        console.error('Auth check error:', error)
+        window.location.href = '/login'
+      } finally {
+        setIsLoading(false)
+      }
     }
-    setIsLoading(false)
+
+    checkAuth()
   }, [])
 
   if (isLoading) return <div>Loading...</div>

@@ -22,8 +22,8 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null)
 
   // ERR login state
-  const [errId, setErrId] = useState('')
-  const [pin, setPin] = useState('')
+  const [errEmail, setErrEmail] = useState('')
+  const [errPassword, setErrPassword] = useState('')
 
   // Partner login state
   const [email, setEmail] = useState('')
@@ -53,29 +53,62 @@ export default function LoginPage() {
     setError(null)
 
     try {
-      const { data: user } = await supabase
-        .from('users')
-        .select('*')
-        .eq('err_id', errId)
-        .single()
+      // First authenticate with Supabase Auth
+      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+        email: errEmail,
+        password: errPassword
+      })
 
-      if (!user || user.pin_hash !== pin) {
-        setError('Invalid ERR ID or PIN')
+      if (authError) {
+        setError('Authentication failed')
         return
       }
 
-      // Store in localStorage
-      localStorage.setItem('user', JSON.stringify(user))
+      // Check if user needs to change password
+      const needsPasswordChange = authData.user?.user_metadata?.is_temporary_password === true ||
+        authData.user?.user_metadata?.has_changed_password === false
+
+      if (needsPasswordChange) {
+        window.location.href = '/change-password'
+        return
+      }
+
+      // Get the user's own record first
+      const { data: userData, error: userError } = await supabase
+        .from('users')
+        .select('*')
+        .eq('auth_user_id', authData.user.id)
+        .single()
+
+      if (userError) {
+        console.error('User data error:', userError)
+        setError('Failed to fetch user data')
+        return
+      }
+
+      if (!userData) {
+        setError('User not found')
+        return
+      }
+
+      if (userData.status !== 'active') {
+        setError('Account is not active')
+        return
+      }
+
+      // Store user data in localStorage
+      localStorage.setItem('user', JSON.stringify(userData))
       localStorage.setItem('isAuthenticated', 'true')
       
       // Set cookies
       document.cookie = `isAuthenticated=true; path=/`
       document.cookie = `userType=err; path=/`
 
-      // Redirect to ERR dashboard instead of root
+      // Redirect to ERR portal
       window.location.href = '/err-portal'
-    } catch {
-      setError('Failed to login. Please try again.')
+    } catch (err) {
+      console.error('Login error:', err)
+      setError(err instanceof Error ? err.message : 'Failed to login')
     } finally {
       setIsLoading(false)
     }
@@ -179,22 +212,23 @@ export default function LoginPage() {
                   </div>
                 )}
                 <div className="space-y-2">
-                  <Label htmlFor="errId">{t('login:err_id')}</Label>
+                  <Label htmlFor="errEmail">{t('login:email')}</Label>
                   <Input
-                    id="errId"
-                    value={errId}
-                    onChange={(e) => setErrId(e.target.value)}
+                    id="errEmail"
+                    type="email"
+                    value={errEmail}
+                    onChange={(e) => setErrEmail(e.target.value)}
                     className="rounded-full"
                     required
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="pin">{t('login:pin')}</Label>
+                  <Label htmlFor="errPassword">{t('login:password')}</Label>
                   <Input
-                    id="pin"
+                    id="errPassword"
                     type="password"
-                    value={pin}
-                    onChange={(e) => setPin(e.target.value)}
+                    value={errPassword}
+                    onChange={(e) => setErrPassword(e.target.value)}
                     className="rounded-full"
                     required
                   />
