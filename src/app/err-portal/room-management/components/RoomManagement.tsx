@@ -9,11 +9,11 @@ import PendingRoomsList from './PendingRoomsList'
 import ActiveRoomsList from './ActiveRoomsList'
 
 interface RoomManagementProps {
-  userRole: string;
-  userErrId: string | null;
+  userRole?: string;
+  userErrId?: string | null;
 }
 
-export default function RoomManagement({ userRole, userErrId }: RoomManagementProps) {
+export default function RoomManagement({ userRole = '', userErrId = null }: RoomManagementProps) {
   const { t, i18n } = useTranslation(['rooms'])
   const [pendingRooms, setPendingRooms] = useState<PendingRoomListItem[]>([])
   const [isLoading, setIsLoading] = useState(true)

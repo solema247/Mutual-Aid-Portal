@@ -1,6 +1,18 @@
 import { supabase } from '@/lib/supabaseClient'
 import { User } from '../types/users'
 
+interface StateResponse {
+  state: {
+    state_name: string;
+  }[];
+}
+
+interface EmergencyRoomWithState {
+  state: {
+    state_name: string;
+  }
+}
+
 export async function getPendingUsers(currentUserRole: string, currentUserErrId: string | null): Promise<User[]> {
   let query = supabase
     .from('users')
@@ -30,12 +42,13 @@ export async function getPendingUsers(currentUserRole: string, currentUserErrId:
       .eq('id', currentUserErrId)
       .single()
 
-    if (currentERR?.state?.state_name) {
+    const stateName = (currentERR as StateResponse)?.state?.[0]?.state_name
+    if (stateName) {
       // Get all state references for this state name
       const { data: stateRefs } = await supabase
         .from('states')
         .select('id')
-        .eq('state_name', currentERR.state.state_name)
+        .eq('state_name', stateName)
 
       if (stateRefs && stateRefs.length > 0) {
         const stateIds = stateRefs.map(ref => ref.id)
@@ -119,12 +132,13 @@ export async function getActiveUsers({
       .eq('id', currentUserErrId)
       .single()
 
-    if (currentERR?.state?.state_name) {
+    const stateName = (currentERR as StateResponse)?.state?.[0]?.state_name
+    if (stateName) {
       // Get all state references for this state name
       const { data: stateRefs } = await supabase
         .from('states')
         .select('id')
-        .eq('state_name', currentERR.state.state_name)
+        .eq('state_name', stateName)
 
       if (stateRefs && stateRefs.length > 0) {
         const stateIds = stateRefs.map(ref => ref.id)

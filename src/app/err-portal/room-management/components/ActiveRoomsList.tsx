@@ -16,14 +16,14 @@ const PAGE_SIZE = 50; // Increased page size
 
 interface ActiveRoomsListProps {
   isLoading: boolean;
-  userRole: string;
-  userErrId: string | null;
+  userRole?: string;
+  userErrId?: string | null;
 }
 
 export default function ActiveRoomsList({ 
   isLoading: initialLoading,
-  userRole,
-  userErrId
+  userRole = '',
+  userErrId = null
 }: ActiveRoomsListProps) {
   const { t, i18n } = useTranslation(['rooms'])
   const [rooms, setRooms] = useState<RoomWithState[]>([])

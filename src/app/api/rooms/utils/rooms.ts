@@ -6,6 +6,12 @@ interface StateRef {
   state_name: string;
 }
 
+interface CurrentERRWithState {
+  state: {
+    state_name: string;
+  };
+}
+
 export async function getPendingRooms(currentUserRole?: string, currentUserErrId?: string | null): Promise<RoomWithState[]> {
   let query = supabase
     .from('emergency_rooms')
@@ -33,7 +39,7 @@ export async function getPendingRooms(currentUserRole?: string, currentUserErrId
         )
       `)
       .eq('id', currentUserErrId)
-      .single()
+      .single() as { data: CurrentERRWithState | null }
 
     if (currentERR?.state?.state_name) {
       // Get all state references for this state name
