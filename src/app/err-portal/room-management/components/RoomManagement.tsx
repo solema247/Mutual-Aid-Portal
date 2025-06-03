@@ -9,7 +9,7 @@ import PendingRoomsList from './PendingRoomsList'
 import ActiveRoomsList from './ActiveRoomsList'
 
 export default function RoomManagement() {
-  const { t } = useTranslation(['rooms'])
+  const { t, i18n } = useTranslation(['rooms'])
   const [pendingRooms, setPendingRooms] = useState<PendingRoomListItem[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -21,9 +21,10 @@ export default function RoomManagement() {
       const formattedRooms: PendingRoomListItem[] = rooms.map(room => ({
         id: room.id,
         name: room.name,
+        name_ar: room.name_ar,
         type: room.type as 'state' | 'base',
-        stateName: room.state?.state_name || '',
-        locality: room.state?.locality || '',
+        stateName: i18n.language === 'ar' ? (room.state?.state_name_ar || '') : (room.state?.state_name || ''),
+        locality: i18n.language === 'ar' ? (room.state?.locality_ar || '') : (room.state?.locality || ''),
         createdAt: new Date(room.created_at || '').toLocaleDateString(),
         status: room.status as 'active' | 'inactive'
       }))
@@ -38,7 +39,7 @@ export default function RoomManagement() {
 
   useEffect(() => {
     fetchPendingRooms()
-  }, [])
+  }, [i18n.language]) // Re-fetch when language changes
 
   return (
     <div className="space-y-6">

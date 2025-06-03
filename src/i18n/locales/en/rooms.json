@@ -24,5 +24,8 @@
   "all_states": "All states",
   "all_localities": "All localities",
   "filter_by_state": "Filter by state",
-  "filter_by_locality": "Filter by locality"
+  "filter_by_locality": "Filter by locality",
+  "previous": "Previous",
+  "next": "Next",
+  "showing_results": "Showing {{from}} to {{to}} of {{total}} results"
 } 

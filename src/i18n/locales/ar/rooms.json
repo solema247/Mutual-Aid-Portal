@@ -24,5 +24,8 @@
   "all_states": "كل الولايات",
   "all_localities": "كل المحليات",
   "filter_by_state": "تصفية حسب الولاية",
-  "filter_by_locality": "تصفية حسب المحلية"
+  "filter_by_locality": "تصفية حسب المحلية",
+  "previous": "السابق",
+  "next": "التالي",
+  "showing_results": "عرض {{from}} إلى {{to}} من {{total}} نتيجة"
 } 

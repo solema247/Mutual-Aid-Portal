@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { useState } from 'react'
 import { PendingRoomListItem } from '@/app/api/rooms/types/rooms'
 import { approveRoom, declineRoom } from '@/app/api/rooms/utils/rooms'
+import { useRouter } from 'next/navigation'
 
 interface PendingRoomsListProps {
   rooms: PendingRoomListItem[]
@@ -12,7 +13,7 @@ interface PendingRoomsListProps {
 }
 
 export default function PendingRoomsList({ rooms, isLoading, onUpdate }: PendingRoomsListProps) {
-  const { t } = useTranslation(['rooms'])
+  const { t, i18n } = useTranslation(['rooms'])
   const [processingId, setProcessingId] = useState<string | null>(null)
 
   const handleApprove = async (roomId: string) => {
@@ -60,7 +61,7 @@ export default function PendingRoomsList({ rooms, isLoading, onUpdate }: Pending
       <div className="divide-y">
         {rooms.map((room) => (
           <div key={room.id} className="grid grid-cols-6 gap-4 p-4">
-            <div>{room.name}</div>
+            <div>{i18n.language === 'ar' && room.name_ar ? room.name_ar : room.name}</div>
             <div>{t(`rooms:${room.type}_type`)}</div>
             <div>{room.stateName}</div>
             <div>{room.locality}</div>

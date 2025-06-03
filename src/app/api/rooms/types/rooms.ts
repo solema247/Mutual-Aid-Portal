@@ -6,6 +6,7 @@ export type State = Database['public']['Tables']['states']['Row']
 export interface RoomWithState {
   id: string
   name: string
+  name_ar: string | null
   type: 'state' | 'base'
   created_at: string
   status: 'active' | 'inactive'
@@ -15,6 +16,7 @@ export interface RoomWithState {
 export interface PendingRoomListItem {
   id: string
   name: string
+  name_ar: string | null
   type: 'state' | 'base'
   stateName: string
   locality: string

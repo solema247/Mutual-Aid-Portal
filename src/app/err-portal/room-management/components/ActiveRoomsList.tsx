@@ -12,8 +12,10 @@ import {
 import { RoomWithState } from '@/app/api/rooms/types/rooms'
 import { getActiveRooms } from '@/app/api/rooms/utils/rooms'
 
+const PAGE_SIZE = 50; // Increased page size
+
 export default function ActiveRoomsList({ isLoading: initialLoading }: { isLoading: boolean }) {
-  const { t } = useTranslation(['rooms'])
+  const { t, i18n } = useTranslation(['rooms'])
   const [rooms, setRooms] = useState<RoomWithState[]>([])
   const [isLoading, setIsLoading] = useState(initialLoading)
   const [error, setError] = useState<string | null>(null)
@@ -22,17 +24,21 @@ export default function ActiveRoomsList({ isLoading: initialLoading }: { isLoadi
   const [selectedLocality, setSelectedLocality] = useState<string>('all')
   const [states, setStates] = useState<{id: string, name: string, localities: string[]}[]>([])
   const [localities, setLocalities] = useState<string[]>([])
+  const [currentPage, setCurrentPage] = useState(1)
+  const [totalRooms, setTotalRooms] = useState(0)
 
   const fetchRooms = useCallback(async () => {
     try {
       setIsLoading(true)
       setError(null)
       
-      const { rooms: fetchedRooms } = await getActiveRooms({
-        page: 1,
-        pageSize: 100,
+      const { rooms: fetchedRooms, total } = await getActiveRooms({
+        page: currentPage,
+        pageSize: PAGE_SIZE,
         type: selectedType === 'all' ? undefined : selectedType
       })
+      
+      setTotalRooms(total)
       
       // Apply client-side filtering for state and locality
       let filteredRooms = fetchedRooms;
@@ -53,17 +59,18 @@ export default function ActiveRoomsList({ isLoading: initialLoading }: { isLoadi
       const uniqueStates = Array.from(
         new Set(
           fetchedRooms
-            .filter(room => room.state)
+            .filter(room => room.state && room.state.id)
             .map(room => ({ 
               id: room.state?.id || '', 
-              name: room.state?.state_name || '',
-              locality: room.state?.locality || ''
+              name: i18n.language === 'ar' ? (room.state?.state_name_ar || room.state?.state_name || '') : (room.state?.state_name || ''),
+              locality: i18n.language === 'ar' ? (room.state?.locality_ar || room.state?.locality || '') : (room.state?.locality || '')
             }))
         )
       ).reduce((acc, { id, name, locality }) => {
+        if (!id) return acc;
         const existingState = acc.find(s => s.id === id);
         if (existingState) {
-          if (!existingState.localities.includes(locality)) {
+          if (locality && !existingState.localities.includes(locality)) {
             existingState.localities.push(locality);
           }
         } else {
@@ -77,15 +84,16 @@ export default function ActiveRoomsList({ isLoading: initialLoading }: { isLoadi
       // Update localities when state is selected
       if (selectedState !== 'all') {
         const stateObj = uniqueStates.find(s => s.id === selectedState);
-        setLocalities(stateObj?.localities || []);
+        const validLocalities = (stateObj?.localities || []).filter(locality => locality);
+        setLocalities(validLocalities);
       } else {
         const allLocalities = Array.from(
           new Set(
             fetchedRooms
-              .filter(room => room.state?.locality)
-              .map(room => room.state?.locality || '')
+              .filter(room => room.state && (room.state.locality || room.state.locality_ar))
+              .map(room => i18n.language === 'ar' ? (room.state?.locality_ar || room.state?.locality || '') : (room.state?.locality || ''))
           )
-        );
+        ).filter(locality => locality);
         setLocalities(allLocalities);
       }
       
@@ -96,11 +104,16 @@ export default function ActiveRoomsList({ isLoading: initialLoading }: { isLoadi
     } finally {
       setIsLoading(false)
     }
-  }, [selectedType, selectedState, selectedLocality])
+  }, [selectedType, selectedState, selectedLocality, currentPage])
 
   useEffect(() => {
     fetchRooms()
   }, [fetchRooms])
+
+  // Reset to first page when filters change
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [selectedType, selectedState, selectedLocality])
 
   // Update localities when state changes
   useEffect(() => {
@@ -110,6 +123,8 @@ export default function ActiveRoomsList({ isLoading: initialLoading }: { isLoadi
       setSelectedLocality('all'); // Reset locality selection
     }
   }, [selectedState, states]);
+
+  const totalPages = Math.ceil(totalRooms / PAGE_SIZE)
 
   return (
     <div className="space-y-4">
@@ -137,7 +152,7 @@ export default function ActiveRoomsList({ isLoading: initialLoading }: { isLoadi
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">{t('rooms:all_states')}</SelectItem>
-            {states.map((state) => (
+            {states.filter(state => state.name).map((state) => (
               <SelectItem key={state.id} value={state.id}>{state.name}</SelectItem>
             ))}
           </SelectContent>
@@ -153,7 +168,7 @@ export default function ActiveRoomsList({ isLoading: initialLoading }: { isLoadi
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">{t('rooms:all_localities')}</SelectItem>
-            {localities.map((locality) => (
+            {localities.filter(locality => locality).map((locality) => (
               <SelectItem key={locality} value={locality}>{locality}</SelectItem>
             ))}
           </SelectContent>
@@ -171,28 +186,56 @@ export default function ActiveRoomsList({ isLoading: initialLoading }: { isLoadi
       )}
 
       {!isLoading && !error && rooms.length > 0 && (
-        <div className="rounded-md border">
-          <div className="grid grid-cols-6 gap-4 p-4 font-medium border-b">
-            <div>{t('rooms:name')}</div>
-            <div>{t('rooms:type')}</div>
-            <div>{t('rooms:state')}</div>
-            <div>{t('rooms:locality')}</div>
-            <div>{t('rooms:created_at')}</div>
-            <div>{t('rooms:actions')}</div>
+        <>
+          <div className="rounded-md border">
+            <div className="grid grid-cols-6 gap-4 p-4 font-medium border-b">
+              <div>{t('rooms:name')}</div>
+              <div>{t('rooms:type')}</div>
+              <div>{t('rooms:state')}</div>
+              <div>{t('rooms:locality')}</div>
+              <div>{t('rooms:created_at')}</div>
+              <div>{t('rooms:actions')}</div>
+            </div>
+            <div className="divide-y">
+              {rooms.map((room) => (
+                <div key={room.id} className="grid grid-cols-6 gap-4 p-4">
+                  <div>{i18n.language === 'ar' && room.name_ar ? room.name_ar : room.name}</div>
+                  <div>{t(`rooms:${room.type}_type`)}</div>
+                  <div>{i18n.language === 'ar' ? room.state?.state_name_ar : room.state?.state_name}</div>
+                  <div>{i18n.language === 'ar' ? room.state?.locality_ar : room.state?.locality}</div>
+                  <div>{new Date(room.created_at || '').toLocaleDateString()}</div>
+                  <div>-</div>
+                </div>
+              ))}
+            </div>
           </div>
-          <div className="divide-y">
-            {rooms.map((room) => (
-              <div key={room.id} className="grid grid-cols-6 gap-4 p-4">
-                <div>{room.name}</div>
-                <div>{t(`rooms:${room.type}_type`)}</div>
-                <div>{room.state?.state_name}</div>
-                <div>{room.state?.locality}</div>
-                <div>{new Date(room.created_at || '').toLocaleDateString()}</div>
-                <div>-</div>
-              </div>
-            ))}
+
+          <div className="flex items-center justify-between px-2">
+            <div className="text-sm text-muted-foreground">
+              {t('rooms:showing_results', {
+                from: ((currentPage - 1) * PAGE_SIZE) + 1,
+                to: Math.min(currentPage * PAGE_SIZE, totalRooms),
+                total: totalRooms
+              })}
+            </div>
+            <div className="flex gap-2">
+              <button
+                className="px-3 py-2 text-sm font-medium rounded-md border disabled:opacity-50"
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+              >
+                {t('rooms:previous')}
+              </button>
+              <button
+                className="px-3 py-2 text-sm font-medium rounded-md border disabled:opacity-50"
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+              >
+                {t('rooms:next')}
+              </button>
+            </div>
           </div>
-        </div>
+        </>
       )}
     </div>
   )
