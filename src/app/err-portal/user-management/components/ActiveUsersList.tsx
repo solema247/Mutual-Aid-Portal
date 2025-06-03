@@ -13,10 +13,16 @@ import { ActiveUserListItem } from '@/app/api/users/types/users'
 import { getActiveUsers, suspendUser, activateUser } from '@/app/api/users/utils/users'
 
 interface ActiveUsersListProps {
-  isLoading: boolean
+  isLoading: boolean;
+  currentUserRole: string;
+  currentUserErrId: string | null;
 }
 
-export default function ActiveUsersList({ isLoading: initialLoading }: ActiveUsersListProps) {
+export default function ActiveUsersList({ 
+  isLoading: initialLoading,
+  currentUserRole,
+  currentUserErrId
+}: ActiveUsersListProps) {
   const { t } = useTranslation(['users', 'common'])
   const [users, setUsers] = useState<ActiveUserListItem[]>([])
   const [isLoading, setIsLoading] = useState(initialLoading)
@@ -34,7 +40,9 @@ export default function ActiveUsersList({ isLoading: initialLoading }: ActiveUse
         pageSize: 20,
         role: selectedRole === 'all' ? undefined : selectedRole as 'admin' | 'state_err' | 'base_err',
         status: selectedStatus,
-        sortOrder
+        sortOrder,
+        currentUserRole,
+        currentUserErrId
       })
 
       const formattedUsers: ActiveUserListItem[] = fetchedUsers.map(user => ({
@@ -54,7 +62,7 @@ export default function ActiveUsersList({ isLoading: initialLoading }: ActiveUse
     } finally {
       setIsLoading(false)
     }
-  }, [selectedRole, selectedStatus, sortOrder, t])
+  }, [selectedRole, selectedStatus, sortOrder, currentUserRole, currentUserErrId, t])
 
   useEffect(() => {
     fetchUsers()

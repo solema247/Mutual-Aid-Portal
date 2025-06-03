@@ -8,7 +8,12 @@ import { getPendingRooms } from '@/app/api/rooms/utils/rooms'
 import PendingRoomsList from './PendingRoomsList'
 import ActiveRoomsList from './ActiveRoomsList'
 
-export default function RoomManagement() {
+interface RoomManagementProps {
+  userRole: string;
+  userErrId: string | null;
+}
+
+export default function RoomManagement({ userRole, userErrId }: RoomManagementProps) {
   const { t, i18n } = useTranslation(['rooms'])
   const [pendingRooms, setPendingRooms] = useState<PendingRoomListItem[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -17,7 +22,7 @@ export default function RoomManagement() {
   const fetchPendingRooms = async () => {
     try {
       setIsLoading(true)
-      const rooms = await getPendingRooms()
+      const rooms = await getPendingRooms(userRole, userErrId)
       const formattedRooms: PendingRoomListItem[] = rooms.map(room => ({
         id: room.id,
         name: room.name,
@@ -64,7 +69,11 @@ export default function RoomManagement() {
         title={t('rooms:active_rooms_title')}
         defaultOpen={false}
       >
-        <ActiveRoomsList isLoading={false} />
+        <ActiveRoomsList 
+          isLoading={false}
+          userRole={userRole}
+          userErrId={userErrId}
+        />
       </CollapsibleRow>
     </div>
   )

@@ -14,7 +14,17 @@ import { getActiveRooms } from '@/app/api/rooms/utils/rooms'
 
 const PAGE_SIZE = 50; // Increased page size
 
-export default function ActiveRoomsList({ isLoading: initialLoading }: { isLoading: boolean }) {
+interface ActiveRoomsListProps {
+  isLoading: boolean;
+  userRole: string;
+  userErrId: string | null;
+}
+
+export default function ActiveRoomsList({ 
+  isLoading: initialLoading,
+  userRole,
+  userErrId
+}: ActiveRoomsListProps) {
   const { t, i18n } = useTranslation(['rooms'])
   const [rooms, setRooms] = useState<RoomWithState[]>([])
   const [isLoading, setIsLoading] = useState(initialLoading)
@@ -35,7 +45,9 @@ export default function ActiveRoomsList({ isLoading: initialLoading }: { isLoadi
       const { rooms: fetchedRooms, total } = await getActiveRooms({
         page: currentPage,
         pageSize: PAGE_SIZE,
-        type: selectedType === 'all' ? undefined : selectedType
+        type: selectedType === 'all' ? undefined : selectedType,
+        currentUserRole: userRole,
+        currentUserErrId: userErrId
       })
       
       setTotalRooms(total)
@@ -104,7 +116,7 @@ export default function ActiveRoomsList({ isLoading: initialLoading }: { isLoadi
     } finally {
       setIsLoading(false)
     }
-  }, [selectedType, selectedState, selectedLocality, currentPage])
+  }, [selectedType, selectedState, selectedLocality, currentPage, userRole, userErrId, i18n.language])
 
   useEffect(() => {
     fetchRooms()

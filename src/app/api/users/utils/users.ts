@@ -1,12 +1,52 @@
 import { supabase } from '@/lib/supabaseClient'
 import { User } from '../types/users'
 
-export async function getPendingUsers(): Promise<User[]> {
-  const { data: users, error } = await supabase
+export async function getPendingUsers(currentUserRole: string, currentUserErrId: string | null): Promise<User[]> {
+  let query = supabase
     .from('users')
-    .select('*')
+    .select(`
+      *,
+      emergency_rooms!inner(
+        *,
+        state:states!emergency_rooms_state_reference_fkey(
+          id,
+          state_name
+        )
+      )
+    `)
     .eq('status', 'pending')
     .order('created_at', { ascending: false })
+
+  // Filter based on role
+  if (currentUserRole === 'state_err' && currentUserErrId) {
+    // First get the state name for the current user's ERR
+    const { data: currentERR } = await supabase
+      .from('emergency_rooms')
+      .select(`
+        state:states!emergency_rooms_state_reference_fkey(
+          state_name
+        )
+      `)
+      .eq('id', currentUserErrId)
+      .single()
+
+    if (currentERR?.state?.state_name) {
+      // Get all state references for this state name
+      const { data: stateRefs } = await supabase
+        .from('states')
+        .select('id')
+        .eq('state_name', currentERR.state.state_name)
+
+      if (stateRefs && stateRefs.length > 0) {
+        const stateIds = stateRefs.map(ref => ref.id)
+        query = query.in('emergency_rooms.state_reference', stateIds)
+      }
+    }
+  } else if (currentUserRole === 'base_err' && currentUserErrId) {
+    query = query.eq('err_id', currentUserErrId)
+  }
+
+  const { data: users, error } = await query
 
   if (error) {
     console.error('Error fetching pending users:', error)
@@ -23,6 +63,8 @@ interface GetActiveUsersParams {
   status?: 'active' | 'suspended'
   sortBy?: string
   sortOrder?: 'asc' | 'desc'
+  currentUserRole: string
+  currentUserErrId: string | null
 }
 
 interface GetActiveUsersResult {
@@ -36,19 +78,61 @@ export async function getActiveUsers({
   role,
   status = 'active',
   sortBy = 'created_at',
-  sortOrder = 'desc'
+  sortOrder = 'desc',
+  currentUserRole,
+  currentUserErrId
 }: GetActiveUsersParams): Promise<GetActiveUsersResult> {
   let query = supabase
     .from('users')
-    .select('*', { count: 'exact' })
+    .select(`
+      *,
+      emergency_rooms!inner(
+        *,
+        state:states!emergency_rooms_state_reference_fkey(
+          id,
+          state_name
+        )
+      )
+    `, { count: 'exact' })
     .neq('status', 'pending')
 
+  // Apply role filter if specified
   if (role) {
     query = query.eq('role', role)
   }
 
+  // Apply status filter
   if (status) {
     query = query.eq('status', status)
+  }
+
+  // Filter based on user role
+  if (currentUserRole === 'state_err' && currentUserErrId) {
+    // First get the state name for the current user's ERR
+    const { data: currentERR } = await supabase
+      .from('emergency_rooms')
+      .select(`
+        state:states!emergency_rooms_state_reference_fkey(
+          state_name
+        )
+      `)
+      .eq('id', currentUserErrId)
+      .single()
+
+    if (currentERR?.state?.state_name) {
+      // Get all state references for this state name
+      const { data: stateRefs } = await supabase
+        .from('states')
+        .select('id')
+        .eq('state_name', currentERR.state.state_name)
+
+      if (stateRefs && stateRefs.length > 0) {
+        const stateIds = stateRefs.map(ref => ref.id)
+        query = query.in('emergency_rooms.state_reference', stateIds)
+      }
+    }
+  } else if (currentUserRole === 'base_err' && currentUserErrId) {
+    query = query.eq('err_id', currentUserErrId)
   }
 
   query = query.order(sortBy, { ascending: sortOrder === 'asc' })

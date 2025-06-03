@@ -1,12 +1,17 @@
 import { supabase } from '@/lib/supabaseClient'
 import { RoomWithState } from '../types/rooms'
 
-export async function getPendingRooms(): Promise<RoomWithState[]> {
-  const { data: rooms, error } = await supabase
+interface StateRef {
+  id: string;
+  state_name: string;
+}
+
+export async function getPendingRooms(currentUserRole?: string, currentUserErrId?: string | null): Promise<RoomWithState[]> {
+  let query = supabase
     .from('emergency_rooms')
     .select(`
       *,
-      state:states(
+      state:states!emergency_rooms_state_reference_fkey(
         id,
         state_name,
         locality,
@@ -16,6 +21,35 @@ export async function getPendingRooms(): Promise<RoomWithState[]> {
     `)
     .eq('status', 'inactive')
     .order('created_at', { ascending: false })
+
+  // Filter based on role
+  if (currentUserRole === 'state_err' && currentUserErrId) {
+    // First get the state name for the current user's ERR
+    const { data: currentERR } = await supabase
+      .from('emergency_rooms')
+      .select(`
+        state:states!emergency_rooms_state_reference_fkey(
+          state_name
+        )
+      `)
+      .eq('id', currentUserErrId)
+      .single()
+
+    if (currentERR?.state?.state_name) {
+      // Get all state references for this state name
+      const { data: stateRefs } = await supabase
+        .from('states')
+        .select('id')
+        .eq('state_name', currentERR.state.state_name)
+
+      if (stateRefs && stateRefs.length > 0) {
+        const stateIds = stateRefs.map(ref => ref.id)
+        query = query.in('state_reference', stateIds)
+      }
+    }
+  }
+
+  const { data: rooms, error } = await query
 
   if (error) {
     console.error('Error fetching pending rooms:', error)
@@ -52,10 +86,11 @@ export async function declineRoom(roomId: string): Promise<void> {
 interface GetActiveRoomsParams {
   page: number
   pageSize: number
-  stateId?: string
   type?: 'state' | 'base'
   sortBy?: string
   sortOrder?: 'asc' | 'desc'
+  currentUserRole?: string
+  currentUserErrId?: string | null
 }
 
 interface GetActiveRoomsResult {
@@ -63,14 +98,14 @@ interface GetActiveRoomsResult {
   total: number
 }
 
-// Search active rooms with a simpler approach
 export async function getActiveRooms({
   page = 1,
   pageSize = 20,
-  stateId,
   type,
   sortBy = 'created_at',
-  sortOrder = 'desc'
+  sortOrder = 'desc',
+  currentUserRole,
+  currentUserErrId
 }: GetActiveRoomsParams): Promise<GetActiveRoomsResult> {
   // Build the base query
   let query = supabase
@@ -92,9 +127,18 @@ export async function getActiveRooms({
     query = query.eq('type', type)
   }
 
-  // Filter by state if specified
-  if (stateId) {
-    query = query.eq('state_reference', stateId)
+  // Filter based on user role
+  if (currentUserRole === 'state_err' && currentUserErrId) {
+    // Get state reference for current user's ERR
+    const { data: currentERR } = await supabase
+      .from('emergency_rooms')
+      .select('state_reference')
+      .eq('id', currentUserErrId)
+      .single()
+
+    if (currentERR) {
+      query = query.eq('state_reference', currentERR.state_reference)
+    }
   }
 
   // Apply sorting

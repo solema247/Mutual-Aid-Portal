@@ -12,6 +12,7 @@ interface User {
   display_name: string;
   role: string;
   status: string;
+  err_id: string | null;
 }
 
 export default function RoomManagementPage() {
@@ -30,7 +31,7 @@ export default function RoomManagementPage() {
           return
         }
 
-        // Get user data from users table
+        // Get user data
         const { data: userData, error: userError } = await supabase
           .from('users')
           .select('*')
@@ -39,12 +40,6 @@ export default function RoomManagementPage() {
 
         if (userError || !userData) {
           console.error('Error fetching user data:', userError)
-          window.location.href = '/login'
-          return
-        }
-
-        if (userData.status !== 'active') {
-          console.error('User account is not active')
           window.location.href = '/login'
           return
         }
@@ -63,8 +58,8 @@ export default function RoomManagementPage() {
 
   if (isLoading) return <div>Loading...</div>
 
-  // Only show room management for admin users
-  if (user?.role !== 'admin') {
+  // Only show room management for admin and state ERR users
+  if (user?.role === 'base_err') {
     return (
       <div className="text-center text-muted-foreground">
         {t('rooms:no_access')}
@@ -81,7 +76,7 @@ export default function RoomManagementPage() {
       </div>
 
       <div className="space-y-4">
-        <RoomManagement />
+        <RoomManagement userRole={user?.role} userErrId={user?.err_id} />
 
         <CollapsibleRow
           title={t('rooms:inactive_rooms_title')}
