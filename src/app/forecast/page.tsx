@@ -99,7 +99,8 @@ function findDuplicates(data: CSVRow[]): DuplicateGroup[] {
       month: (row.Month || '').trim(),
       receiving_mag: (row['Receiving MAG'] || '').trim().toLowerCase(),
       source: (row.Source || '').trim().toLowerCase(),
-      transfer_method: (row['Transfer Method'] || '').trim().toLowerCase()
+      transfer_method: (row['Transfer Method'] || '').trim().toLowerCase(),
+      status: (row.Status || '').trim().toLowerCase()
     }
 
     // Create a key from only the fields in our unique constraint
@@ -108,7 +109,8 @@ function findDuplicates(data: CSVRow[]): DuplicateGroup[] {
       normalizedFields.month,
       normalizedFields.receiving_mag,
       normalizedFields.source,
-      normalizedFields.transfer_method
+      normalizedFields.transfer_method,
+      normalizedFields.status
     ].join('|')
 
     if (!groups.has(key)) {
@@ -120,7 +122,7 @@ function findDuplicates(data: CSVRow[]): DuplicateGroup[] {
   return Array.from(groups.entries())
     .filter(([, rows]) => rows.length > 1)
     .map(([, rows]) => ({
-      key: rows[0].State + '-' + rows[0].Month,
+      key: rows[0].State + '-' + rows[0].Month + '-' + rows[0].Status,
       entries: rows,
       totalAmount: rows.reduce((sum, row) => {
         const amount = parseFloat(row.Amount.replace(/[^0-9.-]/g, ''))
@@ -695,6 +697,7 @@ export default function ForecastPage() {
 
         const worksheet = workbook.Sheets['Forecast']
         const jsonData = XLSX.utils.sheet_to_json(worksheet)
+        console.log('Raw Excel Data:', jsonData)
 
         if (!Array.isArray(jsonData) || jsonData.length === 0) {
           throw new Error('No data found in the Excel file')
@@ -705,7 +708,7 @@ export default function ForecastPage() {
             ? convertExcelDate(row['Month'])
             : row['Month']?.toString() || ''
 
-          return {
+          const mappedRow = {
             Month: monthValue,
             State: row['State']?.toString().trim() || '',
             Amount: (row['Amount'] || '').toString(),
@@ -717,6 +720,8 @@ export default function ForecastPage() {
             'Receiving MAG': row['Receiving MAG']?.toString() || '',
             Status: row['Status']?.toString() || 'planned'
           }
+          console.log('Mapped Row:', mappedRow)
+          return mappedRow
         })
 
         await processFileData(mappedData)
@@ -781,6 +786,7 @@ export default function ForecastPage() {
       const forecasts = data
         .filter(row => {
           if (!row.Month || !row.State || !row.Amount) {
+            console.log('Filtered out row due to missing required fields:', row)
             return false
           }
           return true
@@ -789,19 +795,24 @@ export default function ForecastPage() {
           try {
             const parsedDate = parseDate(row.Month?.toString().trim())
             if (!parsedDate) {
+              console.log('Failed to parse date:', row.Month)
               return null
             }
 
             const matchingState = states.find(s => 
               s.state_name.toLowerCase() === row.State?.trim().toLowerCase()
             )
+            if (!matchingState) {
+              console.log('No matching state found for:', row.State)
+            }
 
             const cleanedAmount = parseFloat(row.Amount.toString().replace(/[^0-9.-]/g, ''))
             if (isNaN(cleanedAmount)) {
+              console.log('Failed to parse amount:', row.Amount)
               return null
             }
 
-            return {
+            const forecast = {
               donor_code: donorData.code,
               state_id: matchingState?.id || null,
               state_name: row.State?.trim(),
@@ -813,16 +824,20 @@ export default function ForecastPage() {
               transfer_method: (row['Transfer Method'] || row.FSP)?.trim() || null,
               source: (row.Source || row['Funding Source'])?.trim() || null,
               receiving_mag: row['Receiving MAG']?.trim() || null,
-              status: row.Status?.toLowerCase().trim() === 'complete' ? 'complete' : 'planned',
+              status: row.Status?.toString().toLowerCase().trim() === 'complete' ? 'complete' : 'planned',
               org_type: donorData.org_type || null,
               created_by: session.user.id
             }
+            console.log('Processed forecast entry:', forecast)
+            return forecast
           } catch (error) {
             console.error('Error processing row:', error)
             return null
           }
         })
         .filter((forecast): forecast is NonNullable<typeof forecast> => forecast !== null)
+
+      console.log('Final forecasts to be submitted:', forecasts)
 
       if (forecasts.length === 0) {
         throw new Error('No valid forecast data found in CSV')
