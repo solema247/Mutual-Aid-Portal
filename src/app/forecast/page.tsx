@@ -135,24 +135,33 @@ function findDuplicates(data: CSVRow[]): DuplicateGroup[] {
 const convertExcelDate = (excelDate: number): string => {
   // Excel dates are number of days since 1900-01-01 (except for the 1900 leap year bug)
   const date = new Date((excelDate - 25569) * 86400 * 1000)
-  const month = date.getMonth() + 1
+  const month = (date.getMonth() + 1).toString().padStart(2, '0')
   const year = date.getFullYear()
-  return `${month.toString().padStart(2, '0')}-${year}`
+  return `${month}-${year}`
 }
 
-// Update the parseDate function to handle the new date format
+// Update the parseDate function to always return 1st of month
 const parseDate = (dateStr: string): Date | null => {
   try {
-    // Add handling for MM-YYYY format from Excel conversion
+    // Handle YYYY-MM format from form submissions
+    if (dateStr.match(/^\d{4}-\d{2}$/)) {
+      const [year, month] = dateStr.split('-')
+      const date = new Date(Date.UTC(parseInt(year), parseInt(month) - 1, 1, 12, 0, 0))
+      return date
+    }
+
+    // Handle MM-YYYY format (e.g., "06-2025")
     if (dateStr.match(/^\d{2}-\d{4}$/)) {
       const [month, year] = dateStr.split('-')
-      return new Date(parseInt(year), parseInt(month) - 1, 1)
+      // Create date at noon to avoid timezone issues
+      const date = new Date(Date.UTC(parseInt(year), parseInt(month) - 1, 1, 12, 0, 0))
+      return date
     }
 
     // Case 1: Already in YYYY-MM-DD format
     if (dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
-      const date = new Date(dateStr)
-      return new Date(date.getFullYear(), date.getMonth(), 1)
+      const [year, month] = dateStr.split('-')
+      return new Date(Date.UTC(parseInt(year), parseInt(month) - 1, 1, 12, 0, 0))
     }
 
     // Case 2: MMM-YY format (e.g., "Jan-25")
@@ -165,14 +174,14 @@ const parseDate = (dateStr: string): Date | null => {
       }
       const monthNum = monthMap[month.toLowerCase()]
       if (!monthNum) return null
-      return new Date(`20${year}-${monthNum}-01`)
+      return new Date(Date.UTC(2000 + parseInt(year), parseInt(monthNum) - 1, 1, 12, 0, 0))
     }
 
     // Case 3: MM/DD/YY or MM/DD/YYYY
     if (dateStr.match(/^\d{1,2}\/\d{1,2}\/\d{2,4}$/)) {
       const [month, , year] = dateStr.split('/')
-      const fullYear = year.length === 2 ? `20${year}` : year
-      return new Date(`${fullYear}-${month.padStart(2, '0')}-01`)
+      const fullYear = year.length === 2 ? 2000 + parseInt(year) : parseInt(year)
+      return new Date(Date.UTC(fullYear, parseInt(month) - 1, 1, 12, 0, 0))
     }
 
     // Case 4: DD-MMM-YYYY or DD-MMM-YY
@@ -185,12 +194,13 @@ const parseDate = (dateStr: string): Date | null => {
       }
       const monthNum = monthMap[month.toLowerCase()]
       if (!monthNum) return null
-      const fullYear = year.length === 2 ? `20${year}` : year
-      return new Date(`${fullYear}-${monthNum}-01`)
+      const fullYear = year.length === 2 ? 2000 + parseInt(year) : parseInt(year)
+      return new Date(Date.UTC(fullYear, parseInt(monthNum) - 1, 1, 12, 0, 0))
     }
 
     return null
-  } catch {
+  } catch (error) {
+    console.error('Error parsing date format')
     return null
   }
 }
@@ -500,7 +510,6 @@ export default function ForecastPage() {
             })
 
           if (lastUploadError) {
-            console.error('Error fetching last upload:', lastUploadError.message)
             setLastUpload(null)
           } else if (data && data.length > 0) {
             // RPC returns an array with a single row
@@ -512,11 +521,9 @@ export default function ForecastPage() {
               setLastUpload(null)
             }
           } else {
-            console.log('No upload history found for donor:', donorData.code)
             setLastUpload(null)
           }
         } catch (uploadErr) {
-          console.error('Error in last upload fetch:', uploadErr)
           setLastUpload(null)
         }
       } catch (err) {
@@ -573,48 +580,45 @@ export default function ForecastPage() {
         .single()
 
       if (donorError) {
-        console.error('Error fetching donor:', donorError)
-        throw new Error(`Failed to fetch donor information: ${donorError.message}`)
+        console.error('Error fetching donor information')
+        throw new Error('Failed to fetch donor information')
       }
 
       if (!donorData.code || !donorData.name) {
         throw new Error('Donor code or name not found in database')
       }
 
-      const forecastsWithCode = rows.map(row => {
-        const monthDate = new Date(row.month + '-01')
-        if (isNaN(monthDate.getTime())) {
-          throw new Error(`Invalid month format: ${row.month}`)
-        }
+      // Filter out empty rows before processing
+      const nonEmptyRows = rows.filter(row => 
+        row.month && 
+        row.state && 
+        row.amount && 
+        row.amount.trim() !== '' &&
+        row.transfer_method &&
+        row.source &&
+        row.receiving_mag
+      )
 
-        return {
-          ...row,
-          month: monthDate.toISOString().split('T')[0],
-          donor_code: donorData.code,
-          created_by: session.user.id,
-          org_name: donorData.name,
-          org_type: donorData.org_type || null
-        }
-      })
+      // Convert form rows to CSV format for consistent processing
+      const csvRows: CSVRow[] = nonEmptyRows.map(row => ({
+        Month: row.month,
+        State: row.state,
+        Amount: row.amount,
+        Localities: row.localities || '',
+        'Org Name': donorData.name,
+        Intermediary: row.intermediary || '',
+        'Transfer Method': row.transfer_method,
+        Source: row.source,
+        'Receiving MAG': row.receiving_mag,
+        Status: row.status
+      }))
 
-      const { data, error } = await supabase.rpc('insert_donor_forecast', {
-        p_forecasts: forecastsWithCode,
-        p_donor_code: donorData.code
-      })
-
-      if (error) {
-        console.error('Error submitting forecasts:', error.message)
-        throw new Error(error.message || 'Failed to submit forecasts')
-      }
-
-      if (data?.success) {
-        console.log(`Successfully submitted ${forecastsWithCode.length} forecasts`)
-        alert('Forecasts submitted successfully!')
-        setRows([])
-      } else {
-        throw new Error(data?.error || 'Failed to submit forecasts')
-      }
+      await submitForecasts(csvRows)
+      
+      setRows([])
+      alert('Forecasts submitted successfully!')
     } catch (err) {
+      console.error('Error in form submission')
       setError(err instanceof Error ? err.message : 'Failed to submit forecasts')
     } finally {
       setIsSubmitting(false)
@@ -697,18 +701,36 @@ export default function ForecastPage() {
 
         const worksheet = workbook.Sheets['Forecast']
         const jsonData = XLSX.utils.sheet_to_json(worksheet)
-        console.log('Raw Excel Data:', jsonData)
 
         if (!Array.isArray(jsonData) || jsonData.length === 0) {
           throw new Error('No data found in the Excel file')
         }
 
         const mappedData: CSVRow[] = jsonData.map((row: any) => {
-          const monthValue = typeof row['Month'] === 'number' 
-            ? convertExcelDate(row['Month'])
-            : row['Month']?.toString() || ''
+          let monthValue
+          if (typeof row['Month'] === 'number') {
+            monthValue = convertExcelDate(row['Month'])
+          } else if (typeof row['Month'] === 'string') {
+            // If it's already a string, just ensure it's in the right format
+            const match = row['Month'].match(/^(\d{2})-(\d{4})$/)
+            if (match) {
+              monthValue = row['Month'] // Already in correct format
+            } else {
+              // Try to parse other string formats
+              const date = parseDate(row['Month'])
+              if (date) {
+                const month = (date.getMonth() + 1).toString().padStart(2, '0')
+                const year = date.getFullYear()
+                monthValue = `${month}-${year}`
+              } else {
+                monthValue = row['Month']?.toString() || ''
+              }
+            }
+          } else {
+            monthValue = ''
+          }
 
-          const mappedRow = {
+          return {
             Month: monthValue,
             State: row['State']?.toString().trim() || '',
             Amount: (row['Amount'] || '').toString(),
@@ -720,8 +742,6 @@ export default function ForecastPage() {
             'Receiving MAG': row['Receiving MAG']?.toString() || '',
             Status: row['Status']?.toString() || 'planned'
           }
-          console.log('Mapped Row:', mappedRow)
-          return mappedRow
         })
 
         await processFileData(mappedData)
@@ -775,18 +795,17 @@ export default function ForecastPage() {
         .single()
 
       if (donorError) {
-        console.error('Error fetching donor:', donorError)
-        throw new Error(`Failed to fetch donor information: ${donorError.message}`)
+        console.error('Error fetching donor information')
+        throw new Error('Failed to fetch donor information')
       }
 
       if (!donorData.code || !donorData.name) {
         throw new Error('Donor code or name not found in database')
       }
 
-      const forecasts = data
+      const forecastsWithCode = data
         .filter(row => {
           if (!row.Month || !row.State || !row.Amount) {
-            console.log('Filtered out row due to missing required fields:', row)
             return false
           }
           return true
@@ -794,74 +813,63 @@ export default function ForecastPage() {
         .map(row => {
           try {
             const parsedDate = parseDate(row.Month?.toString().trim())
-            if (!parsedDate) {
-              console.log('Failed to parse date:', row.Month)
-              return null
-            }
+            if (!parsedDate) return null
 
             const matchingState = states.find(s => 
               s.state_name.toLowerCase() === row.State?.trim().toLowerCase()
             )
-            if (!matchingState) {
-              console.log('No matching state found for:', row.State)
-            }
 
-            const cleanedAmount = parseFloat(row.Amount.toString().replace(/[^0-9.-]/g, ''))
-            if (isNaN(cleanedAmount)) {
-              console.log('Failed to parse amount:', row.Amount)
-              return null
-            }
+            const amountStr = (row.Amount || '').toString()
+            const cleanedAmount = parseFloat(amountStr.replace(/[^0-9.-]/g, ''))
+            if (isNaN(cleanedAmount)) return null
 
-            const forecast = {
+            return {
               donor_code: donorData.code,
               state_id: matchingState?.id || null,
-              state_name: row.State?.trim(),
+              state_name: matchingState?.state_name || null,
               month: parsedDate.toISOString().split('T')[0],
               amount: cleanedAmount,
               localities: row.Localities?.trim() || null,
               org_name: donorData.name,
               intermediary: row.Intermediary?.trim() || null,
-              transfer_method: (row['Transfer Method'] || row.FSP)?.trim() || null,
-              source: (row.Source || row['Funding Source'])?.trim() || null,
+              transfer_method: row['Transfer Method']?.trim() || null,
+              source: row.Source?.trim() || null,
               receiving_mag: row['Receiving MAG']?.trim() || null,
               status: row.Status?.toString().toLowerCase().trim() === 'complete' ? 'complete' : 'planned',
               org_type: donorData.org_type || null,
               created_by: session.user.id
             }
-            console.log('Processed forecast entry:', forecast)
-            return forecast
           } catch (error) {
-            console.error('Error processing row:', error)
+            console.error('Error processing forecast entry')
             return null
           }
         })
         .filter((forecast): forecast is NonNullable<typeof forecast> => forecast !== null)
 
-      console.log('Final forecasts to be submitted:', forecasts)
-
-      if (forecasts.length === 0) {
+      if (forecastsWithCode.length === 0) {
         throw new Error('No valid forecast data found in CSV')
       }
 
       const { data: rpcData, error: rpcError } = await supabase.rpc('insert_donor_forecast', {
-        p_forecasts: forecasts,
+        p_forecasts: forecastsWithCode,
         p_donor_code: donorData.code
       })
 
       if (rpcError) {
-        console.error('RPC error:', rpcError.message)
-        throw new Error(rpcError.message || 'Failed to submit forecasts')
+        console.error('Error submitting forecasts')
+        throw new Error('Failed to submit forecasts')
       }
 
       if (rpcData?.success) {
-        console.log(`Successfully processed ${rpcData.rows_affected} forecasts`)
-        alert('Forecasts uploaded successfully!')
+        alert('Forecasts submitted successfully!')
         setSelectedFile(null)
+        return rpcData
       } else {
-        throw new Error(rpcData?.error || 'Failed to submit forecasts')
+        throw new Error('Failed to submit forecasts')
       }
     } catch (error) {
-      setError(error instanceof Error ? error.message : 'An unexpected error occurred')
+      console.error('Error in forecast submission')
+      throw error
     }
   }
 
