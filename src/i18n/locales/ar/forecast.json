@@ -2,6 +2,16 @@
   "title": "أداة التنبؤ",
   "back": "رجوع",
   "partner": "شريك",
+  "confirm_delete": "هل أنت متأكد أنك تريد حذف هذا التنبؤ؟",
+  "search": "البحث في التنبؤات...",
+  "filters": {
+    "all_months": "كل الشهور",
+    "all_states": "كل الولايات",
+    "all_statuses": "كل الحالات",
+    "all_methods": "كل الطرق",
+    "all_sources": "كل المصادر",
+    "all_mags": "كل MAGs"
+  },
   "sections": {
     "form": {
       "title": "تقديم التنبؤ (نموذج)",
@@ -74,5 +84,6 @@
     }
   },
   "last_upload": "آخر تحميل",
-  "no_uploads": "لا توجد تحميلات سابقة"
+  "no_uploads": "لا توجد تحميلات سابقة",
+  "no_forecasts": "لا توجد تنبؤات"
 } 

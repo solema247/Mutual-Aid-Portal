@@ -2,6 +2,16 @@
   "title": "Forecast Tool",
   "back": "Back",
   "partner": "Partner",
+  "confirm_delete": "Are you sure you want to delete this forecast?",
+  "search": "Search forecasts...",
+  "filters": {
+    "all_months": "All Months",
+    "all_states": "All States",
+    "all_statuses": "All Statuses",
+    "all_methods": "All Methods",
+    "all_sources": "All Sources",
+    "all_mags": "All MAGs"
+  },
   "sections": {
     "form": {
       "title": "Submit Forecast (Form)",
@@ -71,8 +81,13 @@
     "view": {
       "title": "View Forecasts",
       "description": "View and analyze submitted forecast data"
+    },
+    "own_forecasts": {
+      "title": "View Own Organization Forecasts",
+      "description": "View forecasts submitted by your organization"
     }
   },
   "last_upload": "Last Upload",
-  "no_uploads": "No previous uploads"
+  "no_uploads": "No previous uploads",
+  "no_forecasts": "No forecasts found"
 } 

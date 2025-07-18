@@ -33,6 +33,7 @@ import { cn } from '@/lib/utils'
 import '@/i18n/config'
 import LanguageSwitch from '@/components/LanguageSwitch'
 import * as XLSX from 'xlsx'
+import { ViewOwnForecasts } from './components/ViewOwnForecasts'
 
 const MONTHS = [
   'January', 'February', 'March', 'April', 'May', 'June', 
@@ -86,6 +87,7 @@ type DonorData = {
 interface DuplicateGroup {
   key: string
   entries: CSVRow[]
+  combinedEntry: CSVRow
   totalAmount: number
 }
 
@@ -99,8 +101,7 @@ function findDuplicates(data: CSVRow[]): DuplicateGroup[] {
       month: (row.Month || '').trim(),
       receiving_mag: (row['Receiving MAG'] || '').trim().toLowerCase(),
       source: (row.Source || '').trim().toLowerCase(),
-      transfer_method: (row['Transfer Method'] || '').trim().toLowerCase(),
-      status: (row.Status || '').trim().toLowerCase()
+      transfer_method: (row['Transfer Method'] || '').trim().toLowerCase()
     }
 
     // Create a key from only the fields in our unique constraint
@@ -109,8 +110,7 @@ function findDuplicates(data: CSVRow[]): DuplicateGroup[] {
       normalizedFields.month,
       normalizedFields.receiving_mag,
       normalizedFields.source,
-      normalizedFields.transfer_method,
-      normalizedFields.status
+      normalizedFields.transfer_method
     ].join('|')
 
     if (!groups.has(key)) {
@@ -121,14 +121,30 @@ function findDuplicates(data: CSVRow[]): DuplicateGroup[] {
 
   return Array.from(groups.entries())
     .filter(([, rows]) => rows.length > 1)
-    .map(([, rows]) => ({
-      key: rows[0].State + '-' + rows[0].Month + '-' + rows[0].Status,
-      entries: rows,
-      totalAmount: rows.reduce((sum, row) => {
-        const amount = parseFloat(row.Amount.replace(/[^0-9.-]/g, ''))
-        return sum + (isNaN(amount) ? 0 : amount)
-      }, 0)
-    }))
+    .map(([, rows]) => {
+      // Combine localities from all duplicate entries
+      const localities = rows
+        .map(row => row.Localities)
+        .filter(locality => locality && locality.trim() !== '')
+        .join('; ')
+
+      // Create a representative row with combined data
+      const combinedRow = {
+        ...rows[0],
+        Amount: rows.reduce((sum, row) => {
+          const amount = parseFloat(row.Amount.replace(/[^0-9.-]/g, ''))
+          return sum + (isNaN(amount) ? 0 : amount)
+        }, 0).toString(),
+        Localities: localities
+      }
+
+      return {
+        key: rows[0].State + '-' + rows[0].Month,
+        entries: rows,
+        combinedEntry: combinedRow,
+        totalAmount: parseFloat(combinedRow.Amount)
+      }
+    })
 }
 
 // Add this helper function to convert Excel date numbers to date strings
@@ -427,6 +443,7 @@ export default function ForecastPage() {
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [isCsvOpen, setIsCsvOpen] = useState(false)
   const [isViewOpen, setIsViewOpen] = useState(false)
+  const [isOwnForecastsOpen, setIsOwnForecastsOpen] = useState(false)
   const [showDuplicatesDialog, setShowDuplicatesDialog] = useState(false)
   const [duplicateGroups, setDuplicateGroups] = useState<DuplicateGroup[]>([])
   const [csvData, setCsvData] = useState<CSVRow[]>([])
@@ -568,7 +585,10 @@ export default function ForecastPage() {
 
     try {
       const { data: { session }, error: sessionError } = await supabase.auth.getSession()
-      if (sessionError) throw sessionError
+      if (sessionError) {
+        console.error('Session error:', sessionError)
+        throw sessionError
+      }
       if (!session?.user?.id) {
         throw new Error('No authenticated user found')
       }
@@ -604,7 +624,7 @@ export default function ForecastPage() {
         Month: row.month,
         State: row.state,
         Amount: row.amount,
-        Localities: row.localities || '',
+        Localities: row.localities || '',  // Ensure we're handling localities
         'Org Name': donorData.name,
         Intermediary: row.intermediary || '',
         'Transfer Method': row.transfer_method,
@@ -782,8 +802,13 @@ export default function ForecastPage() {
 
   const submitForecasts = async (data: CSVRow[]) => {
     try {
+      console.log('Starting forecast submission with data:', data)
+      
       const { data: { session }, error: sessionError } = await supabase.auth.getSession()
-      if (sessionError) throw sessionError
+      if (sessionError) {
+        console.error('Session error:', sessionError)
+        throw sessionError
+      }
       if (!session?.user?.id) {
         throw new Error('No authenticated user found')
       }
@@ -795,17 +820,20 @@ export default function ForecastPage() {
         .single()
 
       if (donorError) {
-        console.error('Error fetching donor information')
+        console.error('Donor fetch error:', donorError)
         throw new Error('Failed to fetch donor information')
       }
 
-      if (!donorData.code || !donorData.name) {
-        throw new Error('Donor code or name not found in database')
-      }
+      console.log('Processing with donor code:', donorData.code)
 
       const forecastsWithCode = data
         .filter(row => {
           if (!row.Month || !row.State || !row.Amount) {
+            console.log('Filtering out row due to missing fields:', { 
+              hasMonth: !!row.Month, 
+              hasState: !!row.State, 
+              hasAmount: !!row.Amount 
+            })
             return false
           }
           return true
@@ -813,7 +841,10 @@ export default function ForecastPage() {
         .map(row => {
           try {
             const parsedDate = parseDate(row.Month?.toString().trim())
-            if (!parsedDate) return null
+            if (!parsedDate) {
+              console.log('Failed to parse date:', row.Month)
+              return null
+            }
 
             const matchingState = states.find(s => 
               s.state_name.toLowerCase() === row.State?.trim().toLowerCase()
@@ -821,15 +852,18 @@ export default function ForecastPage() {
 
             const amountStr = (row.Amount || '').toString()
             const cleanedAmount = parseFloat(amountStr.replace(/[^0-9.-]/g, ''))
-            if (isNaN(cleanedAmount)) return null
+            if (isNaN(cleanedAmount)) {
+              console.log('Failed to parse amount:', row.Amount)
+              return null
+            }
 
-            return {
+            const forecast = {
               donor_code: donorData.code,
               state_id: matchingState?.id || null,
               state_name: matchingState?.state_name || null,
               month: parsedDate.toISOString().split('T')[0],
               amount: cleanedAmount,
-              localities: row.Localities?.trim() || null,
+              localities: row.Localities?.trim() || null,  // Ensure we're using the correct field name
               org_name: donorData.name,
               intermediary: row.Intermediary?.trim() || null,
               transfer_method: row['Transfer Method']?.trim() || null,
@@ -839,8 +873,20 @@ export default function ForecastPage() {
               org_type: donorData.org_type || null,
               created_by: session.user.id
             }
+
+            console.log('Processed forecast entry:', {
+              state: forecast.state_name,
+              month: forecast.month,
+              status: forecast.status,
+              transfer_method: forecast.transfer_method,
+              source: forecast.source,
+              receiving_mag: forecast.receiving_mag,
+              localities: forecast.localities  // Add this to logging
+            })
+
+            return forecast
           } catch (error) {
-            console.error('Error processing forecast entry')
+            console.error('Error processing row:', error)
             return null
           }
         })
@@ -850,25 +896,43 @@ export default function ForecastPage() {
         throw new Error('No valid forecast data found in CSV')
       }
 
+      console.log('Calling RPC with forecasts:', {
+        count: forecastsWithCode.length,
+        donor_code: donorData.code,
+        sample: forecastsWithCode.map(f => ({
+          state: f.state_name,
+          month: f.month,
+          status: f.status,
+          localities: f.localities  // Add this to sample logging
+        }))
+      })
+
       const { data: rpcData, error: rpcError } = await supabase.rpc('insert_donor_forecast', {
         p_forecasts: forecastsWithCode,
         p_donor_code: donorData.code
       })
 
       if (rpcError) {
-        console.error('Error submitting forecasts')
+        console.error('RPC error details:', {
+          message: rpcError.message,
+          hint: rpcError.hint,
+          details: rpcError.details,
+          code: rpcError.code
+        })
         throw new Error('Failed to submit forecasts')
       }
 
       if (rpcData?.success) {
+        console.log('RPC call successful:', rpcData)
         alert('Forecasts submitted successfully!')
         setSelectedFile(null)
         return rpcData
       } else {
+        console.error('RPC returned failure:', rpcData)
         throw new Error('Failed to submit forecasts')
       }
     } catch (error) {
-      console.error('Error in forecast submission')
+      console.error('Full error details:', error)
       throw error
     }
   }
@@ -954,12 +1018,15 @@ export default function ForecastPage() {
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground">
             The following entries have the same State, Month, Receiving MAG, Source, and Transfer Method. 
-            They will be combined into single entries with summed amounts. Please review and confirm:
+            They will be combined into single entries with summed amounts and combined localities. Please review and confirm:
           </p>
           {duplicateGroups.map((group, i) => (
             <div key={i} className="border rounded-lg p-4 space-y-2">
               <div className="font-medium">
                 Group {i + 1} - Total Amount: ${group.totalAmount.toLocaleString()}
+              </div>
+              <div className="mb-4">
+                <strong>Combined Localities:</strong> {group.combinedEntry.Localities || '-'}
               </div>
               <table className="w-full text-sm">
                 <thead className="bg-muted">
@@ -985,6 +1052,15 @@ export default function ForecastPage() {
                       <td className="p-2">{entry.Source}</td>
                     </tr>
                   ))}
+                  <tr className="border-t bg-muted/50">
+                    <td className="p-2 font-medium">Combined</td>
+                    <td className="p-2">{group.combinedEntry.State}</td>
+                    <td className="p-2 font-medium">{group.combinedEntry.Amount}</td>
+                    <td className="p-2">{group.combinedEntry.Localities || '-'}</td>
+                    <td className="p-2">{group.combinedEntry['Transfer Method']}</td>
+                    <td className="p-2">{group.combinedEntry['Receiving MAG']}</td>
+                    <td className="p-2">{group.combinedEntry.Source}</td>
+                  </tr>
                 </tbody>
               </table>
             </div>
@@ -1000,11 +1076,12 @@ export default function ForecastPage() {
           <Button 
             onClick={async () => {
               setShowDuplicatesDialog(false)
-              await submitForecasts(csvData)
+              // Use the combined entries instead of original data
+              await submitForecasts(duplicateGroups.map(g => g.combinedEntry))
             }}
             className="bg-[#007229] hover:bg-[#007229]/90 text-white"
           >
-            Proceed with Combined Amounts
+            Proceed with Combined Entries
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -1259,6 +1336,29 @@ export default function ForecastPage() {
           </CollapsibleTrigger>
           <CollapsibleContent className="pt-2 pb-4">
             <ViewForecasts />
+          </CollapsibleContent>
+        </Collapsible>
+
+        <Collapsible
+          open={isOwnForecastsOpen}
+          onOpenChange={setIsOwnForecastsOpen}
+          className="w-full"
+        >
+          <CollapsibleTrigger 
+            className={cn(
+              "flex w-full items-center justify-between rounded-md border px-4 py-2 font-medium",
+              'bg-[#007229]/10 border-[#007229]/20 text-[#007229] hover:bg-[#007229]/20'
+            )}
+          >
+            <span>{t('forecast:sections.own_forecasts.title')}</span>
+            <ChevronDown
+              className={cn("h-4 w-4 transition-transform", {
+                "transform rotate-180": isOwnForecastsOpen,
+              })}
+            />
+          </CollapsibleTrigger>
+          <CollapsibleContent className="pt-2 pb-4">
+            <ViewOwnForecasts />
           </CollapsibleContent>
         </Collapsible>
       </div>
