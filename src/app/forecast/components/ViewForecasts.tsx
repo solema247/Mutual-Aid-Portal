@@ -1,21 +1,34 @@
 'use client'
 
 import { useTranslation } from 'react-i18next'
-import { Construction } from 'lucide-react'
+import { useState } from 'react'
 
 export function ViewForecasts() {
   const { t } = useTranslation(['forecast', 'common'])
+  const [isLoading, setIsLoading] = useState(true)
 
   return (
     <div className="space-y-4">
       <div className="space-y-4 pt-4">
-        <div className="bg-yellow-100 border border-yellow-200 text-black px-4 py-3 rounded-md text-center">
-          {t('forecast:sections.view.description')}
-        </div>
-
-        <div className="bg-blue-100 border border-blue-200 text-black px-4 py-3 rounded-md text-center flex items-center justify-center gap-2">
-          <Construction className="h-5 w-5" />
-          Dashboard in Development
+        {isLoading && (
+          <div className="absolute inset-0 flex items-center justify-center bg-white/80">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+              <p className="mt-2 text-sm text-gray-600">{t('common:loading')}</p>
+            </div>
+          </div>
+        )}
+        <div className="w-full aspect-[4/3] rounded-lg overflow-hidden border border-gray-200 relative">
+          <iframe
+            src="https://lookerstudio.google.com/embed/reporting/0dfbd523-dcc9-46bd-a555-ec2cc8743fe2/page/p_flxlejmlrd?embedded=true&hideBottomBar=true"
+            width="100%"
+            height="100%"
+            style={{ border: 0 }}
+            frameBorder="0"
+            allowFullScreen
+            sandbox="allow-storage-access-by-user-activation allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox"
+            onLoad={() => setIsLoading(false)}
+          />
         </div>
       </div>
     </div>
