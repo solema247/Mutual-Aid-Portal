@@ -10,5 +10,14 @@
   "user_management": "User Management",
   "user_management_desc": "Manage and approve ERR staff accounts",
   "project_management": "Project Management",
-  "project_management_desc": "Review and manage ERR project proposals"
+  "project_management_desc": "Review and manage ERR project proposals",
+  "fsystem_upload": "F-System File Upload",
+  "fsystem_upload_desc": "Upload and manage F-System files and documents",
+  "fsystem_select_type": "Select Form Type",
+  "fsystem_select_type_desc": "Choose the type of form you want to upload",
+  "fsystem_f1_title": "F1 Form Upload",
+  "fsystem_f1_desc": "Upload F1 form and provide necessary details",
+  "fsystem_upload_success": "File uploaded successfully",
+  "fsystem_upload_error": "Error uploading file",
+  "fsystem_form_id": "Generated Form ID"
 } 

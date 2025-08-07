@@ -3,7 +3,7 @@
 import { useTranslation } from 'react-i18next'
 import { useState, useEffect } from 'react'
 import MainLayout from '@/components/layout/MainLayout'
-import { Users } from 'lucide-react'
+import { Users, FileUp } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 
 interface User {
@@ -68,6 +68,11 @@ export default function ErrPortalLayout({
       href: '/err-portal/dashboard',
       label: t('err:dashboard'),
       icon: '📈'
+    },
+    {
+      href: '/err-portal/fsystem-upload',
+      label: t('err:fsystem_upload'),
+      icon: <FileUp className="h-5 w-5" />
     }
   ]
 

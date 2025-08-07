@@ -158,6 +158,20 @@ export default function ErrPortalPage() {
           </Card>
         </Link>
 
+        <Link href="/err-portal/fsystem-upload" className="block aspect-square">
+          <Card className="h-full hover:bg-muted/50 transition-colors">
+            <CardHeader className="h-full flex flex-col justify-center items-center text-center">
+              <span className="text-4xl mb-4">📄</span>
+              <CardTitle className="text-xl">
+                {t('err:fsystem_upload')}
+              </CardTitle>
+              <CardDescription className="mt-2">
+                {t('err:fsystem_upload_desc')}
+              </CardDescription>
+            </CardHeader>
+          </Card>
+        </Link>
+
         <button 
           onClick={handleLogout}
           className="block aspect-square"

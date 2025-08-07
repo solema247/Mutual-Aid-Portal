@@ -10,5 +10,14 @@
   "user_management": "إدارة المستخدمين",
   "user_management_desc": "إدارة والموافقة على حسابات موظفي غرف الطوارئ",
   "project_management": "إدارة المشاريع",
-  "project_management_desc": "مراجعة وإدارة مقترحات مشاريع غرف الطوارئ"
+  "project_management_desc": "مراجعة وإدارة مقترحات مشاريع غرف الطوارئ",
+  "fsystem_upload": "رفع ملفات نظام F",
+  "fsystem_upload_desc": "رفع وإدارة ملفات ومستندات نظام F",
+  "fsystem_select_type": "اختر نوع النموذج",
+  "fsystem_select_type_desc": "اختر نوع النموذج الذي تريد رفعه",
+  "fsystem_f1_title": "رفع نموذج F1",
+  "fsystem_f1_desc": "رفع نموذج F1 وتقديم التفاصيل اللازمة",
+  "fsystem_upload_success": "تم رفع الملف بنجاح",
+  "fsystem_upload_error": "خطأ في رفع الملف",
+  "fsystem_form_id": "معرف النموذج المنشأ"
 } 
