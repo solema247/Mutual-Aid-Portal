@@ -71,7 +71,7 @@ export default function F1Upload() {
     const selectedDonor = donors.find(d => d.id === formData.donor_id)
     const selectedState = states.find(s => s.id === formData.state_id)
     
-    if (!selectedDonor?.code || !selectedState?.state_name) return ''
+    if (!selectedDonor?.short_name || !selectedState?.state_name) return ''
 
     // Get state code (first 2 letters)
     const stateCode = selectedState.state_name.substring(0, 2).toUpperCase()
@@ -79,7 +79,7 @@ export default function F1Upload() {
     // Format date (MMYY)
     const dateStr = formData.date
 
-    return `LCC-${selectedDonor.code}-${stateCode}-${dateStr}-${formData.grant_serial}-${formData.project_id}`
+    return `LCC-${selectedDonor.short_name}-${stateCode}-${dateStr}-${formData.grant_serial}-${formData.project_id}`
   }
 
   const handleInputChange = (field: keyof F1FormData, value: string) => {
@@ -101,11 +101,46 @@ export default function F1Upload() {
 
     setIsLoading(true)
     try {
-      // TODO: Implement file upload and form submission
-      console.log('Form data:', formData)
-      console.log('Generated ID:', previewId)
+      const selectedDonor = donors.find(d => d.id === formData.donor_id)
+      const selectedState = states.find(s => s.id === formData.state_id)
+      
+      if (!selectedDonor?.short_name || !selectedState?.state_name) {
+        throw new Error('Missing donor or state information')
+      }
+
+      // Get state code (first 2 letters)
+      const stateCode = selectedState.state_name.substring(0, 2).toUpperCase()
+      
+      // Get file extension
+      const fileExtension = selectedFile.name.split('.').pop()
+      
+      // Upload file to Supabase storage
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('images')
+        .upload(`f1-forms/${selectedDonor.short_name}/${stateCode}/${formData.date}/${previewId}.${fileExtension}`, selectedFile, {
+          cacheControl: '3600',
+          upsert: false
+        })
+
+      if (uploadError) {
+        throw uploadError
+      }
+
+      alert('Form uploaded successfully!')
+      setFormData({
+        donor_id: '',
+        state_id: '',
+        date: '',
+        grant_serial: '',
+        project_id: '',
+        file: null
+      })
+      setSelectedFile(null)
+      setPreviewId('')
+
     } catch (error) {
       console.error('Error submitting form:', error)
+      alert('Error uploading form. Please try again.')
     } finally {
       setIsLoading(false)
     }

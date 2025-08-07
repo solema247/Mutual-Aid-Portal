@@ -3,6 +3,7 @@ export interface Donor {
   name: string;
   code: string;
   status: string;
+  short_name: string;
 }
 
 export interface State {
