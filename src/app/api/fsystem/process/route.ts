@@ -100,6 +100,18 @@ function validateExtractedData(data: any) {
   return data
 }
 
+// Add language detection function after the validateExtractedData function
+function detectLanguage(text: string): 'ar' | 'en' {
+  // Count Arabic and English characters
+  const arabicPattern = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/g;
+  const englishPattern = /[a-zA-Z]/g;
+  
+  const arabicCount = (text.match(arabicPattern) || []).length;
+  const englishCount = (text.match(englishPattern) || []).length;
+  
+  return arabicCount > englishCount ? 'ar' : 'en';
+}
+
 export async function POST(req: Request) {
   try {
     const formData = await req.formData()
@@ -313,6 +325,10 @@ Return all fields in this format:
 
     try {
       const structuredData = JSON.parse(sanitizedContent)
+      // Add language detection
+      const detectedLanguage = detectLanguage(text)
+      structuredData.language = detectedLanguage
+      
       console.log('Validated data:', structuredData)
       return NextResponse.json(structuredData)
     } catch (error) {

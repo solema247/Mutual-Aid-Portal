@@ -10,7 +10,7 @@ import { cn } from '@/lib/utils'
 
 interface Expense {
   activity: string;
-  total_cost: number | null;
+  total_cost: number;
 }
 
 interface ExtractedData {
@@ -31,8 +31,7 @@ interface ExtractedData {
   finance_officer_phone: string | null;
   planned_activities: string[];
   expenses: Expense[];
-  grant_serial: string | null;
-  project_id: string | null;
+  language: 'ar' | 'en' | null;
 }
 
 interface ExtractedDataReviewProps {
@@ -41,37 +40,47 @@ interface ExtractedDataReviewProps {
   onCancel: () => void;
 }
 
-export default function ExtractedDataReview({ data, onConfirm, onCancel }: ExtractedDataReviewProps) {
+export default function ExtractedDataReview({
+  data,
+  onConfirm,
+  onCancel
+}: {
+  data: ExtractedData;
+  onConfirm: (data: ExtractedData) => void;
+  onCancel: () => void;
+}) {
   const { t } = useTranslation(['common', 'err'])
+  const [isSubmitting, setIsSubmitting] = useState(false)
   
   // Initialize state with empty arrays for activities and expenses
   const [editedData, setEditedData] = useState<ExtractedData>({
-    ...data,
-    date: data.date || '',
-    state: data.state || '',
-    locality: data.locality || '',
-    project_objectives: data.project_objectives || '',
-    intended_beneficiaries: data.intended_beneficiaries || '',
-    estimated_beneficiaries: data.estimated_beneficiaries || 0,
-    estimated_timeframe: data.estimated_timeframe || '',
-    additional_support: data.additional_support || '',
-    banking_details: data.banking_details || '',
-    program_officer_name: data.program_officer_name || '',
-    program_officer_phone: data.program_officer_phone || '',
-    reporting_officer_name: data.reporting_officer_name || '',
-    reporting_officer_phone: data.reporting_officer_phone || '',
-    finance_officer_name: data.finance_officer_name || '',
-    finance_officer_phone: data.finance_officer_phone || '',
-    planned_activities: data.planned_activities || [],
-    expenses: data.expenses || [],
-    grant_serial: data.grant_serial || null,
-    project_id: data.project_id || null
+    date: data.date || null,
+    state: data.state || null,
+    locality: data.locality || null,
+    project_objectives: data.project_objectives || null,
+    intended_beneficiaries: data.intended_beneficiaries || null,
+    estimated_beneficiaries: data.estimated_beneficiaries || null,
+    estimated_timeframe: data.estimated_timeframe || null,
+    additional_support: data.additional_support || null,
+    banking_details: data.banking_details || null,
+    program_officer_name: data.program_officer_name || null,
+    program_officer_phone: data.program_officer_phone || null,
+    reporting_officer_name: data.reporting_officer_name || null,
+    reporting_officer_phone: data.reporting_officer_phone || null,
+    finance_officer_name: data.finance_officer_name || null,
+    finance_officer_phone: data.finance_officer_phone || null,
+    planned_activities: Array.isArray(data.planned_activities) ? data.planned_activities : [],
+    expenses: Array.isArray(data.expenses) ? data.expenses.map(exp => ({
+      activity: exp.activity || '',
+      total_cost: typeof exp.total_cost === 'number' ? exp.total_cost : 0
+    })) : [],
+    language: data.language || null
   })
 
   const handleInputChange = (field: keyof ExtractedData, value: any) => {
     setEditedData(prev => ({
       ...prev,
-      [field]: value || ''
+      [field]: value
     }))
   }
 
@@ -87,15 +96,19 @@ export default function ExtractedDataReview({ data, onConfirm, onCancel }: Extra
   }
 
   const handleExpenseChange = (index: number, field: keyof Expense, value: any) => {
-    setEditedData(prev => {
-      const newExpenses = [...prev.expenses];
-      newExpenses[index] = { ...newExpenses[index], [field]: value };
-      return { ...prev, expenses: newExpenses };
-    });
-  };
+    setEditedData(prev => ({
+      ...prev,
+      expenses: prev.expenses.map((exp, i) => 
+        i === index 
+          ? { ...exp, [field]: field === 'total_cost' ? Number(value) || 0 : value }
+          : exp
+      )
+    }))
+  }
 
   // Function to prepare data before confirming
   const handleConfirm = () => {
+    setIsSubmitting(true)
     // Convert empty strings back to null for the database
     const preparedData: ExtractedData = {
       date: editedData.date || null,
@@ -115,8 +128,7 @@ export default function ExtractedDataReview({ data, onConfirm, onCancel }: Extra
       finance_officer_phone: editedData.finance_officer_phone || null,
       planned_activities: editedData.planned_activities,
       expenses: editedData.expenses,
-      grant_serial: editedData.grant_serial || null,
-      project_id: editedData.project_id || null
+      language: editedData.language || null
     }
 
     onConfirm(preparedData)
@@ -339,7 +351,7 @@ export default function ExtractedDataReview({ data, onConfirm, onCancel }: Extra
               onClick={() => {
                 setEditedData(prev => ({
                   ...prev,
-                  expenses: [...prev.expenses, { activity: '', total_cost: null }]
+                  expenses: [...prev.expenses, { activity: '', total_cost: 0 }]
                 }))
               }}
               className="mt-2"
@@ -426,12 +438,16 @@ export default function ExtractedDataReview({ data, onConfirm, onCancel }: Extra
         </CardContent>
       </Card>
 
-      <div className="flex justify-end space-x-4">
+      <div className="flex justify-end space-x-4 mt-8">
         <Button variant="outline" onClick={onCancel}>
           Cancel
         </Button>
-        <Button onClick={handleConfirm}>
-          Confirm and Upload
+        <Button 
+          onClick={handleConfirm} 
+          className="bg-green-600 hover:bg-green-700"
+          disabled={isSubmitting}
+        >
+          {isSubmitting ? 'Uploading...' : 'Confirm and Upload'}
         </Button>
       </div>
     </div>

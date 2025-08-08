@@ -223,20 +223,28 @@ export default function F1Upload() {
         throw uploadError
       }
 
+      // Prepare data for insertion
+      const dataToInsert = {
+        ...editedData,
+        donor_id: formData.donor_id,
+        grant_serial: formData.grant_serial,
+        project_id: formData.project_id,
+        emergency_room_id: formData.emergency_room_id,
+        err_id: selectedRoom.err_code,
+        grant_id: previewId,
+        status: 'pending',
+        source: 'mutual_aid_portal'
+      }
+
+      // Ensure language is included and not undefined
+      if (typeof editedData.language === 'string') {
+        dataToInsert.language = editedData.language
+      }
+
       // Insert the processed data into err_projects
       const { error: insertError } = await supabase
         .from('err_projects')
-        .insert([{
-          ...editedData,
-          donor_id: formData.donor_id,
-          grant_serial: formData.grant_serial,
-          project_id: formData.project_id,
-          emergency_room_id: formData.emergency_room_id,
-          err_id: selectedRoom.err_code,
-          grant_id: previewId,
-          status: 'pending',
-          source: 'mutual_aid_portal'
-        }])
+        .insert([dataToInsert])
 
       if (insertError) {
         throw insertError
@@ -338,14 +346,14 @@ export default function F1Upload() {
                 </div>
 
                 <div>
-                  <Label className="mb-2">Emergency Room</Label>
+                  <Label className="mb-2">Emergency Response Room</Label>
                   <Select
                     value={formData.emergency_room_id}
                     onValueChange={(value) => handleInputChange('emergency_room_id', value)}
                     disabled={!formData.state_id || rooms.length === 0}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="Select emergency room" />
+                      <SelectValue placeholder="Select emergency response room" />
                     </SelectTrigger>
                     <SelectContent>
                       {rooms.map((room) => (
