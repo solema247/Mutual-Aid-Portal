@@ -9,9 +9,9 @@ export interface Donor {
 export interface State {
   id: string;
   state_name: string;
-  state_name_ar: string;
-  locality: string;
-  locality_ar: string;
+  state_name_ar: string | null;
+  locality?: string | null;
+  locality_ar?: string | null;
 }
 
 export interface F1FormData {
@@ -20,6 +20,7 @@ export interface F1FormData {
   date: string; // MMYY format
   grant_serial: string;
   project_id: string;
+  emergency_room_id: string;
   file: File | null;
 }
 
@@ -27,4 +28,14 @@ export interface F1FormResponse {
   success: boolean;
   form_id?: string;
   error?: string;
+}
+
+export interface EmergencyRoom {
+  id: string;
+  name: string;
+  name_ar: string | null;
+  err_code: string | null;
+  status: string;
+  state_reference: string;
+  type: 'state' | 'base';
 } 
