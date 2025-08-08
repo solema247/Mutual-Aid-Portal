@@ -6,6 +6,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Button } from '@/components/ui/button'
 import { useTranslation } from 'react-i18next'
 import { Plus, Minus } from 'lucide-react'
+import { cn } from '@/lib/utils'
 
 interface Expense {
   activity: string;
@@ -30,6 +31,8 @@ interface ExtractedData {
   finance_officer_phone: string | null;
   planned_activities: string[];
   expenses: Expense[];
+  grant_serial: string | null;
+  project_id: string | null;
 }
 
 interface ExtractedDataReviewProps {
@@ -60,7 +63,9 @@ export default function ExtractedDataReview({ data, onConfirm, onCancel }: Extra
     finance_officer_name: data.finance_officer_name || '',
     finance_officer_phone: data.finance_officer_phone || '',
     planned_activities: data.planned_activities || [],
-    expenses: data.expenses || []
+    expenses: data.expenses || [],
+    grant_serial: data.grant_serial || null,
+    project_id: data.project_id || null
   })
 
   const handleInputChange = (field: keyof ExtractedData, value: any) => {
@@ -109,7 +114,9 @@ export default function ExtractedDataReview({ data, onConfirm, onCancel }: Extra
       finance_officer_name: editedData.finance_officer_name || null,
       finance_officer_phone: editedData.finance_officer_phone || null,
       planned_activities: editedData.planned_activities,
-      expenses: editedData.expenses
+      expenses: editedData.expenses,
+      grant_serial: editedData.grant_serial || null,
+      project_id: editedData.project_id || null
     }
 
     onConfirm(preparedData)
@@ -122,78 +129,74 @@ export default function ExtractedDataReview({ data, onConfirm, onCancel }: Extra
           <CardTitle>{t('err:review_extracted_data')}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Basic Information - 3 columns */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
-              <Label htmlFor="date">Date</Label>
+              <Label>Date</Label>
               <Input
-                id="date"
                 value={editedData.date || ''}
                 onChange={(e) => handleInputChange('date', e.target.value)}
               />
             </div>
 
             <div>
-              <Label htmlFor="state">State</Label>
+              <Label>State</Label>
+              <div className="p-2 bg-muted rounded-md">
+                {editedData.state || ''}
+              </div>
+            </div>
+
+            <div>
+              <Label>Locality</Label>
+              <div className="p-2 bg-muted rounded-md">
+                {editedData.locality || ''}
+              </div>
+            </div>
+
+            <div>
+              <Label>Estimated Timeframe</Label>
               <Input
-                id="state"
-                value={editedData.state || ''}
-                onChange={(e) => handleInputChange('state', e.target.value)}
+                value={editedData.estimated_timeframe || ''}
+                onChange={(e) => handleInputChange('estimated_timeframe', e.target.value)}
               />
             </div>
 
             <div>
-              <Label htmlFor="locality">Locality</Label>
+              <Label>Estimated Beneficiaries</Label>
               <Input
-                id="locality"
-                value={editedData.locality || ''}
-                onChange={(e) => handleInputChange('locality', e.target.value)}
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="estimated_beneficiaries">Estimated Beneficiaries</Label>
-              <Input
-                id="estimated_beneficiaries"
                 type="number"
                 value={editedData.estimated_beneficiaries || ''}
                 onChange={(e) => handleInputChange('estimated_beneficiaries', parseInt(e.target.value))}
               />
             </div>
+          </div>
+
+          {/* Full width fields */}
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="project_objectives">Project Objectives</Label>
+              <Textarea
+                id="project_objectives"
+                value={editedData.project_objectives || ''}
+                onChange={(e) => handleInputChange('project_objectives', e.target.value)}
+                className="min-h-[100px]"
+              />
+            </div>
 
             <div>
-              <Label htmlFor="estimated_timeframe">Estimated Timeframe</Label>
-              <Input
-                id="estimated_timeframe"
-                value={editedData.estimated_timeframe || ''}
-                onChange={(e) => handleInputChange('estimated_timeframe', e.target.value)}
+              <Label htmlFor="intended_beneficiaries">Intended Beneficiaries</Label>
+              <Textarea
+                id="intended_beneficiaries"
+                value={editedData.intended_beneficiaries || ''}
+                onChange={(e) => handleInputChange('intended_beneficiaries', e.target.value)}
               />
             </div>
           </div>
 
-          <div>
-            <Label htmlFor="project_objectives">Project Objectives</Label>
-            <Textarea
-              id="project_objectives"
-              value={editedData.project_objectives || ''}
-              onChange={(e) => handleInputChange('project_objectives', e.target.value)}
-              rows={4}
-            />
-          </div>
-
-          <div>
-            <Label htmlFor="intended_beneficiaries">Intended Beneficiaries</Label>
-            <Textarea
-              id="intended_beneficiaries"
-              value={editedData.intended_beneficiaries || ''}
-              onChange={(e) => handleInputChange('intended_beneficiaries', e.target.value)}
-              rows={3}
-            />
-          </div>
-
           {/* Planned Activities Section */}
           <div>
-            <Label>الأنشطة المخططة</Label>
-            <div className="space-y-2">
+            <Label className="text-lg font-semibold mb-2">Planned Activities</Label>
+            <div className="space-y-1 border rounded-lg p-2">
               {[
                 'مساندة المستشفيات',
                 'تشغيل المركز الصحي بالحي',
@@ -204,22 +207,51 @@ export default function ExtractedDataReview({ data, onConfirm, onCancel }: Extra
                 'الحماية و الإجلاء',
                 'مراكز الأطفال و التعليم البديل'
               ].map((activity, index) => (
-                <div key={index} className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    id={`activity-${index}`}
-                    checked={editedData.planned_activities.includes(activity)}
-                    onChange={(e) => {
-                      const newActivities = e.target.checked
-                        ? [...editedData.planned_activities, activity]
-                        : editedData.planned_activities.filter(a => a !== activity);
+                <div 
+                  key={index} 
+                  className={cn(
+                    "flex items-center px-3 py-2 rounded hover:bg-muted/50 transition-colors",
+                    editedData.planned_activities.includes(activity) && "bg-muted"
+                  )}
+                >
+                  <button
+                    type="button"
+                    className="flex items-center gap-3 w-full focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 rounded"
+                    onClick={() => {
+                      const newActivities = editedData.planned_activities.includes(activity)
+                        ? editedData.planned_activities.filter(a => a !== activity)
+                        : [...editedData.planned_activities, activity];
                       handleInputChange('planned_activities', newActivities);
                     }}
-                    className="h-4 w-4"
-                  />
-                  <label htmlFor={`activity-${index}`} className="text-sm">
-                    {activity}
-                  </label>
+                  >
+                    <div 
+                      className={cn(
+                        "flex h-4 w-4 shrink-0 items-center justify-center rounded border",
+                        editedData.planned_activities.includes(activity)
+                          ? "border-primary bg-primary text-primary-foreground"
+                          : "border-muted"
+                      )}
+                    >
+                      {editedData.planned_activities.includes(activity) && (
+                        <svg
+                          width="10"
+                          height="10"
+                          viewBox="0 0 16 16"
+                          fill="none"
+                          xmlns="http://www.w3.org/2000/svg"
+                        >
+                          <path
+                            d="M13.3334 4L6.00008 11.3333L2.66675 8"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        </svg>
+                      )}
+                    </div>
+                    <span className="text-sm">{activity}</span>
+                  </button>
                 </div>
               ))}
             </div>
@@ -227,13 +259,14 @@ export default function ExtractedDataReview({ data, onConfirm, onCancel }: Extra
 
           {/* Expenses Section */}
           <div>
-            <Label>المصروفات</Label>
+            <Label className="text-lg font-semibold mb-2">Expenses</Label>
             <div className="overflow-x-auto">
               <table className="w-full border-collapse border">
                 <thead>
                   <tr className="bg-muted">
-                    <th className="border p-2 text-right">المصروفات</th>
-                    <th className="border p-2 text-right">الإجمالي</th>
+                    <th className="border p-2 text-right">Activity</th>
+                    <th className="border p-2 text-right">Total Cost</th>
+                    <th className="border p-2 w-10"></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -254,15 +287,45 @@ export default function ExtractedDataReview({ data, onConfirm, onCancel }: Extra
                           className="w-full"
                         />
                       </td>
+                      <td className="border p-2 text-center">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive"
+                          onClick={() => {
+                            setEditedData(prev => ({
+                              ...prev,
+                              expenses: prev.expenses.filter((_, i) => i !== index)
+                            }));
+                          }}
+                        >
+                          <svg
+                            width="16"
+                            height="16"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          >
+                            <path d="M3 6h18" />
+                            <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+                            <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+                          </svg>
+                          <span className="sr-only">Delete expense</span>
+                        </Button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
                 <tfoot>
                   <tr className="bg-muted">
                     <td className="border p-2 text-right font-bold">
-                      التكلفة الإجمالية
+                      Total Cost
                     </td>
-                    <td className="border p-2 font-bold">
+                    <td colSpan={2} className="border p-2 font-bold">
                       ${editedData.expenses.reduce((sum, expense) => sum + (expense.total_cost || 0), 0).toFixed(2)}
                     </td>
                   </tr>
@@ -286,59 +349,58 @@ export default function ExtractedDataReview({ data, onConfirm, onCancel }: Extra
             </Button>
           </div>
 
+          {/* Contact Information - 2 columns */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <Label htmlFor="program_officer_name">Program Officer Name</Label>
-              <Input
-                id="program_officer_name"
-                value={editedData.program_officer_name || ''}
-                onChange={(e) => handleInputChange('program_officer_name', e.target.value)}
-              />
+            <div className="space-y-4">
+              <div>
+                <Label>Program Officer</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  <Input
+                    value={editedData.program_officer_name || ''}
+                    onChange={(e) => handleInputChange('program_officer_name', e.target.value)}
+                    placeholder="Name"
+                  />
+                  <Input
+                    value={editedData.program_officer_phone || ''}
+                    onChange={(e) => handleInputChange('program_officer_phone', e.target.value)}
+                    placeholder="Phone"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <Label>Reporting Officer</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  <Input
+                    value={editedData.reporting_officer_name || ''}
+                    onChange={(e) => handleInputChange('reporting_officer_name', e.target.value)}
+                    placeholder="Name"
+                  />
+                  <Input
+                    value={editedData.reporting_officer_phone || ''}
+                    onChange={(e) => handleInputChange('reporting_officer_phone', e.target.value)}
+                    placeholder="Phone"
+                  />
+                </div>
+              </div>
             </div>
 
-            <div>
-              <Label htmlFor="program_officer_phone">Program Officer Phone</Label>
-              <Input
-                id="program_officer_phone"
-                value={editedData.program_officer_phone || ''}
-                onChange={(e) => handleInputChange('program_officer_phone', e.target.value)}
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="reporting_officer_name">Reporting Officer Name</Label>
-              <Input
-                id="reporting_officer_name"
-                value={editedData.reporting_officer_name || ''}
-                onChange={(e) => handleInputChange('reporting_officer_name', e.target.value)}
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="reporting_officer_phone">Reporting Officer Phone</Label>
-              <Input
-                id="reporting_officer_phone"
-                value={editedData.reporting_officer_phone || ''}
-                onChange={(e) => handleInputChange('reporting_officer_phone', e.target.value)}
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="finance_officer_name">Finance Officer Name</Label>
-              <Input
-                id="finance_officer_name"
-                value={editedData.finance_officer_name || ''}
-                onChange={(e) => handleInputChange('finance_officer_name', e.target.value)}
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="finance_officer_phone">Finance Officer Phone</Label>
-              <Input
-                id="finance_officer_phone"
-                value={editedData.finance_officer_phone || ''}
-                onChange={(e) => handleInputChange('finance_officer_phone', e.target.value)}
-              />
+            <div className="space-y-4">
+              <div>
+                <Label>Finance Officer</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  <Input
+                    value={editedData.finance_officer_name || ''}
+                    onChange={(e) => handleInputChange('finance_officer_name', e.target.value)}
+                    placeholder="Name"
+                  />
+                  <Input
+                    value={editedData.finance_officer_phone || ''}
+                    onChange={(e) => handleInputChange('finance_officer_phone', e.target.value)}
+                    placeholder="Phone"
+                  />
+                </div>
+              </div>
             </div>
           </div>
 

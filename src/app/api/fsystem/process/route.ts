@@ -238,7 +238,15 @@ CONTACT INFORMATION:
 
 ACTIVITIES AND EXPENSES:
 1. From section 6 (الأنشطة الرئيسية اللازمة):
-   - Return the list of activities in planned_activities array
+   - Each activity row has three columns: العدد, مدة النشاط, مكان التنفيذ
+   - ONLY include an activity if ALL THREE columns have values
+   - Example row with complete data:
+     Activity: المطبخ المشترك/ تموين
+     العدد: 100
+     مدة النشاط: 7 أيام
+     مكان التنفيذ: الدلنج -- حي الواحة
+   - This activity should be included because all columns are filled
+   - Activities with empty columns should be excluded
 
 2. From section 7 (الميزانية التفصيلية):
    If form is in Arabic (RTL):

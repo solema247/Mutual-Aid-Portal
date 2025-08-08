@@ -286,10 +286,10 @@ export default function F1Upload() {
         <Card>
           <CardContent className="pt-6">
             <div className="space-y-4">
+              {/* File Upload */}
               <div>
-                <Label htmlFor="file">Upload F1 Form (PDF or Word)</Label>
+                <Label className="mb-2">Upload F1 Form (PDF or Word)</Label>
                 <Input
-                  id="file"
                   type="file"
                   accept=".pdf,.doc,.docx"
                   onChange={handleFileChange}
@@ -297,99 +297,102 @@ export default function F1Upload() {
                 />
               </div>
 
-              <div>
-                <Label htmlFor="donor">Donor</Label>
-                <Select
-                  value={formData.donor_id}
-                  onValueChange={(value) => handleInputChange('donor_id', value)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select donor" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {donors.map((donor) => (
-                      <SelectItem key={donor.id} value={donor.id}>
-                        {donor.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              {/* Main Selectors in One Row */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <Label className="mb-2">Donor</Label>
+                  <Select
+                    value={formData.donor_id}
+                    onValueChange={(value) => handleInputChange('donor_id', value)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select donor" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {donors.map((donor) => (
+                        <SelectItem key={donor.id} value={donor.id}>
+                          {donor.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <Label className="mb-2">State</Label>
+                  <Select
+                    value={formData.state_id}
+                    onValueChange={(value) => handleInputChange('state_id', value)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select state" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {states.map((state) => (
+                        <SelectItem key={state.id} value={state.id}>
+                          {state.state_name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <Label className="mb-2">Emergency Room</Label>
+                  <Select
+                    value={formData.emergency_room_id}
+                    onValueChange={(value) => handleInputChange('emergency_room_id', value)}
+                    disabled={!formData.state_id || rooms.length === 0}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select emergency room" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {rooms.map((room) => (
+                        <SelectItem key={room.id} value={room.id}>
+                          {room.name_ar || room.name} {room.err_code ? `(${room.err_code})` : ''}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
 
-              <div>
-                <Label htmlFor="state">State</Label>
-                <Select
-                  value={formData.state_id}
-                  onValueChange={(value) => handleInputChange('state_id', value)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select state" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {states.map((state) => (
-                      <SelectItem key={state.id} value={state.id}>
-                        {state.state_name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              {/* Small Fields in 3 Columns */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <Label className="mb-2">Date (MMYY)</Label>
+                  <Input
+                    placeholder="1224"
+                    value={formData.date}
+                    onChange={(e) => handleInputChange('date', e.target.value)}
+                    maxLength={4}
+                    pattern="[0-9]{4}"
+                  />
+                </div>
 
-              <div>
-                <Label htmlFor="room">Emergency Room</Label>
-                <Select
-                  value={formData.emergency_room_id}
-                  onValueChange={(value) => handleInputChange('emergency_room_id', value)}
-                  disabled={!formData.state_id || rooms.length === 0}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select emergency room" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {rooms.map((room) => (
-                      <SelectItem key={room.id} value={room.id}>
-                        {room.name_ar || room.name} {room.err_code ? `(${room.err_code})` : ''}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+                <div>
+                  <Label className="mb-2">Grant Serial</Label>
+                  <Input
+                    placeholder="0001"
+                    value={formData.grant_serial}
+                    onChange={(e) => handleInputChange('grant_serial', e.target.value)}
+                  />
+                </div>
 
-              <div>
-                <Label htmlFor="date">Date (MMYY)</Label>
-                <Input
-                  id="date"
-                  placeholder="1224"
-                  value={formData.date}
-                  onChange={(e) => handleInputChange('date', e.target.value)}
-                  maxLength={4}
-                  pattern="[0-9]{4}"
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="grant">Grant Serial</Label>
-                <Input
-                  id="grant"
-                  placeholder="0001"
-                  value={formData.grant_serial}
-                  onChange={(e) => handleInputChange('grant_serial', e.target.value)}
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="project">Project ID</Label>
-                <Input
-                  id="project"
-                  placeholder="301"
-                  value={formData.project_id}
-                  onChange={(e) => handleInputChange('project_id', e.target.value)}
-                />
+                <div>
+                  <Label className="mb-2">Project ID</Label>
+                  <Input
+                    placeholder="301"
+                    value={formData.project_id}
+                    onChange={(e) => handleInputChange('project_id', e.target.value)}
+                  />
+                </div>
               </div>
 
               {previewId && (
                 <div className="pt-4">
-                  <Label>Generated Form ID</Label>
+                  <Label className="mb-2">Generated Form ID</Label>
                   <div className="mt-1 p-3 bg-muted rounded-md font-mono">
                     {previewId}
                   </div>
