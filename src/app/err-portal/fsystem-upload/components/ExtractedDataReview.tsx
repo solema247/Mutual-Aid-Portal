@@ -5,6 +5,12 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Button } from '@/components/ui/button'
 import { useTranslation } from 'react-i18next'
+import { Plus, Minus } from 'lucide-react'
+
+interface Expense {
+  activity: string;
+  total_cost: number | null;
+}
 
 interface ExtractedData {
   date: string | null;
@@ -23,7 +29,7 @@ interface ExtractedData {
   finance_officer_name: string | null;
   finance_officer_phone: string | null;
   planned_activities: string[];
-  expenses: any[] | null;
+  expenses: Expense[];
 }
 
 interface ExtractedDataReviewProps {
@@ -35,7 +41,7 @@ interface ExtractedDataReviewProps {
 export default function ExtractedDataReview({ data, onConfirm, onCancel }: ExtractedDataReviewProps) {
   const { t } = useTranslation(['common', 'err'])
   
-  // Initialize state with null values converted to empty strings for form inputs
+  // Initialize state with empty arrays for activities and expenses
   const [editedData, setEditedData] = useState<ExtractedData>({
     ...data,
     date: data.date || '',
@@ -74,6 +80,14 @@ export default function ExtractedDataReview({ data, onConfirm, onCancel }: Extra
       handleInputChange('planned_activities', value.split('\n').filter(Boolean))
     }
   }
+
+  const handleExpenseChange = (index: number, field: keyof Expense, value: any) => {
+    setEditedData(prev => {
+      const newExpenses = [...prev.expenses];
+      newExpenses[index] = { ...newExpenses[index], [field]: value };
+      return { ...prev, expenses: newExpenses };
+    });
+  };
 
   // Function to prepare data before confirming
   const handleConfirm = () => {
@@ -176,16 +190,100 @@ export default function ExtractedDataReview({ data, onConfirm, onCancel }: Extra
             />
           </div>
 
+          {/* Planned Activities Section */}
           <div>
-            <Label htmlFor="planned_activities">Planned Activities (one per line)</Label>
-            <Textarea
-              id="planned_activities"
-              value={Array.isArray(editedData.planned_activities) ? 
-                editedData.planned_activities.join('\n') : 
-                editedData.planned_activities || ''}
-              onChange={(e) => handlePlannedActivitiesChange(e.target.value)}
-              rows={6}
-            />
+            <Label>الأنشطة المخططة</Label>
+            <div className="space-y-2">
+              {[
+                'مساندة المستشفيات',
+                'تشغيل المركز الصحي بالحي',
+                'الخدمات (كهرباء، مياه، مواصلات عامة)',
+                'المطبخ المشترك/ تموين',
+                'الاحتياجات و الفعاليات النسوية',
+                'مراكز الإيواء',
+                'الحماية و الإجلاء',
+                'مراكز الأطفال و التعليم البديل'
+              ].map((activity, index) => (
+                <div key={index} className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id={`activity-${index}`}
+                    checked={editedData.planned_activities.includes(activity)}
+                    onChange={(e) => {
+                      const newActivities = e.target.checked
+                        ? [...editedData.planned_activities, activity]
+                        : editedData.planned_activities.filter(a => a !== activity);
+                      handleInputChange('planned_activities', newActivities);
+                    }}
+                    className="h-4 w-4"
+                  />
+                  <label htmlFor={`activity-${index}`} className="text-sm">
+                    {activity}
+                  </label>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Expenses Section */}
+          <div>
+            <Label>المصروفات</Label>
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse border">
+                <thead>
+                  <tr className="bg-muted">
+                    <th className="border p-2 text-right">المصروفات</th>
+                    <th className="border p-2 text-right">الإجمالي</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {editedData.expenses.map((expense, index) => (
+                    <tr key={index}>
+                      <td className="border p-2">
+                        <Input
+                          value={expense.activity}
+                          onChange={(e) => handleExpenseChange(index, 'activity', e.target.value)}
+                          className="w-full"
+                        />
+                      </td>
+                      <td className="border p-2">
+                        <Input
+                          type="number"
+                          value={expense.total_cost || ''}
+                          onChange={(e) => handleExpenseChange(index, 'total_cost', e.target.value ? parseFloat(e.target.value) : null)}
+                          className="w-full"
+                        />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="bg-muted">
+                    <td className="border p-2 text-right font-bold">
+                      التكلفة الإجمالية
+                    </td>
+                    <td className="border p-2 font-bold">
+                      ${editedData.expenses.reduce((sum, expense) => sum + (expense.total_cost || 0), 0).toFixed(2)}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+            <Button 
+              type="button" 
+              variant="outline" 
+              size="sm" 
+              onClick={() => {
+                setEditedData(prev => ({
+                  ...prev,
+                  expenses: [...prev.expenses, { activity: '', total_cost: null }]
+                }))
+              }}
+              className="mt-2"
+            >
+              <Plus className="h-4 w-4 mr-1" />
+              Add Expense
+            </Button>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

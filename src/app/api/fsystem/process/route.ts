@@ -215,8 +215,9 @@ export async function POST(req: Request) {
       messages: [
         {
           role: "system",
-          content: `Extract information from the following text (which may be in English or Arabic) and format it according to these database fields:
+          content: `Extract information from the following text (which may be in English or Arabic):
 
+BASIC INFORMATION:
 - date: Date of the project in YYYY-MM-DD format (convert any date format to this)
 - state: State name (keep in original language)
 - locality: Locality name (keep in original language)
@@ -226,6 +227,8 @@ export async function POST(req: Request) {
 - estimated_timeframe: Project duration (keep in original language)
 - additional_support: Any additional support mentioned (keep in original language)
 - banking_details: Banking information (keep in original language)
+
+CONTACT INFORMATION:
 - program_officer_name: Name of program officer (keep in original language)
 - program_officer_phone: Phone of program officer
 - reporting_officer_name: Name of reporting officer (keep in original language)
@@ -233,61 +236,57 @@ export async function POST(req: Request) {
 - finance_officer_name: Name of finance officer (keep in original language)
 - finance_officer_phone: Phone of finance officer
 
-For planned activities and expenses, follow these specific rules:
+ACTIVITIES AND EXPENSES:
+1. From section 6 (الأنشطة الرئيسية اللازمة):
+   - Return the list of activities in planned_activities array
 
-PLANNED ACTIVITIES EXTRACTION:
-1. Find the section starting with "الأنشطة المخططة" (Planned Activities).
-2. Extract all items that follow until the next major section or table.
-3. Clean up each activity:
-   - Remove bullet points (●, -, •), numbers, or any other list markers
-   - Remove surrounding parentheses and trailing punctuation
-   - Keep the text in its original language
-4. Return as array of strings in planned_activities field
+2. From section 7 (الميزانية التفصيلية):
+   If form is in Arabic (RTL):
+   - Look at the leftmost column labeled الإجمالي for total costs
+   - Take activity names from rightmost column المصروفات
+   - Ignore middle columns (التكرار, سعر الوحدة)
 
-EXPENSES TABLE EXTRACTION:
-1. Locate and parse the expenses/budget table with these Arabic column mappings:
-   - المصروفات or البند → description
-   - مكان التنفيذ → location
-   - الوصف → append to description with " — " separator
-   - التكرار or العدد → quantity
-   - سعر الوحدة → unit_cost
-   - الإجمالي → total_cost
+   If form is in English (LTR):
+   - Look at the rightmost column labeled Total/الإجمالي
+   - Take activity names from leftmost column Expenses/المصروفات
+   - Ignore middle columns
 
-2. For each table row:
-   - Match the description text with its corresponding numbers by proximity
-   - Join any multi-line descriptions with a single space
-   - Convert any Arabic numbers to Western digits
-   - Remove currency symbols and formatting (commas, spaces) from numbers
-   - Clean location text: normalize slashes and fix merged words
-   
-3. Validate and compute:
-   - If quantity and unit_cost exist but total_cost missing: multiply them
-   - If total_cost exists and one other value missing: divide/multiply as appropriate
-   - Only compute if result would be within 2% of any provided total
-   - Otherwise leave missing values as null
+   For each row:
+   - Only extract rows where الإجمالي has a value (e.g. $3,900, $10, $50)
+   - Remove $ symbol from numbers
+   - Ignore any numbers that aren't in the الإجمالي column
 
-4. Return expenses array with objects in this EXACT format:
-   {
-     "description": string,  // Include any الوصف text after " — "
-     "unit_cost": float | null,
-     "quantity": integer | null,
-     "total_cost": float | null,
-     "location": string | null
-   }
+Example (Arabic form):
+الإجمالي: $3,900 | سعر الوحدة: $32.5 | المصروفات: مشتريات طبية
+Should extract: { activity: "مشتريات طبية", total_cost: 3900 }
 
-Important:
-1. The date MUST be in YYYY-MM-DD format
-2. Keep all text fields in their original language (Arabic or English)
-3. For number fields (estimated_beneficiaries), extract just the number
-4. Return the data in JSON format with these exact field names
-5. If a field is not found in the text, set it to null`
+Return all fields in this format:
+{
+  "date": string | null,
+  "state": string | null,
+  "locality": string | null,
+  "project_objectives": string | null,
+  "intended_beneficiaries": string | null,
+  "estimated_beneficiaries": number | null,
+  "estimated_timeframe": string | null,
+  "additional_support": string | null,
+  "banking_details": string | null,
+  "program_officer_name": string | null,
+  "program_officer_phone": string | null,
+  "reporting_officer_name": string | null,
+  "reporting_officer_phone": string | null,
+  "finance_officer_name": string | null,
+  "finance_officer_phone": string | null,
+  "planned_activities": string[],
+  "expenses": Array<{activity: string, total_cost: number}>
+}`
         },
         {
           role: "user",
           content: text
         }
       ],
-      temperature: 0.3  // Keep lower temperature for more focused extraction
+      temperature: 0.1
     })
 
     const content = completion.choices[0]?.message?.content
