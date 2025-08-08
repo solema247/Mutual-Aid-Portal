@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button'
 import { FileUp } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 import type { Donor, State, F1FormData, EmergencyRoom } from '@/app/api/fsystem/types/fsystem'
+import ExtractedDataReview from './ExtractedDataReview'
 
 export default function F1Upload() {
   const { t } = useTranslation(['common', 'err'])
@@ -28,6 +29,8 @@ export default function F1Upload() {
   })
   const [isLoading, setIsLoading] = useState(false)
   const [previewId, setPreviewId] = useState('')
+  const [processedData, setProcessedData] = useState<any>(null)
+  const [isReviewing, setIsReviewing] = useState(false)
 
   useEffect(() => {
     const fetchData = async () => {
@@ -178,7 +181,31 @@ export default function F1Upload() {
         throw new Error(errorData.details || 'Failed to process document')
       }
 
-      const processedData = await response.json()
+      const extractedData = await response.json()
+      setProcessedData(extractedData)
+      setIsReviewing(true)
+      setIsLoading(false)
+
+    } catch (error) {
+      console.error('Error processing form:', error)
+      alert('Error processing form. Please try again.')
+      setIsLoading(false)
+    }
+  }
+
+  const handleConfirmUpload = async (editedData: any) => {
+    setIsLoading(true)
+    try {
+      const selectedDonor = donors.find(d => d.id === formData.donor_id)
+      const selectedState = states.find(s => s.id === formData.state_id)
+      const selectedRoom = rooms.find(r => r.id === formData.emergency_room_id)
+
+      if (!selectedFile || !selectedDonor?.short_name || !selectedState?.state_name || !selectedRoom?.err_code) {
+        throw new Error('Missing required information')
+      }
+
+      // Get state code (first 2 letters)
+      const stateCode = selectedState.state_name.substring(0, 2).toUpperCase()
 
       // Get file extension and generate path
       const fileExtension = selectedFile.name.split('.').pop()
@@ -200,7 +227,7 @@ export default function F1Upload() {
       const { error: insertError } = await supabase
         .from('err_projects')
         .insert([{
-          ...processedData,
+          ...editedData,
           donor_id: formData.donor_id,
           grant_serial: formData.grant_serial,
           project_id: formData.project_id,
@@ -215,7 +242,7 @@ export default function F1Upload() {
         throw insertError
       }
 
-      alert('Form uploaded and processed successfully!')
+      alert('Form uploaded successfully!')
       setFormData({
         donor_id: '',
         state_id: '',
@@ -227,13 +254,30 @@ export default function F1Upload() {
       })
       setSelectedFile(null)
       setPreviewId('')
+      setProcessedData(null)
+      setIsReviewing(false)
 
     } catch (error) {
-      console.error('Error submitting form:', error)
+      console.error('Error uploading form:', error)
       alert('Error uploading form. Please try again.')
     } finally {
       setIsLoading(false)
     }
+  }
+
+  const handleCancelReview = () => {
+    setProcessedData(null)
+    setIsReviewing(false)
+  }
+
+  if (isReviewing) {
+    return (
+      <ExtractedDataReview
+        data={processedData}
+        onConfirm={handleConfirmUpload}
+        onCancel={handleCancelReview}
+      />
+    )
   }
 
   return (
