@@ -2,16 +2,108 @@ import { NextResponse } from 'next/server'
 import vision from '@google-cloud/vision'
 import OpenAI from 'openai'
 import path from 'path'
+import { google } from 'googleapis'
 
 // Initialize Google Vision client
 const visionClient = new vision.ImageAnnotatorClient({
-  keyFilename: path.join(process.cwd(), '.gcp', 'local-humanitarian-web-chat-d83ac2a11d96.json')
+  keyFilename: path.join(process.cwd(), '.gcp', process.env.GCP_CREDENTIALS_JSON || '')
 })
 
 // Initialize OpenAI client
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 })
+
+// Initialize Google Sheets
+const auth = new google.auth.GoogleAuth({
+  keyFile: path.join(process.cwd(), '.gcp', process.env.GCP_CREDENTIALS_JSON || ''),
+  scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+})
+
+const sheets = google.sheets({ version: 'v4', auth })
+
+// Function to append data to Google Sheet
+async function appendToGoogleSheet(data: any, formMetadata: any) {
+  try {
+    console.log('Starting Google Sheets append with metadata:', formMetadata)
+    
+    // Calculate total USD from expenses
+    const totalUSD = data.expenses.reduce((sum: number, exp: any) => sum + (exp.total_cost || 0), 0)
+    console.log('Calculated total USD:', totalUSD)
+
+    // Prepare row data
+    const rowData = [
+      formMetadata.grant_id,                    // Serial Number
+      formMetadata.err_code,                    // ERR CODE
+      formMetadata.err_name,                    // ERR Name
+      'Pending',                                // Project Status
+      new Date().toLocaleDateString(),          // F1 Date of Submitted
+      '',                                       // Overdue
+      '',                                       // F1
+      '',                                       // # of Base ERR
+      formMetadata.donor_name,                  // Project Donor
+      '',                                       // Partner
+      data.state,                               // State
+      '',                                       // Responsible
+      '',                                       // Sector (Primary)
+      '',                                       // Sector (Secondary)
+      data.project_objectives,                  // Description of ERRs activity
+      data.estimated_beneficiaries,             // Target (Ind.)
+      '',                                       // Target (Fam.)
+      '',                                       // MOU Signed
+      '',                                       // Date Transfer
+      totalUSD,                                 // USD
+      '',                                       // SDG
+      '',                                       // Rate
+      '',                                       // Start Date (Activity)
+      '',                                       // End Date (Activity)
+      '',                                       // Activity Duration
+      '',                                       // F4
+      '',                                       // F5
+      '',                                       // Date report completed
+      '',                                       // Reporting Duration
+      '',                                       // Tracker
+      '',                                       // Family
+      '',                                       // Individuals
+      '',                                       // Male >18
+      '',                                       // Female >18
+      '',                                       // Male <18
+      '',                                       // Female <18
+      '',                                       // People with special needs
+      '',                                       // Lessons learned
+      '',                                       // Challenges
+      '',                                       // Recommendations
+      '',                                       // Comments
+      ''                                        // Grant Segment
+    ]
+
+    console.log('Prepared row data:', rowData)
+    console.log('Using Sheet ID:', process.env.GOOGLE_SHEET_ID)
+    console.log('Using credentials from:', process.env.GCP_CREDENTIALS_JSON)
+
+    const response = await sheets.spreadsheets.values.append({
+      spreadsheetId: process.env.GOOGLE_SHEET_ID,
+      range: 'Activities!A:AQ',  // Updated to target the Activities sheet
+      valueInputOption: 'USER_ENTERED',
+      requestBody: {
+        values: [rowData]
+      },
+    })
+
+    console.log('Google Sheets API Response:', response.data)
+    return true
+  } catch (error) {
+    console.error('Error appending to Google Sheet:', error)
+    if (error instanceof Error) {
+      console.error('Error details:', {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+      })
+    }
+    return false
+  }
+}
 
 // Add types for the expense object
 interface Expense {
@@ -116,6 +208,12 @@ export async function POST(req: Request) {
   try {
     const formData = await req.formData()
     const file = formData.get('file') as File
+    const metadataStr = formData.get('metadata') as string
+    console.log('Received metadata string:', metadataStr)
+    
+    const formMetadata = JSON.parse(metadataStr)
+    console.log('Parsed form metadata:', formMetadata)
+
     if (!file) {
       throw new Error('No file provided')
     }
@@ -328,6 +426,10 @@ Return all fields in this format:
       // Add language detection
       const detectedLanguage = detectLanguage(text)
       structuredData.language = detectedLanguage
+      
+      console.log('Attempting to append to Google Sheet...')
+      const sheetResult = await appendToGoogleSheet(structuredData, formMetadata)
+      console.log('Google Sheet append result:', sheetResult)
       
       console.log('Validated data:', structuredData)
       return NextResponse.json(structuredData)

@@ -171,6 +171,15 @@ export default function F1Upload() {
       const processFormData = new FormData()
       processFormData.append('file', selectedFile)
 
+      // Add metadata for Google Sheets
+      const metadata = {
+        grant_id: previewId,
+        err_code: selectedRoom.err_code,
+        err_name: selectedRoom.name_ar || selectedRoom.name,
+        donor_name: selectedDonor.name
+      }
+      processFormData.append('metadata', JSON.stringify(metadata))
+
       const response = await fetch('/api/fsystem/process', {
         method: 'POST',
         body: processFormData
@@ -223,31 +232,44 @@ export default function F1Upload() {
         throw uploadError
       }
 
-      // Prepare data for insertion
-      const dataToInsert = {
-        ...editedData,
-        donor_id: formData.donor_id,
-        grant_serial: formData.grant_serial,
-        project_id: formData.project_id,
-        emergency_room_id: formData.emergency_room_id,
-        err_id: selectedRoom.err_code,
-        grant_id: previewId,
-        status: 'pending',
-        source: 'mutual_aid_portal'
-      }
-
-      // Ensure language is included and not undefined
-      if (typeof editedData.language === 'string') {
-        dataToInsert.language = editedData.language
-      }
-
-      // Insert the processed data into err_projects
+      // Insert into Supabase
       const { error: insertError } = await supabase
         .from('err_projects')
-        .insert([dataToInsert])
+        .insert([{
+          ...editedData,
+          donor_id: formData.donor_id,
+          grant_serial: formData.grant_serial,
+          project_id: formData.project_id,
+          emergency_room_id: formData.emergency_room_id,
+          err_id: selectedRoom.err_code,
+          grant_id: previewId,
+          status: 'pending',
+          source: 'mutual_aid_portal'
+        }])
 
       if (insertError) {
         throw insertError
+      }
+
+      // Update Google Sheet
+      const sheetData = {
+        ...editedData,
+        grant_id: previewId,
+        err_id: selectedRoom.err_code,
+        err_name: selectedRoom.name_ar || selectedRoom.name,
+        donor_name: selectedDonor.name
+      }
+
+      const sheetResponse = await fetch('/api/sheets/update', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(sheetData)
+      })
+
+      if (!sheetResponse.ok) {
+        console.error('Failed to update Google Sheet:', await sheetResponse.json())
       }
 
       alert('Form uploaded successfully!')
