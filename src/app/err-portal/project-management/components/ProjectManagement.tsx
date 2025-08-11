@@ -204,6 +204,7 @@ export default function ProjectManagement() {
       const { data, error } = await supabase
         .from('err_projects')
         .select('*')
+        .or('source.is.null,source.neq.mutual_aid_portal')
         .order('submitted_at', { ascending: false })
 
       if (error) throw error
