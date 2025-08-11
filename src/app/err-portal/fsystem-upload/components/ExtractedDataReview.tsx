@@ -48,7 +48,7 @@ export default function ExtractedDataReview({
   const { t } = useTranslation(['common', 'fsystem'])
   const [isSubmitting, setIsSubmitting] = useState(false)
   
-  // Initialize state with empty arrays for activities and expenses
+  // Keep track of all activities and selected activities separately
   const [editedData, setEditedData] = useState<ExtractedData>({
     ...data,
     planned_activities: Array.isArray(data.planned_activities) ? data.planned_activities : [],
@@ -57,6 +57,12 @@ export default function ExtractedDataReview({
       total_cost: typeof exp.total_cost === 'number' ? exp.total_cost : 0
     })) : []
   })
+
+  const [selectedActivities, setSelectedActivities] = useState<string[]>(
+    Array.isArray(data.planned_activities) ? data.planned_activities : []
+  )
+
+  const [newActivity, setNewActivity] = useState('')
 
   const handleInputChange = (field: keyof ExtractedData, value: any) => {
     setEditedData(prev => ({
@@ -85,6 +91,17 @@ export default function ExtractedDataReview({
           : exp
       )
     }))
+  }
+
+  const handleAddActivity = () => {
+    if (newActivity.trim()) {
+      setEditedData(prev => ({
+        ...prev,
+        planned_activities: [...prev.planned_activities, newActivity.trim()]
+      }))
+      setSelectedActivities(prev => [...prev, newActivity.trim()])
+      setNewActivity('')
+    }
   }
 
   // Function to prepare data before confirming
@@ -116,12 +133,11 @@ export default function ExtractedDataReview({
   }
 
   const toggleActivity = (activity: string) => {
-    setEditedData(prev => ({
-      ...prev,
-      planned_activities: prev.planned_activities.includes(activity)
-        ? prev.planned_activities.filter(a => a !== activity)
-        : [...prev.planned_activities, activity]
-    }))
+    setSelectedActivities(prev => 
+      prev.includes(activity)
+        ? prev.filter(a => a !== activity)
+        : [...prev, activity]
+    )
   }
 
   // Add function to calculate total expenses
@@ -210,12 +226,12 @@ export default function ExtractedDataReview({
                 </tr>
               </thead>
               <tbody>
-                {data.planned_activities.map((activity, index) => (
+                {editedData.planned_activities.map((activity, index) => (
                   <tr 
                     key={index}
                     className={cn(
                       "border-t cursor-pointer hover:bg-muted/50 transition-colors",
-                      editedData.planned_activities.includes(activity) && "bg-primary/5"
+                      selectedActivities.includes(activity) && "bg-primary/5"
                     )}
                     onClick={() => toggleActivity(activity)}
                   >
@@ -223,11 +239,11 @@ export default function ExtractedDataReview({
                     <td className="px-4 py-3 text-center">
                       <div className={cn(
                         "w-5 h-5 rounded-full border inline-flex items-center justify-center",
-                        editedData.planned_activities.includes(activity)
+                        selectedActivities.includes(activity)
                           ? "bg-emerald-100 border-emerald-200 text-emerald-700"
                           : "border-muted-foreground"
                       )}>
-                        {editedData.planned_activities.includes(activity) && (
+                        {selectedActivities.includes(activity) && (
                           <Check className="w-3 h-3" />
                         )}
                       </div>
@@ -236,6 +252,31 @@ export default function ExtractedDataReview({
                 ))}
               </tbody>
             </table>
+            <div className="p-4 border-t">
+              <div className="flex gap-2">
+                <Input
+                  value={newActivity}
+                  onChange={(e) => setNewActivity(e.target.value)}
+                  placeholder={t('fsystem:review.fields.add_activity_placeholder')}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault()
+                      handleAddActivity()
+                    }
+                  }}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleAddActivity}
+                  disabled={!newActivity.trim()}
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  {t('fsystem:review.fields.add_activity')}
+                </Button>
+              </div>
+            </div>
           </div>
         </div>
 

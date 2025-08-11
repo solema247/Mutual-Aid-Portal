@@ -136,12 +136,23 @@ export default function F1Upload() {
     }
   }
 
-  const generateFormId = () => {
+  const hasRequiredFields = () => {
+    return (
+      formData.donor_id &&
+      formData.state_id &&
+      formData.date &&
+      formData.grant_serial?.length === 4 &&  // Only when grant serial is complete
+      formData.emergency_room_id
+    )
+  }
+
+  const generateBasePattern = () => {
     const selectedDonor = donors.find(d => d.id === formData.donor_id)
     const selectedState = states.find(s => s.id === formData.state_id)
     const selectedRoom = rooms.find(r => r.id === formData.emergency_room_id)
     
     if (!selectedDonor?.short_name || !selectedState?.state_short || !selectedRoom?.err_code) return ''
+    if (!hasRequiredFields()) return ''
 
     // Use state_short instead of first 2 letters
     const stateCode = selectedState.state_short.toUpperCase()
@@ -149,18 +160,105 @@ export default function F1Upload() {
     // Format date (MMYY)
     const dateStr = formData.date
 
-    return `LCC-${selectedDonor.short_name}-${stateCode}-${dateStr}-${formData.grant_serial}-${formData.project_id}`
+    // Create base pattern
+    return `LCC-${selectedDonor.short_name}-${stateCode}-${dateStr}-${formData.grant_serial}`
   }
+
+  const getNextSequenceNumber = async (basePattern: string, previewOnly: boolean = true) => {
+    try {
+      const response = await fetch('/api/fsystem/next-sequence', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          base_pattern: basePattern,
+          preview_only: previewOnly
+        })
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to get next sequence number')
+      }
+
+      const { padded_number } = await response.json()
+      return padded_number
+    } catch (error) {
+      console.error('Error getting sequence number:', error)
+      throw error
+    }
+  }
+
+  const generatePreviewPattern = async () => {
+    const selectedDonor = donors.find(d => d.id === formData.donor_id)
+    const selectedState = states.find(s => s.id === formData.state_id)
+    
+    let pattern = 'LCC'
+
+    if (selectedDonor?.short_name) {
+      pattern += `-${selectedDonor.short_name}`
+    } else {
+      pattern += '-___' // Placeholder for donor
+    }
+
+    if (selectedState?.state_short) {
+      pattern += `-${selectedState.state_short.toUpperCase()}`
+    } else {
+      pattern += '-__' // Placeholder for state
+    }
+
+    if (formData.date) {
+      pattern += `-${formData.date}`
+    } else {
+      pattern += '-____' // Placeholder for date
+    }
+
+    if (formData.grant_serial) {
+      pattern += `-${formData.grant_serial}`
+      
+      // If we have all required fields, try to get the next sequence number
+      if (selectedDonor?.short_name && selectedState?.state_short && formData.date) {
+        try {
+          const basePattern = `LCC-${selectedDonor.short_name}-${selectedState.state_short.toUpperCase()}-${formData.date}-${formData.grant_serial}`
+          const response = await fetch('/api/fsystem/next-sequence', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ 
+              base_pattern: basePattern,
+              preview_only: true
+            })
+          })
+
+          if (response.ok) {
+            const { padded_number } = await response.json()
+            return `${pattern}-${padded_number}`
+          }
+        } catch (error) {
+          console.error('Error previewing sequence:', error)
+        }
+      }
+      pattern += '-XXX' // Fallback to placeholder
+    } else {
+      pattern += '-____-XXX' // Placeholder for grant serial and sequence
+    }
+
+    return pattern
+  }
+
+  useEffect(() => {
+    // Update preview pattern whenever form data changes
+    const updatePattern = async () => {
+      const pattern = await generatePreviewPattern()
+      setPreviewId(pattern)
+    }
+    updatePattern()
+  }, [formData.donor_id, formData.state_id, formData.date, formData.grant_serial])
 
   const handleInputChange = (field: keyof F1FormData, value: string | string[]) => {
     setFormData(prev => ({ ...prev, [field]: value }))
   }
-
-  useEffect(() => {
-    // Update preview ID whenever form data changes
-    const newId = generateFormId()
-    setPreviewId(newId)
-  }, [formData])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -174,31 +272,21 @@ export default function F1Upload() {
       const selectedDonor = donors.find(d => d.id === formData.donor_id)
       const selectedState = states.find(s => s.id === formData.state_id)
       const selectedRoom = rooms.find(r => r.id === formData.emergency_room_id)
-      
-      if (!selectedDonor?.short_name || !selectedState?.state_name || !selectedRoom?.err_code) {
-        throw new Error('Missing donor, state, or emergency room information')
-      }
 
-      // Get state code (first 2 letters)
-      const stateCode = selectedState.state_name.substring(0, 2).toUpperCase()
-      
       // Process the file first
       const processFormData = new FormData()
       processFormData.append('file', selectedFile)
 
-      // Add metadata for initial processing
+      // Add metadata for initial processing - use preview ID
       const metadata = {
-        grant_id: previewId,
-        err_code: selectedRoom.err_code,
-        err_name: selectedRoom.name_ar || selectedRoom.name,
-        donor_name: selectedDonor.name,
-        state_name: selectedState.state_name,        // English state name
-        state_name_ar: selectedState.state_name_ar,  // Arabic state name
-        state_id: selectedState.id,                  // State ID for reference
-        primary_sectors: formData.primary_sectors,
-        secondary_sectors: formData.secondary_sectors
+        grant_id: previewId, // Use preview pattern
+        err_code: selectedRoom?.err_code,
+        err_name: selectedRoom?.name_ar || selectedRoom?.name,
+        donor_name: selectedDonor?.name,
+        state_name: selectedState?.state_name,
+        state_name_ar: selectedState?.state_name_ar,
+        state_id: selectedState?.id
       }
-      console.log('Sending metadata:', metadata) // Add this for debugging
       processFormData.append('metadata', JSON.stringify(metadata))
 
       const response = await fetch('/api/fsystem/process', {
@@ -226,31 +314,21 @@ export default function F1Upload() {
   const handleConfirmUpload = async (editedData: any) => {
     setIsLoading(true)
     try {
+      const basePattern = generateBasePattern()
+      if (!basePattern) {
+        throw new Error('Missing required information')
+      }
+
+      // Get and commit the sequence number after user confirms
+      const finalSequenceNumber = await getNextSequenceNumber(basePattern, false)
+      const finalGrantId = `${basePattern}-${finalSequenceNumber}`
+
       const selectedDonor = donors.find(d => d.id === formData.donor_id)
       const selectedState = states.find(s => s.id === formData.state_id)
       const selectedRoom = rooms.find(r => r.id === formData.emergency_room_id)
 
       if (!selectedFile || !selectedDonor?.short_name || !selectedState?.state_name || !selectedRoom?.err_code) {
         throw new Error('Missing required information')
-      }
-
-      // Use state_short instead of first 2 letters
-      const stateCode = selectedState.state_short.toUpperCase()
-
-      // Get file extension and generate path
-      const fileExtension = selectedFile.name.split('.').pop()
-      const filePath = `f1-forms/${selectedDonor.short_name}/${stateCode}/${formData.date}/${previewId}.${fileExtension}`
-
-      // Upload file to Supabase storage
-      const { error: uploadError } = await supabase.storage
-        .from('images')
-        .upload(filePath, selectedFile, {
-          cacheControl: '3600',
-          upsert: false
-        })
-
-      if (uploadError) {
-        throw uploadError
       }
 
       // Get sector names for selected IDs
@@ -271,7 +349,23 @@ export default function F1Upload() {
       const primarySectorNames = primarySectorData.map(s => s.sector_name_en).join(', ')
       const secondarySectorNames = secondarySectorData.map(s => s.sector_name_en).join(', ')
 
-      // Insert into Supabase
+      // Get file extension and generate path
+      const fileExtension = selectedFile.name.split('.').pop()
+      const filePath = `f1-forms/${selectedDonor.short_name}/${selectedState.state_short}/${formData.date}/${finalGrantId}.${fileExtension}`
+      
+      // Upload file to Supabase storage
+      const { error: uploadError } = await supabase.storage
+        .from('images')
+        .upload(filePath, selectedFile, {
+          cacheControl: '3600',
+          upsert: false
+        })
+
+      if (uploadError) {
+        throw uploadError
+      }
+
+      // Insert into Supabase with final grant ID and sectors
       const { error: insertError } = await supabase
         .from('err_projects')
         .insert([{
@@ -281,10 +375,10 @@ export default function F1Upload() {
           project_id: formData.project_id,
           emergency_room_id: formData.emergency_room_id,
           err_id: selectedRoom.err_code,
-          grant_id: previewId,
+          grant_id: finalGrantId,
           status: 'pending',
           source: 'mutual_aid_portal',
-          state: selectedState.state_name,  // Use English state name
+          state: selectedState.state_name,
           "Sector (Primary)": primarySectorNames,
           "Sector (Secondary)": secondarySectorNames
         }])
@@ -293,15 +387,15 @@ export default function F1Upload() {
         throw insertError
       }
 
-      // Update Google Sheet
+      // Update Google Sheet with final grant ID and sectors
       const sheetData = {
         ...editedData,
-        grant_id: previewId,
+        grant_id: finalGrantId,
         err_id: selectedRoom.err_code,
         err_name: selectedRoom.name_ar || selectedRoom.name,
         donor_name: selectedDonor.name,
         emergency_room_id: formData.emergency_room_id,
-        state_name: selectedState.state_name,  // Already using English name here
+        state_name: selectedState.state_name,
         primary_sectors: primarySectorNames,
         secondary_sectors: secondarySectorNames
       }
@@ -550,7 +644,7 @@ export default function F1Upload() {
               </div>
 
               {/* Small Fields in 3 Columns */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <Label className="mb-2">{t('fsystem:f1.date')}</Label>
                   <Input
@@ -567,28 +661,37 @@ export default function F1Upload() {
                   <Input
                     placeholder={t('fsystem:f1.grant_serial_placeholder')}
                     value={formData.grant_serial}
-                    onChange={(e) => handleInputChange('grant_serial', e.target.value)}
-                  />
-                </div>
-
-                <div>
-                  <Label className="mb-2">{t('fsystem:f1.project_id')}</Label>
-                  <Input
-                    placeholder={t('fsystem:f1.project_id_placeholder')}
-                    value={formData.project_id}
-                    onChange={(e) => handleInputChange('project_id', e.target.value)}
+                    onChange={(e) => {
+                      const value = e.target.value
+                      // Only update if it's empty or matches the pattern
+                      if (!value || /^\d{1,4}$/.test(value)) {
+                        handleInputChange('grant_serial', value)
+                      }
+                    }}
+                    maxLength={4}
+                    pattern="[0-9]{4}"
                   />
                 </div>
               </div>
 
-              {previewId && (
-                <div className="pt-4">
-                  <Label className="mb-2">{t('fsystem:f1.generated_id')}</Label>
-                  <div className="mt-1 p-3 bg-muted rounded-md font-mono">
-                    {previewId}
-                  </div>
+              {/* Generated Form ID - Show as soon as we start entering data */}
+              <div className="pt-4">
+                <Label className="mb-2">{t('fsystem:f1.generated_id')}</Label>
+                <div className="mt-1 p-3 bg-muted rounded-md font-mono min-h-[2.5rem] flex items-center">
+                  {previewId || (
+                    <span className="text-muted-foreground text-sm">
+                      {hasRequiredFields() 
+                        ? t('fsystem:f1.generating') 
+                        : t('fsystem:f1.complete_fields')}
+                    </span>
+                  )}
                 </div>
-              )}
+                {previewId && (
+                  <p className="text-sm text-muted-foreground mt-1">
+                    {t('fsystem:f1.preview_note')}
+                  </p>
+                )}
+              </div>
             </div>
           </CardContent>
         </Card>
