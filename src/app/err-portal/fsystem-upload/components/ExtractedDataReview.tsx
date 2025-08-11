@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Button } from '@/components/ui/button'
 import { useTranslation } from 'react-i18next'
-import { Plus, Minus } from 'lucide-react'
+import { Plus, Minus, Check } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface Expense {
@@ -44,37 +44,18 @@ export default function ExtractedDataReview({
   data,
   onConfirm,
   onCancel
-}: {
-  data: ExtractedData;
-  onConfirm: (data: ExtractedData) => void;
-  onCancel: () => void;
-}) {
-  const { t } = useTranslation(['common', 'err', 'fsystem'])
+}: ExtractedDataReviewProps) {
+  const { t } = useTranslation(['common', 'fsystem'])
   const [isSubmitting, setIsSubmitting] = useState(false)
   
   // Initialize state with empty arrays for activities and expenses
   const [editedData, setEditedData] = useState<ExtractedData>({
-    date: data.date || null,
-    state: data.state || null,
-    locality: data.locality || null,
-    project_objectives: data.project_objectives || null,
-    intended_beneficiaries: data.intended_beneficiaries || null,
-    estimated_beneficiaries: data.estimated_beneficiaries || null,
-    estimated_timeframe: data.estimated_timeframe || null,
-    additional_support: data.additional_support || null,
-    banking_details: data.banking_details || null,
-    program_officer_name: data.program_officer_name || null,
-    program_officer_phone: data.program_officer_phone || null,
-    reporting_officer_name: data.reporting_officer_name || null,
-    reporting_officer_phone: data.reporting_officer_phone || null,
-    finance_officer_name: data.finance_officer_name || null,
-    finance_officer_phone: data.finance_officer_phone || null,
+    ...data,
     planned_activities: Array.isArray(data.planned_activities) ? data.planned_activities : [],
     expenses: Array.isArray(data.expenses) ? data.expenses.map(exp => ({
       activity: exp.activity || '',
       total_cost: typeof exp.total_cost === 'number' ? exp.total_cost : 0
-    })) : [],
-    language: data.language || null
+    })) : []
   })
 
   const handleInputChange = (field: keyof ExtractedData, value: any) => {
@@ -132,6 +113,20 @@ export default function ExtractedDataReview({
     }
 
     onConfirm(preparedData)
+  }
+
+  const toggleActivity = (activity: string) => {
+    setEditedData(prev => ({
+      ...prev,
+      planned_activities: prev.planned_activities.includes(activity)
+        ? prev.planned_activities.filter(a => a !== activity)
+        : [...prev.planned_activities, activity]
+    }))
+  }
+
+  // Add function to calculate total expenses
+  const calculateTotalExpenses = () => {
+    return editedData.expenses.reduce((sum, expense) => sum + (expense.total_cost || 0), 0)
   }
 
   return (
@@ -206,81 +201,132 @@ export default function ExtractedDataReview({
         {/* Planned Activities Section */}
         <div>
           <Label className="text-lg font-semibold mb-2">{t('fsystem:review.fields.planned_activities')}</Label>
-          <div className="space-y-1 border rounded-lg p-2">
-            {editedData.planned_activities.map((activity, index) => (
-              <div key={index} className="flex items-center space-x-2">
-                <Input
-                  value={activity}
-                  onChange={(e) => {
-                    const newActivities = [...editedData.planned_activities]
-                    newActivities[index] = e.target.value
-                    handleInputChange('planned_activities', newActivities)
-                  }}
-                />
-              </div>
-            ))}
+          <div className="border rounded-lg overflow-hidden">
+            <table className="w-full">
+              <thead className="bg-muted">
+                <tr>
+                  <th className="px-4 py-2 text-left font-medium">{t('fsystem:review.fields.activity')}</th>
+                  <th className="w-16 px-4 py-2"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.planned_activities.map((activity, index) => (
+                  <tr 
+                    key={index}
+                    className={cn(
+                      "border-t cursor-pointer hover:bg-muted/50 transition-colors",
+                      editedData.planned_activities.includes(activity) && "bg-primary/5"
+                    )}
+                    onClick={() => toggleActivity(activity)}
+                  >
+                    <td className="px-4 py-3">{activity}</td>
+                    <td className="px-4 py-3 text-center">
+                      <div className={cn(
+                        "w-5 h-5 rounded-full border inline-flex items-center justify-center",
+                        editedData.planned_activities.includes(activity)
+                          ? "bg-primary border-primary text-primary-foreground"
+                          : "border-muted-foreground"
+                      )}>
+                        {editedData.planned_activities.includes(activity) && (
+                          <Check className="w-3 h-3" />
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
 
         {/* Expenses Section */}
         <div>
           <Label className="text-lg font-semibold mb-2">{t('fsystem:review.fields.expenses')}</Label>
-          <div className="overflow-x-auto">
+          <div className="border rounded-lg overflow-hidden">
             <table className="w-full">
-              <thead>
+              <thead className="bg-muted">
                 <tr>
-                  <th className="text-left p-2">{t('fsystem:review.fields.activity')}</th>
-                  <th className="text-right p-2">{t('fsystem:review.fields.total_cost')}</th>
-                  <th className="w-10"></th>
+                  <th className="px-4 py-2 text-left font-medium">{t('fsystem:review.fields.activity')}</th>
+                  <th className="px-4 py-2 text-right font-medium">{t('fsystem:review.fields.total_cost')}</th>
+                  <th className="w-16 px-4 py-2"></th>
                 </tr>
               </thead>
               <tbody>
                 {editedData.expenses.map((expense, index) => (
-                  <tr key={index}>
-                    <td className="p-2">
+                  <tr key={index} className="border-t">
+                    <td className="px-4 py-2">
                       <Input
                         value={expense.activity}
                         onChange={(e) => handleExpenseChange(index, 'activity', e.target.value)}
+                        className="border-0 focus-visible:ring-0 px-0 py-0 h-8"
                       />
                     </td>
-                    <td className="p-2">
+                    <td className="px-4 py-2">
                       <Input
                         type="number"
                         value={expense.total_cost}
                         onChange={(e) => handleExpenseChange(index, 'total_cost', parseFloat(e.target.value))}
-                        className="text-right"
+                        className="border-0 focus-visible:ring-0 px-0 py-0 h-8 text-right"
                       />
                     </td>
-                    <td className="p-2">
+                    <td className="px-4 py-2 text-center">
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => {
+                        onClick={(e) => {
+                          e.stopPropagation()
                           const newExpenses = editedData.expenses.filter((_, i) => i !== index)
                           handleInputChange('expenses', newExpenses)
                         }}
+                        className="h-8 w-8 p-0"
                       >
                         ×
                       </Button>
                     </td>
                   </tr>
                 ))}
+                <tr className="border-t bg-muted/50">
+                  <td className="px-4 py-2 font-medium text-right">{t('fsystem:review.fields.total')}</td>
+                  <td className="px-4 py-2 font-medium text-right">{calculateTotalExpenses().toLocaleString()}</td>
+                  <td></td>
+                </tr>
               </tbody>
             </table>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="mt-2"
-              onClick={() => {
-                handleInputChange('expenses', [
-                  ...editedData.expenses,
-                  { activity: '', total_cost: 0 }
-                ])
-              }}
-            >
-              {t('fsystem:review.fields.add_expense')}
-            </Button>
+            <div className="p-4 border-t">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  handleInputChange('expenses', [
+                    ...editedData.expenses,
+                    { activity: '', total_cost: 0 }
+                  ])
+                }}
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                {t('fsystem:review.fields.add_expense')}
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        {/* Additional Support and Banking Details */}
+        <div className="space-y-4">
+          <div>
+            <Label>{t('fsystem:review.fields.additional_support')}</Label>
+            <Textarea
+              value={editedData.additional_support || ''}
+              onChange={(e) => handleInputChange('additional_support', e.target.value)}
+            />
+          </div>
+
+          <div>
+            <Label>{t('fsystem:review.fields.banking_details')}</Label>
+            <Textarea
+              value={editedData.banking_details || ''}
+              onChange={(e) => handleInputChange('banking_details', e.target.value)}
+            />
           </div>
         </div>
 

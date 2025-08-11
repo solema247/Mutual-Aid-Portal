@@ -31,5 +31,43 @@
   "f5": {
     "title": "F5 Form",
     "coming_soon": "F5 form upload coming soon"
+  },
+  "review": {
+    "title": "Review Extracted Data",
+    "description": "Please review and edit the extracted data before final submission",
+    "submit": "Submit",
+    "submitting": "Submitting...",
+    "cancel": "Cancel",
+    "fields": {
+      "date": "Date",
+      "state": "State",
+      "locality": "Locality",
+      "project_objectives": "Project Objectives",
+      "intended_beneficiaries": "Intended Beneficiaries",
+      "estimated_beneficiaries": "Estimated Beneficiaries",
+      "estimated_timeframe": "Estimated Timeframe",
+      "additional_support": "Additional Support",
+      "banking_details": "Banking Details",
+      "planned_activities": "Planned Activities",
+      "expenses": "Expenses",
+      "activity": "Activity",
+      "total_cost": "Total Cost",
+      "total": "Total",
+      "add_expense": "Add Expense",
+      "officers": {
+        "program": "Program Officer",
+        "reporting": "Reporting Officer",
+        "finance": "Finance Officer",
+        "name": "Name",
+        "phone": "Phone"
+      }
+    }
+  },
+  "messages": {
+    "success": "Form uploaded successfully!",
+    "error": "Error uploading form. Please try again.",
+    "missing_file": "Please select a file",
+    "missing_info": "Missing required information",
+    "invalid_file": "Please select a PDF or Word document"
   }
 } 

@@ -31,5 +31,43 @@
   "f5": {
     "title": "نموذج F5",
     "coming_soon": "رفع نموذج F5 قريباً"
+  },
+  "review": {
+    "title": "مراجعة البيانات المستخرجة",
+    "description": "يرجى مراجعة وتحرير البيانات المستخرجة قبل التقديم النهائي",
+    "submit": "تقديم",
+    "submitting": "جاري التقديم...",
+    "cancel": "إلغاء",
+    "fields": {
+      "date": "التاريخ",
+      "state": "الولاية",
+      "locality": "المحلية",
+      "project_objectives": "أهداف المشروع",
+      "intended_beneficiaries": "المستفيدون المستهدفون",
+      "estimated_beneficiaries": "العدد التقديري للمستفيدين",
+      "estimated_timeframe": "الإطار الزمني التقديري",
+      "additional_support": "الدعم الإضافي",
+      "banking_details": "التفاصيل المصرفية",
+      "planned_activities": "الأنشطة المخططة",
+      "expenses": "المصروفات",
+      "activity": "النشاط",
+      "total_cost": "التكلفة الإجمالية",
+      "total": "المجموع",
+      "add_expense": "إضافة مصروف",
+      "officers": {
+        "program": "مسؤول البرنامج",
+        "reporting": "مسؤول التقارير",
+        "finance": "المسؤول المالي",
+        "name": "الاسم",
+        "phone": "رقم الهاتف"
+      }
+    }
+  },
+  "messages": {
+    "success": "تم رفع النموذج بنجاح!",
+    "error": "حدث خطأ أثناء رفع النموذج. يرجى المحاولة مرة أخرى.",
+    "missing_file": "يرجى اختيار ملف",
+    "missing_info": "معلومات مطلوبة مفقودة",
+    "invalid_file": "يرجى اختيار ملف PDF أو Word"
   }
 } 
