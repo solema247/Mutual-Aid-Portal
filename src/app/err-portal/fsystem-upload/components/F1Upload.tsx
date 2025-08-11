@@ -13,7 +13,7 @@ import type { Donor, State, F1FormData, EmergencyRoom } from '@/app/api/fsystem/
 import ExtractedDataReview from './ExtractedDataReview'
 
 export default function F1Upload() {
-  const { t } = useTranslation(['common', 'err'])
+  const { t } = useTranslation(['common', 'fsystem'])
   const [donors, setDonors] = useState<Donor[]>([])
   const [states, setStates] = useState<State[]>([])
   const [rooms, setRooms] = useState<EmergencyRoom[]>([])
@@ -319,7 +319,7 @@ export default function F1Upload() {
             <div className="space-y-4">
               {/* File Upload */}
               <div>
-                <Label className="mb-2">Upload F1 Form (PDF or Word)</Label>
+                <Label className="mb-2">{t('fsystem:f1.upload_label')}</Label>
                 <Input
                   type="file"
                   accept=".pdf,.doc,.docx"
@@ -331,13 +331,13 @@ export default function F1Upload() {
               {/* Main Selectors in One Row */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
-                  <Label className="mb-2">Donor</Label>
+                  <Label className="mb-2">{t('fsystem:f1.donor')}</Label>
                   <Select
                     value={formData.donor_id}
                     onValueChange={(value) => handleInputChange('donor_id', value)}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="Select donor" />
+                      <SelectValue placeholder={t('fsystem:f1.select_donor')} />
                     </SelectTrigger>
                     <SelectContent>
                       {donors.map((donor) => (
@@ -350,13 +350,13 @@ export default function F1Upload() {
                 </div>
 
                 <div>
-                  <Label className="mb-2">State</Label>
+                  <Label className="mb-2">{t('fsystem:f1.state')}</Label>
                   <Select
                     value={formData.state_id}
                     onValueChange={(value) => handleInputChange('state_id', value)}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="Select state" />
+                      <SelectValue placeholder={t('fsystem:f1.select_state')} />
                     </SelectTrigger>
                     <SelectContent>
                       {states.map((state) => (
@@ -369,14 +369,14 @@ export default function F1Upload() {
                 </div>
 
                 <div>
-                  <Label className="mb-2">Emergency Response Room</Label>
+                  <Label className="mb-2">{t('fsystem:f1.emergency_response_room')}</Label>
                   <Select
                     value={formData.emergency_room_id}
                     onValueChange={(value) => handleInputChange('emergency_room_id', value)}
                     disabled={!formData.state_id || rooms.length === 0}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="Select emergency response room" />
+                      <SelectValue placeholder={t('fsystem:f1.select_emergency_room')} />
                     </SelectTrigger>
                     <SelectContent>
                       {rooms.map((room) => (
@@ -392,9 +392,9 @@ export default function F1Upload() {
               {/* Small Fields in 3 Columns */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
-                  <Label className="mb-2">Date (MMYY)</Label>
+                  <Label className="mb-2">{t('fsystem:f1.date')}</Label>
                   <Input
-                    placeholder="1224"
+                    placeholder={t('fsystem:f1.date_placeholder')}
                     value={formData.date}
                     onChange={(e) => handleInputChange('date', e.target.value)}
                     maxLength={4}
@@ -403,18 +403,18 @@ export default function F1Upload() {
                 </div>
 
                 <div>
-                  <Label className="mb-2">Grant Serial</Label>
+                  <Label className="mb-2">{t('fsystem:f1.grant_serial')}</Label>
                   <Input
-                    placeholder="0001"
+                    placeholder={t('fsystem:f1.grant_serial_placeholder')}
                     value={formData.grant_serial}
                     onChange={(e) => handleInputChange('grant_serial', e.target.value)}
                   />
                 </div>
 
                 <div>
-                  <Label className="mb-2">Project ID</Label>
+                  <Label className="mb-2">{t('fsystem:f1.project_id')}</Label>
                   <Input
-                    placeholder="301"
+                    placeholder={t('fsystem:f1.project_id_placeholder')}
                     value={formData.project_id}
                     onChange={(e) => handleInputChange('project_id', e.target.value)}
                   />
@@ -423,7 +423,7 @@ export default function F1Upload() {
 
               {previewId && (
                 <div className="pt-4">
-                  <Label className="mb-2">Generated Form ID</Label>
+                  <Label className="mb-2">{t('fsystem:f1.generated_id')}</Label>
                   <div className="mt-1 p-3 bg-muted rounded-md font-mono">
                     {previewId}
                   </div>
@@ -436,7 +436,7 @@ export default function F1Upload() {
 
       <Button type="submit" disabled={isLoading} className="w-full">
         <FileUp className="w-4 h-4 mr-2" />
-        {isLoading ? 'Uploading...' : 'Upload F1 Form'}
+        {isLoading ? t('fsystem:f1.uploading') : t('fsystem:f1.upload_button')}
       </Button>
     </form>
   )

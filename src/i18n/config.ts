@@ -1,48 +1,54 @@
 import i18n from 'i18next'
 import { initReactI18next } from 'react-i18next'
 
-// Import all translation files
-import enCommon from './locales/en/common.json'
-import enLogin from './locales/en/login.json'
-import enPartner from './locales/en/partner.json'
-import enForecast from './locales/en/forecast.json'
-import enErr from './locales/en/err.json'
-import enRooms from './locales/en/rooms.json'
-import enDashboard from './locales/en/dashboard.json'
-import enUsers from './locales/en/users.json'
-import enProjects from './locales/en/projects.json'
-import arCommon from './locales/ar/common.json'
-import arLogin from './locales/ar/login.json'
-import arPartner from './locales/ar/partner.json'
-import arForecast from './locales/ar/forecast.json'
-import arErr from './locales/ar/err.json'
-import arRooms from './locales/ar/rooms.json'
-import arDashboard from './locales/ar/dashboard.json'
-import arUsers from './locales/ar/users.json'
-import arProjects from './locales/ar/projects.json'
+// English translations
+import commonEN from './locales/en/common.json'
+import dashboardEN from './locales/en/dashboard.json'
+import errEN from './locales/en/err.json'
+import forecastEN from './locales/en/forecast.json'
+import loginEN from './locales/en/login.json'
+import partnerEN from './locales/en/partner.json'
+import projectsEN from './locales/en/projects.json'
+import roomsEN from './locales/en/rooms.json'
+import usersEN from './locales/en/users.json'
+import fsystemEN from './locales/en/fsystem.json'
+
+// Arabic translations
+import commonAR from './locales/ar/common.json'
+import dashboardAR from './locales/ar/dashboard.json'
+import errAR from './locales/ar/err.json'
+import forecastAR from './locales/ar/forecast.json'
+import loginAR from './locales/ar/login.json'
+import partnerAR from './locales/ar/partner.json'
+import projectsAR from './locales/ar/projects.json'
+import roomsAR from './locales/ar/rooms.json'
+import usersAR from './locales/ar/users.json'
+import fsystemAR from './locales/ar/fsystem.json'
 
 const resources = {
   en: {
-    common: enCommon,
-    login: enLogin,
-    partner: enPartner,
-    forecast: enForecast,
-    err: enErr,
-    rooms: enRooms,
-    dashboard: enDashboard,
-    users: enUsers,
-    projects: enProjects
+    common: commonEN,
+    dashboard: dashboardEN,
+    err: errEN,
+    forecast: forecastEN,
+    login: loginEN,
+    partner: partnerEN,
+    projects: projectsEN,
+    rooms: roomsEN,
+    users: usersEN,
+    fsystem: fsystemEN
   },
   ar: {
-    common: arCommon,
-    login: arLogin,
-    partner: arPartner,
-    forecast: arForecast,
-    err: arErr,
-    rooms: arRooms,
-    dashboard: arDashboard,
-    users: arUsers,
-    projects: arProjects
+    common: commonAR,
+    dashboard: dashboardAR,
+    err: errAR,
+    forecast: forecastAR,
+    login: loginAR,
+    partner: partnerAR,
+    projects: projectsAR,
+    rooms: roomsAR,
+    users: usersAR,
+    fsystem: fsystemAR
   }
 }
 
@@ -50,14 +56,24 @@ i18n
   .use(initReactI18next)
   .init({
     resources,
-    lng: typeof window !== 'undefined' ? window.localStorage.getItem('language') || 'en' : 'en',
+    lng: 'en',
     fallbackLng: 'en',
     interpolation: {
       escapeValue: false
     },
-    // Add namespaces
-    ns: ['common', 'login', 'partner', 'forecast', 'err', 'rooms', 'dashboard', 'users', 'projects'],
-    defaultNS: 'common'
+    defaultNS: 'common',
+    ns: [
+      'common',
+      'dashboard',
+      'err',
+      'forecast',
+      'login',
+      'partner',
+      'projects',
+      'rooms',
+      'users',
+      'fsystem'
+    ]
   })
 
 export default i18n 

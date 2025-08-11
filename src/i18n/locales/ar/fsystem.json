@@ -1,0 +1,35 @@
+{
+  "upload": {
+    "title": "رفع نماذج F-System",
+    "description": "رفع ومعالجة نماذج F-System",
+    "form_type": "اختر نوع النموذج",
+    "form_type_desc": "اختر نوع النموذج الذي تريد رفعه"
+  },
+  "f1": {
+    "title": "نموذج F1",
+    "upload_label": "رفع نموذج F1 (PDF أو Word)",
+    "donor": "المانح",
+    "select_donor": "اختر المانح",
+    "state": "الولاية",
+    "select_state": "اختر الولاية",
+    "emergency_response_room": "غرفة الاستجابة للطوارئ",
+    "select_emergency_room": "اختر غرفة الطوارئ",
+    "date": "التاريخ (MMYY)",
+    "date_placeholder": "1224",
+    "grant_serial": "الرقم التسلسلي للمنحة",
+    "grant_serial_placeholder": "0001",
+    "project_id": "رقم المشروع",
+    "project_id_placeholder": "301",
+    "generated_id": "معرف النموذج المُنشأ",
+    "upload_button": "رفع نموذج F1",
+    "uploading": "جاري الرفع..."
+  },
+  "f4": {
+    "title": "نموذج F4",
+    "coming_soon": "رفع نموذج F4 قريباً"
+  },
+  "f5": {
+    "title": "نموذج F5",
+    "coming_soon": "رفع نموذج F5 قريباً"
+  }
+} 

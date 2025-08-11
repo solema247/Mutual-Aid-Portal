@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -49,7 +49,7 @@ export default function ExtractedDataReview({
   onConfirm: (data: ExtractedData) => void;
   onCancel: () => void;
 }) {
-  const { t } = useTranslation(['common', 'err'])
+  const { t } = useTranslation(['common', 'err', 'fsystem'])
   const [isSubmitting, setIsSubmitting] = useState(false)
   
   // Initialize state with empty arrays for activities and expenses
@@ -135,321 +135,223 @@ export default function ExtractedDataReview({
   }
 
   return (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>{t('err:review_extracted_data')}</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {/* Basic Information - 3 columns */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <Label>Date</Label>
-              <Input
-                value={editedData.date || ''}
-                onChange={(e) => handleInputChange('date', e.target.value)}
-              />
-            </div>
-
-            <div>
-              <Label>State</Label>
-              <div className="p-2 bg-muted rounded-md">
-                {editedData.state || ''}
-              </div>
-            </div>
-
-            <div>
-              <Label>Locality</Label>
-              <div className="p-2 bg-muted rounded-md">
-                {editedData.locality || ''}
-              </div>
-            </div>
-
-            <div>
-              <Label>Estimated Timeframe</Label>
-              <Input
-                value={editedData.estimated_timeframe || ''}
-                onChange={(e) => handleInputChange('estimated_timeframe', e.target.value)}
-              />
-            </div>
-
-            <div>
-              <Label>Estimated Beneficiaries</Label>
-              <Input
-                type="number"
-                value={editedData.estimated_beneficiaries || ''}
-                onChange={(e) => handleInputChange('estimated_beneficiaries', parseInt(e.target.value))}
-              />
-            </div>
-          </div>
-
-          {/* Full width fields */}
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="project_objectives">Project Objectives</Label>
-              <Textarea
-                id="project_objectives"
-                value={editedData.project_objectives || ''}
-                onChange={(e) => handleInputChange('project_objectives', e.target.value)}
-                className="min-h-[100px]"
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="intended_beneficiaries">Intended Beneficiaries</Label>
-              <Textarea
-                id="intended_beneficiaries"
-                value={editedData.intended_beneficiaries || ''}
-                onChange={(e) => handleInputChange('intended_beneficiaries', e.target.value)}
-              />
-            </div>
-          </div>
-
-          {/* Planned Activities Section */}
+    <Card>
+      <CardHeader>
+        <CardTitle>{t('fsystem:review.title')}</CardTitle>
+        <CardDescription>{t('fsystem:review.description')}</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        {/* Basic Information - 3 columns */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
-            <Label className="text-lg font-semibold mb-2">Planned Activities</Label>
-            <div className="space-y-1 border rounded-lg p-2">
-              {[
-                'مساندة المستشفيات',
-                'تشغيل المركز الصحي بالحي',
-                'الخدمات (كهرباء، مياه، مواصلات عامة)',
-                'المطبخ المشترك/ تموين',
-                'الاحتياجات و الفعاليات النسوية',
-                'مراكز الإيواء',
-                'الحماية و الإجلاء',
-                'مراكز الأطفال و التعليم البديل'
-              ].map((activity, index) => (
-                <div 
-                  key={index} 
-                  className={cn(
-                    "flex items-center px-3 py-2 rounded hover:bg-muted/50 transition-colors",
-                    editedData.planned_activities.includes(activity) && "bg-muted"
-                  )}
-                >
-                  <button
-                    type="button"
-                    className="flex items-center gap-3 w-full focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 rounded"
-                    onClick={() => {
-                      const newActivities = editedData.planned_activities.includes(activity)
-                        ? editedData.planned_activities.filter(a => a !== activity)
-                        : [...editedData.planned_activities, activity];
-                      handleInputChange('planned_activities', newActivities);
-                    }}
-                  >
-                    <div 
-                      className={cn(
-                        "flex h-4 w-4 shrink-0 items-center justify-center rounded border",
-                        editedData.planned_activities.includes(activity)
-                          ? "border-primary bg-primary text-primary-foreground"
-                          : "border-muted"
-                      )}
-                    >
-                      {editedData.planned_activities.includes(activity) && (
-                        <svg
-                          width="10"
-                          height="10"
-                          viewBox="0 0 16 16"
-                          fill="none"
-                          xmlns="http://www.w3.org/2000/svg"
-                        >
-                          <path
-                            d="M13.3334 4L6.00008 11.3333L2.66675 8"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          />
-                        </svg>
-                      )}
-                    </div>
-                    <span className="text-sm">{activity}</span>
-                  </button>
-                </div>
-              ))}
+            <Label>{t('fsystem:review.fields.date')}</Label>
+            <Input
+              value={editedData.date || ''}
+              onChange={(e) => handleInputChange('date', e.target.value)}
+            />
+          </div>
+
+          <div>
+            <Label>{t('fsystem:review.fields.state')}</Label>
+            <div className="p-2 bg-muted rounded-md">
+              {editedData.state || ''}
             </div>
           </div>
 
-          {/* Expenses Section */}
           <div>
-            <Label className="text-lg font-semibold mb-2">Expenses</Label>
-            <div className="overflow-x-auto">
-              <table className="w-full border-collapse border">
-                <thead>
-                  <tr className="bg-muted">
-                    <th className="border p-2 text-right">Activity</th>
-                    <th className="border p-2 text-right">Total Cost</th>
-                    <th className="border p-2 w-10"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {editedData.expenses.map((expense, index) => (
-                    <tr key={index}>
-                      <td className="border p-2">
-                        <Input
-                          value={expense.activity}
-                          onChange={(e) => handleExpenseChange(index, 'activity', e.target.value)}
-                          className="w-full"
-                        />
-                      </td>
-                      <td className="border p-2">
-                        <Input
-                          type="number"
-                          value={expense.total_cost || ''}
-                          onChange={(e) => handleExpenseChange(index, 'total_cost', e.target.value ? parseFloat(e.target.value) : null)}
-                          className="w-full"
-                        />
-                      </td>
-                      <td className="border p-2 text-center">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive"
-                          onClick={() => {
-                            setEditedData(prev => ({
-                              ...prev,
-                              expenses: prev.expenses.filter((_, i) => i !== index)
-                            }));
-                          }}
-                        >
-                          <svg
-                            width="16"
-                            height="16"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          >
-                            <path d="M3 6h18" />
-                            <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
-                            <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
-                          </svg>
-                          <span className="sr-only">Delete expense</span>
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-                <tfoot>
-                  <tr className="bg-muted">
-                    <td className="border p-2 text-right font-bold">
-                      Total Cost
+            <Label>{t('fsystem:review.fields.locality')}</Label>
+            <div className="p-2 bg-muted rounded-md">
+              {editedData.locality || ''}
+            </div>
+          </div>
+
+          <div>
+            <Label>{t('fsystem:review.fields.estimated_timeframe')}</Label>
+            <Input
+              value={editedData.estimated_timeframe || ''}
+              onChange={(e) => handleInputChange('estimated_timeframe', e.target.value)}
+            />
+          </div>
+
+          <div>
+            <Label>{t('fsystem:review.fields.estimated_beneficiaries')}</Label>
+            <Input
+              type="number"
+              value={editedData.estimated_beneficiaries || ''}
+              onChange={(e) => handleInputChange('estimated_beneficiaries', parseInt(e.target.value))}
+            />
+          </div>
+        </div>
+
+        {/* Full width fields */}
+        <div className="space-y-4">
+          <div>
+            <Label>{t('fsystem:review.fields.project_objectives')}</Label>
+            <Textarea
+              value={editedData.project_objectives || ''}
+              onChange={(e) => handleInputChange('project_objectives', e.target.value)}
+              className="min-h-[100px]"
+            />
+          </div>
+
+          <div>
+            <Label>{t('fsystem:review.fields.intended_beneficiaries')}</Label>
+            <Textarea
+              value={editedData.intended_beneficiaries || ''}
+              onChange={(e) => handleInputChange('intended_beneficiaries', e.target.value)}
+            />
+          </div>
+        </div>
+
+        {/* Planned Activities Section */}
+        <div>
+          <Label className="text-lg font-semibold mb-2">{t('fsystem:review.fields.planned_activities')}</Label>
+          <div className="space-y-1 border rounded-lg p-2">
+            {editedData.planned_activities.map((activity, index) => (
+              <div key={index} className="flex items-center space-x-2">
+                <Input
+                  value={activity}
+                  onChange={(e) => {
+                    const newActivities = [...editedData.planned_activities]
+                    newActivities[index] = e.target.value
+                    handleInputChange('planned_activities', newActivities)
+                  }}
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Expenses Section */}
+        <div>
+          <Label className="text-lg font-semibold mb-2">{t('fsystem:review.fields.expenses')}</Label>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr>
+                  <th className="text-left p-2">{t('fsystem:review.fields.activity')}</th>
+                  <th className="text-right p-2">{t('fsystem:review.fields.total_cost')}</th>
+                  <th className="w-10"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {editedData.expenses.map((expense, index) => (
+                  <tr key={index}>
+                    <td className="p-2">
+                      <Input
+                        value={expense.activity}
+                        onChange={(e) => handleExpenseChange(index, 'activity', e.target.value)}
+                      />
                     </td>
-                    <td colSpan={2} className="border p-2 font-bold">
-                      ${editedData.expenses.reduce((sum, expense) => sum + (expense.total_cost || 0), 0).toFixed(2)}
+                    <td className="p-2">
+                      <Input
+                        type="number"
+                        value={expense.total_cost}
+                        onChange={(e) => handleExpenseChange(index, 'total_cost', parseFloat(e.target.value))}
+                        className="text-right"
+                      />
+                    </td>
+                    <td className="p-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          const newExpenses = editedData.expenses.filter((_, i) => i !== index)
+                          handleInputChange('expenses', newExpenses)
+                        }}
+                      >
+                        ×
+                      </Button>
                     </td>
                   </tr>
-                </tfoot>
-              </table>
-            </div>
-            <Button 
-              type="button" 
-              variant="outline" 
-              size="sm" 
-              onClick={() => {
-                setEditedData(prev => ({
-                  ...prev,
-                  expenses: [...prev.expenses, { activity: '', total_cost: 0 }]
-                }))
-              }}
+                ))}
+              </tbody>
+            </table>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
               className="mt-2"
+              onClick={() => {
+                handleInputChange('expenses', [
+                  ...editedData.expenses,
+                  { activity: '', total_cost: 0 }
+                ])
+              }}
             >
-              <Plus className="h-4 w-4 mr-1" />
-              Add Expense
+              {t('fsystem:review.fields.add_expense')}
             </Button>
           </div>
+        </div>
 
-          {/* Contact Information - 2 columns */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-4">
-              <div>
-                <Label>Program Officer</Label>
-                <div className="grid grid-cols-2 gap-2">
-                  <Input
-                    value={editedData.program_officer_name || ''}
-                    onChange={(e) => handleInputChange('program_officer_name', e.target.value)}
-                    placeholder="Name"
-                  />
-                  <Input
-                    value={editedData.program_officer_phone || ''}
-                    onChange={(e) => handleInputChange('program_officer_phone', e.target.value)}
-                    placeholder="Phone"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <Label>Reporting Officer</Label>
-                <div className="grid grid-cols-2 gap-2">
-                  <Input
-                    value={editedData.reporting_officer_name || ''}
-                    onChange={(e) => handleInputChange('reporting_officer_name', e.target.value)}
-                    placeholder="Name"
-                  />
-                  <Input
-                    value={editedData.reporting_officer_phone || ''}
-                    onChange={(e) => handleInputChange('reporting_officer_phone', e.target.value)}
-                    placeholder="Phone"
-                  />
-                </div>
+        {/* Contact Information - 2 columns */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-4">
+            <div>
+              <Label>{t('fsystem:review.fields.officers.program')}</Label>
+              <div className="grid grid-cols-2 gap-2">
+                <Input
+                  value={editedData.program_officer_name || ''}
+                  onChange={(e) => handleInputChange('program_officer_name', e.target.value)}
+                  placeholder={t('fsystem:review.fields.officers.name')}
+                />
+                <Input
+                  value={editedData.program_officer_phone || ''}
+                  onChange={(e) => handleInputChange('program_officer_phone', e.target.value)}
+                  placeholder={t('fsystem:review.fields.officers.phone')}
+                />
               </div>
             </div>
 
-            <div className="space-y-4">
-              <div>
-                <Label>Finance Officer</Label>
-                <div className="grid grid-cols-2 gap-2">
-                  <Input
-                    value={editedData.finance_officer_name || ''}
-                    onChange={(e) => handleInputChange('finance_officer_name', e.target.value)}
-                    placeholder="Name"
-                  />
-                  <Input
-                    value={editedData.finance_officer_phone || ''}
-                    onChange={(e) => handleInputChange('finance_officer_phone', e.target.value)}
-                    placeholder="Phone"
-                  />
-                </div>
+            <div>
+              <Label>{t('fsystem:review.fields.officers.reporting')}</Label>
+              <div className="grid grid-cols-2 gap-2">
+                <Input
+                  value={editedData.reporting_officer_name || ''}
+                  onChange={(e) => handleInputChange('reporting_officer_name', e.target.value)}
+                  placeholder={t('fsystem:review.fields.officers.name')}
+                />
+                <Input
+                  value={editedData.reporting_officer_phone || ''}
+                  onChange={(e) => handleInputChange('reporting_officer_phone', e.target.value)}
+                  placeholder={t('fsystem:review.fields.officers.phone')}
+                />
               </div>
             </div>
           </div>
 
-          <div>
-            <Label htmlFor="additional_support">Additional Support</Label>
-            <Textarea
-              id="additional_support"
-              value={editedData.additional_support || ''}
-              onChange={(e) => handleInputChange('additional_support', e.target.value)}
-              rows={3}
-            />
+          <div className="space-y-4">
+            <div>
+              <Label>{t('fsystem:review.fields.officers.finance')}</Label>
+              <div className="grid grid-cols-2 gap-2">
+                <Input
+                  value={editedData.finance_officer_name || ''}
+                  onChange={(e) => handleInputChange('finance_officer_name', e.target.value)}
+                  placeholder={t('fsystem:review.fields.officers.name')}
+                />
+                <Input
+                  value={editedData.finance_officer_phone || ''}
+                  onChange={(e) => handleInputChange('finance_officer_phone', e.target.value)}
+                  placeholder={t('fsystem:review.fields.officers.phone')}
+                />
+              </div>
+            </div>
           </div>
+        </div>
 
-          <div>
-            <Label htmlFor="banking_details">Banking Details</Label>
-            <Textarea
-              id="banking_details"
-              value={editedData.banking_details || ''}
-              onChange={(e) => handleInputChange('banking_details', e.target.value)}
-              rows={3}
-            />
-          </div>
-        </CardContent>
-      </Card>
-
-      <div className="flex justify-end space-x-4 mt-8">
-        <Button variant="outline" onClick={onCancel}>
-          Cancel
-        </Button>
-        <Button 
-          onClick={handleConfirm} 
-          className="bg-green-600 hover:bg-green-700"
-          disabled={isSubmitting}
-        >
-          {isSubmitting ? 'Uploading...' : 'Confirm and Upload'}
-        </Button>
-      </div>
-    </div>
+        <div className="flex justify-end space-x-4 mt-8">
+          <Button variant="outline" onClick={onCancel}>
+            {t('fsystem:review.cancel')}
+          </Button>
+          <Button 
+            onClick={handleConfirm} 
+            disabled={isSubmitting}
+            className="bg-green-600 hover:bg-green-700"
+          >
+            {isSubmitting ? t('fsystem:review.submitting') : t('fsystem:review.submit')}
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
   )
 } 

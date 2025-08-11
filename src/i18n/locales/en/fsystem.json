@@ -1,0 +1,35 @@
+{
+  "upload": {
+    "title": "F-System Upload",
+    "description": "Upload and process F-System forms",
+    "form_type": "Select Form Type",
+    "form_type_desc": "Choose the type of form you want to upload"
+  },
+  "f1": {
+    "title": "F1 Form",
+    "upload_label": "Upload F1 Form (PDF or Word)",
+    "donor": "Donor",
+    "select_donor": "Select donor",
+    "state": "State",
+    "select_state": "Select state",
+    "emergency_response_room": "Emergency Response Room",
+    "select_emergency_room": "Select emergency response room",
+    "date": "Date (MMYY)",
+    "date_placeholder": "1224",
+    "grant_serial": "Grant Serial",
+    "grant_serial_placeholder": "0001",
+    "project_id": "Project ID",
+    "project_id_placeholder": "301",
+    "generated_id": "Generated Form ID",
+    "upload_button": "Upload F1 Form",
+    "uploading": "Uploading..."
+  },
+  "f4": {
+    "title": "F4 Form",
+    "coming_soon": "F4 form upload coming soon"
+  },
+  "f5": {
+    "title": "F5 Form",
+    "coming_soon": "F5 form upload coming soon"
+  }
+} 
