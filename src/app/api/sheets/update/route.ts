@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { google } from 'googleapis'
 import path from 'path'
+import { supabase } from '@/lib/supabaseClient'
+import OpenAI from 'openai'
 
 // Initialize Google Sheets
 const auth = new google.auth.GoogleAuth({
@@ -10,18 +12,83 @@ const auth = new google.auth.GoogleAuth({
 
 const sheets = google.sheets({ version: 'v4', auth })
 
+// Initialize OpenAI
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY
+})
+
+async function translateToEnglish(text: string): Promise<string> {
+  try {
+    const completion = await openai.chat.completions.create({
+      model: "gpt-3.5-turbo",
+      messages: [
+        {
+          role: "system",
+          content: "You are a translator. Translate the given Arabic text to English. Keep any numbers and special characters as is. Return ONLY the translated text, nothing else."
+        },
+        {
+          role: "user",
+          content: text
+        }
+      ],
+      temperature: 0.3
+    })
+
+    return completion.choices[0]?.message?.content || text
+  } catch (error) {
+    console.error('Translation error:', error)
+    return text
+  }
+}
+
 export async function POST(req: Request) {
   try {
     const data = await req.json()
     
+    console.log('Received data:', {
+      emergency_room_id: data.emergency_room_id,
+      err_id: data.err_id,
+      err_name: data.err_name
+    })
+    
+    // Get English ERR name from emergency_rooms table
+    const { data: roomData, error: roomError } = await supabase
+      .from('emergency_rooms')
+      .select('name, name_ar, err_code')
+      .eq('id', data.emergency_room_id)
+      .single()
+
+    if (roomError) {
+      console.error('Error fetching ERR name:', roomError)
+      console.error('emergency_room_id:', data.emergency_room_id)
+    } else {
+      console.log('Successfully fetched room data:', roomData)
+    }
+
+    // Translate necessary fields
+    const [
+      translatedState,
+      translatedObjectives,
+      translatedTimeframe,
+      translatedSupport
+    ] = await Promise.all([
+      translateToEnglish(data.state),
+      translateToEnglish(data.project_objectives),
+      translateToEnglish(data.estimated_timeframe),
+      translateToEnglish(data.additional_support)
+    ])
+
     // Calculate total USD from expenses
     const totalUSD = data.expenses.reduce((sum: number, exp: any) => sum + (exp.total_cost || 0), 0)
+
+    console.log('Room data:', roomData)
+    console.log('Using ERR name:', roomData?.name)
 
     // Prepare row data for Google Sheets
     const sheetRow = [
       data.grant_id,                          // Serial Number
-      data.err_id,                           // ERR CODE
-      data.err_name,                         // ERR Name
+      roomData?.err_code || data.err_id,      // ERR CODE
+      roomData?.name || '',                   // ERR Name (English)
       'Pending',                             // Project Status
       new Date().toLocaleDateString(),       // F1 Date of Submitted
       '',                                    // Overdue
@@ -29,11 +96,11 @@ export async function POST(req: Request) {
       '',                                    // # of Base ERR
       data.donor_name,                       // Project Donor
       '',                                    // Partner
-      data.state,                            // State
+      translatedState,                       // State (translated)
       '',                                    // Responsible
       '',                                    // Sector (Primary)
       '',                                    // Sector (Secondary)
-      data.project_objectives,               // Description of ERRs activity
+      translatedObjectives,                  // Description of ERRs activity (translated)
       data.estimated_beneficiaries,          // Target (Ind.)
       '',                                    // Target (Fam.)
       '',                                    // MOU Signed
@@ -43,7 +110,7 @@ export async function POST(req: Request) {
       '',                                    // Rate
       '',                                    // Start Date (Activity)
       '',                                    // End Date (Activity)
-      '',                                    // Activity Duration
+      translatedTimeframe,                   // Activity Duration (translated)
       '',                                    // F4
       '',                                    // F5
       '',                                    // Date report completed
@@ -58,13 +125,13 @@ export async function POST(req: Request) {
       '',                                    // People with special needs
       '',                                    // Lessons learned
       '',                                    // Challenges
-      '',                                    // Recommendations
+      translatedSupport,                     // Additional Support (translated)
       '',                                    // Comments
       ''                                     // Grant Segment
     ]
 
     // Append to Google Sheet
-    await sheets.spreadsheets.values.append({
+    const response = await sheets.spreadsheets.values.append({
       spreadsheetId: process.env.GOOGLE_SHEET_ID,
       range: 'Activities!A:AQ',
       valueInputOption: 'USER_ENTERED',
@@ -73,6 +140,7 @@ export async function POST(req: Request) {
       },
     })
 
+    console.log('Sheet response:', response.data)
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error('Error updating Google Sheet:', error)

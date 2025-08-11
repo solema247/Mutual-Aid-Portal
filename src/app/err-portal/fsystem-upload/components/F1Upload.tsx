@@ -257,7 +257,8 @@ export default function F1Upload() {
         grant_id: previewId,
         err_id: selectedRoom.err_code,
         err_name: selectedRoom.name_ar || selectedRoom.name,
-        donor_name: selectedDonor.name
+        donor_name: selectedDonor.name,
+        emergency_room_id: formData.emergency_room_id  // Add this line
       }
 
       const sheetResponse = await fetch('/api/sheets/update', {
