@@ -224,7 +224,7 @@ export default function ExtractedDataReview({
                       <div className={cn(
                         "w-5 h-5 rounded-full border inline-flex items-center justify-center",
                         editedData.planned_activities.includes(activity)
-                          ? "bg-primary border-primary text-primary-foreground"
+                          ? "bg-emerald-100 border-emerald-200 text-emerald-700"
                           : "border-muted-foreground"
                       )}>
                         {editedData.planned_activities.includes(activity) && (

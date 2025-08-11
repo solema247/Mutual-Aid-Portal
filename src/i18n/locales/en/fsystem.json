@@ -21,6 +21,10 @@
     "project_id": "Project ID",
     "project_id_placeholder": "301",
     "generated_id": "Generated Form ID",
+    "primary_sectors": "Primary Sectors",
+    "secondary_sectors": "Secondary Sectors",
+    "select_primary_sectors": "Select primary sectors",
+    "select_secondary_sectors": "Select secondary sectors",
     "upload_button": "Upload F1 Form",
     "uploading": "Uploading..."
   },

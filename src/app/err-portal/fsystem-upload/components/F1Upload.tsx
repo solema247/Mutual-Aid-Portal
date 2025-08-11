@@ -9,14 +9,18 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Button } from '@/components/ui/button'
 import { FileUp } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
-import type { Donor, State, F1FormData, EmergencyRoom } from '@/app/api/fsystem/types/fsystem'
+import type { Donor, State, F1FormData, EmergencyRoom, Sector } from '@/app/api/fsystem/types/fsystem'
 import ExtractedDataReview from './ExtractedDataReview'
+import { cn } from '@/lib/utils'
+import { MultiSelect, MultiSelectContent, MultiSelectItem, MultiSelectTrigger, MultiSelectValue } from "@/components/ui/multi-select"
+import { X } from 'lucide-react'
 
 export default function F1Upload() {
   const { t } = useTranslation(['common', 'fsystem'])
   const [donors, setDonors] = useState<Donor[]>([])
   const [states, setStates] = useState<State[]>([])
   const [rooms, setRooms] = useState<EmergencyRoom[]>([])
+  const [sectors, setSectors] = useState<Sector[]>([])
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [formData, setFormData] = useState<F1FormData>({
     donor_id: '',
@@ -25,7 +29,9 @@ export default function F1Upload() {
     grant_serial: '',
     project_id: '',
     emergency_room_id: '',
-    file: null
+    file: null,
+    primary_sectors: [],
+    secondary_sectors: []
   })
   const [isLoading, setIsLoading] = useState(false)
   const [previewId, setPreviewId] = useState('')
@@ -47,7 +53,7 @@ export default function F1Upload() {
         // Fetch states with distinct state names
         const { data: statesData, error: statesError } = await supabase
           .from('states')
-          .select('id, state_name, state_name_ar')
+          .select('id, state_name, state_name_ar, state_short')
           .not('state_name', 'is', null)  // Ensure state_name is not null
           .order('state_name')
 
@@ -59,6 +65,15 @@ export default function F1Upload() {
         )
         
         setStates(uniqueStates)
+
+        // Fetch sectors
+        const { data: sectorsData, error: sectorsError } = await supabase
+          .from('sectors')
+          .select('*')
+          .order('sector_name_en')
+
+        if (sectorsError) throw sectorsError
+        setSectors(sectorsData)
       } catch (error) {
         console.error('Error fetching data:', error)
       }
@@ -126,10 +141,10 @@ export default function F1Upload() {
     const selectedState = states.find(s => s.id === formData.state_id)
     const selectedRoom = rooms.find(r => r.id === formData.emergency_room_id)
     
-    if (!selectedDonor?.short_name || !selectedState?.state_name || !selectedRoom?.err_code) return ''
+    if (!selectedDonor?.short_name || !selectedState?.state_short || !selectedRoom?.err_code) return ''
 
-    // Get state code (first 2 letters)
-    const stateCode = selectedState.state_name.substring(0, 2).toUpperCase()
+    // Use state_short instead of first 2 letters
+    const stateCode = selectedState.state_short.toUpperCase()
     
     // Format date (MMYY)
     const dateStr = formData.date
@@ -137,7 +152,7 @@ export default function F1Upload() {
     return `LCC-${selectedDonor.short_name}-${stateCode}-${dateStr}-${formData.grant_serial}-${formData.project_id}`
   }
 
-  const handleInputChange = (field: keyof F1FormData, value: string) => {
+  const handleInputChange = (field: keyof F1FormData, value: string | string[]) => {
     setFormData(prev => ({ ...prev, [field]: value }))
   }
 
@@ -179,7 +194,9 @@ export default function F1Upload() {
         donor_name: selectedDonor.name,
         state_name: selectedState.state_name,        // English state name
         state_name_ar: selectedState.state_name_ar,  // Arabic state name
-        state_id: selectedState.id                   // State ID for reference
+        state_id: selectedState.id,                  // State ID for reference
+        primary_sectors: formData.primary_sectors,
+        secondary_sectors: formData.secondary_sectors
       }
       console.log('Sending metadata:', metadata) // Add this for debugging
       processFormData.append('metadata', JSON.stringify(metadata))
@@ -217,13 +234,13 @@ export default function F1Upload() {
         throw new Error('Missing required information')
       }
 
-      // Get state code (first 2 letters)
-      const stateCode = selectedState.state_name.substring(0, 2).toUpperCase()
+      // Use state_short instead of first 2 letters
+      const stateCode = selectedState.state_short.toUpperCase()
 
       // Get file extension and generate path
       const fileExtension = selectedFile.name.split('.').pop()
       const filePath = `f1-forms/${selectedDonor.short_name}/${stateCode}/${formData.date}/${previewId}.${fileExtension}`
-      
+
       // Upload file to Supabase storage
       const { error: uploadError } = await supabase.storage
         .from('images')
@@ -235,6 +252,24 @@ export default function F1Upload() {
       if (uploadError) {
         throw uploadError
       }
+
+      // Get sector names for selected IDs
+      const { data: primarySectorData, error: primaryError } = await supabase
+        .from('sectors')
+        .select('sector_name_en')
+        .in('id', formData.primary_sectors)
+
+      if (primaryError) throw primaryError
+
+      const { data: secondarySectorData, error: secondaryError } = await supabase
+        .from('sectors')
+        .select('sector_name_en')
+        .in('id', formData.secondary_sectors)
+
+      if (secondaryError) throw secondaryError
+
+      const primarySectorNames = primarySectorData.map(s => s.sector_name_en).join(', ')
+      const secondarySectorNames = secondarySectorData.map(s => s.sector_name_en).join(', ')
 
       // Insert into Supabase
       const { error: insertError } = await supabase
@@ -249,7 +284,9 @@ export default function F1Upload() {
           grant_id: previewId,
           status: 'pending',
           source: 'mutual_aid_portal',
-          state: selectedState.state_name  // Use English state name instead of Arabic
+          state: selectedState.state_name,  // Use English state name
+          "Sector (Primary)": primarySectorNames,
+          "Sector (Secondary)": secondarySectorNames
         }])
 
       if (insertError) {
@@ -264,7 +301,9 @@ export default function F1Upload() {
         err_name: selectedRoom.name_ar || selectedRoom.name,
         donor_name: selectedDonor.name,
         emergency_room_id: formData.emergency_room_id,
-        state_name: selectedState.state_name  // Already using English name here
+        state_name: selectedState.state_name,  // Already using English name here
+        primary_sectors: primarySectorNames,
+        secondary_sectors: secondarySectorNames
       }
 
       const sheetResponse = await fetch('/api/sheets/update', {
@@ -287,7 +326,9 @@ export default function F1Upload() {
         grant_serial: '',
         project_id: '',
         emergency_room_id: '',
-        file: null
+        file: null,
+        primary_sectors: [],
+        secondary_sectors: []
       })
       setSelectedFile(null)
       setPreviewId('')
@@ -392,6 +433,119 @@ export default function F1Upload() {
                       ))}
                     </SelectContent>
                   </Select>
+                </div>
+              </div>
+
+              {/* Sector Selection */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label className="mb-2">{t('fsystem:f1.primary_sectors')}</Label>
+                  <Select
+                    value={formData.primary_sectors[0] || ''}
+                    onValueChange={(value) => {
+                      if (!value) return
+                      const newValues = [...formData.primary_sectors]
+                      if (!newValues.includes(value)) {
+                        newValues.push(value)
+                        handleInputChange('primary_sectors', newValues)
+                      }
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder={t('fsystem:f1.select_primary_sectors')}>
+                        {formData.primary_sectors.length > 0
+                          ? `${formData.primary_sectors.length} selected`
+                          : t('fsystem:f1.select_primary_sectors')}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {sectors
+                        .filter(sector => !formData.primary_sectors.includes(sector.id))
+                        .map((sector) => (
+                          <SelectItem key={sector.id} value={sector.id}>
+                            {sector.sector_name_en} {sector.sector_name_ar && `(${sector.sector_name_ar})`}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                  {formData.primary_sectors.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {formData.primary_sectors.map(sectorId => {
+                        const sector = sectors.find(s => s.id === sectorId)
+                        if (!sector) return null
+                        return (
+                          <Button
+                            key={sector.id}
+                            variant="secondary"
+                            size="sm"
+                            className="bg-emerald-100 hover:bg-emerald-200 text-emerald-700 border-emerald-200"
+                            onClick={() => {
+                              const newValues = formData.primary_sectors.filter(id => id !== sector.id)
+                              handleInputChange('primary_sectors', newValues)
+                            }}
+                          >
+                            {sector.sector_name_en}
+                            <X className="w-4 h-4 ml-2" />
+                          </Button>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <Label className="mb-2">{t('fsystem:f1.secondary_sectors')}</Label>
+                  <Select
+                    value={formData.secondary_sectors[0] || ''}
+                    onValueChange={(value) => {
+                      if (!value) return
+                      const newValues = [...formData.secondary_sectors]
+                      if (!newValues.includes(value)) {
+                        newValues.push(value)
+                        handleInputChange('secondary_sectors', newValues)
+                      }
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder={t('fsystem:f1.select_secondary_sectors')}>
+                        {formData.secondary_sectors.length > 0
+                          ? `${formData.secondary_sectors.length} selected`
+                          : t('fsystem:f1.select_secondary_sectors')}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {sectors
+                        .filter(sector => !formData.secondary_sectors.includes(sector.id))
+                        .map((sector) => (
+                          <SelectItem key={sector.id} value={sector.id}>
+                            {sector.sector_name_en} {sector.sector_name_ar && `(${sector.sector_name_ar})`}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                  {formData.secondary_sectors.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {formData.secondary_sectors.map(sectorId => {
+                        const sector = sectors.find(s => s.id === sectorId)
+                        if (!sector) return null
+                        return (
+                          <Button
+                            key={sector.id}
+                            variant="secondary"
+                            size="sm"
+                            className="bg-emerald-100 hover:bg-emerald-200 text-emerald-700 border-emerald-200"
+                            onClick={() => {
+                              const newValues = formData.secondary_sectors.filter(id => id !== sector.id)
+                              handleInputChange('secondary_sectors', newValues)
+                            }}
+                          >
+                            {sector.sector_name_en}
+                            <X className="w-4 h-4 ml-2" />
+                          </Button>
+                        )
+                      })}
+                    </div>
+                  )}
                 </div>
               </div>
 

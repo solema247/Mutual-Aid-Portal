@@ -21,6 +21,10 @@
     "project_id": "رقم المشروع",
     "project_id_placeholder": "301",
     "generated_id": "معرف النموذج المُنشأ",
+    "primary_sectors": "القطاعات الرئيسية",
+    "secondary_sectors": "القطاعات الثانوية",
+    "select_primary_sectors": "اختر القطاعات الرئيسية",
+    "select_secondary_sectors": "اختر القطاعات الثانوية",
     "upload_button": "رفع نموذج F1",
     "uploading": "جاري الرفع..."
   },

@@ -97,8 +97,8 @@ export async function POST(req: Request) {
       '',                                    // Partner
       data.state_name,                       // State (English)
       '',                                    // Responsible
-      '',                                    // Sector (Primary)
-      '',                                    // Sector (Secondary)
+      data.primary_sectors || '',            // Sector (Primary)
+      data.secondary_sectors || '',          // Sector (Secondary)
       translatedObjectives,                  // Description of ERRs activity (translated)
       data.estimated_beneficiaries,          // Target (Ind.)
       '',                                    // Target (Fam.)

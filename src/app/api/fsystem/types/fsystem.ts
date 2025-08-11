@@ -10,6 +10,7 @@ export interface State {
   id: string;
   state_name: string;
   state_name_ar: string | null;
+  state_short: string;
   locality?: string | null;
   locality_ar?: string | null;
 }
@@ -22,6 +23,8 @@ export interface F1FormData {
   project_id: string;
   emergency_room_id: string;
   file: File | null;
+  primary_sectors: string[];
+  secondary_sectors: string[];
 }
 
 export interface F1FormResponse {
@@ -38,4 +41,10 @@ export interface EmergencyRoom {
   status: string;
   state_reference: string;
   type: 'state' | 'base';
+}
+
+export interface Sector {
+  id: string;
+  sector_name_en: string;
+  sector_name_ar: string | null;
 } 
