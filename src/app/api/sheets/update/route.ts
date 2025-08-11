@@ -48,7 +48,8 @@ export async function POST(req: Request) {
     console.log('Received data:', {
       emergency_room_id: data.emergency_room_id,
       err_id: data.err_id,
-      err_name: data.err_name
+      err_name: data.err_name,
+      state_name: data.state_name
     })
     
     // Get English ERR name from emergency_rooms table
@@ -65,14 +66,12 @@ export async function POST(req: Request) {
       console.log('Successfully fetched room data:', roomData)
     }
 
-    // Translate necessary fields
+    // Translate necessary fields (excluding state)
     const [
-      translatedState,
       translatedObjectives,
       translatedTimeframe,
       translatedSupport
     ] = await Promise.all([
-      translateToEnglish(data.state),
       translateToEnglish(data.project_objectives),
       translateToEnglish(data.estimated_timeframe),
       translateToEnglish(data.additional_support)
@@ -96,7 +95,7 @@ export async function POST(req: Request) {
       '',                                    // # of Base ERR
       data.donor_name,                       // Project Donor
       '',                                    // Partner
-      translatedState,                       // State (translated)
+      data.state_name,                       // State (English)
       '',                                    // Responsible
       '',                                    // Sector (Primary)
       '',                                    // Sector (Secondary)

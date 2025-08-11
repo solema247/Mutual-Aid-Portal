@@ -334,6 +334,15 @@ Return all fields in this format:
       // Add language detection
       const detectedLanguage = detectLanguage(text)
       structuredData.language = detectedLanguage
+
+      // Override the state from OCR with the selected state from form metadata
+      if (formMetadata.state_name_ar) {
+        console.log('Overriding OCR state with selected state:', {
+          original: structuredData.state,
+          new: formMetadata.state_name_ar
+        })
+        structuredData.state = formMetadata.state_name_ar
+      }
       
       console.log('Validated data:', structuredData)
       return NextResponse.json(structuredData)

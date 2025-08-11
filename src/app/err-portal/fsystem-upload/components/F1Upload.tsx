@@ -171,13 +171,17 @@ export default function F1Upload() {
       const processFormData = new FormData()
       processFormData.append('file', selectedFile)
 
-      // Add metadata for Google Sheets
+      // Add metadata for initial processing
       const metadata = {
         grant_id: previewId,
         err_code: selectedRoom.err_code,
         err_name: selectedRoom.name_ar || selectedRoom.name,
-        donor_name: selectedDonor.name
+        donor_name: selectedDonor.name,
+        state_name: selectedState.state_name,        // English state name
+        state_name_ar: selectedState.state_name_ar,  // Arabic state name
+        state_id: selectedState.id                   // State ID for reference
       }
+      console.log('Sending metadata:', metadata) // Add this for debugging
       processFormData.append('metadata', JSON.stringify(metadata))
 
       const response = await fetch('/api/fsystem/process', {
@@ -244,7 +248,8 @@ export default function F1Upload() {
           err_id: selectedRoom.err_code,
           grant_id: previewId,
           status: 'pending',
-          source: 'mutual_aid_portal'
+          source: 'mutual_aid_portal',
+          state: selectedState.state_name  // Use English state name instead of Arabic
         }])
 
       if (insertError) {
@@ -258,7 +263,8 @@ export default function F1Upload() {
         err_id: selectedRoom.err_code,
         err_name: selectedRoom.name_ar || selectedRoom.name,
         donor_name: selectedDonor.name,
-        emergency_room_id: formData.emergency_room_id  // Add this line
+        emergency_room_id: formData.emergency_room_id,
+        state_name: selectedState.state_name  // Already using English name here
       }
 
       const sheetResponse = await fetch('/api/sheets/update', {
