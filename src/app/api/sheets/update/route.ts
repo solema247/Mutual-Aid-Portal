@@ -6,7 +6,7 @@ import OpenAI from 'openai'
 
 // Initialize Google Sheets
 const auth = new google.auth.GoogleAuth({
-  keyFile: path.join(process.cwd(), '.gcp', process.env.GCP_CREDENTIALS_JSON || ''),
+  credentials: JSON.parse(process.env.GOOGLE_VISION || '{}'),
   scopes: ['https://www.googleapis.com/auth/spreadsheets'],
 })
 
