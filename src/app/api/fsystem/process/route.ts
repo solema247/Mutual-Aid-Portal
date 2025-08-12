@@ -5,7 +5,7 @@ import path from 'path'
 
 // Initialize Google Vision client
 const visionClient = new vision.ImageAnnotatorClient({
-  keyFilename: path.join(process.cwd(), '.gcp', process.env.GCP_CREDENTIALS_JSON || '')
+  credentials: JSON.parse(process.env.GOOGLE_VISION || '{}')
 })
 
 // Initialize OpenAI client
