@@ -19,5 +19,34 @@
   "fsystem_f1_desc": "رفع نموذج F1 وتقديم التفاصيل اللازمة",
   "fsystem_upload_success": "تم رفع الملف بنجاح",
   "fsystem_upload_error": "خطأ في رفع الملف",
-  "fsystem_form_id": "معرف النموذج المنشأ"
-} 
+  "fsystem_form_id": "معرف النموذج المنشأ",
+  "grant_management": "إدارة المنح",
+  "grant_management_desc": "إدارة وتخصيص أموال المنح للولايات",
+  "grant_management": {
+    "title": "إدارة المنح",
+    "select_grant": "اختر المنحة",
+    "select_placeholder": "اختر منحة لإدارتها",
+    "summary": "ملخص المنحة",
+    "total_amount": "إجمالي مبلغ المنحة",
+    "total_allocated": "إجمالي المخصص",
+    "pending_allocations": "التخصيصات المعلقة",
+    "remaining_amount": "المبلغ المتبقي",
+    "allocations": "تخصيصات الولايات",
+    "add_state": "إضافة ولاية",
+    "save_changes": "حفظ التغييرات",
+    "state": "الولاية",
+    "amount": "المبلغ",
+    "decision_no": "رقم القرار",
+    "created_at": "تاريخ الإنشاء",
+    "select_state": "اختر الولاية",
+    "save_allocations": "حفظ التخصيصات",
+    "saving": "جاري الحفظ...",
+    "no_valid_entries": "الرجاء إضافة تخصيص صحيح واحد على الأقل",
+    "exceeds_amount": "إجمالي التخصيصات يتجاوز مبلغ المنحة",
+    "allocations_saved": "تم حفظ تخصيصات الولايات بنجاح",
+    "allocations_updated": "تم تحديث تخصيصات الولايات بنجاح",
+    "update_allocations": "تحديث التخصيصات",
+    "updating": "جاري التحديث...",
+    "select_grant_first": "الرجاء اختيار منحة أولاً"
+  }
+}

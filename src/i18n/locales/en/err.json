@@ -19,5 +19,34 @@
   "fsystem_f1_desc": "Upload F1 form and provide necessary details",
   "fsystem_upload_success": "File uploaded successfully",
   "fsystem_upload_error": "Error uploading file",
-  "fsystem_form_id": "Generated Form ID"
-} 
+  "fsystem_form_id": "Generated Form ID",
+  "grant_management": "Grant Management",
+  "grant_management_desc": "Manage and allocate grant funds to states",
+  "grant_management": {
+    "title": "Grant Management",
+    "select_grant": "Select Grant",
+    "select_placeholder": "Choose a grant to manage",
+    "summary": "Grant Summary",
+    "total_amount": "Total Grant Amount",
+    "total_allocated": "Total Allocated",
+    "pending_allocations": "Pending Allocations",
+    "remaining_amount": "Remaining Amount",
+    "allocations": "State Allocations",
+    "add_state": "Add State",
+    "save_changes": "Save Changes",
+    "state": "State",
+    "amount": "Amount",
+    "decision_no": "Decision No.",
+    "created_at": "Created At",
+    "select_state": "Select state",
+    "save_allocations": "Save Allocations",
+    "saving": "Saving...",
+    "no_valid_entries": "Please add at least one valid allocation",
+    "exceeds_amount": "Total allocations exceed grant amount",
+    "allocations_saved": "State allocations saved successfully",
+    "allocations_updated": "State allocations updated successfully",
+    "update_allocations": "Update Allocations",
+    "updating": "Updating...",
+    "select_grant_first": "Please select a grant first"
+  }
+}
