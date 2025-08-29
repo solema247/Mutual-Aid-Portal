@@ -39,18 +39,17 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible'
 
-// Form schema
 const formSchema = z.object({
-  donor_id: z.string().uuid(),
-  name: z.string().min(1),
+  donor_id: z.string(),
+  name: z.string().min(1, "Name is required"),
   shortname: z.string().optional(),
-  amount: z.string().optional().transform((val) => (val ? Number(val) : undefined)),
-  status: z.enum(['open', 'closed']).default('open'),
+  amount: z.string().optional(),
+  status: z.enum(['open', 'closed']),
   start_date: z.string().optional(),
   end_date: z.string().optional(),
 })
 
-type FormValues = z.infer<typeof formSchema>
+type FormData = z.infer<typeof formSchema>
 
 interface Donor {
   id: string
@@ -79,7 +78,7 @@ export default function GrantsPage() {
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [isTableOpen, setIsTableOpen] = useState(true)
 
-  const form = useForm<FormValues>({
+  const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       donor_id: '',
@@ -103,7 +102,7 @@ export default function GrantsPage() {
           .eq('status', 'active')
 
         if (donorsError) throw donorsError
-        setDonors(donorsData)
+        setDonors(donorsData || [])
 
         // Fetch grants
         await fetchGrants()
@@ -144,18 +143,40 @@ export default function GrantsPage() {
 
       const { data, error } = await query
       if (error) throw error
-      setGrants(data)
+      
+      // Ensure the data matches the GrantCall interface
+      const typedData: GrantCall[] = (data || []).map((item: any) => ({
+        id: item.id,
+        name: item.name,
+        shortname: item.shortname,
+        amount: item.amount,
+        status: item.status as 'open' | 'closed',
+        start_date: item.start_date,
+        end_date: item.end_date,
+        donor: {
+          id: String(item.donor.id),
+          name: String(item.donor.name),
+          short_name: item.donor.short_name
+        }
+      }))
+      
+      setGrants(typedData)
     } catch (error) {
       console.error('Error fetching grants:', error)
       window.alert(t('common:error_fetching_data'))
     }
   }
 
-  const onSubmit = async (values: FormValues) => {
+  const onSubmit = async (values: FormData) => {
     try {
+      const submissionData = {
+        ...values,
+        amount: values.amount ? parseFloat(values.amount) : null
+      }
+
       const { error } = await supabase
         .from('grant_calls')
-        .insert([values])
+        .insert([submissionData])
 
       if (error) throw error
 
@@ -237,7 +258,7 @@ export default function GrantsPage() {
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>{t('partner:grants.form.donor')}</FormLabel>
-                          <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <Select onValueChange={field.onChange} value={field.value}>
                             <FormControl>
                               <SelectTrigger>
                                 <SelectValue placeholder={t('partner:grants.form.select_donor')} />
