@@ -22,9 +22,7 @@
   "fsystem_form_id": "Generated Form ID",
   "grant_management": "Grant Management",
   "grant_management_desc": "Manage and allocate grant funds to states",
-  "grant_management": "Grant Management",
-  "grant_management_desc": "Manage and allocate grant funds to states",
-  "grant_details": {
+  "grants": {
     "title": "Grant Management",
     "select_grant": "Select Grant",
     "select_placeholder": "Choose a grant to manage",

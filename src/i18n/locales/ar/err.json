@@ -22,7 +22,7 @@
   "fsystem_form_id": "معرف النموذج المنشأ",
   "grant_management": "إدارة المنح",
   "grant_management_desc": "إدارة وتخصيص أموال المنح للولايات",
-  "grant_management": {
+  "grants": {
     "title": "إدارة المنح",
     "select_grant": "اختر المنحة",
     "select_placeholder": "اختر منحة لإدارتها",

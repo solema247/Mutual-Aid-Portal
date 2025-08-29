@@ -203,7 +203,7 @@ export default function GrantManagementPage() {
 
     // Validate remaining amount
     if (getRemainingAmount() < 0) {
-      window.alert(t('err:grant_management.exceeds_amount'))
+      window.alert(t('err:grants.exceeds_amount'))
       return
     }
 
@@ -252,7 +252,7 @@ export default function GrantManagementPage() {
         isEdited: false
       })))
 
-      window.alert(t('err:grant_management.allocations_saved'))
+      window.alert(t('err:grants.allocations_saved'))
     } catch (error) {
       console.error('Error saving allocations:', error)
       window.alert(t('common:error_saving'))
@@ -266,7 +266,7 @@ export default function GrantManagementPage() {
   return (
     <div className="max-w-7xl mx-auto p-6 space-y-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-semibold">{t('err:grant_management.title')}</h2>
+        <h2 className="text-2xl font-semibold">{t('err:grants.title')}</h2>
         <Button 
           variant="outline" 
           onClick={() => router.push('/err-portal')}
@@ -277,7 +277,7 @@ export default function GrantManagementPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>{t('err:grant_management.select_grant')}</CardTitle>
+          <CardTitle>{t('err:grants.select_grant')}</CardTitle>
         </CardHeader>
         <CardContent>
           <Select
@@ -285,7 +285,7 @@ export default function GrantManagementPage() {
             onValueChange={setSelectedGrantCall}
           >
             <SelectTrigger className="w-full">
-              <SelectValue placeholder={t('err:grant_management.select_placeholder')} />
+              <SelectValue placeholder={t('err:grants.select_placeholder')} />
             </SelectTrigger>
             <SelectContent>
               {grantCalls.map((grant) => (
@@ -302,13 +302,13 @@ export default function GrantManagementPage() {
         <>
           <Card>
             <CardHeader>
-              <CardTitle>{t('err:grant_management.summary')}</CardTitle>
+              <CardTitle>{t('err:grants.summary')}</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-1">
                   <div className="text-sm text-muted-foreground">
-                    {t('err:grant_management.total_amount')}
+                    {t('err:grants.total_amount')}
                   </div>
                   <div className="text-2xl font-bold text-right">
                     {Number(grantCalls.find(g => g.id === selectedGrantCall)?.amount || 0).toLocaleString()}
@@ -317,7 +317,7 @@ export default function GrantManagementPage() {
 
                 <div className="space-y-1">
                   <div className="text-sm text-muted-foreground">
-                    {t('err:grant_management.total_allocated')}
+                    {t('err:grants.total_allocated')}
                   </div>
                   <div className="text-2xl font-bold text-muted-foreground text-right">
                     {allocations.reduce((sum, alloc) => 
@@ -328,7 +328,7 @@ export default function GrantManagementPage() {
 
                 <div className="space-y-1">
                   <div className="text-sm text-muted-foreground">
-                    {t('err:grant_management.remaining_amount')}
+                    {t('err:grants.remaining_amount')}
                   </div>
                   <div className={cn(
                     "text-2xl font-bold text-right",
@@ -347,7 +347,7 @@ export default function GrantManagementPage() {
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle>{t('err:grant_management.allocations')}</CardTitle>
+              <CardTitle>{t('err:grants.allocations')}</CardTitle>
               <div className="flex items-center gap-2">
                 <Button
                   onClick={handleAddState}
@@ -355,7 +355,7 @@ export default function GrantManagementPage() {
                   variant="outline"
                 >
                   <Plus className="h-4 w-4 mr-2" />
-                  {t('err:grant_management.add_state')}
+                  {t('err:grants.add_state')}
                 </Button>
                 <Button
                   onClick={handleSaveAllocations}
@@ -364,8 +364,8 @@ export default function GrantManagementPage() {
                 >
                   <Save className="h-4 w-4 mr-2" />
                   {isSubmitting 
-                    ? t('err:grant_management.saving')
-                    : t('err:grant_management.save_changes')
+                    ? t('err:grants.saving')
+                    : t('err:grants.save_changes')
                   }
                 </Button>
               </div>
@@ -375,10 +375,10 @@ export default function GrantManagementPage() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>{t('err:grant_management.state')}</TableHead>
-                      <TableHead className="text-right">{t('err:grant_management.amount')}</TableHead>
-                      <TableHead>{t('err:grant_management.decision_no')}</TableHead>
-                      <TableHead>{t('err:grant_management.created_at')}</TableHead>
+                      <TableHead>{t('err:grants.state')}</TableHead>
+                      <TableHead className="text-right">{t('err:grants.amount')}</TableHead>
+                      <TableHead>{t('err:grants.decision_no')}</TableHead>
+                      <TableHead>{t('err:grants.created_at')}</TableHead>
                       <TableHead className="w-[50px]"></TableHead>
                     </TableRow>
                   </TableHeader>
@@ -398,7 +398,7 @@ export default function GrantManagementPage() {
                               onValueChange={(value) => handleAllocationChange(allocation.tempId!, 'state_name', value)}
                             >
                               <SelectTrigger>
-                                <SelectValue placeholder={t('err:grant_management.select_state')} />
+                                <SelectValue placeholder={t('err:grants.select_state')} />
                               </SelectTrigger>
                               <SelectContent>
                                 {states.map((state) => (
