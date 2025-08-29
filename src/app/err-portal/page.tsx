@@ -115,16 +115,16 @@ export default function ErrPortalPage() {
           </Card>
         </Link>
 
-        {/* F-System Upload */}
-        <Link href="/err-portal/fsystem-upload" className="block aspect-square">
+        {/* F1 Work Plans */}
+        <Link href="/err-portal/f1-work-plans" className="block aspect-square">
           <Card className="h-full hover:bg-muted/50 transition-colors">
             <CardHeader className="h-full flex flex-col justify-center items-center text-center">
-              <FileText className="h-8 w-8 mb-4" />
+              <ClipboardList className="h-8 w-8 mb-4" />
               <CardTitle className="text-xl">
-                {t('err:fsystem_upload')}
+                {t('err:f1_work_plans')}
               </CardTitle>
               <CardDescription className="mt-2">
-                {t('err:fsystem_upload_desc')}
+                {t('err:f1_work_plans_desc')}
               </CardDescription>
             </CardHeader>
           </Card>
@@ -134,7 +134,7 @@ export default function ErrPortalPage() {
         <Link href="/err-portal/project-management" className="block aspect-square">
           <Card className="h-full hover:bg-muted/50 transition-colors">
             <CardHeader className="h-full flex flex-col justify-center items-center text-center">
-              <ClipboardList className="h-8 w-8 mb-4" />
+              <FileText className="h-8 w-8 mb-4" />
               <CardTitle className="text-xl">
                 {t('err:project_management')}
               </CardTitle>

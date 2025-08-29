@@ -1,0 +1,24 @@
+{
+  "title": "F1 Work Plans",
+  "description": "Manage and review F1 work plans from ERR App submissions and direct uploads",
+  "err_app_submissions": "ERR App Submissions",
+  "direct_upload": {
+    "title": "Upload F1 Work Plan",
+    "description": "Upload pre-vetted F1 work plans directly",
+    "select_file": "Please select a file first",
+    "download_template": "Download Template",
+    "upload": "Upload Work Plan",
+    "uploading": "Uploading..."
+  },
+  "grant_details": {
+    "select_grant": "Select Grant",
+    "select_state": "Select State Allocation",
+    "no_allocation": "No allocation available for this state",
+    "amount_exceeded": "Amount exceeds state allocation"
+  },
+  "status": {
+    "unassigned": "Unassigned",
+    "allocated": "Allocated",
+    "reassigned": "Reassigned"
+  }
+}
