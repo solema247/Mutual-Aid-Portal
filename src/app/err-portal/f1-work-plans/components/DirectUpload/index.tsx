@@ -10,8 +10,9 @@ import { Button } from '@/components/ui/button'
 import { FileUp } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 import type { Donor, State, F1FormData, EmergencyRoom, Sector } from '@/app/api/fsystem/types/fsystem'
-import ExtractedDataReview from '@/app/err-portal/fsystem-upload/components/ExtractedDataReview'
+import ExtractedDataReview from './ExtractedDataReview'
 import { cn } from '@/lib/utils'
+import StateAllocationTable from './StateAllocationTable'
 import { X } from 'lucide-react'
 
 export default function DirectUpload() {
@@ -21,6 +22,22 @@ export default function DirectUpload() {
   const [rooms, setRooms] = useState<EmergencyRoom[]>([])
   const [sectors, setSectors] = useState<Sector[]>([])
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const [grantCalls, setGrantCalls] = useState<{
+    id: string;
+    name: string;
+    shortname: string;
+    amount: number;
+    donor: { name: string };
+  }[]>([])
+  const [selectedGrantCall, setSelectedGrantCall] = useState<string>('')
+  const [stateAllocations, setStateAllocations] = useState<{
+    id: string;
+    state_name: string;
+    amount: number;
+    amount_used?: number;
+    decision_no: number;
+  }[]>([])
+
   const [formData, setFormData] = useState<F1FormData>({
     donor_id: '',
     state_id: '',
@@ -30,7 +47,9 @@ export default function DirectUpload() {
     emergency_room_id: '',
     file: null,
     primary_sectors: [],
-    secondary_sectors: []
+    secondary_sectors: [],
+    grant_call_id: '',
+    grant_call_state_allocation_id: ''
   })
   const [isLoading, setIsLoading] = useState(false)
   const [previewId, setPreviewId] = useState('')
@@ -40,6 +59,25 @@ export default function DirectUpload() {
   useEffect(() => {
     const fetchData = async () => {
       try {
+        // Fetch active grant calls with donor info
+        const { data: grantCallsData, error: grantCallsError } = await supabase
+          .from('grant_calls')
+          .select(`
+            id,
+            name,
+            shortname,
+            amount,
+            donor:donors (
+              id,
+              name
+            )
+          `)
+          .eq('status', 'open')
+          .order('created_at', { ascending: false })
+
+        if (grantCallsError) throw grantCallsError
+        setGrantCalls(grantCallsData)
+
         // Fetch donors
         const { data: donorsData, error: donorsError } = await supabase
           .from('donors')
@@ -80,6 +118,45 @@ export default function DirectUpload() {
 
     fetchData()
   }, [])
+
+  // Fetch state allocations when grant call changes
+  useEffect(() => {
+    const fetchStateAllocations = async () => {
+      if (!selectedGrantCall) {
+        setStateAllocations([])
+        return
+      }
+
+      try {
+        // Fetch all allocations for this grant call
+        const { data: allocationsData, error: allocationsError } = await supabase
+          .from('grant_call_state_allocations')
+          .select('*')
+          .eq('grant_call_id', selectedGrantCall)
+          .order('decision_no', { ascending: false })
+          .order('state_name')
+
+        if (allocationsError) throw allocationsError
+
+        // Group by state and get latest decision for each
+        const latestByState = allocationsData.reduce((acc, curr) => {
+          if (!acc[curr.state_name] || acc[curr.state_name].decision_no < curr.decision_no) {
+            acc[curr.state_name] = curr
+          }
+          return acc
+        }, {} as Record<string, any>)
+
+        // Convert back to array
+        const latestAllocations = Object.values(latestByState)
+        setStateAllocations(latestAllocations)
+      } catch (error) {
+        console.error('Error fetching state allocations:', error)
+        setStateAllocations([])
+      }
+    }
+
+    fetchStateAllocations()
+  }, [selectedGrantCall])
 
   // Fetch rooms when state changes
   useEffect(() => {
@@ -122,26 +199,14 @@ export default function DirectUpload() {
     fetchRooms()
   }, [formData.state_id, states])
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0]
-      if (file.type === 'application/pdf' || file.type === 'application/msword' || 
-          file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
-        setSelectedFile(file)
-        setFormData(prev => ({ ...prev, file }))
-      } else {
-        alert('Please select a PDF or Word document')
-      }
-    }
-  }
-
   const hasRequiredFields = () => {
     return (
       formData.donor_id &&
       formData.state_id &&
       formData.date &&
       formData.grant_serial?.length === 4 &&
-      formData.emergency_room_id
+      formData.emergency_room_id &&
+      formData.grant_call_state_allocation_id // Require allocation selection
     )
   }
 
@@ -184,79 +249,39 @@ export default function DirectUpload() {
     }
   }
 
-  const generatePreviewPattern = async () => {
-    const selectedDonor = donors.find(d => d.id === formData.donor_id)
-    const selectedState = states.find(s => s.id === formData.state_id)
-    
-    let pattern = 'LCC'
-
-    if (selectedDonor?.short_name) {
-      pattern += `-${selectedDonor.short_name}`
-    } else {
-      pattern += '-___'
-    }
-
-    if (selectedState?.state_short) {
-      pattern += `-${selectedState.state_short.toUpperCase()}`
-    } else {
-      pattern += '-__'
-    }
-
-    if (formData.date) {
-      pattern += `-${formData.date}`
-    } else {
-      pattern += '-____'
-    }
-
-    if (formData.grant_serial) {
-      pattern += `-${formData.grant_serial}`
-      
-      if (selectedDonor?.short_name && selectedState?.state_short && formData.date) {
-        try {
-          const basePattern = `LCC-${selectedDonor.short_name}-${selectedState.state_short.toUpperCase()}-${formData.date}-${formData.grant_serial}`
-          const response = await fetch('/api/fsystem/next-sequence', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ 
-              base_pattern: basePattern,
-              preview_only: true
-            })
-          })
-
-          if (response.ok) {
-            const { padded_number } = await response.json()
-            return `${pattern}-${padded_number}`
-          }
-        } catch (error) {
-          console.error('Error previewing sequence:', error)
-        }
-      }
-      pattern += '-XXX'
-    } else {
-      pattern += '-____-XXX'
-    }
-
-    return pattern
-  }
-
-  useEffect(() => {
-    const updatePattern = async () => {
-      const pattern = await generatePreviewPattern()
-      setPreviewId(pattern)
-    }
-    updatePattern()
-  }, [formData.donor_id, formData.state_id, formData.date, formData.grant_serial])
-
   const handleInputChange = (field: keyof F1FormData, value: string | string[]) => {
     setFormData(prev => ({ ...prev, [field]: value }))
+  }
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0]
+      if (file.type === 'application/pdf' || file.type === 'application/msword' || 
+          file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+        setSelectedFile(file)
+        setFormData(prev => ({ ...prev, file }))
+      } else {
+        alert('Please select a PDF or Word document')
+      }
+    }
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!selectedFile) {
       alert('Please select a file')
+      return
+    }
+
+    if (!formData.grant_call_state_allocation_id) {
+      alert(t('fsystem:f1.select_allocation_first'))
+      return
+    }
+
+    // Get the selected allocation
+    const allocation = stateAllocations.find(a => a.id === formData.grant_call_state_allocation_id)
+    if (!allocation) {
+      alert(t('fsystem:f1.allocation_not_found'))
       return
     }
 
@@ -415,7 +440,9 @@ export default function DirectUpload() {
         emergency_room_id: '',
         file: null,
         primary_sectors: [],
-        secondary_sectors: []
+        secondary_sectors: [],
+        grant_call_id: '',
+        grant_call_state_allocation_id: ''
       })
       setSelectedFile(null)
       setPreviewId('')
@@ -435,19 +462,82 @@ export default function DirectUpload() {
     setIsReviewing(false)
   }
 
-  if (isReviewing) {
-    return (
-      <ExtractedDataReview
-        data={processedData}
-        onConfirm={handleConfirmUpload}
-        onCancel={handleCancelReview}
-      />
-    )
-  }
+  // Get selected allocation info
+  const selectedAllocation = stateAllocations.find(
+    alloc => alloc.id === formData.grant_call_state_allocation_id
+  )
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
-      <div className="grid gap-4">
+    <div className="space-y-6">
+      {/* Grant Selection */}
+      <Card>
+        <CardContent className="pt-6">
+          <div className="space-y-4">
+            <div>
+              <Label className="mb-2">{t('fsystem:f1.select_grant')}</Label>
+              <Select
+                value={selectedGrantCall}
+                onValueChange={(value) => {
+                  setSelectedGrantCall(value)
+                  setFormData(prev => ({
+                    ...prev,
+                    grant_call_id: value,
+                    grant_call_state_allocation_id: '',
+                    state_id: '',
+                    donor_id: grantCalls.find(g => g.id === value)?.donor?.id || ''
+                  }))
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder={t('fsystem:f1.select_grant_placeholder')} />
+                </SelectTrigger>
+                <SelectContent>
+                  {grantCalls.map((grant) => (
+                    <SelectItem key={grant.id} value={grant.id}>
+                      {grant.name} ({grant.donor.name})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {selectedGrantCall && (
+              <div className="rounded-lg border p-4 space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label className="text-sm text-muted-foreground">{t('fsystem:f1.grant_amount')}</Label>
+                    <div className="text-lg font-semibold">
+                      {grantCalls.find(g => g.id === selectedGrantCall)?.amount.toLocaleString()}
+                    </div>
+                  </div>
+                  <div>
+                    <Label className="text-sm text-muted-foreground">{t('fsystem:f1.donor')}</Label>
+                    <div className="text-lg font-semibold">
+                      {grantCalls.find(g => g.id === selectedGrantCall)?.donor.name}
+                    </div>
+                  </div>
+                </div>
+
+                {stateAllocations.length > 0 && (
+                  <StateAllocationTable
+                    allocations={stateAllocations}
+                    selectedAllocationId={formData.grant_call_state_allocation_id}
+                    onSelectAllocation={(id) => {
+                      setFormData(prev => ({
+                        ...prev,
+                        grant_call_state_allocation_id: id,
+                        state_id: states.find(s => s.state_name === stateAllocations.find(a => a.id === id)?.state_name)?.id || ''
+                      }))
+                    }}
+                  />
+                )}
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      {!isReviewing ? (
         <Card>
           <CardContent className="pt-6">
             <div className="space-y-4">
@@ -687,12 +777,30 @@ export default function DirectUpload() {
             </div>
           </CardContent>
         </Card>
-      </div>
+      ) : (
+        <ExtractedDataReview
+          data={processedData}
+          onConfirm={handleConfirmUpload}
+          onCancel={handleCancelReview}
+          allocationInfo={{
+            amount: selectedAllocation?.amount || 0,
+            amountUsed: selectedAllocation?.amount_used || 0,
+            stateName: selectedAllocation?.state_name || '',
+            grantName: grantCalls.find(g => g.id === selectedGrantCall)?.name || ''
+          }}
+          onValidationError={(message) => {
+            alert(message)
+            setIsReviewing(false)
+          }}
+        />
+      )}
 
-      <Button type="submit" disabled={isLoading} className="w-full">
-        <FileUp className="w-4 h-4 mr-2" />
-        {isLoading ? t('fsystem:f1.uploading') : t('fsystem:f1.upload_button')}
-      </Button>
-    </form>
+      {!isReviewing && (
+        <Button type="button" onClick={handleSubmit} disabled={isLoading} className="w-full">
+          <FileUp className="w-4 h-4 mr-2" />
+          {isLoading ? t('fsystem:f1.uploading') : t('fsystem:f1.upload_button')}
+        </Button>
+      )}
+    </div>
   )
 }
