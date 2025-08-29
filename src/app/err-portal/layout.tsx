@@ -3,7 +3,7 @@
 import { useTranslation } from 'react-i18next'
 import { useState, useEffect } from 'react'
 import MainLayout from '@/components/layout/MainLayout'
-import { Users, FileUp } from 'lucide-react'
+import { Users, FileText, ClipboardList, BarChart2, PieChart, UserCog } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 
 interface User {
@@ -45,36 +45,36 @@ export default function ErrPortalLayout({
 
   const sidebarItems = [
     {
-      href: '/err-portal',
-      label: t('err:home'),
-      icon: '🏠'
-    },
-    ...(canManageRooms ? [{
-      href: '/err-portal/room-management',
-      label: t('err:room_management'),
-      icon: '🤝'
-    }] : []),
-    {
-      href: '/err-portal/user-management',
-      label: t('err:user_management'),
-      icon: <Users className="h-5 w-5" />
-    },
-    {
-      href: '/err-portal/project-management',
-      label: t('err:project_management'),
-      icon: '📋'
-    },
-    {
-      href: '/err-portal/dashboard',
-      label: t('err:dashboard'),
-      icon: '📈'
+      href: '/err-portal/grant-management',
+      label: t('err:grant_management'),
+      icon: <PieChart className="h-5 w-5" />
     },
     {
       href: '/err-portal/fsystem-upload',
       label: t('err:fsystem_upload'),
-      icon: <FileUp className="h-5 w-5" />
+      icon: <FileText className="h-5 w-5" />
+    },
+    {
+      href: '/err-portal/project-management',
+      label: t('err:project_management'),
+      icon: <ClipboardList className="h-5 w-5" />
+    },
+    {
+      href: '/err-portal/dashboard',
+      label: t('err:dashboard'),
+      icon: <BarChart2 className="h-5 w-5" />
+    },
+    ...(canManageRooms ? [{
+      href: '/err-portal/room-management',
+      label: t('err:room_management'),
+      icon: <Users className="h-5 w-5" />
+    }] : []),
+    {
+      href: '/err-portal/user-management',
+      label: t('err:user_management'),
+      icon: <UserCog className="h-5 w-5" />
     }
   ]
 
   return <MainLayout sidebarItems={sidebarItems}>{children}</MainLayout>
-} 
+}
