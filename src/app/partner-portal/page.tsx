@@ -61,7 +61,18 @@ export default function PartnerPortalPage() {
             </div>
           </Button>
         </Link>
-        {/* Add more tools/features as needed */}
+        <Link href="/partner-portal/grants" className="block">
+          <Button className="w-full p-4" variant="outline">
+            <div className="flex items-center gap-4 w-full">
+              <div className="flex items-center gap-2">
+                💰 {t('partner:grants.title')}
+              </div>
+              <span className="text-sm text-muted-foreground">
+                {t('partner:grants.description')}
+              </span>
+            </div>
+          </Button>
+        </Link>
       </nav>
 
       <Button 
