@@ -28,6 +28,7 @@ export default function DirectUpload() {
 
   interface GrantSerial {
     id: string;
+    grant_serial: string;  // Added this property
     serial: string;
     grant_call_id: string;
     state_name: string;
@@ -234,11 +235,25 @@ export default function DirectUpload() {
 
     try {
       // Get the grant call details to build the serial
+      interface DonorWithShortName {
+        short_name: string;
+      }
+
+      interface GrantCallWithDonor {
+        shortname: string;
+        donor: DonorWithShortName;
+      }
+
       const { data: grantCall, error: grantError } = await supabase
         .from('grant_calls')
-        .select('shortname, donor:donors!inner(short_name)')
+        .select(`
+          shortname,
+          donor:donors!inner (
+            short_name
+          )
+        `)
         .eq('id', formData.grant_call_id)
-        .single()
+        .single<GrantCallWithDonor>()
 
       if (grantError) throw grantError
       if (!grantCall?.donor?.short_name) throw new Error('Donor short name missing')
@@ -252,6 +267,9 @@ export default function DirectUpload() {
 
       if (stateError) throw stateError
       if (!states?.length) throw new Error('State not found')
+
+      const state = states[0]
+      if (!state.state_short) throw new Error('State short code missing')
 
       // Get the next serial number (count + 1)
       const { count, error: countError } = await supabase
@@ -267,7 +285,7 @@ export default function DirectUpload() {
       const paddedSerial = nextNumber.toString().padStart(4, '0')
 
       // Build the serial string
-      const serial = `LCC-${grantCall.donor.short_name}-${states[0].state_short.toUpperCase()}-${formData.date}-${paddedSerial}`
+      const serial = `LCC-${grantCall.donor.short_name}-${state.state_short.toUpperCase()}-${formData.date}-${paddedSerial}`
       
       setPreviewSerial(serial)
       handleInputChange('grant_serial_id', 'new')
@@ -650,10 +668,10 @@ export default function DirectUpload() {
       )}
 
       {!isReviewing ? (
-        <div className="space-y-6">
+            <div className="space-y-4">
               {/* File Upload */}
-              <div>
-                <Label className="mb-2">{t('fsystem:f1.upload_label')}</Label>
+          <div className="mb-4">
+            <Label className="mb-1">{t('fsystem:f1.upload_label')}</Label>
                 <Input
                   type="file"
                   accept=".pdf,.doc,.docx"
@@ -662,15 +680,16 @@ export default function DirectUpload() {
                 />
               </div>
 
-              {/* Main Selectors in One Row */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div>
+                    {/* Main Form Grid */}
+          <div className="grid grid-cols-3 gap-4">
+            {/* First Row: Donor, State, ERR */}
+            <div className="col-span-1">
                   <Label className="mb-2">{t('fsystem:f1.donor')}</Label>
                   <Select
                     value={formData.donor_id}
                     onValueChange={(value) => handleInputChange('donor_id', value)}
                   >
-                    <SelectTrigger>
+                                <SelectTrigger className="h-[38px] w-full">
                       <SelectValue placeholder={t('fsystem:f1.select_donor')} />
                     </SelectTrigger>
                     <SelectContent>
@@ -683,33 +702,28 @@ export default function DirectUpload() {
                   </Select>
                 </div>
 
-                <div>
+            <div className="col-span-1">
                   <Label className="mb-2">{t('fsystem:f1.state')}</Label>
-                  <Select
-                    value={formData.state_id}
-                    onValueChange={(value) => handleInputChange('state_id', value)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder={t('fsystem:f1.select_state')} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {states.map((state) => (
-                        <SelectItem key={state.id} value={state.id}>
-                          {state.state_name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+              <div className="relative">
+                <Input
+                  value={states.find(s => s.id === formData.state_id)?.state_name || ''}
+                  readOnly
+                  className="bg-muted h-[38px] w-full"
+                />
+                <div className="absolute right-2 top-1/2 transform -translate-y-1/2 text-muted-foreground">
+                  <span className="text-[10px]">{t('fsystem:f1.auto_from_allocation')}</span>
+                </div>
+              </div>
                 </div>
 
-                <div>
+            <div className="col-span-1">
                   <Label className="mb-2">{t('fsystem:f1.emergency_response_room')}</Label>
                   <Select
                     value={formData.emergency_room_id}
                     onValueChange={(value) => handleInputChange('emergency_room_id', value)}
                     disabled={!formData.state_id || rooms.length === 0}
                   >
-                    <SelectTrigger>
+                                <SelectTrigger className="h-[38px] w-full">
                       <SelectValue placeholder={t('fsystem:f1.select_emergency_room')} />
                     </SelectTrigger>
                     <SelectContent>
@@ -720,12 +734,10 @@ export default function DirectUpload() {
                       ))}
                     </SelectContent>
                   </Select>
-                </div>
               </div>
 
-              {/* Sector Selection */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
+                        {/* Second Row: Primary and Secondary Sectors */}
+                        <div className="col-span-3/2">
                   <Label className="mb-2">{t('fsystem:f1.primary_sectors')}</Label>
                   <Select
                     value={formData.primary_sectors[0] || ''}
@@ -738,7 +750,7 @@ export default function DirectUpload() {
                       }
                     }}
                   >
-                    <SelectTrigger>
+                                <SelectTrigger className="h-[38px] w-full">
                       <SelectValue placeholder={t('fsystem:f1.select_primary_sectors')}>
                         {formData.primary_sectors.length > 0
                           ? `${formData.primary_sectors.length} selected`
@@ -756,7 +768,7 @@ export default function DirectUpload() {
                     </SelectContent>
                   </Select>
                   {formData.primary_sectors.length > 0 && (
-                    <div className="flex flex-wrap gap-2 mt-2">
+                <div className="flex flex-wrap gap-1 mt-2">
                       {formData.primary_sectors.map(sectorId => {
                         const sector = sectors.find(s => s.id === sectorId)
                         if (!sector) return null
@@ -780,7 +792,7 @@ export default function DirectUpload() {
                   )}
                 </div>
 
-                <div>
+                <div className="col-span-3/2">
                   <Label className="mb-2">{t('fsystem:f1.secondary_sectors')}</Label>
                   <Select
                     value={formData.secondary_sectors[0] || ''}
@@ -793,8 +805,8 @@ export default function DirectUpload() {
                       }
                     }}
                   >
-                    <SelectTrigger>
-                      <SelectValue placeholder={t('fsystem:f1.select_secondary_sectors')}>
+                                                <SelectTrigger className="h-[38px] w-full">
+                  <SelectValue placeholder={t('fsystem:f1.select_secondary_sectors')}>
                         {formData.secondary_sectors.length > 0
                           ? `${formData.secondary_sectors.length} selected`
                           : t('fsystem:f1.select_secondary_sectors')}
@@ -811,7 +823,7 @@ export default function DirectUpload() {
                     </SelectContent>
                   </Select>
                   {formData.secondary_sectors.length > 0 && (
-                    <div className="flex flex-wrap gap-2 mt-2">
+                <div className="flex flex-wrap gap-1 mt-2">
                       {formData.secondary_sectors.map(sectorId => {
                         const sector = sectors.find(s => s.id === sectorId)
                         if (!sector) return null
@@ -833,12 +845,10 @@ export default function DirectUpload() {
                       })}
                     </div>
                   )}
-                </div>
               </div>
 
-              {/* Small Fields in 2 Columns */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
+            {/* Third Row: Date and Grant Serial */}
+                <div className="col-span-3 md:col-span-1">
                   <Label className="mb-2">{t('fsystem:f1.date')}</Label>
                   <Input
                     placeholder={t('fsystem:f1.date_placeholder')}
@@ -846,10 +856,11 @@ export default function DirectUpload() {
                     onChange={(e) => handleInputChange('date', e.target.value)}
                     maxLength={4}
                     pattern="[0-9]{4}"
+                className="font-mono h-[38px] w-full"
                   />
                 </div>
 
-                <div>
+            <div className="col-span-3/2">
                   <Label className="mb-2">{t('fsystem:f1.grant_serial')}</Label>
               <Select
                 value={formData.grant_serial_id}
@@ -863,7 +874,7 @@ export default function DirectUpload() {
                 }}
                 disabled={!formData.date || !selectedAllocation}
               >
-                <SelectTrigger>
+                <SelectTrigger className="h-[38px] w-full">
                   <SelectValue placeholder={t('fsystem:f1.select_grant_serial')} />
                 </SelectTrigger>
                 <SelectContent>
@@ -883,16 +894,16 @@ export default function DirectUpload() {
               </div>
 
               {/* Generated Form ID */}
-          <div>
-                <Label className="mb-2">{t('fsystem:f1.generated_id')}</Label>
-                <div className="mt-1 p-3 bg-muted rounded-md font-mono min-h-[2.5rem] flex items-center">
-                                {previewSerial || previewId || (
-                <span className="text-muted-foreground text-sm">
-                  {hasRequiredFields() 
-                    ? t('fsystem:f1.generating') 
-                    : t('fsystem:f1.complete_fields')}
-                </span>
-              )}
+          <div className="mt-3">
+            <Label className="mb-1">{t('fsystem:f1.generated_id')}</Label>
+            <div className="mt-1 p-2 bg-muted rounded-md font-mono min-h-[2.5rem] flex items-center">
+              {previewSerial || previewId || (
+                    <span className="text-muted-foreground text-sm">
+                      {hasRequiredFields() 
+                        ? t('fsystem:f1.generating') 
+                        : t('fsystem:f1.complete_fields')}
+                    </span>
+                  )}
                 </div>
                 {previewId && (
                   <p className="text-sm text-muted-foreground mt-1">
