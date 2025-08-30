@@ -220,7 +220,6 @@ export default function DirectUpload() {
       if (!response.ok) throw new Error('Failed to fetch grant serials')
       
       const data = await response.json()
-      console.log('Fetched grant serials:', data) // Debug log
       setGrantSerials(data || [])
     } catch (error) {
       console.error('Error fetching grant serials:', error)
@@ -318,11 +317,6 @@ export default function DirectUpload() {
 
   // Effect to fetch grant serials when dependencies change
   useEffect(() => {
-    console.log('Dependencies changed:', {
-      grant_call_id: formData.grant_call_id,
-      date: formData.date,
-      allocation_id: formData.grant_call_state_allocation_id
-    })
     fetchGrantSerials()
   }, [formData.grant_call_id, formData.date, formData.grant_call_state_allocation_id])
 
@@ -810,7 +804,7 @@ export default function DirectUpload() {
                     }}
                   >
                                                 <SelectTrigger className="h-[38px] w-full">
-                  <SelectValue placeholder={t('fsystem:f1.select_secondary_sectors')}>
+                      <SelectValue placeholder={t('fsystem:f1.select_secondary_sectors')}>
                         {formData.secondary_sectors.length > 0
                           ? `${formData.secondary_sectors.length} selected`
                           : t('fsystem:f1.select_secondary_sectors')}
