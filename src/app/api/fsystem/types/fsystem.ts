@@ -19,7 +19,6 @@ export interface F1FormData {
   donor_id: string;
   state_id: string;
   date: string; // MMYY format
-  grant_serial: string;
   project_id: string;
   emergency_room_id: string;
   file: File | null;
@@ -27,6 +26,7 @@ export interface F1FormData {
   secondary_sectors: string[];
   grant_call_id: string;
   grant_call_state_allocation_id: string;
+  grant_serial_id: string;
 }
 
 export interface F1FormResponse {

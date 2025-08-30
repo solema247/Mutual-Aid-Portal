@@ -26,21 +26,33 @@ export default function DirectUpload() {
   const [selectedGrantCall, setSelectedGrantCall] = useState<string>('')
   const [stateAllocations, setStateAllocations] = useState<StateAllocation[]>([])
 
+  interface GrantSerial {
+    id: string;
+    serial: string;
+    grant_call_id: string;
+    state_name: string;
+    yymm: string;
+  }
+
   const [formData, setFormData] = useState<F1FormData>({
     donor_id: '',
     state_id: '',
     date: '',
-    grant_serial: '',
     project_id: '',
     emergency_room_id: '',
     file: null,
     primary_sectors: [],
     secondary_sectors: [],
     grant_call_id: '',
-    grant_call_state_allocation_id: ''
+    grant_call_state_allocation_id: '',
+    grant_serial_id: ''
   })
+  
+  const [grantSerials, setGrantSerials] = useState<GrantSerial[]>([])
+  const [nextWorkplanNumber, setNextWorkplanNumber] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [previewId, setPreviewId] = useState('')
+  const [previewSerial, setPreviewSerial] = useState<string>('')
   const [processedData, setProcessedData] = useState<any>(null)
   const [isReviewing, setIsReviewing] = useState(false)
 
@@ -199,55 +211,119 @@ export default function DirectUpload() {
     fetchRooms()
   }, [formData.state_id, states])
 
+  const fetchGrantSerials = async () => {
+    const selectedAlloc = getSelectedAllocation()
+    if (!formData.grant_call_id || !formData.date || !selectedAlloc?.state_name) return;
+
+    try {
+      const response = await fetch(`/api/fsystem/grant-serials?grant_call_id=${formData.grant_call_id}&state_name=${selectedAlloc.state_name}&yymm=${formData.date}`)
+      
+      if (!response.ok) throw new Error('Failed to fetch grant serials')
+      
+      const data = await response.json()
+      setGrantSerials(data)
+    } catch (error) {
+      console.error('Error fetching grant serials:', error)
+      setGrantSerials([])
+    }
+  }
+
+  const generateSerialPreview = async () => {
+    const selectedAlloc = getSelectedAllocation()
+    if (!formData.grant_call_id || !formData.date || !selectedAlloc?.state_name) return;
+
+    try {
+      // Get the grant call details to build the serial
+      const { data: grantCall, error: grantError } = await supabase
+        .from('grant_calls')
+        .select('shortname, donor:donors!inner(short_name)')
+        .eq('id', formData.grant_call_id)
+        .single()
+
+      if (grantError) throw grantError
+      if (!grantCall?.donor?.short_name) throw new Error('Donor short name missing')
+
+      // Get the state details
+      const { data: states, error: stateError } = await supabase
+        .from('states')
+        .select('state_short')
+        .eq('state_name', selectedAlloc.state_name)
+        .limit(1)
+
+      if (stateError) throw stateError
+      if (!states?.length) throw new Error('State not found')
+
+      // Get the next serial number (count + 1)
+      const { count, error: countError } = await supabase
+        .from('grant_serials')
+        .select('*', { count: 'exact', head: true })
+        .eq('grant_call_id', formData.grant_call_id)
+        .eq('state_name', selectedAlloc.state_name)
+        .eq('yymm', formData.date)
+
+      if (countError) throw countError
+
+      const nextNumber = (count || 0) + 1
+      const paddedSerial = nextNumber.toString().padStart(4, '0')
+
+      // Build the serial string
+      const serial = `LCC-${grantCall.donor.short_name}-${states[0].state_short.toUpperCase()}-${formData.date}-${paddedSerial}`
+      
+      setPreviewSerial(serial)
+      handleInputChange('grant_serial_id', 'new')
+    } catch (error) {
+      console.error('Error generating serial preview:', error)
+      alert(t('fsystem:f1.errors.create_serial_failed'))
+    }
+  }
+
+  const previewNextWorkplanNumber = async () => {
+    if (!formData.grant_serial_id) {
+      setNextWorkplanNumber(null)
+      setPreviewId('')
+      return
+    }
+
+    try {
+      const response = await fetch(`/api/fsystem/workplans/preview?grant_serial_id=${formData.grant_serial_id}`)
+      
+      if (!response.ok) throw new Error('Failed to get workplan preview')
+      
+      const { next_number, preview_id } = await response.json()
+      setNextWorkplanNumber(next_number)
+      setPreviewId(preview_id)
+    } catch (error) {
+      console.error('Error getting workplan preview:', error)
+      setNextWorkplanNumber(null)
+      setPreviewId('')
+    }
+  }
+
+  // Effect to fetch grant serials when dependencies change
+  useEffect(() => {
+    fetchGrantSerials()
+  }, [formData.grant_call_id, formData.date, formData.grant_call_state_allocation_id])
+
+  // Effect to preview next workplan number when grant serial changes
+  useEffect(() => {
+    previewNextWorkplanNumber()
+  }, [formData.grant_serial_id])
+
   const hasRequiredFields = () => {
     return (
       formData.donor_id &&
       formData.state_id &&
       formData.date &&
-      formData.grant_serial?.length === 4 &&
       formData.emergency_room_id &&
-      formData.grant_call_state_allocation_id // Require allocation selection
+      formData.grant_call_state_allocation_id &&
+      formData.grant_serial_id
     )
   }
 
-  const generateBasePattern = () => {
-    const selectedDonor = donors.find(d => d.id === formData.donor_id)
-    const selectedState = states.find(s => s.id === formData.state_id)
-    const selectedRoom = rooms.find(r => r.id === formData.emergency_room_id)
-    
-    if (!selectedDonor?.short_name || !selectedState?.state_short || !selectedRoom?.err_code) return ''
-    if (!hasRequiredFields()) return ''
-
-    const stateCode = selectedState.state_short.toUpperCase()
-    const dateStr = formData.date
-
-    return `LCC-${selectedDonor.short_name}-${stateCode}-${dateStr}-${formData.grant_serial}`
-  }
-
-  const getNextSequenceNumber = async (basePattern: string, previewOnly: boolean = true) => {
-    try {
-      const response = await fetch('/api/fsystem/next-sequence', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ 
-          base_pattern: basePattern,
-          preview_only: previewOnly
-        })
-      })
-
-      if (!response.ok) {
-        throw new Error('Failed to get next sequence number')
-      }
-
-      const { padded_number } = await response.json()
-      return padded_number
-    } catch (error) {
-      console.error('Error getting sequence number:', error)
-      throw error
-    }
-  }
+  // Get selected allocation
+  const getSelectedAllocation = () => stateAllocations.find(
+    alloc => alloc.id === formData.grant_call_state_allocation_id
+  )
 
   const handleInputChange = (field: keyof F1FormData, value: string | string[]) => {
     setFormData(prev => ({ ...prev, [field]: value }))
@@ -332,14 +408,46 @@ export default function DirectUpload() {
   const handleConfirmUpload = async (editedData: any) => {
     setIsLoading(true)
     try {
-      const basePattern = generateBasePattern()
-      if (!basePattern) {
-        throw new Error('Missing required information')
+      let grantSerialId = formData.grant_serial_id;
+
+      // If this is a new serial, create it first
+      if (grantSerialId === 'new') {
+        const selectedAlloc = getSelectedAllocation()
+        if (!selectedAlloc) throw new Error('Missing allocation')
+
+        const response = await fetch('/api/fsystem/grant-serials/create', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            grant_call_id: formData.grant_call_id,
+            state_name: selectedAlloc.state_name,
+            yymm: formData.date
+          })
+        })
+
+        if (!response.ok) throw new Error('Failed to create grant serial')
+        const newSerial = await response.json()
+        grantSerialId = newSerial.grant_serial
       }
 
-      // Get and commit the sequence number after user confirms
-      const finalSequenceNumber = await getNextSequenceNumber(basePattern, false)
-      const finalGrantId = `${basePattern}-${finalSequenceNumber}`
+      // Get and commit the workplan number
+      const response = await fetch('/api/fsystem/workplans/commit', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          grant_serial: grantSerialId
+        })
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to commit workplan number')
+      }
+
+      const { workplan_number, grant_id } = await response.json()
 
       const selectedDonor = donors.find(d => d.id === formData.donor_id)
       const selectedState = states.find(s => s.id === formData.state_id)
@@ -369,7 +477,7 @@ export default function DirectUpload() {
 
       // Get file extension and generate path
       const fileExtension = selectedFile.name.split('.').pop()
-      const filePath = `f1-forms/${selectedDonor.short_name}/${selectedState.state_short}/${formData.date}/${finalGrantId}.${fileExtension}`
+      const filePath = `f1-forms/${selectedDonor.short_name}/${selectedState.state_short}/${formData.date}/${grant_id}.${fileExtension}`
       
       // Upload file to Supabase storage
       const { error: uploadError } = await supabase.storage
@@ -389,11 +497,13 @@ export default function DirectUpload() {
         .insert([{
           ...editedData,
           donor_id: formData.donor_id,
-          grant_serial: formData.grant_serial,
+
           project_id: formData.project_id,
           emergency_room_id: formData.emergency_room_id,
           err_id: selectedRoom.err_code,
-          grant_id: finalGrantId,
+          grant_id: grant_id,
+          grant_serial_id: formData.grant_serial_id,
+          workplan_number: parseInt(workplan_number),
           status: 'pending',
           source: 'mutual_aid_portal',
           state: selectedState.state_name,
@@ -411,7 +521,7 @@ export default function DirectUpload() {
       // Update Google Sheet with final grant ID and sectors
       const sheetData = {
         ...editedData,
-        grant_id: finalGrantId,
+            grant_id: grant_id,
         err_id: selectedRoom.err_code,
         err_name: selectedRoom.name_ar || selectedRoom.name,
         donor_name: selectedDonor.name,
@@ -438,14 +548,14 @@ export default function DirectUpload() {
         donor_id: '',
         state_id: '',
         date: '',
-        grant_serial: '',
         project_id: '',
         emergency_room_id: '',
         file: null,
         primary_sectors: [],
         secondary_sectors: [],
         grant_call_id: '',
-        grant_call_state_allocation_id: ''
+        grant_call_state_allocation_id: '',
+        grant_serial_id: ''
       })
       setSelectedFile(null)
       setPreviewId('')
@@ -474,307 +584,323 @@ export default function DirectUpload() {
     <div className="space-y-6">
       {!isReviewing && (
         <div className="space-y-6">
-          <div className="space-y-4">
-            <div>
-              <Label className="mb-2">{t('fsystem:f1.select_grant')}</Label>
-              <Select
-                value={selectedGrantCall}
-                onValueChange={(value) => {
-                  setSelectedGrantCall(value)
-                  setFormData(prev => ({
-                    ...prev,
-                    grant_call_id: value,
-                    grant_call_state_allocation_id: '',
-                    state_id: '',
-                    donor_id: grantCalls.find(g => g.id === value)?.donor?.id || ''
-                  }))
-                }}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder={t('fsystem:f1.select_grant_placeholder')} />
-                </SelectTrigger>
-                <SelectContent>
-                  {grantCalls.map((grant) => (
-                    <SelectItem key={grant.id} value={grant.id}>
-                      {grant.name} ({grant.donor.name})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {selectedGrantCall && (
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label className="text-sm text-muted-foreground">{t('fsystem:f1.grant_amount')}</Label>
-                    <div className="text-lg font-semibold">
-                      {grantCalls.find(g => g.id === selectedGrantCall)?.amount.toLocaleString()}
-                    </div>
-                  </div>
-                  <div>
-                    <Label className="text-sm text-muted-foreground">{t('fsystem:f1.donor')}</Label>
-                    <div className="text-lg font-semibold">
-                      {grantCalls.find(g => g.id === selectedGrantCall)?.donor.name}
-                    </div>
-                  </div>
-                </div>
-
-                {stateAllocations.length > 0 && (
-                  <StateAllocationTable
-                    allocations={stateAllocations}
-                    selectedAllocationId={formData.grant_call_state_allocation_id}
-                    onSelectAllocation={(id) => {
-                      setFormData(prev => ({
-                        ...prev,
-                        grant_call_state_allocation_id: id,
-                        state_id: states.find(s => s.state_name === stateAllocations.find(a => a.id === id)?.state_name)?.id || ''
-                      }))
-                    }}
-                  />
-                )}
+            <div className="space-y-4">
+              <div>
+                <Label className="mb-2">{t('fsystem:f1.select_grant')}</Label>
+                <Select
+                  value={selectedGrantCall}
+                  onValueChange={(value) => {
+                    setSelectedGrantCall(value)
+                    setFormData(prev => ({
+                      ...prev,
+                      grant_call_id: value,
+                      grant_call_state_allocation_id: '',
+                      state_id: '',
+                      donor_id: grantCalls.find(g => g.id === value)?.donor?.id || ''
+                    }))
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={t('fsystem:f1.select_grant_placeholder')} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {grantCalls.map((grant) => (
+                      <SelectItem key={grant.id} value={grant.id}>
+                        {grant.name} ({grant.donor.name})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
-            )}
-          </div>
+
+              {selectedGrantCall && (
+              <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label className="text-sm text-muted-foreground">{t('fsystem:f1.grant_amount')}</Label>
+                      <div className="text-lg font-semibold">
+                        {grantCalls.find(g => g.id === selectedGrantCall)?.amount.toLocaleString()}
+                      </div>
+                    </div>
+                    <div>
+                      <Label className="text-sm text-muted-foreground">{t('fsystem:f1.donor')}</Label>
+                      <div className="text-lg font-semibold">
+                        {grantCalls.find(g => g.id === selectedGrantCall)?.donor.name}
+                      </div>
+                    </div>
+                  </div>
+
+                  {stateAllocations.length > 0 && (
+                    <StateAllocationTable
+                      allocations={stateAllocations}
+                      selectedAllocationId={formData.grant_call_state_allocation_id}
+                      onSelectAllocation={(id) => {
+                        setFormData(prev => ({
+                          ...prev,
+                          grant_call_state_allocation_id: id,
+                          state_id: states.find(s => s.state_name === stateAllocations.find(a => a.id === id)?.state_name)?.id || ''
+                        }))
+                      }}
+                    />
+                  )}
+                </div>
+              )}
+            </div>
         </div>
       )}
 
       {!isReviewing ? (
         <div className="space-y-6">
-          {/* File Upload */}
-          <div>
-            <Label className="mb-2">{t('fsystem:f1.upload_label')}</Label>
-            <Input
-              type="file"
-              accept=".pdf,.doc,.docx"
-              onChange={handleFileChange}
-              className="mt-1"
-            />
-          </div>
+              {/* File Upload */}
+              <div>
+                <Label className="mb-2">{t('fsystem:f1.upload_label')}</Label>
+                <Input
+                  type="file"
+                  accept=".pdf,.doc,.docx"
+                  onChange={handleFileChange}
+                  className="mt-1"
+                />
+              </div>
 
-          {/* Main Selectors in One Row */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <Label className="mb-2">{t('fsystem:f1.donor')}</Label>
-              <Select
-                value={formData.donor_id}
-                onValueChange={(value) => handleInputChange('donor_id', value)}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder={t('fsystem:f1.select_donor')} />
-                </SelectTrigger>
-                <SelectContent>
-                  {donors.map((donor) => (
-                    <SelectItem key={donor.id} value={donor.id}>
-                      {donor.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
-              <Label className="mb-2">{t('fsystem:f1.state')}</Label>
-              <Select
-                value={formData.state_id}
-                onValueChange={(value) => handleInputChange('state_id', value)}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder={t('fsystem:f1.select_state')} />
-                </SelectTrigger>
-                <SelectContent>
-                  {states.map((state) => (
-                    <SelectItem key={state.id} value={state.id}>
-                      {state.state_name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
-              <Label className="mb-2">{t('fsystem:f1.emergency_response_room')}</Label>
-              <Select
-                value={formData.emergency_room_id}
-                onValueChange={(value) => handleInputChange('emergency_room_id', value)}
-                disabled={!formData.state_id || rooms.length === 0}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder={t('fsystem:f1.select_emergency_room')} />
-                </SelectTrigger>
-                <SelectContent>
-                  {rooms.map((room) => (
-                    <SelectItem key={room.id} value={room.id}>
-                      {room.name_ar || room.name} {room.err_code ? `(${room.err_code})` : ''}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          {/* Sector Selection */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <Label className="mb-2">{t('fsystem:f1.primary_sectors')}</Label>
-              <Select
-                value={formData.primary_sectors[0] || ''}
-                onValueChange={(value) => {
-                  if (!value) return
-                  const newValues = [...formData.primary_sectors]
-                  if (!newValues.includes(value)) {
-                    newValues.push(value)
-                    handleInputChange('primary_sectors', newValues)
-                  }
-                }}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder={t('fsystem:f1.select_primary_sectors')}>
-                    {formData.primary_sectors.length > 0
-                      ? `${formData.primary_sectors.length} selected`
-                      : t('fsystem:f1.select_primary_sectors')}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  {sectors
-                    .filter(sector => !formData.primary_sectors.includes(sector.id))
-                    .map((sector) => (
-                      <SelectItem key={sector.id} value={sector.id}>
-                        {sector.sector_name_en} {sector.sector_name_ar && `(${sector.sector_name_ar})`}
-                      </SelectItem>
-                    ))}
-                </SelectContent>
-              </Select>
-              {formData.primary_sectors.length > 0 && (
-                <div className="flex flex-wrap gap-2 mt-2">
-                  {formData.primary_sectors.map(sectorId => {
-                    const sector = sectors.find(s => s.id === sectorId)
-                    if (!sector) return null
-                    return (
-                      <Button
-                        key={sector.id}
-                        variant="secondary"
-                        size="sm"
-                        className="bg-emerald-100 hover:bg-emerald-200 text-emerald-700 border-emerald-200"
-                        onClick={() => {
-                          const newValues = formData.primary_sectors.filter(id => id !== sector.id)
-                          handleInputChange('primary_sectors', newValues)
-                        }}
-                      >
-                        {sector.sector_name_en}
-                        <X className="w-4 h-4 ml-2" />
-                      </Button>
-                    )
-                  })}
+              {/* Main Selectors in One Row */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <Label className="mb-2">{t('fsystem:f1.donor')}</Label>
+                  <Select
+                    value={formData.donor_id}
+                    onValueChange={(value) => handleInputChange('donor_id', value)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder={t('fsystem:f1.select_donor')} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {donors.map((donor) => (
+                        <SelectItem key={donor.id} value={donor.id}>
+                          {donor.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
-              )}
-            </div>
 
-            <div>
-              <Label className="mb-2">{t('fsystem:f1.secondary_sectors')}</Label>
+                <div>
+                  <Label className="mb-2">{t('fsystem:f1.state')}</Label>
+                  <Select
+                    value={formData.state_id}
+                    onValueChange={(value) => handleInputChange('state_id', value)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder={t('fsystem:f1.select_state')} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {states.map((state) => (
+                        <SelectItem key={state.id} value={state.id}>
+                          {state.state_name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <Label className="mb-2">{t('fsystem:f1.emergency_response_room')}</Label>
+                  <Select
+                    value={formData.emergency_room_id}
+                    onValueChange={(value) => handleInputChange('emergency_room_id', value)}
+                    disabled={!formData.state_id || rooms.length === 0}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder={t('fsystem:f1.select_emergency_room')} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {rooms.map((room) => (
+                        <SelectItem key={room.id} value={room.id}>
+                          {room.name_ar || room.name} {room.err_code ? `(${room.err_code})` : ''}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {/* Sector Selection */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label className="mb-2">{t('fsystem:f1.primary_sectors')}</Label>
+                  <Select
+                    value={formData.primary_sectors[0] || ''}
+                    onValueChange={(value) => {
+                      if (!value) return
+                      const newValues = [...formData.primary_sectors]
+                      if (!newValues.includes(value)) {
+                        newValues.push(value)
+                        handleInputChange('primary_sectors', newValues)
+                      }
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder={t('fsystem:f1.select_primary_sectors')}>
+                        {formData.primary_sectors.length > 0
+                          ? `${formData.primary_sectors.length} selected`
+                          : t('fsystem:f1.select_primary_sectors')}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {sectors
+                        .filter(sector => !formData.primary_sectors.includes(sector.id))
+                        .map((sector) => (
+                          <SelectItem key={sector.id} value={sector.id}>
+                            {sector.sector_name_en} {sector.sector_name_ar && `(${sector.sector_name_ar})`}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                  {formData.primary_sectors.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {formData.primary_sectors.map(sectorId => {
+                        const sector = sectors.find(s => s.id === sectorId)
+                        if (!sector) return null
+                        return (
+                          <Button
+                            key={sector.id}
+                            variant="secondary"
+                            size="sm"
+                            className="bg-emerald-100 hover:bg-emerald-200 text-emerald-700 border-emerald-200"
+                            onClick={() => {
+                              const newValues = formData.primary_sectors.filter(id => id !== sector.id)
+                              handleInputChange('primary_sectors', newValues)
+                            }}
+                          >
+                            {sector.sector_name_en}
+                            <X className="w-4 h-4 ml-2" />
+                          </Button>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <Label className="mb-2">{t('fsystem:f1.secondary_sectors')}</Label>
+                  <Select
+                    value={formData.secondary_sectors[0] || ''}
+                    onValueChange={(value) => {
+                      if (!value) return
+                      const newValues = [...formData.secondary_sectors]
+                      if (!newValues.includes(value)) {
+                        newValues.push(value)
+                        handleInputChange('secondary_sectors', newValues)
+                      }
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder={t('fsystem:f1.select_secondary_sectors')}>
+                        {formData.secondary_sectors.length > 0
+                          ? `${formData.secondary_sectors.length} selected`
+                          : t('fsystem:f1.select_secondary_sectors')}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {sectors
+                        .filter(sector => !formData.secondary_sectors.includes(sector.id))
+                        .map((sector) => (
+                          <SelectItem key={sector.id} value={sector.id}>
+                            {sector.sector_name_en} {sector.sector_name_ar && `(${sector.sector_name_ar})`}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                  {formData.secondary_sectors.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {formData.secondary_sectors.map(sectorId => {
+                        const sector = sectors.find(s => s.id === sectorId)
+                        if (!sector) return null
+                        return (
+                          <Button
+                            key={sector.id}
+                            variant="secondary"
+                            size="sm"
+                            className="bg-emerald-100 hover:bg-emerald-200 text-emerald-700 border-emerald-200"
+                            onClick={() => {
+                              const newValues = formData.secondary_sectors.filter(id => id !== sector.id)
+                              handleInputChange('secondary_sectors', newValues)
+                            }}
+                          >
+                            {sector.sector_name_en}
+                            <X className="w-4 h-4 ml-2" />
+                          </Button>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Small Fields in 2 Columns */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label className="mb-2">{t('fsystem:f1.date')}</Label>
+                  <Input
+                    placeholder={t('fsystem:f1.date_placeholder')}
+                    value={formData.date}
+                    onChange={(e) => handleInputChange('date', e.target.value)}
+                    maxLength={4}
+                    pattern="[0-9]{4}"
+                  />
+                </div>
+
+                <div>
+                  <Label className="mb-2">{t('fsystem:f1.grant_serial')}</Label>
               <Select
-                value={formData.secondary_sectors[0] || ''}
+                value={formData.grant_serial_id}
                 onValueChange={(value) => {
-                  if (!value) return
-                  const newValues = [...formData.secondary_sectors]
-                  if (!newValues.includes(value)) {
-                    newValues.push(value)
-                    handleInputChange('secondary_sectors', newValues)
+                  if (value === 'new') {
+                    generateSerialPreview()
+                  } else {
+                    setPreviewSerial('')
+                    handleInputChange('grant_serial_id', value)
                   }
                 }}
+                disabled={!formData.date || !selectedAllocation}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder={t('fsystem:f1.select_secondary_sectors')}>
-                    {formData.secondary_sectors.length > 0
-                      ? `${formData.secondary_sectors.length} selected`
-                      : t('fsystem:f1.select_secondary_sectors')}
-                  </SelectValue>
+                  <SelectValue placeholder={t('fsystem:f1.select_grant_serial')} />
                 </SelectTrigger>
                 <SelectContent>
-                  {sectors
-                    .filter(sector => !formData.secondary_sectors.includes(sector.id))
-                    .map((sector) => (
-                      <SelectItem key={sector.id} value={sector.id}>
-                        {sector.sector_name_en} {sector.sector_name_ar && `(${sector.sector_name_ar})`}
-                      </SelectItem>
-                    ))}
+                  {grantSerials.map((serial) => (
+                    <SelectItem key={serial.grant_serial} value={serial.id}>
+                      {serial.serial}
+                    </SelectItem>
+                  ))}
+                  {formData.date && selectedAllocation && (
+                    <SelectItem key="new" value="new">
+                      {t('fsystem:f1.create_new_serial')}
+                    </SelectItem>
+                  )}
                 </SelectContent>
               </Select>
-              {formData.secondary_sectors.length > 0 && (
-                <div className="flex flex-wrap gap-2 mt-2">
-                  {formData.secondary_sectors.map(sectorId => {
-                    const sector = sectors.find(s => s.id === sectorId)
-                    if (!sector) return null
-                    return (
-                      <Button
-                        key={sector.id}
-                        variant="secondary"
-                        size="sm"
-                        className="bg-emerald-100 hover:bg-emerald-200 text-emerald-700 border-emerald-200"
-                        onClick={() => {
-                          const newValues = formData.secondary_sectors.filter(id => id !== sector.id)
-                          handleInputChange('secondary_sectors', newValues)
-                        }}
-                      >
-                        {sector.sector_name_en}
-                        <X className="w-4 h-4 ml-2" />
-                      </Button>
-                    )
-                  })}
                 </div>
-              )}
-            </div>
-          </div>
+              </div>
 
-          {/* Small Fields in 2 Columns */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <Label className="mb-2">{t('fsystem:f1.date')}</Label>
-              <Input
-                placeholder={t('fsystem:f1.date_placeholder')}
-                value={formData.date}
-                onChange={(e) => handleInputChange('date', e.target.value)}
-                maxLength={4}
-                pattern="[0-9]{4}"
-              />
-            </div>
-
-            <div>
-              <Label className="mb-2">{t('fsystem:f1.grant_serial')}</Label>
-              <Input
-                placeholder={t('fsystem:f1.grant_serial_placeholder')}
-                value={formData.grant_serial}
-                onChange={(e) => {
-                  const value = e.target.value
-                  if (!value || /^\d{1,4}$/.test(value)) {
-                    handleInputChange('grant_serial', value)
-                  }
-                }}
-                maxLength={4}
-                pattern="[0-9]{4}"
-              />
-            </div>
-          </div>
-
-          {/* Generated Form ID */}
+              {/* Generated Form ID */}
           <div>
-            <Label className="mb-2">{t('fsystem:f1.generated_id')}</Label>
-            <div className="mt-1 p-3 bg-muted rounded-md font-mono min-h-[2.5rem] flex items-center">
-              {previewId || (
+                <Label className="mb-2">{t('fsystem:f1.generated_id')}</Label>
+                <div className="mt-1 p-3 bg-muted rounded-md font-mono min-h-[2.5rem] flex items-center">
+                                {previewSerial || previewId || (
                 <span className="text-muted-foreground text-sm">
                   {hasRequiredFields() 
                     ? t('fsystem:f1.generating') 
                     : t('fsystem:f1.complete_fields')}
                 </span>
               )}
+                </div>
+                {previewId && (
+                  <p className="text-sm text-muted-foreground mt-1">
+                    {t('fsystem:f1.preview_note')}
+                  </p>
+                )}
+              </div>
             </div>
-            {previewId && (
-              <p className="text-sm text-muted-foreground mt-1">
-                {t('fsystem:f1.preview_note')}
-              </p>
-            )}
-          </div>
-        </div>
       ) : (
         <ExtractedDataReview
           data={processedData}
