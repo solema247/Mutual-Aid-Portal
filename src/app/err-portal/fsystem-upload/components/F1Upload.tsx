@@ -31,7 +31,9 @@ export default function F1Upload() {
     emergency_room_id: '',
     file: null,
     primary_sectors: [],
-    secondary_sectors: []
+    secondary_sectors: [],
+    grant_call_id: '',
+    grant_call_state_allocation_id: ''
   })
   const [isLoading, setIsLoading] = useState(false)
   const [previewId, setPreviewId] = useState('')
@@ -422,7 +424,9 @@ export default function F1Upload() {
         emergency_room_id: '',
         file: null,
         primary_sectors: [],
-        secondary_sectors: []
+        secondary_sectors: [],
+        grant_call_id: '',
+        grant_call_state_allocation_id: ''
       })
       setSelectedFile(null)
       setPreviewId('')

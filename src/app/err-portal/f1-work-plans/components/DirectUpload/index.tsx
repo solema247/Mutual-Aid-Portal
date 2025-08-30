@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Button } from '@/components/ui/button'
 import { FileUp } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
-import type { Donor, State, F1FormData, EmergencyRoom, Sector } from '@/app/api/fsystem/types/fsystem'
+import type { Donor, State, F1FormData, EmergencyRoom, Sector, GrantCall, StateAllocation } from '@/app/api/fsystem/types/fsystem'
 import ExtractedDataReview from './ExtractedDataReview'
 import { cn } from '@/lib/utils'
 import StateAllocationTable from './StateAllocationTable'
@@ -22,21 +22,9 @@ export default function DirectUpload() {
   const [rooms, setRooms] = useState<EmergencyRoom[]>([])
   const [sectors, setSectors] = useState<Sector[]>([])
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
-  const [grantCalls, setGrantCalls] = useState<{
-    id: string;
-    name: string;
-    shortname: string;
-    amount: number;
-    donor: { name: string };
-  }[]>([])
+  const [grantCalls, setGrantCalls] = useState<GrantCall[]>([])
   const [selectedGrantCall, setSelectedGrantCall] = useState<string>('')
-  const [stateAllocations, setStateAllocations] = useState<{
-    id: string;
-    state_name: string;
-    amount: number;
-    amount_used?: number;
-    decision_no: number;
-  }[]>([])
+  const [stateAllocations, setStateAllocations] = useState<StateAllocation[]>([])
 
   const [formData, setFormData] = useState<F1FormData>({
     donor_id: '',
@@ -67,7 +55,7 @@ export default function DirectUpload() {
             name,
             shortname,
             amount,
-            donor:donors (
+            donor:donors!inner (
               id,
               name
             )
@@ -76,7 +64,19 @@ export default function DirectUpload() {
           .order('created_at', { ascending: false })
 
         if (grantCallsError) throw grantCallsError
-        setGrantCalls(grantCallsData)
+        
+        // Transform the data to match the GrantCall type
+        const transformedGrantCalls: GrantCall[] = grantCallsData.map((grant: any) => ({
+          id: grant.id,
+          name: grant.name,
+          shortname: grant.shortname,
+          amount: grant.amount,
+          donor: {
+            id: grant.donor.id,
+            name: grant.donor.name
+          }
+        }))
+        setGrantCalls(transformedGrantCalls)
 
         // Fetch donors
         const { data: donorsData, error: donorsError } = await supabase
@@ -148,7 +148,7 @@ export default function DirectUpload() {
 
         // Convert back to array
         const latestAllocations = Object.values(latestByState)
-        setStateAllocations(latestAllocations)
+        setStateAllocations(latestAllocations as StateAllocation[])
       } catch (error) {
         console.error('Error fetching state allocations:', error)
         setStateAllocations([])
@@ -398,7 +398,10 @@ export default function DirectUpload() {
           source: 'mutual_aid_portal',
           state: selectedState.state_name,
           "Sector (Primary)": primarySectorNames,
-          "Sector (Secondary)": secondarySectorNames
+          "Sector (Secondary)": secondarySectorNames,
+          grant_call_id: formData.grant_call_id,
+          grant_call_state_allocation_id: formData.grant_call_state_allocation_id,
+          funding_status: 'allocated'  // Since we're linking it to an allocation
         }])
 
       if (insertError) {
@@ -469,73 +472,75 @@ export default function DirectUpload() {
 
   return (
     <div className="space-y-6">
-      {/* Grant Selection */}
-      <Card>
-        <CardContent className="pt-6">
-          <div className="space-y-4">
-            <div>
-              <Label className="mb-2">{t('fsystem:f1.select_grant')}</Label>
-              <Select
-                value={selectedGrantCall}
-                onValueChange={(value) => {
-                  setSelectedGrantCall(value)
-                  setFormData(prev => ({
-                    ...prev,
-                    grant_call_id: value,
-                    grant_call_state_allocation_id: '',
-                    state_id: '',
-                    donor_id: grantCalls.find(g => g.id === value)?.donor?.id || ''
-                  }))
-                }}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder={t('fsystem:f1.select_grant_placeholder')} />
-                </SelectTrigger>
-                <SelectContent>
-                  {grantCalls.map((grant) => (
-                    <SelectItem key={grant.id} value={grant.id}>
-                      {grant.name} ({grant.donor.name})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {selectedGrantCall && (
-              <div className="rounded-lg border p-4 space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label className="text-sm text-muted-foreground">{t('fsystem:f1.grant_amount')}</Label>
-                    <div className="text-lg font-semibold">
-                      {grantCalls.find(g => g.id === selectedGrantCall)?.amount.toLocaleString()}
-                    </div>
-                  </div>
-                  <div>
-                    <Label className="text-sm text-muted-foreground">{t('fsystem:f1.donor')}</Label>
-                    <div className="text-lg font-semibold">
-                      {grantCalls.find(g => g.id === selectedGrantCall)?.donor.name}
-                    </div>
-                  </div>
-                </div>
-
-                {stateAllocations.length > 0 && (
-                  <StateAllocationTable
-                    allocations={stateAllocations}
-                    selectedAllocationId={formData.grant_call_state_allocation_id}
-                    onSelectAllocation={(id) => {
-                      setFormData(prev => ({
-                        ...prev,
-                        grant_call_state_allocation_id: id,
-                        state_id: states.find(s => s.state_name === stateAllocations.find(a => a.id === id)?.state_name)?.id || ''
-                      }))
-                    }}
-                  />
-                )}
+      {!isReviewing && (
+        /* Grant Selection */
+        <Card>
+          <CardContent className="pt-6">
+            <div className="space-y-4">
+              <div>
+                <Label className="mb-2">{t('fsystem:f1.select_grant')}</Label>
+                <Select
+                  value={selectedGrantCall}
+                  onValueChange={(value) => {
+                    setSelectedGrantCall(value)
+                    setFormData(prev => ({
+                      ...prev,
+                      grant_call_id: value,
+                      grant_call_state_allocation_id: '',
+                      state_id: '',
+                      donor_id: grantCalls.find(g => g.id === value)?.donor?.id || ''
+                    }))
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={t('fsystem:f1.select_grant_placeholder')} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {grantCalls.map((grant) => (
+                      <SelectItem key={grant.id} value={grant.id}>
+                        {grant.name} ({grant.donor.name})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
-            )}
-          </div>
-        </CardContent>
-      </Card>
+
+              {selectedGrantCall && (
+                <div className="rounded-lg border p-4 space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label className="text-sm text-muted-foreground">{t('fsystem:f1.grant_amount')}</Label>
+                      <div className="text-lg font-semibold">
+                        {grantCalls.find(g => g.id === selectedGrantCall)?.amount.toLocaleString()}
+                      </div>
+                    </div>
+                    <div>
+                      <Label className="text-sm text-muted-foreground">{t('fsystem:f1.donor')}</Label>
+                      <div className="text-lg font-semibold">
+                        {grantCalls.find(g => g.id === selectedGrantCall)?.donor.name}
+                      </div>
+                    </div>
+                  </div>
+
+                  {stateAllocations.length > 0 && (
+                    <StateAllocationTable
+                      allocations={stateAllocations}
+                      selectedAllocationId={formData.grant_call_state_allocation_id}
+                      onSelectAllocation={(id) => {
+                        setFormData(prev => ({
+                          ...prev,
+                          grant_call_state_allocation_id: id,
+                          state_id: states.find(s => s.state_name === stateAllocations.find(a => a.id === id)?.state_name)?.id || ''
+                        }))
+                      }}
+                    />
+                  )}
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {!isReviewing ? (
         <Card>

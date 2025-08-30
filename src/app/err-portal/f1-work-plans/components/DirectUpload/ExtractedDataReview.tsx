@@ -48,6 +48,28 @@ interface ExtractedDataReviewProps {
   onConfirm: (editedData: ExtractedData) => void;
   onCancel: () => void;
   allocationInfo: AllocationInfo;
+  onValidationError?: (message: string) => void;
+}
+
+interface ExtractedData {
+  date: string | null;
+  state: string | null;
+  locality: string | null;
+  project_objectives: string | null;
+  intended_beneficiaries: string | null;
+  estimated_beneficiaries: number | null;
+  estimated_timeframe: string | null;
+  additional_support: string | null;
+  banking_details: string | null;
+  program_officer_name: string | null;
+  program_officer_phone: string | null;
+  reporting_officer_name: string | null;
+  reporting_officer_phone: string | null;
+  finance_officer_name: string | null;
+  finance_officer_phone: string | null;
+  planned_activities: string[];
+  expenses: Expense[];
+  language: 'ar' | 'en' | null;
   onValidationError: (message: string) => void;
 }
 
@@ -130,46 +152,27 @@ export default function ExtractedDataReview({
         <CardDescription>{t('fsystem:review.description')}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
-        {/* Allocation Summary */}
-        <div className="rounded-lg border p-4 space-y-4">
-          <h3 className="font-semibold">{allocationInfo.grantName}</h3>
+        {/* Simple Allocation Summary */}
+        <div className="mb-6">
           <div className="grid grid-cols-3 gap-4">
             <div>
-              <Label className="text-sm text-muted-foreground">
-                {t('fsystem:review.fields.state')}
-              </Label>
-              <div className="text-lg font-semibold">
-                {allocationInfo.stateName}
-              </div>
+              <Label>State</Label>
+              <div className="text-lg font-medium">{allocationInfo.stateName}</div>
             </div>
             <div>
-              <Label className="text-sm text-muted-foreground">
-                {t('fsystem:review.fields.available_amount')}
-              </Label>
-              <div className="text-lg font-semibold">
-                {availableAmount.toLocaleString()}
-              </div>
+              <Label>available_amount</Label>
+              <div className="text-lg font-medium">{(allocationInfo.amount - allocationInfo.amountUsed).toLocaleString()}</div>
             </div>
             <div>
-              <Label className="text-sm text-muted-foreground">
-                {t('fsystem:review.fields.f1_amount')}
-              </Label>
+              <Label>f1_amount</Label>
               <div className={cn(
-                "text-lg font-semibold",
+                "text-lg font-medium",
                 isOverBudget && "text-destructive"
               )}>
                 {totalAmount.toLocaleString()}
               </div>
             </div>
           </div>
-          {isOverBudget && (
-            <div className="mt-2 text-sm text-destructive">
-              {t('fsystem:review.errors.amount_exceeds_available', {
-                available: availableAmount.toLocaleString(),
-                amount: totalAmount.toLocaleString()
-              })}
-            </div>
-          )}
         </div>
 
         {/* Basic Information */}
@@ -231,6 +234,67 @@ export default function ExtractedDataReview({
               value={editedData.intended_beneficiaries || ''}
               onChange={(e) => handleInputChange('intended_beneficiaries', e.target.value)}
             />
+          </div>
+        </div>
+
+        {/* Planned Activities Section */}
+        <div>
+          <Label className="text-lg font-semibold mb-2">{t('fsystem:review.fields.planned_activities')}</Label>
+          <div className="border rounded-lg overflow-hidden">
+            <table className="w-full">
+              <thead className="bg-muted">
+                <tr>
+                  <th className="px-4 py-2 text-left">{t('fsystem:review.fields.activity')}</th>
+                  <th className="w-16 px-4 py-2"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {editedData.planned_activities.map((activity, index) => (
+                  <tr key={index} className="border-t">
+                    <td className="px-4 py-2">
+                      <Input
+                        value={activity}
+                        onChange={(e) => {
+                          const newActivities = [...editedData.planned_activities]
+                          newActivities[index] = e.target.value
+                          handleInputChange('planned_activities', newActivities)
+                        }}
+                        className="border-0 focus-visible:ring-0 px-0 py-0 h-8"
+                      />
+                    </td>
+                    <td className="px-4 py-2 text-center">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          const newActivities = editedData.planned_activities.filter((_, i) => i !== index)
+                          handleInputChange('planned_activities', newActivities)
+                        }}
+                        className="h-8 w-8 p-0"
+                      >
+                        ×
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <div className="p-4 border-t">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  handleInputChange('planned_activities', [
+                    ...editedData.planned_activities,
+                    ''
+                  ])
+                }}
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                {t('fsystem:review.fields.add_activity')}
+              </Button>
+            </div>
           </div>
         </div>
 

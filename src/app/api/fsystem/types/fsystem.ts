@@ -25,6 +25,8 @@ export interface F1FormData {
   file: File | null;
   primary_sectors: string[];
   secondary_sectors: string[];
+  grant_call_id: string;
+  grant_call_state_allocation_id: string;
 }
 
 export interface F1FormResponse {
@@ -47,4 +49,23 @@ export interface Sector {
   id: string;
   sector_name_en: string;
   sector_name_ar: string | null;
+}
+
+export interface GrantCall {
+  id: string;
+  name: string;
+  shortname: string;
+  amount: number;
+  donor: {
+    id: string;
+    name: string;
+  };
+}
+
+export interface StateAllocation {
+  id: string;
+  state_name: string;
+  amount: number;
+  amount_used?: number;
+  decision_no: number;
 } 
