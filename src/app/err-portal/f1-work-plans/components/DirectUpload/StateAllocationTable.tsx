@@ -10,6 +10,9 @@ interface StateAllocationTableProps {
     state_name: string;
     amount: number;
     amount_used?: number;
+    amount_committed?: number;
+    amount_pending?: number;
+    amount_approved?: number;
   }[];
   selectedAllocationId?: string;
   onSelectAllocation?: (id: string) => void;
@@ -32,18 +35,22 @@ export default function StateAllocationTable({
           <tr className="border-b">
             <th className="px-4 py-2 text-left">{t('fsystem:f1.state')}</th>
             <th className="px-4 py-2 text-right">{t('fsystem:f1.allocated_amount')}</th>
+            <th className="px-4 py-2 text-right">{t('fsystem:f1.committed_amount')}</th>
             <th className="px-4 py-2 text-right">{t('fsystem:f1.remaining_amount')}</th>
           </tr>
         </thead>
         <tbody>
           {allocations.map((allocation) => {
-            const remaining = allocation.amount - (allocation.amount_used || 0)
+                        const committed = allocation.amount_committed || 0
+            const pending = allocation.amount_pending || 0
+            const approved = allocation.amount_approved || 0
+            const remaining = allocation.amount - committed
             const isOverAllocated = highlightedAmount !== undefined && 
                                   highlightedAmount > remaining
             
             return (
               <tr 
-                key={allocation.id} 
+                key={allocation.id}
                 className={cn(
                   "hover:bg-muted/50",
                   selectedAllocationId === allocation.id && "bg-green-50 border-l-2 border-l-green-600",
@@ -66,6 +73,12 @@ export default function StateAllocationTable({
               >
                 <td className="px-4 py-2">{allocation.state_name}</td>
                 <td className="px-4 py-2 text-right">{allocation.amount.toLocaleString()}</td>
+                <td className="px-4 py-2 text-right">
+                  {committed.toLocaleString()}
+                  <span className="text-xs text-muted-foreground ml-1">
+                    (Pending: {pending.toLocaleString()}, Approved: {approved.toLocaleString()})
+                  </span>
+                </td>
                 <td className={cn(
                   "px-4 py-2 text-right",
                   isOverAllocated && "text-destructive font-medium"

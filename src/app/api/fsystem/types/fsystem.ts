@@ -67,5 +67,8 @@ export interface StateAllocation {
   state_name: string;
   amount: number;
   amount_used?: number;
+  amount_committed?: number;
+  amount_pending?: number;
+  amount_approved?: number;
   decision_no: number;
 } 

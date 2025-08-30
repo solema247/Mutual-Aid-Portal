@@ -13,6 +13,7 @@
     "grant_amount": "مبلغ المنحة",
     "state_allocations": "تخصيصات الولايات",
     "allocated_amount": "المخصص",
+    "committed_amount": "الملتزم به",
     "remaining_amount": "المتبقي",
     "upload_label": "رفع نموذج F1",
     "select_allocation_first": "الرجاء اختيار تخصيص الولاية من الجدول أعلاه",

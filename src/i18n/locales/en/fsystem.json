@@ -13,6 +13,7 @@
     "grant_amount": "Grant Amount",
     "state_allocations": "State Allocations",
     "allocated_amount": "Allocated",
+    "committed_amount": "Committed",
     "remaining_amount": "Remaining",
     "upload_label": "Upload F1 Form",
     "select_allocation_first": "Please select a state allocation from the table above",

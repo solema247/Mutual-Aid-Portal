@@ -157,9 +157,30 @@ export default function DirectUpload() {
           return acc
         }, {} as Record<string, any>)
 
-        // Convert back to array
-        const latestAllocations = Object.values(latestByState)
-        setStateAllocations(latestAllocations as StateAllocation[])
+        // Convert back to array and type as StateAllocation[]
+        const latestAllocations = Object.values(latestByState) as StateAllocation[]
+
+        // Fetch committed amounts for each allocation
+        const allocationsWithAmounts = await Promise.all(
+          latestAllocations.map(async (allocation: StateAllocation) => {
+            try {
+              const response = await fetch(`/api/fsystem/state-allocations/committed?allocation_id=${allocation.id}`)
+              if (!response.ok) throw new Error('Failed to fetch committed amounts')
+              const { committed, pending, approved } = await response.json()
+              return {
+                ...allocation,
+                amount_committed: committed,
+                amount_pending: pending,
+                amount_approved: approved
+              } as StateAllocation
+            } catch (error) {
+              console.error(`Error fetching amounts for ${allocation.state_name}:`, error)
+              return allocation
+            }
+          })
+        )
+
+        setStateAllocations(allocationsWithAmounts)
       } catch (error) {
         console.error('Error fetching state allocations:', error)
         setStateAllocations([])
