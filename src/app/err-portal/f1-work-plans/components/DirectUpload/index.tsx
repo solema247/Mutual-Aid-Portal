@@ -473,315 +473,308 @@ export default function DirectUpload() {
   return (
     <div className="space-y-6">
       {!isReviewing && (
-        /* Grant Selection */
-        <Card>
-          <CardContent className="pt-6">
-            <div className="space-y-4">
-              <div>
-                <Label className="mb-2">{t('fsystem:f1.select_grant')}</Label>
-                <Select
-                  value={selectedGrantCall}
-                  onValueChange={(value) => {
-                    setSelectedGrantCall(value)
-                    setFormData(prev => ({
-                      ...prev,
-                      grant_call_id: value,
-                      grant_call_state_allocation_id: '',
-                      state_id: '',
-                      donor_id: grantCalls.find(g => g.id === value)?.donor?.id || ''
-                    }))
-                  }}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder={t('fsystem:f1.select_grant_placeholder')} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {grantCalls.map((grant) => (
-                      <SelectItem key={grant.id} value={grant.id}>
-                        {grant.name} ({grant.donor.name})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+        <div className="space-y-6">
+          <div className="space-y-4">
+            <div>
+              <Label className="mb-2">{t('fsystem:f1.select_grant')}</Label>
+              <Select
+                value={selectedGrantCall}
+                onValueChange={(value) => {
+                  setSelectedGrantCall(value)
+                  setFormData(prev => ({
+                    ...prev,
+                    grant_call_id: value,
+                    grant_call_state_allocation_id: '',
+                    state_id: '',
+                    donor_id: grantCalls.find(g => g.id === value)?.donor?.id || ''
+                  }))
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder={t('fsystem:f1.select_grant_placeholder')} />
+                </SelectTrigger>
+                <SelectContent>
+                  {grantCalls.map((grant) => (
+                    <SelectItem key={grant.id} value={grant.id}>
+                      {grant.name} ({grant.donor.name})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
-              {selectedGrantCall && (
-                <div className="rounded-lg border p-4 space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <Label className="text-sm text-muted-foreground">{t('fsystem:f1.grant_amount')}</Label>
-                      <div className="text-lg font-semibold">
-                        {grantCalls.find(g => g.id === selectedGrantCall)?.amount.toLocaleString()}
-                      </div>
-                    </div>
-                    <div>
-                      <Label className="text-sm text-muted-foreground">{t('fsystem:f1.donor')}</Label>
-                      <div className="text-lg font-semibold">
-                        {grantCalls.find(g => g.id === selectedGrantCall)?.donor.name}
-                      </div>
+            {selectedGrantCall && (
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label className="text-sm text-muted-foreground">{t('fsystem:f1.grant_amount')}</Label>
+                    <div className="text-lg font-semibold">
+                      {grantCalls.find(g => g.id === selectedGrantCall)?.amount.toLocaleString()}
                     </div>
                   </div>
-
-                  {stateAllocations.length > 0 && (
-                    <StateAllocationTable
-                      allocations={stateAllocations}
-                      selectedAllocationId={formData.grant_call_state_allocation_id}
-                      onSelectAllocation={(id) => {
-                        setFormData(prev => ({
-                          ...prev,
-                          grant_call_state_allocation_id: id,
-                          state_id: states.find(s => s.state_name === stateAllocations.find(a => a.id === id)?.state_name)?.id || ''
-                        }))
-                      }}
-                    />
-                  )}
+                  <div>
+                    <Label className="text-sm text-muted-foreground">{t('fsystem:f1.donor')}</Label>
+                    <div className="text-lg font-semibold">
+                      {grantCalls.find(g => g.id === selectedGrantCall)?.donor.name}
+                    </div>
+                  </div>
                 </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+
+                {stateAllocations.length > 0 && (
+                  <StateAllocationTable
+                    allocations={stateAllocations}
+                    selectedAllocationId={formData.grant_call_state_allocation_id}
+                    onSelectAllocation={(id) => {
+                      setFormData(prev => ({
+                        ...prev,
+                        grant_call_state_allocation_id: id,
+                        state_id: states.find(s => s.state_name === stateAllocations.find(a => a.id === id)?.state_name)?.id || ''
+                      }))
+                    }}
+                  />
+                )}
+              </div>
+            )}
+          </div>
+        </div>
       )}
 
       {!isReviewing ? (
-        <Card>
-          <CardContent className="pt-6">
-            <div className="space-y-4">
-              {/* File Upload */}
-              <div>
-                <Label className="mb-2">{t('fsystem:f1.upload_label')}</Label>
-                <Input
-                  type="file"
-                  accept=".pdf,.doc,.docx"
-                  onChange={handleFileChange}
-                  className="mt-1"
-                />
-              </div>
+        <div className="space-y-6">
+          {/* File Upload */}
+          <div>
+            <Label className="mb-2">{t('fsystem:f1.upload_label')}</Label>
+            <Input
+              type="file"
+              accept=".pdf,.doc,.docx"
+              onChange={handleFileChange}
+              className="mt-1"
+            />
+          </div>
 
-              {/* Main Selectors in One Row */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div>
-                  <Label className="mb-2">{t('fsystem:f1.donor')}</Label>
-                  <Select
-                    value={formData.donor_id}
-                    onValueChange={(value) => handleInputChange('donor_id', value)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder={t('fsystem:f1.select_donor')} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {donors.map((donor) => (
-                        <SelectItem key={donor.id} value={donor.id}>
-                          {donor.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div>
-                  <Label className="mb-2">{t('fsystem:f1.state')}</Label>
-                  <Select
-                    value={formData.state_id}
-                    onValueChange={(value) => handleInputChange('state_id', value)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder={t('fsystem:f1.select_state')} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {states.map((state) => (
-                        <SelectItem key={state.id} value={state.id}>
-                          {state.state_name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div>
-                  <Label className="mb-2">{t('fsystem:f1.emergency_response_room')}</Label>
-                  <Select
-                    value={formData.emergency_room_id}
-                    onValueChange={(value) => handleInputChange('emergency_room_id', value)}
-                    disabled={!formData.state_id || rooms.length === 0}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder={t('fsystem:f1.select_emergency_room')} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {rooms.map((room) => (
-                        <SelectItem key={room.id} value={room.id}>
-                          {room.name_ar || room.name} {room.err_code ? `(${room.err_code})` : ''}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              {/* Sector Selection */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <Label className="mb-2">{t('fsystem:f1.primary_sectors')}</Label>
-                  <Select
-                    value={formData.primary_sectors[0] || ''}
-                    onValueChange={(value) => {
-                      if (!value) return
-                      const newValues = [...formData.primary_sectors]
-                      if (!newValues.includes(value)) {
-                        newValues.push(value)
-                        handleInputChange('primary_sectors', newValues)
-                      }
-                    }}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder={t('fsystem:f1.select_primary_sectors')}>
-                        {formData.primary_sectors.length > 0
-                          ? `${formData.primary_sectors.length} selected`
-                          : t('fsystem:f1.select_primary_sectors')}
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectContent>
-                      {sectors
-                        .filter(sector => !formData.primary_sectors.includes(sector.id))
-                        .map((sector) => (
-                          <SelectItem key={sector.id} value={sector.id}>
-                            {sector.sector_name_en} {sector.sector_name_ar && `(${sector.sector_name_ar})`}
-                          </SelectItem>
-                        ))}
-                    </SelectContent>
-                  </Select>
-                  {formData.primary_sectors.length > 0 && (
-                    <div className="flex flex-wrap gap-2 mt-2">
-                      {formData.primary_sectors.map(sectorId => {
-                        const sector = sectors.find(s => s.id === sectorId)
-                        if (!sector) return null
-                        return (
-                          <Button
-                            key={sector.id}
-                            variant="secondary"
-                            size="sm"
-                            className="bg-emerald-100 hover:bg-emerald-200 text-emerald-700 border-emerald-200"
-                            onClick={() => {
-                              const newValues = formData.primary_sectors.filter(id => id !== sector.id)
-                              handleInputChange('primary_sectors', newValues)
-                            }}
-                          >
-                            {sector.sector_name_en}
-                            <X className="w-4 h-4 ml-2" />
-                          </Button>
-                        )
-                      })}
-                    </div>
-                  )}
-                </div>
-
-                <div>
-                  <Label className="mb-2">{t('fsystem:f1.secondary_sectors')}</Label>
-                  <Select
-                    value={formData.secondary_sectors[0] || ''}
-                    onValueChange={(value) => {
-                      if (!value) return
-                      const newValues = [...formData.secondary_sectors]
-                      if (!newValues.includes(value)) {
-                        newValues.push(value)
-                        handleInputChange('secondary_sectors', newValues)
-                      }
-                    }}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder={t('fsystem:f1.select_secondary_sectors')}>
-                        {formData.secondary_sectors.length > 0
-                          ? `${formData.secondary_sectors.length} selected`
-                          : t('fsystem:f1.select_secondary_sectors')}
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectContent>
-                      {sectors
-                        .filter(sector => !formData.secondary_sectors.includes(sector.id))
-                        .map((sector) => (
-                          <SelectItem key={sector.id} value={sector.id}>
-                            {sector.sector_name_en} {sector.sector_name_ar && `(${sector.sector_name_ar})`}
-                          </SelectItem>
-                        ))}
-                    </SelectContent>
-                  </Select>
-                  {formData.secondary_sectors.length > 0 && (
-                    <div className="flex flex-wrap gap-2 mt-2">
-                      {formData.secondary_sectors.map(sectorId => {
-                        const sector = sectors.find(s => s.id === sectorId)
-                        if (!sector) return null
-                        return (
-                          <Button
-                            key={sector.id}
-                            variant="secondary"
-                            size="sm"
-                            className="bg-emerald-100 hover:bg-emerald-200 text-emerald-700 border-emerald-200"
-                            onClick={() => {
-                              const newValues = formData.secondary_sectors.filter(id => id !== sector.id)
-                              handleInputChange('secondary_sectors', newValues)
-                            }}
-                          >
-                            {sector.sector_name_en}
-                            <X className="w-4 h-4 ml-2" />
-                          </Button>
-                        )
-                      })}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Small Fields in 2 Columns */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <Label className="mb-2">{t('fsystem:f1.date')}</Label>
-                  <Input
-                    placeholder={t('fsystem:f1.date_placeholder')}
-                    value={formData.date}
-                    onChange={(e) => handleInputChange('date', e.target.value)}
-                    maxLength={4}
-                    pattern="[0-9]{4}"
-                  />
-                </div>
-
-                <div>
-                  <Label className="mb-2">{t('fsystem:f1.grant_serial')}</Label>
-                  <Input
-                    placeholder={t('fsystem:f1.grant_serial_placeholder')}
-                    value={formData.grant_serial}
-                    onChange={(e) => {
-                      const value = e.target.value
-                      if (!value || /^\d{1,4}$/.test(value)) {
-                        handleInputChange('grant_serial', value)
-                      }
-                    }}
-                    maxLength={4}
-                    pattern="[0-9]{4}"
-                  />
-                </div>
-              </div>
-
-              {/* Generated Form ID */}
-              <div className="pt-4">
-                <Label className="mb-2">{t('fsystem:f1.generated_id')}</Label>
-                <div className="mt-1 p-3 bg-muted rounded-md font-mono min-h-[2.5rem] flex items-center">
-                  {previewId || (
-                    <span className="text-muted-foreground text-sm">
-                      {hasRequiredFields() 
-                        ? t('fsystem:f1.generating') 
-                        : t('fsystem:f1.complete_fields')}
-                    </span>
-                  )}
-                </div>
-                {previewId && (
-                  <p className="text-sm text-muted-foreground mt-1">
-                    {t('fsystem:f1.preview_note')}
-                  </p>
-                )}
-              </div>
+          {/* Main Selectors in One Row */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <Label className="mb-2">{t('fsystem:f1.donor')}</Label>
+              <Select
+                value={formData.donor_id}
+                onValueChange={(value) => handleInputChange('donor_id', value)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder={t('fsystem:f1.select_donor')} />
+                </SelectTrigger>
+                <SelectContent>
+                  {donors.map((donor) => (
+                    <SelectItem key={donor.id} value={donor.id}>
+                      {donor.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
-          </CardContent>
-        </Card>
+
+            <div>
+              <Label className="mb-2">{t('fsystem:f1.state')}</Label>
+              <Select
+                value={formData.state_id}
+                onValueChange={(value) => handleInputChange('state_id', value)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder={t('fsystem:f1.select_state')} />
+                </SelectTrigger>
+                <SelectContent>
+                  {states.map((state) => (
+                    <SelectItem key={state.id} value={state.id}>
+                      {state.state_name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label className="mb-2">{t('fsystem:f1.emergency_response_room')}</Label>
+              <Select
+                value={formData.emergency_room_id}
+                onValueChange={(value) => handleInputChange('emergency_room_id', value)}
+                disabled={!formData.state_id || rooms.length === 0}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder={t('fsystem:f1.select_emergency_room')} />
+                </SelectTrigger>
+                <SelectContent>
+                  {rooms.map((room) => (
+                    <SelectItem key={room.id} value={room.id}>
+                      {room.name_ar || room.name} {room.err_code ? `(${room.err_code})` : ''}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {/* Sector Selection */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <Label className="mb-2">{t('fsystem:f1.primary_sectors')}</Label>
+              <Select
+                value={formData.primary_sectors[0] || ''}
+                onValueChange={(value) => {
+                  if (!value) return
+                  const newValues = [...formData.primary_sectors]
+                  if (!newValues.includes(value)) {
+                    newValues.push(value)
+                    handleInputChange('primary_sectors', newValues)
+                  }
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder={t('fsystem:f1.select_primary_sectors')}>
+                    {formData.primary_sectors.length > 0
+                      ? `${formData.primary_sectors.length} selected`
+                      : t('fsystem:f1.select_primary_sectors')}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {sectors
+                    .filter(sector => !formData.primary_sectors.includes(sector.id))
+                    .map((sector) => (
+                      <SelectItem key={sector.id} value={sector.id}>
+                        {sector.sector_name_en} {sector.sector_name_ar && `(${sector.sector_name_ar})`}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+              {formData.primary_sectors.length > 0 && (
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {formData.primary_sectors.map(sectorId => {
+                    const sector = sectors.find(s => s.id === sectorId)
+                    if (!sector) return null
+                    return (
+                      <Button
+                        key={sector.id}
+                        variant="secondary"
+                        size="sm"
+                        className="bg-emerald-100 hover:bg-emerald-200 text-emerald-700 border-emerald-200"
+                        onClick={() => {
+                          const newValues = formData.primary_sectors.filter(id => id !== sector.id)
+                          handleInputChange('primary_sectors', newValues)
+                        }}
+                      >
+                        {sector.sector_name_en}
+                        <X className="w-4 h-4 ml-2" />
+                      </Button>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+
+            <div>
+              <Label className="mb-2">{t('fsystem:f1.secondary_sectors')}</Label>
+              <Select
+                value={formData.secondary_sectors[0] || ''}
+                onValueChange={(value) => {
+                  if (!value) return
+                  const newValues = [...formData.secondary_sectors]
+                  if (!newValues.includes(value)) {
+                    newValues.push(value)
+                    handleInputChange('secondary_sectors', newValues)
+                  }
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder={t('fsystem:f1.select_secondary_sectors')}>
+                    {formData.secondary_sectors.length > 0
+                      ? `${formData.secondary_sectors.length} selected`
+                      : t('fsystem:f1.select_secondary_sectors')}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {sectors
+                    .filter(sector => !formData.secondary_sectors.includes(sector.id))
+                    .map((sector) => (
+                      <SelectItem key={sector.id} value={sector.id}>
+                        {sector.sector_name_en} {sector.sector_name_ar && `(${sector.sector_name_ar})`}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+              {formData.secondary_sectors.length > 0 && (
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {formData.secondary_sectors.map(sectorId => {
+                    const sector = sectors.find(s => s.id === sectorId)
+                    if (!sector) return null
+                    return (
+                      <Button
+                        key={sector.id}
+                        variant="secondary"
+                        size="sm"
+                        className="bg-emerald-100 hover:bg-emerald-200 text-emerald-700 border-emerald-200"
+                        onClick={() => {
+                          const newValues = formData.secondary_sectors.filter(id => id !== sector.id)
+                          handleInputChange('secondary_sectors', newValues)
+                        }}
+                      >
+                        {sector.sector_name_en}
+                        <X className="w-4 h-4 ml-2" />
+                      </Button>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Small Fields in 2 Columns */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <Label className="mb-2">{t('fsystem:f1.date')}</Label>
+              <Input
+                placeholder={t('fsystem:f1.date_placeholder')}
+                value={formData.date}
+                onChange={(e) => handleInputChange('date', e.target.value)}
+                maxLength={4}
+                pattern="[0-9]{4}"
+              />
+            </div>
+
+            <div>
+              <Label className="mb-2">{t('fsystem:f1.grant_serial')}</Label>
+              <Input
+                placeholder={t('fsystem:f1.grant_serial_placeholder')}
+                value={formData.grant_serial}
+                onChange={(e) => {
+                  const value = e.target.value
+                  if (!value || /^\d{1,4}$/.test(value)) {
+                    handleInputChange('grant_serial', value)
+                  }
+                }}
+                maxLength={4}
+                pattern="[0-9]{4}"
+              />
+            </div>
+          </div>
+
+          {/* Generated Form ID */}
+          <div>
+            <Label className="mb-2">{t('fsystem:f1.generated_id')}</Label>
+            <div className="mt-1 p-3 bg-muted rounded-md font-mono min-h-[2.5rem] flex items-center">
+              {previewId || (
+                <span className="text-muted-foreground text-sm">
+                  {hasRequiredFields() 
+                    ? t('fsystem:f1.generating') 
+                    : t('fsystem:f1.complete_fields')}
+                </span>
+              )}
+            </div>
+            {previewId && (
+              <p className="text-sm text-muted-foreground mt-1">
+                {t('fsystem:f1.preview_note')}
+              </p>
+            )}
+          </div>
+        </div>
       ) : (
         <ExtractedDataReview
           data={processedData}
