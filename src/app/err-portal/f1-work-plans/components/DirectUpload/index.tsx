@@ -27,9 +27,7 @@ export default function DirectUpload() {
   const [stateAllocations, setStateAllocations] = useState<StateAllocation[]>([])
 
   interface GrantSerial {
-    id: string;
-    grant_serial: string;  // Added this property
-    serial: string;
+    grant_serial: string;
     grant_call_id: string;
     state_name: string;
     yymm: string;
@@ -222,7 +220,8 @@ export default function DirectUpload() {
       if (!response.ok) throw new Error('Failed to fetch grant serials')
       
       const data = await response.json()
-      setGrantSerials(data)
+      console.log('Fetched grant serials:', data) // Debug log
+      setGrantSerials(data || [])
     } catch (error) {
       console.error('Error fetching grant serials:', error)
       setGrantSerials([])
@@ -319,6 +318,11 @@ export default function DirectUpload() {
 
   // Effect to fetch grant serials when dependencies change
   useEffect(() => {
+    console.log('Dependencies changed:', {
+      grant_call_id: formData.grant_call_id,
+      date: formData.date,
+      allocation_id: formData.grant_call_state_allocation_id
+    })
     fetchGrantSerials()
   }, [formData.grant_call_id, formData.date, formData.grant_call_state_allocation_id])
 
@@ -879,8 +883,8 @@ export default function DirectUpload() {
                 </SelectTrigger>
                 <SelectContent>
                   {grantSerials.map((serial) => (
-                    <SelectItem key={serial.grant_serial} value={serial.id}>
-                      {serial.serial}
+                    <SelectItem key={serial.grant_serial} value={serial.grant_serial}>
+                      {serial.grant_serial}
                     </SelectItem>
                   ))}
                   {formData.date && selectedAllocation && (
