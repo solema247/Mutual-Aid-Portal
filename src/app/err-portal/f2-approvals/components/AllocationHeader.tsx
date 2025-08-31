@@ -62,25 +62,27 @@ export default function AllocationHeader({ onGrantSelect, onStateSelect }: Alloc
 
         if (grantCallError) throw grantCallError
 
-        // Get all state allocations for this grant call
-        const { data: allAllocations, error: allocationsError } = await supabase
+        // First get the latest decision number for this grant call
+        const { data: maxDecisionData, error: maxDecisionError } = await supabase
+          .from('grant_call_state_allocations')
+          .select('decision_no')
+          .eq('grant_call_id', selectedGrantCall)
+          .order('decision_no', { ascending: false })
+          .limit(1)
+
+        if (maxDecisionError) throw maxDecisionError
+        
+        const latestDecisionNo = maxDecisionData[0]?.decision_no
+
+        // Get all state allocations for this grant call at the latest decision number
+        const { data: latestAllocations, error: allocationsError } = await supabase
           .from('grant_call_state_allocations')
           .select('*')
           .eq('grant_call_id', selectedGrantCall)
-          .order('decision_no', { ascending: false })
+          .eq('decision_no', latestDecisionNo)
+          .order('state_name', { ascending: true })
 
         if (allocationsError) throw allocationsError
-
-        // Group by state and get latest decision for each
-        const latestByState = allAllocations.reduce((acc, curr) => {
-          if (!acc[curr.state_name] || acc[curr.state_name].decision_no < curr.decision_no) {
-            acc[curr.state_name] = curr
-          }
-          return acc
-        }, {} as Record<string, any>)
-
-        // Get the latest allocations array
-        const latestAllocations = Object.values(latestByState)
 
         // Get total committed amount for each state from approved projects
         const stateCommitments = await Promise.all(
