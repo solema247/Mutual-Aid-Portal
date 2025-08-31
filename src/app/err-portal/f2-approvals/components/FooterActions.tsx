@@ -24,6 +24,21 @@ export default function FooterActions({
   const [sendBackOpen, setSendBackOpen] = useState(false)
   const [sendBackReason, setSendBackReason] = useState('')
 
+  const calculateTotalAmount = (expenses: string | Array<{ activity: string; total_cost: number; }>): number => {
+    if (!expenses) return 0
+    
+    try {
+      // If expenses is a string (JSON), parse it
+      const expensesArray = typeof expenses === 'string' ? JSON.parse(expenses) : expenses
+      
+      // Sum up all total_cost values
+      return expensesArray.reduce((sum: number, expense: { total_cost: number }) => sum + (expense.total_cost || 0), 0)
+    } catch (error) {
+      console.warn('Error calculating total amount:', error)
+      return 0
+    }
+  }
+
   const handleApprove = async (workplanIds: string[]) => {
     try {
       setIsLoading(true)
@@ -31,7 +46,7 @@ export default function FooterActions({
       // Get workplan data for all selected workplans
       const { data: workplans, error: workplanError } = await supabase
         .from('err_projects')
-        .select('id, requested_amount, grant_call_id, grant_call_state_allocation_id, grant_serial_id')
+        .select('id, expenses, grant_call_id, grant_call_state_allocation_id, grant_serial_id')
         .in('id', workplanIds)
 
       if (workplanError) throw workplanError
@@ -46,7 +61,7 @@ export default function FooterActions({
         grant_call_id: workplan.grant_call_id,
         grant_call_state_allocation_id: workplan.grant_call_state_allocation_id,
         grant_serial_id: workplan.grant_serial_id,
-        delta_amount: workplan.requested_amount,
+        delta_amount: calculateTotalAmount(workplan.expenses),
         reason: 'Initial approval',
         created_by: user?.id
       }))
