@@ -157,8 +157,8 @@ export default function FooterActions({
 
   return (
     <>
-      <div className="fixed bottom-0 left-0 right-0 bg-background border-t p-4">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
+      <div className="mt-4 rounded-lg border bg-card p-4">
+        <div className="flex items-center justify-between">
           <div className="text-sm text-muted-foreground">
             {selectedWorkplans.length > 0 ? (
               t('f2:selected_count', { count: selectedWorkplans.length })

@@ -98,7 +98,7 @@ export default function F2ApprovalsPage() {
 
       {selectedAllocation ? (
         <>
-          <Card className="p-6">
+          <Card className="p-6 space-y-4">
             <WorkplansTable
               grantCallId={selectedGrantCall}
               allocationId={selectedAllocation}
@@ -113,12 +113,11 @@ export default function F2ApprovalsPage() {
                 setAdjustModalOpen(true)
               }}
             />
+            <FooterActions
+              selectedWorkplans={selectedWorkplans}
+              onClearSelection={() => setSelectedWorkplans([])}
+            />
           </Card>
-
-          <FooterActions
-            selectedWorkplans={selectedWorkplans}
-            onClearSelection={() => setSelectedWorkplans([])}
-          />
 
           <ReassignModal
             open={reassignModalOpen}
