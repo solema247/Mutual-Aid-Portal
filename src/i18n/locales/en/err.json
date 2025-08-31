@@ -20,6 +20,8 @@
   "fsystem_upload_success": "File uploaded successfully",
   "fsystem_upload_error": "Error uploading file",
   "fsystem_form_id": "Generated Form ID",
+  "f2_approvals": "F2 Approvals",
+  "f2_approvals_desc": "Review and approve F2 workplans, adjust commitments and reassign allocations",
   "grant_management": "Grant Management",
   "grant_management_desc": "Manage and allocate grant funds to states",
   "grants": {

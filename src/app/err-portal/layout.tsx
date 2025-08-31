@@ -3,7 +3,7 @@
 import { useTranslation } from 'react-i18next'
 import { useState, useEffect } from 'react'
 import MainLayout from '@/components/layout/MainLayout'
-import { Users, FileText, ClipboardList, BarChart2, PieChart, UserCog, Home } from 'lucide-react'
+import { Users, FileText, ClipboardList, BarChart2, PieChart, UserCog, Home, CheckSquare } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 
 interface User {
@@ -58,6 +58,11 @@ export default function ErrPortalLayout({
       href: '/err-portal/f1-work-plans',
       label: t('err:f1_work_plans'),
       icon: <ClipboardList className="h-5 w-5" />
+    },
+    {
+      href: '/err-portal/f2-approvals',
+      label: t('err:f2_approvals'),
+      icon: <CheckSquare className="h-5 w-5" />
     },
     {
       href: '/err-portal/dashboard',

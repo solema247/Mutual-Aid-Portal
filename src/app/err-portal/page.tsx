@@ -130,6 +130,21 @@ export default function ErrPortalPage() {
           </Card>
         </Link>
 
+        {/* F2 Approvals */}
+        <Link href="/err-portal/f2-approvals" className="block aspect-square">
+          <Card className="h-full hover:bg-muted/50 transition-colors">
+            <CardHeader className="h-full flex flex-col justify-center items-center text-center">
+              <CheckSquare className="h-8 w-8 mb-4" />
+              <CardTitle className="text-xl">
+                {t('err:f2_approvals')}
+              </CardTitle>
+              <CardDescription className="mt-2">
+                {t('err:f2_approvals_desc')}
+              </CardDescription>
+            </CardHeader>
+          </Card>
+        </Link>
+
         {/* Project Management */}
         <Link href="/err-portal/project-management" className="block aspect-square">
           <Card className="h-full hover:bg-muted/50 transition-colors">
@@ -176,21 +191,6 @@ export default function ErrPortalPage() {
             </Card>
           </Link>
         )}
-
-        {/* F2 Approvals */}
-        <Link href="/err-portal/f2-approvals" className="block aspect-square">
-          <Card className="h-full hover:bg-muted/50 transition-colors">
-            <CardHeader className="h-full flex flex-col justify-center items-center text-center">
-              <CheckSquare className="h-8 w-8 mb-4" />
-              <CardTitle className="text-xl">
-                {t('err:f2_approvals')}
-              </CardTitle>
-              <CardDescription className="mt-2">
-                {t('err:f2_approvals_desc')}
-              </CardDescription>
-            </CardHeader>
-          </Card>
-        </Link>
 
         {/* User Management */}
         <Link href="/err-portal/user-management" className="block aspect-square">

@@ -124,6 +124,14 @@ export default function AllocationHeader({ onGrantSelect, onStateSelect }: Alloc
         const totalAllocated = stateCommitments.reduce((sum, state) => sum + state.amount, 0)
         const totalCommitted = stateCommitments.reduce((sum, state) => sum + state.total_committed, 0)
 
+        // Debug logging
+        console.log('Grant calculation debug:', {
+          totalGrantAmount: grantCallData.amount,
+          totalAllocated,
+          totalCommitted,
+          calculatedRemaining: grantCallData.amount - totalCommitted
+        })
+
         setAllocationSummary({
           grant_call: {
             id: grantCallData.id,
@@ -134,7 +142,7 @@ export default function AllocationHeader({ onGrantSelect, onStateSelect }: Alloc
           state_allocations: stateCommitments,
           total_allocated: totalAllocated,
           total_committed: totalCommitted,
-          remaining: grantCallData.amount - totalAllocated,
+          remaining: grantCallData.amount - totalCommitted,
         })
       } catch (error) {
         console.error('Error fetching allocation summary:', error)
@@ -174,7 +182,7 @@ export default function AllocationHeader({ onGrantSelect, onStateSelect }: Alloc
       {allocationSummary && (
         <div className="space-y-6">
           {/* Grant Summary */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div className="space-y-1">
               <Label className="text-sm text-muted-foreground">
                 {t('f2:total_grant_amount')}
@@ -195,6 +203,15 @@ export default function AllocationHeader({ onGrantSelect, onStateSelect }: Alloc
 
             <div className="space-y-1">
               <Label className="text-sm text-muted-foreground">
+                {t('f2:total_committed')}
+              </Label>
+              <div className="text-2xl font-bold text-slate-600">
+                {allocationSummary.total_committed.toLocaleString()}
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <Label className="text-sm text-muted-foreground">
                 {t('f2:grant_remaining')}
               </Label>
               <div className={cn(
@@ -202,6 +219,9 @@ export default function AllocationHeader({ onGrantSelect, onStateSelect }: Alloc
                 allocationSummary.remaining >= 0 ? "text-green-600" : "text-red-600"
               )}>
                 {allocationSummary.remaining.toLocaleString()}
+              </div>
+              <div className="text-xs text-muted-foreground mt-1">
+                {t('f2:grant_remaining_note')}
               </div>
             </div>
           </div>

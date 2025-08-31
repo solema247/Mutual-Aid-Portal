@@ -20,6 +20,8 @@
   "fsystem_upload_success": "تم رفع الملف بنجاح",
   "fsystem_upload_error": "خطأ في رفع الملف",
   "fsystem_form_id": "معرف النموذج المنشأ",
+  "f2_approvals": "موافقات F2",
+  "f2_approvals_desc": "مراجعة والموافقة على خطط عمل F2، تعديل الالتزامات وإعادة تخصيص المخصصات",
   "grant_management": "إدارة المنح",
   "grant_management_desc": "إدارة وتخصيص أموال المنح للولايات",
   "grants": {
