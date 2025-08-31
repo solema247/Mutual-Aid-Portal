@@ -224,11 +224,49 @@ export default function ERRAppSubmissions() {
 
   const handleGrantAssignment = async (projectId: string, grantSerial: string) => {
     try {
+      // First, get the next workplan number for this grant serial
+      const { data: seqData, error: seqError } = await supabase
+        .from('grant_workplan_seq')
+        .select('last_workplan_number')
+        .eq('grant_serial', grantSerial)
+        .single()
+
+      if (seqError && seqError.code !== 'PGRST116') { // PGRST116 is "not found"
+        throw seqError
+      }
+
+      const nextWorkplanNumber = seqData ? seqData.last_workplan_number + 1 : 1
+
+      // Update or insert the workplan sequence
+      if (seqData) {
+        const { error: updateSeqError } = await supabase
+          .from('grant_workplan_seq')
+          .update({
+            last_workplan_number: nextWorkplanNumber,
+            last_used: new Date().toISOString()
+          })
+          .eq('grant_serial', grantSerial)
+
+        if (updateSeqError) throw updateSeqError
+      } else {
+        const { error: insertSeqError } = await supabase
+          .from('grant_workplan_seq')
+          .insert({
+            grant_serial: grantSerial,
+            last_workplan_number: nextWorkplanNumber,
+            last_used: new Date().toISOString()
+          })
+
+        if (insertSeqError) throw insertSeqError
+      }
+
+      // Now update the project with grant serial, funding status, and workplan number
       const { error } = await supabase
         .from('err_projects')
         .update({
           grant_serial_id: grantSerial,
-          funding_status: 'allocated'
+          funding_status: 'allocated',
+          workplan_number: nextWorkplanNumber
         })
         .eq('id', projectId)
 
@@ -236,7 +274,7 @@ export default function ERRAppSubmissions() {
 
       // Refresh projects list
       fetchAllProjects()
-      alert('Project assigned to grant serial successfully!')
+      alert(`Project assigned to grant serial successfully! Workplan number: ${nextWorkplanNumber}`)
     } catch (error) {
       console.error('Error assigning project to grant serial:', error)
       alert('Error assigning project to grant serial. Please try again.')
@@ -343,6 +381,7 @@ export default function ERRAppSubmissions() {
                       <TableHead>{t('projects:version')}</TableHead>
                                              <TableHead>{t('projects:grant_call')}</TableHead>
                        <TableHead>{t('projects:grant_serial')}</TableHead>
+                       <TableHead>{t('projects:workplan_number')}</TableHead>
                        <TableHead>{t('projects:funding_status')}</TableHead>
                        <TableHead>{t('projects:actions')}</TableHead>
                     </TableRow>
@@ -356,6 +395,7 @@ export default function ERRAppSubmissions() {
                          <TableCell>{project.version}</TableCell>
                          <TableCell>{project.grant_calls?.name || project.grant_call_id || '-'}</TableCell>
                          <TableCell>{project.grant_serial_id || '-'}</TableCell>
+                         <TableCell>{project.workplan_number || '-'}</TableCell>
                          <TableCell>{t(`projects:status.${project.funding_status}`)}</TableCell>
                         <TableCell>
                           {currentStatus === 'assignment' ? (

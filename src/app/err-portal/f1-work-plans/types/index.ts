@@ -41,6 +41,7 @@ export interface F1Project {
   grant_call_id: string | null
   grant_serial_id: string | null
   funding_status: FundingStatus
+  workplan_number: number | null
   emergency_rooms?: EmergencyRoom | null
   grant_calls?: GrantCall | null
 }
