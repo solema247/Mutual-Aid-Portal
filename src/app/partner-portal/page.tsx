@@ -6,6 +6,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { Button } from '@/components/ui/button'
 import LanguageSwitch from '@/components/LanguageSwitch'
+import { BarChart2, PieChart, LogOut } from 'lucide-react'
 import '@/i18n/config'
 
 interface Donor {
@@ -53,7 +54,8 @@ export default function PartnerPortalPage() {
           <Button className="w-full p-4" variant="outline">
             <div className="flex items-center gap-4 w-full">
               <div className="flex items-center gap-2">
-                📊 {t('partner:forecast')}
+                <BarChart2 className="h-6 w-6" />
+                {t('partner:forecast')}
               </div>
               <span className="text-sm text-muted-foreground">
                 {t('partner:forecast_desc')}
@@ -65,7 +67,8 @@ export default function PartnerPortalPage() {
           <Button className="w-full p-4" variant="outline">
             <div className="flex items-center gap-4 w-full">
               <div className="flex items-center gap-2">
-                💰 {t('partner:grants.title')}
+                <PieChart className="h-6 w-6" />
+                {t('partner:grants.title')}
               </div>
               <span className="text-sm text-muted-foreground">
                 {t('partner:grants.description')}
@@ -85,7 +88,8 @@ export default function PartnerPortalPage() {
           window.location.href = '/login'
         }}
       >
-        🚪 {t('common:logout')}
+        <LogOut className="h-5 w-5 mr-2" />
+        {t('common:logout')}
       </Button>
     </div>
   )

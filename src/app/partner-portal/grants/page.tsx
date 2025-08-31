@@ -7,7 +7,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
 import { supabase } from '@/lib/supabaseClient'
 import { useRouter } from 'next/navigation'
-import { ChevronDown } from 'lucide-react'
+import { ChevronDown, FileText, BarChart2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import LanguageSwitch from '@/components/LanguageSwitch'
 
@@ -209,7 +209,7 @@ export default function GrantsPage() {
       <div className="grid grid-cols-2 gap-4 p-4 bg-muted/20 rounded-lg">
         <div className="space-y-2">
           <div className="flex items-center gap-2 font-medium">
-            <span className="text-lg">📝</span>
+            <FileText className="h-5 w-5" />
             {t('partner:grants.form.title')}
           </div>
           <p className="text-sm text-muted-foreground">
@@ -218,7 +218,7 @@ export default function GrantsPage() {
         </div>
         <div className="space-y-2">
           <div className="flex items-center gap-2 font-medium">
-            <span className="text-lg">📊</span>
+            <BarChart2 className="h-5 w-5" />
             {t('partner:grants.table.title')}
           </div>
           <p className="text-sm text-muted-foreground">

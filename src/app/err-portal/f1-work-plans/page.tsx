@@ -32,7 +32,7 @@ export default function F1WorkPlansPage() {
                 {t('f1_plans:err_app_submissions')}
               </TabsTrigger>
               <TabsTrigger value="direct_upload">
-                {t('f1_plans:direct_upload')}
+                {t('f1_plans:direct_upload.title')}
               </TabsTrigger>
             </TabsList>
 

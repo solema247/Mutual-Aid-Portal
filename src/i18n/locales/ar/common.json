@@ -2,6 +2,7 @@
   "logout": "تسجيل الخروج",
   "logout_desc": "تسجيل الخروج من حسابك",
   "loading": "جاري التحميل...",
+  "back": "رجوع",
   "error_fetching_data": "فشل في جلب البيانات",
   "error_approving_user": "فشل في الموافقة على المستخدم",
   "error_declining_user": "فشل في رفض المستخدم",
