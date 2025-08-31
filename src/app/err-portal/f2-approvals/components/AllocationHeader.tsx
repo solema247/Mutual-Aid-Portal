@@ -16,7 +16,7 @@ interface AllocationHeaderProps {
 }
 
 export default function AllocationHeader({ onGrantSelect, onStateSelect }: AllocationHeaderProps) {
-  const { t } = useTranslation(['err', 'common'])
+  const { t } = useTranslation(['f2', 'common'])
   const [grantCalls, setGrantCalls] = useState<{ id: string; name: string }[]>([])
   const [selectedGrantCall, setSelectedGrantCall] = useState<string>('')
   const [allocationSummary, setAllocationSummary] = useState<AllocationSummary | null>(null)
@@ -147,7 +147,7 @@ export default function AllocationHeader({ onGrantSelect, onStateSelect }: Alloc
   return (
     <div className="space-y-6">
       <div>
-        <Label className="mb-2">{t('err:f2.select_grant')}</Label>
+        <Label className="mb-2">{t('f2:select_grant')}</Label>
         <Select
           value={selectedGrantCall}
           onValueChange={(value) => {
@@ -157,7 +157,7 @@ export default function AllocationHeader({ onGrantSelect, onStateSelect }: Alloc
           }}
         >
           <SelectTrigger className="w-full">
-            <SelectValue placeholder={t('err:f2.select_grant_placeholder')} />
+            <SelectValue placeholder={t('f2:select_grant_placeholder')} />
           </SelectTrigger>
           <SelectContent>
             {grantCalls.map((grant) => (
@@ -175,7 +175,7 @@ export default function AllocationHeader({ onGrantSelect, onStateSelect }: Alloc
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="space-y-1">
               <Label className="text-sm text-muted-foreground">
-                {t('err:f2.total_grant_amount')}
+                {t('f2:total_grant_amount')}
               </Label>
               <div className="text-2xl font-bold">
                 {allocationSummary.total_amount.toLocaleString()}
@@ -184,7 +184,7 @@ export default function AllocationHeader({ onGrantSelect, onStateSelect }: Alloc
 
             <div className="space-y-1">
               <Label className="text-sm text-muted-foreground">
-                {t('err:f2.total_allocated')}
+                {t('f2:total_allocated')}
               </Label>
               <div className="text-2xl font-bold text-muted-foreground">
                 {allocationSummary.total_allocated.toLocaleString()}
@@ -193,7 +193,7 @@ export default function AllocationHeader({ onGrantSelect, onStateSelect }: Alloc
 
             <div className="space-y-1">
               <Label className="text-sm text-muted-foreground">
-                {t('err:f2.grant_remaining')}
+                {t('f2:grant_remaining')}
               </Label>
               <div className={cn(
                 "text-2xl font-bold",
@@ -206,16 +206,15 @@ export default function AllocationHeader({ onGrantSelect, onStateSelect }: Alloc
 
           {/* State Allocations */}
           <div>
-            <Label className="mb-4 block">{t('err:f2.state_allocations')}</Label>
+            <Label className="mb-4 block">{t('f2:state_allocations')}</Label>
             <div className="rounded-lg border">
               <table className="w-full">
                 <thead>
                   <tr className="border-b">
-                    <th className="px-4 py-2 text-left">{t('err:f2.state')}</th>
-                    <th className="px-4 py-2 text-right">{t('err:f2.allocated')}</th>
-                    <th className="px-4 py-2 text-right">{t('err:f2.committed')}</th>
-                    <th className="px-4 py-2 text-right">{t('err:f2.remaining')}</th>
-                    <th className="px-4 py-2 text-center">{t('err:f2.decision_no')}</th>
+                    <th className="px-4 py-2 text-left">{t('f2:state')}</th>
+                    <th className="px-4 py-2 text-right">{t('f2:allocated')}</th>
+                    <th className="px-4 py-2 text-right">{t('f2:committed')}</th>
+                    <th className="px-4 py-2 text-right">{t('f2:remaining')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -237,11 +236,7 @@ export default function AllocationHeader({ onGrantSelect, onStateSelect }: Alloc
                       )}>
                         {state.remaining.toLocaleString()}
                       </td>
-                      <td className="px-4 py-2 text-center">
-                        <span className="inline-block px-2 py-1 text-xs rounded-full bg-muted">
-                          {state.decision_no}
-                        </span>
-                      </td>
+
                     </tr>
                   ))}
                 </tbody>

@@ -33,7 +33,7 @@ export default function WorkplansTable({
   onReassign,
   onAdjust
 }: WorkplansTableProps) {
-  const { t } = useTranslation(['err', 'common'])
+  const { t } = useTranslation(['f2', 'common'])
   const [workplans, setWorkplans] = useState<Workplan[]>([])
   const [isLoading, setIsLoading] = useState(true)
 
@@ -141,12 +141,12 @@ export default function WorkplansTable({
                 />
               )}
             </TableHead>
-            <TableHead>{t('err:f2.workplan_number')}</TableHead>
-            <TableHead>{t('err:f2.err_id')}</TableHead>
-            <TableHead>{t('err:f2.locality')}</TableHead>
-            <TableHead>{t('err:f2.sector_primary')}</TableHead>
-            <TableHead className="text-right">{t('err:f2.requested_amount')}</TableHead>
-            <TableHead>{t('err:f2.status')}</TableHead>
+                              <TableHead>{t('f2:workplan_number')}</TableHead>
+                  <TableHead>{t('f2:err_id')}</TableHead>
+                  <TableHead>{t('f2:locality')}</TableHead>
+                  <TableHead>{t('f2:sector_primary')}</TableHead>
+                  <TableHead className="text-right">{t('f2:requested_amount')}</TableHead>
+                  <TableHead>{t('f2:status')}</TableHead>
             <TableHead className="w-[100px]"></TableHead>
           </TableRow>
         </TableHeader>
@@ -183,11 +183,11 @@ export default function WorkplansTable({
                       ? "bg-green-100 text-green-700" 
                       : "bg-amber-100 text-amber-700"
                   )}>
-                    {t(`err:f2.status_${workplan.status}`)}
+                    {t(`f2:status_${workplan.status}`)}
                   </span>
                   {workplan.funding_status === 'committed' && (
                     <span className="px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
-                      {t('err:f2.committed')}
+                      {t('f2:committed')}
                     </span>
                   )}
                 </div>
@@ -200,7 +200,7 @@ export default function WorkplansTable({
                         variant="ghost"
                         size="icon"
                         onClick={() => onReassign(workplan.id)}
-                        title={t('err:f2.reassign')}
+                        title={t('f2:reassign')}
                       >
                         <ArrowRightLeft className="h-4 w-4" />
                       </Button>
@@ -208,7 +208,7 @@ export default function WorkplansTable({
                         variant="ghost"
                         size="icon"
                         onClick={() => onAdjust(workplan.id)}
-                        title={t('err:f2.adjust')}
+                        title={t('f2:adjust')}
                       >
                         <Pencil className="h-4 w-4" />
                       </Button>

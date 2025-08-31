@@ -22,7 +22,7 @@ export default function AdjustModal({
   onOpenChange,
   workplanId
 }: AdjustModalProps) {
-  const { t } = useTranslation(['err', 'common'])
+  const { t } = useTranslation(['f2', 'common'])
   const [isLoading, setIsLoading] = useState(false)
   const [currentAmount, setCurrentAmount] = useState<number>(0)
   const [formData, setFormData] = useState<Partial<AdjustmentData>>({})
@@ -93,7 +93,7 @@ export default function AdjustModal({
       onOpenChange(false)
     } catch (error) {
       console.error('Error adjusting workplan:', error)
-      alert(t('err:f2.adjust_error'))
+      alert(t('f2:adjust_error'))
     } finally {
       setIsLoading(false)
     }
@@ -103,11 +103,11 @@ export default function AdjustModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle>{t('err:f2.adjust_workplan')}</DialogTitle>
+          <DialogTitle>{t('f2:adjust_workplan')}</DialogTitle>
         </DialogHeader>
         <div className="grid gap-4 py-4">
           <div className="grid gap-2">
-            <Label>{t('err:f2.current_amount')}</Label>
+            <Label>{t('f2:current_amount')}</Label>
             <Input
               value={currentAmount.toLocaleString()}
               disabled
@@ -116,7 +116,7 @@ export default function AdjustModal({
           </div>
 
           <div className="grid gap-2">
-            <Label>{t('err:f2.adjustment_amount')}</Label>
+            <Label>{t('f2:adjustment_amount')}</Label>
             <Input
               type="text"
               value={formData.delta_amount?.toLocaleString() || ''}
@@ -131,7 +131,7 @@ export default function AdjustModal({
           </div>
 
           <div className="grid gap-2">
-            <Label>{t('err:f2.new_amount')}</Label>
+            <Label>{t('f2:new_amount')}</Label>
             <Input
               value={(currentAmount + (formData.delta_amount || 0)).toLocaleString()}
               disabled
@@ -140,11 +140,11 @@ export default function AdjustModal({
           </div>
 
           <div className="grid gap-2">
-            <Label>{t('err:f2.reason')}</Label>
+            <Label>{t('f2:reason')}</Label>
             <Textarea
               value={formData.reason}
               onChange={(e) => setFormData(prev => ({ ...prev, reason: e.target.value }))}
-              placeholder={t('err:f2.reason_placeholder')}
+              placeholder={t('f2:reason_placeholder')}
             />
           </div>
         </div>
@@ -159,7 +159,7 @@ export default function AdjustModal({
             onClick={handleSubmit}
             disabled={isLoading || !formData.delta_amount || !formData.reason}
           >
-            {isLoading ? t('err:f2.adjusting') : t('err:f2.adjust')}
+                          {isLoading ? t('f2:adjusting') : t('f2:adjust')}
           </Button>
         </div>
       </DialogContent>

@@ -19,7 +19,7 @@ export default function FooterActions({
   selectedWorkplans,
   onClearSelection
 }: FooterActionsProps) {
-  const { t } = useTranslation(['err', 'common'])
+  const { t } = useTranslation(['f2', 'common'])
   const [isLoading, setIsLoading] = useState(false)
   const [sendBackOpen, setSendBackOpen] = useState(false)
   const [sendBackReason, setSendBackReason] = useState('')
@@ -65,7 +65,7 @@ export default function FooterActions({
       )
 
       if (pendingWorkplans.length === 0) {
-        alert(t('err:f2.no_pending_workplans'))
+        alert(t('f2:no_pending_workplans'))
         return
       }
 
@@ -83,7 +83,7 @@ export default function FooterActions({
       )
 
       if (workplansToApprove.length === 0) {
-        alert(t('err:f2.all_workplans_have_entries'))
+        alert(t('f2:all_workplans_have_entries'))
         return
       }
 
@@ -122,7 +122,7 @@ export default function FooterActions({
       onClearSelection()
     } catch (error) {
       console.error('Error approving workplans:', error)
-      alert(t('err:f2.approve_error'))
+      alert(t('f2:approve_error'))
     } finally {
       setIsLoading(false)
     }
@@ -149,7 +149,7 @@ export default function FooterActions({
       onClearSelection()
     } catch (error) {
       console.error('Error sending back workplans:', error)
-      alert(t('err:f2.send_back_error'))
+      alert(t('f2:send_back_error'))
     } finally {
       setIsLoading(false)
     }
@@ -161,9 +161,9 @@ export default function FooterActions({
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <div className="text-sm text-muted-foreground">
             {selectedWorkplans.length > 0 ? (
-              t('err:f2.selected_count', { count: selectedWorkplans.length })
+              t('f2:selected_count', { count: selectedWorkplans.length })
             ) : (
-              t('err:f2.no_selection')
+              t('f2:no_selection')
             )}
           </div>
           <div className="flex items-center gap-3">
@@ -173,7 +173,7 @@ export default function FooterActions({
               disabled={selectedWorkplans.length === 0 || isLoading}
             >
               <XSquare className="h-4 w-4 mr-2" />
-              {t('err:f2.send_back_selected')}
+              {t('f2:send_back_selected')}
             </Button>
             <Button
               onClick={() => handleApprove(selectedWorkplans)}
@@ -181,7 +181,7 @@ export default function FooterActions({
               className="bg-[#007229] hover:bg-[#007229]/90 text-white"
             >
               <CheckSquare className="h-4 w-4 mr-2" />
-              {isLoading ? t('err:f2.approving') : t('err:f2.approve_selected')}
+              {isLoading ? t('f2:approving') : t('f2:approve_selected')}
             </Button>
           </div>
         </div>
@@ -190,15 +190,15 @@ export default function FooterActions({
       <Dialog open={sendBackOpen} onOpenChange={setSendBackOpen}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
-            <DialogTitle>{t('err:f2.send_back_reason')}</DialogTitle>
+            <DialogTitle>{t('f2:send_back_reason')}</DialogTitle>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
-              <Label>{t('err:f2.reason')}</Label>
+              <Label>{t('f2:reason')}</Label>
               <Textarea
                 value={sendBackReason}
                 onChange={(e) => setSendBackReason(e.target.value)}
-                placeholder={t('err:f2.send_back_reason_placeholder')}
+                placeholder={t('f2:send_back_reason_placeholder')}
               />
             </div>
           </div>
@@ -214,7 +214,7 @@ export default function FooterActions({
               disabled={isLoading || !sendBackReason}
               className="bg-[#007229] hover:bg-[#007229]/90 text-white"
             >
-              {isLoading ? t('err:f2.sending_back') : t('err:f2.send_back')}
+              {isLoading ? t('f2:sending_back') : t('f2:send_back')}
             </Button>
           </div>
         </DialogContent>

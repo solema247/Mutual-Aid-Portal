@@ -24,7 +24,7 @@ interface User {
 }
 
 export default function F2ApprovalsPage() {
-  const { t } = useTranslation(['err', 'common'])
+  const { t } = useTranslation(['f2', 'common'])
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(true)
   const [user, setUser] = useState<User | null>(null)
@@ -80,7 +80,7 @@ export default function F2ApprovalsPage() {
   return (
     <div className="max-w-7xl mx-auto p-6 space-y-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-semibold">{t('err:f2.title')}</h2>
+        <h2 className="text-2xl font-semibold">{t('f2:title')}</h2>
         <Button 
           variant="outline" 
           onClick={() => router.push('/err-portal')}

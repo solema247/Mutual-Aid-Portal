@@ -12,6 +12,7 @@ import projectsEN from './locales/en/projects.json'
 import roomsEN from './locales/en/rooms.json'
 import usersEN from './locales/en/users.json'
 import fsystemEN from './locales/en/fsystem.json'
+import f2EN from './locales/en/f2.json'
 
 // Arabic translations
 import commonAR from './locales/ar/common.json'
@@ -24,6 +25,7 @@ import projectsAR from './locales/ar/projects.json'
 import roomsAR from './locales/ar/rooms.json'
 import usersAR from './locales/ar/users.json'
 import fsystemAR from './locales/ar/fsystem.json'
+import f2AR from './locales/ar/f2.json'
 
 const resources = {
   en: {
@@ -36,7 +38,8 @@ const resources = {
     projects: projectsEN,
     rooms: roomsEN,
     users: usersEN,
-    fsystem: fsystemEN
+    fsystem: fsystemEN,
+    f2: f2EN
   },
   ar: {
     common: commonAR,
@@ -48,7 +51,8 @@ const resources = {
     projects: projectsAR,
     rooms: roomsAR,
     users: usersAR,
-    fsystem: fsystemAR
+    fsystem: fsystemAR,
+    f2: f2AR
   }
 }
 
@@ -72,8 +76,9 @@ i18n
       'projects',
       'rooms',
       'users',
-      'fsystem'
-    ]
+          'fsystem',
+    'f2'
+  ]
   })
 
 export default i18n 

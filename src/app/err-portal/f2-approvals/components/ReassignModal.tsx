@@ -23,7 +23,7 @@ export default function ReassignModal({
   onOpenChange,
   workplanId
 }: ReassignModalProps) {
-  const { t } = useTranslation(['err', 'common'])
+  const { t } = useTranslation(['f2', 'common'])
   const [isLoading, setIsLoading] = useState(false)
   const [grantCalls, setGrantCalls] = useState<{ id: string; name: string }[]>([])
   const [allocations, setAllocations] = useState<{ id: string; state_name: string; amount: number }[]>([])
@@ -166,7 +166,7 @@ export default function ReassignModal({
       onOpenChange(false)
     } catch (error) {
       console.error('Error reassigning workplan:', error)
-      alert(t('err:f2.reassign_error'))
+      alert(t('f2:reassign_error'))
     } finally {
       setIsLoading(false)
     }
@@ -176,17 +176,17 @@ export default function ReassignModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle>{t('err:f2.reassign_workplan')}</DialogTitle>
+          <DialogTitle>{t('f2:reassign_workplan')}</DialogTitle>
         </DialogHeader>
         <div className="grid gap-4 py-4">
           <div className="grid gap-2">
-            <Label>{t('err:f2.new_grant_call')}</Label>
+            <Label>{t('f2:new_grant_call')}</Label>
             <Select
               value={formData.new_grant_call_id}
               onValueChange={(value) => setFormData(prev => ({ ...prev, new_grant_call_id: value }))}
             >
               <SelectTrigger>
-                <SelectValue placeholder={t('err:f2.select_grant_call')} />
+                <SelectValue placeholder={t('f2:select_grant_call')} />
               </SelectTrigger>
               <SelectContent>
                 {grantCalls.map((grant) => (
@@ -199,14 +199,14 @@ export default function ReassignModal({
           </div>
 
           <div className="grid gap-2">
-            <Label>{t('err:f2.new_allocation')}</Label>
+            <Label>{t('f2:new_allocation')}</Label>
             <Select
               value={formData.new_allocation_id}
               onValueChange={(value) => setFormData(prev => ({ ...prev, new_allocation_id: value }))}
               disabled={!formData.new_grant_call_id}
             >
               <SelectTrigger>
-                <SelectValue placeholder={t('err:f2.select_allocation')} />
+                <SelectValue placeholder={t('f2:select_allocation')} />
               </SelectTrigger>
               <SelectContent>
                 {allocations.map((allocation) => (
@@ -219,14 +219,14 @@ export default function ReassignModal({
           </div>
 
           <div className="grid gap-2">
-            <Label>{t('err:f2.new_serial')}</Label>
+            <Label>{t('f2:new_serial')}</Label>
             <Select
               value={formData.new_serial_id}
               onValueChange={(value) => setFormData(prev => ({ ...prev, new_serial_id: value }))}
               disabled={!formData.new_allocation_id}
             >
               <SelectTrigger>
-                <SelectValue placeholder={t('err:f2.select_serial')} />
+                <SelectValue placeholder={t('f2:select_serial')} />
               </SelectTrigger>
               <SelectContent>
                 {serials.map((serial) => (
@@ -239,11 +239,11 @@ export default function ReassignModal({
           </div>
 
           <div className="grid gap-2">
-            <Label>{t('err:f2.reason')}</Label>
+            <Label>{t('f2:reason')}</Label>
             <Textarea
               value={formData.reason}
               onChange={(e) => setFormData(prev => ({ ...prev, reason: e.target.value }))}
-              placeholder={t('err:f2.reason_placeholder')}
+              placeholder={t('f2:reason_placeholder')}
             />
           </div>
         </div>
@@ -258,7 +258,7 @@ export default function ReassignModal({
             onClick={handleSubmit}
             disabled={isLoading || !formData.new_grant_call_id || !formData.new_allocation_id || !formData.new_serial_id || !formData.reason}
           >
-            {isLoading ? t('err:f2.reassigning') : t('err:f2.reassign')}
+                          {isLoading ? t('f2:reassigning') : t('f2:reassign')}
           </Button>
         </div>
       </DialogContent>
