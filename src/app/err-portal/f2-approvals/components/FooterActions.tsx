@@ -61,8 +61,10 @@ export default function FooterActions({
 
       // Filter out any already approved/committed workplans
       const pendingWorkplans = workplans.filter(w => 
-        w.status !== 'approved' && w.funding_status !== 'committed'
+        w.status === 'pending' && w.funding_status === 'allocated'
       )
+      console.log('Initial workplans:', workplans)
+      console.log('Pending workplans:', pendingWorkplans)
 
       if (pendingWorkplans.length === 0) {
         alert(t('f2:no_pending_workplans'))
@@ -78,9 +80,9 @@ export default function FooterActions({
       if (existingError) throw existingError
 
       // Filter out workplans that already have ledger entries
-      const workplansToApprove = pendingWorkplans.filter(w => 
-        !existingEntries?.some(e => e.workplan_id === w.id)
-      )
+      const workplansToApprove = pendingWorkplans
+      console.log('Existing entries:', existingEntries)
+      console.log('Workplans to approve:', workplansToApprove)
 
       if (workplansToApprove.length === 0) {
         alert(t('f2:all_workplans_have_entries'))
