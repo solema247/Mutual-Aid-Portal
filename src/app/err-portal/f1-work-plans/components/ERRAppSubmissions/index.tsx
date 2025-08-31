@@ -138,14 +138,53 @@ export default function ERRAppSubmissions() {
 
   const fetchAllProjects = async () => {
     try {
-      const { data, error } = await supabase
+      // First fetch projects
+      const { data: projectsData, error: projectsError } = await supabase
         .from('err_projects')
         .select('*')
         .or('source.is.null,source.neq.mutual_aid_portal')
         .order('submitted_at', { ascending: false })
 
-      if (error) throw error
-      setAllProjects(data || [])
+      if (projectsError) throw projectsError
+
+      // Get unique emergency room IDs and grant call IDs
+      const emergencyRoomIds = [...new Set(projectsData?.map(p => p.emergency_room_id).filter(Boolean) || [])]
+      const grantCallIds = [...new Set(projectsData?.map(p => p.grant_call_id).filter(Boolean) || [])]
+
+      // Fetch emergency rooms data
+      let emergencyRoomsData: any[] = []
+      if (emergencyRoomIds.length > 0) {
+        const { data: errData, error: errError } = await supabase
+          .from('emergency_rooms')
+          .select('id, name, name_ar, err_code')
+          .in('id', emergencyRoomIds)
+        
+        if (!errError) {
+          emergencyRoomsData = errData || []
+        }
+      }
+
+      // Fetch grant calls data
+      let grantCallsData: any[] = []
+      if (grantCallIds.length > 0) {
+        const { data: gcData, error: gcError } = await supabase
+          .from('grant_calls')
+          .select('id, name, shortname')
+          .in('id', grantCallIds)
+        
+        if (!gcError) {
+          grantCallsData = gcData || []
+        }
+      }
+
+      // Combine the data
+      const combinedData = projectsData?.map(project => ({
+        ...project,
+        emergency_rooms: emergencyRoomsData.find(err => err.id === project.emergency_room_id) || null,
+        grant_calls: grantCallsData.find(gc => gc.id === project.grant_call_id) || null
+      })) || []
+
+      setAllProjects(combinedData)
       setLoading(false)
     } catch (error) {
       console.error('Error fetching all projects:', error)
@@ -311,13 +350,13 @@ export default function ERRAppSubmissions() {
                   <TableBody>
                     {projects.map((project) => (
                       <TableRow key={project.id}>
-                        <TableCell>{project.err_id}</TableCell>
-                        <TableCell>{formatDate(project.date)}</TableCell>
-                        <TableCell>{`${project.state}, ${project.locality}`}</TableCell>
-                        <TableCell>{project.version}</TableCell>
-                        <TableCell>{project.grant_call_id || '-'}</TableCell>
-                        <TableCell>{project.grant_serial_id || '-'}</TableCell>
-                                                 <TableCell>{t(`projects:status.${project.funding_status}`)}</TableCell>
+                                                 <TableCell>{project.emergency_rooms?.err_code || project.err_id || '-'}</TableCell>
+                         <TableCell>{formatDate(project.date)}</TableCell>
+                         <TableCell>{`${project.state}, ${project.locality}`}</TableCell>
+                         <TableCell>{project.version}</TableCell>
+                         <TableCell>{project.grant_calls?.name || project.grant_call_id || '-'}</TableCell>
+                         <TableCell>{project.grant_serial_id || '-'}</TableCell>
+                         <TableCell>{t(`projects:status.${project.funding_status}`)}</TableCell>
                         <TableCell>
                           {currentStatus === 'assignment' ? (
                             <div className="flex gap-2">
@@ -363,12 +402,12 @@ export default function ERRAppSubmissions() {
         {selectedProject && (
           <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle className="text-xl font-bold border-b pb-2">
-                {t('projects:project_details')} - {selectedProject.err_id}
-                <span className="text-sm font-normal text-muted-foreground ml-2">
-                  {t('projects:version')} {selectedProject.version}
-                </span>
-              </DialogTitle>
+                             <DialogTitle className="text-xl font-bold border-b pb-2">
+                 {t('projects:project_details')} - {selectedProject.emergency_rooms?.err_code || selectedProject.err_id}
+                 <span className="text-sm font-normal text-muted-foreground ml-2">
+                   {t('projects:version')} {selectedProject.version}
+                 </span>
+               </DialogTitle>
             </DialogHeader>
 
             <Tabs value={selectedTab} className="w-full" onValueChange={(value) => setSelectedTab(value as 'details' | 'feedback' | 'assignment')}>

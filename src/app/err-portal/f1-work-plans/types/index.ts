@@ -14,6 +14,13 @@ export interface PlannedActivity {
   }[]
 }
 
+export interface EmergencyRoom {
+  id: string
+  name: string
+  name_ar: string | null
+  err_code: string | null
+}
+
 export interface F1Project {
   id: string
   date: string
@@ -34,6 +41,8 @@ export interface F1Project {
   grant_call_id: string | null
   grant_serial_id: string | null
   funding_status: FundingStatus
+  emergency_rooms?: EmergencyRoom | null
+  grant_calls?: GrantCall | null
 }
 
 export interface GrantCall {
