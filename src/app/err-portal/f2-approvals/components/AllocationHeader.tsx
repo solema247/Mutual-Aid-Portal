@@ -82,17 +82,34 @@ export default function AllocationHeader({ onGrantSelect, onStateSelect }: Alloc
         // Get the latest allocations array
         const latestAllocations = Object.values(latestByState)
 
-        // Get total committed amount for each state from ledger
+        // Get total committed amount for each state from approved projects
         const stateCommitments = await Promise.all(
           latestAllocations.map(async (allocation) => {
-            const { data: ledgerData, error: ledgerError } = await supabase
-              .from('grant_project_commitment_ledger')
-              .select('delta_amount')
+            // Get all approved projects for this allocation
+            const { data: projectsData, error: projectsError } = await supabase
+              .from('err_projects')
+              .select('expenses')
               .eq('grant_call_state_allocation_id', allocation.id)
+              .eq('status', 'approved')
+              .eq('funding_status', 'committed')
 
-            if (ledgerError) throw ledgerError
+            if (projectsError) throw projectsError
 
-            const totalCommitted = ledgerData.reduce((sum, entry) => sum + entry.delta_amount, 0)
+            // Calculate total from expenses
+            const totalCommitted = projectsData.reduce((sum: number, project: any) => {
+              try {
+                const expenses = typeof project.expenses === 'string' 
+                  ? JSON.parse(project.expenses) 
+                  : project.expenses;
+                
+                return sum + expenses.reduce((expSum: number, exp: any) => 
+                  expSum + (exp.total_cost || 0), 0);
+              } catch (error) {
+                console.warn('Error parsing expenses:', error);
+                return sum;
+              }
+            }, 0);
+
             return {
               ...allocation,
               total_committed: totalCommitted,

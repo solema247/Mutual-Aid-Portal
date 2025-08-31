@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Pencil, ArrowRightLeft } from 'lucide-react'
+import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import {
   Table,
@@ -54,7 +55,7 @@ export default function WorkplansTable({
             grant_call_state_allocation_id,
             grant_serial_id
           `)
-          .eq('status', 'pending')
+          // Show both pending and approved projects
           .eq('grant_call_id', grantCallId)
           .eq('grant_call_state_allocation_id', allocationId)
           .order('workplan_number', { ascending: true })
@@ -89,7 +90,10 @@ export default function WorkplansTable({
 
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
-      onSelectWorkplans(workplans.map((w: Workplan) => w.id))
+      // Only select non-committed workplans
+      onSelectWorkplans(workplans
+        .filter((w: Workplan) => w.funding_status !== 'committed')
+        .map((w: Workplan) => w.id))
     } else {
       onSelectWorkplans([])
     }
@@ -128,12 +132,14 @@ export default function WorkplansTable({
         <TableHeader>
           <TableRow>
             <TableHead className="w-[50px]">
-              <input
-                type="checkbox"
-                className="h-4 w-4 rounded border-gray-300"
-                checked={selectedWorkplans.length === workplans.length}
-                onChange={(e) => handleSelectAll(e.target.checked)}
-              />
+              {workplans.some(w => w.funding_status !== 'committed') && (
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 rounded border-gray-300"
+                  checked={selectedWorkplans.length === workplans.filter(w => w.funding_status !== 'committed').length}
+                  onChange={(e) => handleSelectAll(e.target.checked)}
+                />
+              )}
             </TableHead>
             <TableHead>{t('err:f2.workplan_number')}</TableHead>
             <TableHead>{t('err:f2.err_id')}</TableHead>
@@ -146,14 +152,21 @@ export default function WorkplansTable({
         </TableHeader>
         <TableBody>
           {workplans.map((workplan: Workplan) => (
-            <TableRow key={workplan.id}>
+            <TableRow 
+              key={workplan.id}
+              className={cn(
+                workplan.funding_status === 'committed' && "bg-muted/50"
+              )}
+            >
               <TableCell>
-                <input
-                  type="checkbox"
-                  className="h-4 w-4 rounded border-gray-300"
-                  checked={selectedWorkplans.includes(workplan.id)}
-                  onChange={(e) => handleSelectWorkplan(workplan.id, e.target.checked)}
-                />
+                {workplan.funding_status !== 'committed' && (
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 rounded border-gray-300"
+                    checked={selectedWorkplans.includes(workplan.id)}
+                    onChange={(e) => handleSelectWorkplan(workplan.id, e.target.checked)}
+                  />
+                )}
               </TableCell>
               <TableCell>{workplan.workplan_number}</TableCell>
               <TableCell>{workplan.err_id}</TableCell>
@@ -163,32 +176,44 @@ export default function WorkplansTable({
                 {calculateTotalAmount(workplan.expenses).toLocaleString()}
               </TableCell>
               <TableCell>
-                <span className={
-                  workplan.status === 'approved' 
-                    ? 'text-green-600' 
-                    : 'text-amber-600'
-                }>
-                  {t(`err:f2.status_${workplan.status}`)}
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className={cn(
+                    "px-2 py-1 rounded-full text-xs font-medium",
+                    workplan.status === 'approved' 
+                      ? "bg-green-100 text-green-700" 
+                      : "bg-amber-100 text-amber-700"
+                  )}>
+                    {t(`err:f2.status_${workplan.status}`)}
+                  </span>
+                  {workplan.funding_status === 'committed' && (
+                    <span className="px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
+                      {t('err:f2.committed')}
+                    </span>
+                  )}
+                </div>
               </TableCell>
               <TableCell>
                 <div className="flex items-center gap-2">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => onReassign(workplan.id)}
-                    title={t('err:f2.reassign')}
-                  >
-                    <ArrowRightLeft className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => onAdjust(workplan.id)}
-                    title={t('err:f2.adjust')}
-                  >
-                    <Pencil className="h-4 w-4" />
-                  </Button>
+                  {workplan.funding_status !== 'committed' && (
+                    <>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => onReassign(workplan.id)}
+                        title={t('err:f2.reassign')}
+                      >
+                        <ArrowRightLeft className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => onAdjust(workplan.id)}
+                        title={t('err:f2.adjust')}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                    </>
+                  )}
                 </div>
               </TableCell>
             </TableRow>

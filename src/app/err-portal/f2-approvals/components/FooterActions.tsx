@@ -43,20 +43,56 @@ export default function FooterActions({
     try {
       setIsLoading(true)
 
-      // Get workplan data for all selected workplans
+      // Get workplan data and check existing commitments
       const { data: workplans, error: workplanError } = await supabase
         .from('err_projects')
-        .select('id, expenses, grant_call_id, grant_call_state_allocation_id, grant_serial_id')
+        .select(`
+          id, 
+          expenses, 
+          grant_call_id, 
+          grant_call_state_allocation_id, 
+          grant_serial_id,
+          status,
+          funding_status
+        `)
         .in('id', workplanIds)
 
       if (workplanError) throw workplanError
+
+      // Filter out any already approved/committed workplans
+      const pendingWorkplans = workplans.filter(w => 
+        w.status !== 'approved' && w.funding_status !== 'committed'
+      )
+
+      if (pendingWorkplans.length === 0) {
+        alert(t('err:f2.no_pending_workplans'))
+        return
+      }
+
+      // Check for existing ledger entries
+      const { data: existingEntries, error: existingError } = await supabase
+        .from('grant_project_commitment_ledger')
+        .select('workplan_id')
+        .in('workplan_id', pendingWorkplans.map(w => w.id))
+
+      if (existingError) throw existingError
+
+      // Filter out workplans that already have ledger entries
+      const workplansToApprove = pendingWorkplans.filter(w => 
+        !existingEntries?.some(e => e.workplan_id === w.id)
+      )
+
+      if (workplansToApprove.length === 0) {
+        alert(t('err:f2.all_workplans_have_entries'))
+        return
+      }
 
       // Get current user
       const { data: { user }, error: userError } = await supabase.auth.getUser()
       if (userError) throw userError
 
-      // Insert positive deltas for all workplans
-      const ledgerEntries = workplans.map(workplan => ({
+      // Create ledger entries for remaining workplans
+      const ledgerEntries = workplansToApprove.map(workplan => ({
         workplan_id: workplan.id,
         grant_call_id: workplan.grant_call_id,
         grant_call_state_allocation_id: workplan.grant_call_state_allocation_id,
@@ -72,14 +108,14 @@ export default function FooterActions({
 
       if (ledgerError) throw ledgerError
 
-      // Update workplan statuses
+      // Update workplan statuses only for workplans we're approving
       const { error: updateError } = await supabase
         .from('err_projects')
         .update({
           status: 'approved',
           funding_status: 'committed'
         })
-        .in('id', workplanIds)
+        .in('id', workplansToApprove.map(w => w.id))
 
       if (updateError) throw updateError
 
