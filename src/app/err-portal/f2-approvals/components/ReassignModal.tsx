@@ -27,7 +27,7 @@ export default function ReassignModal({
   const [isLoading, setIsLoading] = useState(false)
   const [grantCalls, setGrantCalls] = useState<{ id: string; name: string }[]>([])
   const [allocations, setAllocations] = useState<{ id: string; state_name: string; amount: number }[]>([])
-  const [serials, setSerials] = useState<{ id: string; serial: string }[]>([])
+  const [serials, setSerials] = useState<{ grant_serial: string }[]>([])
   const [formData, setFormData] = useState<Partial<ReassignmentData>>({})
 
   // Fetch grant calls on mount
@@ -59,11 +59,25 @@ export default function ReassignModal({
       }
 
       try {
+        // First get the latest decision number for this grant call
+        const { data: maxDecisionData, error: maxDecisionError } = await supabase
+          .from('grant_call_state_allocations')
+          .select('decision_no')
+          .eq('grant_call_id', formData.new_grant_call_id)
+          .order('decision_no', { ascending: false })
+          .limit(1)
+
+        if (maxDecisionError) throw maxDecisionError
+        
+        const latestDecisionNo = maxDecisionData[0]?.decision_no
+
+        // Get allocations only from the latest decision
         const { data, error } = await supabase
           .from('grant_call_state_allocations')
           .select('id, state_name, amount')
           .eq('grant_call_id', formData.new_grant_call_id)
-          .order('created_at', { ascending: false })
+          .eq('decision_no', latestDecisionNo)
+          .order('state_name', { ascending: true })
 
         if (error) throw error
         setAllocations(data)
@@ -84,10 +98,20 @@ export default function ReassignModal({
       }
 
       try {
+        // Get state name from the selected allocation
+        const { data: allocationData, error: allocationError } = await supabase
+          .from('grant_call_state_allocations')
+          .select('state_name')
+          .eq('id', formData.new_allocation_id)
+          .single()
+
+        if (allocationError) throw allocationError
+
         const { data, error } = await supabase
           .from('grant_serials')
-          .select('id, serial')
-          .eq('grant_call_state_allocation_id', formData.new_allocation_id)
+          .select('grant_serial')
+          .eq('grant_call_id', formData.new_grant_call_id)
+          .eq('state_name', allocationData.state_name)
           .order('created_at', { ascending: false })
 
         if (error) throw error
@@ -111,11 +135,27 @@ export default function ReassignModal({
       // Get current workplan data
       const { data: workplanData, error: workplanError } = await supabase
         .from('err_projects')
-        .select('requested_amount, grant_call_id, grant_call_state_allocation_id, grant_serial_id')
+        .select('expenses, grant_call_id, grant_call_state_allocation_id, grant_serial_id')
         .eq('id', workplanId)
         .single()
 
       if (workplanError) throw workplanError
+
+      // Calculate total amount from expenses
+      const calculateTotalAmount = (expenses: string | Array<{ activity: string; total_cost: number; }>): number => {
+        if (!expenses) return 0
+        
+        try {
+          const expensesArray = typeof expenses === 'string' ? JSON.parse(expenses) : expenses
+          return expensesArray.reduce((sum: number, expense: { total_cost: number }) => 
+            sum + (expense.total_cost || 0), 0)
+        } catch (error) {
+          console.warn('Error calculating total amount:', error)
+          return 0
+        }
+      }
+      
+      const totalAmount = calculateTotalAmount(workplanData.expenses)
 
       // Get current user
       const { data: { user }, error: userError } = await supabase.auth.getUser()
@@ -129,7 +169,7 @@ export default function ReassignModal({
           grant_call_id: workplanData.grant_call_id,
           grant_call_state_allocation_id: workplanData.grant_call_state_allocation_id,
           grant_serial_id: workplanData.grant_serial_id,
-          delta_amount: -workplanData.requested_amount,
+          delta_amount: -totalAmount,
           reason: formData.reason,
           created_by: user?.id
         })
@@ -144,7 +184,7 @@ export default function ReassignModal({
           grant_call_id: formData.new_grant_call_id,
           grant_call_state_allocation_id: formData.new_allocation_id,
           grant_serial_id: formData.new_serial_id,
-          delta_amount: workplanData.requested_amount,
+          delta_amount: totalAmount,
           reason: formData.reason,
           created_by: user?.id
         })
@@ -230,8 +270,8 @@ export default function ReassignModal({
               </SelectTrigger>
               <SelectContent>
                 {serials.map((serial) => (
-                  <SelectItem key={serial.id} value={serial.id}>
-                    {serial.serial}
+                  <SelectItem key={serial.grant_serial} value={serial.grant_serial}>
+                    {serial.grant_serial}
                   </SelectItem>
                 ))}
               </SelectContent>
