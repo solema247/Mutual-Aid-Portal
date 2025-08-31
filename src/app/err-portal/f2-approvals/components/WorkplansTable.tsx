@@ -16,6 +16,8 @@ import { supabase } from '@/lib/supabaseClient'
 import type { Workplan } from '../types'
 
 interface WorkplansTableProps {
+  grantCallId: string | null;
+  allocationId: string;
   selectedWorkplans: string[];
   onSelectWorkplans: (ids: string[]) => void;
   onReassign: (id: string) => void;
@@ -23,6 +25,8 @@ interface WorkplansTableProps {
 }
 
 export default function WorkplansTable({
+  grantCallId,
+  allocationId,
   selectedWorkplans,
   onSelectWorkplans,
   onReassign,
@@ -43,7 +47,7 @@ export default function WorkplansTable({
             err_id,
             locality,
             "Sector (Primary)",
-            requested_amount,
+            expenses,
             status,
             funding_status,
             grant_call_id,
@@ -51,6 +55,8 @@ export default function WorkplansTable({
             grant_serial_id
           `)
           .eq('status', 'pending')
+          .eq('grant_call_id', grantCallId)
+          .eq('grant_call_state_allocation_id', allocationId)
           .order('workplan_number', { ascending: true })
 
         if (error) throw error
@@ -79,7 +85,7 @@ export default function WorkplansTable({
     }
 
     fetchWorkplans()
-  }, [])
+  }, [grantCallId, allocationId])
 
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
@@ -94,6 +100,21 @@ export default function WorkplansTable({
       onSelectWorkplans([...selectedWorkplans, id])
     } else {
       onSelectWorkplans(selectedWorkplans.filter(wId => wId !== id))
+    }
+  }
+
+  const calculateTotalAmount = (expenses: Workplan['expenses']): number => {
+    if (!expenses) return 0
+    
+    try {
+      // If expenses is a string (JSON), parse it
+      const expensesArray = typeof expenses === 'string' ? JSON.parse(expenses) : expenses
+      
+      // Sum up all total_cost values
+      return expensesArray.reduce((sum: number, expense: { total_cost: number }) => sum + (expense.total_cost || 0), 0)
+    } catch (error) {
+      console.warn('Error calculating total amount:', error)
+      return 0
     }
   }
 
@@ -139,7 +160,7 @@ export default function WorkplansTable({
               <TableCell>{workplan.locality}</TableCell>
               <TableCell>{workplan["Sector (Primary)"]}</TableCell>
               <TableCell className="text-right">
-                {workplan.requested_amount ? workplan.requested_amount.toLocaleString() : '0'}
+                {calculateTotalAmount(workplan.expenses).toLocaleString()}
               </TableCell>
               <TableCell>
                 <span className={

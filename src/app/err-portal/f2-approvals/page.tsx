@@ -32,6 +32,8 @@ export default function F2ApprovalsPage() {
   const [reassignModalOpen, setReassignModalOpen] = useState(false)
   const [adjustModalOpen, setAdjustModalOpen] = useState(false)
   const [activeWorkplan, setActiveWorkplan] = useState<string | null>(null)
+  const [selectedGrantCall, setSelectedGrantCall] = useState<string | null>(null)
+  const [selectedAllocation, setSelectedAllocation] = useState<string | null>(null)
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -88,40 +90,49 @@ export default function F2ApprovalsPage() {
       </div>
 
       <Card className="p-6">
-        <AllocationHeader />
-      </Card>
-
-      <Card className="p-6">
-        <WorkplansTable
-          selectedWorkplans={selectedWorkplans}
-          onSelectWorkplans={setSelectedWorkplans}
-          onReassign={(id: string) => {
-            setActiveWorkplan(id)
-            setReassignModalOpen(true)
-          }}
-          onAdjust={(id: string) => {
-            setActiveWorkplan(id)
-            setAdjustModalOpen(true)
-          }}
+        <AllocationHeader 
+          onGrantSelect={setSelectedGrantCall}
+          onStateSelect={setSelectedAllocation}
         />
       </Card>
 
-      <FooterActions
-        selectedWorkplans={selectedWorkplans}
-        onClearSelection={() => setSelectedWorkplans([])}
-      />
+      {selectedAllocation ? (
+        <>
+          <Card className="p-6">
+            <WorkplansTable
+              grantCallId={selectedGrantCall}
+              allocationId={selectedAllocation}
+              selectedWorkplans={selectedWorkplans}
+              onSelectWorkplans={setSelectedWorkplans}
+              onReassign={(id: string) => {
+                setActiveWorkplan(id)
+                setReassignModalOpen(true)
+              }}
+              onAdjust={(id: string) => {
+                setActiveWorkplan(id)
+                setAdjustModalOpen(true)
+              }}
+            />
+          </Card>
 
-      <ReassignModal
-        open={reassignModalOpen}
-        onOpenChange={setReassignModalOpen}
-        workplanId={activeWorkplan}
-      />
+          <FooterActions
+            selectedWorkplans={selectedWorkplans}
+            onClearSelection={() => setSelectedWorkplans([])}
+          />
 
-      <AdjustModal
-        open={adjustModalOpen}
-        onOpenChange={setAdjustModalOpen}
-        workplanId={activeWorkplan}
-      />
+          <ReassignModal
+            open={reassignModalOpen}
+            onOpenChange={setReassignModalOpen}
+            workplanId={activeWorkplan}
+          />
+
+          <AdjustModal
+            open={adjustModalOpen}
+            onOpenChange={setAdjustModalOpen}
+            workplanId={activeWorkplan}
+          />
+        </>
+      ) : null}
     </div>
   )
 }

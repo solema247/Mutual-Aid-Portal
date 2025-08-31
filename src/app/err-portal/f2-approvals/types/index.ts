@@ -4,12 +4,21 @@ export interface Workplan {
   err_id: string;
   locality: string;
   "Sector (Primary)": string;
-  requested_amount: number;
+  expenses: Array<{ activity: string; total_cost: number; }> | string;
   status: 'pending' | 'approved';
   funding_status: 'pending' | 'committed';
   grant_call_id: string;
   grant_call_state_allocation_id: string;
   grant_serial_id: string;
+}
+
+export interface StateAllocation {
+  id: string;
+  state_name: string;
+  amount: number;
+  decision_no: number;
+  total_committed: number;
+  remaining: number;
 }
 
 export interface AllocationSummary {
@@ -18,12 +27,9 @@ export interface AllocationSummary {
     name: string;
     shortname: string;
   };
-  state: {
-    name: string;
-  };
-  grant_serial: string;
-  decision_no: number;
-  allocation_amount: number;
+  total_amount: number;
+  state_allocations: StateAllocation[];
+  total_allocated: number;
   total_committed: number;
   remaining: number;
 }

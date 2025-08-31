@@ -10,7 +10,12 @@ import { CheckCircle2, XCircle } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 import type { AllocationSummary } from '../types'
 
-export default function AllocationHeader() {
+interface AllocationHeaderProps {
+  onGrantSelect: (grantId: string | null) => void;
+  onStateSelect: (allocationId: string | null) => void;
+}
+
+export default function AllocationHeader({ onGrantSelect, onStateSelect }: AllocationHeaderProps) {
   const { t } = useTranslation(['err', 'common'])
   const [grantCalls, setGrantCalls] = useState<{ id: string; name: string }[]>([])
   const [selectedGrantCall, setSelectedGrantCall] = useState<string>('')
@@ -48,52 +53,69 @@ export default function AllocationHeader() {
       try {
         setIsLoading(true)
         
-        // Get the latest allocation decision for this grant call
-        const { data: allocationData, error: allocationError } = await supabase
+        // First get the grant call details
+        const { data: grantCallData, error: grantCallError } = await supabase
+          .from('grant_calls')
+          .select('id, name, shortname, amount')
+          .eq('id', selectedGrantCall)
+          .single()
+
+        if (grantCallError) throw grantCallError
+
+        // Get all state allocations for this grant call
+        const { data: allAllocations, error: allocationsError } = await supabase
           .from('grant_call_state_allocations')
-          .select(`
-            id,
-            state_name,
-            amount,
-            decision_no,
-            grant_calls!inner (
-              id,
-              name,
-              shortname
-            )
-          `)
+          .select('*')
           .eq('grant_call_id', selectedGrantCall)
           .order('decision_no', { ascending: false })
-          .limit(1)
 
-        if (allocationError) throw allocationError
-        if (!allocationData?.length) return
+        if (allocationsError) throw allocationsError
 
-        // Get total committed amount from ledger
-        const { data: ledgerData, error: ledgerError } = await supabase
-          .from('grant_project_commitment_ledger')
-          .select('delta_amount')
-          .eq('grant_call_state_allocation_id', allocationData[0].id)
+        // Group by state and get latest decision for each
+        const latestByState = allAllocations.reduce((acc, curr) => {
+          if (!acc[curr.state_name] || acc[curr.state_name].decision_no < curr.decision_no) {
+            acc[curr.state_name] = curr
+          }
+          return acc
+        }, {} as Record<string, any>)
 
-        if (ledgerError) throw ledgerError
+        // Get the latest allocations array
+        const latestAllocations = Object.values(latestByState)
 
-        const totalCommitted = ledgerData.reduce((sum, entry) => sum + entry.delta_amount, 0)
-        const remaining = allocationData[0].amount - totalCommitted
+        // Get total committed amount for each state from ledger
+        const stateCommitments = await Promise.all(
+          latestAllocations.map(async (allocation) => {
+            const { data: ledgerData, error: ledgerError } = await supabase
+              .from('grant_project_commitment_ledger')
+              .select('delta_amount')
+              .eq('grant_call_state_allocation_id', allocation.id)
+
+            if (ledgerError) throw ledgerError
+
+            const totalCommitted = ledgerData.reduce((sum, entry) => sum + entry.delta_amount, 0)
+            return {
+              ...allocation,
+              total_committed: totalCommitted,
+              remaining: allocation.amount - totalCommitted
+            }
+          })
+        )
+
+        // Calculate totals
+        const totalAllocated = stateCommitments.reduce((sum, state) => sum + state.amount, 0)
+        const totalCommitted = stateCommitments.reduce((sum, state) => sum + state.total_committed, 0)
 
         setAllocationSummary({
           grant_call: {
-            id: allocationData[0].grant_calls.id,
-            name: allocationData[0].grant_calls.name,
-            shortname: allocationData[0].grant_calls.shortname,
+            id: grantCallData.id,
+            name: grantCallData.name,
+            shortname: grantCallData.shortname,
           },
-          state: {
-            name: allocationData[0].state_name,
-          },
-          grant_serial: '', // TODO: Add grant serial logic
-          decision_no: allocationData[0].decision_no,
-          allocation_amount: allocationData[0].amount,
+          total_amount: grantCallData.amount,
+          state_allocations: stateCommitments,
+          total_allocated: totalAllocated,
           total_committed: totalCommitted,
-          remaining: remaining,
+          remaining: grantCallData.amount - totalAllocated,
         })
       } catch (error) {
         console.error('Error fetching allocation summary:', error)
@@ -111,7 +133,11 @@ export default function AllocationHeader() {
         <Label className="mb-2">{t('err:f2.select_grant')}</Label>
         <Select
           value={selectedGrantCall}
-          onValueChange={setSelectedGrantCall}
+          onValueChange={(value) => {
+            setSelectedGrantCall(value)
+            onGrantSelect(value)
+            onStateSelect(null) // Clear state selection when grant changes
+          }}
         >
           <SelectTrigger className="w-full">
             <SelectValue placeholder={t('err:f2.select_grant_placeholder')} />
@@ -127,53 +153,83 @@ export default function AllocationHeader() {
       </div>
 
       {allocationSummary && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="space-y-1">
-            <Label className="text-sm text-muted-foreground">
-              {t('err:f2.allocation_amount')}
-            </Label>
-            <div className="text-2xl font-bold">
-              {allocationSummary.allocation_amount.toLocaleString()}
+        <div className="space-y-6">
+          {/* Grant Summary */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="space-y-1">
+              <Label className="text-sm text-muted-foreground">
+                {t('err:f2.total_grant_amount')}
+              </Label>
+              <div className="text-2xl font-bold">
+                {allocationSummary.total_amount.toLocaleString()}
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <Label className="text-sm text-muted-foreground">
+                {t('err:f2.total_allocated')}
+              </Label>
+              <div className="text-2xl font-bold text-muted-foreground">
+                {allocationSummary.total_allocated.toLocaleString()}
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <Label className="text-sm text-muted-foreground">
+                {t('err:f2.grant_remaining')}
+              </Label>
+              <div className={cn(
+                "text-2xl font-bold",
+                allocationSummary.remaining >= 0 ? "text-green-600" : "text-red-600"
+              )}>
+                {allocationSummary.remaining.toLocaleString()}
+              </div>
             </div>
           </div>
 
-          <div className="space-y-1">
-            <Label className="text-sm text-muted-foreground">
-              {t('err:f2.total_committed')}
-            </Label>
-            <div className="text-2xl font-bold text-muted-foreground">
-              {allocationSummary.total_committed.toLocaleString()}
+          {/* State Allocations */}
+          <div>
+            <Label className="mb-4 block">{t('err:f2.state_allocations')}</Label>
+            <div className="rounded-lg border">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b">
+                    <th className="px-4 py-2 text-left">{t('err:f2.state')}</th>
+                    <th className="px-4 py-2 text-right">{t('err:f2.allocated')}</th>
+                    <th className="px-4 py-2 text-right">{t('err:f2.committed')}</th>
+                    <th className="px-4 py-2 text-right">{t('err:f2.remaining')}</th>
+                    <th className="px-4 py-2 text-center">{t('err:f2.decision_no')}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {allocationSummary.state_allocations.map((state) => (
+                    <tr 
+                      key={state.id} 
+                      className={cn(
+                        "border-b last:border-0 cursor-pointer hover:bg-muted/50",
+                        "transition-colors duration-200"
+                      )}
+                      onClick={() => onStateSelect(state.id)}
+                    >
+                      <td className="px-4 py-2">{state.state_name}</td>
+                      <td className="px-4 py-2 text-right">{state.amount.toLocaleString()}</td>
+                      <td className="px-4 py-2 text-right">{state.total_committed.toLocaleString()}</td>
+                      <td className={cn(
+                        "px-4 py-2 text-right",
+                        state.remaining >= 0 ? "text-green-600" : "text-red-600"
+                      )}>
+                        {state.remaining.toLocaleString()}
+                      </td>
+                      <td className="px-4 py-2 text-center">
+                        <span className="inline-block px-2 py-1 text-xs rounded-full bg-muted">
+                          {state.decision_no}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-          </div>
-
-          <div className="space-y-1">
-            <Label className="text-sm text-muted-foreground">
-              {t('err:f2.remaining_amount')}
-            </Label>
-            <div className={cn(
-              "text-2xl font-bold",
-              allocationSummary.remaining >= 0 ? "text-green-600" : "text-red-600"
-            )}>
-              {allocationSummary.remaining.toLocaleString()}
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2">
-            {allocationSummary.remaining >= 0 ? (
-              <>
-                <CheckCircle2 className="h-5 w-5 text-green-600" />
-                <span className="text-sm text-green-600 font-medium">
-                  {t('err:f2.within_allocation')}
-                </span>
-              </>
-            ) : (
-              <>
-                <XCircle className="h-5 w-5 text-red-600" />
-                <span className="text-sm text-red-600 font-medium">
-                  {t('err:f2.over_allocation')}
-                </span>
-              </>
-            )}
           </div>
         </div>
       )}
