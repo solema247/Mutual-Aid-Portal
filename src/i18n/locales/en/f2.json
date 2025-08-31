@@ -41,12 +41,13 @@
   "reassign_error": "Error reassigning workplan",
   "adjust_workplan": "Adjust Workplan",
   "current_amount": "Current Amount",
-  "adjustment_amount": "Adjustment Amount",
+
   "new_amount": "New Amount",
   "adjusting": "Adjusting...",
   "adjust_error": "Error adjusting workplan",
   "selected_count": "{{count}} workplans selected",
   "no_selection": "No workplans selected",
   "within_allocation": "Within Allocation",
-  "over_allocation": "Over Allocation"
+  "over_allocation": "Over Allocation",
+  "refresh_note": "Click refresh to see latest changes in workplan amounts"
 }

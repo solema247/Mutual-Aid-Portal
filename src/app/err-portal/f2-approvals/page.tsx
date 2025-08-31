@@ -130,6 +130,14 @@ export default function F2ApprovalsPage() {
             open={adjustModalOpen}
             onOpenChange={setAdjustModalOpen}
             workplanId={activeWorkplan}
+            onAdjust={() => {
+              // Trigger a refresh of the workplans table
+              const workplansTable = document.querySelector('div[data-testid="workplans-table"]')
+              if (workplansTable) {
+                const event = new Event('refresh')
+                workplansTable.dispatchEvent(event)
+              }
+            }}
           />
         </>
       ) : null}

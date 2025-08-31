@@ -54,8 +54,13 @@ export interface ReassignmentData {
   reason: string;
 }
 
+export interface Expense {
+  activity: string;
+  total_cost: number;
+}
+
 export interface AdjustmentData {
   workplan_id: string;
-  delta_amount: number;
+  expenses: Expense[];
   reason: string;
 }

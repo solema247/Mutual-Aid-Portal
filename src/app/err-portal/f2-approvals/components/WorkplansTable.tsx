@@ -36,6 +36,21 @@ export default function WorkplansTable({
   const { t } = useTranslation(['f2', 'common'])
   const [workplans, setWorkplans] = useState<Workplan[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [refreshTrigger, setRefreshTrigger] = useState(0)
+
+  const refreshWorkplans = () => {
+    setRefreshTrigger(prev => prev + 1)
+  }
+
+  // Add event listener for refresh events
+  useEffect(() => {
+    const element = document.querySelector('div[data-testid="workplans-table"]')
+    if (element) {
+      const handleRefresh = () => refreshWorkplans()
+      element.addEventListener('refresh', handleRefresh)
+      return () => element.removeEventListener('refresh', handleRefresh)
+    }
+  }, [])
 
   useEffect(() => {
     const fetchWorkplans = async () => {
@@ -86,7 +101,7 @@ export default function WorkplansTable({
     }
 
     fetchWorkplans()
-  }, [grantCallId, allocationId])
+  }, [grantCallId, allocationId, refreshTrigger])
 
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
@@ -127,7 +142,35 @@ export default function WorkplansTable({
   }
 
   return (
-    <div className="w-full">
+    <div className="w-full" data-testid="workplans-table">
+      <div className="flex items-center justify-end mb-4 gap-2">
+        <span className="text-sm text-muted-foreground">
+          {t('common:note')}: {t('f2:refresh_note')}
+        </span>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={refreshWorkplans}
+          disabled={isLoading}
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className={`mr-2 h-4 w-4 ${isLoading ? 'animate-spin' : ''}`}
+          >
+            <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" />
+            <path d="M21 3v5h-5" />
+          </svg>
+          {t('common:refresh')}
+        </Button>
+      </div>
       <Table>
         <TableHeader>
           <TableRow>

@@ -41,12 +41,13 @@
   "reassign_error": "خطأ في إعادة تعيين خطة العمل",
   "adjust_workplan": "تعديل خطة العمل",
   "current_amount": "المبلغ الحالي",
-  "adjustment_amount": "مبلغ التعديل",
+
   "new_amount": "المبلغ الجديد",
   "adjusting": "جاري التعديل...",
   "adjust_error": "خطأ في تعديل خطة العمل",
   "selected_count": "تم تحديد {{count}} خطة عمل",
   "no_selection": "لم يتم تحديد خطط عمل",
   "within_allocation": "ضمن المخصص",
-  "over_allocation": "تجاوز المخصص"
+  "over_allocation": "تجاوز المخصص",
+  "refresh_note": "انقر على تحديث لرؤية آخر التغييرات في مبالغ خطط العمل"
 }
