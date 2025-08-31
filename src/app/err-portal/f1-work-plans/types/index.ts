@@ -32,6 +32,7 @@ export interface F1Project {
   version: number
   current_feedback_id: string | null
   grant_call_id: string | null
+  grant_serial_id: string | null
   funding_status: FundingStatus
 }
 

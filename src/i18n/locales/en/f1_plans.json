@@ -11,6 +11,8 @@
     "uploading": "Uploading..."
   },
   "grant_details": {
+    "grant": "Grant Call",
+    "serial": "Grant Serial",
     "select_grant": "Select Grant",
     "select_state": "Select State Allocation",
     "no_allocation": "No allocation available for this state",

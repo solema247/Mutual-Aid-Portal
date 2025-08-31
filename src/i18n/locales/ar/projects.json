@@ -2,6 +2,7 @@
   "status_new": "مشاريع جديدة",
   "status_feedback": "يتطلب ملاحظات",
   "status_active": "المشاريع النشطة",
+  "status_assignment": "تخصيص المشاريع",
   "status_declined": "المشاريع المرفوضة",
   "new_projects": "مشاريع جديدة",
   "feedback_projects": "مشاريع تتطلب ملاحظات",
@@ -44,5 +45,23 @@
   "current_version": "النسخة الحالية",
   "feedback_required": "مطلوب تغييرات",
   "feedback_tab": "سجل الملاحظات",
-  "details_tab": "تفاصيل المشروع"
+  "details_tab": "تفاصيل المشروع",
+  "assignment_tab": "تخصيص المنحة",
+  "assign_grant": "تخصيص المنحة",
+  "assign_grant_serial": "تخصيص رقم المنحة",
+  "assign_grant_serial_desc": "اختر منحة ورقم تسلسلي لتخصيص هذا المشروع للتمويل.",
+  "select_grant_call": "اختر المنحة",
+  "select_grant_call_placeholder": "اختر منحة...",
+  "select_grant_serial": "اختر رقم المنحة",
+  "select_grant_serial_placeholder": "اختر رقم المنحة...",
+  "assign_project": "تخصيص المشروع لرقم المنحة",
+  "grant_call": "المنحة",
+  "grant_serial": "رقم المنحة",
+  "funding_status": "حالة التمويل",
+  "actions": "الإجراءات",
+  "status": {
+    "unassigned": "غير مخصص",
+    "allocated": "مخصص",
+    "reassigned": "معاد تخصيصه"
+  }
 } 

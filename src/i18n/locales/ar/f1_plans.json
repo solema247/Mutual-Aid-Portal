@@ -11,6 +11,8 @@
     "uploading": "جاري التحميل..."
   },
   "grant_details": {
+    "grant": "المنحة",
+    "serial": "رقم المنحة",
     "select_grant": "اختر المنحة",
     "select_state": "اختر تخصيص الولاية",
     "no_allocation": "لا يوجد تخصيص متاح لهذه الولاية",

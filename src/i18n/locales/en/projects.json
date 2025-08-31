@@ -2,6 +2,7 @@
   "status_new": "New Projects",
   "status_feedback": "Feedback Required",
   "status_active": "Active Projects",
+  "status_assignment": "Project Assignment",
   "status_declined": "Declined Projects",
   "new_projects": "New Projects",
   "feedback_projects": "Projects Requiring Feedback",
@@ -44,5 +45,23 @@
   "current_version": "Current Version",
   "feedback_required": "Changes Required",
   "feedback_tab": "Feedback History",
-  "details_tab": "Project Details"
+  "details_tab": "Project Details",
+  "assignment_tab": "Grant Assignment",
+  "assign_grant": "Assign Grant",
+  "assign_grant_serial": "Assign Grant Serial",
+  "assign_grant_serial_desc": "Select a grant call and serial to assign this project for funding.",
+  "select_grant_call": "Select Grant Call",
+  "select_grant_call_placeholder": "Choose a grant call...",
+  "select_grant_serial": "Select Grant Serial",
+  "select_grant_serial_placeholder": "Choose a grant serial...",
+  "assign_project": "Assign Project to Grant Serial",
+  "grant_call": "Grant Call",
+  "grant_serial": "Grant Serial",
+  "funding_status": "Funding Status",
+  "actions": "Actions",
+  "status": {
+    "unassigned": "Unassigned",
+    "allocated": "Allocated",
+    "reassigned": "Reassigned"
+  }
 } 

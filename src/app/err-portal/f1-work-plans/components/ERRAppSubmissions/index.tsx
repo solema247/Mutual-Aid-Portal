@@ -25,7 +25,7 @@ import FeedbackForm from './FeedbackForm'
 import ProjectDetails from './ProjectDetails'
 import { F1Project } from '../../types'
 
-type ProjectStatus = 'new' | 'feedback' | 'active' | 'declined' | 'draft' | 'pending' | 'approved'
+type ProjectStatus = 'new' | 'feedback' | 'assignment' | 'declined' | 'draft' | 'pending' | 'approved'
 
 type Feedback = {
   id: string
@@ -54,6 +54,10 @@ export default function ERRAppSubmissions() {
   const [selectedTab, setSelectedTab] = useState<'details' | 'feedback'>('details')
   const [feedbackHistory, setFeedbackHistory] = useState<Feedback[]>([])
   const [user, setUser] = useState<User | null>(null)
+  const [grantCalls, setGrantCalls] = useState<any[]>([])
+  const [grantSerials, setGrantSerials] = useState<any[]>([])
+  const [selectedGrantCall, setSelectedGrantCall] = useState<string>('')
+  const [selectedGrantSerial, setSelectedGrantSerial] = useState<string>('')
 
   const filterProjectsByStatus = useCallback(() => {
     let filteredProjects: F1Project[] = []
@@ -68,8 +72,11 @@ export default function ERRAppSubmissions() {
           (p.status === 'draft' && p.current_feedback_id !== null)
         )
         break
-      case 'active':
-        filteredProjects = allProjects.filter(p => ['active', 'approved'].includes(p.status))
+      case 'assignment':
+        filteredProjects = allProjects.filter(p => 
+          p.status === 'approved' && 
+          (!p.grant_serial_id || p.funding_status === 'unassigned')
+        )
         break
       case 'declined':
         filteredProjects = allProjects.filter(p => p.status === 'declined')
@@ -101,6 +108,18 @@ export default function ERRAppSubmissions() {
       fetchFeedbackHistory(selectedProject.id)
     }
   }, [selectedProject])
+
+  useEffect(() => {
+    fetchGrantCalls()
+  }, [])
+
+  useEffect(() => {
+    if (selectedGrantCall) {
+      fetchGrantSerials(selectedGrantCall)
+    } else {
+      setGrantSerials([])
+    }
+  }, [selectedGrantCall])
 
   const fetchFeedbackHistory = async (projectId: string) => {
     try {
@@ -134,11 +153,62 @@ export default function ERRAppSubmissions() {
     }
   }
 
+  const fetchGrantCalls = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('grant_calls')
+        .select('id, name, shortname')
+        .eq('status', 'open')
+        .order('created_at', { ascending: false })
+
+      if (error) throw error
+      setGrantCalls(data || [])
+    } catch (error) {
+      console.error('Error fetching grant calls:', error)
+    }
+  }
+
+  const fetchGrantSerials = async (grantCallId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('grant_serials')
+        .select('grant_serial, grant_call_id, state_name, yymm')
+        .eq('grant_call_id', grantCallId)
+        .order('created_at', { ascending: false })
+
+      if (error) throw error
+      setGrantSerials(data || [])
+    } catch (error) {
+      console.error('Error fetching grant serials:', error)
+    }
+  }
+
+  const handleGrantAssignment = async (projectId: string, grantSerial: string) => {
+    try {
+      const { error } = await supabase
+        .from('err_projects')
+        .update({
+          grant_serial_id: grantSerial,
+          funding_status: 'allocated'
+        })
+        .eq('id', projectId)
+
+      if (error) throw error
+
+      // Refresh projects list
+      fetchAllProjects()
+      alert('Project assigned to grant serial successfully!')
+    } catch (error) {
+      console.error('Error assigning project to grant serial:', error)
+      alert('Error assigning project to grant serial. Please try again.')
+    }
+  }
+
   const handleFeedbackSubmit = async (feedbackText: string, action: 'approve' | 'feedback' | 'decline') => {
     if (!selectedProject || !user) return
 
     try {
-      const newStatus = action === 'approve' ? 'active' : 
+      const newStatus = action === 'approve' ? 'approved' : 
                        action === 'decline' ? 'declined' : 
                        'feedback'
       
@@ -201,8 +271,11 @@ export default function ERRAppSubmissions() {
               (p.status === 'draft' && p.current_feedback_id !== null)
             ).length})
           </TabsTrigger>
-          <TabsTrigger value="active">
-            {t('projects:status_active')} ({allProjects.filter(p => ['active', 'approved'].includes(p.status)).length})
+          <TabsTrigger value="assignment">
+            {t('projects:status_assignment')} ({allProjects.filter(p => 
+              p.status === 'approved' && 
+              (!p.grant_serial_id || p.funding_status === 'unassigned')
+            ).length})
           </TabsTrigger>
           <TabsTrigger value="declined">
             {t('projects:status_declined')} ({allProjects.filter(p => p.status === 'declined').length})
@@ -229,9 +302,10 @@ export default function ERRAppSubmissions() {
                       <TableHead>{t('projects:date')}</TableHead>
                       <TableHead>{t('projects:location')}</TableHead>
                       <TableHead>{t('projects:version')}</TableHead>
-                      <TableHead>{t('f1_plans:grant_details.grant')}</TableHead>
-                      <TableHead>{t('f1_plans:status.funding')}</TableHead>
-                      <TableHead>{t('common:actions')}</TableHead>
+                                             <TableHead>{t('projects:grant_call')}</TableHead>
+                       <TableHead>{t('projects:grant_serial')}</TableHead>
+                       <TableHead>{t('projects:funding_status')}</TableHead>
+                       <TableHead>{t('projects:actions')}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -242,14 +316,38 @@ export default function ERRAppSubmissions() {
                         <TableCell>{`${project.state}, ${project.locality}`}</TableCell>
                         <TableCell>{project.version}</TableCell>
                         <TableCell>{project.grant_call_id || '-'}</TableCell>
-                        <TableCell>{t(`f1_plans:status.${project.funding_status}`)}</TableCell>
+                        <TableCell>{project.grant_serial_id || '-'}</TableCell>
+                                                 <TableCell>{t(`projects:status.${project.funding_status}`)}</TableCell>
                         <TableCell>
-                          <Button
-                            variant="outline"
-                            onClick={() => handleProjectClick(project)}
-                          >
-                            {t('common:view')}
-                          </Button>
+                          {currentStatus === 'assignment' ? (
+                            <div className="flex gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleProjectClick(project)}
+                              >
+                                {t('common:view')}
+                              </Button>
+                              <Button
+                                variant="default"
+                                size="sm"
+                                onClick={() => {
+                                  setSelectedProject(project)
+                                  setSelectedTab('assignment')
+                                  setIsDialogOpen(true)
+                                }}
+                              >
+                                {t('projects:assign_grant')}
+                              </Button>
+                            </div>
+                          ) : (
+                            <Button
+                              variant="outline"
+                              onClick={() => handleProjectClick(project)}
+                            >
+                              {t('common:view')}
+                            </Button>
+                          )}
                         </TableCell>
                       </TableRow>
                     ))}
@@ -273,14 +371,19 @@ export default function ERRAppSubmissions() {
               </DialogTitle>
             </DialogHeader>
 
-            <Tabs value={selectedTab} className="w-full" onValueChange={(value) => setSelectedTab(value as 'details' | 'feedback')}>
-              <TabsList className="grid w-full grid-cols-2">
+            <Tabs value={selectedTab} className="w-full" onValueChange={(value) => setSelectedTab(value as 'details' | 'feedback' | 'assignment')}>
+              <TabsList className="grid w-full grid-cols-3">
                 <TabsTrigger value="details">
                   {t('projects:details_tab')}
                 </TabsTrigger>
                 <TabsTrigger value="feedback">
                   {t('projects:feedback_tab')}
                 </TabsTrigger>
+                {currentStatus === 'assignment' && (
+                  <TabsTrigger value="assignment">
+                    {t('projects:assignment_tab')}
+                  </TabsTrigger>
+                )}
               </TabsList>
 
               <TabsContent value="details" className="py-6">
@@ -302,6 +405,68 @@ export default function ERRAppSubmissions() {
                       />
                     </div>
                   )}
+                </div>
+              </TabsContent>
+
+              <TabsContent value="assignment" className="py-6">
+                <div className="space-y-6">
+                  <div>
+                    <h3 className="text-lg font-semibold mb-4">{t('projects:assign_grant_serial')}</h3>
+                    <p className="text-sm text-muted-foreground mb-4">
+                      {t('projects:assign_grant_serial_desc')}
+                    </p>
+                    
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-medium mb-2">
+                          {t('projects:select_grant_call')}
+                        </label>
+                        <select
+                          value={selectedGrantCall}
+                          onChange={(e) => setSelectedGrantCall(e.target.value)}
+                          className="w-full p-2 border rounded-md"
+                        >
+                          <option value="">{t('projects:select_grant_call_placeholder')}</option>
+                          {grantCalls.map((grantCall) => (
+                            <option key={grantCall.id} value={grantCall.id}>
+                              {grantCall.name} ({grantCall.shortname})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {selectedGrantCall && (
+                        <div>
+                          <label className="block text-sm font-medium mb-2">
+                            {t('projects:select_grant_serial')}
+                          </label>
+                          <select
+                            value={selectedGrantSerial}
+                            onChange={(e) => setSelectedGrantSerial(e.target.value)}
+                            className="w-full p-2 border rounded-md"
+                          >
+                            <option value="">{t('projects:select_grant_serial_placeholder')}</option>
+                            {grantSerials.map((serial) => (
+                              <option key={serial.grant_serial} value={serial.grant_serial}>
+                                {serial.grant_serial} - {serial.state_name} ({serial.yymm})
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+
+                      {selectedGrantSerial && (
+                        <div className="pt-4">
+                          <Button
+                            onClick={() => handleGrantAssignment(selectedProject.id, selectedGrantSerial)}
+                            className="w-full"
+                          >
+                            {t('projects:assign_project')}
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
               </TabsContent>
             </Tabs>
