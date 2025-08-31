@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
-import { Users, BarChart2, FileText, ClipboardList, PieChart, UserCog } from 'lucide-react'
+import { Users, BarChart2, FileText, ClipboardList, PieChart, UserCog, CheckSquare } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 import '@/i18n/config'
 
@@ -176,6 +176,21 @@ export default function ErrPortalPage() {
             </Card>
           </Link>
         )}
+
+        {/* F2 Approvals */}
+        <Link href="/err-portal/f2-approvals" className="block aspect-square">
+          <Card className="h-full hover:bg-muted/50 transition-colors">
+            <CardHeader className="h-full flex flex-col justify-center items-center text-center">
+              <CheckSquare className="h-8 w-8 mb-4" />
+              <CardTitle className="text-xl">
+                {t('err:f2_approvals')}
+              </CardTitle>
+              <CardDescription className="mt-2">
+                {t('err:f2_approvals_desc')}
+              </CardDescription>
+            </CardHeader>
+          </Card>
+        </Link>
 
         {/* User Management */}
         <Link href="/err-portal/user-management" className="block aspect-square">
