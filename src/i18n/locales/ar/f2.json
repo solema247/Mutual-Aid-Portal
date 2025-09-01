@@ -49,6 +49,7 @@
   "adjust_error": "خطأ في تعديل خطة العمل",
   "approve_error": "خطأ في الموافقة على خطط العمل",
   "send_back_error": "خطأ في إرجاع خطط العمل",
+  "send_back_success": "تم إرجاع خطط العمل بنجاح",
   "selected_count": "تم تحديد {{count}} خطة عمل",
   "no_selection": "لم يتم تحديد خطط عمل",
   "within_allocation": "ضمن المخصص",

@@ -169,19 +169,59 @@ export default function FooterActions({
     try {
       setIsLoading(true)
 
-      // Update workplan statuses with note
+      // Get current user
+      const { data: { user }, error: userError } = await supabase.auth.getUser()
+      if (userError) throw userError
+
+      // Update workplan statuses to pending
       const { error: updateError } = await supabase
         .from('err_projects')
         .update({
-          status: 'pending',
-          notes: sendBackReason
+          status: 'pending'
         })
         .in('id', selectedWorkplans)
 
       if (updateError) throw updateError
 
+      // Create feedback entries for each workplan to store the send-back reason
+      const feedbackEntries = selectedWorkplans.map(workplanId => ({
+        project_id: workplanId,
+        feedback_text: sendBackReason,
+        feedback_status: 'pending_changes',
+        created_by: user?.id,
+        iteration_number: 1 // This will be incremented if there are existing feedback entries
+      }))
+
+      // Get existing feedback count for each project to set correct iteration number
+      const { data: existingFeedback, error: feedbackError } = await supabase
+        .from('project_feedback')
+        .select('project_id, iteration_number')
+        .in('project_id', selectedWorkplans)
+
+      if (feedbackError) {
+        console.error('Error fetching existing feedback:', feedbackError)
+        // Continue without iteration numbers
+      } else {
+        // Update iteration numbers based on existing feedback
+        feedbackEntries.forEach(entry => {
+          const existing = existingFeedback?.filter(f => f.project_id === entry.project_id) || []
+          entry.iteration_number = existing.length + 1
+        })
+      }
+
+      // Insert feedback entries
+      const { error: insertFeedbackError } = await supabase
+        .from('project_feedback')
+        .insert(feedbackEntries)
+
+      if (insertFeedbackError) {
+        console.error('Error creating feedback entries:', insertFeedbackError)
+        // Don't throw here, the main operation (status update) succeeded
+      }
+
       setSendBackOpen(false)
       onClearSelection()
+      alert(t('f2:send_back_success'))
     } catch (error) {
       console.error('Error sending back workplans:', error)
       alert(t('f2:send_back_error'))

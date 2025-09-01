@@ -70,9 +70,11 @@ export default function WorkplansTable({
             grant_call_state_allocation_id,
             grant_serial_id
           `)
-          // Show both pending and approved projects
+          // Only show approved projects with allocated or committed funding status
           .eq('grant_call_id', grantCallId)
           .eq('grant_call_state_allocation_id', allocationId)
+          .eq('status', 'approved')
+          .in('funding_status', ['allocated', 'committed'])
           .order('workplan_number', { ascending: true })
 
         if (error) throw error
@@ -82,8 +84,35 @@ export default function WorkplansTable({
           console.log('First workplan data:', data[0])
         }
 
+        // Debug: Log all workplans to see their status
+        console.log('All fetched workplans:', data?.map(w => ({
+          id: w.id,
+          status: w.status,
+          funding_status: w.funding_status,
+          workplan_number: w.workplan_number
+        })))
+
+        // Additional filter to exclude projects that shouldn't be in F2 workflow
+        const filteredWorkplans = data?.filter(w => {
+          // Only include approved projects
+          if (w.status !== 'approved') {
+            console.log(`Excluding workplan ${w.id}: status is ${w.status}, not approved`)
+            return false
+          }
+          
+          // Only include allocated or committed projects
+          if (!['allocated', 'committed'].includes(w.funding_status)) {
+            console.log(`Excluding workplan ${w.id}: funding_status is ${w.funding_status}, not allocated/committed`)
+            return false
+          }
+          
+          return true
+        }) || []
+
+        console.log(`Filtered workplans: ${filteredWorkplans.length} out of ${data?.length || 0}`)
+
         // Validate workplan data before setting
-        const validWorkplans = data?.filter(w => {
+        const validWorkplans = filteredWorkplans.filter(w => {
           const isValid = w && typeof w === 'object' && 'id' in w
           if (!isValid) {
             console.warn('Invalid workplan data:', w)

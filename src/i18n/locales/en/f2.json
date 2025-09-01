@@ -49,6 +49,7 @@
   "adjust_error": "Error adjusting workplan",
   "approve_error": "Error approving workplans",
   "send_back_error": "Error sending back workplans",
+  "send_back_success": "Workplans sent back successfully",
   "selected_count": "{{count}} workplans selected",
   "no_selection": "No workplans selected",
   "within_allocation": "Within Allocation",
