@@ -53,7 +53,8 @@ export default function FooterActions({
           grant_call_state_allocation_id, 
           grant_serial_id,
           status,
-          funding_status
+          funding_status,
+          state
         `)
         .in('id', workplanIds)
 
@@ -94,14 +95,46 @@ export default function FooterActions({
       if (userError) throw userError
 
       // Create ledger entries for remaining workplans
-      const ledgerEntries = workplansToApprove.map(workplan => ({
-        workplan_id: workplan.id,
-        grant_call_id: workplan.grant_call_id,
-        grant_call_state_allocation_id: workplan.grant_call_state_allocation_id,
-        grant_serial_id: workplan.grant_serial_id,
-        delta_amount: calculateTotalAmount(workplan.expenses),
-        reason: 'Initial approval',
-        created_by: user?.id
+      const ledgerEntries = await Promise.all(workplansToApprove.map(async (workplan) => {
+        let grantSerialId = workplan.grant_serial_id
+
+        // If grant_serial_id is "new" or invalid, look up the correct grant serial
+        if (grantSerialId === 'new' || !grantSerialId) {
+          const { data: grantSerialData, error: grantSerialError } = await supabase
+            .from('grant_serials')
+            .select('grant_serial')
+            .eq('grant_call_id', workplan.grant_call_id)
+            .eq('state_name', workplan.state)
+            .single()
+
+          if (grantSerialError) {
+            console.error('Error fetching grant serial:', grantSerialError)
+            throw new Error(`Failed to find grant serial for workplan ${workplan.id}`)
+          }
+
+          grantSerialId = grantSerialData.grant_serial
+
+          // Update the workplan with the correct grant_serial_id
+          const { error: updateSerialError } = await supabase
+            .from('err_projects')
+            .update({ grant_serial_id: grantSerialId })
+            .eq('id', workplan.id)
+
+          if (updateSerialError) {
+            console.error('Error updating workplan grant_serial_id:', updateSerialError)
+            // Don't throw here, continue with the approval process
+          }
+        }
+
+        return {
+          workplan_id: workplan.id,
+          grant_call_id: workplan.grant_call_id,
+          grant_call_state_allocation_id: workplan.grant_call_state_allocation_id,
+          grant_serial_id: grantSerialId,
+          delta_amount: calculateTotalAmount(workplan.expenses),
+          reason: 'Initial approval',
+          created_by: user?.id
+        }
       }))
 
       const { error: ledgerError } = await supabase
