@@ -29,11 +29,13 @@
   "feedback_placeholder": "أدخل ملاحظاتك هنا...",
   "approve": "الموافقة على المشروع",
   "send_feedback": "إرسال الملاحظات",
+  "request_changes": "طلب التغييرات",
   "decline": "رفض المشروع",
   "err_id": "رقم معرف ERR",
   "date": "التاريخ",
   "officer": "مسؤول البرنامج",
   "feedback_history": "سجل الملاحظات",
+  "no_feedback": "لا توجد ملاحظات متاحة",
   "no_feedback_history": "لا يوجد سجل للملاحظات",
   "iteration": "المراجعة",
   "status_pending_changes": "مطلوب تغييرات",
@@ -41,6 +43,7 @@
   "status_resolved": "تم الحل",
   "feedback_created_by": "الملاحظات من",
   "feedback_addressed_by": "تمت المعالجة من قبل",
+  "addressed_on": "تمت المعالجة في",
   "version": "النسخة",
   "current_version": "النسخة الحالية",
   "feedback_required": "مطلوب تغييرات",
@@ -64,5 +67,10 @@
     "unassigned": "غير مخصص",
     "allocated": "مخصص",
     "reassigned": "معاد تخصيصه"
+  },
+  "feedback_status": {
+    "pending_changes": "مطلوب تغييرات",
+    "changes_submitted": "تم تقديم التغييرات",
+    "resolved": "تم الحل"
   }
 } 

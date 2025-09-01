@@ -29,11 +29,13 @@
   "feedback_placeholder": "Enter your feedback here...",
   "approve": "Approve Project",
   "send_feedback": "Send Feedback",
+  "request_changes": "Request Changes",
   "decline": "Decline Project",
   "err_id": "ERR ID",
   "date": "Date",
   "officer": "Program Officer",
   "feedback_history": "Feedback History",
+  "no_feedback": "No feedback available",
   "no_feedback_history": "No feedback history available",
   "iteration": "Iteration",
   "status_pending_changes": "Changes Requested",
@@ -41,6 +43,7 @@
   "status_resolved": "Resolved",
   "feedback_created_by": "Feedback by",
   "feedback_addressed_by": "Addressed by",
+  "addressed_on": "Addressed on",
   "version": "Version",
   "current_version": "Current Version",
   "feedback_required": "Changes Required",
@@ -64,5 +67,10 @@
     "unassigned": "Unassigned",
     "allocated": "Allocated",
     "reassigned": "Reassigned"
+  },
+  "feedback_status": {
+    "pending_changes": "Changes Requested",
+    "changes_submitted": "Changes Submitted",
+    "resolved": "Resolved"
   }
 } 
