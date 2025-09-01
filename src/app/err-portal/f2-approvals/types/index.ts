@@ -6,7 +6,7 @@ export interface Workplan {
   "Sector (Primary)": string;
   expenses: Array<{ activity: string; total_cost: number; }> | string;
   status: 'pending' | 'approved';
-  funding_status: 'pending' | 'committed';
+  funding_status: 'pending' | 'allocated' | 'committed';
   grant_call_id: string;
   grant_call_state_allocation_id: string;
   grant_serial_id: string;

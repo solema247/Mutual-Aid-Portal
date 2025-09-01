@@ -54,5 +54,19 @@
   "no_selection": "لم يتم تحديد خطط عمل",
   "within_allocation": "ضمن المخصص",
   "over_allocation": "تجاوز المخصص",
-  "refresh_note": "انقر على تحديث لرؤية آخر التغييرات في مبالغ خطط العمل"
+  "refresh_note": "انقر على تحديث لرؤية آخر التغييرات في مبالغ خطط العمل",
+  "select_grant": "اختر المنحة",
+  "filter_by_donor": "تصفية حسب المانح",
+  "all_donors": "جميع المانحين",
+  "no_grant_calls_found": "لم يتم العثور على منح",
+  "grant_name": "اسم المنحة",
+  "donor": "المانح",
+  "grant_status_open": "مفتوحة",
+  "grant_status_closed": "مغلقة",
+  "selected": "محدد",
+  "select": "اختر",
+  "actions": "الإجراءات",
+  "back_to_grant_selection": "العودة إلى اختيار المنحة",
+  "selected_grant": "المنحة المحددة",
+  "change_grant": "تغيير المنحة"
 }

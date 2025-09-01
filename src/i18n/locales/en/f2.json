@@ -54,5 +54,19 @@
   "no_selection": "No workplans selected",
   "within_allocation": "Within Allocation",
   "over_allocation": "Over Allocation",
-  "refresh_note": "Click refresh to see latest changes in workplan amounts"
+  "refresh_note": "Click refresh to see latest changes in workplan amounts",
+  "select_grant": "Select Grant Call",
+  "filter_by_donor": "Filter by Donor",
+  "all_donors": "All Donors",
+  "no_grant_calls_found": "No grant calls found",
+  "grant_name": "Grant Name",
+  "donor": "Donor",
+  "grant_status_open": "Open",
+  "grant_status_closed": "Closed",
+  "selected": "Selected",
+  "select": "Select",
+  "actions": "Actions",
+  "back_to_grant_selection": "Back to Grant Selection",
+  "selected_grant": "Selected Grant",
+  "change_grant": "Change Grant"
 }

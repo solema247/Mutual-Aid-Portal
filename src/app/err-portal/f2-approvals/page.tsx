@@ -11,7 +11,8 @@ import {
   WorkplansTable,
   FooterActions,
   ReassignModal,
-  AdjustModal
+  AdjustModal,
+  GrantSelectionTable
 } from './components'
 
 interface User {
@@ -90,10 +91,18 @@ export default function F2ApprovalsPage() {
       </div>
 
       <Card className="p-6">
-        <AllocationHeader 
-          onGrantSelect={setSelectedGrantCall}
-          onStateSelect={setSelectedAllocation}
-        />
+        {!selectedGrantCall ? (
+          <GrantSelectionTable 
+            onGrantSelect={setSelectedGrantCall}
+            selectedGrantId={selectedGrantCall}
+          />
+        ) : (
+          <AllocationHeader 
+            onGrantSelect={setSelectedGrantCall}
+            onStateSelect={setSelectedAllocation}
+            selectedGrantId={selectedGrantCall}
+          />
+        )}
       </Card>
 
       {selectedAllocation ? (

@@ -6,21 +6,30 @@ import { useState, useEffect } from 'react'
 import { cn } from '@/lib/utils'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { CheckCircle2, XCircle } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { CheckCircle2, XCircle, ArrowLeft } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 import type { AllocationSummary } from '../types'
 
 interface AllocationHeaderProps {
   onGrantSelect: (grantId: string | null) => void;
   onStateSelect: (allocationId: string | null) => void;
+  selectedGrantId?: string | null;
 }
 
-export default function AllocationHeader({ onGrantSelect, onStateSelect }: AllocationHeaderProps) {
+export default function AllocationHeader({ onGrantSelect, onStateSelect, selectedGrantId }: AllocationHeaderProps) {
   const { t } = useTranslation(['f2', 'common'])
   const [grantCalls, setGrantCalls] = useState<{ id: string; name: string }[]>([])
-  const [selectedGrantCall, setSelectedGrantCall] = useState<string>('')
+  const [selectedGrantCall, setSelectedGrantCall] = useState<string>(selectedGrantId || '')
   const [allocationSummary, setAllocationSummary] = useState<AllocationSummary | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+
+  // Update selectedGrantCall when selectedGrantId changes
+  useEffect(() => {
+    if (selectedGrantId) {
+      setSelectedGrantCall(selectedGrantId)
+    }
+  }, [selectedGrantId])
 
   // Fetch grant calls
   useEffect(() => {
@@ -156,27 +165,37 @@ export default function AllocationHeader({ onGrantSelect, onStateSelect }: Alloc
 
   return (
     <div className="space-y-6">
-      <div>
-        <Label className="mb-2">{t('f2:select_grant')}</Label>
-        <Select
-          value={selectedGrantCall}
-          onValueChange={(value) => {
-            setSelectedGrantCall(value)
-            onGrantSelect(value)
-            onStateSelect(null) // Clear state selection when grant changes
-          }}
+      <div className="flex items-center justify-between">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => onGrantSelect(null)}
+          className="flex items-center gap-2"
         >
-          <SelectTrigger className="w-full">
-            <SelectValue placeholder={t('f2:select_grant_placeholder')} />
-          </SelectTrigger>
-          <SelectContent>
-            {grantCalls.map((grant) => (
-              <SelectItem key={grant.id} value={grant.id}>
-                {grant.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+          <ArrowLeft className="h-4 w-4" />
+          {t('f2:back_to_grant_selection')}
+        </Button>
+      </div>
+
+      <div>
+        <Label className="mb-2">{t('f2:selected_grant')}</Label>
+        <div className="flex items-center gap-4">
+          <div className="flex-1 p-3 bg-muted rounded-md">
+            <div className="font-medium">{allocationSummary?.grant_call.name}</div>
+            {allocationSummary?.grant_call.shortname && (
+              <div className="text-sm text-muted-foreground">
+                {allocationSummary.grant_call.shortname}
+              </div>
+            )}
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onGrantSelect(null)}
+          >
+            {t('f2:change_grant')}
+          </Button>
+        </div>
       </div>
 
       {allocationSummary && (
