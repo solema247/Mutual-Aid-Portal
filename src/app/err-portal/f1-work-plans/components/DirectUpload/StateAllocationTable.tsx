@@ -2,6 +2,8 @@
 
 import { useTranslation } from 'react-i18next'
 import { Label } from '@/components/ui/label'
+import { Button } from '@/components/ui/button'
+import { RefreshCw } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface StateAllocationTableProps {
@@ -11,25 +13,42 @@ interface StateAllocationTableProps {
     amount: number;
     amount_used?: number;
     amount_committed?: number;
-    amount_pending?: number;
-    amount_approved?: number;
+    amount_allocated?: number;
   }[];
   selectedAllocationId?: string;
   onSelectAllocation?: (id: string) => void;
   highlightedAmount?: number;
+  onRefresh?: () => void;
+  isRefreshing?: boolean;
 }
 
 export default function StateAllocationTable({
   allocations,
   selectedAllocationId,
   onSelectAllocation,
-  highlightedAmount
+  highlightedAmount,
+  onRefresh,
+  isRefreshing = false
 }: StateAllocationTableProps) {
   const { t } = useTranslation(['fsystem'])
 
   return (
     <div>
-      <Label className="mb-2">{t('fsystem:f1.state_allocations')}</Label>
+      <div className="flex items-center justify-between mb-2">
+        <Label>{t('fsystem:f1.state_allocations')}</Label>
+        {onRefresh && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onRefresh}
+            disabled={isRefreshing}
+            className="h-8 px-2"
+          >
+            <RefreshCw className={cn("h-4 w-4", isRefreshing && "animate-spin")} />
+            <span className="ml-1 text-xs">{t('fsystem:f1.refresh')}</span>
+          </Button>
+        )}
+      </div>
       <table className="w-full">
         <thead>
           <tr className="border-b">
@@ -41,10 +60,10 @@ export default function StateAllocationTable({
         </thead>
         <tbody>
           {allocations.map((allocation) => {
-                        const committed = allocation.amount_committed || 0
-            const pending = allocation.amount_pending || 0
-            const approved = allocation.amount_approved || 0
-            const remaining = allocation.amount - committed
+            const committed = allocation.amount_committed || 0
+            const allocated = allocation.amount_allocated || 0
+            const totalUsed = allocation.amount_used || 0
+            const remaining = allocation.amount - totalUsed
             const isOverAllocated = highlightedAmount !== undefined && 
                                   highlightedAmount > remaining
             
@@ -76,7 +95,7 @@ export default function StateAllocationTable({
                 <td className="px-4 py-2 text-right">
                   {committed.toLocaleString()}
                   <span className="text-xs text-muted-foreground ml-1">
-                    (Pending: {pending.toLocaleString()}, Approved: {approved.toLocaleString()})
+                    (Allocated: {allocated.toLocaleString()})
                   </span>
                 </td>
                 <td className={cn(

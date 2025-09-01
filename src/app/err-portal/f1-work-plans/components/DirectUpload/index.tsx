@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
-import { FileUp } from 'lucide-react'
+import { FileUp, RefreshCw } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 import type { Donor, State, F1FormData, EmergencyRoom, Sector, GrantCall, StateAllocation } from '@/app/api/fsystem/types/fsystem'
 import ExtractedDataReview from './ExtractedDataReview'
@@ -50,6 +50,7 @@ export default function DirectUpload() {
   const [grantSerials, setGrantSerials] = useState<GrantSerial[]>([])
   const [nextWorkplanNumber, setNextWorkplanNumber] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
+  const [isRefreshing, setIsRefreshing] = useState(false)
   const [previewId, setPreviewId] = useState('')
   const [previewSerial, setPreviewSerial] = useState<string>('')
   const [processedData, setProcessedData] = useState<any>(null)
@@ -132,63 +133,80 @@ export default function DirectUpload() {
 
   // Fetch state allocations when grant call changes
   useEffect(() => {
-    const fetchStateAllocations = async () => {
-      if (!selectedGrantCall) {
-        setStateAllocations([])
-        return
-      }
-
-      try {
-        // Fetch all allocations for this grant call
-        const { data: allocationsData, error: allocationsError } = await supabase
-          .from('grant_call_state_allocations')
-          .select('*')
-          .eq('grant_call_id', selectedGrantCall)
-          .order('decision_no', { ascending: false })
-          .order('state_name')
-
-        if (allocationsError) throw allocationsError
-
-        // Group by state and get latest decision for each
-        const latestByState = allocationsData.reduce((acc, curr) => {
-          if (!acc[curr.state_name] || acc[curr.state_name].decision_no < curr.decision_no) {
-            acc[curr.state_name] = curr
-          }
-          return acc
-        }, {} as Record<string, any>)
-
-        // Convert back to array and type as StateAllocation[]
-        const latestAllocations = Object.values(latestByState) as StateAllocation[]
-
-        // Fetch committed amounts for each allocation
-        const allocationsWithAmounts = await Promise.all(
-          latestAllocations.map(async (allocation: StateAllocation) => {
-            try {
-              const response = await fetch(`/api/fsystem/state-allocations/committed?allocation_id=${allocation.id}`)
-              if (!response.ok) throw new Error('Failed to fetch committed amounts')
-              const { committed, pending, approved } = await response.json()
-              return {
-                ...allocation,
-                amount_committed: committed,
-                amount_pending: pending,
-                amount_approved: approved
-              } as StateAllocation
-            } catch (error) {
-              console.error(`Error fetching amounts for ${allocation.state_name}:`, error)
-              return allocation
-            }
-          })
-        )
-
-        setStateAllocations(allocationsWithAmounts)
-      } catch (error) {
-        console.error('Error fetching state allocations:', error)
-        setStateAllocations([])
-      }
-    }
-
     fetchStateAllocations()
   }, [selectedGrantCall])
+
+  const fetchStateAllocations = async () => {
+    if (!selectedGrantCall) {
+      setStateAllocations([])
+      return
+    }
+
+    setIsRefreshing(true)
+    try {
+      // Fetch all allocations for this grant call
+      const { data: allocationsData, error: allocationsError } = await supabase
+        .from('grant_call_state_allocations')
+        .select('*')
+        .eq('grant_call_id', selectedGrantCall)
+        .order('decision_no', { ascending: false })
+        .order('state_name')
+
+      if (allocationsError) throw allocationsError
+
+      // Group by state and get latest decision for each
+      const latestByState = allocationsData.reduce((acc, curr) => {
+        if (!acc[curr.state_name] || acc[curr.state_name].decision_no < curr.decision_no) {
+          acc[curr.state_name] = curr
+        }
+        return acc
+      }, {} as Record<string, any>)
+
+      // Convert back to array and type as StateAllocation[]
+      const latestAllocations = Object.values(latestByState) as StateAllocation[]
+
+      // Fetch committed amounts for each allocation
+      const allocationsWithAmounts = await Promise.all(
+        latestAllocations.map(async (allocation: StateAllocation) => {
+          try {
+            const response = await fetch(`/api/fsystem/state-allocations/committed?allocation_id=${allocation.id}`)
+            if (!response.ok) throw new Error('Failed to fetch committed amounts')
+            const { committed, allocated, total_used } = await response.json()
+            
+            console.log(`Allocation ${allocation.state_name}:`, {
+              total_allocation: allocation.amount,
+              committed,
+              allocated,
+              total_used,
+              available: allocation.amount - total_used
+            })
+            
+            return {
+              ...allocation,
+              amount_committed: committed || 0,
+              amount_allocated: allocated || 0,
+              amount_used: total_used || 0
+            } as StateAllocation
+          } catch (error) {
+            console.error(`Error fetching amounts for ${allocation.state_name}:`, error)
+            return {
+              ...allocation,
+              amount_committed: 0,
+              amount_allocated: 0,
+              amount_used: 0
+            } as StateAllocation
+          }
+        })
+      )
+
+      setStateAllocations(allocationsWithAmounts)
+    } catch (error) {
+      console.error('Error fetching state allocations:', error)
+      setStateAllocations([])
+    } finally {
+      setIsRefreshing(false)
+    }
+  }
 
   // Fetch rooms when state changes
   useEffect(() => {
@@ -596,8 +614,12 @@ export default function DirectUpload() {
       })
       setSelectedFile(null)
       setPreviewId('')
+      setPreviewSerial('')
       setProcessedData(null)
       setIsReviewing(false)
+      
+      // Refresh state allocations to show updated amounts
+      await fetchStateAllocations()
 
     } catch (error) {
       console.error('Error uploading form:', error)
@@ -635,6 +657,9 @@ export default function DirectUpload() {
                       state_id: '',
                       donor_id: grantCalls.find(g => g.id === value)?.donor?.id || ''
                     }))
+                    // Clear form ID when grant call changes
+                    setPreviewId('')
+                    setPreviewSerial('')
                   }}
                 >
                   <SelectTrigger>
@@ -677,7 +702,12 @@ export default function DirectUpload() {
                           grant_call_state_allocation_id: id,
                           state_id: states.find(s => s.state_name === stateAllocations.find(a => a.id === id)?.state_name)?.id || ''
                         }))
+                        // Clear form ID when allocation changes
+                        setPreviewId('')
+                        setPreviewSerial('')
                       }}
+                      onRefresh={fetchStateAllocations}
+                      isRefreshing={isRefreshing}
                     />
                   )}
                 </div>

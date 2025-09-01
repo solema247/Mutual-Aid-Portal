@@ -160,11 +160,11 @@ export default function ExtractedDataReview({
               <div className="text-lg font-medium">{allocationInfo.stateName}</div>
             </div>
             <div>
-              <Label>available_amount</Label>
+              <Label>{t('fsystem:review.fields.available_amount')}</Label>
               <div className="text-lg font-medium">{(allocationInfo.amount - allocationInfo.amountUsed).toLocaleString()}</div>
             </div>
             <div>
-              <Label>f1_amount</Label>
+              <Label>{t('fsystem:review.fields.f1_amount')}</Label>
               <div className={cn(
                 "text-lg font-medium",
                 isOverBudget && "text-destructive"

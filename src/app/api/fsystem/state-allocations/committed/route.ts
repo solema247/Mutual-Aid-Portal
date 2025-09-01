@@ -10,73 +10,80 @@ export async function GET(request: Request) {
   }
 
   try {
-    // Get all pending projects for this allocation
-    const { data: pendingProjects, error: pendingError } = await supabase
+    // Get all committed projects for this allocation (funding_status = 'committed')
+    const { data: committedProjects, error: committedError } = await supabase
       .from('err_projects')
       .select('*')
       .eq('grant_call_state_allocation_id', allocation_id)
-      .eq('status', 'pending')
+      .eq('funding_status', 'committed')
 
-    if (pendingError) throw pendingError
+    if (committedError) throw committedError
     
-    console.log('Pending projects found:', pendingProjects)
+    console.log('Committed projects found:', committedProjects)
 
-    // Calculate pending amount
-    const pendingAmount = pendingProjects?.reduce((sum, project) => {
+    // Calculate committed amount
+    const committedAmount = committedProjects?.reduce((sum, project) => {
       try {
-        console.log('Processing project expenses:', project.expenses)
+        console.log('Processing committed project expenses:', project.expenses)
         const expenses = typeof project.expenses === 'string' ? 
           JSON.parse(project.expenses) : project.expenses
-        console.log('Parsed expenses:', expenses)
+        console.log('Parsed committed expenses:', expenses)
         const projectTotal = expenses.reduce((total: number, exp: { total_cost: number }) => {
-          console.log('Processing expense:', exp, 'current total:', total)
+          console.log('Processing committed expense:', exp, 'current total:', total)
           return total + (exp.total_cost || 0)
         }, 0)
-        console.log('Project total:', projectTotal)
+        console.log('Committed project total:', projectTotal)
         return sum + projectTotal
       } catch (e) {
-        console.error('Error parsing expenses:', e)
+        console.error('Error parsing committed expenses:', e)
         return sum
       }
     }, 0) || 0
 
-    // Get all approved projects for this allocation
-    const { data: approvedProjects, error: approvedError } = await supabase
+    // Get all allocated projects for this allocation (funding_status = 'allocated')
+    const { data: allocatedProjects, error: allocatedError } = await supabase
       .from('err_projects')
       .select('*')
       .eq('grant_call_state_allocation_id', allocation_id)
-      .eq('status', 'approved')
+      .eq('funding_status', 'allocated')
 
-    if (approvedError) throw approvedError
+    if (allocatedError) throw allocatedError
 
-    console.log('Approved projects found:', approvedProjects)
+    console.log('Allocated projects found:', allocatedProjects)
 
-    // Calculate approved amount
-    const approvedAmount = approvedProjects?.reduce((sum, project) => {
+    // Calculate allocated amount
+    const allocatedAmount = allocatedProjects?.reduce((sum, project) => {
       try {
-        console.log('Processing approved project expenses:', project.expenses)
+        console.log('Processing allocated project expenses:', project.expenses)
         const expenses = typeof project.expenses === 'string' ? 
           JSON.parse(project.expenses) : project.expenses
-        console.log('Parsed approved expenses:', expenses)
+        console.log('Parsed allocated expenses:', expenses)
         const projectTotal = expenses.reduce((total: number, exp: { total_cost: number }) => {
-          console.log('Processing approved expense:', exp, 'current total:', total)
+          console.log('Processing allocated expense:', exp, 'current total:', total)
           return total + (exp.total_cost || 0)
         }, 0)
-        console.log('Approved project total:', projectTotal)
+        console.log('Allocated project total:', projectTotal)
         return sum + projectTotal
       } catch (e) {
-        console.error('Error parsing approved expenses:', e)
+        console.error('Error parsing allocated expenses:', e)
         return sum
       }
     }, 0) || 0
 
-    // Total committed is sum of pending and approved
-    const committedAmount = pendingAmount + approvedAmount
+    // Total used amount is sum of committed and allocated
+    const totalUsedAmount = committedAmount + allocatedAmount
+
+    console.log('Final calculation summary:', {
+      allocation_id,
+      committed: committedAmount,
+      allocated: allocatedAmount,
+      total_used: totalUsedAmount
+    })
 
     return NextResponse.json({
       committed: committedAmount,
-      pending: pendingAmount,
-      approved: approvedAmount
+      allocated: allocatedAmount,
+      total_used: totalUsedAmount
     })
   } catch (error) {
     console.error('Error calculating committed amount:', error)
