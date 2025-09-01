@@ -10,6 +10,7 @@ export interface Workplan {
   grant_call_id: string;
   grant_call_state_allocation_id: string;
   grant_serial_id: string;
+  source?: string | null;
 }
 
 export interface StateAllocation {

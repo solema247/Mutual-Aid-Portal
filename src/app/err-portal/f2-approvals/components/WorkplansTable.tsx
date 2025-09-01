@@ -68,13 +68,12 @@ export default function WorkplansTable({
             funding_status,
             grant_call_id,
             grant_call_state_allocation_id,
-            grant_serial_id
+            grant_serial_id,
+            source
           `)
-          // Only show approved projects with allocated or committed funding status
+          // Base scope: by grant and allocation
           .eq('grant_call_id', grantCallId)
           .eq('grant_call_state_allocation_id', allocationId)
-          .eq('status', 'approved')
-          .in('funding_status', ['allocated', 'committed'])
           .order('workplan_number', { ascending: true })
 
         if (error) throw error
@@ -92,21 +91,18 @@ export default function WorkplansTable({
           workplan_number: w.workplan_number
         })))
 
-        // Additional filter to exclude projects that shouldn't be in F2 workflow
+        // Additional filter to include approved allocated/committed, and pending mutual_aid_portal
         const filteredWorkplans = data?.filter(w => {
-          // Only include approved projects
-          if (w.status !== 'approved') {
-            console.log(`Excluding workplan ${w.id}: status is ${w.status}, not approved`)
-            return false
+          const isApprovedAllocatedOrCommitted = (
+            w.status === 'approved' && ['allocated', 'committed'].includes(w.funding_status)
+          )
+          const isPendingDirectUpload = (
+            w.source === 'mutual_aid_portal' && w.status === 'pending' && w.funding_status === 'allocated'
+          )
+          if (!(isApprovedAllocatedOrCommitted || isPendingDirectUpload)) {
+            console.log(`Excluding workplan ${w.id}: status=${w.status}, funding_status=${w.funding_status}, source=${w.source}`)
           }
-          
-          // Only include allocated or committed projects
-          if (!['allocated', 'committed'].includes(w.funding_status)) {
-            console.log(`Excluding workplan ${w.id}: funding_status is ${w.funding_status}, not allocated/committed`)
-            return false
-          }
-          
-          return true
+          return isApprovedAllocatedOrCommitted || isPendingDirectUpload
         }) || []
 
         console.log(`Filtered workplans: ${filteredWorkplans.length} out of ${data?.length || 0}`)
