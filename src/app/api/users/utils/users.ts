@@ -19,7 +19,10 @@ export async function getPendingUsers(currentUserRole: string, currentUserErrId:
     .select(`
       *,
       emergency_rooms!inner(
-        *,
+        id,
+        name,
+        name_ar,
+        err_code,
         state:states!emergency_rooms_state_reference_fkey(
           id,
           state_name
@@ -100,7 +103,10 @@ export async function getActiveUsers({
     .select(`
       *,
       emergency_rooms!inner(
-        *,
+        id,
+        name,
+        name_ar,
+        err_code,
         state:states!emergency_rooms_state_reference_fkey(
           id,
           state_name

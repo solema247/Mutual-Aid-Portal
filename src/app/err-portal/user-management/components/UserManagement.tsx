@@ -69,7 +69,10 @@ export default function UserManagement() {
         display_name: user.display_name,
         role: user.role as 'admin' | 'state_err' | 'base_err',
         createdAt: new Date(user.created_at || '').toLocaleDateString(),
-        status: user.status as 'pending' | 'active' | 'suspended'
+        status: user.status as 'pending' | 'active' | 'suspended',
+        err_name: user.emergency_rooms?.name || '-',
+        err_code: user.emergency_rooms?.err_code || '-',
+        state_name: user.emergency_rooms?.state?.state_name || '-'
       }))
       setPendingUsers(formattedUsers)
     } catch (err) {

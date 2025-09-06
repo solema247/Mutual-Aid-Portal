@@ -2,6 +2,8 @@
   "pending_users_title": "Pending User Requests",
   "active_users_title": "Active Users",
   "err_id": "ERR ID",
+  "err_name": "ERR Name",
+  "state": "State",
   "display_name": "Display Name",
   "role": "Role",
   "status": "Status",
@@ -22,5 +24,7 @@
   "activate": "Activate",
   "loading": "Loading users...",
   "no_pending_users": "No pending user requests",
-  "no_active_users": "No active users found"
+  "no_active_users": "No active users found",
+  "sort_asc": "Sort Ascending",
+  "sort_desc": "Sort Descending"
 } 

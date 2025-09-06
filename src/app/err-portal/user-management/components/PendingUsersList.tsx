@@ -49,8 +49,9 @@ export default function PendingUsersList({ users, isLoading, onUpdate }: Pending
 
   return (
     <div className="rounded-md border">
-      <div className="grid grid-cols-6 gap-4 p-4 font-medium border-b">
-        <div>{t('users:err_id')}</div>
+      <div className="grid grid-cols-7 gap-4 p-4 font-medium border-b">
+        <div>{t('users:err_name')}</div>
+        <div>{t('users:state')}</div>
         <div>{t('users:display_name')}</div>
         <div>{t('users:role')}</div>
         <div>{t('users:status')}</div>
@@ -59,8 +60,9 @@ export default function PendingUsersList({ users, isLoading, onUpdate }: Pending
       </div>
       <div className="divide-y">
         {users.map((user) => (
-          <div key={user.id} className="grid grid-cols-6 gap-4 p-4">
-            <div>{user.err_id || '-'}</div>
+          <div key={user.id} className="grid grid-cols-7 gap-4 p-4">
+            <div>{user.err_name || '-'}</div>
+            <div>{user.state_name || '-'}</div>
             <div>{user.display_name || '-'}</div>
             <div>{t(`users:${user.role}_role`)}</div>
             <div>{t(`users:${user.status}_status`)}</div>
