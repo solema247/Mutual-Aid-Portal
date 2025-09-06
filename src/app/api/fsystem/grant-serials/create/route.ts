@@ -26,7 +26,9 @@ export async function POST(request: Request) {
       throw new Error('Grant call not found')
     }
 
-    if (!grantCall.donor?.short_name) {
+    // Handle the donor data - it might be an array from the join
+    const donor = Array.isArray(grantCall.donor) ? grantCall.donor[0] : grantCall.donor
+    if (!donor?.short_name) {
       console.error('Donor short name missing for grant call:', grant_call_id)
       throw new Error('Donor short name missing')
     }
@@ -67,7 +69,7 @@ export async function POST(request: Request) {
     const paddedSerial = nextNumber.toString().padStart(4, '0')
 
     // Build the serial string
-    const serial = `LCC-${grantCall.donor.short_name}-${state.state_short.toUpperCase()}-${yymm}-${paddedSerial}`
+    const serial = `LCC-${donor.short_name}-${state.state_short.toUpperCase()}-${yymm}-${paddedSerial}`
 
     // Insert the new serial (removed created_by field)
     const { data: newSerial, error: insertError } = await supabase

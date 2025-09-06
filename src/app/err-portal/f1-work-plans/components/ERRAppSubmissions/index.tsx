@@ -51,7 +51,7 @@ export default function ERRAppSubmissions() {
   const [selectedProject, setSelectedProject] = useState<F1Project | null>(null)
   const [currentStatus, setCurrentStatus] = useState<ProjectStatus>('new')
   const [isDialogOpen, setIsDialogOpen] = useState(false)
-  const [selectedTab, setSelectedTab] = useState<'details' | 'feedback'>('details')
+  const [selectedTab, setSelectedTab] = useState<'details' | 'feedback' | 'assignment'>('details')
   const [feedbackHistory, setFeedbackHistory] = useState<Feedback[]>([])
   const [user, setUser] = useState<User | null>(null)
   const [grantCalls, setGrantCalls] = useState<any[]>([])

@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { supabase } from '@/lib/supabaseClient'
-import type { AdjustmentData } from '../types'
+import type { AdjustmentData, Expense } from '../types'
 
 interface AdjustModalProps {
   open: boolean;
@@ -103,7 +103,9 @@ export default function AdjustModal({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             grant_call_id: workplanData.grant_call_id,
-            state_name: workplanData.grant_call_state_allocations.state_name,
+            state_name: Array.isArray(workplanData.grant_call_state_allocations) 
+              ? workplanData.grant_call_state_allocations[0]?.state_name 
+              : (workplanData.grant_call_state_allocations as any)?.state_name,
             yymm: new Date().toISOString().slice(2, 4) + new Date().toISOString().slice(5, 7)
           })
         })
