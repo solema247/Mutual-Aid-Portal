@@ -160,18 +160,33 @@ export default function GrantSelectionTable({
       // Calculate allocation and commitment data for each grant call
       const grantCallsWithCalculations = await Promise.all(
         grantCallsWithDonors.map(async (grantCall) => {
-          // Get total allocated amount from state allocations
-          const { data: allocationsData, error: allocationsError } = await supabase
+          // Get total allocated amount from state allocations - only from latest decision
+          // First get the latest decision number for this grant call
+          const { data: maxDecisionData, error: maxDecisionError } = await supabase
             .from('grant_call_state_allocations')
-            .select('amount')
+            .select('decision_no')
             .eq('grant_call_id', grantCall.id)
+            .order('decision_no', { ascending: false })
+            .limit(1)
 
-          if (allocationsError) {
-            console.error('Error fetching allocations:', allocationsError)
+          let totalAllocated = 0
+          if (!maxDecisionError && maxDecisionData?.[0]?.decision_no) {
+            const latestDecisionNo = maxDecisionData[0].decision_no
+            
+            // Get allocations only from the latest decision
+            const { data: allocationsData, error: allocationsError } = await supabase
+              .from('grant_call_state_allocations')
+              .select('amount')
+              .eq('grant_call_id', grantCall.id)
+              .eq('decision_no', latestDecisionNo)
+
+            if (allocationsError) {
+              console.error('Error fetching allocations:', allocationsError)
+            }
+
+            totalAllocated = allocationsData?.reduce((sum, allocation) => 
+              sum + (allocation.amount || 0), 0) || 0
           }
-
-          const totalAllocated = allocationsData?.reduce((sum, allocation) => 
-            sum + (allocation.amount || 0), 0) || 0
 
           // Get total committed amount from approved and committed projects
           const { data: committedProjectsData, error: committedError } = await supabase
