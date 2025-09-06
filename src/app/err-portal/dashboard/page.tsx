@@ -34,6 +34,23 @@ export default function DashboardPage() {
         </CollapsibleRow>
 
         <CollapsibleRow
+          title={t('dashboard:map_title')}
+          defaultOpen={false}
+        >
+          <div className="p-4">
+            <iframe
+              src="https://felt.com/embed/map/SudanERRQGIS-z2CDxQ3DRnCUTluniOvKIA"
+              width="100%"
+              height="600"
+              style={{ border: "none" }}
+              allowFullScreen
+              loading="lazy"
+              title="Sudan ERR Map"
+            />
+          </div>
+        </CollapsibleRow>
+
+        <CollapsibleRow
           title={t('dashboard:statistics_title')}
           defaultOpen={false}
         >
