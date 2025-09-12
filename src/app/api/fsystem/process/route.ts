@@ -100,6 +100,32 @@ function validateExtractedData(data: any) {
   return data
 }
 
+// Find the longest Arabic paragraph to use as a fallback for verbatim text fields
+function getLongestArabicParagraph(sourceText: string): string | null {
+  if (!sourceText) return null
+  const normalized = sourceText.replace(/\r\n/g, '\n')
+  const paragraphs = normalized.split(/\n{2,}/)
+  const arabicRegex = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/
+
+  let best: string | null = null
+  let bestScore = 0
+
+  for (const para of paragraphs) {
+    const trimmed = para.trim()
+    if (!trimmed) continue
+    // Score by number of Arabic characters to bias toward Arabic blocks
+    const arabicCount = (trimmed.match(/[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/g) || []).length
+    if (arabicCount === 0) continue
+    const score = arabicCount
+    if (score > bestScore) {
+      bestScore = score
+      best = trimmed
+    }
+  }
+
+  return best
+}
+
 // Add language detection function after the validateExtractedData function
 function detectLanguage(text: string): 'ar' | 'en' {
   // Count Arabic and English characters
@@ -230,6 +256,7 @@ export async function POST(req: Request) {
     // Process with OpenAI
     const completion = await openai.chat.completions.create({
       model: "gpt-3.5-turbo",
+      max_tokens: 3000,
       messages: [
         {
           role: "system",
@@ -239,7 +266,7 @@ BASIC INFORMATION:
 - date: Date of the project in YYYY-MM-DD format (convert any date format to this)
 - state: State name (keep in original language)
 - locality: Locality name (keep in original language)
-- project_objectives: Project objectives or goals (keep in original language)
+- project_objectives: Return the exact text as found in the OCR (verbatim, preserve line breaks). Do not summarize or shorten. If not present, return null.
 - intended_beneficiaries: Description of who will benefit (keep in original language)
 - estimated_beneficiaries: Number of beneficiaries (integer)
 - estimated_timeframe: Project duration (keep in original language)
@@ -335,6 +362,16 @@ Return all fields in this format:
       const detectedLanguage = detectLanguage(text)
       structuredData.language = detectedLanguage
 
+      // Ensure project_objectives passes through verbatim; fallback if model returns very short content
+      const objectives: unknown = structuredData.project_objectives
+      const objectivesStr = typeof objectives === 'string' ? objectives.trim() : ''
+      if (!objectivesStr || objectivesStr.length < 40) {
+        const fallback = getLongestArabicParagraph(text)
+        if (fallback && fallback.length > objectivesStr.length) {
+          structuredData.project_objectives = fallback
+        }
+      }
+
       // Override the state from OCR with the selected state from form metadata
       if (formMetadata.state_name_ar) {
         console.log('Overriding OCR state with selected state:', {
@@ -343,6 +380,9 @@ Return all fields in this format:
         })
         structuredData.state = formMetadata.state_name_ar
       }
+      
+      // Attach raw OCR for transparency/debugging
+      structuredData.raw_ocr = text
       
       console.log('Validated data:', structuredData)
       return NextResponse.json(structuredData)
