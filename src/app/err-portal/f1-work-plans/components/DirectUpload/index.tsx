@@ -44,7 +44,9 @@ export default function DirectUpload() {
     secondary_sectors: [],
     grant_call_id: '',
     grant_call_state_allocation_id: '',
-    grant_serial_id: ''
+    grant_serial_id: '',
+    currency: 'USD',
+    exchange_rate: 2700
   })
   
   const [grantSerials, setGrantSerials] = useState<GrantSerial[]>([])
@@ -380,7 +382,7 @@ export default function DirectUpload() {
     alloc => alloc.id === formData.grant_call_state_allocation_id
   )
 
-  const handleInputChange = (field: keyof F1FormData, value: string | string[]) => {
+  const handleInputChange = (field: keyof F1FormData, value: string | string[] | number) => {
     setFormData(prev => ({ ...prev, [field]: value }))
   }
 
@@ -434,7 +436,9 @@ export default function DirectUpload() {
         donor_name: selectedDonor?.name,
         state_name: selectedState?.state_name,
         state_name_ar: selectedState?.state_name_ar,
-        state_id: selectedState?.id
+        state_id: selectedState?.id,
+        currency: formData.currency,
+        exchange_rate: formData.exchange_rate
       }
       processFormData.append('metadata', JSON.stringify(metadata))
 
@@ -610,7 +614,9 @@ export default function DirectUpload() {
         secondary_sectors: [],
         grant_call_id: '',
         grant_call_state_allocation_id: '',
-        grant_serial_id: ''
+        grant_serial_id: '',
+        currency: 'USD',
+        exchange_rate: 2700
       })
       setSelectedFile(null)
       setPreviewId('')
@@ -727,6 +733,43 @@ export default function DirectUpload() {
                   onChange={handleFileChange}
                   className="mt-1"
                 />
+              </div>
+
+              {/* Currency Selection */}
+              <div className="mb-4 grid grid-cols-2 gap-4">
+                <div>
+                  <Label className="mb-2">Form Currency</Label>
+                  <Select
+                    value={formData.currency}
+                    onValueChange={(value) => handleInputChange('currency', value as 'USD' | 'SDG')}
+                  >
+                    <SelectTrigger className="h-[38px] w-full">
+                      <SelectValue placeholder="Select currency" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="USD">USD (US Dollar)</SelectItem>
+                      <SelectItem value="SDG">SDG (Sudanese Pound)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                {formData.currency === 'SDG' && (
+                  <div>
+                    <Label className="mb-2">Exchange Rate (USD to SDG)</Label>
+                    <Input
+                      type="number"
+                      step="1"
+                      min="0"
+                      value={formData.exchange_rate || ''}
+                      onChange={(e) => handleInputChange('exchange_rate', parseFloat(e.target.value) || 0)}
+                      placeholder="2700"
+                      className="h-[38px] w-full"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Enter the current exchange rate (e.g., 2700 means 1 USD = 2700 SDG)
+                    </p>
+                  </div>
+                )}
               </div>
 
                     {/* Main Form Grid */}

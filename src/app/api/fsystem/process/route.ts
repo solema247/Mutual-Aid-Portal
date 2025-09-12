@@ -309,9 +309,20 @@ ACTIVITIES AND EXPENSES:
    - Remove $ symbol from numbers
    - Ignore any numbers that aren't in the الإجمالي column
 
+CURRENCY CONVERSION:
+- Form currency: ${formMetadata.currency || 'USD'}
+- Exchange rate (USD to SDG): ${formMetadata.exchange_rate || '1'}
+- If form currency is SDG, convert all amounts to USD using the exchange rate (divide SDG amount by exchange rate)
+- Always return amounts in USD in the final JSON
+- Also include the original amount in SDG if conversion was applied
+
 Example (Arabic form):
 الإجمالي: $3,900 | سعر الوحدة: $32.5 | المصروفات: مشتريات طبية
-Should extract: { activity: "مشتريات طبية", total_cost: 3900 }
+Should extract: { activity: "مشتريات طبية", total_cost_usd: 3900, total_cost_sdg: null, currency: "USD" }
+
+Example (SDG form with exchange rate 2700):
+الإجمالي: 5,000,000 SDG | المصروفات: مشتريات طبية
+Should extract: { activity: "مشتريات طبية", total_cost_usd: 1851.85, total_cost_sdg: 5000000, currency: "SDG" }
 
 Return all fields in this format:
 {
@@ -331,7 +342,9 @@ Return all fields in this format:
   "finance_officer_name": string | null,
   "finance_officer_phone": string | null,
   "planned_activities": string[],
-  "expenses": Array<{activity: string, total_cost: number}>
+  "expenses": Array<{activity: string, total_cost_usd: number, total_cost_sdg: number | null, currency: string}>,
+  "form_currency": string,
+  "exchange_rate": number
 }`
         },
         {

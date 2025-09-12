@@ -19,7 +19,9 @@ interface AllocationInfo {
 
 interface Expense {
   activity: string;
-  total_cost: number;
+  total_cost_usd: number;
+  total_cost_sdg: number | null;
+  currency: string;
 }
 
 interface ExtractedData {
@@ -41,6 +43,8 @@ interface ExtractedData {
   planned_activities: string[];
   expenses: Expense[];
   language: 'ar' | 'en' | null;
+  form_currency?: string;
+  exchange_rate?: number;
 }
 
 interface ExtractedDataReviewProps {
@@ -51,27 +55,6 @@ interface ExtractedDataReviewProps {
   onValidationError?: (message: string) => void;
 }
 
-interface ExtractedData {
-  date: string | null;
-  state: string | null;
-  locality: string | null;
-  project_objectives: string | null;
-  intended_beneficiaries: string | null;
-  estimated_beneficiaries: number | null;
-  estimated_timeframe: string | null;
-  additional_support: string | null;
-  banking_details: string | null;
-  program_officer_name: string | null;
-  program_officer_phone: string | null;
-  reporting_officer_name: string | null;
-  reporting_officer_phone: string | null;
-  finance_officer_name: string | null;
-  finance_officer_phone: string | null;
-  planned_activities: string[];
-  expenses: Expense[];
-  language: 'ar' | 'en' | null;
-  onValidationError: (message: string) => void;
-}
 
 export default function ExtractedDataReview({
   data,
@@ -87,13 +70,15 @@ export default function ExtractedDataReview({
     planned_activities: Array.isArray(data.planned_activities) ? data.planned_activities : [],
     expenses: Array.isArray(data.expenses) ? data.expenses.map(exp => ({
       activity: exp.activity || '',
-      total_cost: typeof exp.total_cost === 'number' ? exp.total_cost : 0
+      total_cost_usd: typeof exp.total_cost_usd === 'number' ? exp.total_cost_usd : 0,
+      total_cost_sdg: typeof exp.total_cost_sdg === 'number' ? exp.total_cost_sdg : null,
+      currency: exp.currency || 'USD'
     })) : []
   })
 
   // Calculate total expenses
   const calculateTotalExpenses = () => {
-    return editedData.expenses.reduce((sum, expense) => sum + (expense.total_cost || 0), 0)
+    return editedData.expenses.reduce((sum, expense) => sum + (expense.total_cost_usd || 0), 0)
   }
 
   const handleInputChange = (field: keyof ExtractedData, value: any) => {
@@ -107,11 +92,11 @@ export default function ExtractedDataReview({
     const newExpenses = [...editedData.expenses]
     newExpenses[index] = {
       ...newExpenses[index],
-      [field]: field === 'total_cost' ? Number(value) || 0 : value
+      [field]: field === 'total_cost_usd' || field === 'total_cost_sdg' ? Number(value) || 0 : value
     }
     
     // Calculate new total
-    const newTotal = newExpenses.reduce((sum, exp) => sum + (exp.total_cost || 0), 0)
+    const newTotal = newExpenses.reduce((sum, exp) => sum + (exp.total_cost_usd || 0), 0)
     const availableAmount = allocationInfo.amount - allocationInfo.amountUsed
     
     // Validate against remaining allocation
@@ -301,12 +286,23 @@ export default function ExtractedDataReview({
         {/* Expenses Section */}
         <div>
           <Label className="text-lg font-semibold mb-2">{t('fsystem:review.fields.expenses')}</Label>
+          {data.form_currency && data.exchange_rate && (
+            <div className="mb-4 p-3 bg-blue-50 rounded-lg">
+              <div className="text-sm text-blue-800">
+                <strong>Form Currency:</strong> {data.form_currency} | 
+                <strong> Exchange Rate:</strong> 1 USD = {data.exchange_rate} SDG
+              </div>
+            </div>
+          )}
           <div className="rounded-lg border overflow-hidden">
             <table className="w-full">
               <thead className="bg-muted">
                 <tr>
                   <th className="px-4 py-2 text-left">{t('fsystem:review.fields.activity')}</th>
-                  <th className="px-4 py-2 text-right">{t('fsystem:review.fields.total_cost')}</th>
+                  <th className="px-4 py-2 text-right">USD</th>
+                  {data.form_currency === 'SDG' && (
+                    <th className="px-4 py-2 text-right">SDG (Original)</th>
+                  )}
                   <th className="w-16 px-4 py-2"></th>
                 </tr>
               </thead>
@@ -323,11 +319,21 @@ export default function ExtractedDataReview({
                     <td className="px-4 py-2">
                       <Input
                         type="number"
-                        value={expense.total_cost}
-                        onChange={(e) => handleExpenseChange(index, 'total_cost', parseFloat(e.target.value))}
+                        value={expense.total_cost_usd}
+                        onChange={(e) => handleExpenseChange(index, 'total_cost_usd', parseFloat(e.target.value))}
                         className="border-0 focus-visible:ring-0 px-0 py-0 h-8 text-right"
                       />
                     </td>
+                    {data.form_currency === 'SDG' && (
+                      <td className="px-4 py-2">
+                        <Input
+                          type="number"
+                          value={expense.total_cost_sdg || ''}
+                          onChange={(e) => handleExpenseChange(index, 'total_cost_sdg', parseFloat(e.target.value))}
+                          className="border-0 focus-visible:ring-0 px-0 py-0 h-8 text-right"
+                        />
+                      </td>
+                    )}
                     <td className="px-4 py-2 text-center">
                       <Button
                         variant="ghost"
@@ -351,6 +357,11 @@ export default function ExtractedDataReview({
                   )}>
                     {totalAmount.toLocaleString()}
                   </td>
+                  {data.form_currency === 'SDG' && (
+                    <td className="px-4 py-2 font-medium text-right">
+                      {editedData.expenses.reduce((sum, exp) => sum + (exp.total_cost_sdg || 0), 0).toLocaleString()}
+                    </td>
+                  )}
                   <td></td>
                 </tr>
               </tbody>
@@ -363,7 +374,7 @@ export default function ExtractedDataReview({
                 onClick={() => {
                   handleInputChange('expenses', [
                     ...editedData.expenses,
-                    { activity: '', total_cost: 0 }
+                    { activity: '', total_cost_usd: 0, total_cost_sdg: null, currency: data.form_currency || 'USD' }
                   ])
                 }}
               >

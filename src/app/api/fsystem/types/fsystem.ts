@@ -27,6 +27,8 @@ export interface F1FormData {
   grant_call_id: string;
   grant_call_state_allocation_id: string;
   grant_serial_id: string;
+  currency: 'USD' | 'SDG';
+  exchange_rate?: number;
 }
 
 export interface F1FormResponse {
