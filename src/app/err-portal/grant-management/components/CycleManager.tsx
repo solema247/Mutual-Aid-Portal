@@ -145,7 +145,7 @@ export default function CycleManager() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto p-6 space-y-6">
+    <div className="max-w-7xl mx-auto p-6 space-y-8">
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-semibold">Funding Cycle Management</h2>
         <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
@@ -164,93 +164,159 @@ export default function CycleManager() {
         </Dialog>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Cycles List */}
-        <div className="lg:col-span-2">
-          <Card>
-            <CardHeader>
-              <CardTitle>Funding Cycles</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Cycle</TableHead>
-                    <TableHead>Year</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Period</TableHead>
-                    <TableHead>Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {cycles.map((cycle) => (
-                    <TableRow 
-                      key={cycle.id}
-                      className={cn(
-                        selectedCycle?.id === cycle.id && "bg-muted/50",
-                        "cursor-pointer hover:bg-muted/30"
-                      )}
-                      onClick={() => handleCycleSelect(cycle)}
-                    >
-                      <TableCell>
-                        <div>
-                          <div className="font-medium">{cycle.name}</div>
-                          <div className="text-sm text-muted-foreground">
-                            Cycle #{cycle.cycle_number}
-                          </div>
+      {/* 1. Funding Cycles Table */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Calendar className="h-5 w-5" />
+            Funding Cycles
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Cycle</TableHead>
+                <TableHead>Year</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Period</TableHead>
+                <TableHead>Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {cycles.map((cycle) => (
+                <TableRow 
+                  key={cycle.id}
+                  className={cn(
+                    selectedCycle?.id === cycle.id && "bg-muted/50",
+                    "cursor-pointer hover:bg-muted/30"
+                  )}
+                  onClick={() => handleCycleSelect(cycle)}
+                >
+                  <TableCell>
+                    <div>
+                      <div className="font-medium">{cycle.name}</div>
+                      <div className="text-sm text-muted-foreground">
+                        Cycle #{cycle.cycle_number}
+                      </div>
+                    </div>
+                  </TableCell>
+                  <TableCell>{cycle.year}</TableCell>
+                  <TableCell>{getStatusBadge(cycle.status)}</TableCell>
+                  <TableCell>
+                    {cycle.start_date && cycle.end_date ? (
+                      <div className="text-sm">
+                        <div>{new Date(cycle.start_date).toLocaleDateString()}</div>
+                        <div className="text-muted-foreground">
+                          to {new Date(cycle.end_date).toLocaleDateString()}
                         </div>
-                      </TableCell>
-                      <TableCell>{cycle.year}</TableCell>
-                      <TableCell>{getStatusBadge(cycle.status)}</TableCell>
-                      <TableCell>
-                        {cycle.start_date && cycle.end_date ? (
-                          <div className="text-sm">
-                            <div>{new Date(cycle.start_date).toLocaleDateString()}</div>
-                            <div className="text-muted-foreground">
-                              to {new Date(cycle.end_date).toLocaleDateString()}
-                            </div>
-                          </div>
-                        ) : (
-                          <span className="text-muted-foreground">No dates set</span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <Button
-                          variant={selectedCycle?.id === cycle.id ? "default" : "outline"}
-                          size="sm"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            handleCycleSelect(cycle)
-                          }}
-                        >
-                          {selectedCycle?.id === cycle.id ? 'Selected' : 'Select'}
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        </div>
+                      </div>
+                    ) : (
+                      <span className="text-muted-foreground">No dates set</span>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    <Button
+                      variant={selectedCycle?.id === cycle.id ? "default" : "outline"}
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleCycleSelect(cycle)
+                      }}
+                    >
+                      {selectedCycle?.id === cycle.id ? 'Selected' : 'Select'}
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
 
-        {/* Budget Summary */}
-        <div className="space-y-6">
-          {selectedCycle && budgetSummary && (
+      {/* 2. Funding Cycle Details */}
+      {selectedCycle && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <TrendingUp className="h-5 w-5" />
+              Cycle Details - {selectedCycle.name}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+              <div className="space-y-2">
+                <div className="text-sm font-medium text-muted-foreground">Cycle Number</div>
+                <div className="text-2xl font-bold">#{selectedCycle.cycle_number}</div>
+              </div>
+              <div className="space-y-2">
+                <div className="text-sm font-medium text-muted-foreground">Year</div>
+                <div className="text-2xl font-bold">{selectedCycle.year}</div>
+              </div>
+              <div className="space-y-2">
+                <div className="text-sm font-medium text-muted-foreground">Status</div>
+                <div className="text-2xl">{getStatusBadge(selectedCycle.status)}</div>
+              </div>
+              <div className="space-y-2">
+                <div className="text-sm font-medium text-muted-foreground">Period</div>
+                <div className="text-sm">
+                  {selectedCycle.start_date && selectedCycle.end_date ? (
+                    <>
+                      <div>{new Date(selectedCycle.start_date).toLocaleDateString()}</div>
+                      <div className="text-muted-foreground">
+                        to {new Date(selectedCycle.end_date).toLocaleDateString()}
+                      </div>
+                    </>
+                  ) : (
+                    <span className="text-muted-foreground">No dates set</span>
+                  )}
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* 3. Budget Summary */}
+      {selectedCycle && budgetSummary && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <DollarSign className="h-5 w-5" />
+              Budget Summary
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
             <CycleBudgetDashboard 
               cycle={selectedCycle}
               budgetSummary={budgetSummary}
             />
-          )}
-        </div>
-      </div>
+          </CardContent>
+        </Card>
+      )}
 
-      {/* Grant Pool Selector and State Allocations */}
+      {/* 4. Grant Pool */}
       {selectedCycle && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <GrantPoolSelector cycleId={selectedCycle.id} />
-          <StateAllocationManager cycleId={selectedCycle.id} />
-        </div>
+        <Card>
+          <CardHeader>
+            <CardTitle>Grant Pool</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <GrantPoolSelector cycleId={selectedCycle.id} />
+          </CardContent>
+        </Card>
+      )}
+
+      {/* 5. State Allocations */}
+      {selectedCycle && (
+        <Card>
+          <CardHeader>
+            <CardTitle>State Allocations</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <StateAllocationManager cycleId={selectedCycle.id} />
+          </CardContent>
+        </Card>
       )}
     </div>
   )
