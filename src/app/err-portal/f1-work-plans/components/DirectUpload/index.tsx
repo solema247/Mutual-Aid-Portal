@@ -550,13 +550,22 @@ export default function DirectUpload() {
         throw uploadError
       }
 
+      // Convert expenses to the old format (just USD amounts) for database storage
+      const expensesForDB = editedData.expenses.map((expense: any) => ({
+        activity: expense.activity,
+        total_cost: expense.total_cost_usd
+      }))
+
+      // Remove currency-related fields that don't exist in the database
+      const { form_currency, exchange_rate, raw_ocr, ...dataForDB } = editedData
+
       // Insert into Supabase with final grant ID and sectors
       const { error: insertError } = await supabase
         .from('err_projects')
         .insert([{
-          ...editedData,
+          ...dataForDB,
+          expenses: expensesForDB, // Use converted expenses
           donor_id: formData.donor_id,
-
           project_id: formData.project_id,
           emergency_room_id: formData.emergency_room_id,
           err_id: selectedRoom.err_code,
@@ -579,8 +588,9 @@ export default function DirectUpload() {
 
       // Update Google Sheet with final grant ID and sectors
       const sheetData = {
-        ...editedData,
-            grant_id: grant_id,
+        ...dataForDB,
+        expenses: expensesForDB, // Use converted expenses for sheet
+        grant_id: grant_id,
         err_id: selectedRoom.err_code,
         err_name: selectedRoom.name_ar || selectedRoom.name,
         donor_name: selectedDonor.name,
