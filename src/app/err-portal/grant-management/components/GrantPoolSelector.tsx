@@ -158,13 +158,12 @@ export default function GrantPoolSelector({ cycleId }: GrantPoolSelectorProps) {
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center justify-between">
-          <span className="flex items-center gap-2">
-            <Building2 className="h-5 w-5" />
-            Grant Pool
-          </span>
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h3 className="text-lg font-semibold flex items-center gap-2">
+          <Building2 className="h-5 w-5" />
+          Grant Pool
+        </h3>
           <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
             <DialogTrigger asChild>
               <Button size="sm" className="bg-[#007229] hover:bg-[#007229]/90 text-white">
@@ -221,10 +220,7 @@ export default function GrantPoolSelector({ cycleId }: GrantPoolSelectorProps) {
               </div>
             </DialogContent>
           </Dialog>
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="space-y-4">
+      </div>
           {/* Summary */}
           <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
             <div className="flex items-center gap-2">
@@ -291,8 +287,6 @@ export default function GrantPoolSelector({ cycleId }: GrantPoolSelectorProps) {
               </TableBody>
             </Table>
           )}
-        </div>
-      </CardContent>
-    </Card>
+    </div>
   )
 }

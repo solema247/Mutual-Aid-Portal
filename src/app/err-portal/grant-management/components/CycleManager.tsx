@@ -116,6 +116,36 @@ export default function CycleManager() {
     form.reset()
   }
 
+  const handleCloseCycle = async (cycleId: string) => {
+    if (!confirm('Are you sure you want to close this cycle? This action cannot be undone.')) {
+      return
+    }
+
+    try {
+      const response = await fetch(`/api/cycles/${cycleId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ status: 'closed' }),
+      })
+
+      if (!response.ok) throw new Error('Failed to close cycle')
+
+      // Refresh cycles and update selected cycle if it was the one closed
+      await fetchCycles()
+      if (selectedCycle?.id === cycleId) {
+        const updatedCycle = cycles.find(c => c.id === cycleId)
+        if (updatedCycle) {
+          setSelectedCycle({ ...updatedCycle, status: 'closed' })
+        }
+      }
+    } catch (error) {
+      console.error('Error closing cycle:', error)
+      alert('Failed to close cycle. Please try again.')
+    }
+  }
+
   const getStatusBadge = (status: string) => {
     return (
       <Badge 
@@ -216,16 +246,30 @@ export default function CycleManager() {
                     )}
                   </TableCell>
                   <TableCell>
-                    <Button
-                      variant={selectedCycle?.id === cycle.id ? "default" : "outline"}
-                      size="sm"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        handleCycleSelect(cycle)
-                      }}
-                    >
-                      {selectedCycle?.id === cycle.id ? 'Selected' : 'Select'}
-                    </Button>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant={selectedCycle?.id === cycle.id ? "default" : "outline"}
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleCycleSelect(cycle)
+                        }}
+                      >
+                        {selectedCycle?.id === cycle.id ? 'Selected' : 'Select'}
+                      </Button>
+                      {cycle.status === 'open' && (
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleCloseCycle(cycle.id)
+                          }}
+                        >
+                          Close
+                        </Button>
+                      )}
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
@@ -238,9 +282,20 @@ export default function CycleManager() {
       {selectedCycle && (
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <TrendingUp className="h-5 w-5" />
-              Cycle Details - {selectedCycle.name}
+            <CardTitle className="flex items-center justify-between">
+              <span className="flex items-center gap-2">
+                <TrendingUp className="h-5 w-5" />
+                Cycle Details - {selectedCycle.name}
+              </span>
+              {selectedCycle.status === 'open' && (
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => handleCloseCycle(selectedCycle.id)}
+                >
+                  Close Cycle
+                </Button>
+              )}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -298,10 +353,7 @@ export default function CycleManager() {
       {/* 4. Grant Pool */}
       {selectedCycle && (
         <Card>
-          <CardHeader>
-            <CardTitle>Grant Pool</CardTitle>
-          </CardHeader>
-          <CardContent>
+          <CardContent className="pt-6">
             <GrantPoolSelector cycleId={selectedCycle.id} />
           </CardContent>
         </Card>
@@ -310,10 +362,7 @@ export default function CycleManager() {
       {/* 5. State Allocations */}
       {selectedCycle && (
         <Card>
-          <CardHeader>
-            <CardTitle>State Allocations</CardTitle>
-          </CardHeader>
-          <CardContent>
+          <CardContent className="pt-6">
             <StateAllocationManager cycleId={selectedCycle.id} />
           </CardContent>
         </Card>

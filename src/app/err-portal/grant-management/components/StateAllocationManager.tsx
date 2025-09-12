@@ -153,13 +153,12 @@ export default function StateAllocationManager({ cycleId }: StateAllocationManag
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center justify-between">
-          <span className="flex items-center gap-2">
-            <MapPin className="h-5 w-5" />
-            State Allocations
-          </span>
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h3 className="text-lg font-semibold flex items-center gap-2">
+          <MapPin className="h-5 w-5" />
+          State Allocations
+        </h3>
           <div className="flex items-center gap-2">
             <Button
               onClick={handleAddState}
@@ -181,10 +180,7 @@ export default function StateAllocationManager({ cycleId }: StateAllocationManag
               </Button>
             )}
           </div>
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="space-y-6">
+      </div>
           {/* Summary */}
           <div className="grid grid-cols-3 gap-4 p-4 bg-muted rounded-lg">
             <div className="text-center">
@@ -311,8 +307,6 @@ export default function StateAllocationManager({ cycleId }: StateAllocationManag
               No state allocations yet. Add states to get started.
             </div>
           )}
-        </div>
-      </CardContent>
-    </Card>
+    </div>
   )
 }
