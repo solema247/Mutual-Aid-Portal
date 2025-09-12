@@ -1,0 +1,298 @@
+'use client'
+
+import React, { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
+import { Plus, Trash2, DollarSign, Building2 } from 'lucide-react'
+import { cn } from '@/lib/utils'
+
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Badge } from '@/components/ui/badge'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog'
+
+import type { CycleGrantInclusion } from '@/types/cycles'
+
+interface GrantCall {
+  id: string
+  name: string
+  shortname: string | null
+  amount: number | null
+  status: 'open' | 'closed'
+  donor: {
+    id: string
+    name: string
+    short_name: string | null
+  }
+}
+
+interface GrantPoolSelectorProps {
+  cycleId: string
+}
+
+export default function GrantPoolSelector({ cycleId }: GrantPoolSelectorProps) {
+  const { t } = useTranslation(['err', 'common'])
+  const [availableGrants, setAvailableGrants] = useState<GrantCall[]>([])
+  const [includedGrants, setIncludedGrants] = useState<CycleGrantInclusion[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [isAddOpen, setIsAddOpen] = useState(false)
+  const [selectedGrant, setSelectedGrant] = useState<string>('')
+  const [amountIncluded, setAmountIncluded] = useState<string>('')
+
+  useEffect(() => {
+    fetchData()
+  }, [cycleId])
+
+  const fetchData = async () => {
+    try {
+      setIsLoading(true)
+      
+      // Fetch available grants
+      const grantsResponse = await fetch('/api/grant-calls')
+      if (!grantsResponse.ok) throw new Error('Failed to fetch grants')
+      const grantsData = await grantsResponse.json()
+      setAvailableGrants(grantsData.filter((grant: GrantCall) => grant.status === 'open'))
+
+      // Fetch included grants for this cycle
+      const inclusionsResponse = await fetch(`/api/cycles/${cycleId}/grants`)
+      if (!inclusionsResponse.ok) throw new Error('Failed to fetch cycle grants')
+      const inclusionsData = await inclusionsResponse.json()
+      setIncludedGrants(inclusionsData)
+    } catch (error) {
+      console.error('Error fetching data:', error)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleAddGrant = async () => {
+    if (!selectedGrant || !amountIncluded) return
+
+    try {
+      const response = await fetch(`/api/cycles/${cycleId}/grants`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          grant_inclusions: [{
+            grant_call_id: selectedGrant,
+            amount_included: parseFloat(amountIncluded)
+          }]
+        }),
+      })
+
+      if (!response.ok) throw new Error('Failed to add grant to cycle')
+
+      setIsAddOpen(false)
+      setSelectedGrant('')
+      setAmountIncluded('')
+      fetchData()
+    } catch (error) {
+      console.error('Error adding grant:', error)
+      alert('Failed to add grant to cycle')
+    }
+  }
+
+  const handleRemoveGrant = async (grantId: string) => {
+    try {
+      const response = await fetch(`/api/cycles/${cycleId}/grants/${grantId}`, {
+        method: 'DELETE',
+      })
+
+      if (!response.ok) throw new Error('Failed to remove grant from cycle')
+
+      fetchData()
+    } catch (error) {
+      console.error('Error removing grant:', error)
+      alert('Failed to remove grant from cycle')
+    }
+  }
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
+    }).format(amount)
+  }
+
+  const getTotalIncluded = () => {
+    return includedGrants.reduce((sum, inclusion) => sum + inclusion.amount_included, 0)
+  }
+
+  const getAvailableGrants = () => {
+    const includedGrantIds = includedGrants.map(inc => inc.grant_calls?.id).filter(Boolean)
+    return availableGrants.filter(grant => !includedGrantIds.includes(grant.id))
+  }
+
+  if (isLoading) {
+    return <div className="text-center py-4">Loading...</div>
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center justify-between">
+          <span className="flex items-center gap-2">
+            <Building2 className="h-5 w-5" />
+            Grant Pool
+          </span>
+          <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
+            <DialogTrigger asChild>
+              <Button size="sm" className="bg-[#007229] hover:bg-[#007229]/90 text-white">
+                <Plus className="h-4 w-4 mr-2" />
+                Add Grant
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[500px]">
+              <DialogHeader>
+                <DialogTitle>Add Grant to Cycle</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div>
+                  <label className="text-sm font-medium">Select Grant</label>
+                  <Select value={selectedGrant} onValueChange={setSelectedGrant}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Choose a grant to include" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {getAvailableGrants().map((grant) => (
+                        <SelectItem key={grant.id} value={grant.id}>
+                          <div>
+                            <div className="font-medium">{grant.name}</div>
+                            <div className="text-sm text-muted-foreground">
+                              {grant.donor.name} - {formatCurrency(grant.amount || 0)}
+                            </div>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="text-sm font-medium">Amount to Include</label>
+                  <Input
+                    type="number"
+                    placeholder="Enter amount to include"
+                    value={amountIncluded}
+                    onChange={(e) => setAmountIncluded(e.target.value)}
+                  />
+                </div>
+                <div className="flex justify-end gap-3">
+                  <Button variant="outline" onClick={() => setIsAddOpen(false)}>
+                    Cancel
+                  </Button>
+                  <Button 
+                    onClick={handleAddGrant}
+                    disabled={!selectedGrant || !amountIncluded}
+                    className="bg-[#007229] hover:bg-[#007229]/90 text-white"
+                  >
+                    Add Grant
+                  </Button>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-4">
+          {/* Summary */}
+          <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
+            <div className="flex items-center gap-2">
+              <DollarSign className="h-4 w-4" />
+              <span className="font-medium">Total Pool Size:</span>
+            </div>
+            <span className="text-lg font-bold">
+              {formatCurrency(getTotalIncluded())}
+            </span>
+          </div>
+
+          {/* Included Grants Table */}
+          {includedGrants.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              No grants included in this cycle yet.
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Grant</TableHead>
+                  <TableHead>Donor</TableHead>
+                  <TableHead className="text-right">Amount Included</TableHead>
+                  <TableHead className="w-[100px]">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {includedGrants.map((inclusion) => (
+                  <TableRow key={inclusion.id}>
+                    <TableCell>
+                      <div>
+                        <div className="font-medium">
+                          {inclusion.grant_calls?.name || 'Unknown Grant'}
+                        </div>
+                        {inclusion.grant_calls?.shortname && (
+                          <div className="text-sm text-muted-foreground">
+                            {inclusion.grant_calls.shortname}
+                          </div>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline">
+                          {inclusion.grant_calls?.donor?.short_name || inclusion.grant_calls?.donor?.name}
+                        </Badge>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-right font-medium">
+                      {formatCurrency(inclusion.amount_included)}
+                    </TableCell>
+                    <TableCell>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleRemoveGrant(inclusion.grant_calls?.id || '')}
+                        className="h-8 w-8 text-destructive hover:text-destructive/80"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  )
+}

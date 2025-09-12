@@ -24,11 +24,15 @@ export interface F1FormData {
   file: File | null;
   primary_sectors: string[];
   secondary_sectors: string[];
-  grant_call_id: string;
-  grant_call_state_allocation_id: string;
+  // NEW: Cycle-based fields
+  funding_cycle_id: string;
+  cycle_state_allocation_id: string;
   grant_serial_id: string;
   currency: 'USD' | 'SDG';
   exchange_rate?: number;
+  // Keep old fields for backward compatibility
+  grant_call_id?: string;
+  grant_call_state_allocation_id?: string;
 }
 
 export interface F1FormResponse {
@@ -73,4 +77,39 @@ export interface StateAllocation {
   amount_pending?: number;
   amount_approved?: number;
   decision_no: number;
+  // NEW: Add cycle context
+  cycle_id?: string;
+  funding_cycle?: FundingCycle;
+}
+
+// NEW: Add cycle-related interfaces
+export interface FundingCycle {
+  id: string;
+  cycle_number: number;
+  year: number;
+  name: string;
+  status: 'open' | 'closed';
+  start_date: string | null;
+  end_date: string | null;
+  created_at: string;
+  created_by: string | null;
+}
+
+export interface CycleGrantInclusion {
+  id: string;
+  cycle_id: string;
+  grant_call_id: string;
+  amount_included: number;
+  created_at: string;
+  created_by: string | null;
+}
+
+export interface CycleStateAllocation {
+  id: string;
+  cycle_id: string;
+  state_name: string;
+  amount: number;
+  decision_no: number;
+  created_at: string;
+  created_by: string | null;
 } 

@@ -9,7 +9,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Button } from '@/components/ui/button'
 import { FileUp, RefreshCw } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
-import type { Donor, State, F1FormData, EmergencyRoom, Sector, GrantCall, StateAllocation } from '@/app/api/fsystem/types/fsystem'
+import type { Donor, State, F1FormData, EmergencyRoom, Sector } from '@/app/api/fsystem/types/fsystem'
+import type { FundingCycle, CycleStateAllocation } from '@/types/cycles'
 import ExtractedDataReview from './ExtractedDataReview'
 import { cn } from '@/lib/utils'
 import StateAllocationTable from './StateAllocationTable'
@@ -22,13 +23,13 @@ export default function DirectUpload() {
   const [rooms, setRooms] = useState<EmergencyRoom[]>([])
   const [sectors, setSectors] = useState<Sector[]>([])
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
-  const [grantCalls, setGrantCalls] = useState<GrantCall[]>([])
-  const [selectedGrantCall, setSelectedGrantCall] = useState<string>('')
-  const [stateAllocations, setStateAllocations] = useState<StateAllocation[]>([])
+  const [fundingCycles, setFundingCycles] = useState<FundingCycle[]>([])
+  const [selectedFundingCycle, setSelectedFundingCycle] = useState<string>('')
+  const [cycleStateAllocations, setCycleStateAllocations] = useState<CycleStateAllocation[]>([])
 
   interface GrantSerial {
     grant_serial: string;
-    grant_call_id: string;
+    funding_cycle_id: string;
     state_name: string;
     yymm: string;
   }
@@ -42,8 +43,8 @@ export default function DirectUpload() {
     file: null,
     primary_sectors: [],
     secondary_sectors: [],
-    grant_call_id: '',
-    grant_call_state_allocation_id: '',
+    funding_cycle_id: '',
+    cycle_state_allocation_id: '',
     grant_serial_id: '',
     currency: 'USD',
     exchange_rate: 2700
@@ -61,36 +62,15 @@ export default function DirectUpload() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // Fetch active grant calls with donor info
-        const { data: grantCallsData, error: grantCallsError } = await supabase
-          .from('grant_calls')
-          .select(`
-            id,
-            name,
-            shortname,
-            amount,
-            donor:donors!inner (
-              id,
-              name
-            )
-          `)
+        // Fetch open funding cycles
+        const { data: cyclesData, error: cyclesError } = await supabase
+          .from('funding_cycles')
+          .select('*')
           .eq('status', 'open')
-          .order('created_at', { ascending: false })
+          .order('cycle_number', { ascending: false })
 
-        if (grantCallsError) throw grantCallsError
-        
-        // Transform the data to match the GrantCall type
-        const transformedGrantCalls: GrantCall[] = grantCallsData.map((grant: any) => ({
-          id: grant.id,
-          name: grant.name,
-          shortname: grant.shortname,
-          amount: grant.amount,
-          donor: {
-            id: grant.donor.id,
-            name: grant.donor.name
-          }
-        }))
-        setGrantCalls(transformedGrantCalls)
+        if (cyclesError) throw cyclesError
+        setFundingCycles(cyclesData || [])
 
         // Fetch donors
         const { data: donorsData, error: donorsError } = await supabase
@@ -133,78 +113,77 @@ export default function DirectUpload() {
     fetchData()
   }, [])
 
-  // Fetch state allocations when grant call changes
+  // Fetch cycle state allocations when funding cycle changes
   useEffect(() => {
-    fetchStateAllocations()
-  }, [selectedGrantCall])
+    fetchCycleStateAllocations()
+  }, [selectedFundingCycle])
 
-  const fetchStateAllocations = async () => {
-    if (!selectedGrantCall) {
-      setStateAllocations([])
+  const fetchCycleStateAllocations = async () => {
+    if (!selectedFundingCycle) {
+      setCycleStateAllocations([])
       return
     }
 
     setIsRefreshing(true)
     try {
-      // Fetch all allocations for this grant call
+      // Fetch all state allocations for this funding cycle
       const { data: allocationsData, error: allocationsError } = await supabase
-        .from('grant_call_state_allocations')
+        .from('cycle_state_allocations')
         .select('*')
-        .eq('grant_call_id', selectedGrantCall)
-        .order('decision_no', { ascending: false })
+        .eq('cycle_id', selectedFundingCycle)
         .order('state_name')
 
       if (allocationsError) throw allocationsError
 
-      // Group by state and get latest decision for each
-      const latestByState = allocationsData.reduce((acc, curr) => {
-        if (!acc[curr.state_name] || acc[curr.state_name].decision_no < curr.decision_no) {
-          acc[curr.state_name] = curr
-        }
-        return acc
-      }, {} as Record<string, any>)
-
-      // Convert back to array and type as StateAllocation[]
-      const latestAllocations = Object.values(latestByState) as StateAllocation[]
-
-      // Fetch committed amounts for each allocation
+      // Convert to CycleStateAllocation[] and fetch committed amounts
       const allocationsWithAmounts = await Promise.all(
-        latestAllocations.map(async (allocation: StateAllocation) => {
+        (allocationsData || []).map(async (allocation: any) => {
           try {
-            const response = await fetch(`/api/fsystem/state-allocations/committed?allocation_id=${allocation.id}`)
-            if (!response.ok) throw new Error('Failed to fetch committed amounts')
-            const { committed, allocated, total_used } = await response.json()
-            
-            console.log(`Allocation ${allocation.state_name}:`, {
-              total_allocation: allocation.amount,
-              committed,
-              allocated,
-              total_used,
-              available: allocation.amount - total_used
-            })
-            
+            // Get committed amount from projects linked to this cycle allocation
+            const { data: projectsData, error: projectsError } = await supabase
+              .from('err_projects')
+              .select('expenses')
+              .eq('cycle_state_allocation_id', allocation.id)
+              .eq('status', 'approved')
+              .eq('funding_status', 'committed')
+
+            if (projectsError) throw projectsError
+
+            // Calculate total committed from expenses
+            const totalCommitted = (projectsData || []).reduce((sum: number, project: any) => {
+              try {
+                const expenses = typeof project.expenses === 'string' 
+                  ? JSON.parse(project.expenses) 
+                  : project.expenses
+                
+                return sum + expenses.reduce((expSum: number, exp: any) => 
+                  expSum + (exp.total_cost || 0), 0)
+              } catch (error) {
+                console.warn('Error parsing expenses:', error)
+                return sum
+              }
+            }, 0)
+
             return {
               ...allocation,
-              amount_committed: committed || 0,
-              amount_allocated: allocated || 0,
-              amount_used: total_used || 0
-            } as StateAllocation
+              total_committed: totalCommitted,
+              remaining: allocation.amount - totalCommitted
+            } as CycleStateAllocation
           } catch (error) {
             console.error(`Error fetching amounts for ${allocation.state_name}:`, error)
             return {
               ...allocation,
-              amount_committed: 0,
-              amount_allocated: 0,
-              amount_used: 0
-            } as StateAllocation
+              total_committed: 0,
+              remaining: allocation.amount
+            } as CycleStateAllocation
           }
         })
       )
 
-      setStateAllocations(allocationsWithAmounts)
+      setCycleStateAllocations(allocationsWithAmounts)
     } catch (error) {
-      console.error('Error fetching state allocations:', error)
-      setStateAllocations([])
+      console.error('Error fetching cycle state allocations:', error)
+      setCycleStateAllocations([])
     } finally {
       setIsRefreshing(false)
     }
@@ -253,10 +232,10 @@ export default function DirectUpload() {
 
   const fetchGrantSerials = async () => {
     const selectedAlloc = getSelectedAllocation()
-    if (!formData.grant_call_id || !formData.date || !selectedAlloc?.state_name) return;
+    if (!formData.funding_cycle_id || !formData.date || !selectedAlloc?.state_name) return;
 
     try {
-      const response = await fetch(`/api/fsystem/grant-serials?grant_call_id=${formData.grant_call_id}&state_name=${selectedAlloc.state_name}&yymm=${formData.date}`)
+      const response = await fetch(`/api/fsystem/grant-serials?funding_cycle_id=${formData.funding_cycle_id}&state_name=${selectedAlloc.state_name}&yymm=${formData.date}`)
       
       if (!response.ok) throw new Error('Failed to fetch grant serials')
       
@@ -270,32 +249,18 @@ export default function DirectUpload() {
 
   const generateSerialPreview = async () => {
     const selectedAlloc = getSelectedAllocation()
-    if (!formData.grant_call_id || !formData.date || !selectedAlloc?.state_name) return;
+    if (!formData.funding_cycle_id || !formData.date || !selectedAlloc?.state_name) return;
 
     try {
-      // Get the grant call details to build the serial
-      interface DonorWithShortName {
-        short_name: string;
-      }
+      // Get the funding cycle details to build the serial
+      const { data: fundingCycle, error: cycleError } = await supabase
+        .from('funding_cycles')
+        .select('name, cycle_number')
+        .eq('id', formData.funding_cycle_id)
+        .single()
 
-      interface GrantCallWithDonor {
-        shortname: string;
-        donor: DonorWithShortName;
-      }
-
-      const { data: grantCall, error: grantError } = await supabase
-        .from('grant_calls')
-        .select(`
-          shortname,
-          donor:donors!inner (
-            short_name
-          )
-        `)
-        .eq('id', formData.grant_call_id)
-        .single<GrantCallWithDonor>()
-
-      if (grantError) throw grantError
-      if (!grantCall?.donor?.short_name) throw new Error('Donor short name missing')
+      if (cycleError) throw cycleError
+      if (!fundingCycle) throw new Error('Funding cycle not found')
 
       // Get the state details
       const { data: states, error: stateError } = await supabase
@@ -314,7 +279,7 @@ export default function DirectUpload() {
       const { count, error: countError } = await supabase
         .from('grant_serials')
         .select('*', { count: 'exact', head: true })
-        .eq('grant_call_id', formData.grant_call_id)
+        .eq('funding_cycle_id', formData.funding_cycle_id)
         .eq('state_name', selectedAlloc.state_name)
         .eq('yymm', formData.date)
 
@@ -323,8 +288,8 @@ export default function DirectUpload() {
       const nextNumber = (count || 0) + 1
       const paddedSerial = nextNumber.toString().padStart(4, '0')
 
-      // Build the serial string
-      const serial = `LCC-${grantCall.donor.short_name}-${state.state_short.toUpperCase()}-${formData.date}-${paddedSerial}`
+      // Build the serial string using cycle info
+      const serial = `LCC-CYCLE${fundingCycle.cycle_number}-${state.state_short.toUpperCase()}-${formData.date}-${paddedSerial}`
       
       setPreviewSerial(serial)
       handleInputChange('grant_serial_id', 'new')
@@ -359,7 +324,7 @@ export default function DirectUpload() {
   // Effect to fetch grant serials when dependencies change
   useEffect(() => {
     fetchGrantSerials()
-  }, [formData.grant_call_id, formData.date, formData.grant_call_state_allocation_id])
+  }, [formData.funding_cycle_id, formData.date, formData.cycle_state_allocation_id])
 
   // Effect to preview next workplan number when grant serial changes
   useEffect(() => {
@@ -372,14 +337,14 @@ export default function DirectUpload() {
       formData.state_id &&
       formData.date &&
       formData.emergency_room_id &&
-      formData.grant_call_state_allocation_id &&
+      formData.cycle_state_allocation_id &&
       formData.grant_serial_id
     )
   }
 
   // Get selected allocation
-  const getSelectedAllocation = () => stateAllocations.find(
-    alloc => alloc.id === formData.grant_call_state_allocation_id
+  const getSelectedAllocation = () => cycleStateAllocations.find(
+    alloc => alloc.id === formData.cycle_state_allocation_id
   )
 
   const handleInputChange = (field: keyof F1FormData, value: string | string[] | number) => {
@@ -406,13 +371,13 @@ export default function DirectUpload() {
       return
     }
 
-    if (!formData.grant_call_state_allocation_id) {
+    if (!formData.cycle_state_allocation_id) {
       alert(t('fsystem:f1.select_allocation_first'))
       return
     }
 
     // Get the selected allocation
-    const allocation = stateAllocations.find(a => a.id === formData.grant_call_state_allocation_id)
+    const allocation = cycleStateAllocations.find(a => a.id === formData.cycle_state_allocation_id)
     if (!allocation) {
       alert(t('fsystem:f1.allocation_not_found'))
       return
@@ -480,7 +445,7 @@ export default function DirectUpload() {
             'Content-Type': 'application/json'
           },
           body: JSON.stringify({
-            grant_call_id: formData.grant_call_id,
+            funding_cycle_id: formData.funding_cycle_id,
             state_name: selectedAlloc.state_name,
             yymm: formData.date
           })
@@ -577,8 +542,8 @@ export default function DirectUpload() {
           state: selectedState.state_name,
           "Sector (Primary)": primarySectorNames,
           "Sector (Secondary)": secondarySectorNames,
-          grant_call_id: formData.grant_call_id,
-          grant_call_state_allocation_id: formData.grant_call_state_allocation_id,
+          funding_cycle_id: formData.funding_cycle_id,
+          cycle_state_allocation_id: formData.cycle_state_allocation_id,
           funding_status: 'allocated'  // Since we're linking it to an allocation
         }])
 
@@ -622,8 +587,8 @@ export default function DirectUpload() {
         file: null,
         primary_sectors: [],
         secondary_sectors: [],
-        grant_call_id: '',
-        grant_call_state_allocation_id: '',
+        funding_cycle_id: '',
+        cycle_state_allocation_id: '',
         grant_serial_id: '',
         currency: 'USD',
         exchange_rate: 2700
@@ -634,8 +599,8 @@ export default function DirectUpload() {
       setProcessedData(null)
       setIsReviewing(false)
       
-      // Refresh state allocations to show updated amounts
-      await fetchStateAllocations()
+      // Refresh cycle state allocations to show updated amounts
+      await fetchCycleStateAllocations()
 
     } catch (error) {
       console.error('Error uploading form:', error)
@@ -651,8 +616,8 @@ export default function DirectUpload() {
   }
 
   // Get selected allocation info
-  const selectedAllocation = stateAllocations.find(
-    alloc => alloc.id === formData.grant_call_state_allocation_id
+  const selectedAllocation = cycleStateAllocations.find(
+    alloc => alloc.id === formData.cycle_state_allocation_id
   )
 
   return (
@@ -661,68 +626,67 @@ export default function DirectUpload() {
         <div className="space-y-6">
             <div className="space-y-4">
               <div>
-                <Label className="mb-2">{t('fsystem:f1.select_grant')}</Label>
+                <Label className="mb-2">{t('fsystem:f1.select_funding_cycle')}</Label>
                 <Select
-                  value={selectedGrantCall}
+                  value={selectedFundingCycle}
                   onValueChange={(value) => {
-                    setSelectedGrantCall(value)
+                    setSelectedFundingCycle(value)
                     setFormData(prev => ({
                       ...prev,
-                      grant_call_id: value,
-                      grant_call_state_allocation_id: '',
-                      state_id: '',
-                      donor_id: grantCalls.find(g => g.id === value)?.donor?.id || ''
+                      funding_cycle_id: value,
+                      cycle_state_allocation_id: '',
+                      state_id: ''
                     }))
-                    // Clear form ID when grant call changes
+                    // Clear form ID when cycle changes
                     setPreviewId('')
                     setPreviewSerial('')
                   }}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder={t('fsystem:f1.select_grant_placeholder')} />
+                    <SelectValue placeholder={t('fsystem:f1.select_funding_cycle_placeholder')} />
                   </SelectTrigger>
                   <SelectContent>
-                    {grantCalls.map((grant) => (
-                      <SelectItem key={grant.id} value={grant.id}>
-                        {grant.name} ({grant.donor.name})
+                    {fundingCycles.map((cycle) => (
+                      <SelectItem key={cycle.id} value={cycle.id}>
+                        {cycle.name} (Cycle {cycle.cycle_number})
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
 
-              {selectedGrantCall && (
+              {selectedFundingCycle && (
               <div className="space-y-4">
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <Label className="text-sm text-muted-foreground">{t('fsystem:f1.grant_amount')}</Label>
+                      <Label className="text-sm text-muted-foreground">{t('fsystem:f1.cycle_name')}</Label>
                       <div className="text-lg font-semibold">
-                        {grantCalls.find(g => g.id === selectedGrantCall)?.amount.toLocaleString()}
+                        {fundingCycles.find(c => c.id === selectedFundingCycle)?.name}
                       </div>
                     </div>
                     <div>
-                      <Label className="text-sm text-muted-foreground">{t('fsystem:f1.donor')}</Label>
+                      <Label className="text-sm text-muted-foreground">{t('fsystem:f1.cycle_number')}</Label>
                       <div className="text-lg font-semibold">
-                        {grantCalls.find(g => g.id === selectedGrantCall)?.donor.name}
+                        Cycle {fundingCycles.find(c => c.id === selectedFundingCycle)?.cycle_number}
                       </div>
                     </div>
                   </div>
 
-                  {stateAllocations.length > 0 && (
+                  {cycleStateAllocations.length > 0 && (
                     <StateAllocationTable
-                      allocations={stateAllocations}
-                      selectedAllocationId={formData.grant_call_state_allocation_id}
+                      allocations={cycleStateAllocations}
+                      selectedAllocationId={formData.cycle_state_allocation_id}
                       onSelectAllocation={(id) => {
                         setFormData(prev => ({
                           ...prev,
-                          grant_call_state_allocation_id: id,
-                          state_id: states.find(s => s.state_name === stateAllocations.find(a => a.id === id)?.state_name)?.id || ''
+                          cycle_state_allocation_id: id,
+                          state_id: states.find(s => s.state_name === cycleStateAllocations.find(a => a.id === id)?.state_name)?.id || ''
                         }))
                         // Clear form ID when allocation changes
                         setPreviewId('')
                         setPreviewSerial('')
                       }}
-                      onRefresh={fetchStateAllocations}
+                      onRefresh={fetchCycleStateAllocations}
                       isRefreshing={isRefreshing}
                     />
                   )}
@@ -1021,9 +985,9 @@ export default function DirectUpload() {
           onCancel={handleCancelReview}
           allocationInfo={{
             amount: selectedAllocation?.amount || 0,
-            amountUsed: selectedAllocation?.amount_used || 0,
+            amountUsed: selectedAllocation?.total_committed || 0,
             stateName: selectedAllocation?.state_name || '',
-            grantName: grantCalls.find(g => g.id === selectedGrantCall)?.name || ''
+            grantName: fundingCycles.find(c => c.id === selectedFundingCycle)?.name || ''
           }}
           onValidationError={(message) => {
             alert(message)

@@ -38,12 +38,19 @@ export interface F1Project {
   err_id: string
   version: number
   current_feedback_id: string | null
-  grant_call_id: string | null
+  // NEW: Cycle-based fields
+  funding_cycle_id: string | null
+  cycle_state_allocation_id: string | null
   grant_serial_id: string | null
   funding_status: FundingStatus
   workplan_number: number | null
   emergency_rooms?: EmergencyRoom | null
+  // Keep existing fields for backward compatibility
+  grant_call_id: string | null
   grant_calls?: GrantCall | null
+  // NEW: Add cycle context
+  funding_cycles?: FundingCycle | null
+  cycle_state_allocations?: CycleStateAllocation | null
 }
 
 export interface GrantCall {
@@ -63,4 +70,23 @@ export interface StateAllocation {
   amount_committed?: number
   amount_allocated?: number
   amount_used?: number
+}
+
+// NEW: Add cycle-related interfaces
+export interface FundingCycle {
+  id: string
+  cycle_number: number
+  year: number
+  name: string
+  status: 'open' | 'closed'
+  start_date: string | null
+  end_date: string | null
+}
+
+export interface CycleStateAllocation {
+  id: string
+  cycle_id: string
+  state_name: string
+  amount: number
+  decision_no: number
 }

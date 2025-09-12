@@ -24,6 +24,7 @@ import FeedbackHistory from './FeedbackHistory'
 import FeedbackForm from './FeedbackForm'
 import ProjectDetails from './ProjectDetails'
 import { F1Project } from '../../types'
+import type { FundingCycle } from '@/types/cycles'
 
 type ProjectStatus = 'new' | 'feedback' | 'assignment' | 'declined' | 'draft' | 'pending' | 'approved'
 
@@ -54,9 +55,9 @@ export default function ERRAppSubmissions() {
   const [selectedTab, setSelectedTab] = useState<'details' | 'feedback' | 'assignment'>('details')
   const [feedbackHistory, setFeedbackHistory] = useState<Feedback[]>([])
   const [user, setUser] = useState<User | null>(null)
-  const [grantCalls, setGrantCalls] = useState<any[]>([])
+  const [fundingCycles, setFundingCycles] = useState<FundingCycle[]>([])
   const [grantSerials, setGrantSerials] = useState<any[]>([])
-  const [selectedGrantCall, setSelectedGrantCall] = useState<string>('')
+  const [selectedFundingCycle, setSelectedFundingCycle] = useState<string>('')
   const [selectedGrantSerial, setSelectedGrantSerial] = useState<string>('')
 
   const filterProjectsByStatus = useCallback(() => {
@@ -110,16 +111,16 @@ export default function ERRAppSubmissions() {
   }, [selectedProject])
 
   useEffect(() => {
-    fetchGrantCalls()
+    fetchFundingCycles()
   }, [])
 
   useEffect(() => {
-    if (selectedGrantCall) {
-      fetchGrantSerials(selectedGrantCall)
+    if (selectedFundingCycle) {
+      fetchGrantSerials(selectedFundingCycle)
     } else {
       setGrantSerials([])
     }
-  }, [selectedGrantCall])
+  }, [selectedFundingCycle])
 
   const fetchFeedbackHistory = async (projectId: string) => {
     try {
@@ -147,9 +148,9 @@ export default function ERRAppSubmissions() {
 
       if (projectsError) throw projectsError
 
-      // Get unique emergency room IDs and grant call IDs
+      // Get unique emergency room IDs and funding cycle IDs
       const emergencyRoomIds = [...new Set(projectsData?.map(p => p.emergency_room_id).filter(Boolean) || [])]
-      const grantCallIds = [...new Set(projectsData?.map(p => p.grant_call_id).filter(Boolean) || [])]
+      const fundingCycleIds = [...new Set(projectsData?.map(p => p.funding_cycle_id).filter(Boolean) || [])]
 
       // Fetch emergency rooms data
       let emergencyRoomsData: any[] = []
@@ -164,16 +165,16 @@ export default function ERRAppSubmissions() {
         }
       }
 
-      // Fetch grant calls data
-      let grantCallsData: any[] = []
-      if (grantCallIds.length > 0) {
-        const { data: gcData, error: gcError } = await supabase
-          .from('grant_calls')
-          .select('id, name, shortname')
-          .in('id', grantCallIds)
+      // Fetch funding cycles data
+      let fundingCyclesData: any[] = []
+      if (fundingCycleIds.length > 0) {
+        const { data: fcData, error: fcError } = await supabase
+          .from('funding_cycles')
+          .select('id, name, cycle_number')
+          .in('id', fundingCycleIds)
         
-        if (!gcError) {
-          grantCallsData = gcData || []
+        if (!fcError) {
+          fundingCyclesData = fcData || []
         }
       }
 
@@ -181,7 +182,7 @@ export default function ERRAppSubmissions() {
       const combinedData = projectsData?.map(project => ({
         ...project,
         emergency_rooms: emergencyRoomsData.find(err => err.id === project.emergency_room_id) || null,
-        grant_calls: grantCallsData.find(gc => gc.id === project.grant_call_id) || null
+        funding_cycles: fundingCyclesData.find(fc => fc.id === project.funding_cycle_id) || null
       })) || []
 
       setAllProjects(combinedData)
@@ -192,27 +193,27 @@ export default function ERRAppSubmissions() {
     }
   }
 
-  const fetchGrantCalls = async () => {
+  const fetchFundingCycles = async () => {
     try {
       const { data, error } = await supabase
-        .from('grant_calls')
-        .select('id, name, shortname')
+        .from('funding_cycles')
+        .select('id, name, cycle_number')
         .eq('status', 'open')
-        .order('created_at', { ascending: false })
+        .order('cycle_number', { ascending: false })
 
       if (error) throw error
-      setGrantCalls(data || [])
+      setFundingCycles(data || [])
     } catch (error) {
-      console.error('Error fetching grant calls:', error)
+      console.error('Error fetching funding cycles:', error)
     }
   }
 
-  const fetchGrantSerials = async (grantCallId: string) => {
+  const fetchGrantSerials = async (fundingCycleId: string) => {
     try {
       const { data, error } = await supabase
         .from('grant_serials')
-        .select('grant_serial, grant_call_id, state_name, yymm')
-        .eq('grant_call_id', grantCallId)
+        .select('grant_serial, funding_cycle_id, state_name, yymm')
+        .eq('funding_cycle_id', fundingCycleId)
         .order('created_at', { ascending: false })
 
       if (error) throw error
@@ -379,7 +380,7 @@ export default function ERRAppSubmissions() {
                       <TableHead>{t('projects:date')}</TableHead>
                       <TableHead>{t('projects:location')}</TableHead>
                       <TableHead>{t('projects:version')}</TableHead>
-                                             <TableHead>{t('projects:grant_call')}</TableHead>
+                                             <TableHead>{t('projects:funding_cycle')}</TableHead>
                        <TableHead>{t('projects:grant_serial')}</TableHead>
                        <TableHead>{t('projects:workplan_number')}</TableHead>
                        <TableHead>{t('projects:funding_status')}</TableHead>
@@ -393,7 +394,7 @@ export default function ERRAppSubmissions() {
                          <TableCell>{formatDate(project.date)}</TableCell>
                          <TableCell>{`${project.state}, ${project.locality}`}</TableCell>
                          <TableCell>{project.version}</TableCell>
-                         <TableCell>{project.grant_calls?.name || project.grant_call_id || '-'}</TableCell>
+                         <TableCell>{project.funding_cycles?.name || project.funding_cycle_id || '-'}</TableCell>
                          <TableCell>{project.grant_serial_id || '-'}</TableCell>
                          <TableCell>{project.workplan_number || '-'}</TableCell>
                          <TableCell>{t(`projects:status.${project.funding_status}`)}</TableCell>
@@ -498,23 +499,23 @@ export default function ERRAppSubmissions() {
                     <div className="space-y-4">
                       <div>
                         <label className="block text-sm font-medium mb-2">
-                          {t('projects:select_grant_call')}
+                          {t('projects:select_funding_cycle')}
                         </label>
                         <select
-                          value={selectedGrantCall}
-                          onChange={(e) => setSelectedGrantCall(e.target.value)}
+                          value={selectedFundingCycle}
+                          onChange={(e) => setSelectedFundingCycle(e.target.value)}
                           className="w-full p-2 border rounded-md"
                         >
-                          <option value="">{t('projects:select_grant_call_placeholder')}</option>
-                          {grantCalls.map((grantCall) => (
-                            <option key={grantCall.id} value={grantCall.id}>
-                              {grantCall.name} ({grantCall.shortname})
+                          <option value="">{t('projects:select_funding_cycle_placeholder')}</option>
+                          {fundingCycles.map((cycle) => (
+                            <option key={cycle.id} value={cycle.id}>
+                              {cycle.name} (Cycle {cycle.cycle_number})
                             </option>
                           ))}
                         </select>
                       </div>
 
-                      {selectedGrantCall && (
+                      {selectedFundingCycle && (
                         <div>
                           <label className="block text-sm font-medium mb-2">
                             {t('projects:select_grant_serial')}
