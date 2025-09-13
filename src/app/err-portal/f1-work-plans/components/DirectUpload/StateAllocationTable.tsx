@@ -14,6 +14,9 @@ interface StateAllocationTableProps {
     amount_used?: number;
     amount_committed?: number;
     amount_allocated?: number;
+    total_committed?: number;
+    total_allocated?: number;
+    remaining?: number;
   }[];
   selectedAllocationId?: string;
   onSelectAllocation?: (id: string) => void;
@@ -53,17 +56,18 @@ export default function StateAllocationTable({
         <thead>
           <tr className="border-b">
             <th className="px-4 py-2 text-left">{t('fsystem:f1.state')}</th>
-            <th className="px-4 py-2 text-right">{t('fsystem:f1.allocated_amount')}</th>
-            <th className="px-4 py-2 text-right">{t('fsystem:f1.committed_amount')}</th>
+            <th className="px-4 py-2 text-right">State Allocation</th>
+            <th className="px-4 py-2 text-right">F1 Pre-Allocation</th>
+            <th className="px-4 py-2 text-right">F1 Committed</th>
             <th className="px-4 py-2 text-right">{t('fsystem:f1.remaining_amount')}</th>
           </tr>
         </thead>
         <tbody>
           {allocations.map((allocation) => {
-            const committed = allocation.amount_committed || 0
-            const allocated = allocation.amount_allocated || 0
-            const totalUsed = allocation.amount_used || 0
-            const remaining = allocation.amount - totalUsed
+            const f1Committed = allocation.total_committed || allocation.amount_committed || 0
+            const f1Allocated = allocation.total_allocated || allocation.amount_allocated || 0
+            const stateAllocation = allocation.amount
+            const remaining = stateAllocation - f1Allocated - f1Committed
             const isOverAllocated = highlightedAmount !== undefined && 
                                   highlightedAmount > remaining
             
@@ -91,13 +95,9 @@ export default function StateAllocationTable({
                 }}
               >
                 <td className="px-4 py-2">{allocation.state_name}</td>
-                <td className="px-4 py-2 text-right">{allocation.amount.toLocaleString()}</td>
-                <td className="px-4 py-2 text-right">
-                  {committed.toLocaleString()}
-                  <span className="text-xs text-muted-foreground ml-1">
-                    (Allocated: {allocated.toLocaleString()})
-                  </span>
-                </td>
+                <td className="px-4 py-2 text-right">{stateAllocation.toLocaleString()}</td>
+                <td className="px-4 py-2 text-right">{f1Allocated.toLocaleString()}</td>
+                <td className="px-4 py-2 text-right">{f1Committed.toLocaleString()}</td>
                 <td className={cn(
                   "px-4 py-2 text-right",
                   isOverAllocated && "text-destructive font-medium"

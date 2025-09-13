@@ -144,18 +144,34 @@ export default function DirectUpload() {
       const allocationsWithAmounts = await Promise.all(
         (allocationsData || []).map(async (allocation: any) => {
           try {
-            // Get committed amount from projects linked to this cycle allocation
+            // Get allocated and committed amounts from projects linked to this cycle allocation
             const { data: projectsData, error: projectsError } = await supabase
               .from('err_projects')
-              .select('expenses')
+              .select('expenses, funding_status')
               .eq('cycle_state_allocation_id', allocation.id)
-              .eq('status', 'approved')
-              .eq('funding_status', 'committed')
+              .in('funding_status', ['allocated', 'committed'])
 
             if (projectsError) throw projectsError
 
-            // Calculate total committed from expenses
+            // Calculate total allocated and committed from expenses
+            const totalAllocated = (projectsData || []).reduce((sum: number, project: any) => {
+              try {
+                const expenses = typeof project.expenses === 'string' 
+                  ? JSON.parse(project.expenses) 
+                  : project.expenses
+                
+                return sum + expenses.reduce((expSum: number, exp: any) => 
+                  expSum + (exp.total_cost || 0), 0)
+              } catch (error) {
+                console.warn('Error parsing expenses:', error)
+                return sum
+              }
+            }, 0)
+
+            // Separate committed amount (only projects with funding_status = 'committed')
             const totalCommitted = (projectsData || []).reduce((sum: number, project: any) => {
+              if (project.funding_status !== 'committed') return sum
+              
               try {
                 const expenses = typeof project.expenses === 'string' 
                   ? JSON.parse(project.expenses) 
@@ -172,7 +188,8 @@ export default function DirectUpload() {
             return {
               ...allocation,
               total_committed: totalCommitted,
-              remaining: allocation.amount - totalCommitted
+              total_allocated: totalAllocated,
+              remaining: allocation.amount - totalAllocated
             } as CycleStateAllocation
           } catch (error) {
             console.error(`Error fetching amounts for ${allocation.state_name}:`, error)
