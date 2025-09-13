@@ -64,6 +64,7 @@ export default function CycleManager() {
   const [isCreateOpen, setIsCreateOpen] = useState(false)
   const [selectedCycle, setSelectedCycle] = useState<FundingCycle | null>(null)
   const [budgetSummary, setBudgetSummary] = useState<CycleBudgetSummary | null>(null)
+  const [isRefreshingBudget, setIsRefreshingBudget] = useState(false)
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
@@ -102,6 +103,19 @@ export default function CycleManager() {
       setBudgetSummary(data)
     } catch (error) {
       console.error('Error fetching budget summary:', error)
+    }
+  }
+
+  const handleRefreshBudget = async () => {
+    if (!selectedCycle) return
+    
+    try {
+      setIsRefreshingBudget(true)
+      await fetchBudgetSummary(selectedCycle.id)
+    } catch (error) {
+      console.error('Error refreshing budget summary:', error)
+    } finally {
+      setIsRefreshingBudget(false)
     }
   }
 
@@ -345,6 +359,8 @@ export default function CycleManager() {
             <CycleBudgetDashboard 
               cycle={selectedCycle}
               budgetSummary={budgetSummary}
+              onRefresh={handleRefreshBudget}
+              isRefreshing={isRefreshingBudget}
             />
           </CardContent>
         </Card>
@@ -354,7 +370,10 @@ export default function CycleManager() {
       {selectedCycle && (
         <Card>
           <CardContent className="pt-6">
-            <GrantPoolSelector cycleId={selectedCycle.id} />
+            <GrantPoolSelector 
+              cycleId={selectedCycle.id} 
+              onGrantsChanged={handleRefreshBudget}
+            />
           </CardContent>
         </Card>
       )}
@@ -363,7 +382,10 @@ export default function CycleManager() {
       {selectedCycle && (
         <Card>
           <CardContent className="pt-6">
-            <StateAllocationManager cycleId={selectedCycle.id} />
+            <StateAllocationManager 
+              cycleId={selectedCycle.id} 
+              onAllocationsChanged={handleRefreshBudget}
+            />
           </CardContent>
         </Card>
       )}

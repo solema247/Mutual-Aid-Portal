@@ -46,9 +46,10 @@ interface CycleStateAllocation {
 
 interface StateAllocationManagerProps {
   cycleId: string
+  onAllocationsChanged?: () => void
 }
 
-export default function StateAllocationManager({ cycleId }: StateAllocationManagerProps) {
+export default function StateAllocationManager({ cycleId, onAllocationsChanged }: StateAllocationManagerProps) {
   const { t } = useTranslation(['err', 'common'])
   const [states, setStates] = useState<State[]>([])
   const [allocations, setAllocations] = useState<CycleStateAllocation[]>([])
@@ -119,6 +120,7 @@ export default function StateAllocationManager({ cycleId }: StateAllocationManag
 
       setNewAllocations([])
       fetchData()
+      onAllocationsChanged?.() // Notify parent that allocations changed
     } catch (error) {
       console.error('Error saving allocations:', error)
       alert('Failed to save allocations')

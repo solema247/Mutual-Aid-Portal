@@ -54,9 +54,10 @@ interface GrantCall {
 
 interface GrantPoolSelectorProps {
   cycleId: string
+  onGrantsChanged?: () => void
 }
 
-export default function GrantPoolSelector({ cycleId }: GrantPoolSelectorProps) {
+export default function GrantPoolSelector({ cycleId, onGrantsChanged }: GrantPoolSelectorProps) {
   const { t } = useTranslation(['err', 'common'])
   const [availableGrants, setAvailableGrants] = useState<GrantCall[]>([])
   const [includedGrants, setIncludedGrants] = useState<CycleGrantInclusion[]>([])
@@ -114,6 +115,7 @@ export default function GrantPoolSelector({ cycleId }: GrantPoolSelectorProps) {
       setSelectedGrant('')
       setAmountIncluded('')
       fetchData()
+      onGrantsChanged?.() // Notify parent that grants changed
     } catch (error) {
       console.error('Error adding grant:', error)
       alert('Failed to add grant to cycle')
@@ -129,6 +131,7 @@ export default function GrantPoolSelector({ cycleId }: GrantPoolSelectorProps) {
       if (!response.ok) throw new Error('Failed to remove grant from cycle')
 
       fetchData()
+      onGrantsChanged?.() // Notify parent that grants changed
     } catch (error) {
       console.error('Error removing grant:', error)
       alert('Failed to remove grant from cycle')

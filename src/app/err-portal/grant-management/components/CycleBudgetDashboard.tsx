@@ -2,7 +2,7 @@
 
 import React from 'react'
 import { useTranslation } from 'react-i18next'
-import { DollarSign, TrendingUp, TrendingDown } from 'lucide-react'
+import { DollarSign, TrendingUp, TrendingDown, RefreshCw } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 import {
@@ -11,17 +11,22 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
 
 import type { FundingCycle, CycleBudgetSummary } from '@/types/cycles'
 
 interface CycleBudgetDashboardProps {
   cycle: FundingCycle
   budgetSummary: CycleBudgetSummary
+  onRefresh?: () => void
+  isRefreshing?: boolean
 }
 
 export default function CycleBudgetDashboard({ 
   cycle, 
-  budgetSummary 
+  budgetSummary,
+  onRefresh,
+  isRefreshing = false
 }: CycleBudgetDashboardProps) {
   const { t } = useTranslation(['err', 'common'])
 
@@ -46,6 +51,23 @@ export default function CycleBudgetDashboard({
 
   return (
     <div className="space-y-4">
+      {/* Budget Summary Header with Refresh Button */}
+      <div className="flex items-center justify-between">
+        <h3 className="text-lg font-semibold">Budget Summary</h3>
+        {onRefresh && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onRefresh}
+            disabled={isRefreshing}
+            className="flex items-center gap-2"
+          >
+            <RefreshCw className={cn("h-4 w-4", isRefreshing && "animate-spin")} />
+            {isRefreshing ? 'Refreshing...' : 'Refresh'}
+          </Button>
+        )}
+      </div>
+
       {/* Budget Summary */}
       <div className="space-y-4">
         {/* Total Available */}
