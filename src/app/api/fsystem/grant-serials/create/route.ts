@@ -5,13 +5,24 @@ export async function POST(request: Request) {
   try {
     const { grant_call_id, funding_cycle_id, cycle_state_allocation_id, state_name, yymm } = await request.json()
 
+    // Debug logging
+    console.log('Grant serial creation request:', {
+      grant_call_id,
+      funding_cycle_id,
+      cycle_state_allocation_id,
+      state_name,
+      yymm
+    })
+
     // Validate required parameters
     if (!state_name || !yymm) {
+      console.log('Validation failed: Missing state_name or yymm')
       return NextResponse.json({ error: 'Missing required parameters: state_name and yymm' }, { status: 400 })
     }
 
     // Must have either grant_call_id (old system) or funding_cycle_id + cycle_state_allocation_id (new system)
     if (!grant_call_id && !funding_cycle_id) {
+      console.log('Validation failed: Missing grant_call_id or funding_cycle_id')
       return NextResponse.json({ error: 'Missing required parameter: grant_call_id or funding_cycle_id' }, { status: 400 })
     }
 
@@ -20,6 +31,7 @@ export async function POST(request: Request) {
     if (funding_cycle_id) {
       // New cycle-based system
       if (!cycle_state_allocation_id) {
+        console.log('Validation failed: Missing cycle_state_allocation_id for cycle-based system')
         return NextResponse.json({ error: 'Missing required parameter: cycle_state_allocation_id' }, { status: 400 })
       }
 
@@ -29,6 +41,7 @@ export async function POST(request: Request) {
         .select(`
           id,
           cycle_grant_inclusions (
+            grant_call_id,
             grant_calls (
               shortname,
               donor:donors!inner(short_name)
@@ -40,19 +53,29 @@ export async function POST(request: Request) {
 
       if (cycleError) throw cycleError
 
-      // Get the first grant from the cycle (for donor info)
-      const firstGrant = cycleData.cycle_grant_inclusions?.[0]?.grant_calls
+      // Get the first grant from the cycle (for donor info and grant_call_id)
+      const firstGrant = cycleData.cycle_grant_inclusions?.[0]?.grant_calls as any
       if (!firstGrant) {
         throw new Error('No grants found in funding cycle')
       }
 
-      donor = Array.isArray(firstGrant.donor) ? firstGrant.donor[0] : firstGrant.donor
-      if (!donor?.short_name) {
+      // Handle the donor data - it might be an array from the join
+      const donorData = Array.isArray(firstGrant.donor) ? firstGrant.donor[0] : firstGrant.donor
+      if (!donorData?.short_name) {
         throw new Error('Donor short name missing')
+      }
+      
+      donor = donorData
+
+      // Get the grant_call_id from the cycle inclusion (needed for database constraint)
+      const grantCallId = cycleData.cycle_grant_inclusions?.[0]?.grant_call_id
+      if (!grantCallId) {
+        throw new Error('Grant call ID not found in cycle inclusion')
       }
 
       serialData = {
         grant_serial: '', // Will be set after counting
+        grant_call_id: grantCallId, // Required for database constraint
         funding_cycle_id,
         cycle_state_allocation_id,
         state_name,
@@ -119,7 +142,21 @@ export async function POST(request: Request) {
     const paddedSerial = nextNumber.toString().padStart(4, '0')
 
     // Build the serial string
-    const serial = `LCC-${donor.short_name}-${state.state_short.toUpperCase()}-${yymm}-${paddedSerial}`
+    let serial
+    if (funding_cycle_id) {
+      // For cycle-based system, use cycle name and donor short name format
+      const { data: cycleData, error: cycleError } = await supabase
+        .from('funding_cycles')
+        .select('name')
+        .eq('id', funding_cycle_id)
+        .single()
+      
+      if (cycleError) throw cycleError
+      serial = `LCC-${cycleData.name}-${donor.short_name}-${state.state_short.toUpperCase()}-${yymm}-${paddedSerial}`
+    } else {
+      // For old grant-call-based system, use donor short name
+      serial = `LCC-${donor.short_name}-${state.state_short.toUpperCase()}-${yymm}-${paddedSerial}`
+    }
 
     // Insert the new serial
     const insertData = {
@@ -136,7 +173,7 @@ export async function POST(request: Request) {
     if (insertError) throw insertError
 
     // Initialize workplan sequence
-    const workplanSeqData = {
+    const workplanSeqData: any = {
       grant_serial: serial,
       last_workplan_number: 0
     }

@@ -356,8 +356,12 @@ export default function DirectUpload() {
       const nextNumber = (count || 0) + 1
       const paddedSerial = nextNumber.toString().padStart(4, '0')
 
+      // Get the selected donor
+      const selectedDonor = donors.find(d => d.id === formData.donor_id)
+      if (!selectedDonor) throw new Error('Donor not found')
+
       // Build the serial string using cycle info
-      const serial = `LCC-CYCLE${fundingCycle.cycle_number}-${state.state_short.toUpperCase()}-${formData.date}-${paddedSerial}`
+      const serial = `LCC-${fundingCycle.name}-${selectedDonor.short_name}-${state.state_short.toUpperCase()}-${formData.date}-${paddedSerial}`
       
       setPreviewSerial(serial)
       handleInputChange('grant_serial_id', 'new')
@@ -500,23 +504,41 @@ export default function DirectUpload() {
   const handleConfirmUpload = async (editedData: any) => {
     setIsLoading(true)
     try {
+      console.log('=== DEBUG: handleConfirmUpload called ===')
+      console.log('Current formData:', formData)
+      console.log('cycle_state_allocation_id:', formData.cycle_state_allocation_id)
+      console.log('funding_cycle_id:', formData.funding_cycle_id)
+      
       let grantSerialId = formData.grant_serial_id;
 
       // If this is a new serial, create it first
       if (grantSerialId === 'new') {
         const selectedAlloc = getSelectedAllocation()
-        if (!selectedAlloc) throw new Error('Missing allocation')
+        if (!selectedAlloc) {
+          throw new Error('Please select a state allocation before submitting the form')
+        }
+
+        if (!formData.cycle_state_allocation_id) {
+          throw new Error('State allocation ID is missing. Please select a state allocation.')
+        }
+
+        const requestData = {
+          funding_cycle_id: formData.funding_cycle_id,
+          cycle_state_allocation_id: formData.cycle_state_allocation_id,
+          state_name: selectedAlloc.state_name,
+          yymm: formData.date
+        }
+
+        console.log('Creating grant serial with data:', requestData)
+        console.log('Form data:', formData)
+        console.log('Selected allocation:', selectedAlloc)
 
         const response = await fetch('/api/fsystem/grant-serials/create', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json'
           },
-          body: JSON.stringify({
-            funding_cycle_id: formData.funding_cycle_id,
-            state_name: selectedAlloc.state_name,
-            yymm: formData.date
-          })
+          body: JSON.stringify(requestData)
         })
 
         if (!response.ok) throw new Error('Failed to create grant serial')
@@ -740,23 +762,46 @@ export default function DirectUpload() {
                     </div>
                   </div>
 
-                  {cycleStateAllocations.length > 0 && (
-                    <StateAllocationTable
-                      allocations={cycleStateAllocations}
-                      selectedAllocationId={formData.cycle_state_allocation_id}
-                      onSelectAllocation={(id) => {
-                        setFormData(prev => ({
-                          ...prev,
-                          cycle_state_allocation_id: id,
-                          state_id: states.find(s => s.state_name === cycleStateAllocations.find(a => a.id === id)?.state_name)?.id || ''
-                        }))
-                        // Clear form ID when allocation changes
-                        setPreviewId('')
-                        setPreviewSerial('')
-                      }}
-                      onRefresh={fetchCycleStateAllocations}
-                      isRefreshing={isRefreshing}
-                    />
+                  {cycleStateAllocations.length > 0 ? (
+                    <div className="space-y-2">
+                      <div className="text-sm text-muted-foreground">
+                        {formData.cycle_state_allocation_id 
+                          ? "✅ State allocation selected" 
+                          : "⚠️ Please select a state allocation below to proceed"}
+                      </div>
+                      <StateAllocationTable
+                        allocations={cycleStateAllocations}
+                        selectedAllocationId={formData.cycle_state_allocation_id}
+                        onSelectAllocation={(id) => {
+                          console.log('=== DEBUG: State allocation selected ===')
+                          console.log('Selected allocation ID:', id)
+                          console.log('Available allocations:', cycleStateAllocations)
+                          
+                          const selectedAllocation = cycleStateAllocations.find(a => a.id === id)
+                          console.log('Selected allocation object:', selectedAllocation)
+                          
+                          setFormData(prev => {
+                            const newFormData = {
+                              ...prev,
+                              cycle_state_allocation_id: id,
+                              state_id: states.find(s => s.state_name === selectedAllocation?.state_name)?.id || ''
+                            }
+                            console.log('Updated formData:', newFormData)
+                            return newFormData
+                          })
+                          // Clear form ID when allocation changes
+                          setPreviewId('')
+                          setPreviewSerial('')
+                        }}
+                        onRefresh={fetchCycleStateAllocations}
+                        isRefreshing={isRefreshing}
+                      />
+                    </div>
+                  ) : (
+                    <div className="text-center py-4 text-muted-foreground">
+                      <p>No state allocations found for this funding cycle.</p>
+                      <p className="text-sm">Please create state allocations in the Grant Management page first.</p>
+                    </div>
                   )}
                 </div>
               )}
