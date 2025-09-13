@@ -152,7 +152,7 @@ export async function POST(request: Request) {
         .single()
       
       if (cycleError) throw cycleError
-      serial = `LCC-${cycleData.name}-${donor.short_name}-${state.state_short.toUpperCase()}-${yymm}-${paddedSerial}`
+      serial = `LCC-CYCLE${cycleData.name}-${donor.short_name}-${state.state_short.toUpperCase()}-${yymm}-${paddedSerial}`
     } else {
       // For old grant-call-based system, use donor short name
       serial = `LCC-${donor.short_name}-${state.state_short.toUpperCase()}-${yymm}-${paddedSerial}`

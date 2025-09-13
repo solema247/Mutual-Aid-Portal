@@ -360,8 +360,8 @@ export default function DirectUpload() {
       const selectedDonor = donors.find(d => d.id === formData.donor_id)
       if (!selectedDonor) throw new Error('Donor not found')
 
-      // Build the serial string using cycle info
-      const serial = `LCC-${fundingCycle.name}-${selectedDonor.short_name}-${state.state_short.toUpperCase()}-${formData.date}-${paddedSerial}`
+      // Build the serial string using cycle info with CYCLE prefix
+      const serial = `LCC-CYCLE${fundingCycle.name}-${selectedDonor.short_name}-${state.state_short.toUpperCase()}-${formData.date}-${paddedSerial}`
       
       setPreviewSerial(serial)
       handleInputChange('grant_serial_id', 'new')
@@ -563,6 +563,13 @@ export default function DirectUpload() {
 
       const { workplan_number, grant_id } = await response.json()
 
+      // Update formData with the actual generated grant serial ID
+      const updatedFormData = {
+        ...formData,
+        grant_serial_id: grant_id
+      }
+      setFormData(updatedFormData)
+
       const selectedDonor = donors.find(d => d.id === formData.donor_id)
       const selectedState = states.find(s => s.id === formData.state_id)
       const selectedRoom = rooms.find(r => r.id === formData.emergency_room_id)
@@ -589,9 +596,14 @@ export default function DirectUpload() {
       const primarySectorNames = primarySectorData.map(s => s.sector_name_en).join(', ')
       const secondarySectorNames = secondarySectorData.map(s => s.sector_name_en).join(', ')
 
-      // Get file extension and generate path
+      // Get file extension and generate path using cycle name as first directory
       const fileExtension = selectedFile.name.split('.').pop()
-      const filePath = `f1-forms/${selectedDonor.short_name}/${selectedState.state_short}/${formData.date}/${grant_id}.${fileExtension}`
+      
+      // Get the funding cycle name for the path
+      const fundingCycle = fundingCycles.find(fc => fc.id === formData.funding_cycle_id)
+      const cycleName = fundingCycle?.name || 'UNKNOWN'
+      
+      const filePath = `f1-forms/${cycleName}/${selectedDonor.short_name}/${selectedState.state_short}/${formData.date}/${grant_id}.${fileExtension}`
       
       // Upload file to Supabase storage
       const { error: uploadError } = await supabase.storage
@@ -625,7 +637,7 @@ export default function DirectUpload() {
           emergency_room_id: formData.emergency_room_id,
           err_id: selectedRoom.err_code,
           grant_id: grant_id,
-          grant_serial_id: formData.grant_serial_id,
+          grant_serial_id: grant_id,
           workplan_number: parseInt(workplan_number),
           status: 'pending',
           source: 'mutual_aid_portal',
