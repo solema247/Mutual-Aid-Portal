@@ -72,15 +72,6 @@ export default function DirectUpload() {
         if (cyclesError) throw cyclesError
         setFundingCycles(cyclesData || [])
 
-        // Fetch donors
-        const { data: donorsData, error: donorsError } = await supabase
-          .from('donors')
-          .select('*')
-          .eq('status', 'active')
-        
-        if (donorsError) throw donorsError
-        setDonors(donorsData)
-
         // Fetch states with distinct state names
         const { data: statesData, error: statesError } = await supabase
           .from('states')
@@ -105,6 +96,19 @@ export default function DirectUpload() {
 
         if (sectorsError) throw sectorsError
         setSectors(sectorsData)
+
+        // Initialize donors (will show all donors when no cycle is selected)
+        try {
+          const { data: donorsData, error: donorsError } = await supabase
+            .from('donors')
+            .select('*')
+            .eq('status', 'active')
+          
+          if (donorsError) throw donorsError
+          setDonors(donorsData || [])
+        } catch (donorError) {
+          console.error('Error fetching initial donors:', donorError)
+        }
       } catch (error) {
         console.error('Error fetching data:', error)
       }
@@ -113,9 +117,10 @@ export default function DirectUpload() {
     fetchData()
   }, [])
 
-  // Fetch cycle state allocations when funding cycle changes
+  // Fetch cycle state allocations and donors when funding cycle changes
   useEffect(() => {
     fetchCycleStateAllocations()
+    fetchCycleDonors()
   }, [selectedFundingCycle])
 
   const fetchCycleStateAllocations = async () => {
@@ -186,6 +191,69 @@ export default function DirectUpload() {
       setCycleStateAllocations([])
     } finally {
       setIsRefreshing(false)
+    }
+  }
+
+  const fetchCycleDonors = async () => {
+    if (!selectedFundingCycle) {
+      // Reset to all donors when no cycle is selected
+      try {
+        const { data: donorsData, error: donorsError } = await supabase
+          .from('donors')
+          .select('*')
+          .eq('status', 'active')
+        
+        if (donorsError) throw donorsError
+        setDonors(donorsData || [])
+      } catch (error) {
+        console.error('Error fetching all donors:', error)
+      }
+      return
+    }
+
+    try {
+      // Fetch donors whose grant calls are included in this funding cycle
+      const { data: cycleDonorsData, error: cycleDonorsError } = await supabase
+        .from('cycle_grant_inclusions')
+        .select(`
+          grant_calls!inner(
+            donor_id,
+            donors!inner(
+              id,
+              name,
+              short_name,
+              status
+            )
+          )
+        `)
+        .eq('cycle_id', selectedFundingCycle)
+
+      if (cycleDonorsError) throw cycleDonorsError
+
+      // Extract unique donors from the cycle grant inclusions
+      const uniqueDonors = new Map()
+      cycleDonorsData?.forEach((inclusion: any) => {
+        const donor = inclusion.grant_calls.donors
+        if (donor && donor.status === 'active') {
+          uniqueDonors.set(donor.id, donor)
+        }
+      })
+
+      setDonors(Array.from(uniqueDonors.values()))
+    } catch (error) {
+      console.error('Error fetching cycle donors:', error)
+      // Fallback to all donors on error
+      try {
+        const { data: donorsData, error: donorsError } = await supabase
+          .from('donors')
+          .select('*')
+          .eq('status', 'active')
+        
+        if (donorsError) throw donorsError
+        setDonors(donorsData || [])
+      } catch (fallbackError) {
+        console.error('Error fetching fallback donors:', fallbackError)
+      }
     }
   }
 
@@ -750,7 +818,14 @@ export default function DirectUpload() {
           <div className="grid grid-cols-3 gap-4">
             {/* First Row: Donor, State, ERR */}
             <div className="col-span-1">
-                  <Label className="mb-2">{t('fsystem:f1.donor')}</Label>
+                  <Label className="mb-2">
+                    {t('fsystem:f1.donor')}
+                    {selectedFundingCycle && (
+                      <span className="text-xs text-muted-foreground ml-1">
+                        (filtered by cycle)
+                      </span>
+                    )}
+                  </Label>
                   <Select
                     value={formData.donor_id}
                     onValueChange={(value) => handleInputChange('donor_id', value)}
@@ -759,11 +834,19 @@ export default function DirectUpload() {
                       <SelectValue placeholder={t('fsystem:f1.select_donor')} />
                     </SelectTrigger>
                     <SelectContent>
-                      {donors.map((donor) => (
-                        <SelectItem key={donor.id} value={donor.id}>
-                          {donor.name}
-                        </SelectItem>
-                      ))}
+                      {donors.length > 0 ? (
+                        donors.map((donor) => (
+                          <SelectItem key={donor.id} value={donor.id}>
+                            {donor.name}
+                          </SelectItem>
+                        ))
+                      ) : (
+                        <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                          {selectedFundingCycle 
+                            ? "No donors available for this cycle" 
+                            : "Select a funding cycle first"}
+                        </div>
+                      )}
                     </SelectContent>
                   </Select>
                 </div>

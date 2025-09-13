@@ -3,67 +3,117 @@ import { supabase } from '@/lib/supabaseClient'
 
 export async function POST(request: Request) {
   try {
-    const { grant_call_id, state_name, yymm } = await request.json()
+    const { grant_call_id, funding_cycle_id, cycle_state_allocation_id, state_name, yymm } = await request.json()
 
-    if (!grant_call_id || !state_name || !yymm) {
-      return NextResponse.json({ error: 'Missing required parameters' }, { status: 400 })
+    // Validate required parameters
+    if (!state_name || !yymm) {
+      return NextResponse.json({ error: 'Missing required parameters: state_name and yymm' }, { status: 400 })
     }
 
-    // Get the grant call details to build the serial
-    const { data: grantCall, error: grantError } = await supabase
-      .from('grant_calls')
-      .select('shortname, donor:donors!inner(short_name)')
-      .eq('id', grant_call_id)
-      .single()
-
-    if (grantError) {
-      console.error('Error fetching grant call:', grantError)
-      throw new Error('Failed to fetch grant call details')
-    }
-    
-    if (!grantCall) {
-      console.error('Grant call not found:', grant_call_id)
-      throw new Error('Grant call not found')
+    // Must have either grant_call_id (old system) or funding_cycle_id + cycle_state_allocation_id (new system)
+    if (!grant_call_id && !funding_cycle_id) {
+      return NextResponse.json({ error: 'Missing required parameter: grant_call_id or funding_cycle_id' }, { status: 400 })
     }
 
-    // Handle the donor data - it might be an array from the join
-    const donor = Array.isArray(grantCall.donor) ? grantCall.donor[0] : grantCall.donor
-    if (!donor?.short_name) {
-      console.error('Donor short name missing for grant call:', grant_call_id)
-      throw new Error('Donor short name missing')
+    let grantCall, donor, serialData
+
+    if (funding_cycle_id) {
+      // New cycle-based system
+      if (!cycle_state_allocation_id) {
+        return NextResponse.json({ error: 'Missing required parameter: cycle_state_allocation_id' }, { status: 400 })
+      }
+
+      // Get cycle and allocation details
+      const { data: cycleData, error: cycleError } = await supabase
+        .from('funding_cycles')
+        .select(`
+          id,
+          cycle_grant_inclusions (
+            grant_calls (
+              shortname,
+              donor:donors!inner(short_name)
+            )
+          )
+        `)
+        .eq('id', funding_cycle_id)
+        .single()
+
+      if (cycleError) throw cycleError
+
+      // Get the first grant from the cycle (for donor info)
+      const firstGrant = cycleData.cycle_grant_inclusions?.[0]?.grant_calls
+      if (!firstGrant) {
+        throw new Error('No grants found in funding cycle')
+      }
+
+      donor = Array.isArray(firstGrant.donor) ? firstGrant.donor[0] : firstGrant.donor
+      if (!donor?.short_name) {
+        throw new Error('Donor short name missing')
+      }
+
+      serialData = {
+        grant_serial: '', // Will be set after counting
+        funding_cycle_id,
+        cycle_state_allocation_id,
+        state_name,
+        yymm
+      }
+    } else {
+      // Old grant-call-based system
+      const { data: grantCallData, error: grantError } = await supabase
+        .from('grant_calls')
+        .select('shortname, donor:donors!inner(short_name)')
+        .eq('id', grant_call_id)
+        .single()
+
+      if (grantError) throw grantError
+      if (!grantCallData) {
+        throw new Error('Grant call not found')
+      }
+
+      donor = Array.isArray(grantCallData.donor) ? grantCallData.donor[0] : grantCallData.donor
+      if (!donor?.short_name) {
+        throw new Error('Donor short name missing')
+      }
+
+      serialData = {
+        grant_serial: '', // Will be set after counting
+        grant_call_id,
+        state_name,
+        yymm
+      }
     }
 
-    // Get the state details - get first state with this name since they share the same short code
+    // Get the state details
     const { data: states, error: stateError } = await supabase
       .from('states')
       .select('state_short')
       .eq('state_name', state_name)
       .limit(1)
 
-    if (stateError) {
-      console.error('Error fetching state:', stateError)
-      throw new Error('Failed to fetch state details')
-    }
-
+    if (stateError) throw stateError
     if (!states?.length) {
-      console.error('State not found:', state_name)
       throw new Error('State not found')
     }
 
     const state = states[0]
 
     // Get the next serial number (count + 1)
-    const { count, error: countError } = await supabase
+    let countQuery = supabase
       .from('grant_serials')
       .select('*', { count: 'exact', head: true })
-      .eq('grant_call_id', grant_call_id)
       .eq('state_name', state_name)
       .eq('yymm', yymm)
 
-    if (countError) {
-      console.error('Error getting serial count:', countError)
-      throw new Error('Failed to get serial count')
+    if (funding_cycle_id) {
+      countQuery = countQuery.eq('funding_cycle_id', funding_cycle_id)
+    } else {
+      countQuery = countQuery.eq('grant_call_id', grant_call_id)
     }
+
+    const { count, error: countError } = await countQuery
+
+    if (countError) throw countError
 
     const nextNumber = (count || 0) + 1
     const paddedSerial = nextNumber.toString().padStart(4, '0')
@@ -71,27 +121,33 @@ export async function POST(request: Request) {
     // Build the serial string
     const serial = `LCC-${donor.short_name}-${state.state_short.toUpperCase()}-${yymm}-${paddedSerial}`
 
-    // Insert the new serial (removed created_by field)
+    // Insert the new serial
+    const insertData = {
+      ...serialData,
+      grant_serial: serial
+    }
+
     const { data: newSerial, error: insertError } = await supabase
       .from('grant_serials')
-      .insert({
-        grant_serial: serial,
-        grant_call_id,
-        state_name,
-        yymm
-      })
+      .insert(insertData)
       .select()
       .single()
 
     if (insertError) throw insertError
 
     // Initialize workplan sequence
+    const workplanSeqData = {
+      grant_serial: serial,
+      last_workplan_number: 0
+    }
+
+    if (funding_cycle_id) {
+      workplanSeqData.funding_cycle_id = funding_cycle_id
+    }
+
     const { error: seqError } = await supabase
       .from('grant_workplan_seq')
-      .insert({
-        grant_serial: serial,
-        last_workplan_number: 0
-      })
+      .insert(workplanSeqData)
 
     if (seqError) throw seqError
 
