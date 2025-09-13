@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Plus, Save, Trash2, MapPin } from 'lucide-react'
+import { Plus, Save, Trash2, MapPin, Pencil, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 import {
@@ -56,6 +56,8 @@ export default function StateAllocationManager({ cycleId, onAllocationsChanged }
   const [isLoading, setIsLoading] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [newAllocations, setNewAllocations] = useState<{ state_name: string; amount: string }[]>([])
+  const [editingAllocation, setEditingAllocation] = useState<string | null>(null)
+  const [editAmount, setEditAmount] = useState<string>('')
 
   useEffect(() => {
     fetchData()
@@ -124,6 +126,74 @@ export default function StateAllocationManager({ cycleId, onAllocationsChanged }
     } catch (error) {
       console.error('Error saving allocations:', error)
       alert('Failed to save allocations')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  const handleEditAllocation = (allocationId: string, currentAmount: number) => {
+    setEditingAllocation(allocationId)
+    setEditAmount(currentAmount.toString())
+  }
+
+  const handleSaveEdit = async () => {
+    if (!editingAllocation || !editAmount || Number(editAmount) <= 0) return
+
+    try {
+      setIsSubmitting(true)
+
+      const response = await fetch(`/api/cycles/${cycleId}/allocations/${editingAllocation}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ amount: Number(editAmount) }),
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || 'Failed to update allocation')
+      }
+
+      setEditingAllocation(null)
+      setEditAmount('')
+      fetchData()
+      onAllocationsChanged?.() // Notify parent that allocations changed
+    } catch (error) {
+      console.error('Error updating allocation:', error)
+      alert(error instanceof Error ? error.message : 'Failed to update allocation')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  const handleCancelEdit = () => {
+    setEditingAllocation(null)
+    setEditAmount('')
+  }
+
+  const handleDeleteAllocation = async (allocationId: string, stateName: string) => {
+    if (!confirm(`Are you sure you want to delete the allocation for ${stateName}?`)) {
+      return
+    }
+
+    try {
+      setIsSubmitting(true)
+
+      const response = await fetch(`/api/cycles/${cycleId}/allocations/${allocationId}`, {
+        method: 'DELETE',
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || 'Failed to delete allocation')
+      }
+
+      fetchData()
+      onAllocationsChanged?.() // Notify parent that allocations changed
+    } catch (error) {
+      console.error('Error deleting allocation:', error)
+      alert(error instanceof Error ? error.message : 'Failed to delete allocation')
     } finally {
       setIsSubmitting(false)
     }
@@ -276,6 +346,7 @@ export default function StateAllocationManager({ cycleId, onAllocationsChanged }
                     <TableHead className="text-right">Committed</TableHead>
                     <TableHead className="text-right">Pending</TableHead>
                     <TableHead className="text-right">Remaining</TableHead>
+                    <TableHead className="w-[100px]">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -283,7 +354,22 @@ export default function StateAllocationManager({ cycleId, onAllocationsChanged }
                     <TableRow key={allocation.id}>
                       <TableCell className="font-medium">{allocation.state_name}</TableCell>
                       <TableCell className="text-right">
-                        {formatCurrency(allocation.amount)}
+                        {editingAllocation === allocation.id ? (
+                          <Input
+                            type="text"
+                            value={editAmount}
+                            onChange={(e) => {
+                              const value = e.target.value.replace(/,/g, '').replace(/[^\d.]/g, '')
+                              if (value === '' || !isNaN(Number(value))) {
+                                setEditAmount(value)
+                              }
+                            }}
+                            className="text-right w-24"
+                            placeholder="0"
+                          />
+                        ) : (
+                          formatCurrency(allocation.amount)
+                        )}
                       </TableCell>
                       <TableCell className="text-right text-green-600">
                         {formatCurrency(allocation.total_committed || 0)}
@@ -296,6 +382,54 @@ export default function StateAllocationManager({ cycleId, onAllocationsChanged }
                         (allocation.remaining || 0) >= 0 ? "text-green-600" : "text-red-600"
                       )}>
                         {formatCurrency(allocation.remaining || 0)}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1">
+                          {editingAllocation === allocation.id ? (
+                            <>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={handleSaveEdit}
+                                disabled={isSubmitting}
+                                className="h-8 w-8 text-green-600 hover:text-green-700"
+                              >
+                                <Save className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={handleCancelEdit}
+                                disabled={isSubmitting}
+                                className="h-8 w-8 text-gray-600 hover:text-gray-700"
+                              >
+                                <X className="h-4 w-4" />
+                              </Button>
+                            </>
+                          ) : (
+                            <>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleEditAllocation(allocation.id, allocation.amount)}
+                                disabled={isSubmitting}
+                                className="h-8 w-8 text-blue-600 hover:text-blue-700"
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleDeleteAllocation(allocation.id, allocation.state_name)}
+                                disabled={isSubmitting || (allocation.total_committed || 0) > 0}
+                                className="h-8 w-8 text-destructive hover:text-destructive/80"
+                                title={(allocation.total_committed || 0) > 0 ? "Cannot delete allocation with committed projects" : "Delete allocation"}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </>
+                          )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}

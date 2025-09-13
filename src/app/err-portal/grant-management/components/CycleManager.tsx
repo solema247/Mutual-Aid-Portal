@@ -131,7 +131,7 @@ export default function CycleManager() {
   }
 
   const handleCloseCycle = async (cycleId: string) => {
-    if (!confirm('Are you sure you want to close this cycle? This action cannot be undone.')) {
+    if (!confirm('Are you sure you want to close this cycle?')) {
       return
     }
 
@@ -157,6 +157,36 @@ export default function CycleManager() {
     } catch (error) {
       console.error('Error closing cycle:', error)
       alert('Failed to close cycle. Please try again.')
+    }
+  }
+
+  const handleReopenCycle = async (cycleId: string) => {
+    if (!confirm('Are you sure you want to reopen this cycle? This will allow new allocations and modifications.')) {
+      return
+    }
+
+    try {
+      const response = await fetch(`/api/cycles/${cycleId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ status: 'open' }),
+      })
+
+      if (!response.ok) throw new Error('Failed to reopen cycle')
+
+      // Refresh cycles and update selected cycle if it was the one reopened
+      await fetchCycles()
+      if (selectedCycle?.id === cycleId) {
+        const updatedCycle = cycles.find(c => c.id === cycleId)
+        if (updatedCycle) {
+          setSelectedCycle({ ...updatedCycle, status: 'open' })
+        }
+      }
+    } catch (error) {
+      console.error('Error reopening cycle:', error)
+      alert('Failed to reopen cycle. Please try again.')
     }
   }
 
@@ -271,7 +301,7 @@ export default function CycleManager() {
                       >
                         {selectedCycle?.id === cycle.id ? 'Selected' : 'Select'}
                       </Button>
-                      {cycle.status === 'open' && (
+                      {cycle.status === 'open' ? (
                         <Button
                           variant="destructive"
                           size="sm"
@@ -281,6 +311,18 @@ export default function CycleManager() {
                           }}
                         >
                           Close
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="default"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleReopenCycle(cycle.id)
+                          }}
+                          className="bg-green-600 hover:bg-green-700 text-white"
+                        >
+                          Reopen
                         </Button>
                       )}
                     </div>
@@ -301,13 +343,22 @@ export default function CycleManager() {
                 <TrendingUp className="h-5 w-5" />
                 Cycle Details - {selectedCycle.name}
               </span>
-              {selectedCycle.status === 'open' && (
+              {selectedCycle.status === 'open' ? (
                 <Button
                   variant="destructive"
                   size="sm"
                   onClick={() => handleCloseCycle(selectedCycle.id)}
                 >
                   Close Cycle
+                </Button>
+              ) : (
+                <Button
+                  variant="default"
+                  size="sm"
+                  onClick={() => handleReopenCycle(selectedCycle.id)}
+                  className="bg-green-600 hover:bg-green-700 text-white"
+                >
+                  Reopen Cycle
                 </Button>
               )}
             </CardTitle>
