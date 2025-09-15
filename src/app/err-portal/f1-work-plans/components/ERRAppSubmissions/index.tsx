@@ -59,6 +59,7 @@ export default function ERRAppSubmissions() {
   const [grantSerials, setGrantSerials] = useState<any[]>([])
   const [selectedFundingCycle, setSelectedFundingCycle] = useState<string>('')
   const [selectedGrantSerial, setSelectedGrantSerial] = useState<string>('')
+  const [isCreatingSerial, setIsCreatingSerial] = useState<boolean>(false)
 
   const filterProjectsByStatus = useCallback(() => {
     let filteredProjects: F1Project[] = []
@@ -121,6 +122,13 @@ export default function ERRAppSubmissions() {
       setGrantSerials([])
     }
   }, [selectedFundingCycle])
+
+  // When opening a project in Assignment tab, preselect the project's funding cycle
+  useEffect(() => {
+    if (isDialogOpen && selectedTab === 'assignment' && selectedProject?.funding_cycle_id) {
+      setSelectedFundingCycle(selectedProject.funding_cycle_id)
+    }
+  }, [isDialogOpen, selectedTab, selectedProject])
 
   const fetchFeedbackHistory = async (projectId: string) => {
     try {
@@ -197,7 +205,7 @@ export default function ERRAppSubmissions() {
     try {
       const { data, error } = await supabase
         .from('funding_cycles')
-        .select('id, name, cycle_number')
+        .select('id, name, cycle_number, start_date')
         .eq('status', 'open')
         .order('cycle_number', { ascending: false })
 
@@ -205,6 +213,107 @@ export default function ERRAppSubmissions() {
       setFundingCycles(data || [])
     } catch (error) {
       console.error('Error fetching funding cycles:', error)
+    }
+  }
+
+  const getCycleYYMM = async (fundingCycleId: string): Promise<string> => {
+    // Derive YYMM from the funding cycle start_date
+    const { data, error } = await supabase
+      .from('funding_cycles')
+      .select('start_date')
+      .eq('id', fundingCycleId)
+      .single()
+
+    if (error || !data?.start_date) {
+      // Fallback to current date if start_date is missing
+      const now = new Date()
+      const yy = String(now.getFullYear()).slice(-2)
+      const mm = String(now.getMonth() + 1).padStart(2, '0')
+      return `${mm}${yy}`
+    }
+
+    const start = new Date(data.start_date)
+    const yy = String(start.getFullYear()).slice(-2)
+    const mm = String(start.getMonth() + 1).padStart(2, '0')
+    return `${mm}${yy}`
+  }
+
+  const handleCreateSerialForProject = async () => {
+    if (!selectedProject?.funding_cycle_id || !selectedProject?.cycle_state_allocation_id) {
+      alert('Project is missing cycle information.')
+      return
+    }
+
+    try {
+      setIsCreatingSerial(true)
+
+      // Derive YYMM from cycle
+      const yymm = await getCycleYYMM(selectedProject.funding_cycle_id)
+
+      // Create serial using cycle-based params
+      const resp = await fetch('/api/fsystem/grant-serials/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          funding_cycle_id: selectedProject.funding_cycle_id,
+          cycle_state_allocation_id: selectedProject.cycle_state_allocation_id,
+          state_name: selectedProject.state,
+          yymm
+        })
+      })
+
+      if (!resp.ok) {
+        const msg = await resp.json().catch(() => ({}))
+        throw new Error(msg?.error || 'Failed to create grant serial')
+      }
+
+      const newSerial = await resp.json()
+
+      // Ensure grant_workplan_seq exists and increment workplan number
+      const { data: seqData, error: seqError } = await supabase
+        .from('grant_workplan_seq')
+        .select('last_workplan_number')
+        .eq('grant_serial', newSerial.grant_serial)
+        .single()
+
+      if (seqError && seqError.code !== 'PGRST116') {
+        throw seqError
+      }
+
+      const nextWorkplanNumber = seqData ? seqData.last_workplan_number + 1 : 1
+
+      if (seqData) {
+        const { error: updateSeqError } = await supabase
+          .from('grant_workplan_seq')
+          .update({ last_workplan_number: nextWorkplanNumber, last_used: new Date().toISOString() })
+          .eq('grant_serial', newSerial.grant_serial)
+        if (updateSeqError) throw updateSeqError
+      } else {
+        const { error: insertSeqError } = await supabase
+          .from('grant_workplan_seq')
+          .insert({ grant_serial: newSerial.grant_serial, last_workplan_number: nextWorkplanNumber, last_used: new Date().toISOString(), funding_cycle_id: selectedProject.funding_cycle_id })
+        if (insertSeqError) throw insertSeqError
+      }
+
+      // Update project with serial and allocation status
+      const { error: updError } = await supabase
+        .from('err_projects')
+        .update({ grant_serial_id: newSerial.grant_serial, workplan_number: nextWorkplanNumber, funding_status: 'allocated' })
+        .eq('id', selectedProject.id)
+      if (updError) throw updError
+
+      // Refresh lists and UI state
+      await fetchAllProjects()
+      if (selectedProject.funding_cycle_id) {
+        await fetchGrantSerials(selectedProject.funding_cycle_id)
+      }
+      setSelectedGrantSerial(newSerial.grant_serial)
+      alert(`Serial created and assigned. Workplan #${nextWorkplanNumber}`)
+    } catch (e) {
+      console.error('Error creating serial for project:', e)
+      alert('Error creating serial. Please try again.')
+    } finally {
+      setIsCreatingSerial(false)
     }
   }
 
@@ -505,13 +614,11 @@ export default function ERRAppSubmissions() {
                           value={selectedFundingCycle}
                           onChange={(e) => setSelectedFundingCycle(e.target.value)}
                           className="w-full p-2 border rounded-md"
+                          disabled
                         >
-                          <option value="">{t('projects:select_funding_cycle_placeholder')}</option>
-                          {fundingCycles.map((cycle) => (
-                            <option key={cycle.id} value={cycle.id}>
-                              {cycle.name} (Cycle {cycle.cycle_number})
-                            </option>
-                          ))}
+                          <option value={selectedFundingCycle}>
+                            {selectedProject?.funding_cycles?.name || selectedProject?.funding_cycle_id || t('projects:select_funding_cycle_placeholder')}
+                          </option>
                         </select>
                       </div>
 
@@ -532,6 +639,14 @@ export default function ERRAppSubmissions() {
                               </option>
                             ))}
                           </select>
+                        </div>
+                      )}
+
+                      {!selectedGrantSerial && selectedProject && (
+                        <div className="pt-2">
+                          <Button onClick={handleCreateSerialForProject} className="w-full" disabled={isCreatingSerial}>
+                            {isCreatingSerial ? t('common:loading') : 'Create serial and assign'}
+                          </Button>
                         </div>
                       )}
 
