@@ -60,10 +60,8 @@ export default function FooterActions({
 
       if (workplanError) throw workplanError
 
-      // Filter out any already approved/committed workplans
-      const pendingWorkplans = workplans.filter(w => 
-        w.status === 'pending' && w.funding_status === 'allocated'
-      )
+      // Pending for commitment: any workplan with funding_status 'allocated'
+      const pendingWorkplans = workplans.filter(w => w.funding_status === 'allocated')
       console.log('Initial workplans:', workplans)
       console.log('Pending workplans:', pendingWorkplans)
 
@@ -172,6 +170,7 @@ export default function FooterActions({
       if (updateError) throw updateError
 
       onClearSelection()
+      alert(`Approved ${workplansToApprove.length} workplan(s) successfully.`)
     } catch (error) {
       console.error('Error approving workplans:', error)
       alert(t('f2:approve_error'))
