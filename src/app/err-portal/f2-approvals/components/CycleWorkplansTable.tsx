@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { Pencil, Link } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
   Table,
   TableBody,
@@ -55,6 +56,7 @@ export default function CycleWorkplansTable({
   const [workplans, setWorkplans] = useState<CycleWorkplan[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [refreshTrigger, setRefreshTrigger] = useState(0)
+  const [sectors, setSectors] = useState<{ id: string; sector_name_en: string }[]>([])
 
   const refreshWorkplans = () => {
     setRefreshTrigger(prev => prev + 1)
@@ -68,6 +70,24 @@ export default function CycleWorkplansTable({
       element.addEventListener('refresh', handleRefresh)
       return () => element.removeEventListener('refresh', handleRefresh)
     }
+  }, [])
+
+  // Fetch sectors once for primary sector dropdown
+  useEffect(() => {
+    const fetchSectors = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('sectors')
+          .select('id, sector_name_en')
+          .order('sector_name_en', { ascending: true })
+
+        if (error) throw error
+        setSectors(data || [])
+      } catch (err) {
+        console.error('Error fetching sectors:', err)
+      }
+    }
+    fetchSectors()
   }, [])
 
   useEffect(() => {
@@ -244,6 +264,22 @@ export default function CycleWorkplansTable({
     }
   }
 
+  const handlePrimarySectorChange = async (workplanId: string, value: string) => {
+    try {
+      const { error } = await supabase
+        .from('err_projects')
+        .update({ 'Sector (Primary)': value })
+        .eq('id', workplanId)
+
+      if (error) throw error
+
+      setWorkplans(prev => prev.map(w => w.id === workplanId ? { ...w, 'Sector (Primary)': value } : w))
+    } catch (err) {
+      console.error('Error updating primary sector:', err)
+      alert('Failed to update sector. Please try again.')
+    }
+  }
+
   if (isLoading) {
     return <div className="text-center py-4">Loading...</div>
   }
@@ -294,7 +330,7 @@ export default function CycleWorkplansTable({
             <TableHead>{t('f2:workplan_number')}</TableHead>
             <TableHead>{t('f2:err_id')}</TableHead>
             <TableHead>{t('f2:locality')}</TableHead>
-            <TableHead>{t('f2:sector_primary')}</TableHead>
+            <TableHead className="w-48">{t('f2:sector_primary')}</TableHead>
             <TableHead>Donor</TableHead>
             <TableHead>Grant Call</TableHead>
             <TableHead className="text-right">{t('f2:requested_amount')}</TableHead>
@@ -323,7 +359,27 @@ export default function CycleWorkplansTable({
               <TableCell>{workplan.workplan_number}</TableCell>
               <TableCell>{workplan.err_code || workplan.err_id}</TableCell>
               <TableCell>{workplan.locality}</TableCell>
-              <TableCell>{workplan["Sector (Primary)"]}</TableCell>
+              <TableCell className="w-48">
+                {workplan.funding_status !== 'committed' ? (
+                  <Select
+                    value={workplan["Sector (Primary)"] || ''}
+                    onValueChange={(val) => handlePrimarySectorChange(workplan.id, val)}
+                  >
+                    <SelectTrigger className="w-48">
+                      <SelectValue placeholder="Select" className="truncate" />
+                    </SelectTrigger>
+                    <SelectContent className="w-56 max-w-[14rem]">
+                      {sectors.map(s => (
+                        <SelectItem key={s.id} value={s.sector_name_en} className="truncate max-w-[14rem]">
+                          {s.sector_name_en}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <span className="block w-48 truncate">{workplan["Sector (Primary)"] || '-'}</span>
+                )}
+              </TableCell>
               <TableCell>{workplan.donor_name || 'N/A'}</TableCell>
               <TableCell>{workplan.grant_call_name || 'N/A'}</TableCell>
               <TableCell className="text-right">
