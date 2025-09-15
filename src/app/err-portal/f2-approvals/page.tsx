@@ -7,12 +7,12 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { supabase } from '@/lib/supabaseClient'
 import {
-  AllocationHeader,
-  WorkplansTable,
+  CycleAllocationHeader,
+  CycleWorkplansTable,
   FooterActions,
   ReassignModal,
   AdjustModal,
-  GrantSelectionTable
+  CycleSelectionTable
 } from './components'
 
 interface User {
@@ -33,7 +33,7 @@ export default function F2ApprovalsPage() {
   const [reassignModalOpen, setReassignModalOpen] = useState(false)
   const [adjustModalOpen, setAdjustModalOpen] = useState(false)
   const [activeWorkplan, setActiveWorkplan] = useState<string | null>(null)
-  const [selectedGrantCall, setSelectedGrantCall] = useState<string | null>(null)
+  const [selectedFundingCycle, setSelectedFundingCycle] = useState<string | null>(null)
   const [selectedAllocation, setSelectedAllocation] = useState<string | null>(null)
 
   useEffect(() => {
@@ -91,16 +91,16 @@ export default function F2ApprovalsPage() {
       </div>
 
       <Card className="p-6">
-        {!selectedGrantCall ? (
-          <GrantSelectionTable 
-            onGrantSelect={setSelectedGrantCall}
-            selectedGrantId={selectedGrantCall}
+        {!selectedFundingCycle ? (
+          <CycleSelectionTable 
+            onCycleSelect={setSelectedFundingCycle}
+            selectedCycleId={selectedFundingCycle}
           />
         ) : (
-          <AllocationHeader 
-            onGrantSelect={setSelectedGrantCall}
+          <CycleAllocationHeader 
+            onCycleSelect={setSelectedFundingCycle}
             onStateSelect={setSelectedAllocation}
-            selectedGrantId={selectedGrantCall}
+            selectedCycleId={selectedFundingCycle}
           />
         )}
       </Card>
@@ -108,8 +108,8 @@ export default function F2ApprovalsPage() {
       {selectedAllocation ? (
         <>
           <Card className="p-6 space-y-4">
-            <WorkplansTable
-              grantCallId={selectedGrantCall}
+            <CycleWorkplansTable
+              cycleId={selectedFundingCycle}
               allocationId={selectedAllocation}
               selectedWorkplans={selectedWorkplans}
               onSelectWorkplans={setSelectedWorkplans}
