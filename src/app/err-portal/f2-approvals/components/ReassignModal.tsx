@@ -161,6 +161,18 @@ export default function ReassignModal({
       const { data: { user }, error: userError } = await supabase.auth.getUser()
       if (userError) throw userError
 
+      // Extract base grant serial from workplan's grant_serial_id
+      // Workplan ID format: LCC-CYCLEWK38-P2H-KA-1025-0001-001
+      // Base serial format: LCC-CYCLEWK38-P2H-KA-1025-0001
+      let baseGrantSerial = workplanData.grant_serial_id
+      if (baseGrantSerial && baseGrantSerial.includes('-')) {
+        const parts = baseGrantSerial.split('-')
+        if (parts.length > 5) {
+          // Remove the last part (workplan number) to get base serial
+          baseGrantSerial = parts.slice(0, -1).join('-')
+        }
+      }
+
       // Insert negative delta for old allocation
       const { error: oldLedgerError } = await supabase
         .from('grant_project_commitment_ledger')
@@ -168,7 +180,7 @@ export default function ReassignModal({
           workplan_id: workplanId,
           grant_call_id: workplanData.grant_call_id,
           grant_call_state_allocation_id: workplanData.grant_call_state_allocation_id,
-          grant_serial_id: workplanData.grant_serial_id,
+          grant_serial_id: baseGrantSerial,
           delta_amount: -totalAmount,
           reason: formData.reason,
           created_by: user?.id

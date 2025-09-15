@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Pencil, ArrowRightLeft } from 'lucide-react'
+import { Pencil, Link } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import {
@@ -37,7 +37,7 @@ interface CycleWorkplansTableProps {
   allocationId: string;
   selectedWorkplans: string[];
   onSelectWorkplans: (ids: string[]) => void;
-  onReassign: (id: string) => void;
+  onAssignToGrantCall: (id: string) => void;
   onAdjust: (id: string) => void;
 }
 
@@ -46,7 +46,7 @@ export default function CycleWorkplansTable({
   allocationId,
   selectedWorkplans,
   onSelectWorkplans,
-  onReassign,
+  onAssignToGrantCall,
   onAdjust
 }: CycleWorkplansTableProps) {
   const { t } = useTranslation(['f2', 'common'])
@@ -334,10 +334,13 @@ export default function CycleWorkplansTable({
                       <Button
                         variant="ghost"
                         size="icon"
-                        onClick={() => onReassign(workplan.id)}
-                        title={t('f2:reassign')}
+                        onClick={() => onAssignToGrantCall(workplan.id)}
+                        title="Assign to Grant Call"
+                        className={cn(
+                          !workplan.grant_call_id && "bg-orange-100 hover:bg-orange-200"
+                        )}
                       >
-                        <ArrowRightLeft className="h-4 w-4" />
+                        <Link className="h-4 w-4" />
                       </Button>
                       <Button
                         variant="ghost"

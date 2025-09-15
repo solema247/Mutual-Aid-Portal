@@ -72,6 +72,13 @@ export default function FooterActions({
         return
       }
 
+      // Check for grant call assignments - all workplans must have grant_call_id
+      const unassignedWorkplans = pendingWorkplans.filter(w => !w.grant_call_id)
+      if (unassignedWorkplans.length > 0) {
+        alert(`Cannot approve workplans without grant call assignment. ${unassignedWorkplans.length} workplan(s) need to be assigned to a grant call first.`)
+        return
+      }
+
       // Check for existing ledger entries
       const { data: existingEntries, error: existingError } = await supabase
         .from('grant_project_commitment_ledger')
@@ -123,6 +130,17 @@ export default function FooterActions({
           if (updateSerialError) {
             console.error('Error updating workplan grant_serial_id:', updateSerialError)
             // Don't throw here, continue with the approval process
+          }
+        } else {
+          // Extract base grant serial if it includes workplan number
+          // Workplan ID format: LCC-CYCLEWK38-P2H-KA-1025-0001-001
+          // Base serial format: LCC-CYCLEWK38-P2H-KA-1025-0001
+          if (grantSerialId && grantSerialId.includes('-')) {
+            const parts = grantSerialId.split('-')
+            if (parts.length > 5) {
+              // Remove the last part (workplan number) to get base serial
+              grantSerialId = parts.slice(0, -1).join('-')
+            }
           }
         }
 

@@ -10,10 +10,10 @@ import {
   CycleAllocationHeader,
   CycleWorkplansTable,
   FooterActions,
-  ReassignModal,
   AdjustModal,
   CycleSelectionTable
 } from './components'
+import AssignToGrantCallModal from './components/AssignToGrantCallModal'
 
 interface User {
   id: string;
@@ -30,7 +30,7 @@ export default function F2ApprovalsPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [user, setUser] = useState<User | null>(null)
   const [selectedWorkplans, setSelectedWorkplans] = useState<string[]>([])
-  const [reassignModalOpen, setReassignModalOpen] = useState(false)
+  const [assignModalOpen, setAssignModalOpen] = useState(false)
   const [adjustModalOpen, setAdjustModalOpen] = useState(false)
   const [activeWorkplan, setActiveWorkplan] = useState<string | null>(null)
   const [selectedFundingCycle, setSelectedFundingCycle] = useState<string | null>(null)
@@ -113,9 +113,9 @@ export default function F2ApprovalsPage() {
               allocationId={selectedAllocation}
               selectedWorkplans={selectedWorkplans}
               onSelectWorkplans={setSelectedWorkplans}
-              onReassign={(id: string) => {
+              onAssignToGrantCall={(id: string) => {
                 setActiveWorkplan(id)
-                setReassignModalOpen(true)
+                setAssignModalOpen(true)
               }}
               onAdjust={(id: string) => {
                 setActiveWorkplan(id)
@@ -128,10 +128,19 @@ export default function F2ApprovalsPage() {
             />
           </Card>
 
-          <ReassignModal
-            open={reassignModalOpen}
-            onOpenChange={setReassignModalOpen}
+          <AssignToGrantCallModal
+            open={assignModalOpen}
+            onOpenChange={setAssignModalOpen}
             workplanId={activeWorkplan}
+            cycleId={selectedFundingCycle}
+            onAssign={() => {
+              // Trigger a refresh of the workplans table
+              const workplansTable = document.querySelector('div[data-testid="workplans-table"]')
+              if (workplansTable) {
+                const event = new Event('refresh')
+                workplansTable.dispatchEvent(event)
+              }
+            }}
           />
 
           <AdjustModal
