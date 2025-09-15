@@ -19,6 +19,7 @@ interface CycleWorkplan {
   id: string;
   workplan_number: number;
   err_id: string;
+  emergency_room_id?: string | null;
   locality: string;
   "Sector (Primary)": string;
   expenses: Array<{ activity: string; total_cost: number; }> | string;
@@ -30,6 +31,7 @@ interface CycleWorkplan {
   source?: string | null;
   donor_name?: string;
   grant_call_name?: string;
+  err_code?: string | null;
 }
 
 interface CycleWorkplansTableProps {
@@ -77,6 +79,7 @@ export default function CycleWorkplansTable({
             id,
             workplan_number,
             err_id,
+            emergency_room_id,
             locality,
             "Sector (Primary)",
             expenses,
@@ -133,6 +136,7 @@ export default function CycleWorkplansTable({
           filteredWorkplans.map(async (w) => {
             let donorName = 'N/A'
             let grantCallName = 'N/A'
+            let errCode: string | null = null
 
             // Try to get donor name if donor_id exists
             if (w.donor_id) {
@@ -162,10 +166,25 @@ export default function CycleWorkplansTable({
               }
             }
 
+            // Try to get ERR code from emergency_rooms if available
+            if (w.emergency_room_id) {
+              try {
+                const { data: erData } = await supabase
+                  .from('emergency_rooms')
+                  .select('err_code')
+                  .eq('id', w.emergency_room_id)
+                  .single()
+                errCode = erData?.err_code || null
+              } catch (error) {
+                console.warn('Error fetching emergency room:', error)
+              }
+            }
+
             return {
               ...w,
               donor_name: donorName,
-              grant_call_name: grantCallName
+              grant_call_name: grantCallName,
+              err_code: errCode
             }
           })
         )
@@ -302,7 +321,7 @@ export default function CycleWorkplansTable({
                 )}
               </TableCell>
               <TableCell>{workplan.workplan_number}</TableCell>
-              <TableCell>{workplan.err_id}</TableCell>
+              <TableCell>{workplan.err_code || workplan.err_id}</TableCell>
               <TableCell>{workplan.locality}</TableCell>
               <TableCell>{workplan["Sector (Primary)"]}</TableCell>
               <TableCell>{workplan.donor_name || 'N/A'}</TableCell>

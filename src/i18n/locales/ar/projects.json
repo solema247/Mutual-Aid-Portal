@@ -61,6 +61,7 @@
   "grant_call": "المنحة",
   "grant_serial": "رقم المنحة",
   "workplan_number": "رقم خطة العمل",
+  "funding_cycle": "دورة التمويل",
   "funding_status": "حالة التمويل",
   "actions": "الإجراءات",
   "status": {

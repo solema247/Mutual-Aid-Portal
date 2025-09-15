@@ -489,24 +489,20 @@ export default function ERRAppSubmissions() {
                       <TableHead>{t('projects:date')}</TableHead>
                       <TableHead>{t('projects:location')}</TableHead>
                       <TableHead>{t('projects:version')}</TableHead>
-                                             <TableHead>{t('projects:funding_cycle')}</TableHead>
-                       <TableHead>{t('projects:grant_serial')}</TableHead>
-                       <TableHead>{t('projects:workplan_number')}</TableHead>
-                       <TableHead>{t('projects:funding_status')}</TableHead>
-                       <TableHead>{t('projects:actions')}</TableHead>
+                      <TableHead>{t('projects:funding_cycle')}</TableHead>
+                      <TableHead>{t('projects:funding_status')}</TableHead>
+                      <TableHead>{t('projects:actions')}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {projects.map((project) => (
                       <TableRow key={project.id}>
-                                                 <TableCell>{project.emergency_rooms?.err_code || project.err_id || '-'}</TableCell>
-                         <TableCell>{formatDate(project.date)}</TableCell>
-                         <TableCell>{`${project.state}, ${project.locality}`}</TableCell>
-                         <TableCell>{project.version}</TableCell>
-                         <TableCell>{project.funding_cycles?.name || project.funding_cycle_id || '-'}</TableCell>
-                         <TableCell>{project.grant_serial_id || '-'}</TableCell>
-                         <TableCell>{project.workplan_number || '-'}</TableCell>
-                         <TableCell>{t(`projects:status.${project.funding_status}`)}</TableCell>
+                        <TableCell>{project.emergency_rooms?.err_code || project.err_id || '-'}</TableCell>
+                        <TableCell>{formatDate(project.date)}</TableCell>
+                        <TableCell>{`${project.state}, ${project.locality}`}</TableCell>
+                        <TableCell>{project.version}</TableCell>
+                        <TableCell>{project.funding_cycles?.name || project.funding_cycle_id || '-'}</TableCell>
+                        <TableCell>{t(`projects:status.${project.funding_status}`)}</TableCell>
                         <TableCell>
                           {currentStatus === 'assignment' ? (
                             <div className="flex gap-2">
