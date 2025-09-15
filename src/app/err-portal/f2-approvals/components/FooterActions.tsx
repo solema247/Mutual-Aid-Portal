@@ -132,13 +132,12 @@ export default function FooterActions({
             // Don't throw here, continue with the approval process
           }
         } else {
-          // Extract base grant serial if it includes workplan number
-          // Workplan ID format: LCC-CYCLEWK38-P2H-KA-1025-0001-001
-          // Base serial format: LCC-CYCLEWK38-P2H-KA-1025-0001
+          // Extract base grant serial only if last segment is a 3-digit workplan suffix
+          // Base serial ends with 4-digit segment (e.g., -0001)
           if (grantSerialId && grantSerialId.includes('-')) {
             const parts = grantSerialId.split('-')
-            if (parts.length > 5) {
-              // Remove the last part (workplan number) to get base serial
+            const last = parts[parts.length - 1]
+            if (/^\d{3}$/.test(last)) {
               grantSerialId = parts.slice(0, -1).join('-')
             }
           }

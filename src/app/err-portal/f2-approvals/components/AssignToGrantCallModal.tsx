@@ -210,8 +210,9 @@ export default function AssignToGrantCallModal({
       let baseGrantSerial = workplanData.grant_serial_id
       if (baseGrantSerial && baseGrantSerial.includes('-')) {
         const parts = baseGrantSerial.split('-')
-        if (parts.length > 5) {
-          // Remove the last part (workplan number) to get base serial
+        const last = parts[parts.length - 1]
+        // Only strip a trailing 3-digit workplan suffix (e.g., -001). Keep 4-digit base segment (e.g., -0001)
+        if (/^\d{3}$/.test(last)) {
           baseGrantSerial = parts.slice(0, -1).join('-')
         }
       }
