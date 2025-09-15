@@ -205,12 +205,22 @@ export default function ReassignModal({
       if (newLedgerError) throw newLedgerError
 
       // Update workplan pointers
+      // Also update donor_id from the new grant call
+      const { data: newGrantCallRow, error: newGrantCallError } = await supabase
+        .from('grant_calls')
+        .select('donor_id')
+        .eq('id', formData.new_grant_call_id)
+        .single()
+
+      if (newGrantCallError) throw newGrantCallError
+
       const { error: updateError } = await supabase
         .from('err_projects')
         .update({
           grant_call_id: formData.new_grant_call_id,
           grant_call_state_allocation_id: formData.new_allocation_id,
-          grant_serial_id: formData.new_serial_id
+          grant_serial_id: formData.new_serial_id,
+          donor_id: newGrantCallRow?.donor_id || null
         })
         .eq('id', workplanId)
 

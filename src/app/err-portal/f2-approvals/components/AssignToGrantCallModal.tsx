@@ -194,11 +194,21 @@ export default function AssignToGrantCallModal({
       }
 
       // Update workplan with grant call assignment
+      // Also populate donor_id from selected grant call
+      const { data: grantCallRow, error: grantCallFetchError } = await supabase
+        .from('grant_calls')
+        .select('donor_id')
+        .eq('id', selectedGrantCallId)
+        .single()
+
+      if (grantCallFetchError) throw grantCallFetchError
+
       const { error: updateError } = await supabase
         .from('err_projects')
         .update({
           grant_call_id: selectedGrantCallId,
-          grant_call_state_allocation_id: grantCallAllocation.id
+          grant_call_state_allocation_id: grantCallAllocation.id,
+          donor_id: grantCallRow?.donor_id || null
         })
         .eq('id', workplanId)
 
