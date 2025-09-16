@@ -10,21 +10,26 @@ export async function GET() {
       .select(`
         amount_included,
         grant_call_id,
-        grant_calls ( id, name, donor_id ),
-        donors:grant_calls(donor_id, donors!inner(id, name, short_name))
+        grant_calls (
+          id, name, donor_id,
+          donors ( id, name, short_name )
+        )
       `)
 
     if (incErr) throw incErr
 
     // Normalize inclusions
     type Row = { donor_id: string | null; donor_name: string | null; grant_call_id: string; grant_call_name: string | null; amount_included: number }
-    const norm: Row[] = (inclusions || []).map((r: any) => ({
-      donor_id: Array.isArray(r.donors) ? r.donors[0]?.id : r.grant_calls?.donor_id || null,
-      donor_name: Array.isArray(r.donors) ? r.donors[0]?.name : null,
-      grant_call_id: r.grant_call_id,
-      grant_call_name: r.grant_calls?.name || null,
-      amount_included: r.amount_included || 0
-    }))
+    const norm: Row[] = (inclusions || []).map((r: any) => {
+      const donorObj = r.grant_calls?.donors || null
+      return {
+        donor_id: donorObj?.id || r.grant_calls?.donor_id || null,
+        donor_name: donorObj?.name || null,
+        grant_call_id: r.grant_call_id,
+        grant_call_name: r.grant_calls?.name || null,
+        amount_included: r.amount_included || 0
+      }
+    })
 
     const includedByGrant = new Map<string, { donor_id: string | null; donor_name: string | null; grant_call_name: string | null; included: number }>()
     for (const r of norm) {

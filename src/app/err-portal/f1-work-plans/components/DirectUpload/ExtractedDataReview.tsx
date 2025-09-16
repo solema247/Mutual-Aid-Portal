@@ -313,7 +313,7 @@ export default function ExtractedDataReview({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>{t('fsystem:review.title')}</CardTitle>
+        <CardTitle>Review Extracted F1 Form and Assign to Pool and Grant Call</CardTitle>
         <CardDescription>{t('fsystem:review.description')}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
@@ -348,6 +348,12 @@ export default function ExtractedDataReview({
                 ))}
               </SelectContent>
             </Select>
+          </div>
+          <div>
+            <Label>Donor</Label>
+            <div className="p-2 bg-muted rounded-md">
+              {donorShort || '-'}
+            </div>
           </div>
           <div>
             <Label>YYMM</Label>

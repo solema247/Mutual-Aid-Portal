@@ -433,7 +433,7 @@ export default function DirectUpload() {
               </div>
 
                     {/* Main Form Grid */}
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="col-span-1">
                   <Label className="mb-2">{t('fsystem:f1.state')}</Label>
                   <Select
@@ -475,120 +475,122 @@ export default function DirectUpload() {
                     </SelectContent>
                   </Select>
               </div>
-
-                        {/* Second Row: Primary and Secondary Sectors */}
-                        <div className="col-span-3/2">
-                  <Label className="mb-2">{t('fsystem:f1.primary_sectors')}</Label>
-                  <Select
-                    value={formData.primary_sectors[0] || ''}
-                    onValueChange={(value) => {
-                      if (!value) return
-                      const newValues = [...formData.primary_sectors]
-                      if (!newValues.includes(value)) {
-                        newValues.push(value)
-                        handleInputChange('primary_sectors', newValues)
-                      }
-                    }}
-                  >
-                                <SelectTrigger className="h-[38px] w-full">
-                      <SelectValue placeholder={t('fsystem:f1.select_primary_sectors')}>
-                        {formData.primary_sectors.length > 0
-                          ? `${formData.primary_sectors.length} selected`
-                          : t('fsystem:f1.select_primary_sectors')}
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectContent>
-                      {sectors
-                        .filter(sector => !formData.primary_sectors.includes(sector.id))
-                        .map((sector) => (
-                          <SelectItem key={sector.id} value={sector.id}>
-                            {sector.sector_name_en} {sector.sector_name_ar && `(${sector.sector_name_ar})`}
-                          </SelectItem>
-                        ))}
-                    </SelectContent>
-                  </Select>
-                  {formData.primary_sectors.length > 0 && (
-                <div className="flex flex-wrap gap-1 mt-2">
-                      {formData.primary_sectors.map(sectorId => {
-                        const sector = sectors.find(s => s.id === sectorId)
-                        if (!sector) return null
-                        return (
-                          <Button
-                            key={sector.id}
-                            variant="secondary"
-                            size="sm"
-                            className="bg-emerald-100 hover:bg-emerald-200 text-emerald-700 border-emerald-200"
-                            onClick={() => {
-                              const newValues = formData.primary_sectors.filter(id => id !== sector.id)
-                              handleInputChange('primary_sectors', newValues)
-                            }}
-                          >
-                            {sector.sector_name_en}
-                            <X className="w-4 h-4 ml-2" />
-                          </Button>
-                        )
-                      })}
-                    </div>
-                  )}
-                </div>
-
-                <div className="col-span-3/2">
-                  <Label className="mb-2">{t('fsystem:f1.secondary_sectors')}</Label>
-                  <Select
-                    value={formData.secondary_sectors[0] || ''}
-                    onValueChange={(value) => {
-                      if (!value) return
-                      const newValues = [...formData.secondary_sectors]
-                      if (!newValues.includes(value)) {
-                        newValues.push(value)
-                        handleInputChange('secondary_sectors', newValues)
-                      }
-                    }}
-                  >
-                                                <SelectTrigger className="h-[38px] w-full">
-                      <SelectValue placeholder={t('fsystem:f1.select_secondary_sectors')}>
-                        {formData.secondary_sectors.length > 0
-                          ? `${formData.secondary_sectors.length} selected`
-                          : t('fsystem:f1.select_secondary_sectors')}
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectContent>
-                      {sectors
-                        .filter(sector => !formData.secondary_sectors.includes(sector.id))
-                        .map((sector) => (
-                          <SelectItem key={sector.id} value={sector.id}>
-                            {sector.sector_name_en} {sector.sector_name_ar && `(${sector.sector_name_ar})`}
-                          </SelectItem>
-                        ))}
-                    </SelectContent>
-                  </Select>
-                  {formData.secondary_sectors.length > 0 && (
-                <div className="flex flex-wrap gap-1 mt-2">
-                      {formData.secondary_sectors.map(sectorId => {
-                        const sector = sectors.find(s => s.id === sectorId)
-                        if (!sector) return null
-                        return (
-                          <Button
-                            key={sector.id}
-                            variant="secondary"
-                            size="sm"
-                            className="bg-emerald-100 hover:bg-emerald-200 text-emerald-700 border-emerald-200"
-                            onClick={() => {
-                              const newValues = formData.secondary_sectors.filter(id => id !== sector.id)
-                              handleInputChange('secondary_sectors', newValues)
-                            }}
-                          >
-                            {sector.sector_name_en}
-                            <X className="w-4 h-4 ml-2" />
-                          </Button>
-                        )
-                      })}
-                    </div>
-                  )}
-              </div>
-
+            
             {/* No date/serial selection in upload-first step */}
               </div>
+
+          {/* Row 4: Primary and Secondary Sectors */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <Label className="mb-2">{t('fsystem:f1.primary_sectors')}</Label>
+              <Select
+                value={formData.primary_sectors[0] || ''}
+                onValueChange={(value) => {
+                  if (!value) return
+                  const newValues = [...formData.primary_sectors]
+                  if (!newValues.includes(value)) {
+                    newValues.push(value)
+                    handleInputChange('primary_sectors', newValues)
+                  }
+                }}
+              >
+                <SelectTrigger className="h-[38px] w-full">
+                  <SelectValue placeholder={t('fsystem:f1.select_primary_sectors')}>
+                    {formData.primary_sectors.length > 0
+                      ? `${formData.primary_sectors.length} selected`
+                      : t('fsystem:f1.select_primary_sectors')}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {sectors
+                    .filter(sector => !formData.primary_sectors.includes(sector.id))
+                    .map((sector) => (
+                      <SelectItem key={sector.id} value={sector.id}>
+                        {sector.sector_name_en} {sector.sector_name_ar && `(${sector.sector_name_ar})`}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+              {formData.primary_sectors.length > 0 && (
+                <div className="flex flex-wrap gap-1 mt-2">
+                  {formData.primary_sectors.map(sectorId => {
+                    const sector = sectors.find(s => s.id === sectorId)
+                    if (!sector) return null
+                    return (
+                      <Button
+                        key={sector.id}
+                        variant="secondary"
+                        size="sm"
+                        className="bg-emerald-100 hover:bg-emerald-200 text-emerald-700 border-emerald-200"
+                        onClick={() => {
+                          const newValues = formData.primary_sectors.filter(id => id !== sector.id)
+                          handleInputChange('primary_sectors', newValues)
+                        }}
+                      >
+                        {sector.sector_name_en}
+                        <X className="w-4 h-4 ml-2" />
+                      </Button>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+
+            <div>
+              <Label className="mb-2">{t('fsystem:f1.secondary_sectors')}</Label>
+              <Select
+                value={formData.secondary_sectors[0] || ''}
+                onValueChange={(value) => {
+                  if (!value) return
+                  const newValues = [...formData.secondary_sectors]
+                  if (!newValues.includes(value)) {
+                    newValues.push(value)
+                    handleInputChange('secondary_sectors', newValues)
+                  }
+                }}
+              >
+                <SelectTrigger className="h-[38px] w-full">
+                  <SelectValue placeholder={t('fsystem:f1.select_secondary_sectors')}>
+                    {formData.secondary_sectors.length > 0
+                      ? `${formData.secondary_sectors.length} selected`
+                      : t('fsystem:f1.select_secondary_sectors')}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {sectors
+                    .filter(sector => !formData.secondary_sectors.includes(sector.id))
+                    .map((sector) => (
+                      <SelectItem key={sector.id} value={sector.id}>
+                        {sector.sector_name_en} {sector.sector_name_ar && `(${sector.sector_name_ar})`}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+              {formData.secondary_sectors.length > 0 && (
+                <div className="flex flex-wrap gap-1 mt-2">
+                  {formData.secondary_sectors.map(sectorId => {
+                    const sector = sectors.find(s => s.id === sectorId)
+                    if (!sector) return null
+                    return (
+                      <Button
+                        key={sector.id}
+                        variant="secondary"
+                        size="sm"
+                        className="bg-emerald-100 hover:bg-emerald-200 text-emerald-700 border-emerald-200"
+                        onClick={() => {
+                          const newValues = formData.secondary_sectors.filter(id => id !== sector.id)
+                          handleInputChange('secondary_sectors', newValues)
+                        }}
+                      >
+                        {sector.sector_name_en}
+                        <X className="w-4 h-4 ml-2" />
+                      </Button>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
             </div>
       ) : (
         <ExtractedDataReview
