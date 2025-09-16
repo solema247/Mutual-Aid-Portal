@@ -88,13 +88,34 @@ export default function PoolDashboard() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>State</TableHead>
-                <TableHead className="text-right">Allocated (total assigned)</TableHead>
-                <TableHead className="text-right">Committed (approved spend)</TableHead>
-                <TableHead className="text-right">Pending (not yet committed)</TableHead>
-                <TableHead className="text-right">Remaining (alloc - committed - pending)</TableHead>
-                <TableHead className="text-right">Proposed (this upload)</TableHead>
-                <TableHead className="text-right">Remainder If Applied (after proposal)</TableHead>
+                <TableHead>
+                  <div className="font-semibold">State</div>
+                  <div className="text-xs text-muted-foreground">State name</div>
+                </TableHead>
+                <TableHead className="text-right">
+                  <div className="font-semibold">Allocated</div>
+                  <div className="text-xs text-muted-foreground">Total assigned</div>
+                </TableHead>
+                <TableHead className="text-right">
+                  <div className="font-semibold">Committed</div>
+                  <div className="text-xs text-muted-foreground">Approved spend</div>
+                </TableHead>
+                <TableHead className="text-right">
+                  <div className="font-semibold">Pending</div>
+                  <div className="text-xs text-muted-foreground">Not yet committed</div>
+                </TableHead>
+                <TableHead className="text-right">
+                  <div className="font-semibold">Remaining</div>
+                  <div className="text-xs text-muted-foreground">Alloc - Committed - Pending</div>
+                </TableHead>
+                <TableHead className="text-right">
+                  <div className="font-semibold">Proposed</div>
+                  <div className="text-xs text-muted-foreground">This upload</div>
+                </TableHead>
+                <TableHead className="text-right">
+                  <div className="font-semibold">Remainder</div>
+                  <div className="text-xs text-muted-foreground">If Applied (after proposal)</div>
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -122,14 +143,38 @@ export default function PoolDashboard() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Donor</TableHead>
-                <TableHead>Grant (Grant Call)</TableHead>
-                <TableHead className="text-right">Included (added to pool)</TableHead>
-                <TableHead className="text-right">Committed (approved spend)</TableHead>
-                <TableHead className="text-right">Pending (not yet committed)</TableHead>
-                <TableHead className="text-right">Remaining (incl - committed - pending)</TableHead>
-                <TableHead className="text-right">Proposed (this upload)</TableHead>
-                <TableHead className="text-right">Remainder If Applied (after proposal)</TableHead>
+                <TableHead>
+                  <div className="font-semibold">Donor</div>
+                  <div className="text-xs text-muted-foreground">Funder name</div>
+                </TableHead>
+                <TableHead>
+                  <div className="font-semibold">Grant</div>
+                  <div className="text-xs text-muted-foreground">Grant Call</div>
+                </TableHead>
+                <TableHead className="text-right">
+                  <div className="font-semibold">Included</div>
+                  <div className="text-xs text-muted-foreground">Added to pool</div>
+                </TableHead>
+                <TableHead className="text-right">
+                  <div className="font-semibold">Committed</div>
+                  <div className="text-xs text-muted-foreground">Approved spend</div>
+                </TableHead>
+                <TableHead className="text-right">
+                  <div className="font-semibold">Pending</div>
+                  <div className="text-xs text-muted-foreground">Not yet committed</div>
+                </TableHead>
+                <TableHead className="text-right">
+                  <div className="font-semibold">Remaining</div>
+                  <div className="text-xs text-muted-foreground">Included - Committed - Pending</div>
+                </TableHead>
+                <TableHead className="text-right">
+                  <div className="font-semibold">Proposed</div>
+                  <div className="text-xs text-muted-foreground">This upload</div>
+                </TableHead>
+                <TableHead className="text-right">
+                  <div className="font-semibold">Remainder</div>
+                  <div className="text-xs text-muted-foreground">If Applied (after proposal)</div>
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
