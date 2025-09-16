@@ -41,6 +41,32 @@ export default function PoolDashboard() {
     return () => window.removeEventListener('f1-proposal', handler as EventListener)
   }, [])
 
+  // Listen for explicit refresh requests after submit
+  useEffect(() => {
+    const refresh = async () => {
+      try {
+        setLoading(true)
+        const [s, bs, bd] = await Promise.all([
+          fetch('/api/pool/summary').then(r => r.json()),
+          fetch('/api/pool/by-state').then(r => r.json()),
+          fetch('/api/pool/by-donor').then(r => r.json())
+        ])
+        setSummary(s)
+        setByState(Array.isArray(bs) ? bs : [])
+        setByDonor(Array.isArray(bd) ? bd : [])
+        // Clear proposal overlays
+        setProposal({ amount: 0 })
+      } catch (e) {
+        console.error('Pool dashboard refresh error:', e)
+      } finally {
+        setLoading(false)
+      }
+    }
+    const onRefresh = () => { refresh() }
+    window.addEventListener('pool-refresh', onRefresh)
+    return () => window.removeEventListener('pool-refresh', onRefresh)
+  }, [])
+
   const fmt = (n: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n || 0)
 
   if (loading) return <div className="text-sm text-muted-foreground">Loading balances…</div>
@@ -63,12 +89,12 @@ export default function PoolDashboard() {
             <TableHeader>
               <TableRow>
                 <TableHead>State</TableHead>
-                <TableHead className="text-right">Allocated</TableHead>
-                <TableHead className="text-right">Committed</TableHead>
-                <TableHead className="text-right">Pending</TableHead>
-                <TableHead className="text-right">Remaining</TableHead>
-                <TableHead className="text-right">Proposed</TableHead>
-                <TableHead className="text-right">Rem. if Applied</TableHead>
+                <TableHead className="text-right">Allocated (total assigned)</TableHead>
+                <TableHead className="text-right">Committed (approved spend)</TableHead>
+                <TableHead className="text-right">Pending (not yet committed)</TableHead>
+                <TableHead className="text-right">Remaining (alloc - committed - pending)</TableHead>
+                <TableHead className="text-right">Proposed (this upload)</TableHead>
+                <TableHead className="text-right">Remainder If Applied (after proposal)</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -97,13 +123,13 @@ export default function PoolDashboard() {
             <TableHeader>
               <TableRow>
                 <TableHead>Donor</TableHead>
-                <TableHead>Grant</TableHead>
-                <TableHead className="text-right">Included</TableHead>
-                <TableHead className="text-right">Committed</TableHead>
-                <TableHead className="text-right">Pending</TableHead>
-                <TableHead className="text-right">Remaining</TableHead>
-                <TableHead className="text-right">Proposed</TableHead>
-                <TableHead className="text-right">Rem. if Applied</TableHead>
+                <TableHead>Grant (Grant Call)</TableHead>
+                <TableHead className="text-right">Included (added to pool)</TableHead>
+                <TableHead className="text-right">Committed (approved spend)</TableHead>
+                <TableHead className="text-right">Pending (not yet committed)</TableHead>
+                <TableHead className="text-right">Remaining (incl - committed - pending)</TableHead>
+                <TableHead className="text-right">Proposed (this upload)</TableHead>
+                <TableHead className="text-right">Remainder If Applied (after proposal)</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>

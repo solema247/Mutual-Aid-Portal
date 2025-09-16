@@ -298,17 +298,32 @@ export default function DirectUpload() {
       // Prepare data for DB
       const { form_currency, exchange_rate, raw_ocr, _selected_state_name, _selected_grant_call_id, _yymm, _existing_serial, ...dataForDB } = editedData
 
+      // Normalize date for DB (MMYY -> YYYY-MM-01)
+      let dbDate: string | null = null
+      if (typeof dataForDB.date === 'string') {
+        const val = dataForDB.date
+        if (/^\d{4}$/.test(val)) {
+          const mm = val.slice(0, 2)
+          const yy = val.slice(2, 4)
+          dbDate = `20${yy}-${mm}-01`
+        } else if (/^\d{4}-\d{2}-\d{2}$/.test(val)) {
+          dbDate = val
+        }
+      }
+
       const { error: insertError } = await supabase
         .from('err_projects')
         .insert([{
           ...dataForDB,
+          date: dbDate,
           expenses: expensesForDB,
           donor_id: donor.id,
           project_id: formData.project_id,
           emergency_room_id: formData.emergency_room_id,
           err_id: selectedRoom?.err_code || null,
           grant_id: grant_id,
-          grant_serial_id: grant_id,
+          grant_serial: grantSerialId,
+          grant_serial_id: grantSerialId,
           workplan_number: parseInt(workplan_number),
           status: 'pending',
           source: 'mutual_aid_portal',
@@ -342,6 +357,9 @@ export default function DirectUpload() {
 
       alert('Form uploaded successfully!')
       // Reset
+      try {
+        window.dispatchEvent(new CustomEvent('pool-refresh'))
+      } catch {}
       setFormData({
         donor_id: '',
         state_id: '',
