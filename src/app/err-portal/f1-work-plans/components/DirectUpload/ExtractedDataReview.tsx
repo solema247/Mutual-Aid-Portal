@@ -72,7 +72,28 @@ export default function ExtractedDataReview({
   const [stateName, setStateName] = useState<string>(data.state || '')
   const [grantOptions, setGrantOptions] = useState<{ grant_call_id: string; grant_call_name: string; donor_name: string; remaining: number }[]>([])
   const [grantCallId, setGrantCallId] = useState<string>('')
-  const [yymm, setYymm] = useState<string>(data.date || '')
+  const deriveMMYY = (value?: string | null) => {
+    try {
+      if (!value) return ''
+      // From full date YYYY-MM-DD → MMYY
+      if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+        const mm = value.slice(5, 7)
+        const yy = value.slice(2, 4)
+        return `${mm}${yy}`
+      }
+      // Already MMYY
+      if (/^\d{4}$/.test(value)) return value
+      return ''
+    } catch { return '' }
+  }
+  const [yymm, setYymm] = useState<string>(deriveMMYY(data.date))
+  const [stateRemaining, setStateRemaining] = useState<number>(0)
+  const [grantRemainingForState, setGrantRemainingForState] = useState<number>(0)
+  const [donorShort, setDonorShort] = useState<string>('')
+  const [stateShort, setStateShort] = useState<string>('')
+  const [existingSerials, setExistingSerials] = useState<string[]>([])
+  const [selectedSerial, setSelectedSerial] = useState<string>('new')
+  const [nextWorkplanPreview, setNextWorkplanPreview] = useState<string>('')
 
   // Load pooled state balances
   useEffect(() => {
@@ -109,8 +130,105 @@ export default function ExtractedDataReview({
     loadGrants()
   }, [stateName])
 
+  // Load remaining caps and preview parts (donorShort/stateShort)
+  useEffect(() => {
+    const loadCapsAndPreview = async () => {
+      try {
+        // State remaining
+        if (stateName) {
+          const stRes = await fetch('/api/pool/by-state')
+          const stRows = await stRes.json()
+          const stRow = (Array.isArray(stRows) ? stRows : []).find((r: any) => r.state_name === stateName)
+          setStateRemaining(stRow ? (stRow.remaining || 0) : 0)
+          // state short
+          const { data: stShort } = await supabase
+            .from('states')
+            .select('state_short')
+            .eq('state_name', stateName)
+            .limit(1)
+          setStateShort((stShort as any)?.[0]?.state_short || '')
+        } else {
+          setStateRemaining(0)
+          setStateShort('')
+        }
+        // Grant remaining for this state and donor short
+        if (stateName && grantCallId) {
+          const grRes = await fetch(`/api/pool/by-grant-for-state?state=${encodeURIComponent(stateName)}`)
+          const grRows = await grRes.json()
+          const grRow = (Array.isArray(grRows) ? grRows : []).find((r: any) => r.grant_call_id === grantCallId)
+          setGrantRemainingForState(grRow ? (grRow.remaining_for_state || 0) : 0)
+          const { data: gc } = await supabase
+            .from('grant_calls')
+            .select('donor_id')
+            .eq('id', grantCallId)
+            .single()
+          if (gc?.donor_id) {
+            const { data: dn } = await supabase
+              .from('donors')
+              .select('short_name')
+              .eq('id', gc.donor_id)
+              .single()
+            setDonorShort((dn as any)?.short_name || '')
+          } else {
+            setDonorShort('')
+          }
+          // Load existing serials for selection when MMYY length is 4
+          if (yymm && /^\d{4}$/.test(yymm)) {
+            const { data: serialRows } = await supabase
+              .from('grant_serials')
+              .select('grant_serial')
+              .eq('grant_call_id', grantCallId)
+              .eq('state_name', stateName)
+              .eq('yymm', yymm)
+            setExistingSerials((serialRows as any[])?.map(r => r.grant_serial) || [])
+          } else {
+            setExistingSerials([])
+          }
+        } else {
+          setGrantRemainingForState(0)
+          setDonorShort('')
+          setExistingSerials([])
+        }
+      } catch (e) {
+        setStateRemaining(0)
+        setGrantRemainingForState(0)
+        setDonorShort('')
+        setStateShort('')
+        setExistingSerials([])
+      }
+    }
+    loadCapsAndPreview()
+  }, [stateName, grantCallId, yymm])
+
+  // Preview next workplan number for an existing serial
+  useEffect(() => {
+    const loadNextWorkplan = async () => {
+      try {
+        if (selectedSerial !== 'new') {
+          const { data, error } = await supabase
+            .from('grant_workplan_seq')
+            .select('last_workplan_number')
+            .eq('grant_serial', selectedSerial)
+            .single()
+          if (!error && data) {
+            const next = (data.last_workplan_number || 0) + 1
+            setNextWorkplanPreview(String(next).padStart(3, '0'))
+          } else {
+            setNextWorkplanPreview('')
+          }
+        } else {
+          setNextWorkplanPreview('')
+        }
+      } catch {
+        setNextWorkplanPreview('')
+      }
+    }
+    loadNextWorkplan()
+  }, [selectedSerial])
+
   const [editedData, setEditedData] = useState<ExtractedData>({
     ...data,
+    date: deriveMMYY(data.date),
     planned_activities: Array.isArray(data.planned_activities) ? data.planned_activities : [],
     expenses: Array.isArray(data.expenses) ? data.expenses.map(exp => ({
       activity: exp.activity || '',
@@ -137,7 +255,7 @@ export default function ExtractedDataReview({
   const handleInputChange = (field: keyof ExtractedData, value: any) => {
     setEditedData(prev => ({
       ...prev,
-      [field]: value
+      [field]: field === 'date' ? String(value).replace(/[^0-9]/g, '').slice(0, 4) : value
     }))
   }
 
@@ -180,11 +298,15 @@ export default function ExtractedDataReview({
       // attach pooled metadata for parent to use
       _selected_state_name: stateName,
       _selected_grant_call_id: grantCallId,
-      _yymm: yymm
+      _yymm: yymm,
+      _existing_serial: selectedSerial !== 'new' ? selectedSerial : ''
     } as any)
   }
 
-  const availableAmount = (allocationInfo?.amount ?? Number.POSITIVE_INFINITY) - (allocationInfo?.amountUsed ?? 0)
+  const availableAmount = Math.min(
+    stateRemaining || 0,
+    grantRemainingForState || 0
+  )
   const totalAmountCalc = calculateTotalExpenses()
   const isOverBudget = totalAmountCalc > availableAmount
 
@@ -229,7 +351,7 @@ export default function ExtractedDataReview({
           </div>
           <div>
             <Label>YYMM</Label>
-            <Input value={yymm} onChange={(e) => setYymm(e.target.value)} placeholder="0925" maxLength={4} />
+            <Input value={yymm} onChange={(e) => setYymm(e.target.value.replace(/[^0-9]/g, '').slice(0, 4))} placeholder="0825" maxLength={4} />
           </div>
         </div>
         {/* Simple Allocation Summary */}
@@ -237,11 +359,11 @@ export default function ExtractedDataReview({
           <div className="grid grid-cols-3 gap-4">
             <div>
               <Label>State</Label>
-              <div className="text-lg font-medium">{allocationInfo?.stateName || '-'}</div>
+              <div className="text-lg font-medium">{stateName || '-'}</div>
             </div>
             <div>
               <Label>{t('fsystem:review.fields.available_amount')}</Label>
-              <div className="text-lg font-medium">{((allocationInfo?.amount ?? 0) - (allocationInfo?.amountUsed ?? 0)).toLocaleString()}</div>
+              <div className="text-lg font-medium">{availableAmount.toLocaleString()}</div>
             </div>
             <div>
               <Label>{t('fsystem:review.fields.f1_amount')}</Label>
@@ -255,13 +377,40 @@ export default function ExtractedDataReview({
           </div>
         </div>
 
+        {/* Serial Select (existing or create new) */}
+        <div>
+          <Label>Assign to Serial</Label>
+          <Select value={selectedSerial} onValueChange={setSelectedSerial}>
+            <SelectTrigger>
+              <SelectValue placeholder="Select or create serial" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="new">Create new serial for {yymm || 'MMYY'}</SelectItem>
+              {existingSerials.map(s => (
+                <SelectItem key={s} value={s}>{s}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        {/* Serial Preview */}
+        <div className="mb-2">
+          <Label>Generated Form Serial (preview)</Label>
+          <div className="p-2 bg-muted rounded-md font-mono">
+            {selectedSerial !== 'new'
+              ? `${selectedSerial}-${nextWorkplanPreview || '___'}`
+              : (donorShort && stateShort && yymm ? `LCC-${donorShort}-${stateShort.toUpperCase()}-${yymm}-XXX` : '-')}
+          </div>
+        </div>
+
         {/* Basic Information */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
-            <Label>{t('fsystem:review.fields.date')}</Label>
+            <Label>{t('fsystem:review.fields.date')} (MMYY)</Label>
             <Input
               value={editedData.date || ''}
               onChange={(e) => handleInputChange('date', e.target.value)}
+              placeholder="0825"
+              maxLength={4}
             />
           </div>
 

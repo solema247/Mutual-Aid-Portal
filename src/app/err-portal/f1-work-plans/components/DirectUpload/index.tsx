@@ -226,15 +226,20 @@ export default function DirectUpload() {
         throw new Error(`Amount exceeds remaining for selected grant. Remaining: ${(grantRow.remaining_for_state || 0).toLocaleString()}`)
       }
 
-      // Create grant serial in pooled mode
-      const serialResp = await fetch('/api/fsystem/grant-serials/create', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ grant_call_id: grantCallId, state_name: stateName, yymm })
-      })
-      if (!serialResp.ok) throw new Error('Failed to create grant serial')
-      const newSerial = await serialResp.json()
-      const grantSerialId: string = newSerial.grant_serial
+      // Use existing serial if provided, otherwise create new
+      let grantSerialId: string
+      if (editedData._existing_serial) {
+        grantSerialId = editedData._existing_serial
+      } else {
+        const serialResp = await fetch('/api/fsystem/grant-serials/create', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ grant_call_id: grantCallId, state_name: stateName, yymm })
+        })
+        if (!serialResp.ok) throw new Error('Failed to create grant serial')
+        const newSerial = await serialResp.json()
+        grantSerialId = newSerial.grant_serial
+      }
 
       // Commit workplan number
       const commitResp = await fetch('/api/fsystem/workplans/commit', {
@@ -291,7 +296,7 @@ export default function DirectUpload() {
       const selectedRoom = (rooms as any[]).find(r => r.id === formData.emergency_room_id)
 
       // Prepare data for DB
-      const { form_currency, exchange_rate, raw_ocr, _selected_state_name, _selected_grant_call_id, _yymm, ...dataForDB } = editedData
+      const { form_currency, exchange_rate, raw_ocr, _selected_state_name, _selected_grant_call_id, _yymm, _existing_serial, ...dataForDB } = editedData
 
       const { error: insertError } = await supabase
         .from('err_projects')
