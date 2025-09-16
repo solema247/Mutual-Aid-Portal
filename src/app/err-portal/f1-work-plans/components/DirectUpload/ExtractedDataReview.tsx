@@ -318,11 +318,11 @@ export default function ExtractedDataReview({
       </CardHeader>
       <CardContent className="space-y-6">
         {/* Pooled selections */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div>
             <Label>State (pooled)</Label>
             <Select value={stateName} onValueChange={setStateName}>
-              <SelectTrigger>
+              <SelectTrigger className="w-full">
                 <SelectValue placeholder="Select State" />
               </SelectTrigger>
               <SelectContent>
@@ -337,7 +337,7 @@ export default function ExtractedDataReview({
           <div>
             <Label>Grant Call</Label>
             <Select value={grantCallId} onValueChange={setGrantCallId}>
-              <SelectTrigger>
+              <SelectTrigger className="w-full">
                 <SelectValue placeholder="Select Grant Call" />
               </SelectTrigger>
               <SelectContent>
@@ -360,9 +360,9 @@ export default function ExtractedDataReview({
             <Input value={yymm} onChange={(e) => setYymm(e.target.value.replace(/[^0-9]/g, '').slice(0, 4))} placeholder="0825" maxLength={4} />
           </div>
         </div>
-        {/* Simple Allocation Summary */}
+        {/* Simple Allocation Summary + Serial selection */}
         <div className="mb-6">
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div>
               <Label>State</Label>
               <div className="text-lg font-medium">{stateName || '-'}</div>
@@ -380,23 +380,21 @@ export default function ExtractedDataReview({
                 {totalAmountCalc.toLocaleString()}
               </div>
             </div>
+            <div>
+              <Label>Assign to Serial</Label>
+              <Select value={selectedSerial} onValueChange={setSelectedSerial}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select or create serial" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="new">Create new serial for {yymm || 'MMYY'}</SelectItem>
+                  {existingSerials.map(s => (
+                    <SelectItem key={s} value={s}>{s}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
-        </div>
-
-        {/* Serial Select (existing or create new) */}
-        <div>
-          <Label>Assign to Serial</Label>
-          <Select value={selectedSerial} onValueChange={setSelectedSerial}>
-            <SelectTrigger>
-              <SelectValue placeholder="Select or create serial" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="new">Create new serial for {yymm || 'MMYY'}</SelectItem>
-              {existingSerials.map(s => (
-                <SelectItem key={s} value={s}>{s}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
         </div>
         {/* Serial Preview */}
         <div className="mb-2">
