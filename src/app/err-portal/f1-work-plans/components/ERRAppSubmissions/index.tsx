@@ -63,6 +63,9 @@ export default function ERRAppSubmissions() {
   const [grantOptions, setGrantOptions] = useState<{ grant_call_id: string; grant_call_name: string; donor_name: string; remaining: number }[]>([])
   const [selectedGrantCallId, setSelectedGrantCallId] = useState<string>('')
   const [isAssigningGrant, setIsAssigningGrant] = useState<boolean>(false)
+  const [inlineGrantChoice, setInlineGrantChoice] = useState<Record<string, string>>({})
+  const [stagedAssignments, setStagedAssignments] = useState<Record<string, string>>({})
+  const [selectedRows, setSelectedRows] = useState<Record<string, boolean>>({})
 
   const filterProjectsByStatus = useCallback(() => {
     let filteredProjects: F1Project[] = []
@@ -492,6 +495,71 @@ export default function ERRAppSubmissions() {
     }
   }
 
+  // Inline pre-assign per project
+  const handleInlineGrantChange = (project: F1Project, grantCallId: string) => {
+    setInlineGrantChoice(prev => ({ ...prev, [project.id]: grantCallId }))
+    // emit proposal for dashboard overlays based on this project's amount
+    try {
+      const expenses = typeof (project as any).expenses === 'string' ? JSON.parse((project as any).expenses) : (project as any).expenses
+      const amount = (expenses || []).reduce((s: number, e: any) => s + (e.total_cost || 0), 0)
+      window.dispatchEvent(new CustomEvent('f1-proposal', { detail: { state: project.state, grant_call_id: grantCallId, amount } }))
+    } catch {}
+  }
+
+  // Stage (no DB write)
+  const handleStage = (project: F1Project) => {
+    const grantCallId = inlineGrantChoice[project.id]
+    if (!grantCallId) return
+    setStagedAssignments(prev => ({ ...prev, [project.id]: grantCallId }))
+    setSelectedRows(prev => ({ ...prev, [project.id]: true }))
+  }
+
+  // Confirm Allocation: batch pre-assign for selected staged projects
+  const handleConfirmAllocation = async () => {
+    const entries = Object.entries(stagedAssignments).filter(([pid]) => selectedRows[pid])
+    if (entries.length === 0) return
+    try {
+      setIsAssigningGrant(true)
+      for (const [projectId, grantCallId] of entries) {
+        const resp = await fetch('/api/f1/pre-assign', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ workplan_id: projectId, grant_call_id: grantCallId })
+        })
+        const body = await resp.json().catch(() => ({}))
+        if (!resp.ok) {
+          const msg = body?.error || 'Failed to assign to grant call'
+          alert(`${msg}${body?.remaining !== undefined ? ` (Remaining: ${body.remaining.toLocaleString()})` : ''}`)
+          // continue others
+        } else {
+          // clear overlay for this item
+          try {
+            const proj = projects.find(p => p.id === projectId)
+            const expenses = proj ? (typeof (proj as any).expenses === 'string' ? JSON.parse((proj as any).expenses) : (proj as any).expenses) : []
+            const amount = (expenses || []).reduce((s: number, e: any) => s + (e.total_cost || 0), 0)
+            window.dispatchEvent(new CustomEvent('f1-proposal', { detail: { state: proj?.state, grant_call_id: grantCallId, amount: 0 } }))
+          } catch {}
+        }
+      }
+      await fetchAllProjects()
+      try { window.dispatchEvent(new CustomEvent('pool-refresh')) } catch {}
+      // Clear staged selection for confirmed rows
+      setSelectedRows(prev => {
+        const copy = { ...prev }
+        for (const [pid] of entries) delete copy[pid]
+        return copy
+      })
+      setStagedAssignments(prev => {
+        const copy = { ...prev }
+        for (const [pid] of entries) delete copy[pid]
+        return copy
+      })
+      alert('Allocation confirmed for selected projects.')
+    } finally {
+      setIsAssigningGrant(false)
+    }
+  }
+
   if (loading) {
     return <div className="text-center">{t('common:loading')}</div>
   }
@@ -536,6 +604,12 @@ export default function ERRAppSubmissions() {
                 <Table>
                   <TableHeader>
                     <TableRow>
+                      {currentStatus === 'assignment' && <TableHead><input type="checkbox" className="h-4 w-4" onChange={(e) => {
+                        const checked = e.target.checked
+                        const next: Record<string, boolean> = {}
+                        projects.forEach(p => { if (stagedAssignments[p.id]) next[p.id] = checked })
+                        setSelectedRows(next)
+                      }} /></TableHead>}
                       <TableHead>{t('projects:err_id')}</TableHead>
                       <TableHead>{t('projects:date')}</TableHead>
                       <TableHead>{t('projects:location')}</TableHead>
@@ -548,6 +622,13 @@ export default function ERRAppSubmissions() {
                   <TableBody>
                     {projects.map((project) => (
                       <TableRow key={project.id}>
+                        {currentStatus === 'assignment' && (
+                          <TableCell>
+                            {stagedAssignments[project.id] ? (
+                              <input type="checkbox" className="h-4 w-4" checked={!!selectedRows[project.id]} onChange={(e) => setSelectedRows(prev => ({ ...prev, [project.id]: e.target.checked }))} />
+                            ) : null}
+                          </TableCell>
+                        )}
                         <TableCell>{project.emergency_rooms?.err_code || project.err_id || '-'}</TableCell>
                         <TableCell>{formatDate(project.date)}</TableCell>
                         <TableCell>{`${project.state}, ${project.locality}`}</TableCell>
@@ -556,25 +637,30 @@ export default function ERRAppSubmissions() {
                         <TableCell>{t(`projects:status.${project.funding_status}`)}</TableCell>
                         <TableCell>
                           {currentStatus === 'assignment' ? (
-                            <div className="flex gap-2">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleProjectClick(project)}
-                              >
-                                {t('common:view')}
-                              </Button>
-                              <Button
-                                variant="default"
-                                size="sm"
-                                onClick={() => {
-                                  setSelectedProject(project)
-                                  setSelectedTab('assignment')
-                                  setIsDialogOpen(true)
-                                }}
-                              >
-                                {t('projects:assign_grant')}
-                              </Button>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-2 items-center">
+                              <div className="md:col-span-2">
+                                <label className="block text-xs font-medium mb-1">Grant Call (Remaining)</label>
+                                <select
+                                  value={inlineGrantChoice[project.id] || ''}
+                                  onChange={(e) => handleInlineGrantChange(project, e.target.value)}
+                                  className="w-full p-2 border rounded-md"
+                                >
+                                  <option value="">Select a grant call…</option>
+                                  {grantOptions.map(opt => (
+                                    <option key={opt.grant_call_id} value={opt.grant_call_id}>
+                                      {opt.donor_name} — {opt.grant_call_name} (Remaining: {opt.remaining.toLocaleString()})
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+                              <div>
+                                <Button className="w-full" disabled={!inlineGrantChoice[project.id]} onClick={() => handleStage(project)}>
+                                  Stage
+                                </Button>
+                              </div>
+                              {stagedAssignments[project.id] && (
+                                <div className="col-span-3 text-xs text-muted-foreground">Staged to: {stagedAssignments[project.id]}</div>
+                              )}
                             </div>
                           ) : (
                             <Button
@@ -591,6 +677,14 @@ export default function ERRAppSubmissions() {
                 </Table>
               )}
             </CardContent>
+            {currentStatus === 'assignment' && (
+              <div className="p-4 flex items-center justify-end gap-2">
+                <Button variant="outline" onClick={() => { setStagedAssignments({}); setSelectedRows({}); try { window.dispatchEvent(new CustomEvent('f1-proposal', { detail: { amount: 0 } })) } catch {} }}>Clear Staging</Button>
+                <Button onClick={handleConfirmAllocation} disabled={isAssigningGrant || Object.keys(selectedRows).filter(k => selectedRows[k]).length === 0}>
+                  {isAssigningGrant ? t('common:loading') : 'Confirm Allocation'}
+                </Button>
+              </div>
+            )}
           </Card>
         </TabsContent>
       </Tabs>

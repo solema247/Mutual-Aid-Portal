@@ -61,10 +61,10 @@ export async function POST(req: Request) {
 
     if (gcErr) throw gcErr
 
-    // Update workplan with grant_call_id and donor_id (keep status allocated)
+    // Update workplan with grant_call_id and donor_id and set funding_status to allocated
     const { error: updErr } = await supabase
       .from('err_projects')
-      .update({ grant_call_id, donor_id: grantCall?.donor_id || null })
+      .update({ grant_call_id, donor_id: grantCall?.donor_id || null, funding_status: 'allocated' })
       .eq('id', workplan_id)
 
     if (updErr) throw updErr
