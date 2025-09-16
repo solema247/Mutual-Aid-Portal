@@ -83,7 +83,7 @@ export default function ERRAppSubmissions() {
       case 'assignment':
         filteredProjects = allProjects.filter(p => 
           p.status === 'approved' && 
-          (!p.grant_serial_id || p.funding_status === 'unassigned')
+          (p.funding_status?.toLowerCase?.() === 'unassigned')
         )
         break
       case 'declined':
@@ -569,24 +569,40 @@ export default function ERRAppSubmissions() {
       <Tabs defaultValue="new" className="w-full" onValueChange={(value) => setCurrentStatus(value as ProjectStatus)}>
         <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="new">
-            {t('projects:status_new')} ({allProjects.filter(p => ['new', 'pending'].includes(p.status)).length})
+            New Projects ({allProjects.filter(p => ['new', 'pending'].includes(p.status)).length})
           </TabsTrigger>
           <TabsTrigger value="feedback">
-            {t('projects:status_feedback')} ({allProjects.filter(p => 
+            Feedback Required ({allProjects.filter(p => 
               p.status === 'feedback' || 
               (p.status === 'draft' && p.current_feedback_id !== null)
             ).length})
           </TabsTrigger>
+          <TabsTrigger value="declined">
+            Declined Projects ({allProjects.filter(p => p.status === 'declined').length})
+          </TabsTrigger>
           <TabsTrigger value="assignment">
-            {t('projects:status_assignment')} ({allProjects.filter(p => 
+            Project Assignment ({allProjects.filter(p => 
               p.status === 'approved' && 
               (!p.grant_serial_id || p.funding_status === 'unassigned')
             ).length})
           </TabsTrigger>
-          <TabsTrigger value="declined">
-            {t('projects:status_declined')} ({allProjects.filter(p => p.status === 'declined').length})
-          </TabsTrigger>
         </TabsList>
+
+        {/* Tab descriptions */}
+        <div className="text-sm text-muted-foreground mt-3">
+          {currentStatus === 'new' && (
+            <span>Initial vetting: review new F1 submissions before requesting changes or approving.</span>
+          )}
+          {currentStatus === 'feedback' && (
+            <span>Projects needing changes: review responses and approve or request further edits.</span>
+          )}
+          {currentStatus === 'declined' && (
+            <span>Declined submissions: archived for record; no further action required.</span>
+          )}
+          {currentStatus === 'assignment' && (
+            <span>Assign approved projects to a Grant Call. Stage allocations to preview pool impact, then Confirm Allocation to apply. Allocated projects proceed to the F2 workflow for confirm/reassign/commit.</span>
+          )}
+        </div>
 
         <TabsContent value={currentStatus}>
           <Card>
