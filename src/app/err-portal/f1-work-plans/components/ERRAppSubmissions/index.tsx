@@ -60,6 +60,9 @@ export default function ERRAppSubmissions() {
   const [selectedFundingCycle, setSelectedFundingCycle] = useState<string>('')
   const [selectedGrantSerial, setSelectedGrantSerial] = useState<string>('')
   const [isCreatingSerial, setIsCreatingSerial] = useState<boolean>(false)
+  const [grantOptions, setGrantOptions] = useState<{ grant_call_id: string; grant_call_name: string; donor_name: string; remaining: number }[]>([])
+  const [selectedGrantCallId, setSelectedGrantCallId] = useState<string>('')
+  const [isAssigningGrant, setIsAssigningGrant] = useState<boolean>(false)
 
   const filterProjectsByStatus = useCallback(() => {
     let filteredProjects: F1Project[] = []
@@ -122,6 +125,29 @@ export default function ERRAppSubmissions() {
       setGrantSerials([])
     }
   }, [selectedFundingCycle])
+
+  // Fetch pooled grant options with remaining for pre-assignment
+  useEffect(() => {
+    const loadGrants = async () => {
+      try {
+        const res = await fetch('/api/pool/by-donor')
+        const data = await res.json()
+        const rows = Array.isArray(data) ? data : []
+        const options = rows
+          .filter((r: any) => (r.remaining || 0) > 0)
+          .map((r: any) => ({
+            grant_call_id: r.grant_call_id,
+            grant_call_name: r.grant_call_name || r.grant_call_id,
+            donor_name: r.donor_name || '-',
+            remaining: r.remaining || 0
+          }))
+        setGrantOptions(options)
+      } catch (e) {
+        console.error('Error loading grant options:', e)
+      }
+    }
+    loadGrants()
+  }, [])
 
   // When opening a project in Assignment tab, preselect the project's funding cycle
   useEffect(() => {
@@ -441,6 +467,31 @@ export default function ERRAppSubmissions() {
     setIsDialogOpen(true)
   }
 
+  const handlePreAssignGrant = async () => {
+    if (!selectedProject || !selectedGrantCallId) return
+    try {
+      setIsAssigningGrant(true)
+      const resp = await fetch('/api/f1/pre-assign', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ workplan_id: selectedProject.id, grant_call_id: selectedGrantCallId })
+      })
+      const body = await resp.json()
+      if (!resp.ok) {
+        const msg = body?.error || 'Failed to assign to grant call'
+        alert(`${msg}${body?.remaining !== undefined ? ` (Remaining: ${body.remaining.toLocaleString()})` : ''}`)
+        return
+      }
+      await fetchAllProjects()
+      alert('Assigned to grant call successfully.')
+    } catch (e) {
+      console.error('Pre-assign error:', e)
+      alert('Error assigning to grant call.')
+    } finally {
+      setIsAssigningGrant(false)
+    }
+  }
+
   if (loading) {
     return <div className="text-center">{t('common:loading')}</div>
   }
@@ -595,6 +646,35 @@ export default function ERRAppSubmissions() {
 
               <TabsContent value="assignment" className="py-6">
                 <div className="space-y-6">
+                  <div>
+                    <h3 className="text-lg font-semibold mb-4">Assign to Grant Call</h3>
+                    <p className="text-sm text-muted-foreground mb-4">
+                      Select a grant call with sufficient remaining to pre-assign this ERR App submission.
+                    </p>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
+                      <div className="md:col-span-2">
+                        <label className="block text-sm font-medium mb-2">Grant Call (Remaining)</label>
+                        <select
+                          value={selectedGrantCallId}
+                          onChange={(e) => setSelectedGrantCallId(e.target.value)}
+                          className="w-full p-2 border rounded-md"
+                        >
+                          <option value="">Select a grant call…</option>
+                          {grantOptions.map(opt => (
+                            <option key={opt.grant_call_id} value={opt.grant_call_id}>
+                              {opt.donor_name} — {opt.grant_call_name} (Remaining: {opt.remaining.toLocaleString()})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <Button className="w-full" disabled={!selectedGrantCallId || isAssigningGrant} onClick={handlePreAssignGrant}>
+                          {isAssigningGrant ? t('common:loading') : 'Assign to Grant'}
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+
                   <div>
                     <h3 className="text-lg font-semibold mb-4">{t('projects:assign_grant_serial')}</h3>
                     <p className="text-sm text-muted-foreground mb-4">

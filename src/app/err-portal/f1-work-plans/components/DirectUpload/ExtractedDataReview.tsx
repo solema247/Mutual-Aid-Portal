@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
@@ -9,6 +9,8 @@ import { Button } from '@/components/ui/button'
 import { useTranslation } from 'react-i18next'
 import { Plus } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { supabase } from '@/lib/supabaseClient'
 
 interface AllocationInfo {
   amount: number;
@@ -51,7 +53,7 @@ interface ExtractedDataReviewProps {
   data: ExtractedData;
   onConfirm: (editedData: ExtractedData) => void;
   onCancel: () => void;
-  allocationInfo: AllocationInfo;
+  allocationInfo?: AllocationInfo;
   onValidationError?: (message: string) => void;
 }
 
@@ -65,6 +67,48 @@ export default function ExtractedDataReview({
 }: ExtractedDataReviewProps) {
   const { t } = useTranslation(['common', 'fsystem'])
   const [isSubmitting, setIsSubmitting] = useState(false)
+  // Pooled selections to be made here (State, Grant Call, YYMM)
+  const [pooledStates, setPooledStates] = useState<{ state_name: string; remaining: number }[]>([])
+  const [stateName, setStateName] = useState<string>(data.state || '')
+  const [grantOptions, setGrantOptions] = useState<{ grant_call_id: string; grant_call_name: string; donor_name: string; remaining: number }[]>([])
+  const [grantCallId, setGrantCallId] = useState<string>('')
+  const [yymm, setYymm] = useState<string>(data.date || '')
+
+  // Load pooled state balances
+  useEffect(() => {
+    const loadStates = async () => {
+      try {
+        const res = await fetch('/api/pool/by-state')
+        const rows = await res.json()
+        setPooledStates(Array.isArray(rows) ? rows.map((r: any) => ({ state_name: r.state_name, remaining: r.remaining })) : [])
+      } catch (e) {
+        console.error('load states error', e)
+      }
+    }
+    loadStates()
+  }, [])
+
+  // Load grants filtered by state
+  useEffect(() => {
+    const loadGrants = async () => {
+      if (!stateName) { setGrantOptions([]); setGrantCallId(''); return }
+      try {
+        const res = await fetch(`/api/pool/by-grant-for-state?state=${encodeURIComponent(stateName)}`)
+        const rows = await res.json()
+        const options = (Array.isArray(rows) ? rows : []).map((r: any) => ({
+          grant_call_id: r.grant_call_id,
+          grant_call_name: r.grant_call_name || r.grant_call_id,
+          donor_name: r.donor_name || '-',
+          remaining: r.remaining_for_state || 0
+        })).filter(o => o.remaining > 0)
+        setGrantOptions(options)
+      } catch (e) {
+        console.error('load grants error', e)
+      }
+    }
+    loadGrants()
+  }, [stateName])
+
   const [editedData, setEditedData] = useState<ExtractedData>({
     ...data,
     planned_activities: Array.isArray(data.planned_activities) ? data.planned_activities : [],
@@ -75,6 +119,15 @@ export default function ExtractedDataReview({
       currency: exp.currency || 'USD'
     })) : []
   })
+
+  // Proposed amount for live preview
+  const totalAmount = useMemo(() => editedData.expenses.reduce((s, e) => s + (e.total_cost_usd || 0), 0), [editedData.expenses])
+
+  useEffect(() => {
+    try {
+      window.dispatchEvent(new CustomEvent('f1-proposal', { detail: { state: stateName, grant_call_id: grantCallId, amount: totalAmount } }))
+    } catch {}
+  }, [stateName, grantCallId, totalAmount])
 
   // Calculate total expenses
   const calculateTotalExpenses = () => {
@@ -97,7 +150,7 @@ export default function ExtractedDataReview({
     
     // Calculate new total
     const newTotal = newExpenses.reduce((sum, exp) => sum + (exp.total_cost_usd || 0), 0)
-    const availableAmount = allocationInfo.amount - allocationInfo.amountUsed
+    const availableAmount = (allocationInfo?.amount ?? Number.POSITIVE_INFINITY) - (allocationInfo?.amountUsed ?? 0)
     
     // Validate against remaining allocation
     if (newTotal > availableAmount) {
@@ -114,21 +167,26 @@ export default function ExtractedDataReview({
   }
 
   const handleConfirm = () => {
-    const totalExpenses = calculateTotalExpenses()
-    const availableAmount = allocationInfo.amount - allocationInfo.amountUsed
-    
-    if (totalExpenses > availableAmount) {
-      alert(t('fsystem:review.errors.cannot_exceed_allocation'))
+    // Basic pooled validations
+    if (!stateName || !grantCallId || !yymm) {
+      alert('Please select State, Grant Call and enter YYMM')
       return
     }
-    
+    // Note: remaining per state/grant already filtered; optional extra checks could be added here
     setIsSubmitting(true)
-    onConfirm(editedData)
+    // Send pooled selections back in the editedData payload (namespaced fields)
+    onConfirm({
+      ...editedData,
+      // attach pooled metadata for parent to use
+      _selected_state_name: stateName,
+      _selected_grant_call_id: grantCallId,
+      _yymm: yymm
+    } as any)
   }
 
-  const availableAmount = allocationInfo.amount - allocationInfo.amountUsed
-  const totalAmount = calculateTotalExpenses()
-  const isOverBudget = totalAmount > availableAmount
+  const availableAmount = (allocationInfo?.amount ?? Number.POSITIVE_INFINITY) - (allocationInfo?.amountUsed ?? 0)
+  const totalAmountCalc = calculateTotalExpenses()
+  const isOverBudget = totalAmountCalc > availableAmount
 
   return (
     <Card>
@@ -137,16 +195,53 @@ export default function ExtractedDataReview({
         <CardDescription>{t('fsystem:review.description')}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
+        {/* Pooled selections */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <Label>State (pooled)</Label>
+            <Select value={stateName} onValueChange={setStateName}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select State" />
+              </SelectTrigger>
+              <SelectContent>
+                {pooledStates.map(s => (
+                  <SelectItem key={s.state_name} value={s.state_name}>
+                    {s.state_name} (Rem: {s.remaining.toLocaleString()})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label>Grant Call</Label>
+            <Select value={grantCallId} onValueChange={setGrantCallId}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select Grant Call" />
+              </SelectTrigger>
+              <SelectContent>
+                {grantOptions.map(g => (
+                  <SelectItem key={g.grant_call_id} value={g.grant_call_id}>
+                    {g.donor_name} — {g.grant_call_name} (Rem: {g.remaining.toLocaleString()})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label>YYMM</Label>
+            <Input value={yymm} onChange={(e) => setYymm(e.target.value)} placeholder="0925" maxLength={4} />
+          </div>
+        </div>
         {/* Simple Allocation Summary */}
         <div className="mb-6">
           <div className="grid grid-cols-3 gap-4">
             <div>
               <Label>State</Label>
-              <div className="text-lg font-medium">{allocationInfo.stateName}</div>
+              <div className="text-lg font-medium">{allocationInfo?.stateName || '-'}</div>
             </div>
             <div>
               <Label>{t('fsystem:review.fields.available_amount')}</Label>
-              <div className="text-lg font-medium">{(allocationInfo.amount - allocationInfo.amountUsed).toLocaleString()}</div>
+              <div className="text-lg font-medium">{((allocationInfo?.amount ?? 0) - (allocationInfo?.amountUsed ?? 0)).toLocaleString()}</div>
             </div>
             <div>
               <Label>{t('fsystem:review.fields.f1_amount')}</Label>
@@ -154,7 +249,7 @@ export default function ExtractedDataReview({
                 "text-lg font-medium",
                 isOverBudget && "text-destructive"
               )}>
-                {totalAmount.toLocaleString()}
+                {totalAmountCalc.toLocaleString()}
               </div>
             </div>
           </div>

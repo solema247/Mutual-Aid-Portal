@@ -6,6 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import ERRAppSubmissions from './components/ERRAppSubmissions'
 import DirectUpload from './components/DirectUpload'
+import PoolDashboard from './components/PoolDashboard'
 
 export default function F1WorkPlansPage() {
   const { t } = useTranslation(['f1_plans', 'common'])
@@ -16,6 +17,16 @@ export default function F1WorkPlansPage() {
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-semibold">{t('f1_plans:title')}</h2>
       </div>
+
+      {/* Pool Dashboard */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Pool Overview</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <PoolDashboard />
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

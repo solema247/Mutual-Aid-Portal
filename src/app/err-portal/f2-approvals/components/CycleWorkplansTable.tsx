@@ -410,10 +410,11 @@ export default function CycleWorkplansTable({
                         variant="ghost"
                         size="icon"
                         onClick={() => onAssignToGrantCall(workplan.id)}
-                        title="Assign to Grant Call"
+                        title={workplan.grant_call_id ? t('f2:reassign') : t('f2:assign_to_grant')}
                         className={cn(
                           !workplan.grant_call_id && "bg-orange-100 hover:bg-orange-200"
                         )}
+                        aria-label={workplan.grant_call_id ? t('f2:reassign') : t('f2:assign_to_grant')}
                       >
                         <Link className="h-4 w-4" />
                       </Button>
