@@ -372,7 +372,7 @@ export default function UncommittedF1sTab() {
                           onClick={() => { setEditorProjectId(f1.id); setEditorOpen(true) }}
                         >
                           <Edit2 className="w-3 h-3 mr-1" />
-                          {t('f2:edit_project')}
+                          {t('projects:edit_project')}
                         </Button>
                       </div>
                     )}

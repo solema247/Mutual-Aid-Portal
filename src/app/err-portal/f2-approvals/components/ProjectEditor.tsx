@@ -174,17 +174,17 @@ export default function ProjectEditor({ open, onOpenChange, projectId, onSaved }
                 </div>
               </div>
               <div>
-                <Label>{t('projects:reporting_officer') || 'Reporting Officer'}</Label>
+                <Label>{t('projects:reporting_officer', { defaultValue: 'Reporting Officer' })}</Label>
                 <div className="grid grid-cols-2 gap-2">
                   <Input placeholder={t('common:name') || 'Name'} value={form.reporting_officer_name || ''} onChange={(e) => updateField('reporting_officer_name', e.target.value)} />
-                  <Input placeholder={t('common:phone') || 'Phone'} value={form.reporting_officer_phone || ''} onChange={(e) => updateField('reporting_officer_phone', e.target.value)} />
+                  <Input placeholder={t('projects:phone', { defaultValue: t('common:phone') || 'Phone' })} value={form.reporting_officer_phone || ''} onChange={(e) => updateField('reporting_officer_phone', e.target.value)} />
                 </div>
               </div>
               <div>
-                <Label>{t('projects:finance_officer') || 'Finance Officer'}</Label>
+                <Label>{t('projects:finance_officer', { defaultValue: 'Finance Officer' })}</Label>
                 <div className="grid grid-cols-2 gap-2">
                   <Input placeholder={t('common:name') || 'Name'} value={form.finance_officer_name || ''} onChange={(e) => updateField('finance_officer_name', e.target.value)} />
-                  <Input placeholder={t('common:phone') || 'Phone'} value={form.finance_officer_phone || ''} onChange={(e) => updateField('finance_officer_phone', e.target.value)} />
+                  <Input placeholder={t('projects:phone', { defaultValue: t('common:phone') || 'Phone' })} value={form.finance_officer_phone || ''} onChange={(e) => updateField('finance_officer_phone', e.target.value)} />
                 </div>
               </div>
             </div>
@@ -224,7 +224,7 @@ export default function ProjectEditor({ open, onOpenChange, projectId, onSaved }
             </div>
 
             <div className="flex justify-end gap-3">
-              <Button variant="outline" onClick={() => onOpenChange(false)}>{t('projects:cancel') || t('common:cancel')}</Button>
+              <Button variant="outline" onClick={() => onOpenChange(false)}>{t('projects:cancel', { defaultValue: t('common:cancel') || 'Cancel' })}</Button>
               <Button onClick={save} disabled={saving}>{saving ? (t('common:saving') || 'Saving…') : t('projects:save_changes')}</Button>
             </div>
           </div>
