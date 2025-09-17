@@ -74,9 +74,12 @@ export default function GrantsPage() {
   const [donors, setDonors] = useState<Donor[]>([])
   const [grants, setGrants] = useState<GrantCall[]>([])
   const [statusFilter, setStatusFilter] = useState<'all' | 'open' | 'closed'>('all')
+  const [currentDonorId, setCurrentDonorId] = useState<string>('')
+  const [isAdminPartner, setIsAdminPartner] = useState<boolean>(false)
   const [isLoading, setIsLoading] = useState(true)
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [isTableOpen, setIsTableOpen] = useState(true)
+  const [currentDonorName, setCurrentDonorName] = useState<string>('')
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
@@ -91,18 +94,83 @@ export default function GrantsPage() {
     },
   })
 
-  // Fetch donors and grants
+  // On mount, detect the logged-in donor from localStorage (partner portal)
+  useEffect(() => {
+    (async () => {
+      try {
+        const stored = localStorage.getItem('donor')
+        if (!stored) return
+        const parsed = JSON.parse(stored)
+        // Try multiple shapes commonly stored for partner logins
+        let detectedId: string | undefined = parsed?.donor_id || parsed?.id || parsed?.donors?.id
+        const detectedName: string | undefined = parsed?.name || parsed?.donors?.name
+        const detectedShort: string | undefined = parsed?.short_name || parsed?.donors?.short_name
+        if (detectedName) setCurrentDonorName(detectedName)
+
+        // Provisional admin detection from possible shapes in localStorage
+        const flatShort = parsed?.short_name
+        const flatName = parsed?.name
+        const nestedShort = parsed?.donors?.short_name
+        const nestedName = parsed?.donors?.name
+        const adminLocal = (
+          flatShort === 'Admin' || nestedShort === 'Admin' ||
+          flatName === 'Admin Partner' || nestedName === 'Admin Partner' ||
+          parsed?.id === 'a39daa94-5339-4850-82e2-3ad5301b0f26'
+        )
+        setIsAdminPartner(!!adminLocal)
+
+        // If we still don't have an id, resolve by name or short_name
+        if (!detectedId && (nestedName || flatName)) {
+          const { data } = await supabase
+            .from('donors')
+            .select('id')
+            .eq('name', nestedName || flatName)
+            .single()
+          if (data?.id) detectedId = data.id
+        }
+        if (!detectedId && detectedShort) {
+          const { data } = await supabase
+            .from('donors')
+            .select('id')
+            .eq('short_name', detectedShort)
+            .single()
+          if (data?.id) detectedId = data.id
+        }
+
+        if (detectedId) setCurrentDonorId(detectedId)
+      } catch {}
+    })()
+  }, [])
+
+  // NOTE: Avoid extra donor lookup to prevent 406s under restrictive RLS; rely on localStorage detection only
+
+  // Keep donor_id in form synced for non-admin users so submit payload is correct
+  useEffect(() => {
+    if (!isAdminPartner && currentDonorId) {
+      const existing = form.getValues('donor_id')
+      if (!existing) {
+        form.setValue('donor_id', currentDonorId, { shouldValidate: true, shouldDirty: true })
+      }
+    }
+  }, [isAdminPartner, currentDonorId])
+
+  // Fetch donors (admin only) and grants
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // Fetch donors
-        const { data: donorsData, error: donorsError } = await supabase
-          .from('donors')
-          .select('id, name, short_name')
-          .eq('status', 'active')
-
-        if (donorsError) throw donorsError
-        setDonors(donorsData || [])
+        // Fetch donors only for Admin Partner so they can choose any donor
+        if (isAdminPartner) {
+          const { data: donorsData, error: donorsError } = await supabase
+            .from('donors')
+            .select('id, name, short_name')
+            .eq('status', 'active')
+            .order('name', { ascending: true })
+          if (donorsError) throw donorsError
+          setDonors(donorsData || [])
+        } else {
+          // Non-admin: skip donors fetch to avoid RLS 406; we show a read-only donor field from localStorage
+          setDonors([])
+        }
 
         // Fetch grants
         await fetchGrants()
@@ -115,11 +183,15 @@ export default function GrantsPage() {
     }
 
     fetchData()
-  }, [t])
+  }, [t, currentDonorId, statusFilter, isAdminPartner])
 
   const fetchGrants = async () => {
     try {
-      const query = supabase
+      // For non-admin users, wait until we know the donor id
+      if (!isAdminPartner && !currentDonorId) {
+        return
+      }
+      let query = supabase
         .from('grant_calls')
         .select(`
           id,
@@ -141,11 +213,15 @@ export default function GrantsPage() {
         query.eq('status', statusFilter)
       }
 
+      if (!isAdminPartner && currentDonorId) {
+        query = query.eq('donor_id', currentDonorId)
+      }
+
       const { data, error } = await query
       if (error) throw error
       
       // Ensure the data matches the GrantCall interface
-      const typedData: GrantCall[] = (data || []).map((item: any) => ({
+      let typedData: GrantCall[] = (data || []).map((item: any) => ({
         id: item.id,
         name: item.name,
         shortname: item.shortname,
@@ -159,6 +235,10 @@ export default function GrantsPage() {
           short_name: item.donor.short_name
         }
       }))
+      // Extra safety: client-side filter for non-admin
+      if (!isAdminPartner && currentDonorId) {
+        typedData = typedData.filter(g => g.donor.id === currentDonorId)
+      }
       
       setGrants(typedData)
     } catch (error) {
@@ -169,8 +249,15 @@ export default function GrantsPage() {
 
   const onSubmit = async (values: FormData) => {
     try {
+      // Ensure donor_id is present for non-admin partners
+      const donorIdFinal = isAdminPartner ? values.donor_id : (values.donor_id || currentDonorId)
+      if (!donorIdFinal) {
+        window.alert(t('common:error_fetching_data'))
+        return
+      }
       const submissionData = {
         ...values,
+        donor_id: donorIdFinal,
         amount: values.amount ? parseFloat(values.amount) : null
       }
 
@@ -252,13 +339,17 @@ export default function GrantsPage() {
               <Form {...form}>
                 <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {isAdminPartner ? (
                     <FormField
                       control={form.control}
                       name="donor_id"
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>{t('partner:grants.form.donor')}</FormLabel>
-                          <Select onValueChange={field.onChange} value={field.value}>
+                          <Select
+                            onValueChange={field.onChange}
+                            value={field.value || ''}
+                          >
                             <FormControl>
                               <SelectTrigger>
                                 <SelectValue placeholder={t('partner:grants.form.select_donor')} />
@@ -276,6 +367,23 @@ export default function GrantsPage() {
                         </FormItem>
                       )}
                     />
+                  ) : (
+                    <>
+                      <FormField
+                        control={form.control}
+                        name="donor_id"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>{t('partner:grants.form.donor')}</FormLabel>
+                            <Input value={currentDonorName || '—'} readOnly />
+                            {/* Keep donor_id in the form model */}
+                            <input type="hidden" value={currentDonorId} onChange={() => {}} />
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </>
+                  )}
 
                     <FormField
                       control={form.control}
