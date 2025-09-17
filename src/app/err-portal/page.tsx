@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
-import { Users, BarChart2, FileText, ClipboardList, PieChart, UserCog, CheckSquare } from 'lucide-react'
+import { Users, BarChart2, FileText, ClipboardList, PieChart, UserCog, CheckSquare, LogOut } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 import '@/i18n/config'
 
@@ -214,7 +214,7 @@ export default function ErrPortalPage() {
         >
           <Card className="h-full hover:bg-muted/50 transition-colors">
             <CardHeader className="h-full flex flex-col justify-center items-center text-center">
-              <span className="text-4xl mb-4">🚪</span>
+              <LogOut className="h-8 w-8 mb-4" />
               <CardTitle className="text-xl">
                 {t('common:logout')}
               </CardTitle>
