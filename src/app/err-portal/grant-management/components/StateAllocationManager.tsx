@@ -221,7 +221,7 @@ export default function StateAllocationManager({ cycleId, onAllocationsChanged }
   }
 
   if (isLoading) {
-    return <div className="text-center py-4">Loading...</div>
+    return <div className="text-center py-4">{t('common:loading')}</div>
   }
 
   return (
@@ -229,7 +229,7 @@ export default function StateAllocationManager({ cycleId, onAllocationsChanged }
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-semibold flex items-center gap-2">
           <MapPin className="h-5 w-5" />
-          State Allocations
+          {t('err:cycles.alloc.title')}
         </h3>
           <div className="flex items-center gap-2">
             <Button
@@ -238,7 +238,7 @@ export default function StateAllocationManager({ cycleId, onAllocationsChanged }
               size="sm"
             >
               <Plus className="h-4 w-4 mr-2" />
-              Add State
+              {t('err:cycles.alloc.add_state')}
             </Button>
             {newAllocations.length > 0 && (
               <Button
@@ -248,7 +248,7 @@ export default function StateAllocationManager({ cycleId, onAllocationsChanged }
                 size="sm"
               >
                 <Save className="h-4 w-4 mr-2" />
-                {isSubmitting ? 'Saving...' : 'Save Changes'}
+                {isSubmitting ? t('err:cycles.alloc.saving') : t('err:cycles.alloc.save_changes')}
               </Button>
             )}
           </div>
@@ -256,15 +256,15 @@ export default function StateAllocationManager({ cycleId, onAllocationsChanged }
           {/* Summary */}
           <div className="grid grid-cols-3 gap-4 p-4 bg-muted rounded-lg">
             <div className="text-center">
-              <div className="text-sm text-muted-foreground">Total Allocated</div>
+              <div className="text-sm text-muted-foreground">{t('err:cycles.alloc.total_allocated')}</div>
               <div className="text-lg font-bold">{formatCurrency(getTotalAllocated())}</div>
             </div>
             <div className="text-center">
-              <div className="text-sm text-muted-foreground">Total Committed</div>
+              <div className="text-sm text-muted-foreground">{t('err:cycles.alloc.total_committed')}</div>
               <div className="text-lg font-bold text-green-600">{formatCurrency(getTotalCommitted())}</div>
             </div>
             <div className="text-center">
-              <div className="text-sm text-muted-foreground">Total Pending</div>
+              <div className="text-sm text-muted-foreground">{t('err:cycles.alloc.total_pending')}</div>
               <div className="text-lg font-bold text-orange-600">{formatCurrency(getTotalPending())}</div>
             </div>
           </div>
@@ -272,12 +272,12 @@ export default function StateAllocationManager({ cycleId, onAllocationsChanged }
           {/* New Allocations */}
           {newAllocations.length > 0 && (
             <div className="space-y-4">
-              <h4 className="font-medium text-sm text-muted-foreground">New Allocations</h4>
+              <h4 className="font-medium text-sm text-muted-foreground">{t('err:cycles.alloc.new_allocations')}</h4>
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>State</TableHead>
-                    <TableHead className="text-right">Amount</TableHead>
+                    <TableHead>{t('err:cycles.alloc.headers.state')}</TableHead>
+                    <TableHead className="text-right">{t('err:cycles.alloc.headers.amount')}</TableHead>
                     <TableHead className="w-[50px]"></TableHead>
                   </TableRow>
                 </TableHeader>
@@ -290,7 +290,7 @@ export default function StateAllocationManager({ cycleId, onAllocationsChanged }
                           onValueChange={(value) => handleAllocationChange(index, 'state_name', value)}
                         >
                           <SelectTrigger>
-                            <SelectValue placeholder="Select state" />
+                            <SelectValue placeholder={t('err:cycles.alloc.select_state')} />
                           </SelectTrigger>
                           <SelectContent>
                             {states.map((state) => (
@@ -337,16 +337,16 @@ export default function StateAllocationManager({ cycleId, onAllocationsChanged }
           {/* Existing Allocations */}
           {allocations.length > 0 && (
             <div className="space-y-4">
-              <h4 className="font-medium text-sm text-muted-foreground">Current Allocations</h4>
+              <h4 className="font-medium text-sm text-muted-foreground">{t('err:cycles.alloc.current_allocations')}</h4>
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>State</TableHead>
-                    <TableHead className="text-right">Allocated</TableHead>
-                    <TableHead className="text-right">Committed</TableHead>
-                    <TableHead className="text-right">Pending</TableHead>
-                    <TableHead className="text-right">Remaining</TableHead>
-                    <TableHead className="w-[100px]">Actions</TableHead>
+                    <TableHead>{t('err:cycles.alloc.headers.state')}</TableHead>
+                    <TableHead className="text-right">{t('err:cycles.alloc.headers.allocated')}</TableHead>
+                    <TableHead className="text-right">{t('err:cycles.alloc.headers.committed')}</TableHead>
+                    <TableHead className="text-right">{t('err:cycles.alloc.headers.pending')}</TableHead>
+                    <TableHead className="text-right">{t('err:cycles.alloc.headers.remaining')}</TableHead>
+                    <TableHead className="w-[100px]">{t('err:cycles.alloc.headers.actions')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -423,7 +423,7 @@ export default function StateAllocationManager({ cycleId, onAllocationsChanged }
                                 onClick={() => handleDeleteAllocation(allocation.id, allocation.state_name)}
                                 disabled={isSubmitting || (allocation.total_committed || 0) > 0}
                                 className="h-8 w-8 text-destructive hover:text-destructive/80"
-                                title={(allocation.total_committed || 0) > 0 ? "Cannot delete allocation with committed projects" : "Delete allocation"}
+                                title={(allocation.total_committed || 0) > 0 ? t('err:cycles.alloc.cannot_delete_committed') : t('err:cycles.alloc.delete_allocation')}
                               >
                                 <Trash2 className="h-4 w-4" />
                               </Button>
@@ -439,9 +439,7 @@ export default function StateAllocationManager({ cycleId, onAllocationsChanged }
           )}
 
           {allocations.length === 0 && newAllocations.length === 0 && (
-            <div className="text-center py-8 text-muted-foreground">
-              No state allocations yet. Add states to get started.
-            </div>
+            <div className="text-center py-8 text-muted-foreground">{t('err:cycles.alloc.empty_state')}</div>
           )}
     </div>
   )

@@ -131,7 +131,7 @@ export default function CycleManager() {
   }
 
   const handleCloseCycle = async (cycleId: string) => {
-    if (!confirm('Are you sure you want to close this cycle?')) {
+    if (!confirm(t('err:cycles.confirm_close'))) {
       return
     }
 
@@ -161,7 +161,7 @@ export default function CycleManager() {
   }
 
   const handleReopenCycle = async (cycleId: string) => {
-    if (!confirm('Are you sure you want to reopen this cycle? This will allow new allocations and modifications.')) {
+    if (!confirm(t('err:cycles.confirm_reopen'))) {
       return
     }
 
@@ -200,7 +200,7 @@ export default function CycleManager() {
             : 'bg-gray-100 text-gray-700 hover:bg-gray-100'
         )}
       >
-        {status === 'open' ? 'Open' : 'Closed'}
+        {status === 'open' ? t('err:cycles.status_open') : t('err:cycles.status_closed')}
       </Badge>
     )
   }
@@ -215,23 +215,23 @@ export default function CycleManager() {
   }
 
   if (isLoading) {
-    return <div className="text-center py-8">Loading...</div>
+    return <div className="text-center py-8">{t('common:loading')}</div>
   }
 
   return (
     <div className="max-w-7xl mx-auto p-6 space-y-8">
       <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-semibold">Funding Cycle Management</h2>
+        <h2 className="text-2xl font-semibold">{t('err:cycles.title')}</h2>
         <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
           <DialogTrigger asChild>
             <Button className="bg-[#007229] hover:bg-[#007229]/90 text-white">
               <Plus className="h-4 w-4 mr-2" />
-              Create New Cycle
+              {t('err:cycles.create_new')}
             </Button>
           </DialogTrigger>
           <DialogContent className="sm:max-w-[600px]">
             <DialogHeader>
-              <DialogTitle>Create New Funding Cycle</DialogTitle>
+              <DialogTitle>{t('err:cycles.create_dialog_title')}</DialogTitle>
             </DialogHeader>
             <CycleCreationForm onSuccess={handleCycleCreated} />
           </DialogContent>
@@ -243,18 +243,18 @@ export default function CycleManager() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Calendar className="h-5 w-5" />
-            Funding Cycles
+            {t('err:cycles.table_title')}
           </CardTitle>
         </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Cycle</TableHead>
-                <TableHead>Year</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Period</TableHead>
-                <TableHead>Actions</TableHead>
+                <TableHead>{t('err:cycles.headers.cycle')}</TableHead>
+                <TableHead>{t('err:cycles.headers.year')}</TableHead>
+                <TableHead>{t('err:cycles.headers.status')}</TableHead>
+                <TableHead>{t('err:cycles.headers.period')}</TableHead>
+                <TableHead>{t('err:cycles.headers.actions')}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -271,7 +271,7 @@ export default function CycleManager() {
                     <div>
                       <div className="font-medium">{cycle.name}</div>
                       <div className="text-sm text-muted-foreground">
-                        Cycle #{cycle.cycle_number}
+                        {t('err:cycles.cycle_number', { num: cycle.cycle_number })}
                       </div>
                     </div>
                   </TableCell>
@@ -282,11 +282,11 @@ export default function CycleManager() {
                       <div className="text-sm">
                         <div>{new Date(cycle.start_date).toLocaleDateString()}</div>
                         <div className="text-muted-foreground">
-                          to {new Date(cycle.end_date).toLocaleDateString()}
+                          {t('err:cycles.to')} {new Date(cycle.end_date).toLocaleDateString()}
                         </div>
                       </div>
                     ) : (
-                      <span className="text-muted-foreground">No dates set</span>
+                      <span className="text-muted-foreground">{t('err:cycles.no_dates')}</span>
                     )}
                   </TableCell>
                   <TableCell>
@@ -299,7 +299,7 @@ export default function CycleManager() {
                           handleCycleSelect(cycle)
                         }}
                       >
-                        {selectedCycle?.id === cycle.id ? 'Selected' : 'Select'}
+                        {selectedCycle?.id === cycle.id ? t('err:cycles.selected') : t('err:cycles.select')}
                       </Button>
                       {cycle.status === 'open' ? (
                         <Button
@@ -310,7 +310,7 @@ export default function CycleManager() {
                             handleCloseCycle(cycle.id)
                           }}
                         >
-                          Close
+                          {t('err:cycles.close')}
                         </Button>
                       ) : (
                         <Button
@@ -322,7 +322,7 @@ export default function CycleManager() {
                           }}
                           className="bg-green-600 hover:bg-green-700 text-white"
                         >
-                          Reopen
+                          {t('err:cycles.reopen')}
                         </Button>
                       )}
                     </div>
@@ -341,7 +341,7 @@ export default function CycleManager() {
             <CardTitle className="flex items-center justify-between">
               <span className="flex items-center gap-2">
                 <TrendingUp className="h-5 w-5" />
-                Cycle Details - {selectedCycle.name}
+                {t('err:cycles.details')} - {selectedCycle.name}
               </span>
               {selectedCycle.status === 'open' ? (
                 <Button
@@ -349,7 +349,7 @@ export default function CycleManager() {
                   size="sm"
                   onClick={() => handleCloseCycle(selectedCycle.id)}
                 >
-                  Close Cycle
+                  {t('err:cycles.close_cycle')}
                 </Button>
               ) : (
                 <Button
@@ -358,7 +358,7 @@ export default function CycleManager() {
                   onClick={() => handleReopenCycle(selectedCycle.id)}
                   className="bg-green-600 hover:bg-green-700 text-white"
                 >
-                  Reopen Cycle
+                  {t('err:cycles.reopen_cycle')}
                 </Button>
               )}
             </CardTitle>
@@ -366,29 +366,29 @@ export default function CycleManager() {
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
               <div className="space-y-2">
-                <div className="text-sm font-medium text-muted-foreground">Cycle Number</div>
+                <div className="text-sm font-medium text-muted-foreground">{t('err:cycles.detail_labels.cycle_number')}</div>
                 <div className="text-2xl font-bold">#{selectedCycle.cycle_number}</div>
               </div>
               <div className="space-y-2">
-                <div className="text-sm font-medium text-muted-foreground">Year</div>
+                <div className="text-sm font-medium text-muted-foreground">{t('err:cycles.detail_labels.year')}</div>
                 <div className="text-2xl font-bold">{selectedCycle.year}</div>
               </div>
               <div className="space-y-2">
-                <div className="text-sm font-medium text-muted-foreground">Status</div>
+                <div className="text-sm font-medium text-muted-foreground">{t('err:cycles.detail_labels.status')}</div>
                 <div className="text-2xl">{getStatusBadge(selectedCycle.status)}</div>
               </div>
               <div className="space-y-2">
-                <div className="text-sm font-medium text-muted-foreground">Period</div>
+                <div className="text-sm font-medium text-muted-foreground">{t('err:cycles.detail_labels.period')}</div>
                 <div className="text-sm">
                   {selectedCycle.start_date && selectedCycle.end_date ? (
                     <>
                       <div>{new Date(selectedCycle.start_date).toLocaleDateString()}</div>
                       <div className="text-muted-foreground">
-                        to {new Date(selectedCycle.end_date).toLocaleDateString()}
+                        {t('err:cycles.to')} {new Date(selectedCycle.end_date).toLocaleDateString()}
                       </div>
                     </>
                   ) : (
-                    <span className="text-muted-foreground">No dates set</span>
+                    <span className="text-muted-foreground">{t('err:cycles.no_dates')}</span>
                   )}
                 </div>
               </div>
@@ -403,7 +403,7 @@ export default function CycleManager() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <DollarSign className="h-5 w-5" />
-              Budget Summary
+              {t('err:cycles.budget_summary')}
             </CardTitle>
           </CardHeader>
           <CardContent>

@@ -53,7 +53,7 @@ export default function CycleBudgetDashboard({
     <div className="space-y-4">
       {/* Budget Summary Header with Refresh Button */}
       <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold">Budget Summary</h3>
+        <h3 className="text-lg font-semibold">{t('err:cycles.budget.title')}</h3>
         {onRefresh && (
           <Button
             variant="outline"
@@ -63,7 +63,7 @@ export default function CycleBudgetDashboard({
             className="flex items-center gap-2"
           >
             <RefreshCw className={cn("h-4 w-4", isRefreshing && "animate-spin")} />
-            {isRefreshing ? 'Refreshing...' : 'Refresh'}
+            {isRefreshing ? t('err:cycles.budget.refreshing') : t('err:cycles.budget.refresh')}
           </Button>
         )}
       </div>
@@ -74,7 +74,7 @@ export default function CycleBudgetDashboard({
         <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
           <div className="flex items-center gap-2">
             <DollarSign className="h-4 w-4 text-blue-600" />
-            <span className="font-medium text-blue-900">Total Available</span>
+            <span className="font-medium text-blue-900">{t('err:cycles.budget.total_available')}</span>
           </div>
           <span className="text-lg font-bold text-blue-900">
             {formatCurrency(budgetSummary.total_available)}
@@ -85,7 +85,7 @@ export default function CycleBudgetDashboard({
         <div className="flex items-center justify-between p-3 bg-amber-50 rounded-lg">
           <div className="flex items-center gap-2">
             <TrendingUp className="h-4 w-4 text-amber-600" />
-            <span className="font-medium text-amber-900">Total Allocated</span>
+            <span className="font-medium text-amber-900">{t('err:cycles.budget.total_allocated')}</span>
           </div>
           <span className="text-lg font-bold text-amber-900">
             {formatCurrency(budgetSummary.total_allocated)}
@@ -96,7 +96,7 @@ export default function CycleBudgetDashboard({
         <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg">
           <div className="flex items-center gap-2">
             <TrendingUp className="h-4 w-4 text-green-600" />
-            <span className="font-medium text-green-900">Total Committed</span>
+            <span className="font-medium text-green-900">{t('err:cycles.budget.total_committed')}</span>
           </div>
           <span className="text-lg font-bold text-green-900">
             {formatCurrency(budgetSummary.total_committed)}
@@ -107,7 +107,7 @@ export default function CycleBudgetDashboard({
         <div className="flex items-center justify-between p-3 bg-orange-50 rounded-lg">
           <div className="flex items-center gap-2">
             <TrendingUp className="h-4 w-4 text-orange-600" />
-            <span className="font-medium text-orange-900">Total Pending</span>
+            <span className="font-medium text-orange-900">{t('err:cycles.budget.total_pending')}</span>
           </div>
           <span className="text-lg font-bold text-orange-900">
             {formatCurrency(budgetSummary.total_pending)}
@@ -130,7 +130,7 @@ export default function CycleBudgetDashboard({
               "font-medium",
               budgetSummary.remaining >= 0 ? "text-green-900" : "text-red-900"
             )}>
-              Remaining
+              {t('err:cycles.budget.remaining')}
             </span>
           </div>
           <span className={cn(
@@ -146,7 +146,7 @@ export default function CycleBudgetDashboard({
           <div className="flex items-center justify-between p-3 bg-purple-50 rounded-lg">
             <div className="flex items-center gap-2">
               <TrendingUp className="h-4 w-4 text-purple-600" />
-              <span className="font-medium text-purple-900">Rollover from Previous</span>
+              <span className="font-medium text-purple-900">{t('err:cycles.budget.rollover_previous')}</span>
             </div>
             <span className="text-lg font-bold text-purple-900">
               {formatCurrency(budgetSummary.unused_from_previous)}
@@ -157,7 +157,7 @@ export default function CycleBudgetDashboard({
         {/* Utilization Progress */}
         <div className="space-y-2">
           <div className="flex justify-between text-sm">
-            <span className="text-muted-foreground">Utilization</span>
+            <span className="text-muted-foreground">{t('err:cycles.budget.utilization')}</span>
             <span className="font-medium">{getUtilizationPercentage()}%</span>
           </div>
           <div className="w-full bg-gray-200 rounded-full h-2">

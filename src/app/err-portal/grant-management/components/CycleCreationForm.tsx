@@ -168,9 +168,9 @@ export default function CycleCreationForm({ onSuccess }: CycleCreationFormProps)
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
         {/* Auto-generated Cycle Number Display */}
         <div className="p-4 bg-muted/20 rounded-lg">
-          <label className="text-sm font-medium text-muted-foreground">Cycle Number</label>
+          <label className="text-sm font-medium text-muted-foreground">{t('err:cycles.create.cycle_number')}</label>
           <div className="text-lg font-semibold">{nextCycleNumber}</div>
-          <div className="text-xs text-muted-foreground">Auto-generated</div>
+          <div className="text-xs text-muted-foreground">{t('err:cycles.create.auto_generated')}</div>
         </div>
 
         <div className="grid grid-cols-3 gap-4">
@@ -179,14 +179,14 @@ export default function CycleCreationForm({ onSuccess }: CycleCreationFormProps)
             name="year"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Year</FormLabel>
+                <FormLabel>{t('err:cycles.create.year')}</FormLabel>
                 <Select
                   value={field.value?.toString()}
                   onValueChange={(value) => field.onChange(parseInt(value))}
                 >
                   <FormControl>
                     <SelectTrigger>
-                      <SelectValue placeholder="Select year" />
+                      <SelectValue placeholder={t('err:cycles.create.select_year')} />
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
@@ -210,14 +210,14 @@ export default function CycleCreationForm({ onSuccess }: CycleCreationFormProps)
             name="month"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Month</FormLabel>
+                <FormLabel>{t('err:cycles.create.month')}</FormLabel>
                 <Select
                   value={field.value?.toString()}
                   onValueChange={(value) => field.onChange(parseInt(value))}
                 >
                   <FormControl>
                     <SelectTrigger>
-                      <SelectValue placeholder="Select month" />
+                      <SelectValue placeholder={t('err:cycles.create.select_month')} />
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
@@ -249,7 +249,7 @@ export default function CycleCreationForm({ onSuccess }: CycleCreationFormProps)
               
               return (
                 <FormItem>
-                  <FormLabel>Week</FormLabel>
+                <FormLabel>{t('err:cycles.create.week')}</FormLabel>
                   <Select
                     value={field.value?.toString()}
                     onValueChange={(value) => field.onChange(parseInt(value))}
@@ -258,9 +258,9 @@ export default function CycleCreationForm({ onSuccess }: CycleCreationFormProps)
                     <FormControl>
                       <SelectTrigger>
                         <SelectValue placeholder={
-                          !selectedYear ? "Select year first" : 
-                          !selectedMonth ? "Select month first" : 
-                          "Select week"
+                          !selectedYear ? t('err:cycles.create.select_year_first') : 
+                          !selectedMonth ? t('err:cycles.create.select_month_first') : 
+                          t('err:cycles.create.select_week')
                         } />
                       </SelectTrigger>
                     </FormControl>
@@ -284,17 +284,17 @@ export default function CycleCreationForm({ onSuccess }: CycleCreationFormProps)
           name="name"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Cycle Name</FormLabel>
+              <FormLabel>{t('err:cycles.create.cycle_name')}</FormLabel>
               <FormControl>
                 <Input 
-                  placeholder="e.g., WK38" 
+                  placeholder={t('err:cycles.create.cycle_name_placeholder') as string} 
                   {...field} 
                 />
               </FormControl>
               <FormMessage />
               {lastCycleName && (
                 <div className="text-xs text-muted-foreground">
-                  💡 Last cycle was named: "{lastCycleName}"
+                  {t('err:cycles.create.last_cycle_named', { name: lastCycleName })}
                 </div>
               )}
             </FormItem>
@@ -310,7 +310,7 @@ export default function CycleCreationForm({ onSuccess }: CycleCreationFormProps)
             disabled={isLoading}
           >
             <X className="h-4 w-4 mr-2" />
-            Reset
+            {t('err:cycles.create.reset')}
           </Button>
           <Button
             type="submit"
@@ -318,7 +318,7 @@ export default function CycleCreationForm({ onSuccess }: CycleCreationFormProps)
             className="bg-[#007229] hover:bg-[#007229]/90 text-white"
           >
             <Save className="h-4 w-4 mr-2" />
-            {isLoading ? 'Creating...' : 'Create Cycle'}
+            {isLoading ? t('err:cycles.create.creating') : t('err:cycles.create.create_button')}
           </Button>
         </div>
       </form>

@@ -24,6 +24,23 @@
   "f2_approvals_desc": "Review and approve F2 workplans, adjust commitments and reassign allocations",
   "grant_management": "Grant Management",
   "grant_management_desc": "Manage and allocate grant funds to states",
+  "gm": {
+    "total_included": "Total Included",
+    "total_included_desc": "Funds added to the pool across cycles",
+    "committed": "Committed",
+    "committed_desc": "Approved spend confirmed against grants",
+    "pending": "Pending",
+    "pending_desc": "Assigned but not yet committed (allocated)",
+    "remaining": "Remaining",
+    "remaining_desc": "Available = Included − Committed − Pending",
+    "submitted": "Submitted",
+    "submitted_desc": "ERR F1s submitted and still under vetting (status = pending)",
+    "approved_for_assignment": "Approved for grant assignment",
+    "approved_for_assignment_desc": "Approved by vetting and waiting to be assigned to a grant (status = approved, funding = unassigned)",
+    "assigned": "Assigned",
+    "assigned_desc": "Assigned to a grant call and pending commitment (funding = allocated)",
+    "committed_pipeline_desc": "Finalized spending committed against the pool (funding = committed)"
+  },
   "grants": {
     "title": "Grant Management",
     "select_grant": "Select Grant",
@@ -50,5 +67,111 @@
     "update_allocations": "Update Allocations",
     "updating": "Updating...",
     "select_grant_first": "Please select a grant first"
+  }
+  ,
+  "cycles": {
+    "title": "Funding Cycle Management",
+    "create_new": "Create New Cycle",
+    "create_dialog_title": "Create New Funding Cycle",
+    "table_title": "Funding Cycles",
+    "headers": {
+      "cycle": "Cycle",
+      "year": "Year",
+      "status": "Status",
+      "period": "Period",
+      "actions": "Actions"
+    },
+    "cycle_number": "Cycle #{{num}}",
+    "to": "to",
+    "no_dates": "No dates set",
+    "selected": "Selected",
+    "select": "Select",
+    "close": "Close",
+    "reopen": "Reopen",
+    "details": "Cycle Details",
+    "close_cycle": "Close Cycle",
+    "reopen_cycle": "Reopen Cycle",
+    "detail_labels": {
+      "cycle_number": "Cycle Number",
+      "year": "Year",
+      "status": "Status",
+      "period": "Period"
+    },
+    "budget_summary": "Budget Summary",
+    "budget": {
+      "title": "Budget Summary",
+      "refresh": "Refresh",
+      "refreshing": "Refreshing...",
+      "total_available": "Total Available",
+      "total_allocated": "Total Allocated",
+      "total_committed": "Total Committed",
+      "total_pending": "Total Pending",
+      "remaining": "Remaining",
+      "rollover_previous": "Rollover from Previous",
+      "utilization": "Utilization"
+    },
+    "pool": {
+      "title": "Grant Pool",
+      "add_grant": "Add Grant",
+      "add_grant_dialog": "Add Grant to Cycle",
+      "select_grant": "Select Grant",
+      "choose_grant_placeholder": "Choose a grant to include",
+      "amount_to_include": "Amount to Include",
+      "amount_placeholder": "Enter amount to include",
+      "total_pool": "Total Pool Size:",
+      "no_grants": "No grants included in this cycle yet.",
+      "headers": {
+        "grant": "Grant",
+        "donor": "Donor",
+        "amount_included": "Amount Included",
+        "actions": "Actions"
+      }
+    },
+    "alloc": {
+      "title": "State Allocations",
+      "add_state": "Add State",
+      "saving": "Saving...",
+      "save_changes": "Save Changes",
+      "total_allocated": "Total Allocated",
+      "total_committed": "Total Committed",
+      "total_pending": "Total Pending",
+      "new_allocations": "New Allocations",
+      "current_allocations": "Current Allocations",
+      "select_state": "Select state",
+      "headers": {
+        "state": "State",
+        "amount": "Amount",
+        "allocated": "Allocated",
+        "committed": "Committed",
+        "pending": "Pending",
+        "remaining": "Remaining",
+        "actions": "Actions"
+      },
+      "cannot_delete_committed": "Cannot delete allocation with committed projects",
+      "delete_allocation": "Delete allocation",
+      "empty_state": "No state allocations yet. Add states to get started."
+    },
+    "status_open": "Open",
+    "status_closed": "Closed",
+    "confirm_close": "Are you sure you want to close this cycle?",
+    "confirm_reopen": "Are you sure you want to reopen this cycle? This will allow new allocations and modifications.",
+    "create": {
+      "cycle_number": "Cycle Number",
+      "auto_generated": "Auto-generated",
+      "year": "Year",
+      "select_year": "Select year",
+      "month": "Month",
+      "select_month": "Select month",
+      "week": "Week",
+      "select_year_first": "Select year first",
+      "select_month_first": "Select month first",
+      "select_week": "Select week",
+      "cycle_name": "Cycle Name",
+      "cycle_name_placeholder": "e.g., WK38",
+      "last_cycle_named": "Last cycle was named: \"{{name}}\"",
+      "creating": "Creating...",
+      "create_button": "Create Cycle",
+      "reset": "Reset"
+    }
   }
 }

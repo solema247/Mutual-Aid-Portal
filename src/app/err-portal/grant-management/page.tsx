@@ -64,29 +64,29 @@ export default function GrantManagementPage() {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
           <CardHeader>
-            <CardTitle>Total Included</CardTitle>
-            <div className="text-xs text-muted-foreground">Funds added to the pool across cycles</div>
+            <CardTitle>{t('err:gm.total_included')}</CardTitle>
+            <div className="text-xs text-muted-foreground">{t('err:gm.total_included_desc')}</div>
           </CardHeader>
           <CardContent className="text-2xl font-bold">{summary ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(summary.total_available) : '—'}</CardContent>
         </Card>
         <Card>
           <CardHeader>
-            <CardTitle>Committed</CardTitle>
-            <div className="text-xs text-muted-foreground">Approved spend confirmed against grants</div>
+            <CardTitle>{t('err:gm.committed')}</CardTitle>
+            <div className="text-xs text-muted-foreground">{t('err:gm.committed_desc')}</div>
           </CardHeader>
           <CardContent className="text-2xl font-bold">{summary ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(summary.total_committed) : '—'}</CardContent>
         </Card>
         <Card>
           <CardHeader>
-            <CardTitle>Pending</CardTitle>
-            <div className="text-xs text-muted-foreground">Assigned but not yet committed (allocated)</div>
+            <CardTitle>{t('err:gm.pending')}</CardTitle>
+            <div className="text-xs text-muted-foreground">{t('err:gm.pending_desc')}</div>
           </CardHeader>
           <CardContent className="text-2xl font-bold">{summary ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(summary.total_pending) : '—'}</CardContent>
         </Card>
         <Card>
           <CardHeader>
-            <CardTitle>Remaining</CardTitle>
-            <div className="text-xs text-muted-foreground">Available = Included − Committed − Pending</div>
+            <CardTitle>{t('err:gm.remaining')}</CardTitle>
+            <div className="text-xs text-muted-foreground">{t('err:gm.remaining_desc')}</div>
           </CardHeader>
           <CardContent className={`text-2xl font-bold ${summary && summary.remaining >= 0 ? 'text-green-700' : 'text-red-700'}`}>{summary ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(summary.remaining) : '—'}</CardContent>
         </Card>
@@ -95,29 +95,29 @@ export default function GrantManagementPage() {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card className="cursor-pointer" onClick={() => router.push('/err-portal/f1-work-plans?err_sub=new')}>
           <CardHeader>
-            <CardTitle>Submitted</CardTitle>
-            <div className="text-xs text-muted-foreground">ERR F1s submitted and still under vetting (status = pending)</div>
+            <CardTitle>{t('err:gm.submitted')}</CardTitle>
+            <div className="text-xs text-muted-foreground">{t('err:gm.submitted_desc')}</div>
           </CardHeader>
           <CardContent className="text-2xl font-bold">{counts.vetting}</CardContent>
         </Card>
         <Card className="cursor-pointer" onClick={() => router.push('/err-portal/f1-work-plans?err_sub=assignment')}>
           <CardHeader>
-            <CardTitle>Approved for grant assignment</CardTitle>
-            <div className="text-xs text-muted-foreground">Approved by vetting and waiting to be assigned to a grant (status = approved, funding = unassigned)</div>
+            <CardTitle>{t('err:gm.approved_for_assignment')}</CardTitle>
+            <div className="text-xs text-muted-foreground">{t('err:gm.approved_for_assignment_desc')}</div>
           </CardHeader>
           <CardContent className="text-2xl font-bold">{counts.approved}</CardContent>
         </Card>
         <Card className="cursor-pointer" onClick={() => router.push('/err-portal/f2-approvals?tab=uncommitted')}>
           <CardHeader>
-            <CardTitle>Assigned</CardTitle>
-            <div className="text-xs text-muted-foreground">Assigned to a grant call and pending commitment (funding = allocated)</div>
+            <CardTitle>{t('err:gm.assigned')}</CardTitle>
+            <div className="text-xs text-muted-foreground">{t('err:gm.assigned_desc')}</div>
           </CardHeader>
           <CardContent className="text-2xl font-bold">{counts.allocated}</CardContent>
         </Card>
         <Card className="cursor-pointer" onClick={() => router.push('/err-portal/f2-approvals?tab=committed')}>
           <CardHeader>
-            <CardTitle>Committed</CardTitle>
-            <div className="text-xs text-muted-foreground">Finalized spending committed against the pool (funding = committed)</div>
+            <CardTitle>{t('err:gm.committed')}</CardTitle>
+            <div className="text-xs text-muted-foreground">{t('err:gm.committed_pipeline_desc')}</div>
           </CardHeader>
           <CardContent className="text-2xl font-bold">{counts.committed}</CardContent>
         </Card>

@@ -157,7 +157,7 @@ export default function GrantPoolSelector({ cycleId, onGrantsChanged }: GrantPoo
   }
 
   if (isLoading) {
-    return <div className="text-center py-4">Loading...</div>
+    return <div className="text-center py-4">{t('common:loading')}</div>
   }
 
   return (
@@ -165,25 +165,25 @@ export default function GrantPoolSelector({ cycleId, onGrantsChanged }: GrantPoo
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-semibold flex items-center gap-2">
           <Building2 className="h-5 w-5" />
-          Grant Pool
+          {t('err:cycles.pool.title')}
         </h3>
           <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
             <DialogTrigger asChild>
               <Button size="sm" className="bg-[#007229] hover:bg-[#007229]/90 text-white">
                 <Plus className="h-4 w-4 mr-2" />
-                Add Grant
+                {t('err:cycles.pool.add_grant')}
               </Button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-[500px]">
               <DialogHeader>
-                <DialogTitle>Add Grant to Cycle</DialogTitle>
+                <DialogTitle>{t('err:cycles.pool.add_grant_dialog')}</DialogTitle>
               </DialogHeader>
               <div className="space-y-4">
                 <div>
-                  <label className="text-sm font-medium">Select Grant</label>
+                  <label className="text-sm font-medium">{t('err:cycles.pool.select_grant')}</label>
                   <Select value={selectedGrant} onValueChange={setSelectedGrant}>
                     <SelectTrigger>
-                      <SelectValue placeholder="Choose a grant to include" />
+                      <SelectValue placeholder={t('err:cycles.pool.choose_grant_placeholder')} />
                     </SelectTrigger>
                     <SelectContent>
                       {getAvailableGrants().map((grant) => (
@@ -200,24 +200,24 @@ export default function GrantPoolSelector({ cycleId, onGrantsChanged }: GrantPoo
                   </Select>
                 </div>
                 <div>
-                  <label className="text-sm font-medium">Amount to Include</label>
+                  <label className="text-sm font-medium">{t('err:cycles.pool.amount_to_include')}</label>
                   <Input
                     type="number"
-                    placeholder="Enter amount to include"
+                    placeholder={t('err:cycles.pool.amount_placeholder') as string}
                     value={amountIncluded}
                     onChange={(e) => setAmountIncluded(e.target.value)}
                   />
                 </div>
                 <div className="flex justify-end gap-3">
                   <Button variant="outline" onClick={() => setIsAddOpen(false)}>
-                    Cancel
+                    {t('common:cancel')}
                   </Button>
                   <Button 
                     onClick={handleAddGrant}
                     disabled={!selectedGrant || !amountIncluded}
                     className="bg-[#007229] hover:bg-[#007229]/90 text-white"
                   >
-                    Add Grant
+                    {t('err:cycles.pool.add_grant')}
                   </Button>
                 </div>
               </div>
@@ -228,7 +228,7 @@ export default function GrantPoolSelector({ cycleId, onGrantsChanged }: GrantPoo
           <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
             <div className="flex items-center gap-2">
               <DollarSign className="h-4 w-4" />
-              <span className="font-medium">Total Pool Size:</span>
+              <span className="font-medium">{t('err:cycles.pool.total_pool')}</span>
             </div>
             <span className="text-lg font-bold">
               {formatCurrency(getTotalIncluded())}
@@ -238,16 +238,16 @@ export default function GrantPoolSelector({ cycleId, onGrantsChanged }: GrantPoo
           {/* Included Grants Table */}
           {includedGrants.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
-              No grants included in this cycle yet.
+              {t('err:cycles.pool.no_grants')}
             </div>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Grant</TableHead>
-                  <TableHead>Donor</TableHead>
-                  <TableHead className="text-right">Amount Included</TableHead>
-                  <TableHead className="w-[100px]">Actions</TableHead>
+                  <TableHead>{t('err:cycles.pool.headers.grant')}</TableHead>
+                  <TableHead>{t('err:cycles.pool.headers.donor')}</TableHead>
+                  <TableHead className="text-right">{t('err:cycles.pool.headers.amount_included')}</TableHead>
+                  <TableHead className="w-[100px]">{t('err:cycles.pool.headers.actions')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
