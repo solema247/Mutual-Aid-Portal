@@ -144,8 +144,10 @@ export default function UncommittedF1sTab() {
 
       if (!response.ok) throw new Error('Failed to reassign grant call')
 
-      // Refresh data
+      // Refresh data and update dashboard overlays
       await fetchUncommittedF1s()
+      try { window.dispatchEvent(new CustomEvent('pool-refresh')) } catch {}
+      try { window.dispatchEvent(new CustomEvent('f1-proposal', { detail: { state: undefined, grant_call_id: undefined, amount: 0 } })) } catch {}
       setEditingGrantCall(prev => ({ ...prev, [f1Id]: false }))
       delete tempGrantCall[f1Id]
     } catch (error) {
@@ -248,7 +250,13 @@ export default function UncommittedF1sTab() {
                       <div className="space-y-2">
                         <Select
                           value={tempGrantCall[f1.id] || ''}
-                          onValueChange={(value) => setTempGrantCall(prev => ({ ...prev, [f1.id]: value }))}
+                          onValueChange={(value) => {
+                            setTempGrantCall(prev => ({ ...prev, [f1.id]: value }))
+                            try {
+                              const amt = calculateTotalAmount(f1.expenses)
+                              window.dispatchEvent(new CustomEvent('f1-proposal', { detail: { state: f1.state, grant_call_id: value, amount: amt } }))
+                            } catch {}
+                          }}
                         >
                           <SelectTrigger className="w-48">
                             <SelectValue placeholder="Select Grant Call" />

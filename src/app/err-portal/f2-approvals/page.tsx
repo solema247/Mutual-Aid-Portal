@@ -87,7 +87,7 @@ export default function F2ApprovalsPage() {
           <CardTitle>Allocation Overview</CardTitle>
         </CardHeader>
         <CardContent>
-          <PoolDashboard showProposals={false} />
+          <PoolDashboard showProposals={currentTab === 'uncommitted'} />
         </CardContent>
       </Card>
 
