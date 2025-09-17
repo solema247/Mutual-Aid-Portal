@@ -596,8 +596,7 @@ export default function ERRAppSubmissions() {
           </TabsTrigger>
           <TabsTrigger value="assignment">
             {t('f1_plans:err_tabs.assignment')} ({allProjects.filter(p => 
-              p.status === 'approved' && 
-              (!p.grant_serial_id || p.funding_status === 'unassigned')
+              p.status === 'approved' && p.funding_status?.toLowerCase?.() === 'unassigned'
             ).length})
           </TabsTrigger>
         </TabsList>
