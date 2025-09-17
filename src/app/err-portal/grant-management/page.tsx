@@ -93,28 +93,28 @@ export default function GrantManagementPage() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
+        <Card className="cursor-pointer" onClick={() => router.push('/err-portal/f1-work-plans?err_sub=new')}>
           <CardHeader>
             <CardTitle>Submitted</CardTitle>
             <div className="text-xs text-muted-foreground">ERR F1s submitted and still under vetting (status = pending)</div>
           </CardHeader>
           <CardContent className="text-2xl font-bold">{counts.vetting}</CardContent>
         </Card>
-        <Card>
+        <Card className="cursor-pointer" onClick={() => router.push('/err-portal/f1-work-plans?err_sub=assignment')}>
           <CardHeader>
             <CardTitle>Approved for grant assignment</CardTitle>
             <div className="text-xs text-muted-foreground">Approved by vetting and waiting to be assigned to a grant (status = approved, funding = unassigned)</div>
           </CardHeader>
           <CardContent className="text-2xl font-bold">{counts.approved}</CardContent>
         </Card>
-        <Card>
+        <Card className="cursor-pointer" onClick={() => router.push('/err-portal/f2-approvals?tab=uncommitted')}>
           <CardHeader>
             <CardTitle>Assigned</CardTitle>
             <div className="text-xs text-muted-foreground">Assigned to a grant call and pending commitment (funding = allocated)</div>
           </CardHeader>
           <CardContent className="text-2xl font-bold">{counts.allocated}</CardContent>
         </Card>
-        <Card>
+        <Card className="cursor-pointer" onClick={() => router.push('/err-portal/f2-approvals?tab=committed')}>
           <CardHeader>
             <CardTitle>Committed</CardTitle>
             <div className="text-xs text-muted-foreground">Finalized spending committed against the pool (funding = committed)</div>
