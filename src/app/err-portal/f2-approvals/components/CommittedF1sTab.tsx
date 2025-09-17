@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -13,6 +14,7 @@ import { Search, Filter } from 'lucide-react'
 import type { CommittedF1, FilterOptions } from '../types'
 
 export default function CommittedF1sTab() {
+  const { t } = useTranslation(['f2', 'common'])
   const [f1s, setF1s] = useState<CommittedF1[]>([])
   const [filterOptions, setFilterOptions] = useState<FilterOptions>({
     grantCalls: [],
@@ -121,17 +123,15 @@ export default function CommittedF1sTab() {
   }
 
   if (isLoading) {
-    return <div className="text-center py-8">Loading committed F1s...</div>
+    return <div className="text-center py-8">{t('common:loading')}</div>
   }
 
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <div>
-          <h3 className="text-lg font-semibold">Committed F1s ({f1s.length})</h3>
-          <p className="text-sm text-muted-foreground">
-            View and filter committed F1s by grant call, donor, cycle, and state
-          </p>
+          <h3 className="text-lg font-semibold">{t('f2:committed_header', { count: f1s.length })}</h3>
+          <p className="text-sm text-muted-foreground">{t('f2:committed_desc')}</p>
         </div>
       </div>
 
@@ -140,17 +140,17 @@ export default function CommittedF1sTab() {
         <CardHeader>
           <CardTitle className="text-base flex items-center gap-2">
             <Filter className="w-4 h-4" />
-            Filters
+            {t('f2:filters')}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
-              <Label>Search</Label>
+              <Label>{t('f2:search')}</Label>
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
                 <Input
-                  placeholder="Search by ERR ID, state, location..."
+                  placeholder={t('f2:search_placeholder') as string}
                   value={filters.search}
                   onChange={(e) => setFilters(prev => ({ ...prev, search: e.target.value }))}
                   className="pl-10"
@@ -158,16 +158,16 @@ export default function CommittedF1sTab() {
               </div>
             </div>
             <div>
-              <Label>Grant Call</Label>
+              <Label>{t('f2:grant_call')}</Label>
               <Select
                 value={filters.grantCall}
                 onValueChange={(value) => setFilters(prev => ({ ...prev, grantCall: value }))}
               >
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="All Grant Calls" />
+                  <SelectValue placeholder={t('f2:all_grant_calls') as string} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Grant Calls</SelectItem>
+                  <SelectItem value="all">{t('f2:all_grant_calls')}</SelectItem>
                   {filterOptions.grantCalls.map(gc => (
                     <SelectItem key={gc.id} value={gc.id}>
                       {gc.donor_name} — {gc.name}
@@ -177,16 +177,16 @@ export default function CommittedF1sTab() {
               </Select>
             </div>
             <div>
-              <Label>Donor</Label>
+              <Label>{t('f2:donor')}</Label>
               <Select
                 value={filters.donor}
                 onValueChange={(value) => setFilters(prev => ({ ...prev, donor: value }))}
               >
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="All Donors" />
+                  <SelectValue placeholder={t('f2:all_donors_label') as string} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Donors</SelectItem>
+                  <SelectItem value="all">{t('f2:all_donors_label')}</SelectItem>
                   {filterOptions.donors.map(donor => (
                     <SelectItem key={donor.id} value={donor.name}>
                       {donor.name}
@@ -196,16 +196,16 @@ export default function CommittedF1sTab() {
               </Select>
             </div>
             <div>
-              <Label>Funding Cycle</Label>
+              <Label>{t('f2:funding_cycle_label')}</Label>
               <Select
                 value={filters.cycle}
                 onValueChange={(value) => setFilters(prev => ({ ...prev, cycle: value }))}
               >
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="All Cycles" />
+                  <SelectValue placeholder={t('f2:all_cycles') as string} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Cycles</SelectItem>
+                  <SelectItem value="all">{t('f2:all_cycles')}</SelectItem>
                   {filterOptions.cycles.map(cycle => (
                     <SelectItem key={cycle.id} value={cycle.id}>
                       {cycle.name} ({cycle.year})
@@ -215,16 +215,16 @@ export default function CommittedF1sTab() {
               </Select>
             </div>
             <div>
-              <Label>State</Label>
+              <Label>{t('f2:state_label')}</Label>
               <Select
                 value={filters.state}
                 onValueChange={(value) => setFilters(prev => ({ ...prev, state: value }))}
               >
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="All States" />
+                  <SelectValue placeholder={t('f2:all_states') as string} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All States</SelectItem>
+                  <SelectItem value="all">{t('f2:all_states')}</SelectItem>
                   {filterOptions.states.map(state => (
                     <SelectItem key={state.name} value={state.name}>
                       {state.name}
@@ -235,7 +235,7 @@ export default function CommittedF1sTab() {
             </div>
             <div className="flex items-end">
               <Button variant="outline" onClick={clearFilters} className="w-full">
-                Clear Filters
+                {t('f2:clear_filters')}
               </Button>
             </div>
           </div>
@@ -248,16 +248,16 @@ export default function CommittedF1sTab() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>ERR ID</TableHead>
-                <TableHead>Date</TableHead>
-                <TableHead>State</TableHead>
-                <TableHead>Location</TableHead>
-                <TableHead>Grant Call</TableHead>
-                <TableHead>Donor</TableHead>
-                <TableHead>Cycle</TableHead>
-                <TableHead className="text-right">Amount</TableHead>
-                <TableHead>Committed</TableHead>
-                <TableHead>Status</TableHead>
+                <TableHead>{t('f2:err_id')}</TableHead>
+                <TableHead>{t('f2:date')}</TableHead>
+                <TableHead>{t('f2:state')}</TableHead>
+                <TableHead>{t('f2:locality')}</TableHead>
+                <TableHead>{t('f2:grant_name')}</TableHead>
+                <TableHead>{t('f2:donor')}</TableHead>
+                <TableHead>{t('f2:funding_cycle_label')}</TableHead>
+                <TableHead className="text-right">{t('f2:requested_amount')}</TableHead>
+                <TableHead>{t('f2:committed')}</TableHead>
+                <TableHead>{t('f2:status')}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -289,9 +289,7 @@ export default function CommittedF1sTab() {
             </TableBody>
           </Table>
           {f1s.length === 0 && (
-            <div className="text-center py-8 text-muted-foreground">
-              No committed F1s found matching the current filters
-            </div>
+            <div className="text-center py-8 text-muted-foreground">{t('f2:no_committed')}</div>
           )}
         </CardContent>
       </Card>

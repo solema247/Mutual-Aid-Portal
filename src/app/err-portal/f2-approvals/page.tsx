@@ -84,7 +84,7 @@ export default function F2ApprovalsPage() {
       {/* Allocation overview dashboard (by State and by Donor/Grant) */}
       <Card>
         <CardHeader>
-          <CardTitle>Allocation Overview</CardTitle>
+          <CardTitle>{t('f2:allocation_overview')}</CardTitle>
         </CardHeader>
         <CardContent>
           <PoolDashboard showProposals={false} />
@@ -93,7 +93,7 @@ export default function F2ApprovalsPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>F2 Approvals - Final Review and Commitment</CardTitle>
+          <CardTitle>{t('f2:page_header')}</CardTitle>
         </CardHeader>
         <CardContent>
           <Tabs 
@@ -102,12 +102,8 @@ export default function F2ApprovalsPage() {
             onValueChange={(value) => setCurrentTab(value as 'uncommitted' | 'committed')}
           >
             <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="uncommitted">
-                Uncommitted F1s
-              </TabsTrigger>
-              <TabsTrigger value="committed">
-                Committed F1s
-              </TabsTrigger>
+              <TabsTrigger value="uncommitted">{t('f2:uncommitted_tab')}</TabsTrigger>
+              <TabsTrigger value="committed">{t('f2:committed_tab')}</TabsTrigger>
             </TabsList>
 
             <TabsContent value="uncommitted" className="mt-6">

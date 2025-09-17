@@ -2,9 +2,11 @@
 
 import React, { useEffect, useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { useTranslation } from 'react-i18next'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 
 export default function PoolDashboard({ showProposals = true }: { showProposals?: boolean }) {
+  const { t } = useTranslation(['f1_plans'])
   const [summary, setSummary] = useState<{ total_available: number; total_committed: number; total_pending: number; remaining: number } | null>(null)
   const [byState, setByState] = useState<any[]>([])
   const [byDonor, setByDonor] = useState<any[]>([])
@@ -70,54 +72,54 @@ export default function PoolDashboard({ showProposals = true }: { showProposals?
 
   const fmt = (n: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n || 0)
 
-  if (loading) return <div className="text-sm text-muted-foreground">Loading balances…</div>
+  if (loading) return <div className="text-sm text-muted-foreground">{t('pool.loading')}</div>
 
   return (
     <div className="space-y-6">
       {summary && (
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <Card><CardHeader><CardTitle>Total</CardTitle></CardHeader><CardContent className="text-2xl font-bold">{fmt(summary.total_available)}</CardContent></Card>
-          <Card><CardHeader><CardTitle>Committed</CardTitle></CardHeader><CardContent className="text-2xl font-bold">{fmt(summary.total_committed)}</CardContent></Card>
-          <Card><CardHeader><CardTitle>Pending</CardTitle></CardHeader><CardContent className="text-2xl font-bold">{fmt(summary.total_pending)}</CardContent></Card>
-          <Card><CardHeader><CardTitle>Remaining</CardTitle></CardHeader><CardContent className={`text-2xl font-bold ${summary.remaining >= 0 ? 'text-green-700' : 'text-red-700'}`}>{fmt(summary.remaining)}</CardContent></Card>
+          <Card><CardHeader><CardTitle>{t('pool.total')}</CardTitle></CardHeader><CardContent className="text-2xl font-bold">{fmt(summary.total_available)}</CardContent></Card>
+          <Card><CardHeader><CardTitle>{t('pool.committed')}</CardTitle></CardHeader><CardContent className="text-2xl font-bold">{fmt(summary.total_committed)}</CardContent></Card>
+          <Card><CardHeader><CardTitle>{t('pool.pending')}</CardTitle></CardHeader><CardContent className="text-2xl font-bold">{fmt(summary.total_pending)}</CardContent></Card>
+          <Card><CardHeader><CardTitle>{t('pool.remaining')}</CardTitle></CardHeader><CardContent className={`text-2xl font-bold ${summary.remaining >= 0 ? 'text-green-700' : 'text-red-700'}`}>{fmt(summary.remaining)}</CardContent></Card>
         </div>
       )}
 
       <Card>
-        <CardHeader><CardTitle>By State</CardTitle></CardHeader>
+        <CardHeader><CardTitle>{t('pool.by_state.title')}</CardTitle></CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>
-                  <div className="font-semibold">State</div>
-                  <div className="text-xs text-muted-foreground">State name</div>
+                  <div className="font-semibold">{t('pool.by_state.state')}</div>
+                  <div className="text-xs text-muted-foreground">{t('pool.by_state.state_desc')}</div>
                 </TableHead>
                 <TableHead className="text-right">
-                  <div className="font-semibold">Allocated</div>
-                  <div className="text-xs text-muted-foreground">Total assigned</div>
+                  <div className="font-semibold">{t('pool.by_state.allocated')}</div>
+                  <div className="text-xs text-muted-foreground">{t('pool.by_state.allocated_desc')}</div>
                 </TableHead>
                 <TableHead className="text-right">
-                  <div className="font-semibold">Committed</div>
-                  <div className="text-xs text-muted-foreground">Approved spend</div>
+                  <div className="font-semibold">{t('pool.by_state.committed')}</div>
+                  <div className="text-xs text-muted-foreground">{t('pool.by_state.committed_desc')}</div>
                 </TableHead>
                 <TableHead className="text-right">
-                  <div className="font-semibold">Pending</div>
-                  <div className="text-xs text-muted-foreground">Not yet committed</div>
+                  <div className="font-semibold">{t('pool.by_state.pending')}</div>
+                  <div className="text-xs text-muted-foreground">{t('pool.by_state.pending_desc')}</div>
                 </TableHead>
                 <TableHead className="text-right">
-                  <div className="font-semibold">Remaining</div>
-                  <div className="text-xs text-muted-foreground">Alloc - Committed - Pending</div>
+                  <div className="font-semibold">{t('pool.by_state.remaining')}</div>
+                  <div className="text-xs text-muted-foreground">{t('pool.by_state.remaining_desc')}</div>
                 </TableHead>
                 {showProposals && (
                   <>
                     <TableHead className="text-right">
-                      <div className="font-semibold">Proposed</div>
-                      <div className="text-xs text-muted-foreground">This upload</div>
+                      <div className="font-semibold">{t('pool.by_state.proposed')}</div>
+                      <div className="text-xs text-muted-foreground">{t('pool.by_state.proposed_desc')}</div>
                     </TableHead>
                     <TableHead className="text-right">
-                      <div className="font-semibold">Remainder</div>
-                      <div className="text-xs text-muted-foreground">If Applied (after proposal)</div>
+                      <div className="font-semibold">{t('pool.by_state.remainder')}</div>
+                      <div className="text-xs text-muted-foreground">{t('pool.by_state.remainder_desc')}</div>
                     </TableHead>
                   </>
                 )}
@@ -147,44 +149,44 @@ export default function PoolDashboard({ showProposals = true }: { showProposals?
       </Card>
 
       <Card>
-        <CardHeader><CardTitle>By Donor/Grant</CardTitle></CardHeader>
+        <CardHeader><CardTitle>{t('pool.by_donor.title')}</CardTitle></CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>
-                  <div className="font-semibold">Donor</div>
-                  <div className="text-xs text-muted-foreground">Funder name</div>
+                  <div className="font-semibold">{t('pool.by_donor.donor')}</div>
+                  <div className="text-xs text-muted-foreground">{t('pool.by_donor.donor_desc')}</div>
                 </TableHead>
                 <TableHead>
-                  <div className="font-semibold">Grant</div>
-                  <div className="text-xs text-muted-foreground">Grant Call</div>
+                  <div className="font-semibold">{t('pool.by_donor.grant')}</div>
+                  <div className="text-xs text-muted-foreground">{t('pool.by_donor.grant_desc')}</div>
                 </TableHead>
                 <TableHead className="text-right">
-                  <div className="font-semibold">Included</div>
-                  <div className="text-xs text-muted-foreground">Added to pool</div>
+                  <div className="font-semibold">{t('pool.by_donor.included')}</div>
+                  <div className="text-xs text-muted-foreground">{t('pool.by_donor.included_desc')}</div>
                 </TableHead>
                 <TableHead className="text-right">
-                  <div className="font-semibold">Committed</div>
-                  <div className="text-xs text-muted-foreground">Approved spend</div>
+                  <div className="font-semibold">{t('pool.by_donor.committed')}</div>
+                  <div className="text-xs text-muted-foreground">{t('pool.by_donor.committed_desc')}</div>
                 </TableHead>
                 <TableHead className="text-right">
-                  <div className="font-semibold">Pending</div>
-                  <div className="text-xs text-muted-foreground">Not yet committed</div>
+                  <div className="font-semibold">{t('pool.by_donor.pending')}</div>
+                  <div className="text-xs text-muted-foreground">{t('pool.by_donor.pending_desc')}</div>
                 </TableHead>
                 <TableHead className="text-right">
-                  <div className="font-semibold">Remaining</div>
-                  <div className="text-xs text-muted-foreground">Included - Committed - Pending</div>
+                  <div className="font-semibold">{t('pool.by_donor.remaining')}</div>
+                  <div className="text-xs text-muted-foreground">{t('pool.by_donor.remaining_desc')}</div>
                 </TableHead>
                 {showProposals && (
                   <>
                     <TableHead className="text-right">
-                      <div className="font-semibold">Proposed</div>
-                      <div className="text-xs text-muted-foreground">This upload</div>
+                      <div className="font-semibold">{t('pool.by_donor.proposed')}</div>
+                      <div className="text-xs text-muted-foreground">{t('pool.by_donor.proposed_desc')}</div>
                     </TableHead>
                     <TableHead className="text-right">
-                      <div className="font-semibold">Remainder</div>
-                      <div className="text-xs text-muted-foreground">If Applied (after proposal)</div>
+                      <div className="font-semibold">{t('pool.by_donor.remainder')}</div>
+                      <div className="text-xs text-muted-foreground">{t('pool.by_donor.remainder_desc')}</div>
                     </TableHead>
                   </>
                 )}

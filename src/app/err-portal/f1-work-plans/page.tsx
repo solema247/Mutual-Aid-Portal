@@ -21,7 +21,7 @@ export default function F1WorkPlansPage() {
       {/* Pool Dashboard */}
       <Card>
         <CardHeader>
-          <CardTitle>Pool Overview</CardTitle>
+          <CardTitle>{t('f1_plans:pool_overview')}</CardTitle>
         </CardHeader>
         <CardContent>
           <PoolDashboard />

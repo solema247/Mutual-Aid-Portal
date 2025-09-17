@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -16,6 +17,7 @@ import ProjectEditor from './ProjectEditor'
 import type { UncommittedF1, GrantCallOption } from '../types'
 
 export default function UncommittedF1sTab() {
+  const { t } = useTranslation(['f2', 'common'])
   const [f1s, setF1s] = useState<UncommittedF1[]>([])
   const [grantCalls, setGrantCalls] = useState<GrantCallOption[]>([])
   const [selectedF1s, setSelectedF1s] = useState<string[]>([])
@@ -188,17 +190,15 @@ export default function UncommittedF1sTab() {
   }
 
   if (isLoading) {
-    return <div className="text-center py-8">Loading uncommitted F1s...</div>
+    return <div className="text-center py-8">{t('common:loading')}</div>
   }
 
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <div>
-          <h3 className="text-lg font-semibold">Uncommitted F1s ({f1s.length})</h3>
-          <p className="text-sm text-muted-foreground">
-            Review, edit expenses, reassign grant calls, and commit F1s for final approval
-          </p>
+          <h3 className="text-lg font-semibold">{t('f2:uncommitted_header', { count: f1s.length })}</h3>
+          <p className="text-sm text-muted-foreground">{t('f2:uncommitted_desc')}</p>
         </div>
         <div className="flex gap-2">
           <Button
@@ -206,7 +206,7 @@ export default function UncommittedF1sTab() {
             disabled={selectedF1s.length === 0 || isCommitting}
             className="bg-green-600 hover:bg-green-700"
           >
-            {isCommitting ? 'Committing...' : `Commit Selected (${selectedF1s.length})`}
+            {isCommitting ? t('f2:committing') : t('f2:commit_selected', { count: selectedF1s.length })}
           </Button>
         </div>
       </div>
@@ -222,14 +222,14 @@ export default function UncommittedF1sTab() {
                     onCheckedChange={handleSelectAll}
                   />
                 </TableHead>
-                <TableHead>ERR ID</TableHead>
-                <TableHead>Date</TableHead>
-                <TableHead>State</TableHead>
-                <TableHead>Location</TableHead>
-                <TableHead>Grant Call</TableHead>
-                <TableHead>Donor</TableHead>
-                <TableHead className="text-right">Amount</TableHead>
-                <TableHead className="text-right">Status</TableHead>
+                <TableHead>{t('f2:err_id')}</TableHead>
+                <TableHead>{t('f2:date') || 'Date'}</TableHead>
+                <TableHead>{t('f2:state')}</TableHead>
+                <TableHead>{t('f2:locality')}</TableHead>
+                <TableHead>{t('f2:grant_name')}</TableHead>
+                <TableHead>{t('f2:donor')}</TableHead>
+                <TableHead className="text-right">{t('f2:requested_amount')}</TableHead>
+                <TableHead className="text-right">{t('f2:status')}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -304,7 +304,7 @@ export default function UncommittedF1sTab() {
                           }}
                         >
                           <RotateCcw className="w-3 h-3 mr-1" />
-                          Reassign
+                          {t('f2:reassign')}
                         </Button>
                       </div>
                     )}
@@ -318,14 +318,14 @@ export default function UncommittedF1sTab() {
                             <Input
                               value={expense.activity}
                               onChange={(e) => handleExpenseChange(f1.id, index, 'activity', e.target.value)}
-                              placeholder="Activity"
+                              placeholder={t('projects:activity') as string}
                               className="w-32"
                             />
                             <Input
                               type="number"
                               value={expense.total_cost}
                               onChange={(e) => handleExpenseChange(f1.id, index, 'total_cost', parseFloat(e.target.value) || 0)}
-                              placeholder="Amount"
+                              placeholder={t('projects:amount') as string}
                               className="w-24"
                             />
                             <Button
@@ -343,7 +343,7 @@ export default function UncommittedF1sTab() {
                             variant="outline"
                             onClick={() => handleAddExpense(f1.id)}
                           >
-                            Add Expense
+                            {t('projects:add_expense')}
                           </Button>
                           <Button
                             size="sm"
@@ -360,7 +360,7 @@ export default function UncommittedF1sTab() {
                           </Button>
                         </div>
                         <div className="text-sm font-medium">
-                          Total: {calculateTotalAmount(tempExpenses[f1.id] || []).toLocaleString()}
+                          {t('projects:total')}: {calculateTotalAmount(tempExpenses[f1.id] || []).toLocaleString()}
                         </div>
                       </div>
                     ) : (
@@ -372,7 +372,7 @@ export default function UncommittedF1sTab() {
                           onClick={() => { setEditorProjectId(f1.id); setEditorOpen(true) }}
                         >
                           <Edit2 className="w-3 h-3 mr-1" />
-                          Edit Project
+                          {t('f2:edit_project')}
                         </Button>
                       </div>
                     )}

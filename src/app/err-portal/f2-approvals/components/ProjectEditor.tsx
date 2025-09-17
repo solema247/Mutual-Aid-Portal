@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -18,6 +19,7 @@ interface ProjectEditorProps {
 }
 
 export default function ProjectEditor({ open, onOpenChange, projectId, onSaved }: ProjectEditorProps) {
+  const { t } = useTranslation(['projects', 'common'])
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
 
@@ -109,94 +111,94 @@ export default function ProjectEditor({ open, onOpenChange, projectId, onSaved }
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-5xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Project Details</DialogTitle>
+          <DialogTitle>{t('projects:project_details')}</DialogTitle>
         </DialogHeader>
 
         {loading ? (
-          <div className="py-10 text-center text-muted-foreground">Loading…</div>
+          <div className="py-10 text-center text-muted-foreground">{t('common:loading')}</div>
         ) : (
           <div className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
-                <Label>Date</Label>
+                <Label>{t('projects:date')}</Label>
                 <Input value={form.date || ''} onChange={(e) => updateField('date', e.target.value)} />
               </div>
               <div>
-                <Label>State</Label>
+                <Label>{t('projects:state') || 'State'}</Label>
                 <Input value={form.state || ''} onChange={(e) => updateField('state', e.target.value)} />
               </div>
               <div>
-                <Label>Locality</Label>
+                <Label>{t('projects:location')}</Label>
                 <Input value={form.locality || ''} onChange={(e) => updateField('locality', e.target.value)} />
               </div>
             </div>
 
             <div>
-              <Label>Project Objectives</Label>
+              <Label>{t('projects:objectives')}</Label>
               <Textarea value={form.project_objectives || ''} onChange={(e) => updateField('project_objectives', e.target.value)} className="min-h-[100px]" />
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <Label>Intended Beneficiaries</Label>
+                <Label>{t('projects:intended_beneficiaries')}</Label>
                 <Textarea value={form.intended_beneficiaries || ''} onChange={(e) => updateField('intended_beneficiaries', e.target.value)} />
               </div>
               <div>
-                <Label>Estimated Beneficiaries</Label>
+                <Label>{t('projects:estimated_number')}</Label>
                 <Input type="number" value={form.estimated_beneficiaries || ''} onChange={(e) => updateField('estimated_beneficiaries', parseInt(e.target.value))} />
               </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <Label>Estimated Timeframe</Label>
+                <Label>{t('projects:estimated_timeframe')}</Label>
                 <Input value={form.estimated_timeframe || ''} onChange={(e) => updateField('estimated_timeframe', e.target.value)} />
               </div>
               <div>
-                <Label>Additional Support</Label>
+                <Label>{t('projects:additional_support')}</Label>
                 <Input value={form.additional_support || ''} onChange={(e) => updateField('additional_support', e.target.value)} />
               </div>
             </div>
 
             <div>
-              <Label>Banking Details</Label>
+              <Label>{t('projects:banking_details')}</Label>
               <Textarea value={form.banking_details || ''} onChange={(e) => updateField('banking_details', e.target.value)} />
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <Label>Program Officer</Label>
+                <Label>{t('projects:officer')}</Label>
                 <div className="grid grid-cols-2 gap-2">
-                  <Input placeholder="Name" value={form.program_officer_name || ''} onChange={(e) => updateField('program_officer_name', e.target.value)} />
-                  <Input placeholder="Phone" value={form.program_officer_phone || ''} onChange={(e) => updateField('program_officer_phone', e.target.value)} />
+                  <Input placeholder={t('common:name') || 'Name'} value={form.program_officer_name || ''} onChange={(e) => updateField('program_officer_name', e.target.value)} />
+                  <Input placeholder={t('common:phone') || 'Phone'} value={form.program_officer_phone || ''} onChange={(e) => updateField('program_officer_phone', e.target.value)} />
                 </div>
               </div>
               <div>
-                <Label>Reporting Officer</Label>
+                <Label>{t('projects:reporting_officer') || 'Reporting Officer'}</Label>
                 <div className="grid grid-cols-2 gap-2">
-                  <Input placeholder="Name" value={form.reporting_officer_name || ''} onChange={(e) => updateField('reporting_officer_name', e.target.value)} />
-                  <Input placeholder="Phone" value={form.reporting_officer_phone || ''} onChange={(e) => updateField('reporting_officer_phone', e.target.value)} />
+                  <Input placeholder={t('common:name') || 'Name'} value={form.reporting_officer_name || ''} onChange={(e) => updateField('reporting_officer_name', e.target.value)} />
+                  <Input placeholder={t('common:phone') || 'Phone'} value={form.reporting_officer_phone || ''} onChange={(e) => updateField('reporting_officer_phone', e.target.value)} />
                 </div>
               </div>
               <div>
-                <Label>Finance Officer</Label>
+                <Label>{t('projects:finance_officer') || 'Finance Officer'}</Label>
                 <div className="grid grid-cols-2 gap-2">
-                  <Input placeholder="Name" value={form.finance_officer_name || ''} onChange={(e) => updateField('finance_officer_name', e.target.value)} />
-                  <Input placeholder="Phone" value={form.finance_officer_phone || ''} onChange={(e) => updateField('finance_officer_phone', e.target.value)} />
+                  <Input placeholder={t('common:name') || 'Name'} value={form.finance_officer_name || ''} onChange={(e) => updateField('finance_officer_name', e.target.value)} />
+                  <Input placeholder={t('common:phone') || 'Phone'} value={form.finance_officer_phone || ''} onChange={(e) => updateField('finance_officer_phone', e.target.value)} />
                 </div>
               </div>
             </div>
 
             <div>
               <div className="flex items-center justify-between">
-                <Label>Planned Activities</Label>
-                <Button variant="outline" size="sm" onClick={() => setActivities(prev => [...prev, ''])}>Add</Button>
+                <Label>{t('projects:planned_activities')}</Label>
+                <Button variant="outline" size="sm" onClick={() => setActivities(prev => [...prev, ''])}>{t('projects:add_activity')}</Button>
               </div>
               <div className="mt-2 space-y-2">
                 {activities.map((a, i) => (
                   <div key={i} className="flex gap-2">
                     <Input value={a} onChange={(e) => setActivities(prev => prev.map((v, idx) => idx === i ? e.target.value : v))} />
-                    <Button variant="outline" size="sm" onClick={() => setActivities(prev => prev.filter((_, idx) => idx !== i))}>Remove</Button>
+                    <Button variant="outline" size="sm" onClick={() => setActivities(prev => prev.filter((_, idx) => idx !== i))}>{t('projects:remove_activity')}</Button>
                   </div>
                 ))}
               </div>
@@ -204,26 +206,26 @@ export default function ProjectEditor({ open, onOpenChange, projectId, onSaved }
 
             <div>
               <div className="flex items-center justify-between">
-                <Label>Expenses</Label>
-                <div className="text-sm text-muted-foreground">Total: {total.toLocaleString()}</div>
+                <Label>{t('projects:expenses')}</Label>
+                <div className="text-sm text-muted-foreground">{t('projects:total')}: {total.toLocaleString()}</div>
               </div>
               <div className="mt-2 space-y-2">
                 {expenses.map((e, i) => (
                   <div key={i} className="grid grid-cols-3 gap-2">
-                    <Input placeholder="Activity" value={e.activity} onChange={(ev) => updateExpense(i, 'activity', ev.target.value)} />
-                    <Input type="number" placeholder="Amount" value={e.total_cost} onChange={(ev) => updateExpense(i, 'total_cost', ev.target.value)} />
+                    <Input placeholder={t('projects:activity') || 'Activity'} value={e.activity} onChange={(ev) => updateExpense(i, 'activity', ev.target.value)} />
+                    <Input type="number" placeholder={t('projects:amount') || 'Amount'} value={e.total_cost} onChange={(ev) => updateExpense(i, 'total_cost', ev.target.value)} />
                     <div className="flex gap-2">
-                      <Button variant="outline" size="sm" onClick={() => removeExpense(i)}>Remove</Button>
+                      <Button variant="outline" size="sm" onClick={() => removeExpense(i)}>{t('projects:remove_expense')}</Button>
                     </div>
                   </div>
                 ))}
-                <Button variant="outline" size="sm" onClick={addExpense}>Add Expense</Button>
+                <Button variant="outline" size="sm" onClick={addExpense}>{t('projects:add_expense')}</Button>
               </div>
             </div>
 
             <div className="flex justify-end gap-3">
-              <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-              <Button onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save Changes'}</Button>
+              <Button variant="outline" onClick={() => onOpenChange(false)}>{t('projects:cancel') || t('common:cancel')}</Button>
+              <Button onClick={save} disabled={saving}>{saving ? (t('common:saving') || 'Saving…') : t('projects:save_changes')}</Button>
             </div>
           </div>
         )}

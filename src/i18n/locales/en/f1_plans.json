@@ -22,5 +22,56 @@
     "unassigned": "Unassigned",
     "allocated": "Allocated",
     "reassigned": "Reassigned"
+  },
+  "pool_overview": "Pool Overview",
+  "pool": {
+    "loading": "Loading balances…",
+    "total": "Total",
+    "committed": "Committed",
+    "pending": "Pending",
+    "remaining": "Remaining",
+    "by_state": {
+      "title": "By State",
+      "state": "State",
+      "state_desc": "State name",
+      "allocated": "Allocated",
+      "allocated_desc": "Total assigned",
+      "committed": "Committed",
+      "committed_desc": "Approved spend",
+      "pending": "Pending",
+      "pending_desc": "Not yet committed",
+      "remaining": "Remaining",
+      "remaining_desc": "Alloc - Committed - Pending",
+      "proposed": "Proposed",
+      "proposed_desc": "This upload",
+      "remainder": "Remainder",
+      "remainder_desc": "If Applied (after proposal)"
+    },
+    "by_donor": {
+      "title": "By Donor/Grant",
+      "donor": "Donor",
+      "donor_desc": "Funder name",
+      "grant": "Grant",
+      "grant_desc": "Grant Call",
+      "included": "Included",
+      "included_desc": "Added to pool",
+      "committed": "Committed",
+      "committed_desc": "Approved spend",
+      "pending": "Pending",
+      "pending_desc": "Not yet committed",
+      "remaining": "Remaining",
+      "remaining_desc": "Included - Committed - Pending",
+      "proposed": "Proposed",
+      "proposed_desc": "This upload",
+      "remainder": "Remainder",
+      "remainder_desc": "If Applied (after proposal)"
+    }
+  }
+  ,
+  "err_tabs": {
+    "new": "New Projects",
+    "feedback": "Feedback Required",
+    "declined": "Declined Projects",
+    "assignment": "Project Assignment"
   }
 }

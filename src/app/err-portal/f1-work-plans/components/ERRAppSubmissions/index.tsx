@@ -569,19 +569,19 @@ export default function ERRAppSubmissions() {
       <Tabs defaultValue="new" className="w-full" onValueChange={(value) => setCurrentStatus(value as ProjectStatus)}>
         <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="new">
-            New Projects ({allProjects.filter(p => ['new', 'pending'].includes(p.status)).length})
+            {t('f1_plans:err_tabs.new')} ({allProjects.filter(p => ['new', 'pending'].includes(p.status)).length})
           </TabsTrigger>
           <TabsTrigger value="feedback">
-            Feedback Required ({allProjects.filter(p => 
+            {t('f1_plans:err_tabs.feedback')} ({allProjects.filter(p => 
               p.status === 'feedback' || 
               (p.status === 'draft' && p.current_feedback_id !== null)
             ).length})
           </TabsTrigger>
           <TabsTrigger value="declined">
-            Declined Projects ({allProjects.filter(p => p.status === 'declined').length})
+            {t('f1_plans:err_tabs.declined')} ({allProjects.filter(p => p.status === 'declined').length})
           </TabsTrigger>
           <TabsTrigger value="assignment">
-            Project Assignment ({allProjects.filter(p => 
+            {t('f1_plans:err_tabs.assignment')} ({allProjects.filter(p => 
               p.status === 'approved' && 
               (!p.grant_serial_id || p.funding_status === 'unassigned')
             ).length})
@@ -591,16 +591,16 @@ export default function ERRAppSubmissions() {
         {/* Tab descriptions */}
         <div className="text-sm text-muted-foreground mt-3">
           {currentStatus === 'new' && (
-            <span>Initial vetting: review new F1 submissions before requesting changes or approving.</span>
+            <span>{t('projects:explainers.new')}</span>
           )}
           {currentStatus === 'feedback' && (
-            <span>Projects needing changes: review responses and approve or request further edits.</span>
+            <span>{t('projects:explainers.feedback')}</span>
           )}
           {currentStatus === 'declined' && (
-            <span>Declined submissions: archived for record; no further action required.</span>
+            <span>{t('projects:explainers.declined')}</span>
           )}
           {currentStatus === 'assignment' && (
-            <span>Assign approved projects to a Grant Call. Stage allocations to preview pool impact, then Confirm Allocation to apply. Allocated projects proceed to the F2 workflow for confirm/reassign/commit.</span>
+            <span>{t('projects:explainers.assignment')}</span>
           )}
         </div>
 
@@ -695,9 +695,9 @@ export default function ERRAppSubmissions() {
             </CardContent>
             {currentStatus === 'assignment' && (
               <div className="p-4 flex items-center justify-end gap-2">
-                <Button variant="outline" onClick={() => { setStagedAssignments({}); setSelectedRows({}); try { window.dispatchEvent(new CustomEvent('f1-proposal', { detail: { amount: 0 } })) } catch {} }}>Clear Staging</Button>
+                <Button variant="outline" onClick={() => { setStagedAssignments({}); setSelectedRows({}); try { window.dispatchEvent(new CustomEvent('f1-proposal', { detail: { amount: 0 } })) } catch {} }}>{t('projects:clear_staging')}</Button>
                 <Button onClick={handleConfirmAllocation} disabled={isAssigningGrant || Object.keys(selectedRows).filter(k => selectedRows[k]).length === 0}>
-                  {isAssigningGrant ? t('common:loading') : 'Confirm Allocation'}
+                  {isAssigningGrant ? t('common:loading') : t('projects:confirm_allocation')}
                 </Button>
               </div>
             )}
