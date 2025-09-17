@@ -17,6 +17,60 @@ export interface Workplan {
   grant_call_state_allocation_id: string;
 }
 
+// NEW: F2 Redesign interfaces
+export interface UncommittedF1 {
+  id: string
+  err_id: string
+  date: string
+  state: string
+  locality: string
+  status: string
+  funding_status: string
+  expenses: Array<{ activity: string; total_cost: number }>
+  grant_call_id: string | null
+  grant_call_name: string | null
+  donor_name: string | null
+  emergency_room_id: string | null
+  err_code: string | null
+  err_name: string | null
+  submitted_at: string
+}
+
+export interface CommittedF1 {
+  id: string
+  err_id: string
+  date: string
+  state: string
+  locality: string
+  status: string
+  funding_status: string
+  expenses: Array<{ activity: string; total_cost: number }>
+  grant_call_id: string | null
+  grant_call_name: string | null
+  donor_name: string | null
+  emergency_room_id: string | null
+  err_code: string | null
+  err_name: string | null
+  submitted_at: string
+  committed_at: string
+  funding_cycle_id: string | null
+  funding_cycle_name: string | null
+}
+
+export interface GrantCallOption {
+  id: string
+  name: string
+  donor_name: string
+  remaining_amount: number
+}
+
+export interface FilterOptions {
+  grantCalls: Array<{ id: string; name: string; donor_name: string }>
+  donors: Array<{ id: string; name: string }>
+  cycles: Array<{ id: string; name: string; year: number }>
+  states: Array<{ name: string }>
+}
+
 export interface StateAllocation {
   id: string;
   state_name: string;

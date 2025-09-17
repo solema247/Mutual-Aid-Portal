@@ -4,16 +4,12 @@ import { useTranslation } from 'react-i18next'
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
-import { Card } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { supabase } from '@/lib/supabaseClient'
-import {
-  CycleAllocationHeader,
-  CycleWorkplansTable,
-  FooterActions,
-  AdjustModal,
-  CycleSelectionTable
-} from './components'
-import AssignToGrantCallModal from './components/AssignToGrantCallModal'
+import PoolDashboard from '../f1-work-plans/components/PoolDashboard'
+import UncommittedF1sTab from './components/UncommittedF1sTab'
+import CommittedF1sTab from './components/CommittedF1sTab'
 
 interface User {
   id: string;
@@ -29,12 +25,7 @@ export default function F2ApprovalsPage() {
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(true)
   const [user, setUser] = useState<User | null>(null)
-  const [selectedWorkplans, setSelectedWorkplans] = useState<string[]>([])
-  const [assignModalOpen, setAssignModalOpen] = useState(false)
-  const [adjustModalOpen, setAdjustModalOpen] = useState(false)
-  const [activeWorkplan, setActiveWorkplan] = useState<string | null>(null)
-  const [selectedFundingCycle, setSelectedFundingCycle] = useState<string | null>(null)
-  const [selectedAllocation, setSelectedAllocation] = useState<string | null>(null)
+  const [currentTab, setCurrentTab] = useState<'uncommitted' | 'committed'>('uncommitted')
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -90,74 +81,45 @@ export default function F2ApprovalsPage() {
         </Button>
       </div>
 
-      <Card className="p-6">
-        {!selectedFundingCycle ? (
-          <CycleSelectionTable 
-            onCycleSelect={setSelectedFundingCycle}
-            selectedCycleId={selectedFundingCycle}
-          />
-        ) : (
-          <CycleAllocationHeader 
-            onCycleSelect={setSelectedFundingCycle}
-            onStateSelect={setSelectedAllocation}
-            selectedCycleId={selectedFundingCycle}
-          />
-        )}
+      {/* Allocation overview dashboard (by State and by Donor/Grant) */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Allocation Overview</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <PoolDashboard showProposals={false} />
+        </CardContent>
       </Card>
 
-      {selectedAllocation ? (
-        <>
-          <Card className="p-6 space-y-4">
-            <CycleWorkplansTable
-              cycleId={selectedFundingCycle}
-              allocationId={selectedAllocation}
-              selectedWorkplans={selectedWorkplans}
-              onSelectWorkplans={setSelectedWorkplans}
-              onAssignToGrantCall={(id: string) => {
-                setActiveWorkplan(id)
-                setAssignModalOpen(true)
-              }}
-              onAdjust={(id: string) => {
-                setActiveWorkplan(id)
-                setAdjustModalOpen(true)
-              }}
-            />
-            <FooterActions
-              selectedWorkplans={selectedWorkplans}
-              onClearSelection={() => setSelectedWorkplans([])}
-            />
-          </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle>F2 Approvals - Final Review and Commitment</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Tabs 
+            defaultValue="uncommitted" 
+            className="w-full" 
+            onValueChange={(value) => setCurrentTab(value as 'uncommitted' | 'committed')}
+          >
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="uncommitted">
+                Uncommitted F1s
+              </TabsTrigger>
+              <TabsTrigger value="committed">
+                Committed F1s
+              </TabsTrigger>
+            </TabsList>
 
-          <AssignToGrantCallModal
-            open={assignModalOpen}
-            onOpenChange={setAssignModalOpen}
-            workplanId={activeWorkplan}
-            cycleId={selectedFundingCycle}
-            onAssign={() => {
-              // Trigger a refresh of the workplans table
-              const workplansTable = document.querySelector('div[data-testid="workplans-table"]')
-              if (workplansTable) {
-                const event = new Event('refresh')
-                workplansTable.dispatchEvent(event)
-              }
-            }}
-          />
+            <TabsContent value="uncommitted" className="mt-6">
+              <UncommittedF1sTab />
+            </TabsContent>
 
-          <AdjustModal
-            open={adjustModalOpen}
-            onOpenChange={setAdjustModalOpen}
-            workplanId={activeWorkplan}
-            onAdjust={() => {
-              // Trigger a refresh of the workplans table
-              const workplansTable = document.querySelector('div[data-testid="workplans-table"]')
-              if (workplansTable) {
-                const event = new Event('refresh')
-                workplansTable.dispatchEvent(event)
-              }
-            }}
-          />
-        </>
-      ) : null}
+            <TabsContent value="committed" className="mt-6">
+              <CommittedF1sTab />
+            </TabsContent>
+          </Tabs>
+        </CardContent>
+      </Card>
     </div>
   )
 }

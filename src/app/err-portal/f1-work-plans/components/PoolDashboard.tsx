@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 
-export default function PoolDashboard() {
+export default function PoolDashboard({ showProposals = true }: { showProposals?: boolean }) {
   const [summary, setSummary] = useState<{ total_available: number; total_committed: number; total_pending: number; remaining: number } | null>(null)
   const [byState, setByState] = useState<any[]>([])
   const [byDonor, setByDonor] = useState<any[]>([])
@@ -31,15 +31,16 @@ export default function PoolDashboard() {
     load()
   }, [])
 
-  // Bridge: listen for proposal events from DirectUpload
+  // Bridge: listen for proposal events from DirectUpload when enabled
   useEffect(() => {
+    if (!showProposals) return
     const handler = (e: any) => {
       const detail = e?.detail || {}
       setProposal({ state: detail.state, grantCallId: detail.grant_call_id, amount: Number(detail.amount) || 0 })
     }
     window.addEventListener('f1-proposal', handler as EventListener)
     return () => window.removeEventListener('f1-proposal', handler as EventListener)
-  }, [])
+  }, [showProposals])
 
   // Listen for explicit refresh requests after submit
   useEffect(() => {
@@ -108,14 +109,18 @@ export default function PoolDashboard() {
                   <div className="font-semibold">Remaining</div>
                   <div className="text-xs text-muted-foreground">Alloc - Committed - Pending</div>
                 </TableHead>
-                <TableHead className="text-right">
-                  <div className="font-semibold">Proposed</div>
-                  <div className="text-xs text-muted-foreground">This upload</div>
-                </TableHead>
-                <TableHead className="text-right">
-                  <div className="font-semibold">Remainder</div>
-                  <div className="text-xs text-muted-foreground">If Applied (after proposal)</div>
-                </TableHead>
+                {showProposals && (
+                  <>
+                    <TableHead className="text-right">
+                      <div className="font-semibold">Proposed</div>
+                      <div className="text-xs text-muted-foreground">This upload</div>
+                    </TableHead>
+                    <TableHead className="text-right">
+                      <div className="font-semibold">Remainder</div>
+                      <div className="text-xs text-muted-foreground">If Applied (after proposal)</div>
+                    </TableHead>
+                  </>
+                )}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -126,10 +131,14 @@ export default function PoolDashboard() {
                   <TableCell className="text-right">{fmt(r.committed)}</TableCell>
                   <TableCell className="text-right">{fmt(r.pending)}</TableCell>
                   <TableCell className={`text-right ${r.remaining >= 0 ? 'text-green-700' : 'text-red-700'}`}>{fmt(r.remaining)}</TableCell>
-                  <TableCell className="text-right">{proposal.state === r.state_name ? fmt(proposal.amount) : fmt(0)}</TableCell>
-                  <TableCell className={`text-right ${((r.remaining - (proposal.state === r.state_name ? proposal.amount : 0)) >= 0) ? 'text-green-700' : 'text-red-700'}`}>
-                    {fmt(r.remaining - (proposal.state === r.state_name ? proposal.amount : 0))}
-                  </TableCell>
+                  {showProposals && (
+                    <>
+                      <TableCell className="text-right">{proposal.state === r.state_name ? fmt(proposal.amount) : fmt(0)}</TableCell>
+                      <TableCell className={`text-right ${((r.remaining - (proposal.state === r.state_name ? proposal.amount : 0)) >= 0) ? 'text-green-700' : 'text-red-700'}`}>
+                        {fmt(r.remaining - (proposal.state === r.state_name ? proposal.amount : 0))}
+                      </TableCell>
+                    </>
+                  )}
                 </TableRow>
               ))}
             </TableBody>
@@ -167,14 +176,18 @@ export default function PoolDashboard() {
                   <div className="font-semibold">Remaining</div>
                   <div className="text-xs text-muted-foreground">Included - Committed - Pending</div>
                 </TableHead>
-                <TableHead className="text-right">
-                  <div className="font-semibold">Proposed</div>
-                  <div className="text-xs text-muted-foreground">This upload</div>
-                </TableHead>
-                <TableHead className="text-right">
-                  <div className="font-semibold">Remainder</div>
-                  <div className="text-xs text-muted-foreground">If Applied (after proposal)</div>
-                </TableHead>
+                {showProposals && (
+                  <>
+                    <TableHead className="text-right">
+                      <div className="font-semibold">Proposed</div>
+                      <div className="text-xs text-muted-foreground">This upload</div>
+                    </TableHead>
+                    <TableHead className="text-right">
+                      <div className="font-semibold">Remainder</div>
+                      <div className="text-xs text-muted-foreground">If Applied (after proposal)</div>
+                    </TableHead>
+                  </>
+                )}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -186,10 +199,14 @@ export default function PoolDashboard() {
                   <TableCell className="text-right">{fmt(r.committed)}</TableCell>
                   <TableCell className="text-right">{fmt(r.pending)}</TableCell>
                   <TableCell className={`text-right ${r.remaining >= 0 ? 'text-green-700' : 'text-red-700'}`}>{fmt(r.remaining)}</TableCell>
-                  <TableCell className="text-right">{proposal.grantCallId === r.grant_call_id ? fmt(proposal.amount) : fmt(0)}</TableCell>
-                  <TableCell className={`text-right ${((r.remaining - (proposal.grantCallId === r.grant_call_id ? proposal.amount : 0)) >= 0) ? 'text-green-700' : 'text-red-700'}`}>
-                    {fmt(r.remaining - (proposal.grantCallId === r.grant_call_id ? proposal.amount : 0))}
-                  </TableCell>
+                  {showProposals && (
+                    <>
+                      <TableCell className="text-right">{proposal.grantCallId === r.grant_call_id ? fmt(proposal.amount) : fmt(0)}</TableCell>
+                      <TableCell className={`text-right ${((r.remaining - (proposal.grantCallId === r.grant_call_id ? proposal.amount : 0)) >= 0) ? 'text-green-700' : 'text-red-700'}`}>
+                        {fmt(r.remaining - (proposal.grantCallId === r.grant_call_id ? proposal.amount : 0))}
+                      </TableCell>
+                    </>
+                  )}
                 </TableRow>
               ))}
             </TableBody>
