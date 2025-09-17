@@ -14,6 +14,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
+import { RefreshCw } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -587,6 +588,18 @@ export default function ERRAppSubmissions() {
             ).length})
           </TabsTrigger>
         </TabsList>
+
+        {/* Quick refresh for ERR App Submissions */}
+        <div className="flex justify-end mt-3">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={fetchAllProjects}
+          >
+            <RefreshCw className="h-4 w-4 mr-2" />
+            {t('common:refresh')}
+          </Button>
+        </div>
 
         {/* Tab descriptions */}
         <div className="text-sm text-muted-foreground mt-3">
