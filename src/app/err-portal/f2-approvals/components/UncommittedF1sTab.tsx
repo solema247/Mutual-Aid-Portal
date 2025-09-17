@@ -229,7 +229,7 @@ export default function UncommittedF1sTab() {
                 <TableHead>{t('f2:grant_name')}</TableHead>
                 <TableHead>{t('f2:donor')}</TableHead>
                 <TableHead className="text-right">{t('f2:requested_amount')}</TableHead>
-                <TableHead className="text-right">{t('f2:status')}</TableHead>
+                {/* Status column removed visually */}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -377,11 +377,7 @@ export default function UncommittedF1sTab() {
                       </div>
                     )}
                   </TableCell>
-                  <TableCell className="text-right">
-                    <Badge variant={f1.status === 'approved' ? 'default' : 'secondary'}>
-                      {f1.status}
-                    </Badge>
-                  </TableCell>
+                  {/* Status cell removed visually */}
                 </TableRow>
               ))}
             </TableBody>
