@@ -12,6 +12,7 @@ import { Badge } from '@/components/ui/badge'
 import { supabase } from '@/lib/supabaseClient'
 import { cn } from '@/lib/utils'
 import { Edit2, Save, X, RotateCcw } from 'lucide-react'
+import ProjectEditor from './ProjectEditor'
 import type { UncommittedF1, GrantCallOption } from '../types'
 
 export default function UncommittedF1sTab() {
@@ -24,6 +25,8 @@ export default function UncommittedF1sTab() {
   const [tempGrantCall, setTempGrantCall] = useState<Record<string, string>>({})
   const [isLoading, setIsLoading] = useState(true)
   const [isCommitting, setIsCommitting] = useState(false)
+  const [editorOpen, setEditorOpen] = useState(false)
+  const [editorProjectId, setEditorProjectId] = useState<string | null>(null)
 
   useEffect(() => {
     fetchUncommittedF1s()
@@ -366,10 +369,10 @@ export default function UncommittedF1sTab() {
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={() => handleEditExpenses(f1.id)}
+                          onClick={() => { setEditorProjectId(f1.id); setEditorOpen(true) }}
                         >
                           <Edit2 className="w-3 h-3 mr-1" />
-                          Edit
+                          Edit Project
                         </Button>
                       </div>
                     )}
@@ -385,6 +388,12 @@ export default function UncommittedF1sTab() {
           </Table>
         </CardContent>
       </Card>
+      <ProjectEditor
+        open={editorOpen}
+        onOpenChange={setEditorOpen}
+        projectId={editorProjectId}
+        onSaved={async () => { await fetchUncommittedF1s() }}
+      />
     </div>
   )
 }

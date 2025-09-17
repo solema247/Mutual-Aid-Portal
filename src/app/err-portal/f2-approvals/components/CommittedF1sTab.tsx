@@ -78,7 +78,7 @@ export default function CommittedF1sTab() {
         .select('id, name, year')
         .order('year', { ascending: false })
 
-      // Fetch states
+      // Fetch states (deduplicate by state_name)
       const { data: statesData } = await supabase
         .from('states')
         .select('state_name')
@@ -92,7 +92,9 @@ export default function CommittedF1sTab() {
         })),
         donors: donorsData || [],
         cycles: cyclesData || [],
-        states: (statesData || []).map((s: any) => ({ name: s.state_name }))
+        states: Array.from(new Set(((statesData || []) as any[]).map((s: any) => s.state_name)))
+          .filter(Boolean)
+          .map((name: string) => ({ name }))
       })
     } catch (error) {
       console.error('Error fetching filter options:', error)
@@ -161,7 +163,7 @@ export default function CommittedF1sTab() {
                 value={filters.grantCall}
                 onValueChange={(value) => setFilters(prev => ({ ...prev, grantCall: value }))}
               >
-                <SelectTrigger>
+                <SelectTrigger className="w-full">
                   <SelectValue placeholder="All Grant Calls" />
                 </SelectTrigger>
                 <SelectContent>
@@ -180,7 +182,7 @@ export default function CommittedF1sTab() {
                 value={filters.donor}
                 onValueChange={(value) => setFilters(prev => ({ ...prev, donor: value }))}
               >
-                <SelectTrigger>
+                <SelectTrigger className="w-full">
                   <SelectValue placeholder="All Donors" />
                 </SelectTrigger>
                 <SelectContent>
@@ -199,7 +201,7 @@ export default function CommittedF1sTab() {
                 value={filters.cycle}
                 onValueChange={(value) => setFilters(prev => ({ ...prev, cycle: value }))}
               >
-                <SelectTrigger>
+                <SelectTrigger className="w-full">
                   <SelectValue placeholder="All Cycles" />
                 </SelectTrigger>
                 <SelectContent>
@@ -218,7 +220,7 @@ export default function CommittedF1sTab() {
                 value={filters.state}
                 onValueChange={(value) => setFilters(prev => ({ ...prev, state: value }))}
               >
-                <SelectTrigger>
+                <SelectTrigger className="w-full">
                   <SelectValue placeholder="All States" />
                 </SelectTrigger>
                 <SelectContent>
