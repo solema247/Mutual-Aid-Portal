@@ -235,12 +235,25 @@ export default function ERRAppSubmissions() {
     try {
       const { data, error } = await supabase
         .from('funding_cycles')
-        .select('id, name, cycle_number, start_date')
+        .select('id, name, cycle_number, start_date, year, status, end_date, created_at, created_by')
         .eq('status', 'open')
         .order('cycle_number', { ascending: false })
 
       if (error) throw error
-      setFundingCycles(data || [])
+      // Narrow to the fields we actually use and satisfy FundingCycle type
+      const mapped = (data || []).map((fc: any) => ({
+        id: fc.id,
+        name: fc.name,
+        cycle_number: fc.cycle_number,
+        year: fc.year ?? new Date(fc.start_date || Date.now()).getFullYear(),
+        status: fc.status,
+        start_date: fc.start_date || null,
+        end_date: fc.end_date || null,
+        // The following fields exist in the type but are not used in UI; include from response if present
+        created_at: fc.created_at ?? null,
+        created_by: fc.created_by ?? null
+      }))
+      setFundingCycles(mapped)
     } catch (error) {
       console.error('Error fetching funding cycles:', error)
     }

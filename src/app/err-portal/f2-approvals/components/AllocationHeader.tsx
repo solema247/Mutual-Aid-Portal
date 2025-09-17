@@ -142,10 +142,11 @@ export default function AllocationHeader({ onGrantSelect, onStateSelect, selecte
         })
 
         setAllocationSummary({
-          grant_call: {
+          funding_cycle: {
             id: grantCallData.id,
             name: grantCallData.name,
-            shortname: grantCallData.shortname,
+            cycle_number: 0,
+            year: new Date().getFullYear(),
           },
           total_amount: grantCallData.amount,
           state_allocations: stateCommitments,
@@ -181,12 +182,7 @@ export default function AllocationHeader({ onGrantSelect, onStateSelect, selecte
         <Label className="mb-2">{t('f2:selected_grant')}</Label>
         <div className="flex items-center gap-4">
           <div className="flex-1 p-3 bg-muted rounded-md">
-            <div className="font-medium">{allocationSummary?.grant_call.name}</div>
-            {allocationSummary?.grant_call.shortname && (
-              <div className="text-sm text-muted-foreground">
-                {allocationSummary.grant_call.shortname}
-              </div>
-            )}
+            <div className="font-medium">{allocationSummary?.funding_cycle.name}</div>
           </div>
           <Button
             variant="outline"

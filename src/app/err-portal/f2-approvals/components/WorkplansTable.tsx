@@ -116,7 +116,27 @@ export default function WorkplansTable({
           return isValid
         }) || []
 
-        setWorkplans(validWorkplans)
+        // Map to the Workplan interface shape
+        const mapped: Workplan[] = validWorkplans.map((w: any) => ({
+          id: w.id,
+          workplan_number: w.workplan_number,
+          err_id: w.err_id,
+          locality: w.locality,
+          "Sector (Primary)": w["Sector (Primary)"],
+          expenses: w.expenses,
+          status: w.status,
+          funding_status: w.funding_status,
+          // Required by Workplan type; not used in this view, set to allocation scope
+          funding_cycle_id: '',
+          cycle_state_allocation_id: allocationId,
+          grant_serial_id: w.grant_serial_id,
+          source: w.source,
+          // Keep backward-compatibility fields
+          grant_call_id: grantCallId || '',
+          grant_call_state_allocation_id: allocationId
+        }))
+
+        setWorkplans(mapped)
       } catch (error) {
         console.error('Error fetching workplans:', error)
         setWorkplans([])

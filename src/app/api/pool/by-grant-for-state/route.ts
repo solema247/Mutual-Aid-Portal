@@ -22,14 +22,18 @@ export async function GET(request: Request) {
     type Row = { donor_id: string | null; donor_name: string | null; donor_short?: string | null; grant_call_id: string; grant_call_name: string | null; included: number }
     const includedByGrant = new Map<string, Row>()
     for (const r of inclusions || []) {
-      const donor = Array.isArray(r.donors) ? r.donors[0] : undefined
+      const rowAny = r as any
+      const donor = (rowAny?.donors?.[0]) as { id?: string; name?: string; short_name?: string } | undefined
+      const grantCallsField = rowAny?.grant_calls
+      const donorIdFromGrantCall = Array.isArray(grantCallsField) ? grantCallsField[0]?.donor_id : grantCallsField?.donor_id
+      const grantCallNameFromGrantCall = Array.isArray(grantCallsField) ? grantCallsField[0]?.name : grantCallsField?.name
       const key = r.grant_call_id as string
       const prev = includedByGrant.get(key) || {
-        donor_id: donor?.id || r.grant_calls?.donor_id || null,
+        donor_id: donor?.id || donorIdFromGrantCall || null,
         donor_name: donor?.name || null,
         donor_short: donor?.short_name || null,
         grant_call_id: key,
-        grant_call_name: r.grant_calls?.name || null,
+        grant_call_name: grantCallNameFromGrantCall || null,
         included: 0
       }
       prev.included += r.amount_included || 0

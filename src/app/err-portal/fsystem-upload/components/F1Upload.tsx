@@ -39,6 +39,9 @@ export default function F1Upload() {
     file: null,
     primary_sectors: [],
     secondary_sectors: [],
+    funding_cycle_id: '',
+    cycle_state_allocation_id: '',
+    currency: 'USD',
     grant_call_id: '',
     grant_call_state_allocation_id: '',
     grant_serial_id: ''
@@ -419,6 +422,9 @@ export default function F1Upload() {
         file: null,
         primary_sectors: [],
         secondary_sectors: [],
+        funding_cycle_id: '',
+        cycle_state_allocation_id: '',
+        currency: 'USD',
         grant_call_id: '',
         grant_call_state_allocation_id: ''
       })

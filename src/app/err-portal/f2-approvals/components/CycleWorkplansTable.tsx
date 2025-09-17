@@ -32,6 +32,7 @@ interface CycleWorkplan {
   source?: string | null;
   donor_name?: string;
   grant_call_name?: string;
+  grant_call_id?: string | null;
   err_code?: string | null;
 }
 
