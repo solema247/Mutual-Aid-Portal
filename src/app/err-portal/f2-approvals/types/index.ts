@@ -34,6 +34,7 @@ export interface UncommittedF1 {
   err_code: string | null
   err_name: string | null
   submitted_at: string
+  approval_file_key?: string | null
 }
 
 export interface CommittedF1 {

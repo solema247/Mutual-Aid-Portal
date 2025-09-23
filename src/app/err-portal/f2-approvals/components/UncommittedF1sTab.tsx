@@ -12,7 +12,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Badge } from '@/components/ui/badge'
 import { supabase } from '@/lib/supabaseClient'
 import { cn } from '@/lib/utils'
-import { Edit2, Save, X, RotateCcw } from 'lucide-react'
+import { Edit2, Save, X, ArrowRightLeft } from 'lucide-react'
 import ProjectEditor from './ProjectEditor'
 import type { UncommittedF1, GrantCallOption } from '../types'
 
@@ -65,7 +65,8 @@ export default function UncommittedF1sTab() {
 
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
-      setSelectedF1s(f1s.map(f1 => f1.id))
+      // Only select rows that have an approval file
+      setSelectedF1s(f1s.filter(f1 => !!f1.approval_file_key).map(f1 => f1.id))
     } else {
       setSelectedF1s([])
     }
@@ -167,6 +168,13 @@ export default function UncommittedF1sTab() {
       return
     }
 
+    // Client-side guard: prevent commit if any selected item lacks approval
+    const missing = selectedF1s.filter(id => !f1s.find(f => f.id === id)?.approval_file_key)
+    if (missing.length > 0) {
+      alert(t('f2:cannot_commit_without_approval'))
+      return
+    }
+
     setIsCommitting(true)
     try {
       const response = await fetch('/api/f2/uncommitted/commit', {
@@ -175,7 +183,19 @@ export default function UncommittedF1sTab() {
         body: JSON.stringify({ f1_ids: selectedF1s })
       })
 
-      if (!response.ok) throw new Error('Failed to commit F1s')
+      if (!response.ok) {
+        try {
+          const err = await response.json()
+          if (err?.missing_project_ids?.length) {
+            alert(`${t('f2:cannot_commit_without_approval')}: ${err.missing_project_ids.length} item(s) missing.`)
+          } else {
+            alert('Failed to commit F1s')
+          }
+        } catch {
+          alert('Failed to commit F1s')
+        }
+        return
+      }
 
       const result = await response.json()
       alert(`Successfully committed ${result.committed_count} F1(s)`)
@@ -203,7 +223,7 @@ export default function UncommittedF1sTab() {
         <div className="flex gap-2">
           <Button
             onClick={handleCommitSelected}
-            disabled={selectedF1s.length === 0 || isCommitting}
+          disabled={selectedF1s.length === 0 || isCommitting || selectedF1s.some(id => !f1s.find(f => f.id === id)?.approval_file_key)}
             className="bg-green-600 hover:bg-green-700"
           >
             {isCommitting ? t('f2:committing') : t('f2:commit_selected', { count: selectedF1s.length })}
@@ -229,6 +249,7 @@ export default function UncommittedF1sTab() {
                 <TableHead>{t('f2:grant_name')}</TableHead>
                 <TableHead>{t('f2:donor')}</TableHead>
                 <TableHead className="text-right">{t('f2:requested_amount')}</TableHead>
+                <TableHead>{t('f2:community_approval')}</TableHead>
                 {/* Status column removed visually */}
               </TableRow>
             </TableHeader>
@@ -238,6 +259,7 @@ export default function UncommittedF1sTab() {
                   <TableCell>
                     <Checkbox
                       checked={selectedF1s.includes(f1.id)}
+                      disabled={!f1.approval_file_key}
                       onCheckedChange={(checked) => handleSelectF1(f1.id, checked as boolean)}
                     />
                   </TableCell>
@@ -293,8 +315,8 @@ export default function UncommittedF1sTab() {
                         </div>
                       </div>
                     ) : (
-                      <div className="space-y-1">
-                        <div className="font-medium">{f1.grant_call_name || 'Unassigned'}</div>
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="font-medium truncate">{f1.grant_call_name || 'Unassigned'}</div>
                         <Button
                           size="sm"
                           variant="outline"
@@ -302,9 +324,9 @@ export default function UncommittedF1sTab() {
                             setTempGrantCall(prev => ({ ...prev, [f1.id]: f1.grant_call_id || '' }))
                             setEditingGrantCall(prev => ({ ...prev, [f1.id]: true }))
                           }}
+                          title={t('f2:reassign') as string}
                         >
-                          <RotateCcw className="w-3 h-3 mr-1" />
-                          {t('f2:reassign')}
+                          <ArrowRightLeft className="w-4 h-4" />
                         </Button>
                       </div>
                     )}
@@ -364,15 +386,52 @@ export default function UncommittedF1sTab() {
                         </div>
                       </div>
                     ) : (
-                      <div className="space-y-1">
+                      <div className="flex items-center justify-between gap-2">
                         <div className="font-medium">{calculateTotalAmount(f1.expenses).toLocaleString()}</div>
                         <Button
                           size="sm"
                           variant="outline"
                           onClick={() => { setEditorProjectId(f1.id); setEditorOpen(true) }}
+                          title={t('projects:edit_project') as string}
                         >
-                          <Edit2 className="w-3 h-3 mr-1" />
-                          {t('projects:edit_project')}
+                          <Edit2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {f1.approval_file_key ? (
+                      <Badge variant="default">{t('f2:approval_uploaded')}</Badge>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <Badge variant="secondary" className="text-muted-foreground">{t('f2:approval_required')}</Badge>
+                        <input
+                          id={`approval-file-${f1.id}`}
+                          type="file"
+                          className="hidden"
+                          accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                          onChange={async (e) => {
+                            const file = e.target.files?.[0]
+                            if (!file) return
+                            try {
+                              const key = `f2-approvals/${f1.id}/${Date.now()}-${file.name.replace(/\s+/g,'_')}`
+                              const { error: upErr } = await supabase.storage.from('images').upload(key, file, { upsert: true })
+                              if (upErr) { alert(t('f2:upload_failed')); return }
+                              const resp = await fetch('/api/f2/uncommitted', {
+                                method: 'PATCH',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ id: f1.id, approval_file_key: key })
+                              })
+                              if (!resp.ok) { alert(t('f2:upload_failed')); return }
+                              await fetchUncommittedF1s()
+                            } catch (err) {
+                              console.error('Upload error', err)
+                              alert(t('f2:upload_failed'))
+                            }
+                          }}
+                        />
+                        <Button size="sm" variant="outline" onClick={() => document.getElementById(`approval-file-${f1.id}`)?.click()}>
+                          {t('f2:upload')}
                         </Button>
                       </div>
                     )}

@@ -10,6 +10,19 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'F1 IDs array is required' }, { status: 400 })
     }
 
+    // Validate that each project has an approval file uploaded
+    const { data: approvalsCheck, error: chkErr } = await supabase
+      .from('err_projects')
+      .select('id, approval_file_key')
+      .in('id', f1_ids)
+
+    if (chkErr) throw chkErr
+
+    const missing = (approvalsCheck || []).filter((p: any) => !p.approval_file_key).map((p: any) => p.id)
+    if (missing.length > 0) {
+      return NextResponse.json({ error: 'Missing F2 approval document', missing_project_ids: missing }, { status: 400 })
+    }
+
     const { error } = await supabase
       .from('err_projects')
       .update({ funding_status: 'committed', status: 'approved' })

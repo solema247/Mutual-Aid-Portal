@@ -19,7 +19,8 @@ export async function GET() {
         grant_calls (id, name, donors (name)),
         emergency_room_id,
         emergency_rooms (err_code, name_ar, name),
-        submitted_at
+        submitted_at,
+        approval_file_key
       `)
       .eq('funding_status', 'allocated')
       .order('submitted_at', { ascending: false })
@@ -41,7 +42,8 @@ export async function GET() {
       emergency_room_id: f1.emergency_room_id,
       err_code: f1.emergency_rooms?.err_code || null,
       err_name: f1.emergency_rooms?.name_ar || f1.emergency_rooms?.name || null,
-      submitted_at: f1.submitted_at
+      submitted_at: f1.submitted_at,
+      approval_file_key: f1.approval_file_key || null
     }))
 
     return NextResponse.json(formattedF1s)
@@ -54,7 +56,7 @@ export async function GET() {
 // PATCH /api/f2/uncommitted - Update F1 expenses or grant call
 export async function PATCH(request: Request) {
   try {
-    const { id, expenses, grant_call_id } = await request.json()
+    const { id, expenses, grant_call_id, approval_file_key } = await request.json()
     
     if (!id) {
       return NextResponse.json({ error: 'F1 ID is required' }, { status: 400 })
@@ -63,6 +65,7 @@ export async function PATCH(request: Request) {
     const updateData: any = {}
     if (expenses !== undefined) updateData.expenses = expenses
     if (grant_call_id !== undefined) updateData.grant_call_id = grant_call_id
+    if (approval_file_key !== undefined) updateData.approval_file_key = approval_file_key
 
     const { error } = await supabase
       .from('err_projects')
