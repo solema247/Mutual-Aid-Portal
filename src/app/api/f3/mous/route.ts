@@ -127,52 +127,129 @@ export async function POST(request: Request) {
 
     if (linkErr) throw linkErr
 
-    // Minimal document generation: create a simple text blob and upload as .docx placeholder
+    // Generate a styled Word-compatible HTML document (.doc) and upload
     try {
-      const docContent = [
-        'Memorandum of Understanding Agreement',
-        '',
-        'Between',
-        `${inserted.partner_name}`,
-        'And',
-        `${inserted.err_name}`,
-        '',
-        '1. Purpose',
-        `This MOU will guide the partnership between ${inserted.partner_name} and ${inserted.err_name} to support the community and provide for the humanitarian needs of people affected by the ongoing conflict in Sudan.`,
-        'This will be accomplished by undertaking the following activities:',
-        `${inserted.err_name} / ${inserted.partner_name} shall:`,
-        '- Provide medical treatment for volunteers and their families.',
-        '- Meet the medical needs of the volunteers.',
-        '- The target beneficiaries are volunteers and their families.',
-        `- Provide a sum of $${Number(total_amount || 0).toLocaleString()}.`,
-        '- Accept applications submitted by communities and assess needs fairly, following the community-led methodology (F1 submit).',
-        '- Provide technical support and ensure consistent follow-up on the agreed procedures.',
-        '- Report to the donor.',
-        '',
-        '2. Principles of Partnership',
-        'All parties have entered into this agreement in a spirit of cooperation, valuing the different skills, experiences, knowledge, and opinions that each party brings. All parties will support a culture where risk management is valued as essential and beneficial, critical for long-term project success. The parties commit to desired outcomes and expected benefits, share and listen to new ideas, seek to use experiences to overcome challenges, and agree to regular and proactive communication with early escalation of issues.',
-        '',
-        '3. Reports',
-        'The partner shall present a narrative report (F5) and a financial report (F4) after completion, sharing details of work completed, people supported, and a breakdown of costs. This must follow the F-system templates. ERR undertakes to return any funds for which accounting is not provided.',
-        '',
-        '4. Funding',
-        `The ${inserted.partner_name} will provide a grant of $${Number(total_amount || 0).toLocaleString()} upon signing this MOU. Micro-grant funding will be disbursed to ERR-approved central accounts, with no more than $6,000 per account authorized in one F1. Proof of payment and acknowledgment of receipt must be shared within one week. In case of delay, a clear justification must be attached to the F4 report. Small grants will be distributed to ERR sub-accounts with no more than $6,000 per F1 request.`,
-        '',
-        '5. Budget',
-        'The budget to support the ERR will follow sound procurement procedures. Any changes or obstacles must be reported at least 24 hours in advance.',
-        '',
-        '6. Approved Accounts',
-        'Account details as approved by ERR will be used for disbursement.',
-        '',
-        '7. Duration',
-        `This MOU is effective upon signature by authorized officials of both parties. ${end_date ? `It will terminate on ${end_date}.` : ''} Either party may terminate with written notification.`,
-        '',
-        '8. Contact Information',
-        `Partner: ${inserted.partner_name}`,
-        `ERR: ${inserted.err_name}`,
-      ].join('\n')
-      const filePath = `f3-mous/${inserted.id}/${inserted.mou_code}.docx`
-      const blob = new Blob([docContent], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' })
+      // Load one linked project for details
+      const { data: proj } = await supabase
+        .from('err_projects')
+        .select('project_objectives, intended_beneficiaries, planned_activities, locality, state, banking_details')
+        .eq('mou_id', inserted.id)
+        .limit(1)
+        .maybeSingle()
+
+      const html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <style>
+    body { font-family: Arial, Helvetica, sans-serif; color: #111; line-height: 1.5; }
+    h1 { font-size: 20px; margin: 0 0 8px; }
+    h2 { font-size: 16px; margin: 16px 0 8px; }
+    .section { border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px; margin: 12px 0; }
+    .row { display: table; width: 100%; table-layout: fixed; }
+    .col { display: table-cell; vertical-align: top; width: 50%; padding: 8px; }
+    .box { border: 1px solid #e5e7eb; border-radius: 6px; padding: 8px; }
+    ul { margin: 4px 0; padding-left: 18px; }
+    .rtl { direction: rtl; }
+    .muted { color: #6b7280; font-size: 12px; }
+    .meta { margin-bottom: 8px; }
+  </style>
+  <title>${inserted.mou_code}</title>
+  <meta name=Generator content="Word HTML" />
+</head>
+<body>
+  <div class="meta">
+    <div><strong>MOU Code:</strong> ${inserted.mou_code}</div>
+    <div><strong>Partner:</strong> ${inserted.partner_name}</div>
+    <div><strong>ERR:</strong> ${inserted.err_name}</div>
+    <div><strong>State:</strong> ${inserted.state || ''}</div>
+    <div><strong>Total:</strong> ${Number(total_amount || 0).toLocaleString()}</div>
+  </div>
+
+  <div class="section">
+    <h2>1. Purpose</h2>
+    <div>This MOU will guide the partnership between ${inserted.partner_name} and ${inserted.err_name} to support the community and provide for the humanitarian needs of people affected by the ongoing conflict in Sudan.</div>
+    <div class="muted">This will be accomplished by undertaking the following activities:</div>
+    <div class="row">
+      <div class="col">
+        <div class="box">
+          <div style="font-weight:600; margin-bottom:6px;">${inserted.err_name} shall</div>
+          ${proj?.project_objectives ? `<div><strong>Objectives</strong><div>${String(proj.project_objectives).replace(/\n/g,'<br/>')}</div></div>` : ''}
+          ${proj?.intended_beneficiaries ? `<div style="margin-top:6px;"><strong>Target Beneficiaries</strong><div>${String(proj.intended_beneficiaries).replace(/\n/g,'<br/>')}</div></div>` : ''}
+          ${proj?.planned_activities ? `<div style="margin-top:6px;"><strong>Planned Activities</strong><div>${String(proj.planned_activities).replace(/\n/g,'<br/>')}</div></div>` : ''}
+          ${(proj?.locality || proj?.state) ? `<div class="muted" style="margin-top:6px;">Location: ${proj?.locality || ''} / ${proj?.state || ''}</div>` : ''}
+        </div>
+      </div>
+      <div class="col">
+        <div class="box">
+          <div style="font-weight:600; margin-bottom:6px;">${inserted.partner_name} shall</div>
+          <ul>
+            <li>Provide a sum of $${Number(total_amount || 0).toLocaleString()}.</li>
+            <li>Accept applications submitted by communities that determine needs priorities (protection, WASH, food security, health, shelter/NFIs).</li>
+            <li>Assess needs fairly using the community-led methodology (F1 submit).</li>
+            <li>Provide technical support and ensure consistent follow-up on agreed procedures.</li>
+            <li>Report to the donor.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>2. Principles of Partnership</h2>
+    <div class="row">
+      <div class="col"><div class="box">All parties have entered into this agreement in a spirit of cooperation, valuing the different skills, experiences, knowledge, and opinions that each party brings. All parties will support a culture where risk management is valued as essential and beneficial. The parties commit to desired outcomes and expected benefits, share and listen to new ideas, seek to use experiences to overcome challenges, and agree to regular and proactive communication with early escalation of issues.</div></div>
+      <div class="col"><div class="box rtl">دخلت جميع الأطراف في هذه الاتفاقية بروح التعاون، مع تقدير المهارات والخبرات والمعرفة والآراء المختلفة التي يجلبها كل طرف. ستدعم جميع الأطراف ثقافة يعتبر فيها إدارة المخاطر أمرًا أساسيًا ومفيدًا. تلتزم الأطراف بالنتائج المرجوة والفوائد المتوقعة، وتشارك الأفكار الجديدة وتستمع إليها، وتسعى للاستفادة من خبرات الأطراف الأخرى لتجاوز التحديات، وتوافق على التواصل المنتظم والاستباقي مع التصعيد المبكر للمشكلات لضمان الحل السريع.</div></div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>3. Reports</h2>
+    <div class="row">
+      <div class="col"><div class="box">The partner shall present a narrative report (F5) and a financial report (F4) after completion, sharing details of work completed, people supported, and a breakdown of costs. This must follow the F-system templates. ERR undertakes to return any funds for which accounting is not provided.</div></div>
+      <div class="col"><div class="box rtl">يلتزم الشريك بتقديم تقرير سردي (F5) وتقرير مالي (F4) بعد اكتمال التنفيذ، يتضمن تفاصيل الأعمال المنجزة، وعدد الأشخاص المستفيدين، وتفصيلاً للتكاليف. يجب أن يتبع ذلك نماذج نظام الـ F. وتلتزم غرفة الطوارئ بإعادة أي أموال لا يتم تقديم حسابات عنها.</div></div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>4. Funding</h2>
+    <div class="row">
+      <div class="col"><div class="box">The ${inserted.partner_name} will provide a grant of $${Number(total_amount || 0).toLocaleString()} upon signing this MOU. Disbursement and proof-of-payment requirements apply per policy.</div></div>
+      <div class="col"><div class="box rtl">سيقوم ${inserted.partner_name} بتقديم منحة قدرها $${Number(total_amount || 0).toLocaleString()} عند توقيع مذكرة التفاهم هذه. تنطبق متطلبات الصرف وإثبات الدفع وفق السياسات المعمول بها.</div></div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>5. Budget</h2>
+    <div class="row">
+      <div class="col"><div class="box">A detailed budget is maintained in the F1(s) linked to this MOU. Procurement procedures apply; changes or obstacles must be reported at least 24 hours in advance.</div></div>
+      <div class="col"><div class="box rtl">يتم الاحتفاظ بميزانية تفصيلية في نماذج F1 المرتبطة بهذه المذكرة. تُطبق إجراءات الشراء، ويجب الإبلاغ عن أي تغييرات أو عوائق قبل 24 ساعة على الأقل.</div></div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>6. Approved Accounts</h2>
+    <div class="row">
+      <div class="col"><div class="box">${proj?.banking_details ? String(proj.banking_details).replace(/\n/g,'<br/>') : 'Account details as shared and approved by ERR will be used for disbursement.'}</div></div>
+      <div class="col"><div class="box rtl">${proj?.banking_details ? String(proj.banking_details).replace(/\n/g,'<br/>') : 'تُستخدم تفاصيل الحساب المعتمدة من غرفة الطوارئ في عمليات الصرف.'}</div></div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>7. Duration</h2>
+    <div>This MOU is effective upon signature by authorized officials of both parties. ${end_date ? `It will terminate on ${end_date}.` : ''} Either party may terminate with written notification.</div>
+  </div>
+
+  <div class="section">
+    <h2>8. Contact Information</h2>
+    <div>Partner: ${inserted.partner_name}<br/>ERR: ${inserted.err_name}</div>
+  </div>
+
+</body>
+</html>`
+
+      const filePath = `f3-mous/${inserted.id}/${inserted.mou_code}.doc`
+      const blob = new Blob([html], { type: 'application/msword' })
       // Supabase storage upload via fetch is not available server-side; use storage API
       const { error: upErr } = await supabase.storage.from('images').upload(filePath, blob, { upsert: true })
       if (!upErr) {
