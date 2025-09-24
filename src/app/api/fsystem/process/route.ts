@@ -163,7 +163,9 @@ export async function POST(req: Request) {
     if (file.type === 'application/pdf') {
       console.log('Processing PDF file...')
 
-      // First batch to get total pages (request first 5 pages)
+      // Respect max pages hint (default 5, capped 20)
+      const maxPagesHint = Math.max(1, Math.min(Number(formMetadata?.ocr_max_pages) || 5, 20))
+      const firstBatchPages = Array.from({ length: Math.min(5, maxPagesHint) }, (_, i) => i + 1)
       const [pageInfo] = await visionClient.batchAnnotateFiles({
         requests: [{
           inputConfig: {
@@ -174,9 +176,9 @@ export async function POST(req: Request) {
             type: 'DOCUMENT_TEXT_DETECTION'
           }],
           imageContext: {
-            languageHints: ['ar']
+            languageHints: ['ar', 'en']
           },
-          pages: [1, 2, 3, 4, 5]  // First 5 pages
+          pages: firstBatchPages  // First batch pages
         }]
       })
 
@@ -189,10 +191,12 @@ export async function POST(req: Request) {
         allTexts.push(pageText)
       })
 
-      // If we got 5 pages, there might be more
-      if (firstBatchResponses.length === 5) {
+      // Continue only up to the max pages hint
+      if (firstBatchResponses.length === firstBatchPages.length && maxPagesHint > firstBatchPages.length) {
         try {
-          // Try next batch
+          // Try next batch within the max pages hint
+          const nextCount = Math.min(5, maxPagesHint - firstBatchPages.length)
+          const nextPages = Array.from({ length: nextCount }, (_, i) => firstBatchPages.length + i + 1)
           const [nextBatch] = await visionClient.batchAnnotateFiles({
             requests: [{
               inputConfig: {
@@ -203,18 +207,19 @@ export async function POST(req: Request) {
                 type: 'DOCUMENT_TEXT_DETECTION'
               }],
               imageContext: {
-                languageHints: ['ar']
+                languageHints: ['ar', 'en']
               },
-              pages: [6, 7, 8, 9, 10]  // Next 5 pages
+              pages: nextPages
             }]
           })
 
           const nextBatchResponses = nextBatch.responses?.[0]?.responses || []
           nextBatchResponses.forEach((response, idx) => {
             const pageText = response?.fullTextAnnotation?.text || ''
-            console.log(`Page ${idx + 6} text length:`, pageText.length)
+            console.log(`Page ${idx + firstBatchPages.length + 1} text length:`, pageText.length)
             allTexts.push(pageText)
           })
+          // No further batches if we reached the max pages hint
         } catch (error) {
           // If error occurs on second batch, just use what we have
           console.log('Note: Could not process beyond page 5, using available pages')
@@ -224,7 +229,30 @@ export async function POST(req: Request) {
       console.log('Total pages processed:', allTexts.length)
 
       if (allTexts.length === 0) {
-        throw new Error('No text extracted from PDF')
+        // Gracefully handle empty OCR: return minimal structure
+        return NextResponse.json({
+          date: null,
+          state: null,
+          locality: null,
+          project_objectives: null,
+          intended_beneficiaries: null,
+          estimated_beneficiaries: null,
+          estimated_timeframe: null,
+          additional_support: null,
+          banking_details: null,
+          program_officer_name: null,
+          program_officer_phone: null,
+          reporting_officer_name: null,
+          reporting_officer_phone: null,
+          finance_officer_name: null,
+          finance_officer_phone: null,
+          planned_activities: [],
+          expenses: [],
+          form_currency: formMetadata?.currency || 'USD',
+          exchange_rate: formMetadata?.exchange_rate || 1,
+          language: null,
+          raw_ocr: ''
+        })
       }
 
       // Combine all texts with page breaks
@@ -234,7 +262,7 @@ export async function POST(req: Request) {
       const [result] = await visionClient.documentTextDetection({
         image: { content: base64 },
         imageContext: {
-          languageHints: ['ar']  // Help Vision detect Arabic text
+          languageHints: ['ar', 'en']  // Help Vision detect Arabic/English text
         }
       })
       text = result.fullTextAnnotation?.text || ''
@@ -250,7 +278,30 @@ export async function POST(req: Request) {
     }
 
     if (!text) {
-      throw new Error('No text extracted from document')
+      // Gracefully handle empty OCR: return minimal structure
+      return NextResponse.json({
+        date: null,
+        state: null,
+        locality: null,
+        project_objectives: null,
+        intended_beneficiaries: null,
+        estimated_beneficiaries: null,
+        estimated_timeframe: null,
+        additional_support: null,
+        banking_details: null,
+        program_officer_name: null,
+        program_officer_phone: null,
+        reporting_officer_name: null,
+        reporting_officer_phone: null,
+        finance_officer_name: null,
+        finance_officer_phone: null,
+        planned_activities: [],
+        expenses: [],
+        form_currency: formMetadata?.currency || 'USD',
+        exchange_rate: formMetadata?.exchange_rate || 1,
+        language: null,
+        raw_ocr: ''
+      })
     }
 
     // Process with OpenAI

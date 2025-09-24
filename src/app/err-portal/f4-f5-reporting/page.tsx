@@ -5,6 +5,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '@/components/ui/table'
+import UploadF4Modal from './components/UploadF4Modal'
 
 interface F4Row {
   id: number
@@ -89,17 +90,7 @@ export default function F4F5ReportingPage() {
             </CardContent>
           </Card>
 
-          {uploadOpen && (
-            <div className="fixed inset-0 bg-black/40 flex items-center justify-center" onClick={() => setUploadOpen(false)}>
-              <div className="bg-white rounded-md shadow w-full max-w-xl p-4" onClick={(e)=>e.stopPropagation()}>
-                <div className="text-lg font-semibold mb-2">Upload F4 (Direct)</div>
-                <div className="text-sm text-muted-foreground">Minimal placeholder. Full modal to follow.</div>
-                <div className="mt-4 flex justify-end gap-2">
-                  <Button variant="outline" onClick={() => setUploadOpen(false)}>Close</Button>
-                </div>
-              </div>
-            </div>
-          )}
+          <UploadF4Modal open={uploadOpen} onOpenChange={setUploadOpen} onSaved={load} />
         </TabsContent>
 
         <TabsContent value="f5" className="mt-4">
