@@ -119,10 +119,10 @@ export async function POST(request: Request) {
 
     if (insErr) throw insErr
 
-    // Link projects to the MOU
+    // Link projects to the MOU and activate them
     const { error: linkErr } = await supabase
       .from('err_projects')
-      .update({ mou_id: inserted.id })
+      .update({ mou_id: inserted.id, status: 'active' })
       .in('id', project_ids)
 
     if (linkErr) throw linkErr

@@ -20,6 +20,7 @@ export async function GET(
       .from('err_projects')
       .select(`
         id,
+        language,
         banking_details,
         program_officer_name,
         program_officer_phone,
@@ -39,13 +40,29 @@ export async function GET(
       .order('submitted_at', { ascending: false })
     if (projErr) throw projErr
 
-    // Choose a project with non-empty descriptive fields if possible
-    const pick = (projects || []).find((p: any) => (
-      (p?.project_objectives && String(p.project_objectives).trim() !== '') ||
-      (p?.intended_beneficiaries && String(p.intended_beneficiaries).trim() !== '') ||
-      (p?.planned_activities && String(p.planned_activities).trim() !== '')
-    )) || (projects || [])[0] || null
-    const project = pick
+    // Resolve planned activities for all projects
+    const resolvedProjects = [] as any[]
+    for (const p of (projects || [])) {
+      let resolved = { ...p }
+      if (p?.planned_activities) {
+        try {
+          const raw = typeof p.planned_activities === 'string' ? JSON.parse(p.planned_activities) : p.planned_activities
+          const arr = Array.isArray(raw) ? raw : []
+          const ids = Array.from(new Set(arr.map((a: any) => a?.selectedActivity).filter(Boolean)))
+          if (ids.length > 0) {
+            const { data: activities } = await supabase
+              .from('planned_activities')
+              .select('id, activity_name, language')
+              .in('id', ids as string[])
+            const nameMap: Record<string, string> = {}
+            for (const a of (activities || [])) nameMap[a.id] = a.activity_name || a.id
+            const names = arr.map((a: any) => nameMap[a?.selectedActivity] || a?.selectedActivity || '').filter(Boolean)
+            resolved.planned_activities_resolved = names.join('\n')
+          }
+        } catch {}
+      }
+      resolvedProjects.push(resolved)
+    }
 
     // Try resolve partner by name
     let partner = null as any
@@ -59,7 +76,7 @@ export async function GET(
       partner = partnerRow
     }
 
-    return NextResponse.json({ mou, project, partner })
+    return NextResponse.json({ mou, projects: resolvedProjects, partner })
   } catch (error) {
     console.error('Error loading MOU detail:', error)
     return NextResponse.json({ error: 'Failed to load MOU detail' }, { status: 500 })

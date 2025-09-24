@@ -23,6 +23,23 @@ interface MOU {
 
 interface MOUDetail {
   mou: MOU
+  projects?: Array<{
+    banking_details: string | null
+    program_officer_name: string | null
+    program_officer_phone: string | null
+    reporting_officer_name: string | null
+    reporting_officer_phone: string | null
+    finance_officer_name: string | null
+    finance_officer_phone: string | null
+    project_objectives: string | null
+    intended_beneficiaries: string | null
+    planned_activities: string | null
+    planned_activities_resolved?: string | null
+    locality: string | null
+    state: string | null
+    "Sector (Primary)"?: string | null
+    "Sector (Secondary)"?: string | null
+  }> | null
   project?: {
     banking_details: string | null
     program_officer_name: string | null
@@ -34,6 +51,7 @@ interface MOUDetail {
     project_objectives: string | null
     intended_beneficiaries: string | null
     planned_activities: string | null
+    planned_activities_resolved?: string | null
     locality: string | null
     state: string | null
     "Sector (Primary)"?: string | null
@@ -60,6 +78,24 @@ export default function F3MOUsPage() {
   const [translations, setTranslations] = useState<{ objectives_en?: string; beneficiaries_en?: string; activities_en?: string; objectives_ar?: string; beneficiaries_ar?: string; activities_ar?: string }>({})
   const [exporting, setExporting] = useState(false)
   const previewId = 'mou-preview-content'
+
+  const toDisplay = (value: any): string => {
+    if (value == null) return ''
+    if (typeof value === 'string') return value
+    try {
+      if (Array.isArray(value)) {
+        return value.map((item: any) => {
+          if (item == null) return ''
+          if (typeof item === 'string') return item
+          return item.activity || item.description || item.selectedActivity || JSON.stringify(item)
+        }).join('\n')
+      }
+      // Plain object
+      return JSON.stringify(value)
+    } catch {
+      return String(value)
+    }
+  }
 
   const fetchMous = async () => {
     try {
@@ -127,9 +163,10 @@ export default function F3MOUsPage() {
                             const data = await res.json()
                             setDetail(data)
                             // Attempt lightweight auto-translation for project fields
-                            const obj = data?.project?.project_objectives as string | undefined
-                            const ben = data?.project?.intended_beneficiaries as string | undefined
-                            const act = data?.project?.planned_activities as string | undefined
+                            const p0 = (data?.projects && data.projects[0]) || data?.project || {}
+                            const objStr = toDisplay(p0?.project_objectives)
+                            const benStr = toDisplay(p0?.intended_beneficiaries)
+                            const actStr = toDisplay(p0?.planned_activities_resolved || p0?.planned_activities)
                             const hasArabic = (s?: string) => !!s && /[\u0600-\u06FF]/.test(s)
 
                             const translate = async (q: string, source: 'ar'|'en', target: 'ar'|'en') => {
@@ -147,31 +184,31 @@ export default function F3MOUsPage() {
                             }
 
                             const newTx: any = {}
-                            if (obj) {
-                              if (hasArabic(obj)) {
-                                newTx.objectives_ar = obj
-                                newTx.objectives_en = await translate(obj, 'ar', 'en')
+                            if (objStr) {
+                              if (hasArabic(objStr)) {
+                                newTx.objectives_ar = objStr
+                                newTx.objectives_en = await translate(objStr, 'ar', 'en')
                               } else {
-                                newTx.objectives_en = obj
-                                newTx.objectives_ar = await translate(obj, 'en', 'ar')
+                                newTx.objectives_en = objStr
+                                newTx.objectives_ar = await translate(objStr, 'en', 'ar')
                               }
                             }
-                            if (ben) {
-                              if (hasArabic(ben)) {
-                                newTx.beneficiaries_ar = ben
-                                newTx.beneficiaries_en = await translate(ben, 'ar', 'en')
+                            if (benStr) {
+                              if (hasArabic(benStr)) {
+                                newTx.beneficiaries_ar = benStr
+                                newTx.beneficiaries_en = await translate(benStr, 'ar', 'en')
                               } else {
-                                newTx.beneficiaries_en = ben
-                                newTx.beneficiaries_ar = await translate(ben, 'en', 'ar')
+                                newTx.beneficiaries_en = benStr
+                                newTx.beneficiaries_ar = await translate(benStr, 'en', 'ar')
                               }
                             }
-                            if (act) {
-                              if (hasArabic(act)) {
-                                newTx.activities_ar = act
-                                newTx.activities_en = await translate(act, 'ar', 'en')
+                            if (actStr) {
+                              if (hasArabic(actStr)) {
+                                newTx.activities_ar = actStr
+                                newTx.activities_en = await translate(actStr, 'ar', 'en')
                               } else {
-                                newTx.activities_en = act
-                                newTx.activities_ar = await translate(act, 'en', 'ar')
+                                newTx.activities_en = actStr
+                                newTx.activities_ar = await translate(actStr, 'en', 'ar')
                               }
                             }
                             setTranslations(newTx)
@@ -218,26 +255,26 @@ export default function F3MOUsPage() {
                   <div className="rounded-md border p-3">
                     <div className="font-medium mb-2">{activeMou.err_name} shall</div>
                     <div className="text-sm space-y-2">
-                      {(translations.objectives_en || detail?.project?.project_objectives) && (
+                      {(translations.objectives_en || (detail?.projects?.[0]?.project_objectives ?? detail?.project?.project_objectives)) && (
                         <div>
                           <div className="font-semibold">Objectives</div>
-                          <div className="whitespace-pre-wrap">{translations.objectives_en || detail?.project?.project_objectives}</div>
+                          <div className="whitespace-pre-wrap">{translations.objectives_en || toDisplay(detail?.projects?.[0]?.project_objectives ?? detail?.project?.project_objectives)}</div>
                         </div>
                       )}
-                      {(translations.beneficiaries_en || detail?.project?.intended_beneficiaries) && (
+                      {(translations.beneficiaries_en || (detail?.projects?.[0]?.intended_beneficiaries ?? detail?.project?.intended_beneficiaries)) && (
                         <div>
                           <div className="font-semibold">Target Beneficiaries</div>
-                          <div className="whitespace-pre-wrap">{translations.beneficiaries_en || detail?.project?.intended_beneficiaries}</div>
+                          <div className="whitespace-pre-wrap">{translations.beneficiaries_en || toDisplay(detail?.projects?.[0]?.intended_beneficiaries ?? detail?.project?.intended_beneficiaries)}</div>
                         </div>
                       )}
-                      {(translations.activities_en || detail?.project?.planned_activities) && (
+                      {(translations.activities_en || (detail?.projects?.[0]?.planned_activities_resolved ?? detail?.project?.planned_activities_resolved) || (detail?.projects?.[0]?.planned_activities ?? detail?.project?.planned_activities)) && (
                         <div>
                           <div className="font-semibold">Planned Activities</div>
-                          <div className="whitespace-pre-wrap">{translations.activities_en || detail?.project?.planned_activities}</div>
+                          <div className="whitespace-pre-wrap">{translations.activities_en || toDisplay((detail?.projects?.[0]?.planned_activities_resolved ?? detail?.project?.planned_activities_resolved) || (detail?.projects?.[0]?.planned_activities ?? detail?.project?.planned_activities))}</div>
                         </div>
                       )}
-                      {(detail?.project?.locality || detail?.project?.state) && (
-                        <div className="text-xs text-muted-foreground">Location: {detail?.project?.locality || '-'} / {detail?.project?.state || '-'}</div>
+                      {((detail?.projects?.[0]?.locality ?? detail?.project?.locality) || (detail?.projects?.[0]?.state ?? detail?.project?.state)) && (
+                        <div className="text-xs text-muted-foreground">Location: {(detail?.projects?.[0]?.locality ?? detail?.project?.locality) || '-'} / {(detail?.projects?.[0]?.state ?? detail?.project?.state) || '-'}</div>
                       )}
                     </div>
                   </div>
@@ -258,26 +295,26 @@ export default function F3MOUsPage() {
                   <div className="rounded-md border p-3" dir="rtl">
                     <div className="font-medium mb-2">تلتزم {activeMou.err_name}</div>
                     <div className="text-sm space-y-2">
-                      {(translations.objectives_ar || detail?.project?.project_objectives) && (
+                      {(translations.objectives_ar || (detail?.projects?.[0]?.project_objectives ?? detail?.project?.project_objectives)) && (
                         <div>
                           <div className="font-semibold">الأهداف</div>
-                          <div className="whitespace-pre-wrap">{translations.objectives_ar || detail?.project?.project_objectives}</div>
+                          <div className="whitespace-pre-wrap">{translations.objectives_ar || toDisplay(detail?.projects?.[0]?.project_objectives ?? detail?.project?.project_objectives)}</div>
                         </div>
                       )}
-                      {(translations.beneficiaries_ar || detail?.project?.intended_beneficiaries) && (
+                      {(translations.beneficiaries_ar || (detail?.projects?.[0]?.intended_beneficiaries ?? detail?.project?.intended_beneficiaries)) && (
                         <div>
                           <div className="font-semibold">المستفيدون المستهدفون</div>
-                          <div className="whitespace-pre-wrap">{translations.beneficiaries_ar || detail?.project?.intended_beneficiaries}</div>
+                          <div className="whitespace-pre-wrap">{translations.beneficiaries_ar || toDisplay(detail?.projects?.[0]?.intended_beneficiaries ?? detail?.project?.intended_beneficiaries)}</div>
                         </div>
                       )}
-                      {(translations.activities_ar || detail?.project?.planned_activities) && (
+                      {(translations.activities_ar || (detail?.projects?.[0]?.planned_activities_resolved ?? detail?.project?.planned_activities_resolved) || (detail?.projects?.[0]?.planned_activities ?? detail?.project?.planned_activities)) && (
                         <div>
                           <div className="font-semibold">الأنشطة المخططة</div>
-                          <div className="whitespace-pre-wrap">{translations.activities_ar || detail?.project?.planned_activities}</div>
+                          <div className="whitespace-pre-wrap">{translations.activities_ar || toDisplay((detail?.projects?.[0]?.planned_activities_resolved ?? detail?.project?.planned_activities_resolved) || (detail?.projects?.[0]?.planned_activities ?? detail?.project?.planned_activities))}</div>
                         </div>
                       )}
-                      {(detail?.project?.locality || detail?.project?.state) && (
-                        <div className="text-xs text-muted-foreground">الموقع: {detail?.project?.locality || '-'} / {detail?.project?.state || '-'}</div>
+                      {((detail?.projects?.[0]?.locality ?? detail?.project?.locality) || (detail?.projects?.[0]?.state ?? detail?.project?.state)) && (
+                        <div className="text-xs text-muted-foreground">الموقع: {(detail?.projects?.[0]?.locality ?? detail?.project?.locality) || '-'} / {(detail?.projects?.[0]?.state ?? detail?.project?.state) || '-'}</div>
                       )}
                     </div>
                   </div>
