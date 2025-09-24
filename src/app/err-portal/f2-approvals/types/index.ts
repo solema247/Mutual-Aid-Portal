@@ -56,6 +56,7 @@ export interface CommittedF1 {
   committed_at: string
   funding_cycle_id: string | null
   funding_cycle_name: string | null
+  mou_id?: string | null
 }
 
 export interface GrantCallOption {

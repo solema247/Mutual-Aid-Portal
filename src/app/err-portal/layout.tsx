@@ -65,6 +65,11 @@ export default function ErrPortalLayout({
       icon: <CheckSquare className="h-5 w-5" />
     },
     {
+      href: '/err-portal/f3-mous',
+      label: 'F3 MOUs',
+      icon: <FileText className="h-5 w-5" />
+    },
+    {
       href: '/err-portal/dashboard',
       label: t('err:dashboard'),
       icon: <BarChart2 className="h-5 w-5" />

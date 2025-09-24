@@ -12,6 +12,8 @@ import { Badge } from '@/components/ui/badge'
 import { supabase } from '@/lib/supabaseClient'
 import { Search, Filter } from 'lucide-react'
 import type { CommittedF1, FilterOptions } from '../types'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 
 export default function CommittedF1sTab() {
   const { t } = useTranslation(['f2', 'common'])
@@ -30,10 +32,58 @@ export default function CommittedF1sTab() {
     state: 'all'
   })
   const [isLoading, setIsLoading] = useState(true)
+  const [selected, setSelected] = useState<string[]>([])
+  const [partners, setPartners] = useState<Array<{ id: string; name: string }>>([])
+  const [selectedPartnerId, setSelectedPartnerId] = useState<string>('')
+  const [partnerModalOpen, setPartnerModalOpen] = useState(false)
+
+  const toggleAll = (checked: boolean) => {
+    if (!checked) return setSelected([])
+    setSelected(f1s.filter(f => !f.mou_id).map(f => f.id))
+  }
+  const toggleOne = (id: string, checked: boolean) => {
+    if (checked) setSelected(prev => [...prev, id])
+    else setSelected(prev => prev.filter(x => x !== id))
+  }
+  const createMOU = async () => {
+    if (selected.length === 0) return
+    if (!selectedPartnerId) { alert('Please select a local partner'); return }
+    const total = selected
+      .map(id => f1s.find(f => f.id === id))
+      .filter(Boolean)
+      .reduce((s: number, f: any) => s + f.expenses.reduce((x: number, e: any) => x + (e.total_cost || 0), 0), 0)
+    const body = {
+      project_ids: selected,
+      partner_id: selectedPartnerId,
+      state: f1s.find(f => f.id === selected[0])?.state,
+      mou_code: undefined,
+      end_date: null
+    }
+    const resp = await fetch('/api/f3/mous', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    if (!resp.ok) { alert('Failed to create MOU'); return }
+    alert('MOU created')
+    setSelected([])
+    setSelectedPartnerId('')
+    setPartnerModalOpen(false)
+    await fetchCommittedF1s()
+  }
+
+  const openPartnerModal = () => {
+    if (selected.length === 0) { alert('Please select committed projects'); return }
+    setPartnerModalOpen(true)
+  }
 
   useEffect(() => {
     fetchCommittedF1s()
     fetchFilterOptions()
+    ;(async () => {
+      const { data } = await supabase
+        .from('partners')
+        .select('id, name')
+        .eq('status', 'active')
+        .order('name')
+      setPartners((data || []) as any)
+    })()
   }, [])
 
   useEffect(() => {
@@ -132,6 +182,15 @@ export default function CommittedF1sTab() {
         <div>
           <h3 className="text-lg font-semibold">{t('f2:committed_header', { count: f1s.length })}</h3>
           <p className="text-sm text-muted-foreground">{t('f2:committed_desc')}</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button
+            onClick={openPartnerModal}
+            disabled={selected.length === 0 || selected.some(id => !!f1s.find(f => f.id === id)?.mou_id)}
+            className="bg-green-600 hover:bg-green-700 text-white"
+          >
+            Create F3 MOU
+          </Button>
         </div>
       </div>
 
@@ -248,6 +307,9 @@ export default function CommittedF1sTab() {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-12">
+                  <Checkbox checked={selected.length > 0 && selected.length === f1s.filter(f => !f.mou_id).length} onCheckedChange={toggleAll} />
+                </TableHead>
                 <TableHead>{t('f2:err_id')}</TableHead>
                 <TableHead>{t('f2:date')}</TableHead>
                 <TableHead>{t('f2:state')}</TableHead>
@@ -258,11 +320,15 @@ export default function CommittedF1sTab() {
                 <TableHead className="text-right">{t('f2:requested_amount')}</TableHead>
                 <TableHead>{t('f2:committed')}</TableHead>
                 <TableHead>{t('f2:status')}</TableHead>
+                <TableHead>MOU</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {f1s.map((f1) => (
                 <TableRow key={f1.id}>
+                  <TableCell>
+                    <Checkbox disabled={!!f1.mou_id} checked={selected.includes(f1.id)} onCheckedChange={(c) => toggleOne(f1.id, c as boolean)} />
+                  </TableCell>
                   <TableCell>
                     <div className="font-medium">{f1.err_id}</div>
                     <div className="text-sm text-muted-foreground">{f1.err_code}</div>
@@ -284,6 +350,11 @@ export default function CommittedF1sTab() {
                       {f1.funding_status}
                     </Badge>
                   </TableCell>
+                  <TableCell>
+                    {f1.mou_id ? (
+                      <a className="text-primary underline" href="/err-portal/f3-mous">View MOU</a>
+                    ) : '-'}
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -293,6 +364,33 @@ export default function CommittedF1sTab() {
           )}
         </CardContent>
       </Card>
+
+      <Dialog open={partnerModalOpen} onOpenChange={setPartnerModalOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Select Local Partner</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-4 py-2">
+            <div>
+              <Label>Local Partner</Label>
+              <select
+                className="mt-1 block w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                value={selectedPartnerId}
+                onChange={(e) => setSelectedPartnerId(e.target.value)}
+              >
+                <option value="">Select partner…</option>
+                {partners.map(p => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setPartnerModalOpen(false)}>Cancel</Button>
+            <Button onClick={createMOU} disabled={!selectedPartnerId} className="bg-green-600 hover:bg-green-700 text-white">Create</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

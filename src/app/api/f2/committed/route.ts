@@ -28,7 +28,8 @@ export async function GET(request: Request) {
         emergency_rooms (err_code, name_ar, name),
         submitted_at,
         funding_cycle_id,
-        funding_cycles (id, name, year)
+        funding_cycles (id, name, year),
+        mou_id
       `)
       .eq('funding_status', 'committed')
       .order('submitted_at', { ascending: false })
@@ -66,7 +67,8 @@ export async function GET(request: Request) {
       submitted_at: f1.submitted_at,
       committed_at: f1.submitted_at,
       funding_cycle_id: f1.funding_cycle_id,
-      funding_cycle_name: f1.funding_cycles?.name || null
+      funding_cycle_name: f1.funding_cycles?.name || null,
+      mou_id: f1.mou_id || null
     }))
 
     // Apply client-side filters that can't be done in SQL
