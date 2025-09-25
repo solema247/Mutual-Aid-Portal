@@ -452,12 +452,10 @@ Return all fields in this format:
 
     console.log('Raw GPT response:', content)
 
-    // Sanitize the JSON string
+    // Sanitize the JSON string (basic cleanup only)
     const sanitizedContent = content
       .replace(/[\u0000-\u001F\u007F-\u009F]/g, '') // Remove control characters
-      .replace(/\\/g, '\\\\')  // Escape backslashes
-      .replace(/[\u2028\u2029]/g, ' ')  // Replace line terminators
-      .replace(/[^\x20-\x7E\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/g, ' ') // Keep only Arabic, English and basic punctuation
+      .replace(/^```[a-zA-Z]*\n|```$/g, '') // Strip markdown fences if present
 
     try {
       const structuredData = JSON.parse(sanitizedContent)
@@ -496,6 +494,47 @@ Return all fields in this format:
     } catch (error) {
       console.error('JSON parse error:', error)
       console.error('Sanitized content:', sanitizedContent)
+
+      // Attempt a one-shot repair for F5 JSON
+      if (isF5) {
+        try {
+          const repair = await openai.chat.completions.create({
+            model: 'gpt-3.5-turbo',
+            max_tokens: 3000,
+            temperature: 0,
+            messages: [
+              { role: 'system', content: 'You will receive possibly malformed JSON. Return STRICT, MINIFIED JSON only (no code fences, no prose). Use exactly these keys: raw_ocr, language, date, reach (array of objects with activity_name, activity_goal, location, start_date, end_date, individual_count, household_count, male_count, female_count, under18_male, under18_female), positive_changes, negative_results, unexpected_results, lessons_learned, suggestions, reporting_person.' },
+              { role: 'user', content: sanitizedContent }
+            ]
+          })
+          const fixed = repair.choices[0]?.message?.content || ''
+          const fixedSan = fixed.replace(/^[\s`]+|[\s`]+$/g, '')
+          const repaired = JSON.parse(fixedSan)
+          if (!repaired.language) repaired.language = detectLanguage(text)
+          repaired.raw_ocr = text
+          return NextResponse.json(repaired)
+        } catch (repairErr) {
+          console.warn('F5 repair attempt failed:', repairErr)
+        }
+      }
+
+      // Fallback for F5: return a minimal valid structure so caller can proceed
+      if (isF5) {
+        const detectedLanguage = detectLanguage(text)
+        return NextResponse.json({
+          raw_ocr: text,
+          language: detectedLanguage,
+          date: null,
+          reach: [],
+          positive_changes: null,
+          negative_results: null,
+          unexpected_results: null,
+          lessons_learned: null,
+          suggestions: null,
+          reporting_person: null
+        })
+      }
+
       throw new Error(`Failed to parse OpenAI response: ${error instanceof Error ? error.message : 'Unknown error'}`)
     }
   } catch (error) {

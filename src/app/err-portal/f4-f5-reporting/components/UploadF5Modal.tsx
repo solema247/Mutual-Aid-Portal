@@ -36,6 +36,7 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved }: UploadF5M
       const { data } = await supabase
         .from('err_projects')
         .select('state')
+        .eq('status', 'active')
       const uniq = Array.from(new Set(((data as any[]) || []).map((r:any)=>r.state).filter(Boolean))) as string[]
       setStates(uniq)
     })()
@@ -47,6 +48,7 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved }: UploadF5M
       const { data } = await supabase
         .from('err_projects')
         .select('emergency_room_id, emergency_rooms (id, name, name_ar, err_code)')
+        .eq('status', 'active')
         .eq('state', selectedState)
       const map = new Map<string, { id: string; label: string }>()
       for (const r of (data as any[]) || []) {
@@ -69,6 +71,7 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved }: UploadF5M
       const { data } = await supabase
         .from('err_projects')
         .select('id, project_objectives, submitted_at')
+        .eq('status', 'active')
         .eq('emergency_room_id', selectedRoomId)
         .order('submitted_at', { ascending: false })
       setProjects(((data as any[]) || []).map((p:any)=> ({ id: p.id, label: p.project_objectives || p.id })))
