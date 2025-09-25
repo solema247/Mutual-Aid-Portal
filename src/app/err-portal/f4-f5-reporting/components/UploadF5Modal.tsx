@@ -8,11 +8,64 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { supabase } from '@/lib/supabaseClient'
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '@/components/ui/table'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 
 interface UploadF5ModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   onSaved: () => void
+}
+
+// Helper function to extract table data from raw OCR
+const extractTables = (rawOcr: string) => {
+  const activitiesTable: string[] = []
+  const demographicsTable: string[] = []
+  
+  if (!rawOcr) return { activitiesTable, demographicsTable }
+  
+  const lines = rawOcr.split('\n')
+  let inActivitiesSection = false
+  let inDemographicsSection = false
+  
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim()
+    
+    // Detect activities table section
+    if (line.includes('الأنشطة المنفذة') || line.includes('إسم النشاط')) {
+      inActivitiesSection = true
+      inDemographicsSection = false
+      activitiesTable.push(line)
+      continue
+    }
+    
+    // Detect demographics table section
+    if (line.includes('الحصر الإضافي للمستفيدين') || (line.includes('ذكور') && line.includes('إناث'))) {
+      inDemographicsSection = true
+      inActivitiesSection = false
+      demographicsTable.push(line)
+      continue
+    }
+    
+    // Stop activities section when we hit demographics or narrative
+    if (inActivitiesSection && (line.includes('الحصر الإضافي') || line.includes('التأثيرات'))) {
+      inActivitiesSection = false
+    }
+    
+    // Stop demographics section when we hit narrative
+    if (inDemographicsSection && (line.includes('التأثيرات') || line.includes('أروي'))) {
+      inDemographicsSection = false
+    }
+    
+    // Add lines to appropriate table
+    if (inActivitiesSection && line.length > 0) {
+      activitiesTable.push(line)
+    } else if (inDemographicsSection && line.length > 0) {
+      demographicsTable.push(line)
+    }
+  }
+  
+  return { activitiesTable, demographicsTable }
 }
 
 export default function UploadF5Modal({ open, onOpenChange, onSaved }: UploadF5ModalProps) {
@@ -29,6 +82,9 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved }: UploadF5M
   const [summaryDraft, setSummaryDraft] = useState<any | null>(null)
   const [reachDraft, setReachDraft] = useState<any[]>([])
   const [tempKey, setTempKey] = useState<string>('')
+  const [fileUrl, setFileUrl] = useState<string>('')
+  const [rawOcr, setRawOcr] = useState<string>('')
+  const [activeTab, setActiveTab] = useState('form')
 
   useEffect(() => {
     if (!open) return
@@ -95,6 +151,14 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved }: UploadF5M
       if (!parseRes.ok) throw new Error(parseJson.error || 'Parse failed')
       setSummaryDraft({ ...(parseJson.summaryDraft || {}), report_date: reportDate || (parseJson.summaryDraft?.report_date || '') })
       setReachDraft(parseJson.reachDraft || [])
+      setRawOcr(parseJson.summaryDraft?.raw_ocr || '')
+      
+      // Get signed URL for file viewing
+      const { data: signedUrl } = await supabase.storage.from('images').createSignedUrl(key, 3600)
+      if (signedUrl?.signedUrl) {
+        setFileUrl(signedUrl.signedUrl)
+      }
+      
       setStep('preview')
     } catch (e) {
       console.error(e)
@@ -130,6 +194,9 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved }: UploadF5M
     setReachDraft([])
     setStep('select')
     setTempKey('')
+    setFileUrl('')
+    setRawOcr('')
+    setActiveTab('form')
   }
 
   return (
@@ -189,7 +256,14 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved }: UploadF5M
             </div>
           </div>
         ) : (
-          <div className="space-y-6 select-text">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+            <TabsList className="grid w-full grid-cols-3">
+              <TabsTrigger value="form">Edit Form</TabsTrigger>
+              <TabsTrigger value="file">View File</TabsTrigger>
+              <TabsTrigger value="tables">Extracted Tables</TabsTrigger>
+            </TabsList>
+            
+            <TabsContent value="form" className="space-y-6 select-text mt-6">
             {/* Summary */}
             <div className="space-y-3">
               <div className="grid grid-cols-2 gap-4">
@@ -326,7 +400,83 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved }: UploadF5M
               <Button variant="outline" onClick={()=>setStep('select')}>Back</Button>
               <Button onClick={handleSave} disabled={isLoading}>{isLoading ? 'Saving…' : 'Save F5'}</Button>
             </div>
-          </div>
+            </TabsContent>
+            
+            <TabsContent value="file" className="mt-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Uploaded File</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {fileUrl ? (
+                    <div className="w-full h-[600px] border rounded">
+                      {file?.type === 'application/pdf' ? (
+                        <iframe 
+                          src={fileUrl} 
+                          className="w-full h-full rounded"
+                          title="F5 Report PDF"
+                        />
+                      ) : (
+                        <img 
+                          src={fileUrl} 
+                          alt="F5 Report" 
+                          className="w-full h-full object-contain rounded"
+                        />
+                      )}
+                    </div>
+                  ) : (
+                    <div className="w-full h-[600px] border rounded flex items-center justify-center text-muted-foreground">
+                      No file preview available
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+            
+            <TabsContent value="tables" className="mt-6">
+              <div className="space-y-6">
+                {(() => {
+                  const { activitiesTable, demographicsTable } = extractTables(rawOcr)
+                  return (
+                    <>
+                      <Card>
+                        <CardHeader>
+                          <CardTitle>Activities Table (الأنشطة المنفذة)</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="bg-muted/30 p-4 rounded font-mono text-sm whitespace-pre-wrap max-h-[300px] overflow-y-auto" dir="rtl">
+                            {activitiesTable.length > 0 ? activitiesTable.join('\n') : 'No activities table detected'}
+                          </div>
+                        </CardContent>
+                      </Card>
+                      
+                      <Card>
+                        <CardHeader>
+                          <CardTitle>Demographics Table (الحصر الإضافي للمستفيدين)</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="bg-muted/30 p-4 rounded font-mono text-sm whitespace-pre-wrap max-h-[300px] overflow-y-auto" dir="rtl">
+                            {demographicsTable.length > 0 ? demographicsTable.join('\n') : 'No demographics table detected'}
+                          </div>
+                        </CardContent>
+                      </Card>
+                      
+                      <Card>
+                        <CardHeader>
+                          <CardTitle>Full OCR Text</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="bg-muted/30 p-4 rounded font-mono text-sm whitespace-pre-wrap max-h-[400px] overflow-y-auto" dir="rtl">
+                            {rawOcr || 'No OCR text available'}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </>
+                  )
+                })()}
+              </div>
+            </TabsContent>
+          </Tabs>
         )}
       </DialogContent>
     </Dialog>
