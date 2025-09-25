@@ -75,23 +75,32 @@ export default function ProjectManagement() {
     const total = (rows || []).length
     const withMou = (rows || []).filter((r:any) => !!r.has_mou).length
     const withF4 = (rows || []).filter((r:any) => Number(r.f4_count || 0) > 0).length
+    const withF5 = (rows || []).filter((r:any) => Number(r.f5_count || 0) > 0).length
     const pctF4 = total > 0 ? (withF4 / total) : 0
-    return { total, withMou, withF4, pctF4 }
+    const pctF5 = total > 0 ? (withF5 / total) : 0
+    return { total, withMou, withF4, withF5, pctF4, pctF5 }
   }, [rows])
 
   // Aggregations for drill-down
   const stateRows = useMemo(() => {
-    const byState = new Map<string, { state: string; plan: number; actual: number; variance: number; burn: number; f4_count: number; last_report_date: string | null }>()
+    const byState = new Map<string, { state: string; plan: number; actual: number; variance: number; burn: number; f4_count: number; f5_count: number; total_projects: number; projects_with_f4: number; projects_with_f5: number; last_report_date: string | null; last_f5_date: string | null }>()
     for (const r of rows) {
       const key = r.state || '—'
-      const curr = byState.get(key) || { state: key, plan: 0, actual: 0, variance: 0, burn: 0, f4_count: 0, last_report_date: null as string | null }
+      const curr = byState.get(key) || { state: key, plan: 0, actual: 0, variance: 0, burn: 0, f4_count: 0, f5_count: 0, total_projects: 0, projects_with_f4: 0, projects_with_f5: 0, last_report_date: null as string | null, last_f5_date: null as string | null }
       curr.plan += Number(r.plan || 0)
       curr.actual += Number(r.actual || 0)
       curr.variance = curr.plan - curr.actual
       curr.f4_count += Number(r.f4_count || 0)
+      curr.f5_count += Number(r.f5_count || 0)
+      curr.total_projects += 1
+      if (Number(r.f4_count || 0) > 0) curr.projects_with_f4 += 1
+      if (Number(r.f5_count || 0) > 0) curr.projects_with_f5 += 1
       const last = curr.last_report_date
       const cand = r.last_report_date || null
       curr.last_report_date = !last ? cand : (!cand ? last : (new Date(last) > new Date(cand) ? last : cand))
+      const lastF5 = curr.last_f5_date
+      const candF5 = r.last_f5_date || null
+      curr.last_f5_date = !lastF5 ? candF5 : (!candF5 ? lastF5 : (new Date(lastF5) > new Date(candF5) ? lastF5 : candF5))
       byState.set(key, curr)
     }
     // compute burn
@@ -101,17 +110,24 @@ export default function ProjectManagement() {
   const roomRows = useMemo(() => {
     if (!selectedStateName) return [] as any[]
     const filtered = rows.filter((r:any) => r.state === selectedStateName)
-    const byRoom = new Map<string, { err_id: string; state: string; plan: number; actual: number; variance: number; burn: number; f4_count: number; last_report_date: string | null }>()
+    const byRoom = new Map<string, { err_id: string; state: string; plan: number; actual: number; variance: number; burn: number; f4_count: number; f5_count: number; total_projects: number; projects_with_f4: number; projects_with_f5: number; last_report_date: string | null; last_f5_date: string | null }>()
     for (const r of filtered) {
       const key = r.err_id || '—'
-      const curr = byRoom.get(key) || { err_id: key, state: selectedStateName, plan: 0, actual: 0, variance: 0, burn: 0, f4_count: 0, last_report_date: null as string | null }
+      const curr = byRoom.get(key) || { err_id: key, state: selectedStateName, plan: 0, actual: 0, variance: 0, burn: 0, f4_count: 0, f5_count: 0, total_projects: 0, projects_with_f4: 0, projects_with_f5: 0, last_report_date: null as string | null, last_f5_date: null as string | null }
       curr.plan += Number(r.plan || 0)
       curr.actual += Number(r.actual || 0)
       curr.variance = curr.plan - curr.actual
       curr.f4_count += Number(r.f4_count || 0)
+      curr.f5_count += Number(r.f5_count || 0)
+      curr.total_projects += 1
+      if (Number(r.f4_count || 0) > 0) curr.projects_with_f4 += 1
+      if (Number(r.f5_count || 0) > 0) curr.projects_with_f5 += 1
       const last = curr.last_report_date
       const cand = r.last_report_date || null
       curr.last_report_date = !last ? cand : (!cand ? last : (new Date(last) > new Date(cand) ? last : cand))
+      const lastF5 = curr.last_f5_date
+      const candF5 = r.last_f5_date || null
+      curr.last_f5_date = !lastF5 ? candF5 : (!candF5 ? lastF5 : (new Date(lastF5) > new Date(candF5) ? lastF5 : candF5))
       byRoom.set(key, curr)
     }
     return Array.from(byRoom.values()).map(v => ({ ...v, burn: v.plan > 0 ? v.actual / v.plan : 0 }))
@@ -194,21 +210,21 @@ export default function ProjectManagement() {
         <Card>
           <CardHeader><CardTitle>Plan</CardTitle></CardHeader>
           <CardContent>
-            {Number(kpis.plan||0).toLocaleString()}
+            ${Number(kpis.plan||0).toLocaleString()}
             <div className="text-xs text-muted-foreground mt-1">Sum of planned budgets from F1 planned activities.</div>
           </CardContent>
         </Card>
         <Card>
           <CardHeader><CardTitle>Actuals</CardTitle></CardHeader>
           <CardContent>
-            {Number(kpis.actual||0).toLocaleString()}
+            ${Number(kpis.actual||0).toLocaleString()}
             <div className="text-xs text-muted-foreground mt-1">Sum of recorded expenses from F4 reports.</div>
           </CardContent>
         </Card>
         <Card>
           <CardHeader><CardTitle>Variance</CardTitle></CardHeader>
           <CardContent>
-            {Number(kpis.variance||0).toLocaleString()}
+            ${Number(kpis.variance||0).toLocaleString()}
             <div className="text-xs text-muted-foreground mt-1">Plan minus Actuals for the current view.</div>
           </CardContent>
         </Card>
@@ -253,11 +269,43 @@ export default function ProjectManagement() {
         </Card>
       </div>
 
+      {/* F5 Program Reporting Cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <Card>
+          <CardHeader><CardTitle>With F5s</CardTitle></CardHeader>
+          <CardContent>
+            {Number(counters.withF5||0).toLocaleString()}
+            <div className="text-xs text-muted-foreground mt-1">Projects that have at least one F5 program report.</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader><CardTitle>% F5 Complete</CardTitle></CardHeader>
+          <CardContent>
+            {(counters.pctF5*100).toFixed(0)}%
+            <div className="text-xs text-muted-foreground mt-1">Share of projects with at least one F5.</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader><CardTitle>Total Individuals</CardTitle></CardHeader>
+          <CardContent>
+            {Number(kpis.f5_total_individuals||0).toLocaleString()}
+            <div className="text-xs text-muted-foreground mt-1">Total individuals reached through F5 program reports.</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader><CardTitle>Total Families</CardTitle></CardHeader>
+          <CardContent>
+            {Number(kpis.f5_total_families||0).toLocaleString()}
+            <div className="text-xs text-muted-foreground mt-1">Total families reached through F5 program reports.</div>
+          </CardContent>
+        </Card>
+      </div>
+
       {/* Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle>
-            {donorName}
+          <Card>
+            <CardHeader>
+              <CardTitle>
+            All Active Projects
             {level !== 'state' && (
               <Button variant="outline" size="sm" className="ml-2" onClick={goBack}>Back</Button>
             )}
@@ -267,9 +315,9 @@ export default function ProjectManagement() {
             {level === 'project' && selectedErrId ? (
               <span className="ml-2 text-sm text-muted-foreground">State: {selectedStateName} · ERR: {selectedErrId}</span>
             ) : null}
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
           <div className="text-xs text-muted-foreground mb-2">
             {level === 'state' && 'Tip: Click a state to drill into its ERR rooms.'}
             {level === 'room' && 'Tip: Click an ERR to drill into its projects.'}
@@ -277,10 +325,10 @@ export default function ProjectManagement() {
           </div>
           {loading ? (
             <div className="py-8 text-center text-muted-foreground">Loading…</div>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
                   {level === 'state' ? (
                     <>
                       <TableHead>State</TableHead>
@@ -302,13 +350,17 @@ export default function ProjectManagement() {
                   <TableHead className="text-right">Variance</TableHead>
                   <TableHead className="text-right">Burn</TableHead>
                   <TableHead>F4s</TableHead>
+                  <TableHead>% F4 Complete</TableHead>
+                  <TableHead>F5s</TableHead>
+                  <TableHead>% F5 Complete</TableHead>
                   <TableHead>Last F4</TableHead>
+                  <TableHead>Last F5</TableHead>
                   {level === 'project' && <TableHead>Actions</TableHead>}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
                 {(displayed||[]).length===0 ? (
-                  <TableRow><TableCell colSpan={level==='project'?10:(level==='room'?8:7)} className="text-center text-muted-foreground">No data</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={level==='project'?14:(level==='room'?12:11)} className="text-center text-muted-foreground">No data</TableCell></TableRow>
                 ) : displayed.map((r:any, idx:number)=> (
                   <TableRow key={r.project_id || r.err_id || r.state || idx} className="cursor-pointer" onClick={()=>onRowClick(r)}>
                     {level === 'state' ? (
@@ -332,23 +384,37 @@ export default function ProjectManagement() {
                     <TableCell className="text-right">{Number(r.variance||0).toLocaleString()}</TableCell>
                     <TableCell className="text-right">{r.burn ? (r.burn*100).toFixed(0)+'%' : '0%'}</TableCell>
                     <TableCell>{r.f4_count||0}</TableCell>
+                    <TableCell className="text-right">
+                      {level === 'project' 
+                        ? (r.f4_count > 0 ? '100%' : '0%')
+                        : `${r.total_projects > 0 ? Math.round((r.projects_with_f4 / r.total_projects) * 100) : 0}%`
+                      }
+                    </TableCell>
+                    <TableCell>{r.f5_count||0}</TableCell>
+                    <TableCell className="text-right">
+                      {level === 'project' 
+                        ? (r.f5_count > 0 ? '100%' : '0%')
+                        : `${r.total_projects > 0 ? Math.round((r.projects_with_f5 / r.total_projects) * 100) : 0}%`
+                      }
+                    </TableCell>
                     <TableCell>{r.last_report_date ? new Date(r.last_report_date).toLocaleDateString() : '-'}</TableCell>
+                    <TableCell>{r.last_f5_date ? new Date(r.last_f5_date).toLocaleDateString() : '-'}</TableCell>
                     {level === 'project' && (
-                      <TableCell>
-                        <Button
-                          variant="outline"
+                        <TableCell>
+                          <Button
+                            variant="outline"
                           size="sm"
                           onClick={(e)=>{ e.stopPropagation(); setDetailProjectId(r.project_id || null); setDetailOpen(true) }}
                         >View</Button>
-                      </TableCell>
+                        </TableCell>
                     )}
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
 
       {/* Project detail modal when at project level and a row is clicked via explicit action */}
       <ProjectDetailModal
@@ -358,4 +424,4 @@ export default function ProjectManagement() {
       />
     </div>
   )
-}
+} 

@@ -21,12 +21,12 @@ export async function GET(request: Request) {
     const state = searchParams.get('state')
     const err = searchParams.get('err')
 
-    // Build project filter (committed + approved/active only)
+    // Build project filter (include more statuses to catch F5 projects)
     let pq = supabase
       .from('err_projects')
-      .select('id, state, grant_call_id, emergency_rooms (id, name, name_ar, err_code), planned_activities, status, mou_id')
-      .eq('funding_status', 'committed')
-      .in('status', ['approved', 'active'])
+      .select('id, state, grant_call_id, emergency_rooms (id, name, name_ar, err_code), planned_activities, status, funding_status, mou_id')
+      .in('status', ['approved', 'active', 'pending'])
+      .in('funding_status', ['committed', 'allocated'])
     if (grant) pq = pq.eq('grant_call_id', grant)
     if (state) pq = pq.eq('state', state)
     if (err) pq = pq.eq('emergency_room_id', err)
@@ -39,6 +39,9 @@ export async function GET(request: Request) {
       pq = pq.in('grant_call_id', grantIds)
     }
     const { data: projects } = await pq
+    
+    console.log('Found projects:', projects?.length || 0)
+    console.log('Project IDs:', projects?.map((p:any) => p.id) || [])
 
     // Resolve MOU codes for projects that have mou_id
     const mouIds = Array.from(new Set(((projects || []).map((p:any)=> p.mou_id).filter(Boolean)))) as string[]
@@ -58,6 +61,29 @@ export async function GET(request: Request) {
     if (projectIds.length) sq = sq.in('project_id', projectIds)
     const { data: summaries } = await sq
 
+    // F5 reports for program reporting - get reach data for totals
+    let f5q = supabase.from('err_program_report').select('id, project_id, report_date')
+    if (projectIds.length) f5q = f5q.in('project_id', projectIds)
+    const { data: f5Reports } = await f5q
+    
+    console.log('Found F5 reports:', f5Reports?.length || 0)
+    console.log('F5 report project IDs:', f5Reports?.map((f:any) => f.project_id) || [])
+    
+    // Get F5 reach data for individual and family totals
+    const f5ReportIds = (f5Reports || []).map((f:any) => f.id)
+    let f5ReachData: any[] = []
+    if (f5ReportIds.length) {
+      const { data: reachData } = await supabase
+        .from('err_program_reach')
+        .select('report_id, individual_count, household_count')
+        .in('report_id', f5ReportIds)
+      f5ReachData = reachData || []
+    }
+    
+    // Calculate totals
+    const totalIndividuals = f5ReachData.reduce((sum, r) => sum + (Number(r.individual_count) || 0), 0)
+    const totalFamilies = f5ReachData.reduce((sum, r) => sum + (Number(r.household_count) || 0), 0)
+
     // Index summaries by project
     const sumByProject = new Map<string, { actual: number; count: number; last: string | null }>()
     for (const s of (summaries || [])) {
@@ -69,10 +95,21 @@ export async function GET(request: Request) {
       sumByProject.set(pid, { actual, count, last })
     }
 
+    // Index F5 reports by project
+    const f5ByProject = new Map<string, { count: number; last: string | null }>()
+    for (const f5 of (f5Reports || [])) {
+      const pid = (f5 as any).project_id
+      const prev = f5ByProject.get(pid) || { count: 0, last: null }
+      const count = prev.count + 1
+      const last = prev.last && (new Date(prev.last) > new Date((f5 as any).report_date)) ? prev.last : (f5 as any).report_date
+      f5ByProject.set(pid, { count, last })
+    }
+
     // Build project-level rows
     const projRows = (projects || []).map((p:any) => {
       const plan = sumPlanFromPlannedActivities(p.planned_activities)
       const agg = sumByProject.get(p.id) || { actual: 0, count: 0, last: null }
+      const f5Agg = f5ByProject.get(p.id) || { count: 0, last: null }
       const variance = plan - agg.actual
       const burn = plan > 0 ? agg.actual / plan : 0
       return {
@@ -87,7 +124,9 @@ export async function GET(request: Request) {
         variance,
         burn,
         f4_count: agg.count,
-        last_report_date: agg.last
+        last_report_date: agg.last,
+        f5_count: f5Agg.count,
+        last_f5_date: f5Agg.last
       }
     })
 
@@ -99,7 +138,11 @@ export async function GET(request: Request) {
       variance: 0,
       burn: 0,
       f4_count: projRows.reduce((s,r)=> s + r.f4_count, 0),
-      last_report_date: projRows.map(r=> r.last_report_date).filter(Boolean).sort().slice(-1)[0] || null
+      last_report_date: projRows.map(r=> r.last_report_date).filter(Boolean).sort().slice(-1)[0] || null,
+      f5_count: projRows.reduce((s,r)=> s + r.f5_count, 0),
+      last_f5_date: projRows.map(r=> r.last_f5_date).filter(Boolean).sort().slice(-1)[0] || null,
+      f5_total_individuals: totalIndividuals,
+      f5_total_families: totalFamilies
     }
     kpis.variance = kpis.plan - kpis.actual
     kpis.burn = kpis.plan > 0 ? kpis.actual / kpis.plan : 0
