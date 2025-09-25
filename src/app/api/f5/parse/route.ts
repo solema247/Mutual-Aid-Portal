@@ -80,6 +80,7 @@ export async function POST(request: Request) {
       suggestions: ocrJson.suggestions || extractBetween(raw, 'What advice or requests') || null,
       reporting_person: ocrJson.reporting_person || null,
       demographics: ocrJson.demographics || null,
+      raw_ocr: ocrJson.raw_ocr || null,
       is_draft: true
     }
 

@@ -37,7 +37,6 @@ export default function ViewF5Modal({ reportId, open, onOpenChange }: ViewF5Moda
   const project = report?.err_projects
   const room = project?.emergency_rooms
   const reach = data?.reach || []
-  const demographics = report?.demographics || null
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -149,16 +148,16 @@ export default function ViewF5Modal({ reportId, open, onOpenChange }: ViewF5Moda
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {!data?.demographics?.breakdowns?.length ? (
+                  {reach.length === 0 ? (
                     <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground">No demographic breakdowns available</TableCell></TableRow>
-                  ) : data.demographics.breakdowns.map((breakdown:any, idx:number)=> (
-                    <TableRow key={idx}>
-                      <TableCell>{breakdown.activity_name || '-'}</TableCell>
-                      <TableCell>{Number(breakdown.male_count ?? 0).toLocaleString()}</TableCell>
-                      <TableCell>{Number(breakdown.female_count ?? 0).toLocaleString()}</TableCell>
-                      <TableCell>{Number(breakdown.under18_male ?? 0).toLocaleString()}</TableCell>
-                      <TableCell>{Number(breakdown.under18_female ?? 0).toLocaleString()}</TableCell>
-                      <TableCell>{Number(breakdown.special_needs ?? 0).toLocaleString()}</TableCell>
+                  ) : reach.map((activity:any)=> (
+                    <TableRow key={activity.id}>
+                      <TableCell>{activity.activity_name || '-'}</TableCell>
+                      <TableCell>{Number(activity.male_count ?? 0).toLocaleString()}</TableCell>
+                      <TableCell>{Number(activity.female_count ?? 0).toLocaleString()}</TableCell>
+                      <TableCell>{Number(activity.under18_male ?? 0).toLocaleString()}</TableCell>
+                      <TableCell>{Number(activity.under18_female ?? 0).toLocaleString()}</TableCell>
+                      <TableCell>{Number(activity.special_needs ?? 0).toLocaleString()}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
