@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
-import { Users, BarChart2, FileText, ClipboardList, PieChart, UserCog, CheckSquare, LogOut, BookOpen } from 'lucide-react'
+import { Users, BarChart2, FileText, ClipboardList, PieChart, UserCog, CheckSquare, LogOut, BookOpen, PenTool, Cog } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 import '@/i18n/config'
 
@@ -119,7 +119,7 @@ export default function ErrPortalPage() {
         <Link href="/err-portal/f1-work-plans" className="block aspect-square">
           <Card className="h-full hover:bg-muted/50 transition-colors">
             <CardHeader className="h-full flex flex-col justify-center items-center text-center">
-              <BookOpen className="h-8 w-8 mb-4" />
+              <ClipboardList className="h-8 w-8 mb-4" />
               <CardTitle className="text-xl">
                 {t('err:f1_work_plans')}
               </CardTitle>
@@ -145,26 +145,11 @@ export default function ErrPortalPage() {
           </Card>
         </Link>
 
-        {/* Project Management */}
-        <Link href="/err-portal/project-management" className="block aspect-square">
-          <Card className="h-full hover:bg-muted/50 transition-colors">
-            <CardHeader className="h-full flex flex-col justify-center items-center text-center">
-              <FileText className="h-8 w-8 mb-4" />
-              <CardTitle className="text-xl">
-                {t('err:project_management')}
-              </CardTitle>
-              <CardDescription className="mt-2">
-                {t('err:project_management_desc')}
-              </CardDescription>
-            </CardHeader>
-          </Card>
-        </Link>
-
         {/* F3 MOUs */}
         <Link href="/err-portal/f3-mous" className="block aspect-square">
           <Card className="h-full hover:bg-muted/50 transition-colors">
             <CardHeader className="h-full flex flex-col justify-center items-center text-center">
-              <FileText className="h-8 w-8 mb-4" />
+              <PenTool className="h-8 w-8 mb-4" />
               <CardTitle className="text-xl">F3 MOUs</CardTitle>
               <CardDescription className="mt-2">Create and view MOUs</CardDescription>
             </CardHeader>
@@ -175,9 +160,24 @@ export default function ErrPortalPage() {
         <Link href="/err-portal/f4-f5-reporting" className="block aspect-square">
           <Card className="h-full hover:bg-muted/50 transition-colors">
             <CardHeader className="h-full flex flex-col justify-center items-center text-center">
-              <ClipboardList className="h-8 w-8 mb-4" />
+              <BookOpen className="h-8 w-8 mb-4" />
               <CardTitle className="text-xl">F4 & F5 Reporting</CardTitle>
               <CardDescription className="mt-2">Upload and review financial/program reports</CardDescription>
+            </CardHeader>
+          </Card>
+        </Link>
+
+        {/* Project Management */}
+        <Link href="/err-portal/project-management" className="block aspect-square">
+          <Card className="h-full hover:bg-muted/50 transition-colors">
+            <CardHeader className="h-full flex flex-col justify-center items-center text-center">
+              <Cog className="h-8 w-8 mb-4" />
+              <CardTitle className="text-xl">
+                {t('err:project_management')}
+              </CardTitle>
+              <CardDescription className="mt-2">
+                {t('err:project_management_desc')}
+              </CardDescription>
             </CardHeader>
           </Card>
         </Link>
