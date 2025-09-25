@@ -63,7 +63,7 @@ export default function F4F5ReportingPage() {
         <TabsContent value="f4" className="mt-4 space-y-4">
           <div className="flex items-center justify-between">
             <div className="text-lg font-semibold">F4 Financial Reports</div>
-            <Button onClick={() => setUploadOpen(true)}>Upload F4</Button>
+            <Button className="bg-green-700 hover:bg-green-800 text-white font-bold" onClick={() => setUploadOpen(true)}>Upload F4</Button>
           </div>
 
           <div className="flex flex-wrap md:flex-nowrap gap-2 items-center">
@@ -106,7 +106,7 @@ export default function F4F5ReportingPage() {
             </Select>
             <Button
               variant="outline"
-              className="h-9 w-full md:w-24"
+              className="h-9 w-full md:w-24 md:ml-auto"
               onClick={() => { setQ(''); setFErr(''); setFState(''); setFDonor(''); setFGrant(''); }}
             >Reset</Button>
           </div>

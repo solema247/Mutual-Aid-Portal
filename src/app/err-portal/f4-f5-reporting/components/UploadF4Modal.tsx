@@ -16,6 +16,10 @@ interface UploadF4ModalProps {
 }
 
 export default function UploadF4Modal({ open, onOpenChange, onSaved }: UploadF4ModalProps) {
+  const [states, setStates] = useState<string[]>([])
+  const [selectedState, setSelectedState] = useState('')
+  const [rooms, setRooms] = useState<Array<{ id: string; label: string }>>([])
+  const [selectedRoomId, setSelectedRoomId] = useState('')
   const [projects, setProjects] = useState<Array<{ id: string; label: string }>>([])
   const [projectId, setProjectId] = useState('')
   const [projectMeta, setProjectMeta] = useState<any | null>(null)
@@ -31,17 +35,53 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved }: UploadF4M
   useEffect(() => {
     if (!open) return
     ;(async () => {
+      // Load distinct states with active projects
       const { data } = await supabase
         .from('err_projects')
-        .select('id, status, submitted_at, emergency_room_id, emergency_rooms (err_code, name, name_ar)')
+        .select('state')
         .eq('status', 'active')
-        .order('submitted_at', { ascending: false })
-      setProjects(((data as any[]) || []).map((p: any) => {
-        const label = p.emergency_rooms?.err_code || p.emergency_rooms?.name_ar || p.emergency_rooms?.name || p.id
-        return { id: p.id, label }
-      }))
+      const uniq = Array.from(new Set(((data as any[]) || []).map((r:any)=>r.state).filter(Boolean))) as string[]
+      setStates(uniq)
     })()
   }, [open])
+
+  // When state changes, load ERR rooms in that state with active projects
+  useEffect(() => {
+    if (!selectedState) { setRooms([]); setSelectedRoomId(''); setProjects([]); setProjectId(''); return }
+    ;(async () => {
+      const { data } = await supabase
+        .from('err_projects')
+        .select('emergency_room_id, emergency_rooms (id, name, name_ar, err_code)')
+        .eq('status', 'active')
+        .eq('state', selectedState)
+      const map = new Map<string, { id: string; label: string }>()
+      for (const r of (data as any[]) || []) {
+        const room = r.emergency_rooms
+        if (room?.id && !map.has(room.id)) {
+          const label = room.name || room.name_ar || room.err_code || room.id
+          map.set(room.id, { id: room.id, label })
+        }
+      }
+      setRooms(Array.from(map.values()))
+      setSelectedRoomId('')
+      setProjects([])
+      setProjectId('')
+    })()
+  }, [selectedState])
+
+  // When room changes, load its active projects
+  useEffect(() => {
+    if (!selectedRoomId) { setProjects([]); setProjectId(''); return }
+    ;(async () => {
+      const { data } = await supabase
+        .from('err_projects')
+        .select('id, project_objectives, submitted_at')
+        .eq('status', 'active')
+        .eq('emergency_room_id', selectedRoomId)
+        .order('submitted_at', { ascending: false })
+      setProjects(((data as any[]) || []).map((p:any)=> ({ id: p.id, label: p.project_objectives || p.id })))
+    })()
+  }, [selectedRoomId])
 
   // Load selected project meta
   useEffect(() => {
@@ -160,16 +200,40 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved }: UploadF4M
         </DialogHeader>
         {step === 'select' ? (
           <div className="space-y-4">
-            <div>
-              <Label>Project (Active)</Label>
-              <Select value={projectId} onValueChange={setProjectId}>
-                <SelectTrigger className="w-full"><SelectValue placeholder="Select project" /></SelectTrigger>
-                <SelectContent>
-                  {projects.map(p => (
-                    <SelectItem key={p.id} value={p.id}>{p.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div>
+                <Label>State</Label>
+                <Select value={selectedState} onValueChange={(v)=>{ setSelectedState(v); }}>
+                  <SelectTrigger className="w-full"><SelectValue placeholder="Select state" /></SelectTrigger>
+                  <SelectContent>
+                    {states.map(s => (
+                      <SelectItem key={s} value={s}>{s}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>ERR (with active projects)</Label>
+                <Select value={selectedRoomId} onValueChange={(v)=>{ setSelectedRoomId(v); }} disabled={!selectedState}>
+                  <SelectTrigger className="w-full"><SelectValue placeholder="Select ERR" /></SelectTrigger>
+                  <SelectContent>
+                    {rooms.map(r => (
+                      <SelectItem key={r.id} value={r.id}>{r.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Project</Label>
+                <Select value={projectId} onValueChange={setProjectId} disabled={!selectedRoomId}>
+                  <SelectTrigger className="w-full"><SelectValue placeholder="Select project (by objectives)" /></SelectTrigger>
+                  <SelectContent>
+                    {projects.map(p => (
+                      <SelectItem key={p.id} value={p.id}>{p.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
             <div>
               <Label>Report Date</Label>
