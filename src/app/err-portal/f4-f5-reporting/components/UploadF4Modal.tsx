@@ -152,7 +152,7 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved }: UploadF4M
 
   return (
     <Dialog open={open} onOpenChange={(v) => { onOpenChange(v); if (!v) reset() }}>
-      <DialogContent className="max-w-5xl w-[90vw] max-h-[85vh] overflow-y-auto select-text">
+      <DialogContent className="max-w-7xl w-[95vw] max-h-[85vh] overflow-y-auto select-text">
         <DialogHeader>
           <DialogTitle>Upload F4 Financial Report</DialogTitle>
         </DialogHeader>
@@ -227,7 +227,23 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved }: UploadF4M
 
             {/* Expenses (move above Financials) */}
             <div>
-              <Label>Expenses</Label>
+              <div className="flex items-center justify-between mb-2">
+                <Label>Expenses</Label>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setExpensesDraft(prev => ([...prev, {
+                    expense_activity: '',
+                    expense_description: '',
+                    expense_amount: 0,
+                    payment_date: '',
+                    payment_method: 'Bank Transfer',
+                    receipt_no: '',
+                    seller: '',
+                    is_draft: true
+                  }]))}
+                >Add expense</Button>
+              </div>
               <div className="border rounded overflow-hidden select-text">
                 {expensesDraft.length === 0 ? (
                   <div className="p-3 text-sm text-muted-foreground">No expenses parsed</div>
@@ -242,6 +258,7 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved }: UploadF4M
                         <TableHead className="w-[12%] py-1 px-2 text-xs">Method</TableHead>
                         <TableHead className="w-[12%] py-1 px-2 text-xs">Receipt No.</TableHead>
                         <TableHead className="w-[18%] py-1 px-2 text-xs">Seller</TableHead>
+                        <TableHead className="w-[8%] py-1 px-2 text-xs text-right">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -268,9 +285,17 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved }: UploadF4M
                             }} />
                           </TableCell>
                           <TableCell className="py-1 px-2">
-                            <Input className="h-8" placeholder="Method" value={ex.payment_method || ''} onChange={(e)=>{
-                              const arr=[...expensesDraft]; arr[idx]={...arr[idx], payment_method: e.target.value}; setExpensesDraft(arr)
-                            }} />
+                            <Select value={ex.payment_method || 'Bank Transfer'} onValueChange={(v)=>{
+                              const arr=[...expensesDraft]; arr[idx]={...arr[idx], payment_method: v}; setExpensesDraft(arr)
+                            }}>
+                              <SelectTrigger className="h-8 w-full">
+                                <SelectValue placeholder="Method" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="Bank Transfer">Bank Transfer</SelectItem>
+                                <SelectItem value="Cash">Cash</SelectItem>
+                              </SelectContent>
+                            </Select>
                           </TableCell>
                           <TableCell className="py-1 px-2">
                             <Input className="h-8" placeholder="Receipt No." value={ex.receipt_no || ''} onChange={(e)=>{
@@ -281,6 +306,17 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved }: UploadF4M
                             <Input className="h-8" placeholder="Seller" value={ex.seller || ''} onChange={(e)=>{
                               const arr=[...expensesDraft]; arr[idx]={...arr[idx], seller: e.target.value}; setExpensesDraft(arr)
                             }} />
+                          </TableCell>
+                          <TableCell className="py-1 px-2 text-right">
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              onClick={() => {
+                                const arr = [...expensesDraft]
+                                arr.splice(idx, 1)
+                                setExpensesDraft(arr)
+                              }}
+                            >Delete</Button>
                           </TableCell>
                         </TableRow>
                       ))}

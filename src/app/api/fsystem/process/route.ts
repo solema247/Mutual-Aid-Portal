@@ -304,6 +304,9 @@ export async function POST(req: Request) {
       })
     }
 
+    // Decide prompt based on form type
+    const isF4 = String(formMetadata?.form_type || '').toUpperCase() === 'F4'
+
     // Process with OpenAI
     const completion = await openai.chat.completions.create({
       model: "gpt-3.5-turbo",
@@ -311,7 +314,37 @@ export async function POST(req: Request) {
       messages: [
         {
           role: "system",
-          content: `Extract information from the following text (which may be in English or Arabic):
+          content: isF4 ? `Extract ONLY F4 Financial Report data from the text (Arabic or English). Do not infer or convert amounts. Keep raw amounts and detected currency.
+
+BASIC INFORMATION:
+- date: Report date in YYYY-MM-DD if present (convert formats); else null
+- state: State name as seen (original language) or null
+- locality: ERR room or locality name as seen or null
+
+EXPENSES TABLE (actual expenses):
+- For each listed expense row with an amount, return an object:
+  { activity: string, amount_value: number, currency: "USD" | "SDG" | null }
+- Detect currency from context/symbols/labels (e.g., SDG, جنيه, $, USD). If unclear, null.
+- Do NOT convert any amounts. Keep the number as it appears (strip commas and symbols).
+- Ignore receipt pages, bank slips, or pages without an expense row with amount.
+
+TOTALS SECTION (verbatim extraction without math):
+- total_expenses_text: numeric string if A ( إجمالي النفقات ) is present, else null
+- total_grant_text: numeric string if B is present, else null
+- total_other_sources_text: numeric string if C is present, else null
+- remainder_text: numeric string if D is present, else null
+
+NARRATIVE RESPONSES:
+- excess_expenses: text for question 4 if present, else null
+- surplus_use: text for question 5 if present, else null
+- lessons: text for question 6 if present, else null
+- training: text for question 7 if present, else null
+
+OTHER:
+- language: "ar" or "en" inferred from the text
+- raw_ocr: include full OCR text back to caller
+
+Return strict JSON with keys exactly as specified above.` : `Extract information from the following text (which may be in English or Arabic):
 
 BASIC INFORMATION:
 - date: Date of the project in YYYY-MM-DD format (convert any date format to this)
@@ -422,22 +455,26 @@ Return all fields in this format:
 
     try {
       const structuredData = JSON.parse(sanitizedContent)
-      // Add language detection
-      const detectedLanguage = detectLanguage(text)
-      structuredData.language = detectedLanguage
+      // Add language detection if missing
+      if (!structuredData.language) {
+        const detectedLanguage = detectLanguage(text)
+        structuredData.language = detectedLanguage
+      }
 
-      // Ensure project_objectives passes through verbatim; fallback if model returns very short content
-      const objectives: unknown = structuredData.project_objectives
-      const objectivesStr = typeof objectives === 'string' ? objectives.trim() : ''
-      if (!objectivesStr || objectivesStr.length < 40) {
-        const fallback = getLongestArabicParagraph(text)
-        if (fallback && fallback.length > objectivesStr.length) {
-          structuredData.project_objectives = fallback
+      if (!isF4) {
+        // F1 behavior only
+        const objectives: unknown = structuredData.project_objectives
+        const objectivesStr = typeof objectives === 'string' ? objectives.trim() : ''
+        if (!objectivesStr || objectivesStr.length < 40) {
+          const fallback = getLongestArabicParagraph(text)
+          if (fallback && fallback.length > objectivesStr.length) {
+            structuredData.project_objectives = fallback
+          }
         }
       }
 
       // Override the state from OCR with the selected state from form metadata
-      if (formMetadata.state_name_ar) {
+      if (!isF4 && formMetadata.state_name_ar) {
         console.log('Overriding OCR state with selected state:', {
           original: structuredData.state,
           new: formMetadata.state_name_ar
