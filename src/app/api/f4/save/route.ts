@@ -6,15 +6,21 @@ export async function POST(req: Request) {
     const { project_id, summary, expenses, file_key_temp, uploaded_by } = await req.json()
     if (!project_id || !summary) return NextResponse.json({ error: 'project_id and summary required' }, { status: 400 })
 
-    // Fetch ERR ID from the linked project
+    // Fetch project context (ERR, state, human project code)
     let err_id: string | null = null
+    let state_name: string | null = null
+    let grant_serial_id: string | null = null
+    let err_code: string | null = null
     try {
       const { data: prj } = await supabase
         .from('err_projects')
-        .select('err_id')
+        .select('err_id, state, grant_serial_id, emergency_rooms ( err_code )')
         .eq('id', project_id)
         .single()
       err_id = (prj as any)?.err_id || null
+      state_name = (prj as any)?.state || null
+      grant_serial_id = (prj as any)?.grant_serial_id || null
+      err_code = (prj as any)?.emergency_rooms?.err_code || null
     } catch {}
 
     // Insert summary
@@ -37,12 +43,43 @@ export async function POST(req: Request) {
     if (insErr) throw insErr
     const summary_id = inserted.id
 
-    // If a summary file exists, move/record it as an attachment
+    // If a summary file exists, move it from tmp to a clear final path and record attachment
     if (file_key_temp) {
-      // Keep it simple: client directly uploaded using SDK to the temp key; we just register it
-      await supabase
-        .from('err_summary_attachments')
-        .insert({ summary_id, file_key: file_key_temp, file_type: 'summary_pdf', uploaded_by: uploaded_by || null })
+      try {
+        const tempKey: string = String(file_key_temp)
+        const ext = (tempKey.split('.').pop() || 'pdf').toLowerCase()
+        const safe = (s: string | null | undefined) => (s || 'UNKNOWN')
+          .toString()
+          .trim()
+          .replace(/[^\p{L}\p{N}\-_. ]+/gu, '-')
+          .replace(/\s+/g, '-')
+        const finalPath = `f4-financial-reports/${safe(state_name)}/${safe(err_code || err_id)}/${safe(grant_serial_id)}/${summary_id}/summary.${ext}`
+
+        // Read temp via signed URL
+        const { data: sign, error: signErr } = await (supabase as any).storage
+          .from('images')
+          .createSignedUrl(tempKey, 60)
+        if (signErr || !sign?.signedUrl) throw new Error('Failed to sign temp file')
+        const resp = await fetch(sign.signedUrl)
+        if (!resp.ok) throw new Error('Failed to read temp file')
+        const blob = await resp.blob()
+
+        // Upload to final path
+        const { error: upErr } = await supabase.storage
+          .from('images')
+          .upload(finalPath, blob, { upsert: true })
+        if (upErr) throw upErr
+
+        // Best-effort delete temp
+        try { await supabase.storage.from('images').remove([tempKey]) } catch {}
+
+        // Record attachment with final path
+        await supabase
+          .from('err_summary_attachments')
+          .insert({ summary_id, file_key: finalPath, file_type: 'summary_pdf', uploaded_by: uploaded_by || null })
+      } catch (e) {
+        console.warn('F4 file finalize failed, continuing without attachment', e)
+      }
     }
 
     // Insert expenses
