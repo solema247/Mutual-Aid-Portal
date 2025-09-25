@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Card, CardContent } from '@/components/ui/card'
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '@/components/ui/table'
 import UploadF4Modal from './components/UploadF4Modal'
+import ViewF4Modal from './components/ViewF4Modal'
 
 interface F4Row {
   id: number
@@ -35,6 +36,8 @@ export default function F4F5ReportingPage() {
   const [fDonor, setFDonor] = useState('')
   const [fGrant, setFGrant] = useState('')
   const [uploadOpen, setUploadOpen] = useState(false)
+  const [viewId, setViewId] = useState<number | null>(null)
+  const [viewOpen, setViewOpen] = useState(false)
 
   const load = async () => {
     try {
@@ -126,6 +129,7 @@ export default function F4F5ReportingPage() {
                     <TableHead className="text-right">Remainder</TableHead>
                     <TableHead>Files</TableHead>
                     <TableHead>Updated</TableHead>
+                    <TableHead></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -151,6 +155,9 @@ export default function F4F5ReportingPage() {
                       <TableCell className="text-right">{Number(r.remainder || 0).toLocaleString()}</TableCell>
                       <TableCell>{r.attachments_count}</TableCell>
                       <TableCell>{new Date(r.updated_at).toLocaleDateString()}</TableCell>
+                      <TableCell>
+                        <Button variant="outline" size="sm" onClick={()=>{ setViewId(r.id); setViewOpen(true) }}>View</Button>
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -159,6 +166,7 @@ export default function F4F5ReportingPage() {
           </Card>
 
           <UploadF4Modal open={uploadOpen} onOpenChange={setUploadOpen} onSaved={load} />
+          <ViewF4Modal summaryId={viewId} open={viewOpen} onOpenChange={(v)=>{ setViewOpen(v); if (!v) setViewId(null) }} />
         </TabsContent>
 
         <TabsContent value="f5" className="mt-4">

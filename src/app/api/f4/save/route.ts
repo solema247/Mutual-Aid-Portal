@@ -87,6 +87,7 @@ export async function POST(req: Request) {
     if (Array.isArray(expenses) && expenses.length) {
       const payload = expenses.map((e: any) => ({
         project_id,
+        summary_id,
         expense_activity: e.expense_activity || null,
         expense_description: e.expense_description || null,
         expense_amount: e.expense_amount ?? null,
