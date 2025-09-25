@@ -79,6 +79,7 @@ export async function POST(request: Request) {
       lessons_learned: ocrJson.lessons_learned || extractBetween(raw, 'Based on what you learned', 'What advice or requests') || null,
       suggestions: ocrJson.suggestions || extractBetween(raw, 'What advice or requests') || null,
       reporting_person: ocrJson.reporting_person || null,
+      demographics: ocrJson.demographics || null,
       is_draft: true
     }
 

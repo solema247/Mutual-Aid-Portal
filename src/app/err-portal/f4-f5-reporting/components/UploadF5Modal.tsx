@@ -226,10 +226,10 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved }: UploadF5M
               </div>
             </div>
 
-            {/* Reach Table */}
+            {/* Activities Table */}
             <div>
               <div className="flex items-center justify-between mb-2">
-                <Label>Implemented Activities (Reach)</Label>
+                <Label>Implemented Activities</Label>
                 <Button
                   variant="secondary"
                   size="sm"
@@ -257,16 +257,12 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved }: UploadF5M
                     <TableHeader>
                       <TableRow>
                         <TableHead className="py-1 px-2 text-xs">Activity Name</TableHead>
-                        <TableHead className="py-1 px-2 text-xs">Objective / Details</TableHead>
-                        <TableHead className="py-1 px-2 text-xs">Location</TableHead>
+                        <TableHead className="py-1 px-2 text-xs">Goal/Details of Activity</TableHead>
+                        <TableHead className="py-1 px-2 text-xs">Implementation Location</TableHead>
                         <TableHead className="py-1 px-2 text-xs">Start</TableHead>
                         <TableHead className="py-1 px-2 text-xs">End</TableHead>
-                        <TableHead className="py-1 px-2 text-xs">Individuals</TableHead>
-                        <TableHead className="py-1 px-2 text-xs">Families</TableHead>
-                        <TableHead className="py-1 px-2 text-xs">Male</TableHead>
-                        <TableHead className="py-1 px-2 text-xs">Female</TableHead>
-                        <TableHead className="py-1 px-2 text-xs">Boys &lt;18</TableHead>
-                        <TableHead className="py-1 px-2 text-xs">Girls &lt;18</TableHead>
+                        <TableHead className="py-1 px-2 text-xs">Beneficiaries (Individuals)</TableHead>
+                        <TableHead className="py-1 px-2 text-xs">Beneficiaries (Families)</TableHead>
                         <TableHead className="py-1 px-2 text-xs text-right">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -280,13 +276,44 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved }: UploadF5M
                           <TableCell className="py-1 px-2"><Input className="h-8" type="date" value={row.end_date || ''} onChange={(e)=>{ const arr=[...reachDraft]; arr[idx]={...arr[idx], end_date: e.target.value}; setReachDraft(arr) }} /></TableCell>
                           <TableCell className="py-1 px-2"><Input className="h-8" type="number" value={row.individual_count ?? ''} onChange={(e)=>{ const arr=[...reachDraft]; arr[idx]={...arr[idx], individual_count: parseInt(e.target.value)||0}; setReachDraft(arr) }} /></TableCell>
                           <TableCell className="py-1 px-2"><Input className="h-8" type="number" value={row.household_count ?? ''} onChange={(e)=>{ const arr=[...reachDraft]; arr[idx]={...arr[idx], household_count: parseInt(e.target.value)||0}; setReachDraft(arr) }} /></TableCell>
+                          <TableCell className="py-1 px-2 text-right">
+                            <Button variant="destructive" size="sm" onClick={()=>{ const arr=[...reachDraft]; arr.splice(idx,1); setReachDraft(arr) }}>Delete</Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </div>
+            </div>
+
+            {/* Demographics Breakdown Table */}
+            <div>
+              <Label>Additional Beneficiary Breakdown</Label>
+              <div className="border rounded overflow-hidden select-text">
+                {reachDraft.length === 0 ? (
+                  <div className="p-3 text-sm text-muted-foreground">No activities to show demographics</div>
+                ) : (
+                  <Table className="select-text">
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="py-1 px-2 text-xs">Activity</TableHead>
+                        <TableHead className="py-1 px-2 text-xs">Male</TableHead>
+                        <TableHead className="py-1 px-2 text-xs">Female</TableHead>
+                        <TableHead className="py-1 px-2 text-xs">Male &lt;18</TableHead>
+                        <TableHead className="py-1 px-2 text-xs">Female &lt;18</TableHead>
+                        <TableHead className="py-1 px-2 text-xs">People with Disabilities</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {reachDraft.map((row, idx) => (
+                        <TableRow key={idx} className="text-sm">
+                          <TableCell className="py-1 px-2">{row.activity_name || '-'}</TableCell>
                           <TableCell className="py-1 px-2"><Input className="h-8" type="number" value={row.male_count ?? ''} onChange={(e)=>{ const arr=[...reachDraft]; arr[idx]={...arr[idx], male_count: parseInt(e.target.value)||0}; setReachDraft(arr) }} /></TableCell>
                           <TableCell className="py-1 px-2"><Input className="h-8" type="number" value={row.female_count ?? ''} onChange={(e)=>{ const arr=[...reachDraft]; arr[idx]={...arr[idx], female_count: parseInt(e.target.value)||0}; setReachDraft(arr) }} /></TableCell>
                           <TableCell className="py-1 px-2"><Input className="h-8" type="number" value={row.under18_male ?? ''} onChange={(e)=>{ const arr=[...reachDraft]; arr[idx]={...arr[idx], under18_male: parseInt(e.target.value)||0}; setReachDraft(arr) }} /></TableCell>
                           <TableCell className="py-1 px-2"><Input className="h-8" type="number" value={row.under18_female ?? ''} onChange={(e)=>{ const arr=[...reachDraft]; arr[idx]={...arr[idx], under18_female: parseInt(e.target.value)||0}; setReachDraft(arr) }} /></TableCell>
-                          <TableCell className="py-1 px-2 text-right">
-                            <Button variant="destructive" size="sm" onClick={()=>{ const arr=[...reachDraft]; arr.splice(idx,1); setReachDraft(arr) }}>Delete</Button>
-                          </TableCell>
+                          <TableCell className="py-1 px-2"><Input className="h-8" type="number" value={summaryDraft?.demographics?.special_needs ?? ''} onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), demographics: { ...(s?.demographics||{}), special_needs: parseInt(e.target.value)||0 } }))} /></TableCell>
                         </TableRow>
                       ))}
                     </TableBody>

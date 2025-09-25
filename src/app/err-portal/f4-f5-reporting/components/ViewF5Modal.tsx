@@ -37,6 +37,7 @@ export default function ViewF5Modal({ reportId, open, onOpenChange }: ViewF5Moda
   const project = report?.err_projects
   const room = project?.emergency_rooms
   const reach = data?.reach || []
+  const demographics = report?.demographics || null
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -100,41 +101,64 @@ export default function ViewF5Modal({ reportId, open, onOpenChange }: ViewF5Moda
               </div>
             </div>
 
-            {/* Reach */}
+            {/* Activities Table */}
             <div>
               <Label>Implemented Activities</Label>
               <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead>Activity Name</TableHead>
-                    <TableHead>Objective / Details</TableHead>
-                    <TableHead>Location</TableHead>
+                    <TableHead>Goal/Details of Activity</TableHead>
+                    <TableHead>Implementation Location</TableHead>
                     <TableHead>Start</TableHead>
                     <TableHead>End</TableHead>
-                    <TableHead>Individuals</TableHead>
-                    <TableHead>Families</TableHead>
-                    <TableHead>Male</TableHead>
-                    <TableHead>Female</TableHead>
-                    <TableHead>Boys &lt;18</TableHead>
-                    <TableHead>Girls &lt;18</TableHead>
+                    <TableHead>Beneficiaries (Individuals)</TableHead>
+                    <TableHead>Beneficiaries (Families)</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {reach.length === 0 ? (
-                    <TableRow><TableCell colSpan={11} className="text-center text-muted-foreground">No activities</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground">No activities</TableCell></TableRow>
                   ) : reach.map((e:any)=> (
                     <TableRow key={e.id}>
                       <TableCell>{e.activity_name || '-'}</TableCell>
                       <TableCell>{e.activity_goal || '-'}</TableCell>
                       <TableCell>{e.location || '-'}</TableCell>
-                      <TableCell>{e.start_date ? new Date(e.start_date).toLocaleDateString() : '-'}</TableCell>
-                      <TableCell>{e.end_date ? new Date(e.end_date).toLocaleDateString() : '-'}</TableCell>
-                      <TableCell>{e.individual_count ?? 0}</TableCell>
-                      <TableCell>{e.household_count ?? 0}</TableCell>
-                      <TableCell>{e.male_count ?? 0}</TableCell>
-                      <TableCell>{e.female_count ?? 0}</TableCell>
-                      <TableCell>{e.under18_male ?? 0}</TableCell>
-                      <TableCell>{e.under18_female ?? 0}</TableCell>
+                      <TableCell>{e.start_date || '-'}</TableCell>
+                      <TableCell>{e.end_date || '-'}</TableCell>
+                      <TableCell>{Number(e.individual_count ?? 0).toLocaleString()}</TableCell>
+                      <TableCell>{Number(e.household_count ?? 0).toLocaleString()}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+
+            {/* Demographics Breakdown Table */}
+            <div>
+              <Label>Additional Beneficiary Breakdown</Label>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Activity</TableHead>
+                    <TableHead>Male</TableHead>
+                    <TableHead>Female</TableHead>
+                    <TableHead>Male &lt;18</TableHead>
+                    <TableHead>Female &lt;18</TableHead>
+                    <TableHead>People with Disabilities</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {!data?.demographics?.breakdowns?.length ? (
+                    <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground">No demographic breakdowns available</TableCell></TableRow>
+                  ) : data.demographics.breakdowns.map((breakdown:any, idx:number)=> (
+                    <TableRow key={idx}>
+                      <TableCell>{breakdown.activity_name || '-'}</TableCell>
+                      <TableCell>{Number(breakdown.male_count ?? 0).toLocaleString()}</TableCell>
+                      <TableCell>{Number(breakdown.female_count ?? 0).toLocaleString()}</TableCell>
+                      <TableCell>{Number(breakdown.under18_male ?? 0).toLocaleString()}</TableCell>
+                      <TableCell>{Number(breakdown.under18_female ?? 0).toLocaleString()}</TableCell>
+                      <TableCell>{Number(breakdown.special_needs ?? 0).toLocaleString()}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>

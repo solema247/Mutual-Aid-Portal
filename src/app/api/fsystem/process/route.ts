@@ -346,11 +346,50 @@ OTHER:
 - language: "ar" or "en" inferred from the text
 - raw_ocr: include full OCR text back to caller
 
-Return strict JSON with keys exactly as specified above.` : (isF5 ? `You are extracting structured data from an F5 program report. Return JSON with keys:
-- raw_ocr, language, date
-- reach: array of rows with fields {activity_name, activity_goal, location, start_date, end_date, individuals (or individual_count), families (or household_count), male_count, female_count, under18_male, under18_female}
-- positive_changes, negative_results, unexpected_results, lessons_learned, suggestions, reporting_person.
-Preserve text verbatim; do not invent numbers.` : `Extract information from the following text (which may be in English or Arabic):
+Return strict JSON with keys exactly as specified above.` : (isF5 ? `Extract F5 program report data. Return MINIFIED JSON (no whitespace, no markdown) with EXACTLY these fields:
+
+date: Report date (string)
+language: "ar" or "en"
+reach: Array of activity objects with EXACTLY these fields:
+  activity_name: Activity name (string)
+  activity_goal: Activity goal/details (string)
+  location: Implementation location (string)
+  start_date: Start date (string)
+  end_date: End date (string)
+  individual_count: Number of individuals (number)
+  household_count: Number of families/households (number)
+  male_count: Number of males (number)
+  female_count: Number of females (number)
+  under18_male: Number of males under 18 (number)
+  under18_female: Number of females under 18 (number)
+
+positive_changes: Positive changes/impacts text (string)
+negative_results: Negative results/challenges text (string)
+unexpected_results: Unexpected results text (string)
+lessons_learned: Lessons learned text (string)
+suggestions: Suggestions/requests text (string)
+reporting_person: Name of reporting person (string)
+
+IMPORTANT:
+- Return ONLY minified JSON, no markdown, no other text
+- Use null for missing values, not empty strings
+- For reach activities:
+  - Extract all activities with their details
+  - Map Arabic headers:
+    اسم النشاط -> activity_name
+    هدف/تفاصيل النشاط -> activity_goal
+    مكان التنفيذ -> location
+    البداية -> start_date
+    النهاية -> end_date
+    أفراد -> individual_count
+    أسر -> household_count
+    ذكور -> male_count
+    إناث -> female_count
+    ذكور تحت 18 -> under18_male
+    إناث تحت 18 -> under18_female
+
+Example output format (minified):
+{"date":"2025-08-25","language":"ar","reach":[{"activity_name":"ورشة تدريبية","activity_goal":"هدف الورشة","location":"موقع التنفيذ","start_date":"2025-08-01","end_date":"2025-08-02","individual_count":30,"household_count":10,"male_count":15,"female_count":15,"under18_male":5,"under18_female":5}],"positive_changes":"التغييرات الإيجابية","negative_results":null,"unexpected_results":null,"lessons_learned":null,"suggestions":null,"reporting_person":"اسم المسؤول"}` : `Extract information from the following text (which may be in English or Arabic):
 
 BASIC INFORMATION:
 - date: Date of the project in YYYY-MM-DD format (convert any date format to this)
@@ -486,6 +525,194 @@ Return all fields in this format:
         structuredData.state = formMetadata.state_name_ar
       }
       
+      // If F5, normalize reach rows and parse demographics from raw OCR
+      if (isF5) {
+        function toAsciiDigits(s: any) {
+          if (s == null) return s
+          const map: Record<string,string> = { '٠':'0','١':'1','٢':'2','٣':'3','٤':'4','٥':'5','٦':'6','٧':'7','٨':'8','٩':'9' }
+          return String(s).replace(/[٠-٩]/g, d => (map as any)[d] ?? d).replace(/[,،]/g,'').trim()
+        }
+        function toNum(n: any): number | null {
+          const v = toAsciiDigits(n)
+          if (!v) return null
+          const f = parseInt(v, 10)
+          return Number.isFinite(f) ? f : null
+        }
+        function normalizeDate(v: any): string | null {
+          const s = toAsciiDigits(v)
+          if (!s) return null
+          if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s
+          if (/^\d{1,2}\/\d{1,2}(\/\d{2,4})?$/.test(s)) return s
+          return null
+        }
+        function normalizeReachRow(row: any) {
+          const r: any = { ...row }
+          // Map alternates to expected keys
+          if (r.individuals != null && r.individual_count == null) r.individual_count = r.individuals
+          if (r.families != null && r.household_count == null) r.household_count = r.families
+          if (r.start != null && r.start_date == null) r.start_date = r.start
+          if (r.end != null && r.end_date == null) r.end_date = r.end
+
+          r.activity_name = r.activity_name ?? r.name ?? null
+          r.activity_goal = r.activity_goal ?? r.details ?? null
+          r.location = r.location ?? r.place ?? null
+
+          r.start_date = normalizeDate(r.start_date)
+          r.end_date = normalizeDate(r.end_date)
+
+          r.individual_count = toNum(r.individual_count)
+          r.household_count = toNum(r.household_count)
+          r.male_count = toNum(r.male_count)
+          r.female_count = toNum(r.female_count)
+          r.under18_male = toNum(r.under18_male)
+          r.under18_female = toNum(r.under18_female)
+
+          return {
+            activity_name: r.activity_name || null,
+            activity_goal: r.activity_goal || null,
+            location: r.location || null,
+            start_date: r.start_date || null,
+            end_date: r.end_date || null,
+            individual_count: r.individual_count ?? null,
+            household_count: r.household_count ?? null,
+            male_count: r.male_count ?? null,
+            female_count: r.female_count ?? null,
+            under18_male: r.under18_male ?? null,
+            under18_female: r.under18_female ?? null
+          }
+        }
+        function parseDemographics(sourceText: string) {
+          const t = (sourceText || '').replace(/\s+/g,' ').trim()
+          
+          // Look for the demographics section and the activities list
+          const demographicsMatch = t.match(/الحصر\s*الإضافي\s*للمستفيدين[\s\S]*?(?=التأثيرات|$)/i)
+          if (!demographicsMatch) {
+            return { breakdowns: [] }
+          }
+          
+          const demoSection = demographicsMatch[0]
+          
+          // Split into lines and clean
+          const lines = demoSection.split('\n').map(l => l.trim()).filter(l => l.length > 0)
+          
+          // First, find all activity names in the main activities section
+          const activityNames = Array.isArray(structuredData.reach) 
+            ? structuredData.reach.map((r: { activity_name?: string }) => r.activity_name).filter(Boolean)
+            : []
+          
+          // Then find the demographics breakdown section which lists activities again with their numbers
+          let inBreakdownSection = false
+          let currentActivity = ''
+          let numberGroups: number[][] = []
+          let currentNumbers: number[] = []
+          
+          for (let i = 0; i < lines.length; i++) {
+            const line = lines[i]
+            
+            // Skip header lines
+            if (line.includes('الحصر') || line.includes('إسم النشاط') || line.includes('التاريخ') || line.includes('محلية')) {
+              continue
+            }
+            
+            // Look for numbers
+            const numbers = line.match(/[٠-٩0-9,]+/g)
+            if (numbers) {
+              // Convert Arabic numerals and clean
+              const cleanNums = numbers.map(n => {
+                const cleaned = n.replace(/[,،]/g, '')
+                return toNum(cleaned) || 0
+              })
+              currentNumbers.push(...cleanNums)
+              continue
+            }
+            
+            // If we have a line that matches one of our activity names
+            const matchingActivity = activityNames.find((name: string) => 
+              name && line.includes(name.split(' ')[0]) // Match on first word to be more lenient
+            )
+            
+            if (matchingActivity) {
+              // If we already have numbers for a previous activity, save them
+              if (currentNumbers.length > 0) {
+                numberGroups.push(currentNumbers)
+              }
+              currentActivity = matchingActivity
+              currentNumbers = []
+              continue
+            }
+          }
+          
+          // Don't forget the last group of numbers
+          if (currentNumbers.length > 0) {
+            numberGroups.push(currentNumbers)
+          }
+          
+          // Now map the activities to their demographic breakdowns
+          const breakdowns = activityNames.map((activityName: string, idx: number) => {
+            const numbers = numberGroups[idx] || []
+            return {
+              activity_name: activityName,
+              male_count: numbers[0] || 0,
+              female_count: numbers[1] || 0,
+              under18_male: numbers[2] || 0,
+              under18_female: numbers[3] || 0,
+              special_needs: numbers[4] || 0
+            }
+          })
+          
+          return { breakdowns }
+        }
+        
+        function parseNarrativeSection(sourceText: string) {
+          const t = (sourceText || '').replace(/\s+/g,' ').trim()
+          
+          // Extract narrative sections using markers and question numbers
+          const positiveMatch = t.match(/(?:7\s*\.\s*)?(?:أروي\s+)?التغيرات\s*والآثار\s*الإيجابية[^\n]*\n([\s\S]*?)(?=2\s*\.\s*هل|هل\s*توجد|$)/i)
+          const negativeMatch = t.match(/(?:2\s*\.\s*)?هل\s*توجد\s*أي\s*نتائج\s*سلبية[^\n]*\n([\s\S]*?)(?=3\s*\.\s*ما|ما\s*الذي|$)/i)
+          const unexpectedMatch = t.match(/(?:3\s*\.\s*)?ما\s*الذي\s*لم\s*يحدث[^\n]*\n([\s\S]*?)(?=4\s*\.\s*بناءاً|بناءاً|$)/i)
+          const lessonsMatch = t.match(/(?:4\s*\.\s*)?بناءاً\s*على\s*ما\s*تعلمتموه[^\n]*\n([\s\S]*?)(?=5\s*\.\s*ما|ما\s*هي\s*النصائح|$)/i)
+          const suggestionsMatch = t.match(/(?:5\s*\.\s*)?ما\s*هي\s*النصائح[^\n]*\n([\s\S]*?)(?=\n\s*$|$)/i)
+          
+          return {
+            positive_changes: positiveMatch?.[1]?.trim() || null,
+            negative_results: negativeMatch?.[1]?.trim() || null,
+            unexpected_results: unexpectedMatch?.[1]?.trim() || null,
+            lessons_learned: lessonsMatch?.[1]?.trim() || null,
+            suggestions: suggestionsMatch?.[1]?.trim() || null
+          }
+        }
+
+        if (Array.isArray(structuredData.reach)) {
+          structuredData.reach = structuredData.reach
+            .map((r: any) => normalizeReachRow(r))
+            .filter((r: any) => r.activity_name)
+        }
+        
+        // Parse demographics and narrative sections
+        const demographics = parseDemographics(text)
+        const narrative = parseNarrativeSection(text)
+        
+        // Merge results
+        structuredData.demographics = demographics
+        
+        // Only use regex-parsed narrative as fallback if AI didn't extract them
+        if (!structuredData.positive_changes && narrative.positive_changes) {
+          structuredData.positive_changes = narrative.positive_changes
+        }
+        if (!structuredData.negative_results && narrative.negative_results) {
+          structuredData.negative_results = narrative.negative_results
+        }
+        if (!structuredData.unexpected_results && narrative.unexpected_results) {
+          structuredData.unexpected_results = narrative.unexpected_results
+        }
+        if (!structuredData.lessons_learned && narrative.lessons_learned) {
+          structuredData.lessons_learned = narrative.lessons_learned
+        }
+        if (!structuredData.suggestions && narrative.suggestions) {
+          structuredData.suggestions = narrative.suggestions
+        }
+      }
+
       // Attach raw OCR for transparency/debugging
       structuredData.raw_ocr = text
       
