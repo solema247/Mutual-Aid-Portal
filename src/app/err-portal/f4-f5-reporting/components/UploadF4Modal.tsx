@@ -104,7 +104,9 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved }: UploadF4M
       setExpensesDraft((parseJson.expensesDraft || []).map((ex: any) => ({
         ...ex,
         // initialize display amount to SDG if present, else fallback to USD
-        expense_amount: ex.expense_amount_sdg ?? ex.expense_amount ?? 0
+        expense_amount: ex.expense_amount_sdg ?? ex.expense_amount ?? 0,
+        // default payment method so it persists even if user doesn't touch the select
+        payment_method: ex.payment_method || 'Bank Transfer'
       })))
       setStep('preview')
     } catch (e) {
