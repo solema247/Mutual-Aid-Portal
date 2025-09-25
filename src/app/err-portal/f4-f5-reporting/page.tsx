@@ -9,6 +9,8 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '@/components/ui/table'
 import UploadF4Modal from './components/UploadF4Modal'
 import ViewF4Modal from './components/ViewF4Modal'
+import UploadF5Modal from './components/UploadF5Modal'
+import ViewF5Modal from './components/ViewF5Modal'
 
 interface F4Row {
   id: number
@@ -26,6 +28,18 @@ interface F4Row {
   updated_at: string
 }
 
+interface F5Row {
+  id: string
+  project_id: string | null
+  err_name?: string | null
+  state?: string | null
+  grant_call?: string | null
+  donor?: string | null
+  report_date: string | null
+  activities_count: number
+  updated_at: string
+}
+
 export default function F4F5ReportingPage() {
   const [tab, setTab] = useState<'f4'|'f5'>('f4')
   const [rows, setRows] = useState<F4Row[]>([])
@@ -38,6 +52,18 @@ export default function F4F5ReportingPage() {
   const [uploadOpen, setUploadOpen] = useState(false)
   const [viewId, setViewId] = useState<number | null>(null)
   const [viewOpen, setViewOpen] = useState(false)
+
+  // F5 state
+  const [f5Rows, setF5Rows] = useState<F5Row[]>([])
+  const [f5Loading, setF5Loading] = useState(false)
+  const [f5Q, setF5Q] = useState('')
+  const [f5Err, setF5Err] = useState('')
+  const [f5State, setF5State] = useState('')
+  const [f5Donor, setF5Donor] = useState('')
+  const [f5Grant, setF5Grant] = useState('')
+  const [uploadF5Open, setUploadF5Open] = useState(false)
+  const [viewF5Id, setViewF5Id] = useState<string | null>(null)
+  const [viewF5Open, setViewF5Open] = useState(false)
 
   const load = async () => {
     try {
@@ -53,7 +79,22 @@ export default function F4F5ReportingPage() {
     }
   }
 
+  const loadF5 = async () => {
+    try {
+      setF5Loading(true)
+      const res = await fetch('/api/f5/list')
+      if (!res.ok) throw new Error('failed f5 list')
+      const data = await res.json()
+      setF5Rows(data)
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setF5Loading(false)
+    }
+  }
+
   useEffect(() => { load() }, [])
+  useEffect(() => { if (tab === 'f5') loadF5() }, [tab])
 
   return (
     <div className="max-w-7xl mx-auto p-6 space-y-6">
@@ -169,8 +210,104 @@ export default function F4F5ReportingPage() {
           <ViewF4Modal summaryId={viewId} open={viewOpen} onOpenChange={(v)=>{ setViewOpen(v); if (!v) setViewId(null) }} />
         </TabsContent>
 
-        <TabsContent value="f5" className="mt-4">
-          <Card><CardContent className="py-8 text-center text-muted-foreground">F5 (Program) coming next.</CardContent></Card>
+        <TabsContent value="f5" className="mt-4 space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="text-lg font-semibold">F5 Program Reports</div>
+            <Button className="bg-green-700 hover:bg-green-800 text-white font-bold" onClick={() => setUploadF5Open(true)}>Upload F5</Button>
+          </div>
+
+          <div className="flex flex-wrap md:flex-nowrap gap-2 items-center">
+            <Input className="h-9 flex-1 md:flex-none md:w-64" placeholder="Search…" value={f5Q} onChange={(e)=>setF5Q(e.target.value)} />
+            <Select value={f5Err || '__ALL__'} onValueChange={(v)=>setF5Err(v==='__ALL__'?'':v)}>
+              <SelectTrigger className="h-9 w-full md:w-48"><SelectValue placeholder="ERR" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__ALL__">All</SelectItem>
+                {[...new Set(f5Rows.map(r=>r.err_name).filter(Boolean))].map((v)=> (
+                  <SelectItem key={String(v)} value={String(v)}>{String(v)}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={f5State || '__ALL__'} onValueChange={(v)=>setF5State(v==='__ALL__'?'':v)}>
+              <SelectTrigger className="h-9 w-full md:w-48"><SelectValue placeholder="State" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__ALL__">All</SelectItem>
+                {[...new Set(f5Rows.map(r=>r.state).filter(Boolean))].map((v)=> (
+                  <SelectItem key={String(v)} value={String(v)}>{String(v)}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={f5Donor || '__ALL__'} onValueChange={(v)=>setF5Donor(v==='__ALL__'?'':v)}>
+              <SelectTrigger className="h-9 w-full md:w-48"><SelectValue placeholder="Donor" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__ALL__">All</SelectItem>
+                {[...new Set(f5Rows.map(r=>r.donor).filter(Boolean))].map((v)=> (
+                  <SelectItem key={String(v)} value={String(v)}>{String(v)}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={f5Grant || '__ALL__'} onValueChange={(v)=>setF5Grant(v==='__ALL__'?'':v)}>
+              <SelectTrigger className="h-9 w-full md:w-48"><SelectValue placeholder="Grant Call" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__ALL__">All</SelectItem>
+                {[...new Set(f5Rows.map(r=>r.grant_call).filter(Boolean))].map((v)=> (
+                  <SelectItem key={String(v)} value={String(v)}>{String(v)}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button
+              variant="outline"
+              className="h-9 w-full md:w-24 md:ml-auto"
+              onClick={() => { setF5Q(''); setF5Err(''); setF5State(''); setF5Donor(''); setF5Grant(''); }}
+            >Reset</Button>
+          </div>
+
+          <Card>
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>ERR</TableHead>
+                    <TableHead>State</TableHead>
+                    <TableHead>Grant Call</TableHead>
+                    <TableHead>Donor</TableHead>
+                    <TableHead>Report Date</TableHead>
+                    <TableHead className="text-right">Activities</TableHead>
+                    <TableHead>Updated</TableHead>
+                    <TableHead></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {f5Loading ? (
+                    <TableRow><TableCell colSpan={7} className="text-center py-6">Loading…</TableCell></TableRow>
+                  ) : f5Rows.length === 0 ? (
+                    <TableRow><TableCell colSpan={7} className="text-center py-6 text-muted-foreground">No F5 reports yet</TableCell></TableRow>
+                  ) : f5Rows
+                    .filter(r => !f5Q || [r.err_name, r.state, r.donor, r.grant_call].some(v => (v||'').toLowerCase().includes(f5Q.toLowerCase())))
+                    .filter(r => !f5Err || r.err_name === f5Err)
+                    .filter(r => !f5State || r.state === f5State)
+                    .filter(r => !f5Donor || r.donor === f5Donor)
+                    .filter(r => !f5Grant || r.grant_call === f5Grant)
+                    .map(r => (
+                    <TableRow key={r.id}>
+                      <TableCell>{r.err_name || '-'}</TableCell>
+                      <TableCell>{r.state || '-'}</TableCell>
+                      <TableCell>{r.grant_call || '-'}</TableCell>
+                      <TableCell>{r.donor || '-'}</TableCell>
+                      <TableCell>{r.report_date ? new Date(r.report_date).toLocaleDateString() : '-'}</TableCell>
+                      <TableCell className="text-right">{Number(r.activities_count || 0).toLocaleString()}</TableCell>
+                      <TableCell>{new Date(r.updated_at).toLocaleDateString()}</TableCell>
+                      <TableCell>
+                        <Button variant="outline" size="sm" onClick={()=>{ setViewF5Id(r.id); setViewF5Open(true) }}>View</Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+
+          <UploadF5Modal open={uploadF5Open} onOpenChange={setUploadF5Open} onSaved={loadF5} />
+          <ViewF5Modal reportId={viewF5Id} open={viewF5Open} onOpenChange={(v)=>{ setViewF5Open(v); if (!v) setViewF5Id(null) }} />
         </TabsContent>
       </Tabs>
     </div>

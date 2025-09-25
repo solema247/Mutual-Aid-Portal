@@ -305,7 +305,9 @@ export async function POST(req: Request) {
     }
 
     // Decide prompt based on form type
-    const isF4 = String(formMetadata?.form_type || '').toUpperCase() === 'F4'
+    const formType = String(formMetadata?.form_type || '').toUpperCase()
+    const isF4 = formType === 'F4'
+    const isF5 = formType === 'F5'
 
     // Process with OpenAI
     const completion = await openai.chat.completions.create({
@@ -344,7 +346,11 @@ OTHER:
 - language: "ar" or "en" inferred from the text
 - raw_ocr: include full OCR text back to caller
 
-Return strict JSON with keys exactly as specified above.` : `Extract information from the following text (which may be in English or Arabic):
+Return strict JSON with keys exactly as specified above.` : (isF5 ? `You are extracting structured data from an F5 program report. Return JSON with keys:
+- raw_ocr, language, date
+- reach: array of rows with fields {activity_name, activity_goal, location, start_date, end_date, individuals (or individual_count), families (or household_count), male_count, female_count, under18_male, under18_female}
+- positive_changes, negative_results, unexpected_results, lessons_learned, suggestions, reporting_person.
+Preserve text verbatim; do not invent numbers.` : `Extract information from the following text (which may be in English or Arabic):
 
 BASIC INFORMATION:
 - date: Date of the project in YYYY-MM-DD format (convert any date format to this)
@@ -429,7 +435,7 @@ Return all fields in this format:
   "expenses": Array<{activity: string, total_cost_usd: number, total_cost_sdg: number | null, currency: string}>,
   "form_currency": string,
   "exchange_rate": number
-}`
+}`)
         },
         {
           role: "user",
@@ -461,7 +467,7 @@ Return all fields in this format:
         structuredData.language = detectedLanguage
       }
 
-      if (!isF4) {
+      if (!isF4 && !isF5) {
         // F1 behavior only
         const objectives: unknown = structuredData.project_objectives
         const objectivesStr = typeof objectives === 'string' ? objectives.trim() : ''
