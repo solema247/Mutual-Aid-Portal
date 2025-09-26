@@ -8,6 +8,8 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { supabase } from '@/lib/supabaseClient'
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '@/components/ui/table'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 
 interface UploadF4ModalProps {
   open: boolean
@@ -31,6 +33,8 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved }: UploadF4M
   const [expensesDraft, setExpensesDraft] = useState<any[]>([])
   const [tempKey, setTempKey] = useState<string>('')
   const [fxRate, setFxRate] = useState<number | null>(null)
+  const [fileUrl, setFileUrl] = useState<string>('')
+  const [activeTab, setActiveTab] = useState('form')
 
   useEffect(() => {
     if (!open) return
@@ -147,6 +151,12 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved }: UploadF4M
       const { error: upErr } = await supabase.storage.from('images').upload(key, file, { upsert: true })
       if (upErr) throw upErr
       // parse
+      // Get signed URL for file viewing
+      const { data: signedUrl } = await supabase.storage.from('images').createSignedUrl(key, 3600)
+      if (signedUrl?.signedUrl) {
+        setFileUrl(signedUrl.signedUrl)
+      }
+
       const parseRes = await fetch('/api/f4/parse', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ project_id: projectId, file_key_temp: key }) })
       const parseJson = await parseRes.json()
       if (!parseRes.ok) throw new Error(parseJson.error || 'Parse failed')
@@ -200,6 +210,8 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved }: UploadF4M
     setExpensesDraft([])
     setStep('select')
     setTempKey('')
+    setFileUrl('')
+    setActiveTab('form')
   }
 
   return (
@@ -259,7 +271,13 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved }: UploadF4M
             </div>
           </div>
         ) : (
-          <div className="space-y-6 select-text">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="form">Edit Form</TabsTrigger>
+              <TabsTrigger value="file">View File</TabsTrigger>
+            </TabsList>
+            
+            <TabsContent value="form" className="space-y-6 select-text mt-6">
             {/* Summary Header */}
             <div className="space-y-3">
               <div className="grid grid-cols-2 gap-4">
@@ -442,7 +460,39 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved }: UploadF4M
               <Button variant="outline" onClick={()=>setStep('select')}>Back</Button>
               <Button onClick={handleSave} disabled={isLoading}>{isLoading ? 'Saving…' : 'Save F4'}</Button>
             </div>
-          </div>
+            </TabsContent>
+            
+            <TabsContent value="file" className="mt-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Uploaded File</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {fileUrl ? (
+                    <div className="w-full h-[600px] border rounded">
+                      {file?.type === 'application/pdf' ? (
+                        <iframe 
+                          src={fileUrl} 
+                          className="w-full h-full rounded"
+                          title="F4 Report PDF"
+                        />
+                      ) : (
+                        <img 
+                          src={fileUrl} 
+                          alt="F4 Report" 
+                          className="w-full h-full object-contain rounded"
+                        />
+                      )}
+                    </div>
+                  ) : (
+                    <div className="w-full h-[600px] border rounded flex items-center justify-center text-muted-foreground">
+                      No file preview available
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+          </Tabs>
         )}
       </DialogContent>
     </Dialog>
