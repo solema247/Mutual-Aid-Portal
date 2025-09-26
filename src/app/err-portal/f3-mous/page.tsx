@@ -69,7 +69,7 @@ interface MOUDetail {
 }
 
 export default function F3MOUsPage() {
-  const { t } = useTranslation(['common'])
+  const { t, i18n } = useTranslation(['f3', 'common'])
   const [mous, setMous] = useState<MOU[]>([])
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
@@ -120,27 +120,27 @@ export default function F3MOUsPage() {
     <div className="max-w-7xl mx-auto p-6 space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle>F3 MOUs</CardTitle>
+          <CardTitle>{t('f3:title')}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex items-center gap-2">
-            <Input placeholder="Search by code or partner" value={search} onChange={(e) => setSearch(e.target.value)} />
-            <Button variant="outline" onClick={fetchMous}>{t('common:search') || 'Search'}</Button>
+            <Input placeholder={t('f3:search_placeholder') as string} value={search} onChange={(e) => setSearch(e.target.value)} />
+            <Button variant="outline" onClick={fetchMous}>{t('f3:search')}</Button>
           </div>
 
           {loading ? (
             <div className="py-8 text-center text-muted-foreground">{t('common:loading') || 'Loading...'}</div>
           ) : (
-            <Table>
+            <Table dir={i18n.language === 'ar' ? 'rtl' : 'ltr'}>
               <TableHeader>
                 <TableRow>
-                  <TableHead>MOU Code</TableHead>
-                  <TableHead>Partner</TableHead>
-                  <TableHead>ERR / State</TableHead>
-                  <TableHead className="text-right">Total</TableHead>
-                  <TableHead>End Date</TableHead>
-                  <TableHead>Created</TableHead>
-                  <TableHead>Actions</TableHead>
+                  <TableHead>{t('f3:headers.mou_code')}</TableHead>
+                  <TableHead>{t('f3:headers.partner')}</TableHead>
+                  <TableHead>{t('f3:headers.err_state')}</TableHead>
+                  <TableHead className="text-right">{t('f3:headers.total')}</TableHead>
+                  <TableHead>{t('f3:headers.end_date')}</TableHead>
+                  <TableHead>{t('f3:headers.created')}</TableHead>
+                  <TableHead>{t('f3:headers.actions')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -219,7 +219,7 @@ export default function F3MOUsPage() {
                           }
                         }}
                       >
-                        Preview
+                        {t('f3:preview')}
                       </Button>
                         <input
                           type="file"
@@ -262,7 +262,7 @@ export default function F3MOUsPage() {
                             document.getElementById(`payment-upload-${m.id}`)?.click()
                           }}
                         >
-                          {m.payment_confirmation_file ? 'Update Payment' : 'Add Payment'}
+                          {m.payment_confirmation_file ? t('f3:update_payment') : t('f3:add_payment')}
                         </Button>
                         {m.payment_confirmation_file && (
                           <Button
@@ -293,8 +293,8 @@ export default function F3MOUsPage() {
                                 alert('Failed to open payment confirmation')
                               }
                             }}
-                          >
-                            View Payment
+                            >
+                            {t('f3:view_payment')}
                           </Button>
                         )}
                       </div>
@@ -315,56 +315,70 @@ export default function F3MOUsPage() {
           {activeMou && (
             <div id={previewId} className="space-y-4">
               <div className="rounded-lg border p-4" data-mou-section="true">
-                <div className="text-lg font-semibold mb-2">Memorandum of Understanding Agreement</div>
+                <div className="text-lg font-semibold mb-2">
+                  {t('f3:mou_agreement', { lng: 'en' })}
+                  <div className="text-sm text-muted-foreground" dir="rtl">{t('f3:mou_agreement', { lng: 'ar' })}</div>
+                </div>
                 <div className="text-sm">
-                  <div className="font-medium">Between</div>
+                  <div className="font-medium">{t('f3:between', { lng: 'en' })}</div>
                   <div>{activeMou.partner_name}</div>
-                  <div className="font-medium mt-2">And</div>
+                  <div className="font-medium mt-2">{t('f3:and', { lng: 'en' })}</div>
                   <div>{activeMou.err_name}</div>
+                  <div className="mt-3" dir="rtl">
+                    <div className="font-medium">{t('f3:between', { lng: 'ar' })}</div>
+                    <div>{activeMou.partner_name}</div>
+                    <div className="font-medium mt-2">{t('f3:and', { lng: 'ar' })}</div>
+                    <div>{activeMou.err_name}</div>
+                  </div>
                 </div>
               </div>
 
               <div className="rounded-lg border p-4" data-mou-section="true">
-                <div className="font-semibold mb-2">1. Purpose</div>
-                <p className="text-sm">This MOU will guide the partnership between {activeMou.partner_name} and {activeMou.err_name} to support the community and provide for the humanitarian needs of people affected by the ongoing conflict in Sudan.</p>
-                <p className="text-sm mt-2">This will be accomplished by undertaking the following activities:</p>
+                <div className="font-semibold mb-2">
+                  1. {t('f3:purpose', { lng: 'en' })}
+                  <div className="text-sm text-muted-foreground" dir="rtl">{t('f3:purpose', { lng: 'ar' })}</div>
+                </div>
+                <p className="text-sm">{t('f3:purpose_desc', { lng: 'en', partner: activeMou.partner_name, err: activeMou.err_name })}</p>
+                <p className="text-sm mt-2">{t('f3:activities_intro', { lng: 'en' })}</p>
+                <p className="text-sm mt-2" dir="rtl">{t('f3:activities_intro', { lng: 'ar' })}</p>
+                <p className="text-sm" dir="rtl">{t('f3:purpose_desc', { lng: 'ar', partner: activeMou.partner_name, err: activeMou.err_name })}</p>
 
                 {/* English row */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3" data-mou-subsection="true">
                   <div className="rounded-md border p-3">
-                    <div className="font-medium mb-2">{activeMou.err_name} shall</div>
+                    <div className="font-medium mb-2">{t('f3:shall_err', { err: activeMou.err_name })}</div>
                     <div className="text-sm space-y-2">
                       {(translations.objectives_en || (detail?.projects?.[0]?.project_objectives ?? detail?.project?.project_objectives)) && (
                         <div>
-                          <div className="font-semibold">Objectives</div>
+                          <div className="font-semibold">{t('f3:objectives')}</div>
                           <div className="whitespace-pre-wrap">{translations.objectives_en || toDisplay(detail?.projects?.[0]?.project_objectives ?? detail?.project?.project_objectives)}</div>
                         </div>
                       )}
                       {(translations.beneficiaries_en || (detail?.projects?.[0]?.intended_beneficiaries ?? detail?.project?.intended_beneficiaries)) && (
                         <div>
-                          <div className="font-semibold">Target Beneficiaries</div>
+                          <div className="font-semibold">{t('f3:target_beneficiaries')}</div>
                           <div className="whitespace-pre-wrap">{translations.beneficiaries_en || toDisplay(detail?.projects?.[0]?.intended_beneficiaries ?? detail?.project?.intended_beneficiaries)}</div>
                         </div>
                       )}
                       {(translations.activities_en || (detail?.projects?.[0]?.planned_activities_resolved ?? detail?.project?.planned_activities_resolved) || (detail?.projects?.[0]?.planned_activities ?? detail?.project?.planned_activities)) && (
                         <div>
-                          <div className="font-semibold">Planned Activities</div>
+                          <div className="font-semibold">{t('f3:planned_activities')}</div>
                           <div className="whitespace-pre-wrap">{translations.activities_en || toDisplay((detail?.projects?.[0]?.planned_activities_resolved ?? detail?.project?.planned_activities_resolved) || (detail?.projects?.[0]?.planned_activities ?? detail?.project?.planned_activities))}</div>
                         </div>
                       )}
                       {((detail?.projects?.[0]?.locality ?? detail?.project?.locality) || (detail?.projects?.[0]?.state ?? detail?.project?.state)) && (
-                        <div className="text-xs text-muted-foreground">Location: {(detail?.projects?.[0]?.locality ?? detail?.project?.locality) || '-'} / {(detail?.projects?.[0]?.state ?? detail?.project?.state) || '-'}</div>
+                        <div className="text-xs text-muted-foreground">{t('f3:location', { lng: 'en' })}: {(detail?.projects?.[0]?.locality ?? detail?.project?.locality) || '-'} / {(detail?.projects?.[0]?.state ?? detail?.project?.state) || '-'}</div>
                       )}
                     </div>
                   </div>
                   <div className="rounded-md border p-3">
-                    <div className="font-medium mb-2">{activeMou.partner_name} shall</div>
+                    <div className="font-medium mb-2">{t('f3:shall_partner', { partner: activeMou.partner_name })}</div>
                     <ul className="list-disc pl-5 text-sm space-y-1">
-                      <li>Provide a sum of ${Number(activeMou.total_amount || 0).toLocaleString()}.</li>
-                      <li>Accept applications submitted by communities that determine needs priorities (protection, WASH, food security, health, shelter/NFIs).</li>
-                      <li>Assess needs fairly using the community-led methodology (F1 submit).</li>
-                      <li>Provide technical support and ensure consistent follow-up on agreed procedures.</li>
-                      <li>Report to the donor.</li>
+                      <li>{t('f3:partner_provide_sum', { amount: Number(activeMou.total_amount || 0).toLocaleString() })}</li>
+                      <li>{t('f3:partner_accept_apps')}</li>
+                      <li>{t('f3:partner_assess_needs')}</li>
+                      <li>{t('f3:partner_support_followup')}</li>
+                      <li>{t('f3:partner_report')}</li>
                     </ul>
                   </div>
                 </div>
@@ -411,97 +425,113 @@ export default function F3MOUsPage() {
               </div>
 
               <div className="rounded-lg border p-4" data-mou-section="true">
-                <div className="font-semibold mb-2">2. Principles of Partnership</div>
+                <div className="font-semibold mb-2">2. {t('f3:principles')}</div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="rounded-md border p-3 text-sm">
-                    All parties have entered into this agreement in a spirit of cooperation, valuing the different skills, experiences, knowledge, and opinions that each party brings. All parties will support a culture where risk management is valued as essential and beneficial. The parties commit to desired outcomes and expected benefits, share and listen to new ideas, seek to use experiences to overcome challenges, and agree to regular and proactive communication with early escalation of issues.
-                  </div>
-                  <div className="rounded-md border p-3 text-sm" dir="rtl">
-                    دخلت جميع الأطراف في هذه الاتفاقية بروح التعاون، مع تقدير المهارات والخبرات والمعرفة والآراء المختلفة التي يجلبها كل طرف. ستدعم جميع الأطراف ثقافة يعتبر فيها إدارة المخاطر أمرًا أساسيًا ومفيدًا. تلتزم الأطراف بالنتائج المرجوة والفوائد المتوقعة، وتشارك الأفكار الجديدة وتستمع إليها، وتسعى للاستفادة من خبرات الأطراف الأخرى لتجاوز التحديات، وتوافق على التواصل المنتظم والاستباقي مع التصعيد المبكر للمشكلات لضمان الحل السريع.
-                  </div>
+                  <div className="rounded-md border p-3 text-sm">{t('f3:principles_en_desc')}</div>
+                  <div className="rounded-md border p-3 text-sm" dir="rtl">{t('f3:principles_ar_desc')}</div>
                 </div>
               </div>
 
               <div className="rounded-lg border p-4" data-mou-section="true">
-                <div className="font-semibold mb-2">3. Reports</div>
+                <div className="font-semibold mb-2">3. {t('f3:reports')}</div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="rounded-md border p-3 text-sm">
-                    The partner shall present a narrative report (F5) and a financial report (F4) after completion, sharing details of work completed, people supported, and a breakdown of costs. This must follow the F-system templates. ERR undertakes to return any funds for which accounting is not provided.
-                  </div>
-                  <div className="rounded-md border p-3 text-sm" dir="rtl">
-                    يلتزم الشريك بتقديم تقرير سردي (F5) وتقرير مالي (F4) بعد اكتمال التنفيذ، يتضمن تفاصيل الأعمال المنجزة، وعدد الأشخاص المستفيدين، وتفصيلاً للتكاليف. يجب أن يتبع ذلك نماذج نظام الـ F. وتلتزم غرفة الطوارئ بإعادة أي أموال لا يتم تقديم حسابات عنها.
-                  </div>
+                  <div className="rounded-md border p-3 text-sm">{t('f3:reports_en_desc')}</div>
+                  <div className="rounded-md border p-3 text-sm" dir="rtl">{t('f3:reports_ar_desc')}</div>
                 </div>
               </div>
 
               <div className="rounded-lg border p-4" data-mou-section="true">
-                <div className="font-semibold mb-2">4. Funding</div>
+                <div className="font-semibold mb-2">4. {t('f3:funding')}</div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="rounded-md border p-3 text-sm">
-                    The {activeMou.partner_name} will provide a grant of ${Number(activeMou.total_amount || 0).toLocaleString()} upon signing this MOU. Disbursement and proof-of-payment requirements apply per policy.
-                  </div>
-                  <div className="rounded-md border p-3 text-sm" dir="rtl">
-                    سيقوم {activeMou.partner_name} بتقديم منحة قدرها ${Number(activeMou.total_amount || 0).toLocaleString()} عند توقيع مذكرة التفاهم هذه. تنطبق متطلبات الصرف وإثبات الدفع وفق السياسات المعمول بها.
-                  </div>
+                  <div className="rounded-md border p-3 text-sm">{t('f3:funding_en_desc', { partner: activeMou.partner_name, amount: Number(activeMou.total_amount || 0).toLocaleString() })}</div>
+                  <div className="rounded-md border p-3 text_sm" dir="rtl">{t('f3:funding_ar_desc', { partner: activeMou.partner_name, amount: Number(activeMou.total_amount || 0).toLocaleString() })}</div>
                 </div>
               </div>
 
               <div className="rounded-lg border p-4" data-mou-section="true">
-                <div className="font-semibold mb-2">5. Budget</div>
+                <div className="font-semibold mb-2">5. {t('f3:budget')}</div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="rounded-md border p-3 text-sm">
-                    A detailed budget is maintained in the F1(s) linked to this MOU. Procurement procedures apply; changes or obstacles must be reported at least 24 hours in advance.
-                  </div>
-                  <div className="rounded-md border p-3 text-sm" dir="rtl">
-                    يتم الاحتفاظ بميزانية تفصيلية في نماذج F1 المرتبطة بهذه المذكرة. تُطبق إجراءات الشراء، ويجب الإبلاغ عن أي تغييرات أو عوائق قبل 24 ساعة على الأقل.
-                  </div>
+                  <div className="rounded-md border p-3 text-sm">{t('f3:budget_en_desc')}</div>
+                  <div className="rounded-md border p-3 text-sm" dir="rtl">{t('f3:budget_ar_desc')}</div>
                 </div>
               </div>
 
               <div className="rounded-lg border p-4" data-mou-section="true">
-                <div className="font-semibold mb-2">6. Approved Accounts</div>
+                <div className="font-semibold mb-2">6. {t('f3:approved_accounts')}</div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="rounded-md border p-3 text-sm whitespace-pre-wrap">
-                    {detail?.project?.banking_details || 'Account details as shared and approved by ERR will be used for disbursement.'}
-                  </div>
-                  <div className="rounded-md border p-3 text-sm whitespace-pre-wrap" dir="rtl">
-                    {detail?.project?.banking_details || 'تُستخدم تفاصيل الحساب المعتمدة من غرفة الطوارئ في عمليات الصرف.'}
-                  </div>
+                  <div className="rounded-md border p-3 text-sm whitespace-pre-wrap">{detail?.project?.banking_details || t('f3:approved_accounts_en_desc')}</div>
+                  <div className="rounded-md border p-3 text-sm whitespace-pre-wrap" dir="rtl">{detail?.project?.banking_details || t('f3:approved_accounts_ar_desc')}</div>
                 </div>
               </div>
 
               <div className="rounded-lg border p-4" data-mou-section="true">
-                <div className="font-semibold mb-2">7. Duration</div>
-                <p className="text-sm">This MOU is effective upon signature by authorized officials of both parties. {activeMou.end_date ? `It will terminate on ${new Date(activeMou.end_date).toLocaleDateString()}.` : 'It remains valid unless terminated by mutual consent.'}</p>
+                <div className="font-semibold mb-2">
+                  7. {t('f3:duration', { lng: 'en' })}
+                  <div className="text-sm text-muted-foreground" dir="rtl">{t('f3:duration', { lng: 'ar' })}</div>
+                </div>
+                <p className="text-sm">{activeMou.end_date ? t('f3:duration_en_until', { lng: 'en', date: new Date(activeMou.end_date).toLocaleDateString() }) : t('f3:duration_en_open', { lng: 'en' })}</p>
+                <p className="text-sm" dir="rtl">{activeMou.end_date ? t('f3:duration_en_until', { lng: 'ar', date: new Date(activeMou.end_date).toLocaleDateString() }) : t('f3:duration_en_open', { lng: 'ar' })}</p>
               </div>
 
               <div className="rounded-lg border p-4" data-mou-section="true">
-                <div className="font-semibold mb-2">8. Contact Information</div>
+                <div className="font-semibold mb-2">8. {t('f3:contact_info', { lng: 'en' })}
+                  <div className="text-sm text-muted-foreground" dir="rtl">{t('f3:contact_info', { lng: 'ar' })}</div>
+                </div>
+                {/* English labels */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                   <div>
-                    <div className="font-medium mb-1">Partner</div>
+                    <div className="font-medium mb-1">{t('f3:partner_label', { lng: 'en' })}</div>
                     <div>{detail?.partner?.name || activeMou.partner_name}</div>
                     {detail?.partner?.contact_person && (
-                      <div>Representative: {detail.partner.contact_person}</div>
+                      <div>{t('f3:representative', { lng: 'en' })}: {detail.partner.contact_person}</div>
                     )}
                     {detail?.partner?.position && (
-                      <div>Position: {detail.partner.position}</div>
+                      <div>{t('f3:position', { lng: 'en' })}: {detail.partner.position}</div>
                     )}
                     {detail?.partner?.email && (
-                      <div>Email: {detail.partner.email}</div>
+                      <div>{t('f3:email', { lng: 'en' })}: {detail.partner.email}</div>
                     )}
                     {detail?.partner?.phone_number && (
-                      <div>Phone: {detail.partner.phone_number}</div>
+                      <div>{t('f3:phone', { lng: 'en' })}: {detail.partner.phone_number}</div>
                     )}
                   </div>
                   <div>
-                    <div className="font-medium mb-1">ERR</div>
+                    <div className="font-medium mb-1">{t('f3:err_label', { lng: 'en' })}</div>
                     <div>{activeMou.err_name}</div>
                     {detail?.project?.program_officer_name && (
-                      <div>Representative: {detail.project.program_officer_name}</div>
+                      <div>{t('f3:representative', { lng: 'en' })}: {detail.project.program_officer_name}</div>
                     )}
                     {detail?.project?.program_officer_phone && (
-                      <div>Tel: {detail.project.program_officer_phone}</div>
+                      <div>{t('f3:phone', { lng: 'en' })}: {detail.project.program_officer_phone}</div>
+                    )}
+                  </div>
+                </div>
+                {/* Arabic labels */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm mt-4" dir="rtl">
+                  <div>
+                    <div className="font-medium mb-1">{t('f3:partner_label', { lng: 'ar' })}</div>
+                    <div>{detail?.partner?.name || activeMou.partner_name}</div>
+                    {detail?.partner?.contact_person && (
+                      <div>{t('f3:representative', { lng: 'ar' })}: {detail.partner.contact_person}</div>
+                    )}
+                    {detail?.partner?.position && (
+                      <div>{t('f3:position', { lng: 'ar' })}: {detail.partner.position}</div>
+                    )}
+                    {detail?.partner?.email && (
+                      <div>{t('f3:email', { lng: 'ar' })}: {detail.partner.email}</div>
+                    )}
+                    {detail?.partner?.phone_number && (
+                      <div>{t('f3:phone', { lng: 'ar' })}: {detail.partner.phone_number}</div>
+                    )}
+                  </div>
+                  <div>
+                    <div className="font-medium mb-1">{t('f3:err_label', { lng: 'ar' })}</div>
+                    <div>{activeMou.err_name}</div>
+                    {detail?.project?.program_officer_name && (
+                      <div>{t('f3:representative', { lng: 'ar' })}: {detail.project.program_officer_name}</div>
+                    )}
+                    {detail?.project?.program_officer_phone && (
+                      <div>{t('f3:phone', { lng: 'ar' })}: {detail.project.program_officer_phone}</div>
                     )}
                   </div>
                 </div>

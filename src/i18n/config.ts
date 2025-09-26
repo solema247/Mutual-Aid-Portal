@@ -14,6 +14,7 @@ import usersEN from './locales/en/users.json'
 import fsystemEN from './locales/en/fsystem.json'
 import f2EN from './locales/en/f2.json'
 import f1_plansEN from './locales/en/f1_plans.json'
+import f3EN from './locales/en/f3.json'
 
 // Arabic translations
 import commonAR from './locales/ar/common.json'
@@ -28,6 +29,7 @@ import usersAR from './locales/ar/users.json'
 import fsystemAR from './locales/ar/fsystem.json'
 import f2AR from './locales/ar/f2.json'
 import f1_plansAR from './locales/ar/f1_plans.json'
+import f3AR from './locales/ar/f3.json'
 
 const resources = {
   en: {
@@ -42,7 +44,8 @@ const resources = {
     users: usersEN,
     fsystem: fsystemEN,
     f2: f2EN,
-    f1_plans: f1_plansEN
+      f1_plans: f1_plansEN,
+      f3: f3EN
   },
   ar: {
     common: commonAR,
@@ -56,7 +59,8 @@ const resources = {
     users: usersAR,
     fsystem: fsystemAR,
     f2: f2AR,
-    f1_plans: f1_plansAR
+      f1_plans: f1_plansAR,
+      f3: f3AR
   }
 }
 
@@ -82,7 +86,8 @@ i18n
       'users',
                 'fsystem',
       'f2',
-      'f1_plans'
+      'f1_plans',
+      'f3'
     ]
   })
 
