@@ -1,5 +1,5 @@
 {
-  "title": "بوابة موظفي غرف الطوارئ",
+  "title": "منصة منسقي غرف الطوارئ",
   "welcome": "مرحباً، {{name}}",
   "dashboard": "لوحة المعلومات",
   "dashboard_desc": "عرض إحصائيات وتقارير غرف الطوارئ",
@@ -8,7 +8,7 @@
   "room_management": "إدارة الغرف",
   "room_management_desc": "إدارة والموافقة على طلبات غرف الطوارئ",
   "user_management": "إدارة المستخدمين",
-  "user_management_desc": "إدارة والموافقة على حسابات موظفي غرف الطوارئ",
+  "user_management_desc": "إدارة والموافقة على حسابات منسقي غرف الطوارئ",
   "project_management": "إدارة المشاريع",
   "project_management_desc": "مراجعة وإدارة مقترحات مشاريع غرف الطوارئ",
   "f1_work_plans": "خطط عمل F1",
