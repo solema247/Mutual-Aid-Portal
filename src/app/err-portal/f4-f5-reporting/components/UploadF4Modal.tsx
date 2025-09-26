@@ -101,6 +101,7 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved }: UploadF4M
         .eq('id', projectId)
         .single()
       if (error) { console.error('loadProject meta', error); setProjectMeta(null); return }
+      // Calculate total from planned_activities (for ERR App submissions)
       const plannedArr = Array.isArray((data as any)?.planned_activities)
         ? (data as any).planned_activities
         : (typeof (data as any)?.planned_activities === 'string' ? JSON.parse((data as any)?.planned_activities || '[]') : [])
@@ -108,8 +109,17 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved }: UploadF4M
         const inner = Array.isArray(pa?.expenses) ? pa.expenses : []
         return s + inner.reduce((ss: number, ie: any) => ss + (Number(ie.total) || 0), 0)
       }, 0)
-      // Total Grant must come solely from planned_activities (F1 plan of record)
-      const grantSum = fromPlanned
+
+      // Calculate total from expenses (for mutual_aid_portal submissions)
+      const expensesArr = Array.isArray((data as any)?.expenses)
+        ? (data as any).expenses
+        : (typeof (data as any)?.expenses === 'string' ? JSON.parse((data as any)?.expenses || '[]') : [])
+      const fromExpenses = (Array.isArray(expensesArr) ? expensesArr : []).reduce((s: number, ex: any) => {
+        return s + (Number(ex.total_cost) || 0)
+      }, 0)
+
+      // Use expenses total if it exists (mutual_aid_portal), otherwise use planned_activities total (ERR App)
+      const grantSum = fromExpenses > 0 ? fromExpenses : fromPlanned
       const room = (data as any)?.emergency_rooms
       const roomLabel = room?.err_code || room?.name_ar || room?.name || ''
       setProjectMeta({
