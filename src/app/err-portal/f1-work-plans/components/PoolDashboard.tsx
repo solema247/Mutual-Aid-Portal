@@ -7,7 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 
 export default function PoolDashboard({ showProposals = true }: { showProposals?: boolean }) {
   const { t } = useTranslation(['f1_plans'])
-  const [summary, setSummary] = useState<{ total_available: number; total_committed: number; total_pending: number; remaining: number } | null>(null)
+  const [summary, setSummary] = useState<{ total_included: number; total_committed: number; total_pending: number; remaining: number; total_grants: number; total_not_included: number } | null>(null)
   const [byState, setByState] = useState<any[]>([])
   const [byDonor, setByDonor] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -78,7 +78,7 @@ export default function PoolDashboard({ showProposals = true }: { showProposals?
     <div className="space-y-6">
       {summary && (
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <Card><CardHeader><CardTitle>{t('pool.total')}</CardTitle></CardHeader><CardContent className="text-2xl font-bold">{fmt(summary.total_available)}</CardContent></Card>
+          <Card><CardHeader><CardTitle>{t('pool.total')}</CardTitle></CardHeader><CardContent className="text-2xl font-bold">{fmt(summary.total_included)}</CardContent></Card>
           <Card><CardHeader><CardTitle>{t('pool.committed')}</CardTitle></CardHeader><CardContent className="text-2xl font-bold">{fmt(summary.total_committed)}</CardContent></Card>
           <Card><CardHeader><CardTitle>{t('pool.pending')}</CardTitle></CardHeader><CardContent className="text-2xl font-bold">{fmt(summary.total_pending)}</CardContent></Card>
           <Card><CardHeader><CardTitle>{t('pool.remaining')}</CardTitle></CardHeader><CardContent className={`text-2xl font-bold ${summary.remaining >= 0 ? 'text-green-700' : 'text-red-700'}`}>{fmt(summary.remaining)}</CardContent></Card>
