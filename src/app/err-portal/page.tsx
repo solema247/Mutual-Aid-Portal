@@ -150,8 +150,12 @@ export default function ErrPortalPage() {
           <Card className="h-full hover:bg-muted/50 transition-colors">
             <CardHeader className="h-full flex flex-col justify-center items-center text-center">
               <PenTool className="h-8 w-8 mb-4" />
-              <CardTitle className="text-xl">F3 MOUs</CardTitle>
-              <CardDescription className="mt-2">Create and view MOUs</CardDescription>
+              <CardTitle className="text-xl">
+                {t('err:f3_mous')}
+              </CardTitle>
+              <CardDescription className="mt-2">
+                {t('err:f3_mous_desc')}
+              </CardDescription>
             </CardHeader>
           </Card>
         </Link>
@@ -161,8 +165,12 @@ export default function ErrPortalPage() {
           <Card className="h-full hover:bg-muted/50 transition-colors">
             <CardHeader className="h-full flex flex-col justify-center items-center text-center">
               <BookOpen className="h-8 w-8 mb-4" />
-              <CardTitle className="text-xl">F4 & F5 Reporting</CardTitle>
-              <CardDescription className="mt-2">Upload and review financial/program reports</CardDescription>
+              <CardTitle className="text-xl">
+                {t('err:f4_f5_reporting')}
+              </CardTitle>
+              <CardDescription className="mt-2">
+                {t('err:f4_f5_reporting_desc')}
+              </CardDescription>
             </CardHeader>
           </Card>
         </Link>

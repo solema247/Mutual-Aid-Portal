@@ -96,5 +96,101 @@
     "pending_changes": "Changes Requested",
     "changes_submitted": "Changes Submitted",
     "resolved": "Resolved"
+  },
+  "management": {
+    "filters": {
+      "donor": "Donor",
+      "grant_call": "Grant Call",
+      "state": "State",
+      "err": "ERR",
+      "all_donors": "All Donors",
+      "all_grants": "All Grants",
+      "all_states": "All States",
+      "all_err": "All ERR",
+      "reset": "Reset"
+    },
+    "kpis": {
+      "plan": "Plan",
+      "actuals": "Actuals",
+      "variance": "Variance",
+      "burn": "Burn",
+      "plan_desc": "Sum of planned budgets from F1 planned activities.",
+      "actuals_desc": "Sum of recorded expenses from F4 reports.",
+      "variance_desc": "Plan minus Actuals for the current view.",
+      "burn_desc": "Actuals divided by Plan (utilization)."
+    },
+    "counters": {
+      "projects": "Projects",
+      "with_mous": "With MOUs",
+      "with_f4s": "With F4s",
+      "f4_complete": "% F4 Complete",
+      "with_f5s": "With F5s",
+      "f5_complete": "% F5 Complete",
+      "total_individuals": "Total Individuals",
+      "total_families": "Total Families",
+      "projects_desc": "Committed projects (approved/active) in the current view.",
+      "with_mous_desc": "Projects linked to an F3 MOU.",
+      "with_f4s_desc": "Projects that have at least one F4 report.",
+      "f4_complete_desc": "Share of projects with at least one F4.",
+      "with_f5s_desc": "Projects that have at least one F5 program report.",
+      "f5_complete_desc": "Share of projects with at least one F5.",
+      "total_individuals_desc": "Total individuals reached through F5 program reports.",
+      "total_families_desc": "Total families reached through F5 program reports."
+    },
+    "table": {
+      "title": "All Active Projects",
+      "back": "Back",
+      "state": "State",
+      "err": "ERR",
+      "mou": "MOU",
+      "plan": "Plan",
+      "actuals": "Actuals",
+      "variance": "Variance",
+      "burn": "Burn",
+      "f4s": "F4s",
+      "f4_complete": "% F4 Complete",
+      "f5s": "F5s",
+      "f5_complete": "% F5 Complete",
+      "last_f4": "Last F4",
+      "last_f5": "Last F5",
+      "actions": "Actions",
+      "view": "View",
+      "no_data": "No data",
+      "loading": "Loading…",
+      "tips": {
+        "state": "Tip: Click a state to drill into its ERR rooms.",
+        "room": "Tip: Click an ERR to drill into its projects.",
+        "project": "Tip: Click a project row or the View button to open details."
+      }
+    },
+    "detail_modal": {
+      "title": "Project Detail",
+      "loading": "Loading…",
+      "no_data": "No data",
+      "labels": {
+        "err": "ERR",
+        "state": "State",
+        "project_objectives": "Project Objectives",
+        "intended_beneficiaries": "Intended Beneficiaries",
+        "estimated_beneficiaries": "Estimated Beneficiaries",
+        "f4_reports": "F4 Reports",
+        "latest_f4_expenses": "Latest F4 Expenses"
+      },
+      "table": {
+        "report_date": "Report Date",
+        "total_grant": "Total Grant",
+        "total_expenses": "Total Expenses",
+        "remainder": "Remainder",
+        "activity": "Activity",
+        "description": "Description",
+        "amount": "Amount",
+        "payment_date": "Payment Date",
+        "method": "Method",
+        "receipt": "Receipt",
+        "seller": "Seller",
+        "no_reports": "No reports",
+        "no_expenses": "No expenses"
+      }
+    }
   }
 } 

@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -12,6 +13,7 @@ type Grant = { id: string; name: string; shortname?: string; donor_id: string }
 type Room = { id: string; name?: string; name_ar?: string; err_code?: string }
 
 export default function ProjectManagement() {
+  const { t } = useTranslation(['projects'])
   const [donors, setDonors] = useState<Donor[]>([])
   const [grants, setGrants] = useState<Grant[]>([])
   const [states, setStates] = useState<string[]>([])
@@ -68,7 +70,7 @@ export default function ProjectManagement() {
     loadRollup()
   }, [donor, grant, state, err])
 
-  const donorName = useMemo(() => donors.find(d => d.id === donor)?.name || 'All Donors', [donor, donors])
+  const donorName = useMemo(() => donors.find(d => d.id === donor)?.name || t('management.filters.all_donors'), [donor, donors, t])
 
   // Project-level counters for the current filtered slice
   const counters = useMemo(() => {
@@ -167,72 +169,72 @@ export default function ProjectManagement() {
     <div className="space-y-6">
       <div className="flex flex-wrap gap-2 items-center">
         <Select value={donor || '__ALL__'} onValueChange={(v)=>setDonor(v==='__ALL__'?'':v)}>
-          <SelectTrigger className="h-9 w-full md:w-56"><SelectValue placeholder="Donor" /></SelectTrigger>
+          <SelectTrigger className="h-9 w-full md:w-56"><SelectValue placeholder={t('management.filters.donor')} /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="__ALL__">All Donors</SelectItem>
+            <SelectItem value="__ALL__">{t('management.filters.all_donors')}</SelectItem>
             {donors.map(d => (
               <SelectItem key={d.id} value={d.id}>{d.short_name || d.name}</SelectItem>
             ))}
           </SelectContent>
         </Select>
         <Select value={grant || '__ALL__'} onValueChange={(v)=>setGrant(v==='__ALL__'?'':v)}>
-          <SelectTrigger className="h-9 w-full md:w-56"><SelectValue placeholder="Grant Call" /></SelectTrigger>
+          <SelectTrigger className="h-9 w-full md:w-56"><SelectValue placeholder={t('management.filters.grant_call')} /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="__ALL__">All Grants</SelectItem>
+            <SelectItem value="__ALL__">{t('management.filters.all_grants')}</SelectItem>
             {grants.map(g => (
               <SelectItem key={g.id} value={g.id}>{g.shortname || g.name}</SelectItem>
             ))}
           </SelectContent>
         </Select>
         <Select value={state || '__ALL__'} onValueChange={(v)=>setState(v==='__ALL__'?'':v)}>
-          <SelectTrigger className="h-9 w-full md:w-56"><SelectValue placeholder="State" /></SelectTrigger>
+          <SelectTrigger className="h-9 w-full md:w-56"><SelectValue placeholder={t('management.filters.state')} /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="__ALL__">All States</SelectItem>
+            <SelectItem value="__ALL__">{t('management.filters.all_states')}</SelectItem>
             {states.map(s => (
               <SelectItem key={s} value={s}>{s}</SelectItem>
             ))}
           </SelectContent>
         </Select>
         <Select value={err || '__ALL__'} onValueChange={(v)=>setErr(v==='__ALL__'?'':v)}>
-          <SelectTrigger className="h-9 w-full md:w-56"><SelectValue placeholder="ERR" /></SelectTrigger>
+          <SelectTrigger className="h-9 w-full md:w-56"><SelectValue placeholder={t('management.filters.err')} /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="__ALL__">All ERR</SelectItem>
+            <SelectItem value="__ALL__">{t('management.filters.all_err')}</SelectItem>
             {rooms.map(r => (
               <SelectItem key={r.id} value={r.id}>{r.name || r.err_code || r.name_ar}</SelectItem>
             ))}
           </SelectContent>
         </Select>
-        <Button variant="outline" className="h-9 w-full md:w-24 md:ml-auto" onClick={()=>{ setDonor(''); setGrant(''); setState(''); setErr(''); }}>Reset</Button>
+        <Button variant="outline" className="h-9 w-full md:w-24 md:ml-auto" onClick={()=>{ setDonor(''); setGrant(''); setState(''); setErr(''); }}>{t('management.filters.reset')}</Button>
       </div>
 
       {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <Card>
-          <CardHeader><CardTitle>Plan</CardTitle></CardHeader>
+          <CardHeader><CardTitle>{t('management.kpis.plan')}</CardTitle></CardHeader>
           <CardContent>
             ${Number(kpis.plan||0).toLocaleString()}
-            <div className="text-xs text-muted-foreground mt-1">Sum of planned budgets from F1 planned activities.</div>
+            <div className="text-xs text-muted-foreground mt-1">{t('management.kpis.plan_desc')}</div>
           </CardContent>
         </Card>
         <Card>
-          <CardHeader><CardTitle>Actuals</CardTitle></CardHeader>
+          <CardHeader><CardTitle>{t('management.kpis.actuals')}</CardTitle></CardHeader>
           <CardContent>
             ${Number(kpis.actual||0).toLocaleString()}
-            <div className="text-xs text-muted-foreground mt-1">Sum of recorded expenses from F4 reports.</div>
+            <div className="text-xs text-muted-foreground mt-1">{t('management.kpis.actuals_desc')}</div>
           </CardContent>
         </Card>
         <Card>
-          <CardHeader><CardTitle>Variance</CardTitle></CardHeader>
+          <CardHeader><CardTitle>{t('management.kpis.variance')}</CardTitle></CardHeader>
           <CardContent>
             ${Number(kpis.variance||0).toLocaleString()}
-            <div className="text-xs text-muted-foreground mt-1">Plan minus Actuals for the current view.</div>
+            <div className="text-xs text-muted-foreground mt-1">{t('management.kpis.variance_desc')}</div>
           </CardContent>
         </Card>
         <Card>
-          <CardHeader><CardTitle>Burn</CardTitle></CardHeader>
+          <CardHeader><CardTitle>{t('management.kpis.burn')}</CardTitle></CardHeader>
           <CardContent>
             {kpis.burn ? (kpis.burn*100).toFixed(0)+'%' : '0%'}
-            <div className="text-xs text-muted-foreground mt-1">Actuals divided by Plan (utilization).</div>
+            <div className="text-xs text-muted-foreground mt-1">{t('management.kpis.burn_desc')}</div>
           </CardContent>
         </Card>
       </div>
@@ -240,31 +242,31 @@ export default function ProjectManagement() {
       {/* Project Counters */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <Card>
-          <CardHeader><CardTitle>Projects</CardTitle></CardHeader>
+          <CardHeader><CardTitle>{t('management.counters.projects')}</CardTitle></CardHeader>
           <CardContent>
             {Number(counters.total||0).toLocaleString()}
-            <div className="text-xs text-muted-foreground mt-1">Committed projects (approved/active) in the current view.</div>
+            <div className="text-xs text-muted-foreground mt-1">{t('management.counters.projects_desc')}</div>
           </CardContent>
         </Card>
         <Card>
-          <CardHeader><CardTitle>With MOUs</CardTitle></CardHeader>
+          <CardHeader><CardTitle>{t('management.counters.with_mous')}</CardTitle></CardHeader>
           <CardContent>
             {Number(counters.withMou||0).toLocaleString()}
-            <div className="text-xs text-muted-foreground mt-1">Projects linked to an F3 MOU.</div>
+            <div className="text-xs text-muted-foreground mt-1">{t('management.counters.with_mous_desc')}</div>
           </CardContent>
         </Card>
         <Card>
-          <CardHeader><CardTitle>With F4s</CardTitle></CardHeader>
+          <CardHeader><CardTitle>{t('management.counters.with_f4s')}</CardTitle></CardHeader>
           <CardContent>
             {Number(counters.withF4||0).toLocaleString()}
-            <div className="text-xs text-muted-foreground mt-1">Projects that have at least one F4 report.</div>
+            <div className="text-xs text-muted-foreground mt-1">{t('management.counters.with_f4s_desc')}</div>
           </CardContent>
         </Card>
         <Card>
-          <CardHeader><CardTitle>% F4 Complete</CardTitle></CardHeader>
+          <CardHeader><CardTitle>{t('management.counters.f4_complete')}</CardTitle></CardHeader>
           <CardContent>
             {(counters.pctF4*100).toFixed(0)}%
-            <div className="text-xs text-muted-foreground mt-1">Share of projects with at least one F4.</div>
+            <div className="text-xs text-muted-foreground mt-1">{t('management.counters.f4_complete_desc')}</div>
           </CardContent>
         </Card>
       </div>
@@ -272,31 +274,31 @@ export default function ProjectManagement() {
       {/* F5 Program Reporting Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <Card>
-          <CardHeader><CardTitle>With F5s</CardTitle></CardHeader>
+          <CardHeader><CardTitle>{t('management.counters.with_f5s')}</CardTitle></CardHeader>
           <CardContent>
             {Number(counters.withF5||0).toLocaleString()}
-            <div className="text-xs text-muted-foreground mt-1">Projects that have at least one F5 program report.</div>
+            <div className="text-xs text-muted-foreground mt-1">{t('management.counters.with_f5s_desc')}</div>
           </CardContent>
         </Card>
         <Card>
-          <CardHeader><CardTitle>% F5 Complete</CardTitle></CardHeader>
+          <CardHeader><CardTitle>{t('management.counters.f5_complete')}</CardTitle></CardHeader>
           <CardContent>
             {(counters.pctF5*100).toFixed(0)}%
-            <div className="text-xs text-muted-foreground mt-1">Share of projects with at least one F5.</div>
+            <div className="text-xs text-muted-foreground mt-1">{t('management.counters.f5_complete_desc')}</div>
           </CardContent>
         </Card>
         <Card>
-          <CardHeader><CardTitle>Total Individuals</CardTitle></CardHeader>
+          <CardHeader><CardTitle>{t('management.counters.total_individuals')}</CardTitle></CardHeader>
           <CardContent>
             {Number(kpis.f5_total_individuals||0).toLocaleString()}
-            <div className="text-xs text-muted-foreground mt-1">Total individuals reached through F5 program reports.</div>
+            <div className="text-xs text-muted-foreground mt-1">{t('management.counters.total_individuals_desc')}</div>
           </CardContent>
         </Card>
         <Card>
-          <CardHeader><CardTitle>Total Families</CardTitle></CardHeader>
+          <CardHeader><CardTitle>{t('management.counters.total_families')}</CardTitle></CardHeader>
           <CardContent>
             {Number(kpis.f5_total_families||0).toLocaleString()}
-            <div className="text-xs text-muted-foreground mt-1">Total families reached through F5 program reports.</div>
+            <div className="text-xs text-muted-foreground mt-1">{t('management.counters.total_families_desc')}</div>
           </CardContent>
         </Card>
       </div>
@@ -305,62 +307,62 @@ export default function ProjectManagement() {
           <Card>
             <CardHeader>
               <CardTitle>
-            All Active Projects
+            {t('management.table.title')}
             {level !== 'state' && (
-              <Button variant="outline" size="sm" className="ml-2" onClick={goBack}>Back</Button>
+              <Button variant="outline" size="sm" className="ml-2" onClick={goBack}>{t('management.table.back')}</Button>
             )}
             {level === 'room' && selectedStateName ? (
-              <span className="ml-2 text-sm text-muted-foreground">State: {selectedStateName}</span>
+              <span className="ml-2 text-sm text-muted-foreground">{t('management.table.state')}: {selectedStateName}</span>
             ) : null}
             {level === 'project' && selectedErrId ? (
-              <span className="ml-2 text-sm text-muted-foreground">State: {selectedStateName} · ERR: {selectedErrId}</span>
+              <span className="ml-2 text-sm text-muted-foreground">{t('management.table.state')}: {selectedStateName} · {t('management.table.err')}: {selectedErrId}</span>
             ) : null}
               </CardTitle>
             </CardHeader>
             <CardContent>
           <div className="text-xs text-muted-foreground mb-2">
-            {level === 'state' && 'Tip: Click a state to drill into its ERR rooms.'}
-            {level === 'room' && 'Tip: Click an ERR to drill into its projects.'}
-            {level === 'project' && 'Tip: Click a project row or the View button to open details.'}
+            {level === 'state' && t('management.table.tips.state')}
+            {level === 'room' && t('management.table.tips.room')}
+            {level === 'project' && t('management.table.tips.project')}
           </div>
           {loading ? (
-            <div className="py-8 text-center text-muted-foreground">Loading…</div>
+            <div className="py-8 text-center text-muted-foreground">{t('management.table.loading')}</div>
               ) : (
                 <Table>
                   <TableHeader>
                     <TableRow>
                   {level === 'state' ? (
                     <>
-                      <TableHead>State</TableHead>
+                      <TableHead>{t('management.table.state')}</TableHead>
                     </>
                   ) : level === 'room' ? (
                     <>
-                      <TableHead>ERR</TableHead>
-                      <TableHead>State</TableHead>
+                      <TableHead>{t('management.table.err')}</TableHead>
+                      <TableHead>{t('management.table.state')}</TableHead>
                     </>
                   ) : (
                     <>
-                      <TableHead>ERR</TableHead>
-                      <TableHead>State</TableHead>
-                      <TableHead>MOU</TableHead>
+                      <TableHead>{t('management.table.err')}</TableHead>
+                      <TableHead>{t('management.table.state')}</TableHead>
+                      <TableHead>{t('management.table.mou')}</TableHead>
                     </>
                   )}
-                  <TableHead className="text-right">Plan</TableHead>
-                  <TableHead className="text-right">Actuals</TableHead>
-                  <TableHead className="text-right">Variance</TableHead>
-                  <TableHead className="text-right">Burn</TableHead>
-                  <TableHead>F4s</TableHead>
-                  <TableHead>% F4 Complete</TableHead>
-                  <TableHead>F5s</TableHead>
-                  <TableHead>% F5 Complete</TableHead>
-                  <TableHead>Last F4</TableHead>
-                  <TableHead>Last F5</TableHead>
-                  {level === 'project' && <TableHead>Actions</TableHead>}
+                  <TableHead className="text-right">{t('management.table.plan')}</TableHead>
+                  <TableHead className="text-right">{t('management.table.actuals')}</TableHead>
+                  <TableHead className="text-right">{t('management.table.variance')}</TableHead>
+                  <TableHead className="text-right">{t('management.table.burn')}</TableHead>
+                  <TableHead>{t('management.table.f4s')}</TableHead>
+                  <TableHead>{t('management.table.f4_complete')}</TableHead>
+                  <TableHead>{t('management.table.f5s')}</TableHead>
+                  <TableHead>{t('management.table.f5_complete')}</TableHead>
+                  <TableHead>{t('management.table.last_f4')}</TableHead>
+                  <TableHead>{t('management.table.last_f5')}</TableHead>
+                  {level === 'project' && <TableHead>{t('management.table.actions')}</TableHead>}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                 {(displayed||[]).length===0 ? (
-                  <TableRow><TableCell colSpan={level==='project'?14:(level==='room'?12:11)} className="text-center text-muted-foreground">No data</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={level==='project'?14:(level==='room'?12:11)} className="text-center text-muted-foreground">{t('management.table.no_data')}</TableCell></TableRow>
                 ) : displayed.map((r:any, idx:number)=> (
                   <TableRow key={r.project_id || r.err_id || r.state || idx} className="cursor-pointer" onClick={()=>onRowClick(r)}>
                     {level === 'state' ? (
@@ -405,7 +407,7 @@ export default function ProjectManagement() {
                             variant="outline"
                           size="sm"
                           onClick={(e)=>{ e.stopPropagation(); setDetailProjectId(r.project_id || null); setDetailOpen(true) }}
-                        >View</Button>
+                        >{t('management.table.view')}</Button>
                         </TableCell>
                     )}
                       </TableRow>

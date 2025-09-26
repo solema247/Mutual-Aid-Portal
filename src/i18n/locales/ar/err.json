@@ -22,6 +22,10 @@
   "fsystem_form_id": "معرف النموذج المنشأ",
   "f2_approvals": "موافقات F2",
   "f2_approvals_desc": "مراجعة والموافقة على خطط عمل F2، تعديل الالتزامات وإعادة تخصيص المخصصات",
+  "f3_mous": "F3 MOUs",
+  "f3_mous_desc": "إنشاء وعرض MOUs",
+  "f4_f5_reporting": "تقارير F4 و F5",
+  "f4_f5_reporting_desc": "رفع ومراجعة التقارير المالية/البرنامجية",
   "grant_management": "إدارة المنح",
   "grant_management_desc": "إدارة وتخصيص أموال المنح للولايات",
   "gm": {

@@ -22,6 +22,10 @@
   "fsystem_form_id": "Generated Form ID",
   "f2_approvals": "F2 Approvals",
   "f2_approvals_desc": "Review and approve F2 workplans, adjust commitments and reassign allocations",
+  "f3_mous": "F3 MOUs",
+  "f3_mous_desc": "Create and view MOUs",
+  "f4_f5_reporting": "F4 & F5 Reporting",
+  "f4_f5_reporting_desc": "Upload and review financial/program reports",
   "grant_management": "Grant Management",
   "grant_management_desc": "Manage and allocate grant funds to states",
   "gm": {
