@@ -13,6 +13,15 @@ function sumPlanFromPlannedActivities(planned: any): number {
   }
 }
 
+function sumPlanFromExpenses(expenses: any): number {
+  try {
+    const arr = Array.isArray(expenses) ? expenses : (typeof expenses === 'string' ? JSON.parse(expenses || '[]') : [])
+    return (arr || []).reduce((s: number, e: any) => s + (Number(e?.total_cost) || 0), 0)
+  } catch {
+    return 0
+  }
+}
+
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url)
@@ -24,7 +33,7 @@ export async function GET(request: Request) {
     // Build project filter (include more statuses to catch F5 projects)
     let pq = supabase
       .from('err_projects')
-      .select('id, state, grant_call_id, emergency_rooms (id, name, name_ar, err_code), planned_activities, status, funding_status, mou_id')
+      .select('id, state, grant_call_id, emergency_rooms (id, name, name_ar, err_code), planned_activities, expenses, source, status, funding_status, mou_id')
       .in('status', ['approved', 'active', 'pending'])
       .in('funding_status', ['committed', 'allocated'])
     if (grant) pq = pq.eq('grant_call_id', grant)
@@ -107,7 +116,10 @@ export async function GET(request: Request) {
 
     // Build project-level rows
     const projRows = (projects || []).map((p:any) => {
-      const plan = sumPlanFromPlannedActivities(p.planned_activities)
+      // Use expenses for mutual_aid_portal projects, otherwise use planned_activities
+      const plan = p.source === 'mutual_aid_portal' 
+        ? sumPlanFromExpenses(p.expenses)
+        : sumPlanFromPlannedActivities(p.planned_activities)
       const agg = sumByProject.get(p.id) || { actual: 0, count: 0, last: null }
       const f5Agg = f5ByProject.get(p.id) || { count: 0, last: null }
       const variance = plan - agg.actual

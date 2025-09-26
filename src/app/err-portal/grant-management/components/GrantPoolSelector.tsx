@@ -243,8 +243,9 @@ export default function GrantPoolSelector({ cycleId, onGrantsChanged }: GrantPoo
                         // Validate amount
                         const amount = parseFloat(value)
                         const selectedGrantCall = availableGrants.find(g => g.id === selectedGrant)
-                        
-                        if (selectedGrantCall?.available_amount !== null && amount > selectedGrantCall.available_amount) {
+                        if (!selectedGrantCall) return
+
+                        if (selectedGrantCall.available_amount !== null && amount > selectedGrantCall.available_amount) {
                           setAmountError(t('cycles.pool.amount_exceeds_available'))
                         } else {
                           setAmountError('')
