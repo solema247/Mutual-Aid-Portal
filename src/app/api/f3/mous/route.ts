@@ -248,10 +248,20 @@ export async function POST(request: Request) {
 </body>
 </html>`
 
-      const filePath = `f3-mous/${inserted.id}/${inserted.mou_code}.doc`
-      const blob = new Blob([html], { type: 'application/msword' })
-      // Supabase storage upload via fetch is not available server-side; use storage API
-      const { error: upErr } = await supabase.storage.from('images').upload(filePath, blob, { upsert: true })
+      const filePath = `f3-mous/${inserted.id}/${inserted.mou_code}.pdf`
+      
+      // Generate PDF
+      const { generateMouPdf } = await import('./pdf-generator')
+      const pdfBuffer = await generateMouPdf(html)
+      
+      // Upload PDF to storage
+      const { error: upErr } = await supabase.storage
+        .from('images')
+        .upload(filePath, pdfBuffer, { 
+          contentType: 'application/pdf',
+          upsert: true 
+        })
+      
       if (!upErr) {
         await supabase.from('mous').update({ file_key: filePath }).eq('id', inserted.id)
       }
