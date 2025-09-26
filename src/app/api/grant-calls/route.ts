@@ -1,12 +1,11 @@
 import { NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabaseClient'
 
-export async function GET(request: Request) {
+// GET /api/grant-calls - Get grant calls with available amounts
+export async function GET() {
   try {
-    const { searchParams } = new URL(request.url)
-    const status = searchParams.get('status')
-
-    let query = supabase
+    // Get all grant calls
+    const { data: grantCalls, error: grantError } = await supabase
       .from('grant_calls')
       .select(`
         id,
@@ -14,25 +13,41 @@ export async function GET(request: Request) {
         shortname,
         amount,
         status,
-        start_date,
-        end_date,
         donor:donors (
           id,
           name,
           short_name
         )
       `)
-      .order('created_at', { ascending: false })
+      .eq('status', 'open')
 
-    if (status) {
-      query = query.eq('status', status)
-    }
+    if (grantError) throw grantError
 
-    const { data, error } = await query
+    // Get all inclusions for these grant calls
+    const { data: inclusions, error: inclusionsError } = await supabase
+      .from('cycle_grant_inclusions')
+      .select('grant_call_id, amount_included')
 
-    if (error) throw error
+    if (inclusionsError) throw inclusionsError
 
-    return NextResponse.json(data)
+    // Calculate available amounts
+    const grantCallsWithAvailable = (grantCalls || []).map(grant => {
+      const totalIncluded = (inclusions || [])
+        .filter(inc => inc.grant_call_id === grant.id)
+        .reduce((sum, inc) => sum + (inc.amount_included || 0), 0)
+
+      return {
+        ...grant,
+        available_amount: grant.amount ? grant.amount - totalIncluded : null
+      }
+    })
+
+    // Only return grant calls that have available amount > 0 or null
+    const availableGrantCalls = grantCallsWithAvailable.filter(
+      grant => grant.available_amount === null || grant.available_amount > 0
+    )
+
+    return NextResponse.json(availableGrantCalls)
   } catch (error) {
     console.error('Error fetching grant calls:', error)
     return NextResponse.json({ error: 'Failed to fetch grant calls' }, { status: 500 })

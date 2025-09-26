@@ -125,7 +125,9 @@
         "donor": "Donor",
         "amount_included": "Amount Included",
         "actions": "Actions"
-      }
+      },
+      "amount_exceeds_available": "Amount exceeds available grant amount",
+      "available_amount": "Available Amount"
     },
     "alloc": {
       "title": "State Allocations",

@@ -9,5 +9,6 @@
   "error_approving_user": "Failed to approve user",
   "error_declining_user": "Failed to decline user",
   "error_updating_user_status": "Failed to update user status",
-  "error_unexpected": "An unexpected error occurred"
+  "error_unexpected": "An unexpected error occurred",
+  "cancel": "Cancel"
 } 

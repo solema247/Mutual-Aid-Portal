@@ -125,7 +125,9 @@
         "donor": "المانح",
         "amount_included": "المبلغ المُدرج",
         "actions": "إجراءات"
-      }
+      },
+      "amount_exceeds_available": "المبلغ يتجاوز المبلغ المتاح في المنحة",
+      "available_amount": "المبلغ المتاح"
     },
     "alloc": {
       "title": "تخصيصات الولايات",

@@ -44,6 +44,7 @@ interface GrantCall {
   name: string
   shortname: string | null
   amount: number | null
+  available_amount: number | null  // Amount still available for inclusion
   status: 'open' | 'closed'
   donor: {
     id: string
@@ -65,6 +66,7 @@ export default function GrantPoolSelector({ cycleId, onGrantsChanged }: GrantPoo
   const [isAddOpen, setIsAddOpen] = useState(false)
   const [selectedGrant, setSelectedGrant] = useState<string>('')
   const [amountIncluded, setAmountIncluded] = useState<string>('')
+  const [amountError, setAmountError] = useState<string>('')
 
   useEffect(() => {
     fetchData()
@@ -95,6 +97,17 @@ export default function GrantPoolSelector({ cycleId, onGrantsChanged }: GrantPoo
   const handleAddGrant = async () => {
     if (!selectedGrant || !amountIncluded) return
 
+    // Get the selected grant
+    const selectedGrantCall = availableGrants.find(g => g.id === selectedGrant)
+    if (!selectedGrantCall) return
+
+    // Validate amount
+    const amount = parseFloat(amountIncluded)
+    if (selectedGrantCall.available_amount !== null && amount > selectedGrantCall.available_amount) {
+      alert(t('err:cycles.pool.amount_exceeds_available'))
+      return
+    }
+
     try {
       const response = await fetch(`/api/cycles/${cycleId}/grants`, {
         method: 'POST',
@@ -104,7 +117,7 @@ export default function GrantPoolSelector({ cycleId, onGrantsChanged }: GrantPoo
         body: JSON.stringify({
           grant_inclusions: [{
             grant_call_id: selectedGrant,
-            amount_included: parseFloat(amountIncluded)
+            amount_included: amount
           }]
         }),
       })
@@ -181,7 +194,13 @@ export default function GrantPoolSelector({ cycleId, onGrantsChanged }: GrantPoo
               <div className="space-y-4">
                 <div>
                   <label className="text-sm font-medium">{t('err:cycles.pool.select_grant')}</label>
-                  <Select value={selectedGrant} onValueChange={setSelectedGrant}>
+                  <Select 
+                    value={selectedGrant} 
+                    onValueChange={(value) => {
+                      setSelectedGrant(value)
+                      setAmountIncluded('')
+                      setAmountError('')
+                    }}>
                     <SelectTrigger>
                       <SelectValue placeholder={t('err:cycles.pool.choose_grant_placeholder')} />
                     </SelectTrigger>
@@ -192,6 +211,11 @@ export default function GrantPoolSelector({ cycleId, onGrantsChanged }: GrantPoo
                             <div className="font-medium">{grant.name}</div>
                             <div className="text-sm text-muted-foreground">
                               {grant.donor.name} - {formatCurrency(grant.amount || 0)}
+                              {grant.available_amount !== null && (
+                                <span className="ml-2 text-green-600">
+                                  (Available: {formatCurrency(grant.available_amount)})
+                                </span>
+                              )}
                             </div>
                           </div>
                         </SelectItem>
@@ -201,12 +225,44 @@ export default function GrantPoolSelector({ cycleId, onGrantsChanged }: GrantPoo
                 </div>
                 <div>
                   <label className="text-sm font-medium">{t('err:cycles.pool.amount_to_include')}</label>
-                  <Input
-                    type="number"
-                    placeholder={t('err:cycles.pool.amount_placeholder') as string}
-                    value={amountIncluded}
-                    onChange={(e) => setAmountIncluded(e.target.value)}
-                  />
+                  <div className="space-y-2">
+                    <Input
+                      type="number"
+                      placeholder={t('err:cycles.pool.amount_placeholder') as string}
+                      value={amountIncluded}
+                      onChange={(e) => {
+                        const value = e.target.value
+                        setAmountIncluded(value)
+                        
+                        // Clear error if empty
+                        if (!value) {
+                          setAmountError('')
+                          return
+                        }
+
+                        // Validate amount
+                        const amount = parseFloat(value)
+                        const selectedGrantCall = availableGrants.find(g => g.id === selectedGrant)
+                        
+                        if (selectedGrantCall?.available_amount !== null && amount > selectedGrantCall.available_amount) {
+                          setAmountError(t('cycles.pool.amount_exceeds_available'))
+                        } else {
+                          setAmountError('')
+                        }
+                      }}
+                      className={cn(amountError && "border-red-500 focus-visible:ring-red-500")}
+                    />
+                    {amountError && (
+                      <div className="text-sm text-red-500">
+                        {amountError}
+                      </div>
+                    )}
+                    {selectedGrant && (
+                      <div className="text-sm text-muted-foreground">
+                        {t('cycles.pool.available_amount')}: {formatCurrency(availableGrants.find(g => g.id === selectedGrant)?.available_amount || 0)}
+                      </div>
+                    )}
+                  </div>
                 </div>
                 <div className="flex justify-end gap-3">
                   <Button variant="outline" onClick={() => setIsAddOpen(false)}>
@@ -214,7 +270,7 @@ export default function GrantPoolSelector({ cycleId, onGrantsChanged }: GrantPoo
                   </Button>
                   <Button 
                     onClick={handleAddGrant}
-                    disabled={!selectedGrant || !amountIncluded}
+                    disabled={!selectedGrant || !amountIncluded || !!amountError}
                     className="bg-[#007229] hover:bg-[#007229]/90 text-white"
                   >
                     {t('err:cycles.pool.add_grant')}
