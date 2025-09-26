@@ -123,7 +123,49 @@
     },
     "view": "عرض",
     "loading": "جارٍ التحميل…",
-    "empty": "لا توجد تقارير F5 بعد"
+    "empty": "لا توجد تقارير F5 بعد",
+    "preview": {
+      "tabs": { "edit_form": "تحرير النموذج", "view_file": "عرض الملف", "tables": "الجداول المستخرجة" },
+      "summary": {
+        "report_date": "تاريخ التقرير",
+        "reporting_person": "شخص الإبلاغ",
+        "positive_changes": "التغيرات الإيجابية",
+        "negative_results": "النتائج السلبية",
+        "unexpected_results": "النتائج غير المتوقعة",
+        "lessons_learned": "الدروس المستفادة",
+        "suggestions": "المقترحات"
+      },
+      "activities": {
+        "title": "الأنشطة المنفذة",
+        "add": "إضافة صف",
+        "empty": "لا توجد صفوف مستخرجة",
+        "cols": {
+          "activity_name": "اسم النشاط",
+          "activity_goal": "هدف/تفاصيل النشاط",
+          "location": "مكان التنفيذ",
+          "start": "البداية",
+          "end": "النهاية",
+          "beneficiaries_individuals": "المستفيدون (أفراد)",
+          "beneficiaries_families": "المستفيدون (أسر)",
+          "actions": "الإجراءات",
+          "delete": "حذف"
+        }
+      },
+      "demographics": {
+        "title": "تفصيل إضافي للمستفيدين",
+        "empty": "لا توجد أنشطة لعرض التفاصيل",
+        "cols": {
+          "activity": "النشاط",
+          "male": "ذكور",
+          "female": "إناث",
+          "male_u18": "ذكور <18",
+          "female_u18": "إناث <18",
+          "pwd": "أشخاص ذوو إعاقة"
+        }
+      },
+      "file": { "uploaded_file": "الملف المرفوع", "no_preview": "لا تتوفر معاينة للملف" },
+      "buttons": { "back": "رجوع", "save": "حفظ F5", "saving": "جارٍ الحفظ…" }
+    }
   }
 }
 

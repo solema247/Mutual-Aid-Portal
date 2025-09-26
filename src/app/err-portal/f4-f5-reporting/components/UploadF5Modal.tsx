@@ -261,9 +261,9 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved }: UploadF5M
         ) : (
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
             <TabsList className="grid w-full grid-cols-3">
-              <TabsTrigger value="form">Edit Form</TabsTrigger>
-              <TabsTrigger value="file">View File</TabsTrigger>
-              <TabsTrigger value="tables">Extracted Tables</TabsTrigger>
+              <TabsTrigger value="form">{t('f5.preview.tabs.edit_form')}</TabsTrigger>
+              <TabsTrigger value="file">{t('f5.preview.tabs.view_file')}</TabsTrigger>
+              <TabsTrigger value="tables">{t('f5.preview.tabs.tables')}</TabsTrigger>
             </TabsList>
             
             <TabsContent value="form" className="space-y-6 select-text mt-6">
@@ -271,33 +271,33 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved }: UploadF5M
             <div className="space-y-3">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label>Report Date</Label>
+                  <Label>{t('f5.preview.summary.report_date')}</Label>
                   <Input type="date" value={summaryDraft?.report_date ?? reportDate} onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), report_date: e.target.value }))} />
                 </div>
                 <div>
-                  <Label>Reporting Person</Label>
+                  <Label>{t('f5.preview.summary.reporting_person')}</Label>
                   <Input value={summaryDraft?.reporting_person ?? ''} onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), reporting_person: e.target.value }))} />
                 </div>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <Label>Positive Changes</Label>
+                  <Label>{t('f5.preview.summary.positive_changes')}</Label>
                   <Input value={summaryDraft?.positive_changes ?? ''} onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), positive_changes: e.target.value }))} />
                 </div>
                 <div>
-                  <Label>Negative Results</Label>
+                  <Label>{t('f5.preview.summary.negative_results')}</Label>
                   <Input value={summaryDraft?.negative_results ?? ''} onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), negative_results: e.target.value }))} />
                 </div>
                 <div>
-                  <Label>Unexpected Results</Label>
+                  <Label>{t('f5.preview.summary.unexpected_results')}</Label>
                   <Input value={summaryDraft?.unexpected_results ?? ''} onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), unexpected_results: e.target.value }))} />
                 </div>
                 <div>
-                  <Label>Lessons Learned</Label>
+                  <Label>{t('f5.preview.summary.lessons_learned')}</Label>
                   <Input value={summaryDraft?.lessons_learned ?? ''} onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), lessons_learned: e.target.value }))} />
                 </div>
                 <div className="md:col-span-2">
-                  <Label>Suggestions</Label>
+                  <Label>{t('f5.preview.summary.suggestions')}</Label>
                   <Input value={summaryDraft?.suggestions ?? ''} onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), suggestions: e.target.value }))} />
                 </div>
               </div>
@@ -306,7 +306,7 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved }: UploadF5M
             {/* Activities Table */}
             <div>
               <div className="flex items-center justify-between mb-2">
-                <Label>Implemented Activities</Label>
+                <Label>{t('f5.preview.activities.title')}</Label>
                 <Button
                   variant="secondary"
                   size="sm"
@@ -324,37 +324,37 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved }: UploadF5M
                     under18_female: null,
                     is_draft: true
                   }]))}
-                >Add row</Button>
+                >{t('f5.preview.activities.add')}</Button>
               </div>
               <div className="border rounded overflow-hidden select-text">
                 {reachDraft.length === 0 ? (
-                  <div className="p-3 text-sm text-muted-foreground">No rows parsed</div>
+                  <div className="p-3 text-sm text-muted-foreground">{t('f5.preview.activities.empty')}</div>
                 ) : (
                   <Table className="select-text">
                     <TableHeader>
                       <TableRow>
-                        <TableHead className="py-1 px-2 text-xs">Activity Name</TableHead>
-                        <TableHead className="py-1 px-2 text-xs">Goal/Details of Activity</TableHead>
-                        <TableHead className="py-1 px-2 text-xs">Implementation Location</TableHead>
-                        <TableHead className="py-1 px-2 text-xs">Start</TableHead>
-                        <TableHead className="py-1 px-2 text-xs">End</TableHead>
-                        <TableHead className="py-1 px-2 text-xs">Beneficiaries (Individuals)</TableHead>
-                        <TableHead className="py-1 px-2 text-xs">Beneficiaries (Families)</TableHead>
-                        <TableHead className="py-1 px-2 text-xs text-right">Actions</TableHead>
+                        <TableHead className="py-1 px-2 text-xs">{t('f5.preview.activities.cols.activity_name')}</TableHead>
+                        <TableHead className="py-1 px-2 text-xs">{t('f5.preview.activities.cols.activity_goal')}</TableHead>
+                        <TableHead className="py-1 px-2 text-xs">{t('f5.preview.activities.cols.location')}</TableHead>
+                        <TableHead className="py-1 px-2 text-xs">{t('f5.preview.activities.cols.start')}</TableHead>
+                        <TableHead className="py-1 px-2 text-xs">{t('f5.preview.activities.cols.end')}</TableHead>
+                        <TableHead className="py-1 px-2 text-xs">{t('f5.preview.activities.cols.beneficiaries_individuals')}</TableHead>
+                        <TableHead className="py-1 px-2 text-xs">{t('f5.preview.activities.cols.beneficiaries_families')}</TableHead>
+                        <TableHead className="py-1 px-2 text-xs text-right">{t('f5.preview.activities.cols.actions')}</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {reachDraft.map((row, idx) => (
                         <TableRow key={idx} className="text-sm">
-                          <TableCell className="py-1 px-2"><Input className="h-8" value={row.activity_name || ''} onChange={(e)=>{ const arr=[...reachDraft]; arr[idx]={...arr[idx], activity_name: e.target.value}; setReachDraft(arr) }} /></TableCell>
-                          <TableCell className="py-1 px-2"><Input className="h-8" value={row.activity_goal || ''} onChange={(e)=>{ const arr=[...reachDraft]; arr[idx]={...arr[idx], activity_goal: e.target.value}; setReachDraft(arr) }} /></TableCell>
-                          <TableCell className="py-1 px-2"><Input className="h-8" value={row.location || ''} onChange={(e)=>{ const arr=[...reachDraft]; arr[idx]={...arr[idx], location: e.target.value}; setReachDraft(arr) }} /></TableCell>
+                          <TableCell className="py-1 px-2"><Input className="h-8" placeholder={t('f5.preview.activities.cols.activity_name') as string} value={row.activity_name || ''} onChange={(e)=>{ const arr=[...reachDraft]; arr[idx]={...arr[idx], activity_name: e.target.value}; setReachDraft(arr) }} /></TableCell>
+                          <TableCell className="py-1 px-2"><Input className="h-8" placeholder={t('f5.preview.activities.cols.activity_goal') as string} value={row.activity_goal || ''} onChange={(e)=>{ const arr=[...reachDraft]; arr[idx]={...arr[idx], activity_goal: e.target.value}; setReachDraft(arr) }} /></TableCell>
+                          <TableCell className="py-1 px-2"><Input className="h-8" placeholder={t('f5.preview.activities.cols.location') as string} value={row.location || ''} onChange={(e)=>{ const arr=[...reachDraft]; arr[idx]={...arr[idx], location: e.target.value}; setReachDraft(arr) }} /></TableCell>
                           <TableCell className="py-1 px-2"><Input className="h-8" type="date" value={row.start_date || ''} onChange={(e)=>{ const arr=[...reachDraft]; arr[idx]={...arr[idx], start_date: e.target.value}; setReachDraft(arr) }} /></TableCell>
                           <TableCell className="py-1 px-2"><Input className="h-8" type="date" value={row.end_date || ''} onChange={(e)=>{ const arr=[...reachDraft]; arr[idx]={...arr[idx], end_date: e.target.value}; setReachDraft(arr) }} /></TableCell>
                           <TableCell className="py-1 px-2"><Input className="h-8" type="number" value={row.individual_count ?? ''} onChange={(e)=>{ const arr=[...reachDraft]; arr[idx]={...arr[idx], individual_count: parseInt(e.target.value)||0}; setReachDraft(arr) }} /></TableCell>
                           <TableCell className="py-1 px-2"><Input className="h-8" type="number" value={row.household_count ?? ''} onChange={(e)=>{ const arr=[...reachDraft]; arr[idx]={...arr[idx], household_count: parseInt(e.target.value)||0}; setReachDraft(arr) }} /></TableCell>
                           <TableCell className="py-1 px-2 text-right">
-                            <Button variant="destructive" size="sm" onClick={()=>{ const arr=[...reachDraft]; arr.splice(idx,1); setReachDraft(arr) }}>Delete</Button>
+                            <Button variant="destructive" size="sm" onClick={()=>{ const arr=[...reachDraft]; arr.splice(idx,1); setReachDraft(arr) }}>{t('f5.preview.activities.cols.delete')}</Button>
                           </TableCell>
                         </TableRow>
                       ))}
@@ -366,20 +366,20 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved }: UploadF5M
 
             {/* Demographics Breakdown Table */}
             <div>
-              <Label>Additional Beneficiary Breakdown</Label>
+              <Label>{t('f5.preview.demographics.title')}</Label>
               <div className="border rounded overflow-hidden select-text">
                 {reachDraft.length === 0 ? (
-                  <div className="p-3 text-sm text-muted-foreground">No activities to show demographics</div>
+                  <div className="p-3 text-sm text-muted-foreground">{t('f5.preview.demographics.empty')}</div>
                 ) : (
                   <Table className="select-text">
                     <TableHeader>
                       <TableRow>
-                        <TableHead className="py-1 px-2 text-xs">Activity</TableHead>
-                        <TableHead className="py-1 px-2 text-xs">Male</TableHead>
-                        <TableHead className="py-1 px-2 text-xs">Female</TableHead>
-                        <TableHead className="py-1 px-2 text-xs">Male &lt;18</TableHead>
-                        <TableHead className="py-1 px-2 text-xs">Female &lt;18</TableHead>
-                        <TableHead className="py-1 px-2 text-xs">People with Disabilities</TableHead>
+                        <TableHead className="py-1 px-2 text-xs">{t('f5.preview.demographics.cols.activity')}</TableHead>
+                        <TableHead className="py-1 px-2 text-xs">{t('f5.preview.demographics.cols.male')}</TableHead>
+                        <TableHead className="py-1 px-2 text-xs">{t('f5.preview.demographics.cols.female')}</TableHead>
+                        <TableHead className="py-1 px-2 text-xs">{t('f5.preview.demographics.cols.male_u18')}</TableHead>
+                        <TableHead className="py-1 px-2 text-xs">{t('f5.preview.demographics.cols.female_u18')}</TableHead>
+                        <TableHead className="py-1 px-2 text-xs">{t('f5.preview.demographics.cols.pwd')}</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -400,8 +400,8 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved }: UploadF5M
             </div>
 
             <div className="flex justify-between">
-              <Button variant="outline" onClick={()=>setStep('select')}>Back</Button>
-              <Button onClick={handleSave} disabled={isLoading}>{isLoading ? 'Saving…' : 'Save F5'}</Button>
+              <Button variant="outline" onClick={()=>setStep('select')}>{t('f5.preview.buttons.back')}</Button>
+              <Button onClick={handleSave} disabled={isLoading}>{isLoading ? t('f5.preview.buttons.saving') : t('f5.preview.buttons.save')}</Button>
             </div>
             </TabsContent>
             
