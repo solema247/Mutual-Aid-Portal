@@ -27,6 +27,8 @@
   "gm": {
     "total_included": "إجمالي المضاف",
     "total_included_desc": "الأموال المضافة إلى المجمّع عبر الدورات",
+    "total_grants": "إجمالي المتاح في المنح",
+    "not_included": "لم يتم إدراجه بعد",
     "committed": "المُلتزم",
     "committed_desc": "إنفاق مُعتمد ومؤكد على المنح",
     "pending": "قيد الانتظار",

@@ -14,7 +14,14 @@ export default function GrantManagementPage() {
   const { t } = useTranslation(['err', 'common'])
   const router = useRouter()
   const [loading, setLoading] = useState(true)
-  const [summary, setSummary] = useState<{ total_available: number; total_committed: number; total_pending: number; remaining: number } | null>(null)
+  const [summary, setSummary] = useState<{ 
+    total_included: number;
+    total_committed: number;
+    total_pending: number;
+    remaining: number;
+    total_grants: number;
+    total_not_included: number;
+  } | null>(null)
   const [counts, setCounts] = useState<{ vetting: number; approved: number; allocated: number; committed: number }>({ vetting: 0, approved: 0, allocated: 0, committed: 0 })
 
   useEffect(() => {
@@ -67,7 +74,17 @@ export default function GrantManagementPage() {
             <CardTitle>{t('err:gm.total_included')}</CardTitle>
             <div className="text-xs text-muted-foreground">{t('err:gm.total_included_desc')}</div>
           </CardHeader>
-          <CardContent className="text-2xl font-bold">{summary ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(summary.total_available) : '—'}</CardContent>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {summary ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(summary.total_included) : '—'}
+            </div>
+            <div className="text-sm text-muted-foreground mt-2">
+              {t('err:gm.total_grants')}: {summary ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(summary.total_grants) : '—'}
+            </div>
+            <div className="text-sm text-green-600 mt-1">
+              {t('err:gm.not_included')}: {summary ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(summary.total_not_included) : '—'}
+            </div>
+          </CardContent>
         </Card>
         <Card>
           <CardHeader>
