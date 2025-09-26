@@ -1,49 +1,53 @@
-import { jsPDF } from 'jspdf'
-import nodeHtmlToImage from 'node-html-to-image'
+export function generateMouPdf(html: string): string {
+  // Add PDF-specific styling
+  const styledHtml = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <style>
+        @page {
+          margin: 1cm;
+          size: A4;
+        }
+        body {
+          font-family: Arial, sans-serif;
+          line-height: 1.5;
+          color: #111;
+        }
+        .section {
+          margin: 1em 0;
+          padding: 1em;
+          border: 1px solid #e5e7eb;
+          border-radius: 8px;
+          page-break-inside: avoid;
+        }
+        .grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 1em;
+        }
+        .box {
+          padding: 0.5em;
+          border: 1px solid #e5e7eb;
+          border-radius: 4px;
+        }
+        .rtl {
+          direction: rtl;
+        }
+        .text-muted {
+          color: #6b7280;
+        }
+        h1 { font-size: 1.5em; margin: 0 0 0.5em; }
+        h2 { font-size: 1.2em; margin: 1em 0 0.5em; }
+        ul { margin: 0.5em 0; padding-left: 1.5em; }
+      </style>
+    </head>
+    <body>
+      ${html}
+    </body>
+    </html>
+  `
 
-export async function generateMouPdf(html: string): Promise<Buffer> {
-  try {
-    // Convert HTML sections to images
-    const sections = html.split('<div class="section">').slice(1)
-    const sectionImages: Buffer[] = []
-
-    for (const section of sections) {
-      const sectionHtml = `<div class="section">${section}`
-      const image = await nodeHtmlToImage({
-        html: sectionHtml,
-        transparent: true,
-        puppeteerArgs: { args: ['--no-sandbox'] }
-      }) as Buffer
-      sectionImages.push(image)
-    }
-
-    // Create PDF
-    const pdf = new jsPDF('p', 'pt', 'a4')
-    const pageWidth = pdf.internal.pageSize.getWidth()
-    const pageHeight = pdf.internal.pageSize.getHeight()
-    const margin = 36 // ~0.5 inch
-
-    let currentY = margin
-    for (const image of sectionImages) {
-      // Convert Buffer to base64
-      const base64 = `data:image/png;base64,${image.toString('base64')}`
-      
-      // Calculate dimensions
-      const imgWidth = pageWidth - (margin * 2)
-      const imgHeight = (image.length / (pageWidth * 4)) * imgWidth // Approximate height based on buffer size
-
-      if (currentY + imgHeight > pageHeight - margin) {
-        pdf.addPage()
-        currentY = margin
-      }
-
-      pdf.addImage(base64, 'PNG', margin, currentY, imgWidth, imgHeight)
-      currentY += imgHeight + 12 // gap between sections
-    }
-
-    return Buffer.from(pdf.output('arraybuffer'))
-  } catch (error) {
-    console.error('Error generating PDF:', error)
-    throw error
-  }
+  return styledHtml
 }

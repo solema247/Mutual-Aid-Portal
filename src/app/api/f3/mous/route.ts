@@ -248,17 +248,17 @@ export async function POST(request: Request) {
 </body>
 </html>`
 
-      const filePath = `f3-mous/${inserted.id}/${inserted.mou_code}.pdf`
+      const filePath = `f3-mous/${inserted.id}/${inserted.mou_code}.html`
       
-      // Generate PDF
+      // Generate styled HTML
       const { generateMouPdf } = await import('./pdf-generator')
-      const pdfBuffer = await generateMouPdf(html)
+      const styledHtml = generateMouPdf(html)
       
-      // Upload PDF to storage
+      // Upload HTML file
       const { error: upErr } = await supabase.storage
         .from('images')
-        .upload(filePath, pdfBuffer, { 
-          contentType: 'application/pdf',
+        .upload(filePath, styledHtml, { 
+          contentType: 'text/html',
           upsert: true 
         })
       
