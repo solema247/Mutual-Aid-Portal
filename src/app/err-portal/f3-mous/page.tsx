@@ -18,6 +18,7 @@ interface MOU {
   total_amount: number
   end_date: string | null
   file_key: string | null
+  payment_confirmation_file: string | null
   created_at: string
 }
 
@@ -152,10 +153,11 @@ export default function F3MOUsPage() {
                     <TableCell>{m.end_date ? new Date(m.end_date).toLocaleDateString() : '-'}</TableCell>
                     <TableCell>{new Date(m.created_at).toLocaleDateString()}</TableCell>
                     <TableCell>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={async () => {
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={async () => {
                           setActiveMou(m)
                           setPreviewOpen(true)
                           try {
@@ -219,6 +221,83 @@ export default function F3MOUsPage() {
                       >
                         Preview
                       </Button>
+                        <input
+                          type="file"
+                          id={`payment-upload-${m.id}`}
+                          className="hidden"
+                          accept=".pdf,.jpg,.jpeg,.png"
+                          onChange={async (e) => {
+                            const file = e.target.files?.[0]
+                            if (!file) return
+
+                            try {
+                              const formData = new FormData()
+                              formData.append('file', file)
+
+                              const response = await fetch(`/api/f3/mous/${m.id}/payment-confirmation`, {
+                                method: 'POST',
+                                body: formData
+                              })
+
+                              if (!response.ok) {
+                                throw new Error('Failed to upload payment confirmation')
+                              }
+
+                              // Refresh the MOUs list
+                              await fetchMous()
+                              alert('Payment confirmation uploaded successfully')
+                            } catch (error) {
+                              console.error('Error uploading payment confirmation:', error)
+                              alert('Failed to upload payment confirmation')
+                            }
+
+                            // Clear the input
+                            e.target.value = ''
+                          }}
+                        />
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            document.getElementById(`payment-upload-${m.id}`)?.click()
+                          }}
+                        >
+                          {m.payment_confirmation_file ? 'Update Payment' : 'Add Payment'}
+                        </Button>
+                        {m.payment_confirmation_file && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={async () => {
+                              try {
+                                // First get the signed URL
+                                const response = await fetch(`/api/storage/signed-url?path=${encodeURIComponent(m.payment_confirmation_file || '')}`)
+                                if (!response.ok) {
+                                  throw new Error('Failed to get signed URL')
+                                }
+                                const { url, error } = await response.json()
+                                if (error || !url) {
+                                  throw new Error(error || 'No URL returned')
+                                }
+
+                                // Create a link and click it
+                                const link = document.createElement('a')
+                                link.href = url
+                                link.target = '_blank'
+                                link.rel = 'noopener noreferrer'
+                                document.body.appendChild(link)
+                                link.click()
+                                document.body.removeChild(link)
+                              } catch (error) {
+                                console.error('Error getting signed URL:', error)
+                                alert('Failed to open payment confirmation')
+                              }
+                            }}
+                          >
+                            View Payment
+                          </Button>
+                        )}
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
