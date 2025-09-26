@@ -78,7 +78,7 @@ export async function POST(request: Request) {
 
     // Infer defaults if not provided
     const inferredState = state || projects[0]?.state || null
-    const inferredErrName = err_name || projects[0]?.emergency_rooms?.name || projects[0]?.emergency_rooms?.name_ar || `${inferredState || ''} Emergency Room`
+    const inferredErrName = err_name || projects[0]?.emergency_rooms?.[0]?.name || projects[0]?.emergency_rooms?.[0]?.name_ar || `${inferredState || ''} Emergency Room`
     let inferredPartner = partner_name || 'Localization Hub'
 
     // If partner_id provided, resolve partner_name from partners table

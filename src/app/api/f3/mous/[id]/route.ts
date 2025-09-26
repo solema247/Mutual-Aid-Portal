@@ -43,7 +43,7 @@ export async function GET(
     // Resolve planned activities for all projects
     const resolvedProjects = [] as any[]
     for (const p of (projects || [])) {
-      let resolved = { ...p }
+      let resolved: any = { ...p }
       if (p?.planned_activities) {
         try {
           const raw = typeof p.planned_activities === 'string' ? JSON.parse(p.planned_activities) : p.planned_activities
