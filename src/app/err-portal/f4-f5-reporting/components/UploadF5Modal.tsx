@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
@@ -69,6 +70,7 @@ const extractTables = (rawOcr: string) => {
 }
 
 export default function UploadF5Modal({ open, onOpenChange, onSaved }: UploadF5ModalProps) {
+  const { t } = useTranslation(['f4f5'])
   const [states, setStates] = useState<string[]>([])
   const [selectedState, setSelectedState] = useState('')
   const [rooms, setRooms] = useState<Array<{ id: string; label: string }>>([])
@@ -203,15 +205,15 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved }: UploadF5M
     <Dialog open={open} onOpenChange={(v) => { onOpenChange(v); if (!v) reset() }}>
       <DialogContent className="max-w-7xl w-[95vw] max-h-[85vh] overflow-y-auto select-text">
         <DialogHeader>
-          <DialogTitle>Upload F5 Program Report</DialogTitle>
+          <DialogTitle>{t('f5.modal.title')}</DialogTitle>
         </DialogHeader>
         {step === 'select' ? (
           <div className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <div>
-                <Label>State</Label>
+              <div className="space-y-1">
+                <Label>{t('f5.modal.state')}</Label>
                 <Select value={selectedState} onValueChange={(v)=>{ setSelectedState(v); }}>
-                  <SelectTrigger className="w-full"><SelectValue placeholder="Select state" /></SelectTrigger>
+                  <SelectTrigger className="w-full"><SelectValue placeholder={t('f5.modal.state_placeholder') as string} /></SelectTrigger>
                   <SelectContent>
                     {states.map(s => (
                       <SelectItem key={s} value={s}>{s}</SelectItem>
@@ -219,10 +221,10 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved }: UploadF5M
                   </SelectContent>
                 </Select>
               </div>
-              <div>
-                <Label>ERR (with projects)</Label>
+              <div className="space-y-1">
+                <Label>{t('f5.modal.err')}</Label>
                 <Select value={selectedRoomId} onValueChange={(v)=>{ setSelectedRoomId(v); }} disabled={!selectedState}>
-                  <SelectTrigger className="w-full"><SelectValue placeholder="Select ERR" /></SelectTrigger>
+                  <SelectTrigger className="w-full"><SelectValue placeholder={t('f5.modal.err_placeholder') as string} /></SelectTrigger>
                   <SelectContent>
                     {rooms.map(r => (
                       <SelectItem key={r.id} value={r.id}>{r.label}</SelectItem>
@@ -230,10 +232,10 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved }: UploadF5M
                   </SelectContent>
                 </Select>
               </div>
-              <div>
-                <Label>Project</Label>
+              <div className="space-y-1">
+                <Label>{t('f5.modal.project')}</Label>
                 <Select value={projectId} onValueChange={setProjectId} disabled={!selectedRoomId}>
-                  <SelectTrigger className="w-full"><SelectValue placeholder="Select project (by objectives)" /></SelectTrigger>
+                  <SelectTrigger className="w-full"><SelectValue placeholder={t('f5.modal.project_placeholder') as string} /></SelectTrigger>
                   <SelectContent>
                     {projects.map(p => (
                       <SelectItem key={p.id} value={p.id}>{p.label}</SelectItem>
@@ -242,17 +244,18 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved }: UploadF5M
                 </Select>
               </div>
             </div>
-            <div>
-              <Label>Report Date</Label>
+            <div className="space-y-1">
+              <Label>{t('f5.modal.report_date')}</Label>
               <Input type="date" value={reportDate} onChange={(e) => setReportDate(e.target.value)} />
             </div>
-            <div>
-              <Label>Report File (PDF/Image)</Label>
+            <div className="space-y-1">
+              <Label>{t('f5.modal.report_file')}</Label>
               <Input type="file" accept=".pdf,image/*" onChange={(e) => setFile(e.target.files?.[0] || null)} />
+              <div className="text-xs text-muted-foreground">{t('f5.modal.choose_file_hint')}</div>
             </div>
             <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-              <Button onClick={handleUploadAndParse} disabled={!projectId || !file || isLoading}>{isLoading ? 'Processing…' : 'Process'}</Button>
+              <Button variant="outline" onClick={() => onOpenChange(false)}>{t('f5.modal.cancel')}</Button>
+              <Button onClick={handleUploadAndParse} disabled={!projectId || !file || isLoading}>{isLoading ? 'Processing…' : t('f5.modal.process')}</Button>
             </div>
           </div>
         ) : (

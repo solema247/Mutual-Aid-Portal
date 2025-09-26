@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Card, CardContent } from '@/components/ui/card'
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '@/components/ui/table'
 import UploadF4Modal from './components/UploadF4Modal'
+import { useTranslation } from 'react-i18next'
 import ViewF4Modal from './components/ViewF4Modal'
 import UploadF5Modal from './components/UploadF5Modal'
 import ViewF5Modal from './components/ViewF5Modal'
@@ -41,6 +42,7 @@ interface F5Row {
 }
 
 export default function F4F5ReportingPage() {
+  const { t } = useTranslation(['f4f5'])
   const [tab, setTab] = useState<'f4'|'f5'>('f4')
   const [rows, setRows] = useState<F4Row[]>([])
   const [loading, setLoading] = useState(false)
@@ -100,49 +102,49 @@ export default function F4F5ReportingPage() {
     <div className="max-w-7xl mx-auto p-6 space-y-6">
       <Tabs value={tab} onValueChange={(v) => setTab(v as any)}>
         <TabsList>
-          <TabsTrigger value="f4">F4 Financial</TabsTrigger>
-          <TabsTrigger value="f5">F5 Program</TabsTrigger>
+          <TabsTrigger value="f4">{t('tabs.f4')}</TabsTrigger>
+          <TabsTrigger value="f5">{t('tabs.f5')}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="f4" className="mt-4 space-y-4">
           <div className="flex items-center justify-between">
-            <div className="text-lg font-semibold">F4 Financial Reports</div>
-            <Button className="bg-green-700 hover:bg-green-800 text-white font-bold" onClick={() => setUploadOpen(true)}>Upload F4</Button>
+            <div className="text-lg font-semibold">{t('f4.title')}</div>
+            <Button className="bg-green-700 hover:bg-green-800 text-white font-bold" onClick={() => setUploadOpen(true)}>{t('f4.upload')}</Button>
           </div>
 
           <div className="flex flex-wrap md:flex-nowrap gap-2 items-center">
-            <Input className="h-9 flex-1 md:flex-none md:w-64" placeholder="Search…" value={q} onChange={(e)=>setQ(e.target.value)} />
+            <Input className="h-9 flex-1 md:flex-none md:w-64" placeholder={t('f4.search') as string} value={q} onChange={(e)=>setQ(e.target.value)} />
             <Select value={fErr || '__ALL__'} onValueChange={(v)=>setFErr(v==='__ALL__'?'':v)}>
-              <SelectTrigger className="h-9 w-full md:w-48"><SelectValue placeholder="ERR" /></SelectTrigger>
+              <SelectTrigger className="h-9 w-full md:w-48"><SelectValue placeholder={t('f4.filters.err') as string} /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="__ALL__">All</SelectItem>
+                <SelectItem value="__ALL__">{t('f4.filters.all')}</SelectItem>
                 {[...new Set(rows.map(r=>r.err_name).filter(Boolean))].map((v)=> (
                   <SelectItem key={String(v)} value={String(v)}>{String(v)}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
             <Select value={fState || '__ALL__'} onValueChange={(v)=>setFState(v==='__ALL__'?'':v)}>
-              <SelectTrigger className="h-9 w-full md:w-48"><SelectValue placeholder="State" /></SelectTrigger>
+              <SelectTrigger className="h-9 w-full md:w-48"><SelectValue placeholder={t('f4.filters.state') as string} /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="__ALL__">All</SelectItem>
+                <SelectItem value="__ALL__">{t('f4.filters.all')}</SelectItem>
                 {[...new Set(rows.map(r=>r.state).filter(Boolean))].map((v)=> (
                   <SelectItem key={String(v)} value={String(v)}>{String(v)}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
             <Select value={fDonor || '__ALL__'} onValueChange={(v)=>setFDonor(v==='__ALL__'?'':v)}>
-              <SelectTrigger className="h-9 w-full md:w-48"><SelectValue placeholder="Donor" /></SelectTrigger>
+              <SelectTrigger className="h-9 w-full md:w-48"><SelectValue placeholder={t('f4.filters.donor') as string} /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="__ALL__">All</SelectItem>
+                <SelectItem value="__ALL__">{t('f4.filters.all')}</SelectItem>
                 {[...new Set(rows.map(r=>r.donor).filter(Boolean))].map((v)=> (
                   <SelectItem key={String(v)} value={String(v)}>{String(v)}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
             <Select value={fGrant || '__ALL__'} onValueChange={(v)=>setFGrant(v==='__ALL__'?'':v)}>
-              <SelectTrigger className="h-9 w-full md:w-48"><SelectValue placeholder="Grant Call" /></SelectTrigger>
+              <SelectTrigger className="h-9 w-full md:w-48"><SelectValue placeholder={t('f4.filters.grant') as string} /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="__ALL__">All</SelectItem>
+                <SelectItem value="__ALL__">{t('f4.filters.all')}</SelectItem>
                 {[...new Set(rows.map(r=>r.grant_call).filter(Boolean))].map((v)=> (
                   <SelectItem key={String(v)} value={String(v)}>{String(v)}</SelectItem>
                 ))}
@@ -152,7 +154,7 @@ export default function F4F5ReportingPage() {
               variant="outline"
               className="h-9 w-full md:w-24 md:ml-auto"
               onClick={() => { setQ(''); setFErr(''); setFState(''); setFDonor(''); setFGrant(''); }}
-            >Reset</Button>
+            >{t('f4.filters.reset')}</Button>
           </div>
 
           <Card>
@@ -160,24 +162,24 @@ export default function F4F5ReportingPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>ERR</TableHead>
-                    <TableHead>State</TableHead>
-                    <TableHead>Grant Call</TableHead>
-                    <TableHead>Donor</TableHead>
-                    <TableHead>Report Date</TableHead>
-                    <TableHead className="text-right">Total Grant</TableHead>
-                    <TableHead className="text-right">Total Expenses</TableHead>
-                    <TableHead className="text-right">Remainder</TableHead>
-                    <TableHead>Files</TableHead>
-                    <TableHead>Updated</TableHead>
-                    <TableHead></TableHead>
+                    <TableHead>{t('f4.headers.err')}</TableHead>
+                    <TableHead>{t('f4.headers.state')}</TableHead>
+                    <TableHead>{t('f4.headers.grant')}</TableHead>
+                    <TableHead>{t('f4.headers.donor')}</TableHead>
+                    <TableHead>{t('f4.headers.report_date')}</TableHead>
+                    <TableHead className="text-right">{t('f4.headers.total_grant')}</TableHead>
+                    <TableHead className="text-right">{t('f4.headers.total_expenses')}</TableHead>
+                    <TableHead className="text-right">{t('f4.headers.remainder')}</TableHead>
+                    <TableHead>{t('f4.headers.files')}</TableHead>
+                    <TableHead>{t('f4.headers.updated')}</TableHead>
+                    <TableHead>{t('f4.headers.actions')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {loading ? (
-                    <TableRow><TableCell colSpan={7} className="text-center py-6">Loading…</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={7} className="text-center py-6">{t('f4.loading')}</TableCell></TableRow>
                   ) : rows.length === 0 ? (
-                    <TableRow><TableCell colSpan={7} className="text-center py-6 text-muted-foreground">No F4 reports yet</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={7} className="text-center py-6 text-muted-foreground">{t('f4.empty')}</TableCell></TableRow>
                   ) : rows
                     .filter(r => !q || [r.err_name, r.state, r.donor, r.grant_call].some(v => (v||'').toLowerCase().includes(q.toLowerCase())))
                     .filter(r => !fErr || r.err_name === fErr)
@@ -197,7 +199,7 @@ export default function F4F5ReportingPage() {
                       <TableCell>{r.attachments_count}</TableCell>
                       <TableCell>{new Date(r.updated_at).toLocaleDateString()}</TableCell>
                       <TableCell>
-                        <Button variant="outline" size="sm" onClick={()=>{ setViewId(r.id); setViewOpen(true) }}>View</Button>
+                        <Button variant="outline" size="sm" onClick={()=>{ setViewId(r.id); setViewOpen(true) }}>{t('f4.view')}</Button>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -212,43 +214,43 @@ export default function F4F5ReportingPage() {
 
         <TabsContent value="f5" className="mt-4 space-y-4">
           <div className="flex items-center justify-between">
-            <div className="text-lg font-semibold">F5 Program Reports</div>
-            <Button className="bg-green-700 hover:bg-green-800 text-white font-bold" onClick={() => setUploadF5Open(true)}>Upload F5</Button>
+            <div className="text-lg font-semibold">{t('f5.title')}</div>
+            <Button className="bg-green-700 hover:bg-green-800 text-white font-bold" onClick={() => setUploadF5Open(true)}>{t('f5.upload')}</Button>
           </div>
 
           <div className="flex flex-wrap md:flex-nowrap gap-2 items-center">
-            <Input className="h-9 flex-1 md:flex-none md:w-64" placeholder="Search…" value={f5Q} onChange={(e)=>setF5Q(e.target.value)} />
+            <Input className="h-9 flex-1 md:flex-none md:w-64" placeholder={t('f5.search') as string} value={f5Q} onChange={(e)=>setF5Q(e.target.value)} />
             <Select value={f5Err || '__ALL__'} onValueChange={(v)=>setF5Err(v==='__ALL__'?'':v)}>
-              <SelectTrigger className="h-9 w-full md:w-48"><SelectValue placeholder="ERR" /></SelectTrigger>
+              <SelectTrigger className="h-9 w-full md:w-48"><SelectValue placeholder={t('f5.filters.err') as string} /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="__ALL__">All</SelectItem>
+                <SelectItem value="__ALL__">{t('f5.filters.all')}</SelectItem>
                 {[...new Set(f5Rows.map(r=>r.err_name).filter(Boolean))].map((v)=> (
                   <SelectItem key={String(v)} value={String(v)}>{String(v)}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
             <Select value={f5State || '__ALL__'} onValueChange={(v)=>setF5State(v==='__ALL__'?'':v)}>
-              <SelectTrigger className="h-9 w-full md:w-48"><SelectValue placeholder="State" /></SelectTrigger>
+              <SelectTrigger className="h-9 w-full md:w-48"><SelectValue placeholder={t('f5.filters.state') as string} /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="__ALL__">All</SelectItem>
+                <SelectItem value="__ALL__">{t('f5.filters.all')}</SelectItem>
                 {[...new Set(f5Rows.map(r=>r.state).filter(Boolean))].map((v)=> (
                   <SelectItem key={String(v)} value={String(v)}>{String(v)}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
             <Select value={f5Donor || '__ALL__'} onValueChange={(v)=>setF5Donor(v==='__ALL__'?'':v)}>
-              <SelectTrigger className="h-9 w-full md:w-48"><SelectValue placeholder="Donor" /></SelectTrigger>
+              <SelectTrigger className="h-9 w-full md:w-48"><SelectValue placeholder={t('f5.filters.donor') as string} /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="__ALL__">All</SelectItem>
+                <SelectItem value="__ALL__">{t('f5.filters.all')}</SelectItem>
                 {[...new Set(f5Rows.map(r=>r.donor).filter(Boolean))].map((v)=> (
                   <SelectItem key={String(v)} value={String(v)}>{String(v)}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
             <Select value={f5Grant || '__ALL__'} onValueChange={(v)=>setF5Grant(v==='__ALL__'?'':v)}>
-              <SelectTrigger className="h-9 w-full md:w-48"><SelectValue placeholder="Grant Call" /></SelectTrigger>
+              <SelectTrigger className="h-9 w-full md:w-48"><SelectValue placeholder={t('f5.filters.grant') as string} /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="__ALL__">All</SelectItem>
+                <SelectItem value="__ALL__">{t('f5.filters.all')}</SelectItem>
                 {[...new Set(f5Rows.map(r=>r.grant_call).filter(Boolean))].map((v)=> (
                   <SelectItem key={String(v)} value={String(v)}>{String(v)}</SelectItem>
                 ))}
@@ -258,7 +260,7 @@ export default function F4F5ReportingPage() {
               variant="outline"
               className="h-9 w-full md:w-24 md:ml-auto"
               onClick={() => { setF5Q(''); setF5Err(''); setF5State(''); setF5Donor(''); setF5Grant(''); }}
-            >Reset</Button>
+            >{t('f5.filters.reset')}</Button>
           </div>
 
           <Card>
@@ -266,21 +268,21 @@ export default function F4F5ReportingPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>ERR</TableHead>
-                    <TableHead>State</TableHead>
-                    <TableHead>Grant Call</TableHead>
-                    <TableHead>Donor</TableHead>
-                    <TableHead>Report Date</TableHead>
-                    <TableHead className="text-right">Activities</TableHead>
-                    <TableHead>Updated</TableHead>
-                    <TableHead></TableHead>
+                    <TableHead>{t('f5.headers.err')}</TableHead>
+                    <TableHead>{t('f5.headers.state')}</TableHead>
+                    <TableHead>{t('f5.headers.grant')}</TableHead>
+                    <TableHead>{t('f5.headers.donor')}</TableHead>
+                    <TableHead>{t('f5.headers.report_date')}</TableHead>
+                    <TableHead className="text-right">{t('f5.headers.activities')}</TableHead>
+                    <TableHead>{t('f5.headers.updated')}</TableHead>
+                    <TableHead>{t('f5.headers.actions')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {f5Loading ? (
-                    <TableRow><TableCell colSpan={7} className="text-center py-6">Loading…</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={7} className="text-center py-6">{t('f5.loading')}</TableCell></TableRow>
                   ) : f5Rows.length === 0 ? (
-                    <TableRow><TableCell colSpan={7} className="text-center py-6 text-muted-foreground">No F5 reports yet</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={7} className="text-center py-6 text-muted-foreground">{t('f5.empty')}</TableCell></TableRow>
                   ) : f5Rows
                     .filter(r => !f5Q || [r.err_name, r.state, r.donor, r.grant_call].some(v => (v||'').toLowerCase().includes(f5Q.toLowerCase())))
                     .filter(r => !f5Err || r.err_name === f5Err)
@@ -297,7 +299,7 @@ export default function F4F5ReportingPage() {
                       <TableCell className="text-right">{Number(r.activities_count || 0).toLocaleString()}</TableCell>
                       <TableCell>{new Date(r.updated_at).toLocaleDateString()}</TableCell>
                       <TableCell>
-                        <Button variant="outline" size="sm" onClick={()=>{ setViewF5Id(r.id); setViewF5Open(true) }}>View</Button>
+                        <Button variant="outline" size="sm" onClick={()=>{ setViewF5Id(r.id); setViewF5Open(true) }}>{t('f5.view')}</Button>
                       </TableCell>
                     </TableRow>
                   ))}

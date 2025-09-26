@@ -1,0 +1,130 @@
+{
+  "tabs": {
+    "f4": "التقارير المالية F4",
+    "f5": "تقارير البرنامج F5"
+  },
+  "f4": {
+    "title": "التقارير المالية F4",
+    "upload": "رفع F4",
+    "search": "ابحث…",
+    "modal": {
+      "title": "رفع تقرير مالي F4",
+      "project": "المشروع",
+      "project_placeholder": "اختر المشروع حسب الأهداف",
+      "err": "غرفة الطوارئ (ذات المشاريع النشطة)",
+      "err_placeholder": "اختر الغرفة",
+      "state": "الولاية",
+      "state_placeholder": "اختر الولاية",
+      "report_date": "تاريخ التقرير",
+      "summary_file": "ملف الملخص (PDF/صورة)",
+      "choose_file_hint": "لم يتم اختيار ملف — اختر ملفًا",
+      "process": "معالجة",
+      "cancel": "إلغاء"
+    },
+    "filters": {
+      "err": "غرفة الطوارئ",
+      "state": "الولاية",
+      "donor": "المانح",
+      "grant": "نداء المنحة",
+      "all": "الكل",
+      "reset": "إعادة تعيين"
+    },
+    "headers": {
+      "err": "غرفة الطوارئ",
+      "state": "الولاية",
+      "grant": "نداء المنحة",
+      "donor": "المانح",
+      "report_date": "تاريخ التقرير",
+      "total_grant": "إجمالي المنحة",
+      "total_expenses": "إجمالي المصروفات",
+      "remainder": "المتبقي",
+      "files": "الملفات",
+      "updated": "آخر تحديث",
+      "actions": ""
+    },
+    "view": "عرض",
+    "loading": "جارٍ التحميل…",
+    "empty": "لا توجد تقارير F4 بعد",
+    "preview": {
+      "tabs": { "edit_form": "تحرير النموذج", "view_file": "عرض الملف" },
+      "labels": {
+        "err_room": "غرفة الطوارئ",
+        "report_date": "تاريخ التقرير",
+        "project_activities": "أنشطة المشروع",
+        "beneficiaries": "المستفيدون",
+        "fx_rate": "سعر الصرف (جنيه/1 دولار)",
+        "fx_placeholder": "مثال: 3200"
+      },
+      "expenses": {
+        "title": "المصروفات",
+        "empty": "لا توجد مصروفات مستخرجة",
+        "add": "إضافة مصروف",
+        "cols": {
+          "activity": "النشاط",
+          "description": "الوصف",
+          "amount": "المبلغ",
+          "payment_date": "تاريخ الدفع",
+          "method": "طريقة الدفع",
+          "receipt_no": "رقم الإيصال",
+          "seller": "البائع",
+          "actions": "الإجراءات",
+          "delete": "حذف"
+        }
+      },
+      "financials": {
+        "total_grant": "إجمالي المنحة",
+        "total_expenses": "إجمالي المصروفات (من الجدول)",
+        "remainder": "المتبقي",
+        "total_other_sources": "إجمالي مصادر أخرى",
+        "excess_expenses": "المصروفات الزائدة (كيف تمت تغطيتها؟)",
+        "surplus_use": "استخدام الفائض",
+        "lessons_learned": "الدروس المستفادة",
+        "training_needs": "الاحتياجات التدريبية"
+      },
+      "file": { "uploaded_file": "الملف المرفوع", "no_preview": "لا تتوفر معاينة للملف" },
+      "buttons": { "back": "رجوع", "save": "حفظ F4", "saving": "جارٍ الحفظ…" }
+    }
+  },
+  "f5": {
+    "title": "تقارير البرنامج F5",
+    "upload": "رفع F5",
+    "search": "ابحث…",
+    "modal": {
+      "title": "رفع تقرير برنامج F5",
+      "project": "المشروع",
+      "project_placeholder": "اختر المشروع حسب الأهداف",
+      "err": "غرفة الطوارئ (ذات المشاريع)",
+      "err_placeholder": "اختر الغرفة",
+      "state": "الولاية",
+      "state_placeholder": "اختر الولاية",
+      "report_date": "تاريخ التقرير",
+      "report_file": "ملف التقرير (PDF/صورة)",
+      "choose_file_hint": "لم يتم اختيار ملف — اختر ملفًا",
+      "process": "معالجة",
+      "cancel": "إلغاء"
+    },
+    "filters": {
+      "err": "غرفة الطوارئ",
+      "state": "الولاية",
+      "donor": "المانح",
+      "grant": "نداء المنحة",
+      "all": "الكل",
+      "reset": "إعادة تعيين"
+    },
+    "headers": {
+      "err": "غرفة الطوارئ",
+      "state": "الولاية",
+      "grant": "نداء المنحة",
+      "donor": "المانح",
+      "report_date": "تاريخ التقرير",
+      "activities": "الأنشطة",
+      "updated": "آخر تحديث",
+      "actions": ""
+    },
+    "view": "عرض",
+    "loading": "جارٍ التحميل…",
+    "empty": "لا توجد تقارير F5 بعد"
+  }
+}
+
+

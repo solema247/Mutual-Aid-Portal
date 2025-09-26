@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
@@ -18,6 +19,7 @@ interface UploadF4ModalProps {
 }
 
 export default function UploadF4Modal({ open, onOpenChange, onSaved }: UploadF4ModalProps) {
+  const { t } = useTranslation(['f4f5'])
   const [states, setStates] = useState<string[]>([])
   const [selectedState, setSelectedState] = useState('')
   const [rooms, setRooms] = useState<Array<{ id: string; label: string }>>([])
@@ -218,15 +220,15 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved }: UploadF4M
     <Dialog open={open} onOpenChange={(v) => { onOpenChange(v); if (!v) reset() }}>
       <DialogContent className="max-w-7xl w-[95vw] max-h-[85vh] overflow-y-auto select-text">
         <DialogHeader>
-          <DialogTitle>Upload F4 Financial Report</DialogTitle>
+          <DialogTitle>{t('f4.modal.title')}</DialogTitle>
         </DialogHeader>
         {step === 'select' ? (
           <div className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <div>
-                <Label>State</Label>
+              <div className="space-y-1">
+                <Label>{t('f4.modal.state')}</Label>
                 <Select value={selectedState} onValueChange={(v)=>{ setSelectedState(v); }}>
-                  <SelectTrigger className="w-full"><SelectValue placeholder="Select state" /></SelectTrigger>
+                  <SelectTrigger className="w-full"><SelectValue placeholder={t('f4.modal.state_placeholder') as string} /></SelectTrigger>
                   <SelectContent>
                     {states.map(s => (
                       <SelectItem key={s} value={s}>{s}</SelectItem>
@@ -234,10 +236,10 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved }: UploadF4M
                   </SelectContent>
                 </Select>
               </div>
-              <div>
-                <Label>ERR (with active projects)</Label>
+              <div className="space-y-1">
+                <Label>{t('f4.modal.err')}</Label>
                 <Select value={selectedRoomId} onValueChange={(v)=>{ setSelectedRoomId(v); }} disabled={!selectedState}>
-                  <SelectTrigger className="w-full"><SelectValue placeholder="Select ERR" /></SelectTrigger>
+                  <SelectTrigger className="w-full"><SelectValue placeholder={t('f4.modal.err_placeholder') as string} /></SelectTrigger>
                   <SelectContent>
                     {rooms.map(r => (
                       <SelectItem key={r.id} value={r.id}>{r.label}</SelectItem>
@@ -245,10 +247,10 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved }: UploadF4M
                   </SelectContent>
                 </Select>
               </div>
-              <div>
-                <Label>Project</Label>
+              <div className="space-y-1">
+                <Label>{t('f4.modal.project')}</Label>
                 <Select value={projectId} onValueChange={setProjectId} disabled={!selectedRoomId}>
-                  <SelectTrigger className="w-full"><SelectValue placeholder="Select project (by objectives)" /></SelectTrigger>
+                  <SelectTrigger className="w-full"><SelectValue placeholder={t('f4.modal.project_placeholder') as string} /></SelectTrigger>
                   <SelectContent>
                     {projects.map(p => (
                       <SelectItem key={p.id} value={p.id}>{p.label}</SelectItem>
@@ -257,24 +259,25 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved }: UploadF4M
                 </Select>
               </div>
             </div>
-            <div>
-              <Label>Report Date</Label>
+            <div className="space-y-1">
+              <Label>{t('f4.modal.report_date')}</Label>
               <Input type="date" value={reportDate} onChange={(e) => setReportDate(e.target.value)} />
             </div>
-            <div>
-              <Label>Summary File (PDF/Image)</Label>
+            <div className="space-y-1">
+              <Label>{t('f4.modal.summary_file')}</Label>
               <Input type="file" accept=".pdf,image/*" onChange={(e) => setFile(e.target.files?.[0] || null)} />
+              <div className="text-xs text-muted-foreground">{t('f4.modal.choose_file_hint')}</div>
             </div>
             <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-              <Button onClick={handleUploadAndParse} disabled={!projectId || !file || isLoading}>{isLoading ? 'Processing…' : 'Process'}</Button>
+              <Button variant="outline" onClick={() => onOpenChange(false)}>{t('f4.modal.cancel')}</Button>
+              <Button onClick={handleUploadAndParse} disabled={!projectId || !file || isLoading}>{isLoading ? 'Processing…' : t('f4.modal.process')}</Button>
             </div>
           </div>
         ) : (
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
             <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="form">Edit Form</TabsTrigger>
-              <TabsTrigger value="file">View File</TabsTrigger>
+              <TabsTrigger value="form">{t('f4.preview.tabs.edit_form')}</TabsTrigger>
+              <TabsTrigger value="file">{t('f4.preview.tabs.view_file')}</TabsTrigger>
             </TabsList>
             
             <TabsContent value="form" className="space-y-6 select-text mt-6">
@@ -282,26 +285,26 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved }: UploadF4M
             <div className="space-y-3">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label>ERR Room</Label>
+                  <Label>{t('f4.preview.labels.err_room')}</Label>
                   <div className="h-10 flex items-center px-3 rounded border bg-muted/50">{projectMeta?.roomLabel || '-'}</div>
                 </div>
                 <div>
-                  <Label>Report Date</Label>
+                  <Label>{t('f4.preview.labels.report_date')}</Label>
                   <Input type="date" value={summaryDraft?.report_date ?? reportDate} onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), report_date: e.target.value }))} />
                 </div>
               </div>
               <div>
-                <Label>Project Activities</Label>
+                <Label>{t('f4.preview.labels.project_activities')}</Label>
                 <div className="min-h-[40px] px-3 py-2 rounded border bg-muted/50 text-sm whitespace-pre-wrap">{projectMeta?.project_objectives || '-'}</div>
               </div>
               <div>
-                <Label>Beneficiaries</Label>
+                <Label>{t('f4.preview.labels.beneficiaries')}</Label>
                 <Input value={summaryDraft?.beneficiaries ?? projectMeta?.beneficiaries ?? ''} onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), beneficiaries: e.target.value }))} />
               </div>
               {/* FX Rate (moved here) */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label>FX Rate (SDG per 1 USD)</Label>
+                  <Label>{t('f4.preview.labels.fx_rate')}</Label>
                   <Input type="number" value={fxRate ?? ''} onChange={(e)=>{
                     const v = parseFloat(e.target.value)
                     setFxRate(isNaN(v) ? null : v)
@@ -314,7 +317,7 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved }: UploadF4M
                         }
                       }))
                     }
-                  }} placeholder="e.g. 3200" />
+                  }} placeholder={t('f4.preview.labels.fx_placeholder') as string} />
                 </div>
               </div>
             </div>
@@ -322,7 +325,7 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved }: UploadF4M
             {/* Expenses (move above Financials) */}
             <div>
               <div className="flex items-center justify-between mb-2">
-                <Label>Expenses</Label>
+                <Label>{t('f4.preview.expenses.title')}</Label>
                 <Button
                   variant="secondary"
                   size="sm"
@@ -340,41 +343,41 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved }: UploadF4M
               </div>
               <div className="border rounded overflow-hidden select-text">
                 {expensesDraft.length === 0 ? (
-                  <div className="p-3 text-sm text-muted-foreground">No expenses parsed</div>
+                  <div className="p-3 text-sm text-muted-foreground">{t('f4.preview.expenses.empty')}</div>
                 ) : (
                   <Table className="select-text">
                     <TableHeader>
                       <TableRow>
-                        <TableHead className="w-[16%] py-1 px-2 text-xs">Activity</TableHead>
-                        <TableHead className="w-[24%] py-1 px-2 text-xs">Description</TableHead>
-                        <TableHead className="w-[14%] py-1 px-2 text-right text-xs">Amount</TableHead>
-                        <TableHead className="w-[14%] py-1 px-2 text-xs">Payment Date</TableHead>
-                        <TableHead className="w-[12%] py-1 px-2 text-xs">Method</TableHead>
-                        <TableHead className="w-[12%] py-1 px-2 text-xs">Receipt No.</TableHead>
-                        <TableHead className="w-[18%] py-1 px-2 text-xs">Seller</TableHead>
-                        <TableHead className="w-[8%] py-1 px-2 text-xs text-right">Actions</TableHead>
+                        <TableHead className="w-[16%] py-1 px-2 text-xs">{t('f4.preview.expenses.cols.activity')}</TableHead>
+                        <TableHead className="w-[24%] py-1 px-2 text-xs">{t('f4.preview.expenses.cols.description')}</TableHead>
+                        <TableHead className="w-[14%] py-1 px-2 text-right text-xs">{t('f4.preview.expenses.cols.amount')}</TableHead>
+                        <TableHead className="w-[14%] py-1 px-2 text-xs">{t('f4.preview.expenses.cols.payment_date')}</TableHead>
+                        <TableHead className="w-[12%] py-1 px-2 text-xs">{t('f4.preview.expenses.cols.method')}</TableHead>
+                        <TableHead className="w-[12%] py-1 px-2 text-xs">{t('f4.preview.expenses.cols.receipt_no')}</TableHead>
+                        <TableHead className="w-[18%] py-1 px-2 text-xs">{t('f4.preview.expenses.cols.seller')}</TableHead>
+                        <TableHead className="w-[8%] py-1 px-2 text-xs text-right">{t('f4.preview.expenses.cols.actions')}</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {expensesDraft.map((ex, idx) => (
                         <TableRow key={idx} className="text-sm">
                           <TableCell className="py-1 px-2">
-                            <Input className="h-8" placeholder="Activity" value={ex.expense_activity || ''} onChange={(e)=>{
+                            <Input className="h-8" placeholder={t('f4.preview.expenses.cols.activity') as string} value={ex.expense_activity || ''} onChange={(e)=>{
                               const arr=[...expensesDraft]; arr[idx]={...arr[idx], expense_activity: e.target.value}; setExpensesDraft(arr)
                             }} />
                           </TableCell>
                           <TableCell className="py-1 px-2">
-                            <Input className="h-8" placeholder="Description" value={ex.expense_description || ''} onChange={(e)=>{
+                            <Input className="h-8" placeholder={t('f4.preview.expenses.cols.description') as string} value={ex.expense_description || ''} onChange={(e)=>{
                               const arr=[...expensesDraft]; arr[idx]={...arr[idx], expense_description: e.target.value}; setExpensesDraft(arr)
                             }} />
                           </TableCell>
                           <TableCell className="py-1 px-2 text-right">
-                            <Input className="h-8" type="number" placeholder="Amount" value={ex.expense_amount ?? ''} onChange={(e)=>{
+                            <Input className="h-8" type="number" placeholder={t('f4.preview.expenses.cols.amount') as string} value={ex.expense_amount ?? ''} onChange={(e)=>{
                               const arr=[...expensesDraft]; arr[idx]={...arr[idx], expense_amount: parseFloat(e.target.value)||0}; setExpensesDraft(arr)
                             }} />
                           </TableCell>
                           <TableCell className="py-1 px-2">
-                            <Input className="h-8" type="date" placeholder="Payment Date" value={ex.payment_date || ''} onChange={(e)=>{
+                            <Input className="h-8" type="date" placeholder={t('f4.preview.expenses.cols.payment_date') as string} value={ex.payment_date || ''} onChange={(e)=>{
                               const arr=[...expensesDraft]; arr[idx]={...arr[idx], payment_date: e.target.value}; setExpensesDraft(arr)
                             }} />
                           </TableCell>
@@ -383,7 +386,7 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved }: UploadF4M
                               const arr=[...expensesDraft]; arr[idx]={...arr[idx], payment_method: v}; setExpensesDraft(arr)
                             }}>
                               <SelectTrigger className="h-8 w-full">
-                                <SelectValue placeholder="Method" />
+                                <SelectValue placeholder={t('f4.preview.expenses.cols.method') as string} />
                               </SelectTrigger>
                               <SelectContent>
                                 <SelectItem value="Bank Transfer">Bank Transfer</SelectItem>
@@ -392,12 +395,12 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved }: UploadF4M
                             </Select>
                           </TableCell>
                           <TableCell className="py-1 px-2">
-                            <Input className="h-8" placeholder="Receipt No." value={ex.receipt_no || ''} onChange={(e)=>{
+                            <Input className="h-8" placeholder={t('f4.preview.expenses.cols.receipt_no') as string} value={ex.receipt_no || ''} onChange={(e)=>{
                               const arr=[...expensesDraft]; arr[idx]={...arr[idx], receipt_no: e.target.value}; setExpensesDraft(arr)
                             }} />
                           </TableCell>
                           <TableCell className="py-1 px-2">
-                            <Input className="h-8" placeholder="Seller" value={ex.seller || ''} onChange={(e)=>{
+                            <Input className="h-8" placeholder={t('f4.preview.expenses.cols.seller') as string} value={ex.seller || ''} onChange={(e)=>{
                               const arr=[...expensesDraft]; arr[idx]={...arr[idx], seller: e.target.value}; setExpensesDraft(arr)
                             }} />
                           </TableCell>
@@ -410,7 +413,7 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved }: UploadF4M
                                 arr.splice(idx, 1)
                                 setExpensesDraft(arr)
                               }}
-                            >Delete</Button>
+                            >{t('f4.preview.expenses.cols.delete')}</Button>
                           </TableCell>
                         </TableRow>
                       ))}
