@@ -339,7 +339,7 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved }: UploadF4M
                     seller: '',
                     is_draft: true
                   }]))}
-                >Add expense</Button>
+                >{t('f4.preview.expenses.add')}</Button>
               </div>
               <div className="border rounded overflow-hidden select-text">
                 {expensesDraft.length === 0 ? (
@@ -426,42 +426,42 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved }: UploadF4M
             {/* Financials */}
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label>Total Grant</Label>
+                <Label>{t('f4.preview.financials.total_grant')}</Label>
                 <div className="h-10 flex items-center px-3 rounded border bg-muted/50">{(projectMeta?.total_grant_from_project ?? 0).toLocaleString()}</div>
               </div>
               <div>
-                <Label>Total Expenses (from table)</Label>
+                <Label>{t('f4.preview.financials.total_expenses')}</Label>
                 <div className="h-10 flex items-center px-3 rounded border bg-muted/50">{expensesDraft.reduce((s, ex) => s + (ex.expense_amount || 0), 0).toLocaleString()}</div>
               </div>
               <div>
-                <Label>Remainder</Label>
+                <Label>{t('f4.preview.financials.remainder')}</Label>
                 <Input type="number" value={(projectMeta?.total_grant_from_project || 0) - expensesDraft.reduce((s, ex) => s + (Number(ex.expense_amount) || 0), 0)} readOnly />
               </div>
               <div>
-                <Label>Total Other Sources</Label>
+                <Label>{t('f4.preview.financials.total_other_sources')}</Label>
                 <Input type="number" value={summaryDraft?.total_other_sources ?? ''} onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), total_other_sources: parseFloat(e.target.value)||0 }))} />
               </div>
               <div className="col-span-2">
-                <Label>Excess Expenses (How covered?)</Label>
+                <Label>{t('f4.preview.financials.excess_expenses')}</Label>
                 <Input value={summaryDraft?.excess_expenses ?? ''} onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), excess_expenses: e.target.value }))} />
               </div>
               <div className="col-span-2">
-                <Label>Surplus Use</Label>
+                <Label>{t('f4.preview.financials.surplus_use')}</Label>
                 <Input value={summaryDraft?.surplus_use ?? ''} onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), surplus_use: e.target.value }))} />
               </div>
               <div className="col-span-2">
-                <Label>Lessons Learned</Label>
+                <Label>{t('f4.preview.financials.lessons_learned')}</Label>
                 <Input value={summaryDraft?.lessons ?? ''} onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), lessons: e.target.value }))} />
               </div>
               <div className="col-span-2">
-                <Label>Training Needs</Label>
+                <Label>{t('f4.preview.financials.training_needs')}</Label>
                 <Input value={summaryDraft?.training ?? ''} onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), training: e.target.value }))} />
               </div>
             </div>
 
             <div className="flex justify-between">
-              <Button variant="outline" onClick={()=>setStep('select')}>Back</Button>
-              <Button onClick={handleSave} disabled={isLoading}>{isLoading ? 'Saving…' : 'Save F4'}</Button>
+              <Button variant="outline" onClick={()=>setStep('select')}>{t('f4.preview.buttons.back')}</Button>
+              <Button onClick={handleSave} disabled={isLoading}>{isLoading ? t('f4.preview.buttons.saving') : t('f4.preview.buttons.save')}</Button>
             </div>
             </TabsContent>
             
