@@ -17,7 +17,7 @@ import ProjectEditor from './ProjectEditor'
 import type { UncommittedF1, GrantCallOption } from '../types'
 
 export default function UncommittedF1sTab() {
-  const { t } = useTranslation(['f2', 'common'])
+  const { t, i18n } = useTranslation(['f2', 'common'])
   const [f1s, setF1s] = useState<UncommittedF1[]>([])
   const [grantCalls, setGrantCalls] = useState<GrantCallOption[]>([])
   const [selectedF1s, setSelectedF1s] = useState<string[]>([])
@@ -233,10 +233,10 @@ export default function UncommittedF1sTab() {
 
       <Card>
         <CardContent className="p-0">
-          <Table>
+          <Table dir={i18n.language === 'ar' ? 'rtl' : 'ltr'}>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-12">
+                <TableHead className="w-12 px-4">
                   <Checkbox
                     checked={selectedF1s.length === f1s.length && f1s.length > 0}
                     onCheckedChange={handleSelectAll}
@@ -256,7 +256,7 @@ export default function UncommittedF1sTab() {
             <TableBody>
               {f1s.map((f1) => (
                 <TableRow key={f1.id}>
-                  <TableCell>
+                  <TableCell className="px-4">
                     <Checkbox
                       checked={selectedF1s.includes(f1.id)}
                       disabled={!f1.approval_file_key}

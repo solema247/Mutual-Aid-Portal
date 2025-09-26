@@ -16,7 +16,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 
 export default function CommittedF1sTab() {
-  const { t } = useTranslation(['f2', 'common'])
+  const { t, i18n } = useTranslation(['f2', 'common'])
   const [f1s, setF1s] = useState<CommittedF1[]>([])
   const [filterOptions, setFilterOptions] = useState<FilterOptions>({
     grantCalls: [],
@@ -304,10 +304,10 @@ export default function CommittedF1sTab() {
       {/* Results Table */}
       <Card>
         <CardContent className="p-0">
-          <Table>
+          <Table dir={i18n.language === 'ar' ? 'rtl' : 'ltr'}>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-12">
+                <TableHead className="w-12 px-4">
                   <Checkbox checked={selected.length > 0 && selected.length === f1s.filter(f => !f.mou_id).length} onCheckedChange={toggleAll} />
                 </TableHead>
                 <TableHead>{t('f2:err_id')}</TableHead>
@@ -326,7 +326,7 @@ export default function CommittedF1sTab() {
             <TableBody>
               {f1s.map((f1) => (
                 <TableRow key={f1.id}>
-                  <TableCell>
+                  <TableCell className="px-4">
                     <Checkbox disabled={!!f1.mou_id} checked={selected.includes(f1.id)} onCheckedChange={(c) => toggleOne(f1.id, c as boolean)} />
                   </TableCell>
                   <TableCell>
@@ -347,12 +347,12 @@ export default function CommittedF1sTab() {
                   </TableCell>
                   <TableCell>
                     <Badge variant="default">
-                      {f1.funding_status}
+                      {t(`f2:${f1.funding_status}`)}
                     </Badge>
                   </TableCell>
                   <TableCell>
                     {f1.mou_id ? (
-                      <a className="text-primary underline" href="/err-portal/f3-mous">View MOU</a>
+                      <a className="text-primary underline" href="/err-portal/f3-mous">{t('f2:view_mou')}</a>
                     ) : '-'}
                   </TableCell>
                 </TableRow>

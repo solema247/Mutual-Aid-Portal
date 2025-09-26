@@ -98,5 +98,8 @@
   "clear_filters": "Clear Filters",
   "committed_header": "Committed F1s ({{count}})",
   "committed_desc": "View and filter committed F1s by grant call, donor, cycle, and state",
-  "no_committed": "No committed F1s found matching the current filters"
+  "no_committed": "No committed F1s found matching the current filters",
+  "view_mou": "View MOU",
+  "committed": "Committed",
+  "allocated": "Allocated"
 }
