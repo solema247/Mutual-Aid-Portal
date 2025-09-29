@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server'
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
 import { supabase } from '@/lib/supabaseClient'
 
 // GET /api/pool/summary - Overall pool across cycles
@@ -60,7 +62,7 @@ export async function GET() {
       remaining,
       total_grants,
       total_not_included
-    })
+    }, { headers: { 'Cache-Control': 'no-store' } })
   } catch (error) {
     console.error('Pool summary error:', error)
     return NextResponse.json({ error: 'Failed to compute pool summary' }, { status: 500 })

@@ -29,7 +29,7 @@ export default function GrantManagementPage() {
       try {
         setLoading(true)
         // Pool summary
-        const pool = await fetch('/api/pool/summary').then(r => r.json())
+        const pool = await fetch('/api/pool/summary', { cache: 'no-store' }).then(r => r.json())
         setSummary(pool)
         // F1 counts
         const [
