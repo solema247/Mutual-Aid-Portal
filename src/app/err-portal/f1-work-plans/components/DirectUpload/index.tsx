@@ -194,7 +194,7 @@ export default function DirectUpload() {
 
     } catch (error) {
       console.error('Error processing form:', error)
-      alert('Error processing form. Please try again.')
+      alert('Upload failed. Please try again in a minute.')
       setIsLoading(false)
     }
   }
@@ -381,7 +381,7 @@ export default function DirectUpload() {
       setIsReviewing(false)
     } catch (e: any) {
       console.error('Finalize error:', e)
-      alert(e?.message || 'Failed to finalize upload')
+      alert('Upload failed. Please try again in a minute.')
     } finally {
       setIsLoading(false)
     }
