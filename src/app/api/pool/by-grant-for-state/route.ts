@@ -63,28 +63,13 @@ export async function GET(request: Request) {
     }
 
     // State remaining overall
-    // Filter state cap to current open tranche per cycle for the given state
-    const { data: tranches } = await supabase
-      .from('cycle_tranches')
-      .select('cycle_id, tranche_no, status')
-    const currentOpenByCycle = new Map<string, number>()
-    for (const t of tranches || []) {
-      const any = currentOpenByCycle.get((t as any).cycle_id)
-      if ((t as any).status === 'open') {
-        const no = (t as any).tranche_no as number
-        currentOpenByCycle.set((t as any).cycle_id, any ? Math.min(any, no) : no)
-      }
-    }
+    // State cap across all tranches
     const { data: allocs, error: allocErr } = await supabase
       .from('cycle_state_allocations')
-      .select('state_name, amount, cycle_id, decision_no')
+      .select('state_name, amount')
     if (allocErr) throw allocErr
     const stateCap = (allocs || [])
       .filter(a => a.state_name === state)
-      .filter((r: any) => {
-        const openNo = currentOpenByCycle.get(r.cycle_id)
-        return openNo ? (r.decision_no === openNo) : true
-      })
       .reduce((s, a: any) => s + (a.amount || 0), 0)
 
     const committedState = sumExpenses((usage || []).filter(u => u.state === state && u.funding_status === 'committed'))
