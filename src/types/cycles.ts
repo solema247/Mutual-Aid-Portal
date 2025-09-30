@@ -8,6 +8,11 @@ export interface FundingCycle {
   end_date: string | null;
   created_at: string;
   created_by: string | null;
+  // New tranche-capable fields
+  type?: 'one_off' | 'tranches' | 'emergency';
+  tranche_count?: number | null;
+  pool_amount?: number;
+  tranche_splits?: number[] | null;
 }
 
 export interface CycleGrantInclusion {
@@ -61,6 +66,11 @@ export interface CycleCreationData {
   name: string;
   start_date?: string;
   end_date?: string;
+  // New fields for tranche cycles
+  type?: 'one_off' | 'tranches' | 'emergency';
+  tranche_count?: number;
+  pool_amount?: number;
+  tranche_splits?: number[];
   grant_inclusions: {
     grant_call_id: string;
     amount_included: number;

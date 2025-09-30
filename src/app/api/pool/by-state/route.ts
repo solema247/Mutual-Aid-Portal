@@ -5,15 +5,34 @@ import { supabase } from '@/lib/supabaseClient'
 export async function GET() {
   try {
     // Caps: sum allocations by state across cycles
+    // Determine current open tranche per cycle
+    const { data: tranches } = await supabase
+      .from('cycle_tranches')
+      .select('cycle_id, tranche_no, status')
+
+    const currentOpenByCycle = new Map<string, number>()
+    for (const t of tranches || []) {
+      const any = currentOpenByCycle.get((t as any).cycle_id)
+      if ((t as any).status === 'open') {
+        const no = (t as any).tranche_no as number
+        currentOpenByCycle.set((t as any).cycle_id, any ? Math.min(any, no) : no)
+      }
+    }
+
+    // Sum allocations by state for current open tranches only (fallback to all if none tracked)
     const { data: allocs, error: allocErr } = await supabase
       .from('cycle_state_allocations')
-      .select('state_name, amount')
+      .select('state_name, amount, cycle_id, decision_no')
 
     if (allocErr) throw allocErr
 
     const capByState = new Map<string, number>()
     for (const a of allocs || []) {
-      capByState.set(a.state_name, (capByState.get(a.state_name) || 0) + (a.amount || 0))
+      const row: any = a
+      const openNo = currentOpenByCycle.get(row.cycle_id)
+      const include = openNo ? (row.decision_no === openNo) : true
+      if (!include) continue
+      capByState.set(row.state_name, (capByState.get(row.state_name) || 0) + (row.amount || 0))
     }
 
     // Usage from err_projects with CSA link; fallback by state if CSA missing

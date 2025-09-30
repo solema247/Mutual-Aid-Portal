@@ -65,6 +65,7 @@ export default function CycleManager() {
   const [selectedCycle, setSelectedCycle] = useState<FundingCycle | null>(null)
   const [budgetSummary, setBudgetSummary] = useState<CycleBudgetSummary | null>(null)
   const [isRefreshingBudget, setIsRefreshingBudget] = useState(false)
+  const [allocRefreshToken, setAllocRefreshToken] = useState(0)
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
@@ -117,6 +118,11 @@ export default function CycleManager() {
     } finally {
       setIsRefreshingBudget(false)
     }
+  }
+
+  const handleGrantsChanged = async () => {
+    await handleRefreshBudget()
+    setAllocRefreshToken((t) => t + 1)
   }
 
   const handleCycleSelect = (cycle: FundingCycle) => {
@@ -423,7 +429,7 @@ export default function CycleManager() {
           <CardContent className="pt-6">
             <GrantPoolSelector 
               cycleId={selectedCycle.id} 
-              onGrantsChanged={handleRefreshBudget}
+              onGrantsChanged={handleGrantsChanged}
             />
           </CardContent>
         </Card>
@@ -435,6 +441,8 @@ export default function CycleManager() {
           <CardContent className="pt-6">
             <StateAllocationManager 
               cycleId={selectedCycle.id} 
+              cycle={selectedCycle}
+              refreshToken={allocRefreshToken}
               onAllocationsChanged={handleRefreshBudget}
             />
           </CardContent>

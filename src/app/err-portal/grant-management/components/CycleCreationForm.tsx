@@ -28,9 +28,11 @@ import { Card, CardContent } from '@/components/ui/card'
 
 const formSchema = z.object({
   year: z.number().min(2020, "Year must be at least 2020"),
-  month: z.number().min(1).max(12, "Month must be between 1 and 12"),
-  week: z.number().min(1).max(5, "Week must be between 1 and 5"),
+  start_date: z.string().nullable().optional(),
+  end_date: z.string().nullable().optional(),
   name: z.string().min(1, "Cycle name is required"),
+  type: z.enum(['one_off','tranches','emergency']).default('one_off'),
+  tranche_count: z.number().min(1).optional(),
 })
 
 type FormData = z.infer<typeof formSchema>
@@ -44,14 +46,18 @@ export default function CycleCreationForm({ onSuccess }: CycleCreationFormProps)
   const [isLoading, setIsLoading] = useState(false)
   const [nextCycleNumber, setNextCycleNumber] = useState(1)
   const [lastCycleName, setLastCycleName] = useState('')
+  const [startDisplay, setStartDisplay] = useState('')
+  const [endDisplay, setEndDisplay] = useState('')
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       year: new Date().getFullYear(),
-      month: new Date().getMonth() + 1,
-      week: 1,
+      start_date: null,
+      end_date: null,
       name: '',
+      type: 'one_off',
+      tranche_count: undefined,
     },
   })
 
@@ -84,61 +90,21 @@ export default function CycleCreationForm({ onSuccess }: CycleCreationFormProps)
     fetchCycleInfo()
   }, [form])
 
-  // Reset week when year or month changes to ensure valid selection
-  useEffect(() => {
-    const subscription = form.watch((value, { name }) => {
-      if (name === 'year' || name === 'month') {
-        // Reset week to 1 when year or month changes
-        form.setValue('week', 1)
-      }
-    })
-    return () => subscription.unsubscribe()
-  }, [form])
-
-  // Get weeks for the selected month and year
-  const getWeeksForMonth = (year: number, month: number) => {
-    const firstDay = new Date(year, month - 1, 1)
-    const lastDay = new Date(year, month, 0)
-    
-    const weeks = []
-    for (let week = 1; week <= 5; week++) {
-      const weekStart = new Date(year, month - 1, (week - 1) * 7 + 1)
-      const weekEnd = new Date(year, month - 1, Math.min(week * 7, lastDay.getDate()))
-      
-      // Only include weeks that actually exist in this month
-      if (weekStart <= lastDay) {
-        const monthName = weekStart.toLocaleString('default', { month: 'short' })
-        weeks.push({
-          weekNumber: week,
-          startDate: weekStart,
-          endDate: weekEnd,
-          label: `${weekStart.getDate()}-${weekEnd.getDate()} ${monthName}`
-        })
-      }
-    }
-    
-    return weeks
-  }
+  // No weekly logic needed anymore
 
   const onSubmit = async (values: FormData) => {
     try {
       setIsLoading(true)
-
-      // Calculate start and end dates from week selection
-      const weeks = getWeeksForMonth(values.year, values.month)
-      const selectedWeek = weeks.find(w => w.weekNumber === values.week)
-      
-      if (!selectedWeek) {
-        throw new Error('Invalid week selection')
-      }
 
       // Prepare data with auto-generated values
       const cycleData = {
         cycle_number: nextCycleNumber,
         year: values.year,
         name: values.name,
-        start_date: selectedWeek.startDate.toISOString().split('T')[0],
-        end_date: selectedWeek.endDate.toISOString().split('T')[0],
+        start_date: values.start_date || null,
+        end_date: values.end_date || null,
+        type: values.type,
+        tranche_count: values.type === 'tranches' ? values.tranche_count : null,
       }
 
       const response = await fetch('/api/cycles', {
@@ -163,6 +129,21 @@ export default function CycleCreationForm({ onSuccess }: CycleCreationFormProps)
     }
   }
 
+  const formatDateShort = (iso: string | null | undefined) => {
+    if (!iso) return ''
+    const [y, m, d] = iso.split('-')
+    if (!y || !m || !d) return ''
+    return `${d}/${m}/${y.slice(2)}`
+  }
+
+  useEffect(() => {
+    const subscription = form.watch((value) => {
+      setStartDisplay(formatDateShort(value.start_date as any))
+      setEndDisplay(formatDateShort(value.end_date as any))
+    })
+    return () => subscription.unsubscribe()
+  }, [form])
+
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
@@ -173,19 +154,19 @@ export default function CycleCreationForm({ onSuccess }: CycleCreationFormProps)
           <div className="text-xs text-muted-foreground">{t('err:cycles.create.auto_generated')}</div>
         </div>
 
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-4 gap-4">
           <FormField
             control={form.control}
             name="year"
             render={({ field }) => (
-              <FormItem>
+              <FormItem className="min-w-0">
                 <FormLabel>{t('err:cycles.create.year')}</FormLabel>
                 <Select
                   value={field.value?.toString()}
                   onValueChange={(value) => field.onChange(parseInt(value))}
                 >
                   <FormControl>
-                    <SelectTrigger>
+                    <SelectTrigger className="w-full">
                       <SelectValue placeholder={t('err:cycles.create.select_year')} />
                     </SelectTrigger>
                   </FormControl>
@@ -207,31 +188,33 @@ export default function CycleCreationForm({ onSuccess }: CycleCreationFormProps)
 
           <FormField
             control={form.control}
-            name="month"
+            name="start_date"
             render={({ field }) => (
-              <FormItem>
-                <FormLabel>{t('err:cycles.create.month')}</FormLabel>
-                <Select
-                  value={field.value?.toString()}
-                  onValueChange={(value) => field.onChange(parseInt(value))}
-                >
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder={t('err:cycles.create.select_month')} />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {Array.from({ length: 12 }, (_, i) => {
-                      const month = i + 1
-                      const monthName = new Date(2024, i).toLocaleString('default', { month: 'long' })
-                      return (
-                        <SelectItem key={month} value={month.toString()}>
-                          {monthName} ({month})
-                        </SelectItem>
-                      )
-                    })}
-                  </SelectContent>
-                </Select>
+              <FormItem className="min-w-0">
+                <FormLabel>{t('err:cycles.create.start_date') || 'Start Date'}</FormLabel>
+                <FormControl>
+                  <div className="relative w-full">
+                    <input
+                      type="date"
+                      value={field.value ?? ''}
+                      onChange={(e) => {
+                        const v = e.target.value || null
+                        field.onChange(v)
+                        setStartDisplay(formatDateShort(v))
+                      }}
+                      className="absolute inset-0 opacity-0 cursor-pointer"
+                      aria-label="Hidden date picker"
+                    />
+                    <Input
+                      type="text"
+                      readOnly
+                      value={startDisplay}
+                      placeholder="dd/mm/yy"
+                      className="w-full pr-10"
+                    />
+                    <Calendar className="h-4 w-4 absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+                  </div>
+                </FormControl>
                 <FormMessage />
               </FormItem>
             )}
@@ -239,43 +222,63 @@ export default function CycleCreationForm({ onSuccess }: CycleCreationFormProps)
 
           <FormField
             control={form.control}
-            name="week"
-            render={({ field }) => {
-              const selectedYear = form.getValues('year')
-              const selectedMonth = form.getValues('month')
-              const availableWeeks = (selectedYear && selectedMonth) 
-                ? getWeeksForMonth(selectedYear, selectedMonth) 
-                : []
-              
-              return (
-                <FormItem>
-                <FormLabel>{t('err:cycles.create.week')}</FormLabel>
-                  <Select
-                    value={field.value?.toString()}
-                    onValueChange={(value) => field.onChange(parseInt(value))}
-                    disabled={!selectedYear || !selectedMonth}
-                  >
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder={
-                          !selectedYear ? t('err:cycles.create.select_year_first') : 
-                          !selectedMonth ? t('err:cycles.create.select_month_first') : 
-                          t('err:cycles.create.select_week')
-                        } />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {availableWeeks.map((week) => (
-                        <SelectItem key={week.weekNumber} value={week.weekNumber.toString()}>
-                          {week.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-            <FormMessage />
-                </FormItem>
-              )
-            }}
+            name="end_date"
+            render={({ field }) => (
+              <FormItem className="min-w-0">
+                <FormLabel>{t('err:cycles.create.end_date_optional') || 'End Date (optional)'}</FormLabel>
+                <FormControl>
+                  <div className="relative w-full">
+                    <input
+                      type="date"
+                      value={field.value ?? ''}
+                      onChange={(e) => {
+                        const v = e.target.value || null
+                        field.onChange(v)
+                        setEndDisplay(formatDateShort(v))
+                      }}
+                      className="absolute inset-0 opacity-0 cursor-pointer"
+                      aria-label="Hidden date picker"
+                    />
+                    <Input
+                      type="text"
+                      readOnly
+                      value={endDisplay}
+                      placeholder="dd/mm/yy"
+                      className="w-full pr-10"
+                    />
+                    <Calendar className="h-4 w-4 absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+                  </div>
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          {/* Cycle Type moved into this row */}
+          <FormField
+            control={form.control}
+            name="type"
+            render={({ field }) => (
+              <FormItem className="min-w-0">
+                <FormLabel>Cycle Type</FormLabel>
+                <Select
+                  value={field.value}
+                  onValueChange={(value) => field.onChange(value as 'one_off' | 'tranches' | 'emergency')}
+                >
+                  <FormControl>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select type" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    <SelectItem value="one_off">One-off</SelectItem>
+                    <SelectItem value="tranches">Tranches</SelectItem>
+                    <SelectItem value="emergency">Emergency</SelectItem>
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )}
           />
         </div>
 
@@ -286,20 +289,42 @@ export default function CycleCreationForm({ onSuccess }: CycleCreationFormProps)
             <FormItem>
               <FormLabel>{t('err:cycles.create.cycle_name')}</FormLabel>
               <FormControl>
-                <Input 
-                  placeholder={t('err:cycles.create.cycle_name_placeholder') as string} 
-                  {...field} 
-                />
+                <Input {...field} />
               </FormControl>
               <FormMessage />
-              {lastCycleName && (
-                <div className="text-xs text-muted-foreground">
-                  {t('err:cycles.create.last_cycle_named', { name: lastCycleName })}
-                </div>
-              )}
+              {/* Removed WKxx naming tip */}
             </FormItem>
           )}
         />
+
+        {/* Tranche fields */}
+        <div className="grid grid-cols-3 gap-4">
+          
+
+          {form.watch('type') === 'tranches' && (
+            <FormField
+              control={form.control}
+              name="tranche_count"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Number of Tranches</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="number"
+                      min={1}
+                      value={field.value ?? ''}
+                      onChange={(e) => field.onChange(e.target.value ? parseInt(e.target.value) : undefined)}
+                      placeholder="e.g. 3"
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          )}
+
+          {/* Pool amount removed; pool derived from grant inclusions after creation */}
+        </div>
 
 
         <div className="flex justify-end gap-3 pt-4">

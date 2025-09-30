@@ -53,13 +53,16 @@ export async function PUT(
 ) {
   try {
     const body = await request.json()
-    const { name, start_date, end_date, status } = body
+    const { name, start_date, end_date, status, type, tranche_count, tranche_splits } = body
 
     const updateData: any = {}
     if (name !== undefined) updateData.name = name
     if (start_date !== undefined) updateData.start_date = start_date
     if (end_date !== undefined) updateData.end_date = end_date
     if (status !== undefined) updateData.status = status
+    if (type !== undefined) updateData.type = type
+    if (tranche_count !== undefined) updateData.tranche_count = tranche_count
+    if (tranche_splits !== undefined) updateData.tranche_splits = tranche_splits
 
     const { data, error } = await supabase
       .from('funding_cycles')

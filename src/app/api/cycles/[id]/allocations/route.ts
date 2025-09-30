@@ -79,7 +79,18 @@ export async function POST(
       return NextResponse.json({ error: 'Invalid allocations data' }, { status: 400 })
     }
 
-    // Get the latest decision number for this cycle
+    // Load tranche caps from cycle_tranches (preferred) or fallback to cycle.tranche_splits
+    const { data: tranches, error: tranchesErr } = await supabase
+      .from('cycle_tranches')
+      .select('tranche_no, planned_cap, status')
+      .eq('cycle_id', params.id)
+      .order('tranche_no', { ascending: true })
+    if (tranchesErr) throw tranchesErr
+
+    // Build caps array from cycle_tranches
+    const trancheSplits: number[] = (tranches || []).map(t => Number(t.planned_cap) || 0)
+
+    // Get existing allocations grouped by decision_no
     const { data: maxDecision, error: decisionError } = await supabase
       .from('cycle_state_allocations')
       .select('decision_no')
@@ -89,14 +100,58 @@ export async function POST(
 
     if (decisionError) throw decisionError
 
-    const nextDecisionNo = (maxDecision?.[0]?.decision_no ?? 0) + 1
+    // Use the lowest open tranche from cycle_tranches if available
+    let activeDecision = 1
+    const open = (tranches || []).filter(t => t.status === 'open').map(t => t.tranche_no)
+    if (open.length > 0) {
+      activeDecision = Math.min(...open)
+    } else {
+      const latestDecision = maxDecision?.[0]?.decision_no ?? 0
+      activeDecision = Math.max(1, latestDecision === 0 ? 1 : latestDecision)
+    }
+
+    // Enforce cap if a split is defined for this tranche
+    if (trancheSplits.length >= activeDecision) {
+      // Per-tranche caps
+      const perTrancheCaps = trancheSplits
+      const cumulativeCapUpToActive = perTrancheCaps
+        .slice(0, activeDecision)
+        .reduce((s: number, n: number) => s + (Number(n) || 0), 0)
+
+      // Sum allocations in all previous tranches
+      const { data: prevAllocs, error: prevErr } = await supabase
+        .from('cycle_state_allocations')
+        .select('amount, decision_no')
+        .eq('cycle_id', params.id)
+        .lt('decision_no', activeDecision)
+      if (prevErr) throw prevErr
+      const allocatedBefore = (prevAllocs || []).reduce((s: number, r: any) => s + (Number(r.amount) || 0), 0)
+
+      // Effective available for the active tranche = cumulative caps - allocations before
+      const effectiveAvailableForActive = Math.max(0, cumulativeCapUpToActive - allocatedBefore)
+
+      // Existing allocations in the active tranche
+      const { data: existingInTranche, error: sumErr } = await supabase
+        .from('cycle_state_allocations')
+        .select('amount, decision_no')
+        .eq('cycle_id', params.id)
+        .eq('decision_no', activeDecision)
+      if (sumErr) throw sumErr
+      const already = (existingInTranche || []).reduce((s: number, r: any) => s + (Number(r.amount) || 0), 0)
+
+      const toAdd = (allocations || []).reduce((s: number, r: any) => s + (Number(r.amount) || 0), 0)
+
+      if (already + toAdd > effectiveAvailableForActive + 1e-6) {
+        return NextResponse.json({ error: 'Allocation exceeds available cap for this tranche' }, { status: 400 })
+      }
+    }
 
     // Prepare allocations data
     const allocationsData = allocations.map((allocation: any) => ({
       cycle_id: params.id,
       state_name: allocation.state_name,
       amount: allocation.amount,
-      decision_no: nextDecisionNo
+      decision_no: activeDecision
     }))
 
     const { data, error } = await supabase

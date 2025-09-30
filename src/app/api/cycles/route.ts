@@ -60,7 +60,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const body = await request.json()
-    const { cycle_number, year, name, start_date, end_date, grant_inclusions } = body
+    const { cycle_number, year, name, start_date, end_date, grant_inclusions, type, tranche_count, pool_amount, tranche_splits } = body
 
     // Validate required fields
     if (!cycle_number || !year || !name) {
@@ -92,7 +92,11 @@ export async function POST(request: Request) {
         name,
         start_date,
         end_date,
-        status: 'open'
+        status: 'open',
+        type,
+        tranche_count,
+        pool_amount,
+        tranche_splits
       })
       .select()
       .single()
