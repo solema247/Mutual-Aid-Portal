@@ -94,6 +94,9 @@ export default function ExtractedDataReview({
   const [existingSerials, setExistingSerials] = useState<string[]>([])
   const [selectedSerial, setSelectedSerial] = useState<string>('new')
   const [nextWorkplanPreview, setNextWorkplanPreview] = useState<string>('')
+  const [fundingCycles, setFundingCycles] = useState<{ id: string; name: string; type: string; available: number; allocationId: string }[]>([])
+  const [selectedFundingCycleId, setSelectedFundingCycleId] = useState<string>('')
+  const [cycleStateAllocationId, setCycleStateAllocationId] = useState<string>('')
 
   // Load pooled state balances
   useEffect(() => {
@@ -129,6 +132,103 @@ export default function ExtractedDataReview({
     }
     loadGrants()
   }, [stateName])
+
+  // Load funding cycles that include the selected grant call
+  useEffect(() => {
+    const loadFundingCycles = async () => {
+      if (!grantCallId) { 
+        setFundingCycles([])
+        setSelectedFundingCycleId('')
+        setCycleStateAllocationId('')
+        return 
+      }
+      try {
+        // Get funding cycles that include this grant call
+        const { data: cycles, error } = await supabase
+          .from('cycle_grant_inclusions')
+          .select(`
+            cycle_id,
+            funding_cycles!inner (
+              id,
+              name,
+              type,
+              status
+            )
+          `)
+          .eq('grant_call_id', grantCallId)
+          .eq('funding_cycles.status', 'open')
+
+        if (error) throw error
+
+        // Get available amounts for each cycle for the selected state
+        const cycleOptions = []
+        for (const cycle of cycles || []) {
+          const cycleData = (cycle as any).funding_cycles
+          if (!cycleData) continue
+
+          // Get state allocation for this cycle and state
+          const { data: allocation, error: allocError } = await supabase
+            .from('cycle_state_allocations')
+            .select('id, amount')
+            .eq('cycle_id', cycleData.id)
+            .eq('state_name', stateName)
+            .single()
+
+          if (allocError || !allocation) continue
+
+          // Get committed and pending amounts for this allocation
+          const { data: projects, error: projError } = await supabase
+            .from('err_projects')
+            .select('expenses, status, funding_status')
+            .eq('cycle_state_allocation_id', allocation.id)
+
+          if (projError) continue
+
+          const committed = (projects || [])
+            .filter((p: any) => p.status === 'approved' && p.funding_status === 'committed')
+            .reduce((sum: number, p: any) => {
+              try {
+                const expenses = typeof p.expenses === 'string' ? JSON.parse(p.expenses) : p.expenses
+                return sum + expenses.reduce((expSum: number, exp: any) => 
+                  expSum + (exp.total_cost || 0), 0)
+              } catch {
+                return sum
+              }
+            }, 0)
+
+          const pending = (projects || [])
+            .filter((p: any) => p.status === 'pending' && p.funding_status === 'allocated')
+            .reduce((sum: number, p: any) => {
+              try {
+                const expenses = typeof p.expenses === 'string' ? JSON.parse(p.expenses) : p.expenses
+                return sum + expenses.reduce((expSum: number, exp: any) => 
+                  expSum + (exp.total_cost || 0), 0)
+              } catch {
+                return sum
+              }
+            }, 0)
+
+          const available = allocation.amount - committed - pending
+
+          if (available > 0) {
+            cycleOptions.push({
+              id: cycleData.id,
+              name: cycleData.name,
+              type: cycleData.type,
+              available: available,
+              allocationId: allocation.id
+            })
+          }
+        }
+
+        setFundingCycles(cycleOptions)
+      } catch (e) {
+        console.error('load funding cycles error', e)
+        setFundingCycles([])
+      }
+    }
+    loadFundingCycles()
+  }, [grantCallId, stateName])
 
   // Load remaining caps and preview parts (donorShort/stateShort)
   useEffect(() => {
@@ -290,6 +390,10 @@ export default function ExtractedDataReview({
       alert('Please select State, Grant Call and enter YYMM')
       return
     }
+    if (!selectedFundingCycleId) {
+      alert('Please select a Funding Cycle')
+      return
+    }
     // Note: remaining per state/grant already filtered; optional extra checks could be added here
     setIsSubmitting(true)
     // Send pooled selections back in the editedData payload (namespaced fields)
@@ -299,11 +403,15 @@ export default function ExtractedDataReview({
       _selected_state_name: stateName,
       _selected_grant_call_id: grantCallId,
       _yymm: yymm,
-      _existing_serial: selectedSerial !== 'new' ? selectedSerial : ''
+      _existing_serial: selectedSerial !== 'new' ? selectedSerial : '',
+      _selected_funding_cycle_id: selectedFundingCycleId,
+      _cycle_state_allocation_id: cycleStateAllocationId
     } as any)
   }
 
-  const availableAmount = Math.min(
+  // Get available amount from selected funding cycle
+  const selectedCycle = fundingCycles.find(c => c.id === selectedFundingCycleId)
+  const availableAmount = selectedCycle ? selectedCycle.available : Math.min(
     stateRemaining || 0,
     grantRemainingForState || 0
   )
@@ -318,7 +426,7 @@ export default function ExtractedDataReview({
       </CardHeader>
       <CardContent className="space-y-6">
         {/* Pooled selections */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
           <div>
             <Label>State (pooled)</Label>
             <Select value={stateName} onValueChange={setStateName}>
@@ -344,6 +452,25 @@ export default function ExtractedDataReview({
                 {grantOptions.map(g => (
                   <SelectItem key={g.grant_call_id} value={g.grant_call_id}>
                     {g.donor_name} — {g.grant_call_name} (Rem: {g.remaining.toLocaleString()})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label>Funding Cycle</Label>
+            <Select value={selectedFundingCycleId} onValueChange={(value) => {
+              setSelectedFundingCycleId(value)
+              const cycle = fundingCycles.find(c => c.id === value)
+              setCycleStateAllocationId(cycle?.allocationId || '')
+            }}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Select Funding Cycle" />
+              </SelectTrigger>
+              <SelectContent>
+                {fundingCycles.map(c => (
+                  <SelectItem key={c.id} value={c.id}>
+                    {c.name} ({c.type}) - {c.available.toLocaleString()}
                   </SelectItem>
                 ))}
               </SelectContent>

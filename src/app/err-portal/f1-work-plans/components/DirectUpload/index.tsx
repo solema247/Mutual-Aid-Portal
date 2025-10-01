@@ -296,7 +296,7 @@ export default function DirectUpload() {
       const selectedRoom = (rooms as any[]).find(r => r.id === formData.emergency_room_id)
 
       // Prepare data for DB
-      const { form_currency, exchange_rate, raw_ocr, _selected_state_name, _selected_grant_call_id, _yymm, _existing_serial, ...dataForDB } = editedData
+      const { form_currency, exchange_rate, raw_ocr, _selected_state_name, _selected_grant_call_id, _yymm, _existing_serial, _selected_funding_cycle_id, _cycle_state_allocation_id, ...dataForDB } = editedData
 
       // Normalize date for DB (MMYY -> YYYY-MM-01)
       let dbDate: string | null = null
@@ -330,8 +330,8 @@ export default function DirectUpload() {
           state: stateName,
           "Sector (Primary)": primaryNames,
           "Sector (Secondary)": secondaryNames,
-          funding_cycle_id: null,
-          cycle_state_allocation_id: null,
+          funding_cycle_id: _selected_funding_cycle_id || null,
+          cycle_state_allocation_id: _cycle_state_allocation_id || null,
           grant_call_id: grantCallId,
           funding_status: 'allocated',
           file_key: filePath
