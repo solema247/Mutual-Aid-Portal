@@ -221,7 +221,11 @@ export default function StateAllocationManager({ cycleId, cycle, refreshToken, o
   }
 
   const filteredAllocations = () => {
-    return allocations.filter(a => a.decision_no === activeTranche)
+    if (cycle?.type === 'tranches') {
+      return allocations.filter(a => a.decision_no === activeTranche)
+    }
+    // For non-tranche cycles, show all allocations
+    return allocations
   }
 
   const getAllAllocations = () => {
@@ -684,7 +688,7 @@ export default function StateAllocationManager({ cycleId, cycle, refreshToken, o
         </Card>
       )}
 
-      {/* Tranche Tabs */}
+      {/* Tranche Tabs - Only show for tranche cycles */}
       {cycle?.type === 'tranches' && (
         <div className="space-y-3">
           <div className="space-y-3">
@@ -800,7 +804,32 @@ export default function StateAllocationManager({ cycleId, cycle, refreshToken, o
               </Button>
             )}
           </div>
-      </div>
+        </div>
+      )}
+
+      {/* Add State Button for non-tranche cycles */}
+      {cycle?.type !== 'tranches' && (
+        <div className="flex items-center gap-2">
+          <Button
+            onClick={handleAddState}
+            variant="outline"
+            size="sm"
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            {t('err:cycles.alloc.add_state')}
+          </Button>
+          {newAllocations.length > 0 && (
+            <Button
+              onClick={handleSaveAllocations}
+              disabled={isSubmitting}
+              className="bg-[#007229] hover:bg-[#007229]/90 text-white"
+              size="sm"
+            >
+              <Save className="h-4 w-4 mr-2" />
+              {isSubmitting ? t('err:cycles.alloc.saving') : t('err:cycles.alloc.save_changes')}
+            </Button>
+          )}
+        </div>
       )}
 
       {/* Tranche Status */}
@@ -960,7 +989,7 @@ export default function StateAllocationManager({ cycleId, cycle, refreshToken, o
                     <TableRow key={allocation.id}>
                       <TableCell className="font-medium">{allocation.state_name}</TableCell>
                       <TableCell className="text-right">
-                        {editingAllocation === allocation.id && trancheStatuses[activeTranche] === 'open' ? (
+                        {editingAllocation === allocation.id && ((cycle?.type === 'tranches' && trancheStatuses[activeTranche] === 'open') || cycle?.type !== 'tranches') ? (
                           <Input
                             type="text"
                             value={editAmount}
@@ -990,7 +1019,7 @@ export default function StateAllocationManager({ cycleId, cycle, refreshToken, o
                         {formatCurrency(allocation.remaining || 0)}
                       </TableCell>
                       <TableCell>
-                        {trancheStatuses[activeTranche] === 'open' && (
+                        {((cycle?.type === 'tranches' && trancheStatuses[activeTranche] === 'open') || cycle?.type !== 'tranches') && (
                         <div className="flex items-center gap-1">
                           {editingAllocation === allocation.id ? (
                             <>
