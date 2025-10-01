@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Plus, Save, Trash2, MapPin, Pencil, X } from 'lucide-react'
+import { Plus, Save, Trash2, MapPin, Pencil, X, ChevronDown, ChevronUp } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 import {
@@ -289,12 +289,18 @@ export default function StateAllocationManager({ cycleId, cycle, refreshToken, o
       // initialize statuses and active tranche
       const statuses: {[key: number]: 'open' | 'closed'} = {}
       let currentOpen = 1
+      const openTranches: number[] = []
+      
       for (const t of normalized) {
         statuses[t.tranche_no] = t.status
         if (t.status === 'open') {
-          currentOpen = Math.min(currentOpen, t.tranche_no)
+          openTranches.push(t.tranche_no)
         }
       }
+      
+      // Set currentOpen to the highest open tranche, or 1 if none are open
+      currentOpen = openTranches.length > 0 ? Math.max(...openTranches) : 1
+      
       setTrancheStatuses(statuses)
       setActiveTranche(currentOpen)
     } catch (e) {
@@ -360,29 +366,94 @@ export default function StateAllocationManager({ cycleId, cycle, refreshToken, o
     try {
       setIsSavingSplits(true)
       
-      // Calculate remaining pool not yet planned in existing tranches
-      const totalPlanned = (tranches && tranches.length > 0)
-        ? tranches.reduce((sum, t) => sum + (Number(t.planned_cap) || 0), 0)
-        : trancheSplits.reduce((sum, n) => sum + (Number(n) || 0), 0)
-      const remainingBalance = Math.max(0, cyclePoolAmount - totalPlanned)
+      // Calculate total actually allocated across all tranches
+      const totalAllocated = allocations.reduce((sum, alloc) => sum + alloc.amount, 0)
+      const remainingBalance = Math.max(0, cyclePoolAmount - totalAllocated)
       
       if (remainingBalance <= 0) {
         alert('No remaining balance available to create a new tranche')
         return
       }
       
-      // Add new tranche with remaining unplanned pool
+      // Check if current tranche is fully allocated
+      const currentTrancheAllocated = getTrancheTotal(activeTranche)
+      const currentTranchePlanned = trancheSplits[activeTranche - 1] || 0
+      const isCurrentTrancheFullyAllocated = currentTrancheAllocated >= currentTranchePlanned
+      
       const newTrancheNo = (tranches && tranches.length > 0)
         ? Math.max(...tranches.map(t => t.tranche_no)) + 1
         : trancheCount + 1
-      const response = await fetch(`/api/cycles/${cycleId}/tranches`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tranche_no: newTrancheNo, planned_cap: remainingBalance, status: 'closed' })
-      })
-      if (!response.ok) throw new Error('Failed to add new tranche')
-      await loadTranches()
-      alert(`Tranche ${newTrancheNo} added with ${formatCurrency(remainingBalance)}`)
+      
+      if (isCurrentTrancheFullyAllocated) {
+        // If current tranche is fully allocated, close it and create new tranche with full remaining balance
+        await fetch(`/api/cycles/${cycleId}/tranches`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tranche_no: activeTranche, status: 'closed' })
+        })
+        
+        // Create new tranche with full remaining balance and open it
+        const response = await fetch(`/api/cycles/${cycleId}/tranches`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tranche_no: newTrancheNo, planned_cap: remainingBalance, status: 'open' })
+        })
+        if (!response.ok) throw new Error('Failed to add new tranche')
+        
+        // Update funding_cycles table with new tranche count and splits
+        const newTrancheSplits = [...trancheSplits]
+        newTrancheSplits.push(remainingBalance)
+        
+        await fetch(`/api/cycles/${cycleId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            tranche_count: newTrancheSplits.length, 
+            tranche_splits: newTrancheSplits 
+          })
+        })
+        
+        await loadTranches()
+        // Don't set activeTranche here - let loadTranches() determine the correct active tranche
+        alert(`Tranche ${activeTranche} closed. Tranche ${newTrancheNo} opened with ${formatCurrency(remainingBalance)}.`)
+      } else {
+        // If current tranche is not fully allocated, split remaining balance
+        const splitAmount = Math.floor(remainingBalance / 2)
+        const newTrancheAmount = remainingBalance - splitAmount
+        
+        // Update current tranche's planned cap to include the split amount
+        const updatedCurrentTrancheCap = currentTranchePlanned + splitAmount
+        await fetch(`/api/cycles/${cycleId}/tranches`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tranche_no: activeTranche, planned_cap: updatedCurrentTrancheCap })
+        })
+        
+        // Add new tranche with the remaining split amount
+        const response = await fetch(`/api/cycles/${cycleId}/tranches`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tranche_no: newTrancheNo, planned_cap: newTrancheAmount, status: 'closed' })
+        })
+        if (!response.ok) throw new Error('Failed to add new tranche')
+        
+        // Update funding_cycles table with new tranche count and splits
+        const newTrancheSplits = [...trancheSplits]
+        newTrancheSplits[activeTranche - 1] = updatedCurrentTrancheCap
+        newTrancheSplits.push(newTrancheAmount)
+        
+        await fetch(`/api/cycles/${cycleId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            tranche_count: newTrancheSplits.length, 
+            tranche_splits: newTrancheSplits 
+          })
+        })
+        
+        await loadTranches()
+        alert(`Tranche ${newTrancheNo} added with ${formatCurrency(newTrancheAmount)}. Current tranche updated to ${formatCurrency(updatedCurrentTrancheCap)}.`)
+      }
     } catch (error) {
       console.error('Error adding new tranche:', error)
       alert('Failed to add new tranche')
@@ -393,18 +464,12 @@ export default function StateAllocationManager({ cycleId, cycle, refreshToken, o
 
   // Tranche status tracking
   const [trancheStatuses, setTrancheStatuses] = useState<{[key: number]: 'open' | 'closed'}>({})
+  
+  // Tranche allocation tool collapse state
+  const [isTrancheAllocationExpanded, setIsTrancheAllocationExpanded] = useState(true)
 
-  // Initialize tranche statuses
-  useEffect(() => {
-    if (cycle?.type === 'tranches' && trancheCount > 0) {
-      const statuses: {[key: number]: 'open' | 'closed'} = {}
-      // First tranche is always open, others start as closed
-      for (let i = 1; i <= trancheCount; i++) {
-        statuses[i] = i === 1 ? 'open' : 'closed'
-      }
-      setTrancheStatuses(statuses)
-    }
-  }, [cycle?.type, trancheCount])
+  // Note: Tranche statuses are now loaded from API in loadTranches() function
+  // No need to initialize with default values as they override API data
 
   // Tranche completion logic
   const getCurrentTrancheStatus = () => {
@@ -534,20 +599,35 @@ export default function StateAllocationManager({ cycleId, cycle, refreshToken, o
       {cycle?.type === 'tranches' && cyclePoolAmount > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Tranche Allocation</CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base">{t('err:cycles.alloc.tranche_allocation.title')}</CardTitle>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setIsTrancheAllocationExpanded(!isTrancheAllocationExpanded)}
+                className="h-8 w-8 p-0"
+              >
+                {isTrancheAllocationExpanded ? (
+                  <ChevronUp className="h-4 w-4" />
+                ) : (
+                  <ChevronDown className="h-4 w-4" />
+                )}
+              </Button>
+            </div>
           </CardHeader>
-          <CardContent className="space-y-4">
+          {isTrancheAllocationExpanded && (
+            <CardContent className="space-y-4">
             <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
-              <span className="font-medium">Total Pool Amount:</span>
+              <span className="font-medium">{t('err:cycles.alloc.tranche_allocation.total_pool_amount')}:</span>
               <span className="text-lg font-bold">{formatCurrency(cyclePoolAmount)}</span>
             </div>
             
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <span className="text-sm font-medium">Split across {trancheCount} tranches:</span>
+                <span className="text-sm font-medium">{t('err:cycles.alloc.tranche_allocation.split_across_tranches', { count: trancheCount })}:</span>
                 <div className="flex gap-2">
                   <Button variant="outline" size="sm" onClick={handleEqualSplit}>
-                    Equal Split
+                    {t('err:cycles.alloc.tranche_allocation.equal_split')}
                   </Button>
                   <Button 
                     size="sm" 
@@ -555,38 +635,52 @@ export default function StateAllocationManager({ cycleId, cycle, refreshToken, o
                     onClick={saveTrancheSplits} 
                     disabled={isSavingSplits}
                   >
-                    {isSavingSplits ? 'Saving...' : 'Save'}
+                    {isSavingSplits ? t('err:cycles.alloc.saving') : t('err:cycles.alloc.tranche_allocation.save')}
                   </Button>
                 </div>
               </div>
               
               <div className="max-h-64 overflow-y-auto border rounded-lg bg-white">
                 <div className="grid grid-cols-1 gap-1 p-2">
-                  {Array.from({ length: trancheCount }, (_, i) => i + 1).map(trancheNum => (
-                    <div key={trancheNum} className="flex items-center justify-between p-2 hover:bg-gray-50 rounded">
-                      <div className="text-sm font-medium min-w-[80px]">Tranche {trancheNum}</div>
-                      <div className="flex items-center gap-2">
-                        <Input
-                          type="number"
-                          value={trancheSplits[trancheNum - 1] || 0}
-                          onChange={(e) => {
-                            const value = parseFloat(e.target.value || '0')
-                            setTrancheSplits(prev => {
-                              const newSplits = [...prev]
-                              newSplits[trancheNum - 1] = value
-                              return newSplits
-                            })
-                          }}
-                          className="w-24 text-right text-sm"
-                        />
-                        <span className="text-xs text-muted-foreground">USD</span>
+                  {Array.from({ length: trancheCount }, (_, i) => i + 1).map(trancheNum => {
+                    const actualAllocated = getTrancheTotal(trancheNum)
+                    const plannedCap = trancheSplits[trancheNum - 1] || 0
+                    const isOverAllocated = actualAllocated > plannedCap
+                    const isUnderAllocated = actualAllocated < plannedCap
+                    
+                    return (
+                      <div key={trancheNum} className="flex items-center justify-between p-2 hover:bg-gray-50 rounded">
+                        <div className="text-sm font-medium min-w-[80px]">{t('err:cycles.alloc.tranche_allocation.tranche')} {trancheNum}</div>
+                        <div className="flex items-center gap-2">
+                          <div className="text-right">
+                            <div className="text-xs text-muted-foreground">{t('err:cycles.alloc.tranche_allocation.planned')}: {formatCurrency(plannedCap)}</div>
+                            <div className={`text-sm font-medium ${isOverAllocated ? 'text-red-600' : isUnderAllocated ? 'text-orange-600' : 'text-green-600'}`}>
+                              {t('err:cycles.alloc.tranche_allocation.actual')}: {formatCurrency(actualAllocated)}
+                            </div>
+                          </div>
+                          <Input
+                            type="number"
+                            value={trancheSplits[trancheNum - 1] || 0}
+                            onChange={(e) => {
+                              const value = parseFloat(e.target.value || '0')
+                              setTrancheSplits(prev => {
+                                const newSplits = [...prev]
+                                newSplits[trancheNum - 1] = value
+                                return newSplits
+                              })
+                            }}
+                            className="w-24 text-right text-sm"
+                          />
+                          <span className="text-xs text-muted-foreground">USD</span>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
               </div>
             </div>
-          </CardContent>
+            </CardContent>
+          )}
         </Card>
       )}
 
@@ -596,19 +690,21 @@ export default function StateAllocationManager({ cycleId, cycle, refreshToken, o
           <div className="space-y-3">
             {/* Tranche Navigation */}
             <div className="flex items-center gap-2 p-2 bg-muted rounded-lg">
-              <span className="text-sm font-medium mr-2">Active Tranche:</span>
+              <span className="text-sm font-medium mr-2">{t('err:cycles.alloc.tranche_allocation.active_tranche')}:</span>
               <div className="flex items-center gap-1">
                 {(() => {
-                  // Only show past tranches (closed) and the current open tranche
-                  const closedTranches = Object.entries(trancheStatuses)
-                    .filter(([, status]) => status === 'closed')
+                  // Show all opened tranches (past closed + current open)
+                  const allTranches = Object.entries(trancheStatuses)
                     .map(([k]) => Number(k))
-                  const openTranches = Object.entries(trancheStatuses)
-                    .filter(([, status]) => status === 'open')
-                    .map(([k]) => Number(k))
-                  const currentOpen = openTranches.length > 0 ? Math.min(...openTranches) : 1
-                  const toShow = [...closedTranches.filter(n => n < currentOpen), currentOpen]
                     .sort((a, b) => a - b)
+                  
+                  // Find the highest opened tranche number
+                  const highestOpenedTranche = Math.max(...allTranches.filter(n => 
+                    trancheStatuses[n] === 'open' || trancheStatuses[n] === 'closed'
+                  ))
+                  
+                  // Show all tranches up to the highest opened tranche
+                  const toShow = allTranches.filter(n => n <= highestOpenedTranche)
                   return toShow
                 })().map(trancheNum => {
                   const isOpen = trancheStatuses[trancheNum] === 'open'
@@ -639,13 +735,14 @@ export default function StateAllocationManager({ cycleId, cycle, refreshToken, o
                 </Button>
               )}
               
-              {/* Open next tranche button */}
+              {/* Open next tranche button - only show if current tranche is open */}
               {(() => {
+                const currentTrancheIsOpen = trancheStatuses[activeTranche] === 'open'
                 const nextTranche = activeTranche + 1
                 const nextTrancheExists = nextTranche <= trancheCount
                 const nextTrancheIsClosed = nextTrancheExists && trancheStatuses[nextTranche] === 'closed'
                 
-                if (nextTrancheIsClosed) {
+                if (currentTrancheIsOpen && nextTrancheIsClosed) {
                   return (
                     <Button
                       variant="outline"
@@ -664,17 +761,20 @@ export default function StateAllocationManager({ cycleId, cycle, refreshToken, o
                 variant="outline" 
                 size="sm" 
                 onClick={addNewTranche}
-                disabled={isSavingSplits}
+                disabled={isSavingSplits || (() => {
+                  const totalAllocated = allocations.reduce((sum, alloc) => sum + alloc.amount, 0)
+                  return totalAllocated >= cyclePoolAmount
+                })()}
                 className="ml-2"
               >
                 <Plus className="h-4 w-4 mr-1" />
-                Add Tranche
+                {t('err:cycles.alloc.tranche_allocation.add_tranche')}
               </Button>
             </div>
             
             {/* Tranche Summary */}
             <div className="text-xs text-muted-foreground px-2">
-              Showing Tranche {activeTranche} of {trancheCount} total tranches
+              {t('err:cycles.alloc.tranche_allocation.showing_tranche', { current: activeTranche, total: trancheCount })}
             </div>
           </div>
           
@@ -707,24 +807,24 @@ export default function StateAllocationManager({ cycleId, cycle, refreshToken, o
       {trancheStatus && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Tranche {activeTranche} Status</CardTitle>
+            <CardTitle className="text-base">{t('err:cycles.alloc.tranche_allocation.tranche_status', { num: activeTranche })}</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div className="text-center">
-                <div className="text-sm text-muted-foreground">Cap</div>
+                <div className="text-sm text-muted-foreground">{t('err:cycles.alloc.tranche_allocation.cap')}</div>
                 <div className="text-lg font-bold">{formatCurrency(trancheStatus.cap)}</div>
               </div>
               <div className="text-center">
-                <div className="text-sm text-muted-foreground">Allocated</div>
+                <div className="text-sm text-muted-foreground">{t('err:cycles.alloc.tranche_allocation.allocated')}</div>
                 <div className="text-lg font-bold">{formatCurrency(trancheStatus.allocated)}</div>
               </div>
               <div className="text-center">
-                <div className="text-sm text-muted-foreground">Committed</div>
+                <div className="text-sm text-muted-foreground">{t('err:cycles.alloc.tranche_allocation.committed')}</div>
                 <div className="text-lg font-bold text-green-600">{formatCurrency(trancheStatus.committed)}</div>
               </div>
               <div className="text-center">
-                <div className="text-sm text-muted-foreground">Remaining</div>
+                <div className="text-sm text-muted-foreground">{t('err:cycles.alloc.tranche_allocation.remaining')}</div>
                 <div className={`text-lg font-bold ${trancheStatus.remaining > 0 ? 'text-orange-600' : 'text-green-600'}`}>
                   {formatCurrency(trancheStatus.remaining)}
                 </div>
@@ -750,7 +850,7 @@ export default function StateAllocationManager({ cycleId, cycle, refreshToken, o
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
                   <span className="text-sm font-medium text-blue-800">
-                    {formatCurrency(trancheStatus.remaining)} remaining to allocate
+                    {t('err:cycles.alloc.tranche_allocation.remaining_to_allocate', { amount: formatCurrency(trancheStatus.remaining) })}
                   </span>
                 </div>
               </div>
