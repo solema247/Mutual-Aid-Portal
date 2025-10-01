@@ -46,7 +46,7 @@ interface CycleStateAllocation {
 
 interface StateAllocationManagerProps {
   cycleId: string
-  cycle?: { tranche_count?: number | null }
+  cycle?: { tranche_count?: number | null; type?: 'one_off' | 'tranches' | 'emergency' }
   refreshToken?: number
   onAllocationsChanged?: () => void
 }
@@ -289,7 +289,7 @@ export default function StateAllocationManager({ cycleId, cycle, refreshToken, o
       }))
       normalized.sort((a: any, b: any) => a.tranche_no - b.tranche_no)
       setTranches(normalized)
-      setTrancheSplits(normalized.map(t => t.planned_cap))
+      setTrancheSplits(normalized.map((t: any) => t.planned_cap))
       // initialize statuses and active tranche
       const statuses: {[key: number]: 'open' | 'closed'} = {}
       let currentOpen = 1

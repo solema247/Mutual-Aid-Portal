@@ -31,7 +31,7 @@ const formSchema = z.object({
   start_date: z.string().nullable().optional(),
   end_date: z.string().nullable().optional(),
   name: z.string().min(1, "Cycle name is required"),
-  type: z.enum(['one_off','tranches','emergency']).default('one_off'),
+  type: z.enum(['one_off','tranches','emergency']),
   tranche_count: z.number().min(1).optional(),
 })
 
