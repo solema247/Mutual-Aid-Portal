@@ -67,7 +67,7 @@ export default function ExtractedDataReview({
 }: ExtractedDataReviewProps) {
   const { t } = useTranslation(['common', 'fsystem'])
   const [isSubmitting, setIsSubmitting] = useState(false)
-  // Pooled selections to be made here (State, Grant Call, YYMM)
+  // Pooled selections to be made here (State, Grant Call, MMYY)
   const [pooledStates, setPooledStates] = useState<{ state_name: string; remaining: number }[]>([])
   const [stateName, setStateName] = useState<string>(data.state || '')
   const [grantOptions, setGrantOptions] = useState<{ grant_call_id: string; grant_call_name: string; donor_name: string; remaining: number }[]>([])
@@ -112,80 +112,50 @@ export default function ExtractedDataReview({
     loadStates()
   }, [])
 
-  // Load grants filtered by state
-  useEffect(() => {
-    const loadGrants = async () => {
-      if (!stateName) { setGrantOptions([]); setGrantCallId(''); return }
-      try {
-        const res = await fetch(`/api/pool/by-grant-for-state?state=${encodeURIComponent(stateName)}`)
-        const rows = await res.json()
-        const options = (Array.isArray(rows) ? rows : []).map((r: any) => ({
-          grant_call_id: r.grant_call_id,
-          grant_call_name: r.grant_call_name || r.grant_call_id,
-          donor_name: r.donor_name || '-',
-          remaining: r.remaining_for_state || 0
-        })).filter(o => o.remaining > 0)
-        setGrantOptions(options)
-      } catch (e) {
-        console.error('load grants error', e)
-      }
-    }
-    loadGrants()
-  }, [stateName])
-
-  // Load funding cycles that include the selected grant call
+  // Load funding cycles filtered by state
   useEffect(() => {
     const loadFundingCycles = async () => {
-      if (!grantCallId) { 
+      if (!stateName) { 
         setFundingCycles([])
         setSelectedFundingCycleId('')
         setCycleStateAllocationId('')
         return 
       }
       try {
-        // Get funding cycles that include this grant call
+        // Get all open funding cycles
         const { data: cycles, error } = await supabase
-          .from('cycle_grant_inclusions')
-          .select(`
-            cycle_id,
-            funding_cycles!inner (
-              id,
-              name,
-              type,
-              status
-            )
-          `)
-          .eq('grant_call_id', grantCallId)
-          .eq('funding_cycles.status', 'open')
+          .from('funding_cycles')
+          .select('id, name, type, status')
+          .eq('status', 'open')
 
         if (error) throw error
 
         // Get available amounts for each cycle for the selected state
         const cycleOptions = []
         for (const cycle of cycles || []) {
-          const cycleData = (cycle as any).funding_cycles
-          if (!cycleData) continue
-
-          // Get state allocation for this cycle and state
-          const { data: allocation, error: allocError } = await supabase
+          // Get ALL state allocations for this cycle and state (there can be multiple)
+          const { data: allocations, error: allocError } = await supabase
             .from('cycle_state_allocations')
             .select('id, amount')
-            .eq('cycle_id', cycleData.id)
+            .eq('cycle_id', cycle.id)
             .eq('state_name', stateName)
-            .single()
 
-          if (allocError || !allocation) continue
+          if (allocError || !allocations || allocations.length === 0) continue
 
-          // Get committed and pending amounts for this allocation
+          // Sum all allocations for this cycle and state
+          const totalAllocated = allocations.reduce((sum: number, alloc: any) => sum + (alloc.amount || 0), 0)
+
+          // Get committed and pending amounts for ALL allocations in this cycle
+          const allocationIds = allocations.map((alloc: any) => alloc.id)
           const { data: projects, error: projError } = await supabase
             .from('err_projects')
             .select('expenses, status, funding_status')
-            .eq('cycle_state_allocation_id', allocation.id)
+            .in('cycle_state_allocation_id', allocationIds)
 
           if (projError) continue
 
           const committed = (projects || [])
-            .filter((p: any) => p.status === 'approved' && p.funding_status === 'committed')
+            .filter((p: any) => (p.status === 'approved' || p.status === 'active') && p.funding_status === 'committed')
             .reduce((sum: number, p: any) => {
               try {
                 const expenses = typeof p.expenses === 'string' ? JSON.parse(p.expenses) : p.expenses
@@ -208,15 +178,16 @@ export default function ExtractedDataReview({
               }
             }, 0)
 
-          const available = allocation.amount - committed - pending
+          const available = totalAllocated - committed - pending
 
           if (available > 0) {
+            // Use the first allocation ID for tracking (they're all for the same cycle/state)
             cycleOptions.push({
-              id: cycleData.id,
-              name: cycleData.name,
-              type: cycleData.type,
+              id: cycle.id,
+              name: cycle.name,
+              type: cycle.type,
               available: available,
-              allocationId: allocation.id
+              allocationId: allocations[0].id
             })
           }
         }
@@ -228,7 +199,64 @@ export default function ExtractedDataReview({
       }
     }
     loadFundingCycles()
-  }, [grantCallId, stateName])
+  }, [stateName])
+
+  // Load grants filtered by state and funding cycle
+  useEffect(() => {
+    const loadGrants = async () => {
+      if (!stateName || !selectedFundingCycleId) { 
+        setGrantOptions([])
+        setGrantCallId('')
+        return 
+      }
+      try {
+        // Get grant calls that are included in the selected funding cycle
+        const { data: inclusions, error } = await supabase
+          .from('cycle_grant_inclusions')
+          .select(`
+            grant_call_id,
+            grant_calls!inner (
+              id,
+              name,
+              donor_id,
+              donors!inner (
+                name
+              )
+            )
+          `)
+          .eq('cycle_id', selectedFundingCycleId)
+
+        if (error) throw error
+
+        // Get remaining amounts for each grant call for the selected state
+        const grantOptions = []
+        for (const inclusion of inclusions || []) {
+          const grantCall = (inclusion as any).grant_calls
+          if (!grantCall) continue
+
+          // Get remaining amount for this grant call and state
+          const res = await fetch(`/api/pool/by-grant-for-state?state=${encodeURIComponent(stateName)}`)
+          const rows = await res.json()
+          const grantRow = (Array.isArray(rows) ? rows : []).find((r: any) => r.grant_call_id === grantCall.id)
+          
+          if (grantRow && (grantRow.remaining_for_state || 0) > 0) {
+            grantOptions.push({
+              grant_call_id: grantCall.id,
+              grant_call_name: grantCall.name,
+              donor_name: grantCall.donors?.name || '-',
+              remaining: grantRow.remaining_for_state || 0
+            })
+          }
+        }
+
+        setGrantOptions(grantOptions)
+      } catch (e) {
+        console.error('load grants error', e)
+        setGrantOptions([])
+      }
+    }
+    loadGrants()
+  }, [stateName, selectedFundingCycleId])
 
   // Load remaining caps and preview parts (donorShort/stateShort)
   useEffect(() => {
@@ -387,7 +415,7 @@ export default function ExtractedDataReview({
   const handleConfirm = () => {
     // Basic pooled validations
     if (!stateName || !grantCallId || !yymm) {
-      alert('Please select State, Grant Call and enter YYMM')
+      alert('Please select State, Grant Call and enter MMYY')
       return
     }
     if (!selectedFundingCycleId) {
@@ -443,21 +471,6 @@ export default function ExtractedDataReview({
             </Select>
           </div>
           <div>
-            <Label>Grant Call</Label>
-            <Select value={grantCallId} onValueChange={setGrantCallId}>
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Select Grant Call" />
-              </SelectTrigger>
-              <SelectContent>
-                {grantOptions.map(g => (
-                  <SelectItem key={g.grant_call_id} value={g.grant_call_id}>
-                    {g.donor_name} — {g.grant_call_name} (Rem: {g.remaining.toLocaleString()})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
             <Label>Funding Cycle</Label>
             <Select value={selectedFundingCycleId} onValueChange={(value) => {
               setSelectedFundingCycleId(value)
@@ -477,13 +490,28 @@ export default function ExtractedDataReview({
             </Select>
           </div>
           <div>
+            <Label>Grant Call</Label>
+            <Select value={grantCallId} onValueChange={setGrantCallId}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Select Grant Call" />
+              </SelectTrigger>
+              <SelectContent>
+                {grantOptions.map(g => (
+                  <SelectItem key={g.grant_call_id} value={g.grant_call_id}>
+                    {g.donor_name} — {g.grant_call_name} (Rem: {g.remaining.toLocaleString()})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
             <Label>Donor</Label>
             <div className="p-2 bg-muted rounded-md">
               {donorShort || '-'}
             </div>
           </div>
           <div>
-            <Label>YYMM</Label>
+            <Label>MMYY</Label>
             <Input value={yymm} onChange={(e) => setYymm(e.target.value.replace(/[^0-9]/g, '').slice(0, 4))} placeholder="0825" maxLength={4} />
           </div>
         </div>

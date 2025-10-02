@@ -38,12 +38,12 @@ export async function GET(
     const totalAllocated = allocations?.reduce((sum, allocation) => 
       sum + (allocation.amount || 0), 0) || 0
 
-    // Get total committed (from approved workplans)
+    // Get total committed (from approved and active workplans)
     const { data: committedProjects, error: committedError } = await supabase
       .from('err_projects')
       .select('expenses')
       .eq('funding_cycle_id', params.id)
-      .eq('status', 'approved')
+      .in('status', ['approved', 'active'])
       .eq('funding_status', 'committed')
 
     if (committedError) throw committedError

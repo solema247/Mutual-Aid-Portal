@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Plus, Calendar, DollarSign, TrendingUp } from 'lucide-react'
+import { Plus, Calendar, DollarSign, TrendingUp, ChevronDown, ChevronUp } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 import {
@@ -66,6 +66,8 @@ export default function CycleManager() {
   const [budgetSummary, setBudgetSummary] = useState<CycleBudgetSummary | null>(null)
   const [isRefreshingBudget, setIsRefreshingBudget] = useState(false)
   const [allocRefreshToken, setAllocRefreshToken] = useState(0)
+  const [isBudgetSummaryExpanded, setIsBudgetSummaryExpanded] = useState(true)
+  const [isFundingCyclesExpanded, setIsFundingCyclesExpanded] = useState(true)
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
@@ -247,97 +249,115 @@ export default function CycleManager() {
       {/* 1. Funding Cycles Table */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Calendar className="h-5 w-5" />
-            {t('err:cycles.table_title')}
-          </CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center gap-2">
+              <Calendar className="h-5 w-5" />
+              {t('err:cycles.table_title')}
+            </CardTitle>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setIsFundingCyclesExpanded(!isFundingCyclesExpanded)}
+              className="h-8 w-8 p-0"
+            >
+              {isFundingCyclesExpanded ? (
+                <ChevronUp className="h-4 w-4" />
+              ) : (
+                <ChevronDown className="h-4 w-4" />
+              )}
+            </Button>
+          </div>
         </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>{t('err:cycles.headers.cycle')}</TableHead>
-                <TableHead>{t('err:cycles.headers.year')}</TableHead>
-                <TableHead>{t('err:cycles.headers.status')}</TableHead>
-                <TableHead>{t('err:cycles.headers.period')}</TableHead>
-                <TableHead>{t('err:cycles.headers.actions')}</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {cycles.map((cycle) => (
-                <TableRow 
-                  key={cycle.id}
-                  className={cn(
-                    selectedCycle?.id === cycle.id && "bg-muted/50",
-                    "cursor-pointer hover:bg-muted/30"
-                  )}
-                  onClick={() => handleCycleSelect(cycle)}
-                >
-                  <TableCell>
-                    <div>
-                      <div className="font-medium">{cycle.name}</div>
-                      <div className="text-sm text-muted-foreground">
-                        {t('err:cycles.cycle_number', { num: cycle.cycle_number })}
-                      </div>
-                    </div>
-                  </TableCell>
-                  <TableCell>{cycle.year}</TableCell>
-                  <TableCell>{getStatusBadge(cycle.status)}</TableCell>
-                  <TableCell>
-                    {cycle.start_date && cycle.end_date ? (
-                      <div className="text-sm">
-                        <div>{new Date(cycle.start_date).toLocaleDateString()}</div>
-                        <div className="text-muted-foreground">
-                          {t('err:cycles.to')} {new Date(cycle.end_date).toLocaleDateString()}
-                        </div>
-                      </div>
-                    ) : (
-                      <span className="text-muted-foreground">{t('err:cycles.no_dates')}</span>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <Button
-                        variant={selectedCycle?.id === cycle.id ? "default" : "outline"}
-                        size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          handleCycleSelect(cycle)
-                        }}
-                      >
-                        {selectedCycle?.id === cycle.id ? t('err:cycles.selected') : t('err:cycles.select')}
-                      </Button>
-                      {cycle.status === 'open' ? (
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            handleCloseCycle(cycle.id)
-                          }}
-                        >
-                          {t('err:cycles.close')}
-                        </Button>
-                      ) : (
-                        <Button
-                          variant="default"
-                          size="sm"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            handleReopenCycle(cycle.id)
-                          }}
-                          className="bg-green-600 hover:bg-green-700 text-white"
-                        >
-                          {t('err:cycles.reopen')}
-                        </Button>
+        {isFundingCyclesExpanded && (
+          <CardContent>
+            <div className="max-h-96 overflow-y-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>{t('err:cycles.headers.cycle')}</TableHead>
+                    <TableHead>{t('err:cycles.headers.year')}</TableHead>
+                    <TableHead>{t('err:cycles.headers.status')}</TableHead>
+                    <TableHead>{t('err:cycles.headers.period')}</TableHead>
+                    <TableHead>{t('err:cycles.headers.actions')}</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {cycles.map((cycle) => (
+                    <TableRow 
+                      key={cycle.id}
+                      className={cn(
+                        selectedCycle?.id === cycle.id && "bg-muted/50",
+                        "cursor-pointer hover:bg-muted/30"
                       )}
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
+                      onClick={() => handleCycleSelect(cycle)}
+                    >
+                      <TableCell>
+                        <div>
+                          <div className="font-medium">{cycle.name}</div>
+                          <div className="text-sm text-muted-foreground">
+                            {t('err:cycles.cycle_number', { num: cycle.cycle_number })}
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell>{cycle.year}</TableCell>
+                      <TableCell>{getStatusBadge(cycle.status)}</TableCell>
+                      <TableCell>
+                        {cycle.start_date && cycle.end_date ? (
+                          <div className="text-sm">
+                            <div>{new Date(cycle.start_date).toLocaleDateString()}</div>
+                            <div className="text-muted-foreground">
+                              {t('err:cycles.to')} {new Date(cycle.end_date).toLocaleDateString()}
+                            </div>
+                          </div>
+                        ) : (
+                          <span className="text-muted-foreground">{t('err:cycles.no_dates')}</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant={selectedCycle?.id === cycle.id ? "default" : "outline"}
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleCycleSelect(cycle)
+                            }}
+                          >
+                            {selectedCycle?.id === cycle.id ? t('err:cycles.selected') : t('err:cycles.select')}
+                          </Button>
+                          {cycle.status === 'open' ? (
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleCloseCycle(cycle.id)
+                              }}
+                            >
+                              {t('err:cycles.close')}
+                            </Button>
+                          ) : (
+                            <Button
+                              variant="default"
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleReopenCycle(cycle.id)
+                              }}
+                              className="bg-green-600 hover:bg-green-700 text-white"
+                            >
+                              {t('err:cycles.reopen')}
+                            </Button>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        )}
       </Card>
 
       {/* 2. Funding Cycle Details */}
@@ -407,19 +427,35 @@ export default function CycleManager() {
       {selectedCycle && budgetSummary && (
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <DollarSign className="h-5 w-5" />
-              {t('err:cycles.budget_summary')}
-            </CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle className="flex items-center gap-2">
+                <DollarSign className="h-5 w-5" />
+                {t('err:cycles.budget_summary')}
+              </CardTitle>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setIsBudgetSummaryExpanded(!isBudgetSummaryExpanded)}
+                className="h-8 w-8 p-0"
+              >
+                {isBudgetSummaryExpanded ? (
+                  <ChevronUp className="h-4 w-4" />
+                ) : (
+                  <ChevronDown className="h-4 w-4" />
+                )}
+              </Button>
+            </div>
           </CardHeader>
-          <CardContent>
-            <CycleBudgetDashboard 
-              cycle={selectedCycle}
-              budgetSummary={budgetSummary}
-              onRefresh={handleRefreshBudget}
-              isRefreshing={isRefreshingBudget}
-            />
-          </CardContent>
+          {isBudgetSummaryExpanded && (
+            <CardContent>
+              <CycleBudgetDashboard 
+                cycle={selectedCycle}
+                budgetSummary={budgetSummary}
+                onRefresh={handleRefreshBudget}
+                isRefreshing={isRefreshingBudget}
+              />
+            </CardContent>
+          )}
         </Card>
       )}
 

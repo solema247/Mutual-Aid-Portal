@@ -28,7 +28,7 @@ export async function GET(
       const projects = allocation.err_projects || []
       
       const totalCommitted = projects
-        .filter((p: any) => p.status === 'approved' && p.funding_status === 'committed')
+        .filter((p: any) => (p.status === 'approved' || p.status === 'active') && p.funding_status === 'committed')
         .reduce((sum: number, p: any) => {
           try {
             const expenses = typeof p.expenses === 'string' ? JSON.parse(p.expenses) : p.expenses
