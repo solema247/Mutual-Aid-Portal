@@ -52,7 +52,10 @@ export default function ActiveUsersList({
         role: user.role as 'admin' | 'state_err' | 'base_err',
         status: user.status as 'active' | 'suspended',
         createdAt: new Date(user.created_at || '').toLocaleDateString(),
-        updatedAt: user.updated_at ? new Date(user.updated_at).toLocaleDateString() : null
+        updatedAt: user.updated_at ? new Date(user.updated_at).toLocaleDateString() : null,
+        err_name: user.emergency_rooms?.name || '-',
+        err_code: user.emergency_rooms?.err_code || '-',
+        state_name: user.emergency_rooms?.state?.state_name || '-'
       }))
 
       setUsers(formattedUsers)
@@ -136,8 +139,9 @@ export default function ActiveUsersList({
       </div>
 
       <div className="rounded-md border">
-        <div className="grid grid-cols-7 gap-4 p-4 font-medium border-b">
-          <div>{t('users:err_id')}</div>
+        <div className="grid grid-cols-8 gap-4 p-4 font-medium border-b">
+          <div>{t('users:err_name')}</div>
+          <div>{t('users:state')}</div>
           <div>{t('users:display_name')}</div>
           <div>{t('users:role')}</div>
           <div>{t('users:status')}</div>
@@ -147,8 +151,9 @@ export default function ActiveUsersList({
         </div>
         <div className="divide-y">
           {users.map((user) => (
-            <div key={user.id} className="grid grid-cols-7 gap-4 p-4">
-              <div>{user.err_id || '-'}</div>
+            <div key={user.id} className="grid grid-cols-8 gap-4 p-4">
+              <div>{user.err_name || '-'}</div>
+              <div>{user.state_name || '-'}</div>
               <div>{user.display_name || '-'}</div>
               <div>{t(`users:${user.role}_role`)}</div>
               <div>{t(`users:${user.status}_status`)}</div>

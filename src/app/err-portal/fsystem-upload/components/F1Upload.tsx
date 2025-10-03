@@ -22,17 +22,33 @@ export default function F1Upload() {
   const [rooms, setRooms] = useState<EmergencyRoom[]>([])
   const [sectors, setSectors] = useState<Sector[]>([])
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  interface GrantSerial {
+    id: string;
+    serial: string;
+    grant_call_id: string;
+    state_name: string;
+    yymm: string;
+  }
+
   const [formData, setFormData] = useState<F1FormData>({
     donor_id: '',
     state_id: '',
     date: '',
-    grant_serial: '',
     project_id: '',
     emergency_room_id: '',
     file: null,
     primary_sectors: [],
-    secondary_sectors: []
+    secondary_sectors: [],
+    funding_cycle_id: '',
+    cycle_state_allocation_id: '',
+    currency: 'USD',
+    grant_call_id: '',
+    grant_call_state_allocation_id: '',
+    grant_serial_id: ''
   })
+  
+  const [grantSerials, setGrantSerials] = useState<GrantSerial[]>([])
+  const [nextWorkplanNumber, setNextWorkplanNumber] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [previewId, setPreviewId] = useState('')
   const [processedData, setProcessedData] = useState<any>(null)
@@ -136,125 +152,95 @@ export default function F1Upload() {
     }
   }
 
+  const fetchGrantSerials = async () => {
+    const selectedState = states.find(s => s.id === formData.state_id)
+    if (!formData.grant_call_id || !formData.date || !selectedState?.state_name) return;
+
+    try {
+      const response = await fetch(`/api/fsystem/grant-serials?grant_call_id=${formData.grant_call_id}&state_name=${selectedState.state_name}&yymm=${formData.date}`)
+      
+      if (!response.ok) throw new Error('Failed to fetch grant serials')
+      
+      const data = await response.json()
+      setGrantSerials(data)
+    } catch (error) {
+      console.error('Error fetching grant serials:', error)
+      setGrantSerials([])
+    }
+  }
+
+  const createNewSerial = async () => {
+    const selectedState = states.find(s => s.id === formData.state_id)
+    if (!formData.grant_call_id || !formData.date || !selectedState?.state_name) return;
+
+    try {
+      const response = await fetch('/api/fsystem/grant-serials/create', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ 
+          grant_call_id: formData.grant_call_id,
+          state_name: selectedState.state_name,
+          yymm: formData.date
+        })
+      })
+
+      if (!response.ok) throw new Error('Failed to create grant serial')
+
+      const newSerial = await response.json()
+      setGrantSerials(prev => [...prev, newSerial])
+      handleInputChange('grant_serial_id', newSerial.id)
+    } catch (error) {
+      console.error('Error creating grant serial:', error)
+      alert(t('fsystem:f1.errors.create_serial_failed'))
+    }
+  }
+
+  const previewNextWorkplanNumber = async () => {
+    if (!formData.grant_serial_id) {
+      setNextWorkplanNumber(null)
+      setPreviewId('')
+      return
+    }
+
+    try {
+      const response = await fetch(`/api/fsystem/workplans/preview?grant_serial_id=${formData.grant_serial_id}`)
+      
+      if (!response.ok) throw new Error('Failed to get workplan preview')
+      
+      const { next_number, preview_id } = await response.json()
+      setNextWorkplanNumber(next_number)
+      setPreviewId(preview_id)
+        } catch (error) {
+      console.error('Error getting workplan preview:', error)
+      setNextWorkplanNumber(null)
+      setPreviewId('')
+    }
+  }
+
+  // Effect to fetch grant serials when dependencies change
+  useEffect(() => {
+    fetchGrantSerials()
+  }, [formData.grant_call_id, formData.date, formData.state_id])
+
+  // Effect to preview next workplan number when grant serial changes
+  useEffect(() => {
+    previewNextWorkplanNumber()
+  }, [formData.grant_serial_id])
+
   const hasRequiredFields = () => {
     return (
       formData.donor_id &&
       formData.state_id &&
       formData.date &&
-      formData.grant_serial?.length === 4 &&  // Only when grant serial is complete
-      formData.emergency_room_id
+      formData.emergency_room_id &&
+      formData.grant_call_id &&
+      formData.grant_serial_id
     )
   }
 
-  const generateBasePattern = () => {
-    const selectedDonor = donors.find(d => d.id === formData.donor_id)
-    const selectedState = states.find(s => s.id === formData.state_id)
-    const selectedRoom = rooms.find(r => r.id === formData.emergency_room_id)
-    
-    if (!selectedDonor?.short_name || !selectedState?.state_short || !selectedRoom?.err_code) return ''
-    if (!hasRequiredFields()) return ''
 
-    // Use state_short instead of first 2 letters
-    const stateCode = selectedState.state_short.toUpperCase()
-    
-    // Format date (MMYY)
-    const dateStr = formData.date
-
-    // Create base pattern
-    return `LCC-${selectedDonor.short_name}-${stateCode}-${dateStr}-${formData.grant_serial}`
-  }
-
-  const getNextSequenceNumber = async (basePattern: string, previewOnly: boolean = true) => {
-    try {
-      const response = await fetch('/api/fsystem/next-sequence', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ 
-          base_pattern: basePattern,
-          preview_only: previewOnly
-        })
-      })
-
-      if (!response.ok) {
-        throw new Error('Failed to get next sequence number')
-      }
-
-      const { padded_number } = await response.json()
-      return padded_number
-    } catch (error) {
-      console.error('Error getting sequence number:', error)
-      throw error
-    }
-  }
-
-  const generatePreviewPattern = async () => {
-    const selectedDonor = donors.find(d => d.id === formData.donor_id)
-    const selectedState = states.find(s => s.id === formData.state_id)
-    
-    let pattern = 'LCC'
-
-    if (selectedDonor?.short_name) {
-      pattern += `-${selectedDonor.short_name}`
-    } else {
-      pattern += '-___' // Placeholder for donor
-    }
-
-    if (selectedState?.state_short) {
-      pattern += `-${selectedState.state_short.toUpperCase()}`
-    } else {
-      pattern += '-__' // Placeholder for state
-    }
-
-    if (formData.date) {
-      pattern += `-${formData.date}`
-    } else {
-      pattern += '-____' // Placeholder for date
-    }
-
-    if (formData.grant_serial) {
-      pattern += `-${formData.grant_serial}`
-      
-      // If we have all required fields, try to get the next sequence number
-      if (selectedDonor?.short_name && selectedState?.state_short && formData.date) {
-        try {
-          const basePattern = `LCC-${selectedDonor.short_name}-${selectedState.state_short.toUpperCase()}-${formData.date}-${formData.grant_serial}`
-          const response = await fetch('/api/fsystem/next-sequence', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ 
-              base_pattern: basePattern,
-              preview_only: true
-            })
-          })
-
-          if (response.ok) {
-            const { padded_number } = await response.json()
-            return `${pattern}-${padded_number}`
-          }
-        } catch (error) {
-          console.error('Error previewing sequence:', error)
-        }
-      }
-      pattern += '-XXX' // Fallback to placeholder
-    } else {
-      pattern += '-____-XXX' // Placeholder for grant serial and sequence
-    }
-
-    return pattern
-  }
-
-  useEffect(() => {
-    // Update preview pattern whenever form data changes
-    const updatePattern = async () => {
-      const pattern = await generatePreviewPattern()
-      setPreviewId(pattern)
-    }
-    updatePattern()
-  }, [formData.donor_id, formData.state_id, formData.date, formData.grant_serial])
 
   const handleInputChange = (field: keyof F1FormData, value: string | string[]) => {
     setFormData(prev => ({ ...prev, [field]: value }))
@@ -314,14 +300,26 @@ export default function F1Upload() {
   const handleConfirmUpload = async (editedData: any) => {
     setIsLoading(true)
     try {
-      const basePattern = generateBasePattern()
-      if (!basePattern) {
-        throw new Error('Missing required information')
+      if (!formData.grant_serial_id) {
+        throw new Error('Missing grant serial')
       }
 
-      // Get and commit the sequence number after user confirms
-      const finalSequenceNumber = await getNextSequenceNumber(basePattern, false)
-      const finalGrantId = `${basePattern}-${finalSequenceNumber}`
+      // Get and commit the workplan number
+      const response = await fetch('/api/fsystem/workplans/commit', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          grant_serial_id: formData.grant_serial_id
+        })
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to commit workplan number')
+      }
+
+      const { workplan_number, grant_id } = await response.json()
 
       const selectedDonor = donors.find(d => d.id === formData.donor_id)
       const selectedState = states.find(s => s.id === formData.state_id)
@@ -351,7 +349,7 @@ export default function F1Upload() {
 
       // Get file extension and generate path
       const fileExtension = selectedFile.name.split('.').pop()
-      const filePath = `f1-forms/${selectedDonor.short_name}/${selectedState.state_short}/${formData.date}/${finalGrantId}.${fileExtension}`
+      const filePath = `f1-forms/${selectedDonor.short_name}/${selectedState.state_short}/${formData.date}/${grant_id}.${fileExtension}`
       
       // Upload file to Supabase storage
       const { error: uploadError } = await supabase.storage
@@ -371,11 +369,12 @@ export default function F1Upload() {
         .insert([{
           ...editedData,
           donor_id: formData.donor_id,
-          grant_serial: formData.grant_serial,
+          grant_serial_id: formData.grant_serial_id,
+          workplan_number: parseInt(workplan_number),
           project_id: formData.project_id,
           emergency_room_id: formData.emergency_room_id,
           err_id: selectedRoom.err_code,
-          grant_id: finalGrantId,
+          grant_id: grant_id,
           status: 'pending',
           source: 'mutual_aid_portal',
           state: selectedState.state_name,
@@ -390,7 +389,7 @@ export default function F1Upload() {
       // Update Google Sheet with final grant ID and sectors
       const sheetData = {
         ...editedData,
-        grant_id: finalGrantId,
+        grant_id: grant_id,
         err_id: selectedRoom.err_code,
         err_name: selectedRoom.name_ar || selectedRoom.name,
         donor_name: selectedDonor.name,
@@ -417,12 +416,17 @@ export default function F1Upload() {
         donor_id: '',
         state_id: '',
         date: '',
-        grant_serial: '',
+        grant_serial_id: '',
         project_id: '',
         emergency_room_id: '',
         file: null,
         primary_sectors: [],
-        secondary_sectors: []
+        secondary_sectors: [],
+        funding_cycle_id: '',
+        cycle_state_allocation_id: '',
+        currency: 'USD',
+        grant_call_id: '',
+        grant_call_state_allocation_id: ''
       })
       setSelectedFile(null)
       setPreviewId('')
@@ -658,19 +662,33 @@ export default function F1Upload() {
 
                 <div>
                   <Label className="mb-2">{t('fsystem:f1.grant_serial')}</Label>
-                  <Input
-                    placeholder={t('fsystem:f1.grant_serial_placeholder')}
-                    value={formData.grant_serial}
-                    onChange={(e) => {
-                      const value = e.target.value
-                      // Only update if it's empty or matches the pattern
-                      if (!value || /^\d{1,4}$/.test(value)) {
-                        handleInputChange('grant_serial', value)
+                  <Select
+                    value={formData.grant_serial_id}
+                    onValueChange={(value) => {
+                      if (value === 'new') {
+                        createNewSerial()
+                      } else {
+                        handleInputChange('grant_serial_id', value)
                       }
                     }}
-                    maxLength={4}
-                    pattern="[0-9]{4}"
-                  />
+                    disabled={!formData.date || !formData.grant_call_id || !formData.state_id}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder={t('fsystem:f1.select_grant_serial')} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {grantSerials.map((serial) => (
+                        <SelectItem key={serial.id} value={serial.id}>
+                          {serial.serial}
+                        </SelectItem>
+                      ))}
+                      {formData.date && formData.grant_call_id && formData.state_id && (
+                        <SelectItem value="new">
+                          {t('fsystem:f1.create_new_serial')}
+                        </SelectItem>
+                      )}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
 

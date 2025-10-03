@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
-import { Users } from 'lucide-react'
+import { Users, BarChart2, FileText, ClipboardList, PieChart, UserCog, CheckSquare, LogOut, BookOpen, PenTool, Cog } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 import '@/i18n/config'
 
@@ -100,11 +100,117 @@ export default function ErrPortalPage() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
+        {/* Grant Management */}
+        <Link href="/err-portal/grant-management" className="block aspect-square">
+          <Card className="h-full hover:bg-muted/50 transition-colors">
+            <CardHeader className="h-full flex flex-col justify-center items-center text-center">
+              <PieChart className="h-8 w-8 mb-4" />
+              <CardTitle className="text-xl">
+                {t('err:grant_management')}
+              </CardTitle>
+              <CardDescription className="mt-2">
+                {t('err:grant_management_desc')}
+              </CardDescription>
+            </CardHeader>
+          </Card>
+        </Link>
+
+        {/* F1 Work Plans */}
+        <Link href="/err-portal/f1-work-plans" className="block aspect-square">
+          <Card className="h-full hover:bg-muted/50 transition-colors">
+            <CardHeader className="h-full flex flex-col justify-center items-center text-center">
+              <ClipboardList className="h-8 w-8 mb-4" />
+              <CardTitle className="text-xl">
+                {t('err:f1_work_plans')}
+              </CardTitle>
+              <CardDescription className="mt-2">
+                {t('err:f1_work_plans_desc')}
+              </CardDescription>
+            </CardHeader>
+          </Card>
+        </Link>
+
+        {/* F2 Approvals */}
+        <Link href="/err-portal/f2-approvals" className="block aspect-square">
+          <Card className="h-full hover:bg-muted/50 transition-colors">
+            <CardHeader className="h-full flex flex-col justify-center items-center text-center">
+              <CheckSquare className="h-8 w-8 mb-4" />
+              <CardTitle className="text-xl">
+                {t('err:f2_approvals')}
+              </CardTitle>
+              <CardDescription className="mt-2">
+                {t('err:f2_approvals_desc')}
+              </CardDescription>
+            </CardHeader>
+          </Card>
+        </Link>
+
+        {/* F3 MOUs */}
+        <Link href="/err-portal/f3-mous" className="block aspect-square">
+          <Card className="h-full hover:bg-muted/50 transition-colors">
+            <CardHeader className="h-full flex flex-col justify-center items-center text-center">
+              <PenTool className="h-8 w-8 mb-4" />
+              <CardTitle className="text-xl">
+                {t('err:f3_mous')}
+              </CardTitle>
+              <CardDescription className="mt-2">
+                {t('err:f3_mous_desc')}
+              </CardDescription>
+            </CardHeader>
+          </Card>
+        </Link>
+
+        {/* F4 & F5 Reporting */}
+        <Link href="/err-portal/f4-f5-reporting" className="block aspect-square">
+          <Card className="h-full hover:bg-muted/50 transition-colors">
+            <CardHeader className="h-full flex flex-col justify-center items-center text-center">
+              <BookOpen className="h-8 w-8 mb-4" />
+              <CardTitle className="text-xl">
+                {t('err:f4_f5_reporting')}
+              </CardTitle>
+              <CardDescription className="mt-2">
+                {t('err:f4_f5_reporting_desc')}
+              </CardDescription>
+            </CardHeader>
+          </Card>
+        </Link>
+
+        {/* Project Management */}
+        <Link href="/err-portal/project-management" className="block aspect-square">
+          <Card className="h-full hover:bg-muted/50 transition-colors">
+            <CardHeader className="h-full flex flex-col justify-center items-center text-center">
+              <Cog className="h-8 w-8 mb-4" />
+              <CardTitle className="text-xl">
+                {t('err:project_management')}
+              </CardTitle>
+              <CardDescription className="mt-2">
+                {t('err:project_management_desc')}
+              </CardDescription>
+            </CardHeader>
+          </Card>
+        </Link>
+
+        {/* Dashboard */}
+        <Link href="/err-portal/dashboard" className="block aspect-square">
+          <Card className="h-full hover:bg-muted/50 transition-colors">
+            <CardHeader className="h-full flex flex-col justify-center items-center text-center">
+              <BarChart2 className="h-8 w-8 mb-4" />
+              <CardTitle className="text-xl">
+                {t('err:dashboard')}
+              </CardTitle>
+              <CardDescription className="mt-2">
+                {t('err:dashboard_desc')}
+              </CardDescription>
+            </CardHeader>
+          </Card>
+        </Link>
+
+        {/* Room Management - Conditional */}
         {canManageRooms && (
           <Link href="/err-portal/room-management" className="block aspect-square">
             <Card className="h-full hover:bg-muted/50 transition-colors">
               <CardHeader className="h-full flex flex-col justify-center items-center text-center">
-                <span className="text-4xl mb-4">🤝</span>
+                <Users className="h-8 w-8 mb-4" />
                 <CardTitle className="text-xl">
                   {t('err:room_management')}
                 </CardTitle>
@@ -116,10 +222,11 @@ export default function ErrPortalPage() {
           </Link>
         )}
 
+        {/* User Management */}
         <Link href="/err-portal/user-management" className="block aspect-square">
           <Card className="h-full hover:bg-muted/50 transition-colors">
             <CardHeader className="h-full flex flex-col justify-center items-center text-center">
-              <Users className="h-8 w-8 mb-4" />
+              <UserCog className="h-8 w-8 mb-4" />
               <CardTitle className="text-xl">
                 {t('err:user_management')}
               </CardTitle>
@@ -129,56 +236,15 @@ export default function ErrPortalPage() {
             </CardHeader>
           </Card>
         </Link>
-        
-        <Link href="/err-portal/project-management" className="block aspect-square">
-          <Card className="h-full hover:bg-muted/50 transition-colors">
-            <CardHeader className="h-full flex flex-col justify-center items-center text-center">
-              <span className="text-4xl mb-4">📋</span>
-              <CardTitle className="text-xl">
-                {t('err:project_management')}
-              </CardTitle>
-              <CardDescription className="mt-2">
-                {t('err:project_management_desc')}
-              </CardDescription>
-            </CardHeader>
-          </Card>
-        </Link>
 
-        <Link href="/err-portal/dashboard" className="block aspect-square">
-          <Card className="h-full hover:bg-muted/50 transition-colors">
-            <CardHeader className="h-full flex flex-col justify-center items-center text-center">
-              <span className="text-4xl mb-4">📈</span>
-              <CardTitle className="text-xl">
-                {t('err:dashboard')}
-              </CardTitle>
-              <CardDescription className="mt-2">
-                {t('err:dashboard_desc')}
-              </CardDescription>
-            </CardHeader>
-          </Card>
-        </Link>
-
-        <Link href="/err-portal/fsystem-upload" className="block aspect-square">
-          <Card className="h-full hover:bg-muted/50 transition-colors">
-            <CardHeader className="h-full flex flex-col justify-center items-center text-center">
-              <span className="text-4xl mb-4">📄</span>
-              <CardTitle className="text-xl">
-                {t('err:fsystem_upload')}
-              </CardTitle>
-              <CardDescription className="mt-2">
-                {t('err:fsystem_upload_desc')}
-              </CardDescription>
-            </CardHeader>
-          </Card>
-        </Link>
-
+        {/* Logout Button */}
         <button 
           onClick={handleLogout}
           className="block aspect-square"
         >
           <Card className="h-full hover:bg-muted/50 transition-colors">
             <CardHeader className="h-full flex flex-col justify-center items-center text-center">
-              <span className="text-4xl mb-4">🚪</span>
+              <LogOut className="h-8 w-8 mb-4" />
               <CardTitle className="text-xl">
                 {t('common:logout')}
               </CardTitle>
@@ -191,4 +257,4 @@ export default function ErrPortalPage() {
       </div>
     </div>
   )
-} 
+}

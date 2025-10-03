@@ -1,59 +1,75 @@
 {
   "upload": {
-    "title": "F-System Upload",
-    "description": "Upload and process F-System forms",
+    "title": "F-System File Upload",
+    "description": "Upload and manage F-System files and documents",
     "form_type": "Select Form Type",
     "form_type_desc": "Choose the type of form you want to upload"
   },
   "f1": {
-    "title": "F1 Form",
-    "upload_label": "Upload F1 Form (PDF or Word)",
+    "title": "F1 Form Upload",
+    "description": "Upload F1 form and provide necessary details",
+    "select_grant": "Select Grant Call",
+    "select_grant_placeholder": "Choose a grant call",
+    "grant_amount": "Grant Amount",
+    "state_allocations": "State Allocations",
+    "allocated_amount": "Allocated",
+    "committed_amount": "Committed",
+    "remaining_amount": "Remaining",
+    "upload_label": "Upload F1 Form",
+    "select_allocation_first": "Please select a state allocation from the table above",
+    "allocation_not_found": "Selected allocation not found. Please try again",
+    "click_to_select": "Click to select this state allocation",
+    "amount_exceeds_allocation": "Amount exceeds remaining allocation",
+    "select_allocation_hint": "Click on a state allocation to select it for this F1 form",
+    "refresh": "Refresh",
     "donor": "Donor",
-    "select_donor": "Select donor",
     "state": "State",
-    "select_state": "Select state",
+    "auto_from_allocation": "Auto from allocation",
+    "select_donor": "Select Donor",
+    "select_state": "Select State",
+    "select_emergency_room": "Select Emergency Room",
     "emergency_response_room": "Emergency Response Room",
-    "select_emergency_room": "Select emergency response room",
-    "date": "Date (MMYY)",
-    "date_placeholder": "1224",
-    "grant_serial": "Grant Serial",
-    "grant_serial_placeholder": "0001",
-    "project_id": "Project ID",
-    "project_id_placeholder": "301",
-    "generated_id": "Form ID Preview",
-    "preview_pattern": "Form ID Pattern Preview",
-    "complete_fields": "Complete all required fields to see ID preview",
-    "preview_note": "This ID will be finalized after document review and approval",
-    "sequence_note": "Final sequence number (XXX) will be assigned when form is submitted",
-    "generating": "Generating preview...",
     "primary_sectors": "Primary Sectors",
     "secondary_sectors": "Secondary Sectors",
     "select_primary_sectors": "Select primary sectors",
     "select_secondary_sectors": "Select secondary sectors",
-    "upload_button": "Upload F1 Form",
-    "uploading": "Uploading..."
+    "date": "Date",
+    "date_placeholder": "MMYY",
+    "grant_serial": "Grant Serial",
+    "select_grant_serial": "Select Grant Serial",
+    "grant_serial_placeholder": "4-digit serial",
+    "create_new_serial": "Create New Serial",
+    "generated_id": "Generated Form ID",
+    "generating": "Generating...",
+    "complete_fields": "Complete required fields to generate ID",
+    "preview_note": "This is a preview. Final ID will be generated on upload.",
+    "uploading": "Uploading...",
+    "upload_button": "Upload Form"
   },
   "f4": {
-    "title": "F4 Form",
-    "coming_soon": "F4 form upload coming soon"
+    "title": "F4 Form Upload",
+    "coming_soon": "Coming Soon"
   },
   "f5": {
-    "title": "F5 Form",
-    "coming_soon": "F5 form upload coming soon"
+    "title": "F5 Form Upload",
+    "coming_soon": "Coming Soon"
   },
   "review": {
     "title": "Review Extracted Data",
-    "description": "Please review and edit the extracted data before final submission",
-    "submit": "Submit",
-    "submitting": "Submitting...",
-    "cancel": "Cancel",
+    "description": "Please review and confirm the data extracted from your document",
+    "errors": {
+      "exceeds_allocation": "Total amount ({{amount}}) exceeds remaining allocation ({{remaining}}) for {{state}}",
+      "amount_too_high": "Amount exceeds remaining allocation of {{remaining}}",
+      "cannot_exceed_allocation": "Total amount cannot exceed remaining allocation",
+      "amount_exceeds_available": "F1 form amount ({{amount}}) exceeds available amount ({{available}})"
+    },
     "fields": {
       "date": "Date",
       "state": "State",
       "locality": "Locality",
       "project_objectives": "Project Objectives",
       "intended_beneficiaries": "Intended Beneficiaries",
-      "estimated_beneficiaries": "Estimated Beneficiaries",
+      "estimated_beneficiaries": "Estimated Number of Beneficiaries",
       "estimated_timeframe": "Estimated Timeframe",
       "additional_support": "Additional Support",
       "banking_details": "Banking Details",
@@ -62,9 +78,11 @@
       "activity": "Activity",
       "total_cost": "Total Cost",
       "total": "Total",
-      "add_expense": "Add Expense",
+      "available_amount": "Available Amount",
+      "f1_amount": "F1 Form Amount",
       "add_activity": "Add Activity",
-      "add_activity_placeholder": "Enter new activity...",
+      "add_activity_placeholder": "Enter new activity",
+      "add_expense": "Add Expense",
       "officers": {
         "program": "Program Officer",
         "reporting": "Reporting Officer",
@@ -72,13 +90,9 @@
         "name": "Name",
         "phone": "Phone"
       }
-    }
-  },
-  "messages": {
-    "success": "Form uploaded successfully!",
-    "error": "Error uploading form. Please try again.",
-    "missing_file": "Please select a file",
-    "missing_info": "Missing required information",
-    "invalid_file": "Please select a PDF or Word document"
+    },
+    "cancel": "Cancel",
+    "submit": "Submit",
+    "submitting": "Submitting..."
   }
-} 
+}

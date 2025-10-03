@@ -1,0 +1,505 @@
+'use client'
+
+import { useEffect, useState } from 'react'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { useTranslation } from 'react-i18next'
+import { Button } from '@/components/ui/button'
+import { Label } from '@/components/ui/label'
+import { Input } from '@/components/ui/input'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { supabase } from '@/lib/supabaseClient'
+import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '@/components/ui/table'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+
+interface UploadF4ModalProps {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  onSaved: () => void
+}
+
+export default function UploadF4Modal({ open, onOpenChange, onSaved }: UploadF4ModalProps) {
+  const { t } = useTranslation(['f4f5'])
+  const [states, setStates] = useState<string[]>([])
+  const [selectedState, setSelectedState] = useState('')
+  const [rooms, setRooms] = useState<Array<{ id: string; label: string }>>([])
+  const [selectedRoomId, setSelectedRoomId] = useState('')
+  const [projects, setProjects] = useState<Array<{ id: string; label: string }>>([])
+  const [projectId, setProjectId] = useState('')
+  const [projectMeta, setProjectMeta] = useState<any | null>(null)
+  const [file, setFile] = useState<File | null>(null)
+  const [reportDate, setReportDate] = useState('')
+  const [isLoading, setIsLoading] = useState(false)
+  const [step, setStep] = useState<'select'|'preview'>('select')
+  const [summaryDraft, setSummaryDraft] = useState<any | null>(null)
+  const [expensesDraft, setExpensesDraft] = useState<any[]>([])
+  const [tempKey, setTempKey] = useState<string>('')
+  const [fxRate, setFxRate] = useState<number | null>(null)
+  const [fileUrl, setFileUrl] = useState<string>('')
+  const [activeTab, setActiveTab] = useState('form')
+
+  useEffect(() => {
+    if (!open) return
+    ;(async () => {
+      // Load distinct states with active projects
+      const { data } = await supabase
+        .from('err_projects')
+        .select('state')
+        .eq('status', 'active')
+      const uniq = Array.from(new Set(((data as any[]) || []).map((r:any)=>r.state).filter(Boolean))) as string[]
+      setStates(uniq)
+    })()
+  }, [open])
+
+  // When state changes, load ERR rooms in that state with active projects
+  useEffect(() => {
+    if (!selectedState) { setRooms([]); setSelectedRoomId(''); setProjects([]); setProjectId(''); return }
+    ;(async () => {
+      const { data } = await supabase
+        .from('err_projects')
+        .select('emergency_room_id, emergency_rooms (id, name, name_ar, err_code)')
+        .eq('status', 'active')
+        .eq('state', selectedState)
+      const map = new Map<string, { id: string; label: string }>()
+      for (const r of (data as any[]) || []) {
+        const room = r.emergency_rooms
+        if (room?.id && !map.has(room.id)) {
+          const label = room.name || room.name_ar || room.err_code || room.id
+          map.set(room.id, { id: room.id, label })
+        }
+      }
+      setRooms(Array.from(map.values()))
+      setSelectedRoomId('')
+      setProjects([])
+      setProjectId('')
+    })()
+  }, [selectedState])
+
+  // When room changes, load its active projects
+  useEffect(() => {
+    if (!selectedRoomId) { setProjects([]); setProjectId(''); return }
+    ;(async () => {
+      const { data } = await supabase
+        .from('err_projects')
+        .select('id, project_objectives, submitted_at')
+        .eq('status', 'active')
+        .eq('emergency_room_id', selectedRoomId)
+        .order('submitted_at', { ascending: false })
+      setProjects(((data as any[]) || []).map((p:any)=> ({ id: p.id, label: p.project_objectives || p.id })))
+    })()
+  }, [selectedRoomId])
+
+  // Load selected project meta
+  useEffect(() => {
+    const loadProject = async () => {
+      if (!projectId) { setProjectMeta(null); return }
+      const { data, error } = await supabase
+        .from('err_projects')
+        .select(`
+          id,
+          project_objectives,
+          intended_beneficiaries,
+          estimated_beneficiaries,
+          expenses,
+          planned_activities,
+          emergency_rooms (err_code, name, name_ar)
+        `)
+        .eq('id', projectId)
+        .single()
+      if (error) { console.error('loadProject meta', error); setProjectMeta(null); return }
+      // Calculate total from planned_activities (for ERR App submissions)
+      const plannedArr = Array.isArray((data as any)?.planned_activities)
+        ? (data as any).planned_activities
+        : (typeof (data as any)?.planned_activities === 'string' ? JSON.parse((data as any)?.planned_activities || '[]') : [])
+      const fromPlanned = (Array.isArray(plannedArr) ? plannedArr : []).reduce((s: number, pa: any) => {
+        const inner = Array.isArray(pa?.expenses) ? pa.expenses : []
+        return s + inner.reduce((ss: number, ie: any) => ss + (Number(ie.total) || 0), 0)
+      }, 0)
+
+      // Calculate total from expenses (for mutual_aid_portal submissions)
+      const expensesArr = Array.isArray((data as any)?.expenses)
+        ? (data as any).expenses
+        : (typeof (data as any)?.expenses === 'string' ? JSON.parse((data as any)?.expenses || '[]') : [])
+      const fromExpenses = (Array.isArray(expensesArr) ? expensesArr : []).reduce((s: number, ex: any) => {
+        return s + (Number(ex.total_cost) || 0)
+      }, 0)
+
+      // Use expenses total if it exists (mutual_aid_portal), otherwise use planned_activities total (ERR App)
+      const grantSum = fromExpenses > 0 ? fromExpenses : fromPlanned
+      const room = (data as any)?.emergency_rooms
+      const roomLabel = room?.err_code || room?.name_ar || room?.name || ''
+      setProjectMeta({
+        roomLabel,
+        project_objectives: (data as any)?.project_objectives || '',
+        beneficiaries: (data as any)?.intended_beneficiaries || (data as any)?.estimated_beneficiaries || '',
+        total_grant_from_project: grantSum
+      })
+    }
+    loadProject()
+  }, [projectId])
+
+  const handleUploadAndParse = async () => {
+    if (!projectId || !file) return
+    setIsLoading(true)
+    try {
+      const ext = (file.name.split('.').pop() || 'pdf').toLowerCase()
+      // init temp key
+      const initRes = await fetch('/api/f4/upload/init', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ project_id: projectId, ext }) })
+      const initJson = await initRes.json()
+      if (!initRes.ok) throw new Error(initJson.error || 'Init failed')
+      const key = initJson.file_key_temp as string
+      setTempKey(key)
+      // upload file to storage
+      const { error: upErr } = await supabase.storage.from('images').upload(key, file, { upsert: true })
+      if (upErr) throw upErr
+      // parse
+      // Get signed URL for file viewing
+      const { data: signedUrl } = await supabase.storage.from('images').createSignedUrl(key, 3600)
+      if (signedUrl?.signedUrl) {
+        setFileUrl(signedUrl.signedUrl)
+      }
+
+      const parseRes = await fetch('/api/f4/parse', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ project_id: projectId, file_key_temp: key }) })
+      const parseJson = await parseRes.json()
+      if (!parseRes.ok) throw new Error(parseJson.error || 'Parse failed')
+      setSummaryDraft({ ...(parseJson.summaryDraft || {}), report_date: reportDate || (parseJson.summaryDraft?.report_date || '') })
+      setExpensesDraft((parseJson.expensesDraft || []).map((ex: any) => ({
+        ...ex,
+        // initialize display amount to SDG if present, else fallback to USD
+        expense_amount: ex.expense_amount_sdg ?? ex.expense_amount ?? 0,
+        // default payment method so it persists even if user doesn't touch the select
+        payment_method: ex.payment_method || 'Bank Transfer'
+      })))
+      setStep('preview')
+    } catch (e) {
+      console.error(e)
+      alert('Failed to process file')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleSave = async () => {
+    if (!projectId || !summaryDraft) return
+    setIsLoading(true)
+    try {
+      const totalFromTable = expensesDraft.reduce((s, ex) => s + (Number(ex.expense_amount) || 0), 0)
+      const remainderComputed = (projectMeta?.total_grant_from_project || 0) - totalFromTable
+      const summaryToSave = {
+        ...summaryDraft,
+        total_grant: projectMeta?.total_grant_from_project ?? null,
+        total_expenses: totalFromTable,
+        remainder: remainderComputed
+      }
+      const res = await fetch('/api/f4/save', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ project_id: projectId, summary: summaryToSave, expenses: expensesDraft, file_key_temp: tempKey }) })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error || 'Save failed')
+      onOpenChange(false)
+      onSaved()
+    } catch (e) {
+      console.error(e)
+      alert('Failed to save F4')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const reset = () => {
+    setProjectId('')
+    setFile(null)
+    setReportDate('')
+    setSummaryDraft(null)
+    setExpensesDraft([])
+    setStep('select')
+    setTempKey('')
+    setFileUrl('')
+    setActiveTab('form')
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => { onOpenChange(v); if (!v) reset() }}>
+      <DialogContent className="max-w-7xl w-[95vw] max-h-[85vh] overflow-y-auto select-text">
+        <DialogHeader>
+          <DialogTitle>{t('f4.modal.title')}</DialogTitle>
+        </DialogHeader>
+        {step === 'select' ? (
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div className="space-y-1">
+                <Label>{t('f4.modal.state')}</Label>
+                <Select value={selectedState} onValueChange={(v)=>{ setSelectedState(v); }}>
+                  <SelectTrigger className="w-full"><SelectValue placeholder={t('f4.modal.state_placeholder') as string} /></SelectTrigger>
+                  <SelectContent>
+                    {states.map(s => (
+                      <SelectItem key={s} value={s}>{s}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label>{t('f4.modal.err')}</Label>
+                <Select value={selectedRoomId} onValueChange={(v)=>{ setSelectedRoomId(v); }} disabled={!selectedState}>
+                  <SelectTrigger className="w-full"><SelectValue placeholder={t('f4.modal.err_placeholder') as string} /></SelectTrigger>
+                  <SelectContent>
+                    {rooms.map(r => (
+                      <SelectItem key={r.id} value={r.id}>{r.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label>{t('f4.modal.project')}</Label>
+                <Select value={projectId} onValueChange={setProjectId} disabled={!selectedRoomId}>
+                  <SelectTrigger className="w-full"><SelectValue placeholder={t('f4.modal.project_placeholder') as string} /></SelectTrigger>
+                  <SelectContent>
+                    {projects.map(p => (
+                      <SelectItem key={p.id} value={p.id}>{p.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="space-y-1">
+              <Label>{t('f4.modal.report_date')}</Label>
+              <Input type="date" value={reportDate} onChange={(e) => setReportDate(e.target.value)} />
+            </div>
+            <div className="space-y-1">
+              <Label>{t('f4.modal.summary_file')}</Label>
+              <Input type="file" accept=".pdf,image/*" onChange={(e) => setFile(e.target.files?.[0] || null)} />
+              <div className="text-xs text-muted-foreground">{t('f4.modal.choose_file_hint')}</div>
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => onOpenChange(false)}>{t('f4.modal.cancel')}</Button>
+              <Button onClick={handleUploadAndParse} disabled={!projectId || !file || isLoading}>{isLoading ? 'Processing…' : t('f4.modal.process')}</Button>
+            </div>
+          </div>
+        ) : (
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="form">{t('f4.preview.tabs.edit_form')}</TabsTrigger>
+              <TabsTrigger value="file">{t('f4.preview.tabs.view_file')}</TabsTrigger>
+            </TabsList>
+            
+            <TabsContent value="form" className="space-y-6 select-text mt-6">
+            {/* Summary Header */}
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label>{t('f4.preview.labels.err_room')}</Label>
+                  <div className="h-10 flex items-center px-3 rounded border bg-muted/50">{projectMeta?.roomLabel || '-'}</div>
+                </div>
+                <div>
+                  <Label>{t('f4.preview.labels.report_date')}</Label>
+                  <Input type="date" value={summaryDraft?.report_date ?? reportDate} onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), report_date: e.target.value }))} />
+                </div>
+              </div>
+              <div>
+                <Label>{t('f4.preview.labels.project_activities')}</Label>
+                <div className="min-h-[40px] px-3 py-2 rounded border bg-muted/50 text-sm whitespace-pre-wrap">{projectMeta?.project_objectives || '-'}</div>
+              </div>
+              <div>
+                <Label>{t('f4.preview.labels.beneficiaries')}</Label>
+                <Input value={summaryDraft?.beneficiaries ?? projectMeta?.beneficiaries ?? ''} onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), beneficiaries: e.target.value }))} />
+              </div>
+              {/* FX Rate (moved here) */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label>{t('f4.preview.labels.fx_rate')}</Label>
+                  <Input type="number" value={fxRate ?? ''} onChange={(e)=>{
+                    const v = parseFloat(e.target.value)
+                    setFxRate(isNaN(v) ? null : v)
+                    if (!isNaN(v) && v > 0) {
+                      setExpensesDraft(prev => prev.map((ex:any)=>{
+                        const sdg = ex.expense_amount_sdg ?? ex.expense_amount
+                        return {
+                          ...ex,
+                          expense_amount: typeof sdg === 'number' ? +(sdg / v).toFixed(2) : ex.expense_amount
+                        }
+                      }))
+                    }
+                  }} placeholder={t('f4.preview.labels.fx_placeholder') as string} />
+                </div>
+              </div>
+            </div>
+
+            {/* Expenses (move above Financials) */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <Label>{t('f4.preview.expenses.title')}</Label>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setExpensesDraft(prev => ([...prev, {
+                    expense_activity: '',
+                    expense_description: '',
+                    expense_amount: 0,
+                    payment_date: '',
+                    payment_method: 'Bank Transfer',
+                    receipt_no: '',
+                    seller: '',
+                    is_draft: true
+                  }]))}
+                >{t('f4.preview.expenses.add')}</Button>
+              </div>
+              <div className="border rounded overflow-hidden select-text">
+                {expensesDraft.length === 0 ? (
+                  <div className="p-3 text-sm text-muted-foreground">{t('f4.preview.expenses.empty')}</div>
+                ) : (
+                  <Table className="select-text">
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-[16%] py-1 px-2 text-xs">{t('f4.preview.expenses.cols.activity')}</TableHead>
+                        <TableHead className="w-[24%] py-1 px-2 text-xs">{t('f4.preview.expenses.cols.description')}</TableHead>
+                        <TableHead className="w-[14%] py-1 px-2 text-right text-xs">{t('f4.preview.expenses.cols.amount')}</TableHead>
+                        <TableHead className="w-[14%] py-1 px-2 text-xs">{t('f4.preview.expenses.cols.payment_date')}</TableHead>
+                        <TableHead className="w-[12%] py-1 px-2 text-xs">{t('f4.preview.expenses.cols.method')}</TableHead>
+                        <TableHead className="w-[12%] py-1 px-2 text-xs">{t('f4.preview.expenses.cols.receipt_no')}</TableHead>
+                        <TableHead className="w-[18%] py-1 px-2 text-xs">{t('f4.preview.expenses.cols.seller')}</TableHead>
+                        <TableHead className="w-[8%] py-1 px-2 text-xs text-right">{t('f4.preview.expenses.cols.actions')}</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {expensesDraft.map((ex, idx) => (
+                        <TableRow key={idx} className="text-sm">
+                          <TableCell className="py-1 px-2">
+                            <Input className="h-8" placeholder={t('f4.preview.expenses.cols.activity') as string} value={ex.expense_activity || ''} onChange={(e)=>{
+                              const arr=[...expensesDraft]; arr[idx]={...arr[idx], expense_activity: e.target.value}; setExpensesDraft(arr)
+                            }} />
+                          </TableCell>
+                          <TableCell className="py-1 px-2">
+                            <Input className="h-8" placeholder={t('f4.preview.expenses.cols.description') as string} value={ex.expense_description || ''} onChange={(e)=>{
+                              const arr=[...expensesDraft]; arr[idx]={...arr[idx], expense_description: e.target.value}; setExpensesDraft(arr)
+                            }} />
+                          </TableCell>
+                          <TableCell className="py-1 px-2 text-right">
+                            <Input className="h-8" type="number" placeholder={t('f4.preview.expenses.cols.amount') as string} value={ex.expense_amount ?? ''} onChange={(e)=>{
+                              const arr=[...expensesDraft]; arr[idx]={...arr[idx], expense_amount: parseFloat(e.target.value)||0}; setExpensesDraft(arr)
+                            }} />
+                          </TableCell>
+                          <TableCell className="py-1 px-2">
+                            <Input className="h-8" type="date" placeholder={t('f4.preview.expenses.cols.payment_date') as string} value={ex.payment_date || ''} onChange={(e)=>{
+                              const arr=[...expensesDraft]; arr[idx]={...arr[idx], payment_date: e.target.value}; setExpensesDraft(arr)
+                            }} />
+                          </TableCell>
+                          <TableCell className="py-1 px-2">
+                            <Select value={ex.payment_method || 'Bank Transfer'} onValueChange={(v)=>{
+                              const arr=[...expensesDraft]; arr[idx]={...arr[idx], payment_method: v}; setExpensesDraft(arr)
+                            }}>
+                              <SelectTrigger className="h-8 w-full">
+                                <SelectValue placeholder={t('f4.preview.expenses.cols.method') as string} />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="Bank Transfer">Bank Transfer</SelectItem>
+                                <SelectItem value="Cash">Cash</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </TableCell>
+                          <TableCell className="py-1 px-2">
+                            <Input className="h-8" placeholder={t('f4.preview.expenses.cols.receipt_no') as string} value={ex.receipt_no || ''} onChange={(e)=>{
+                              const arr=[...expensesDraft]; arr[idx]={...arr[idx], receipt_no: e.target.value}; setExpensesDraft(arr)
+                            }} />
+                          </TableCell>
+                          <TableCell className="py-1 px-2">
+                            <Input className="h-8" placeholder={t('f4.preview.expenses.cols.seller') as string} value={ex.seller || ''} onChange={(e)=>{
+                              const arr=[...expensesDraft]; arr[idx]={...arr[idx], seller: e.target.value}; setExpensesDraft(arr)
+                            }} />
+                          </TableCell>
+                          <TableCell className="py-1 px-2 text-right">
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              onClick={() => {
+                                const arr = [...expensesDraft]
+                                arr.splice(idx, 1)
+                                setExpensesDraft(arr)
+                              }}
+                            >{t('f4.preview.expenses.cols.delete')}</Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </div>
+            </div>
+
+            {/* Financials */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>{t('f4.preview.financials.total_grant')}</Label>
+                <div className="h-10 flex items-center px-3 rounded border bg-muted/50">{(projectMeta?.total_grant_from_project ?? 0).toLocaleString()}</div>
+              </div>
+              <div>
+                <Label>{t('f4.preview.financials.total_expenses')}</Label>
+                <div className="h-10 flex items-center px-3 rounded border bg-muted/50">{expensesDraft.reduce((s, ex) => s + (ex.expense_amount || 0), 0).toLocaleString()}</div>
+              </div>
+              <div>
+                <Label>{t('f4.preview.financials.remainder')}</Label>
+                <Input type="number" value={(projectMeta?.total_grant_from_project || 0) - expensesDraft.reduce((s, ex) => s + (Number(ex.expense_amount) || 0), 0)} readOnly />
+              </div>
+              <div>
+                <Label>{t('f4.preview.financials.total_other_sources')}</Label>
+                <Input type="number" value={summaryDraft?.total_other_sources ?? ''} onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), total_other_sources: parseFloat(e.target.value)||0 }))} />
+              </div>
+              <div className="col-span-2">
+                <Label>{t('f4.preview.financials.excess_expenses')}</Label>
+                <Input value={summaryDraft?.excess_expenses ?? ''} onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), excess_expenses: e.target.value }))} />
+              </div>
+              <div className="col-span-2">
+                <Label>{t('f4.preview.financials.surplus_use')}</Label>
+                <Input value={summaryDraft?.surplus_use ?? ''} onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), surplus_use: e.target.value }))} />
+              </div>
+              <div className="col-span-2">
+                <Label>{t('f4.preview.financials.lessons_learned')}</Label>
+                <Input value={summaryDraft?.lessons ?? ''} onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), lessons: e.target.value }))} />
+              </div>
+              <div className="col-span-2">
+                <Label>{t('f4.preview.financials.training_needs')}</Label>
+                <Input value={summaryDraft?.training ?? ''} onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), training: e.target.value }))} />
+              </div>
+            </div>
+
+            <div className="flex justify-between">
+              <Button variant="outline" onClick={()=>setStep('select')}>{t('f4.preview.buttons.back')}</Button>
+              <Button onClick={handleSave} disabled={isLoading}>{isLoading ? t('f4.preview.buttons.saving') : t('f4.preview.buttons.save')}</Button>
+            </div>
+            </TabsContent>
+            
+            <TabsContent value="file" className="mt-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Uploaded File</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {fileUrl ? (
+                    <div className="w-full h-[600px] border rounded">
+                      {file?.type === 'application/pdf' ? (
+                        <iframe 
+                          src={fileUrl} 
+                          className="w-full h-full rounded"
+                          title="F4 Report PDF"
+                        />
+                      ) : (
+                        <img 
+                          src={fileUrl} 
+                          alt="F4 Report" 
+                          className="w-full h-full object-contain rounded"
+                        />
+                      )}
+                    </div>
+                  ) : (
+                    <div className="w-full h-[600px] border rounded flex items-center justify-center text-muted-foreground">
+                      No file preview available
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+          </Tabs>
+        )}
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+

@@ -1,0 +1,77 @@
+{
+  "title": "خطط عمل F1",
+  "description": "إدارة ومراجعة خطط عمل F1 من تقديمات تطبيق ERR والتحميل المباشر",
+  "err_app_submissions": "تقديمات تطبيق ERR",
+  "direct_upload": {
+    "title": "تحميل خطة عمل F1",
+    "description": "تحميل خطط عمل F1 المعتمدة مسبقاً مباشرة",
+    "select_file": "الرجاء اختيار ملف أولاً",
+    "download_template": "تحميل النموذج",
+    "upload": "تحميل خطة العمل",
+    "uploading": "جاري التحميل..."
+  },
+  "grant_details": {
+    "grant": "المنحة",
+    "serial": "رقم المنحة",
+    "select_grant": "اختر المنحة",
+    "select_state": "اختر تخصيص الولاية",
+    "no_allocation": "لا يوجد تخصيص متاح لهذه الولاية",
+    "amount_exceeded": "المبلغ يتجاوز تخصيص الولاية"
+  },
+  "status": {
+    "unassigned": "غير مخصص",
+    "allocated": "مخصص",
+    "reassigned": "معاد تخصيصه"
+  },
+  "pool_overview": "نظرة عامة على المجمّع",
+  "pool": {
+    "loading": "جارٍ تحميل الأرصدة…",
+    "total": "الإجمالي",
+    "committed": "المُلتزم",
+    "pending": "المعلق",
+    "remaining": "المتبقي",
+    "by_state": {
+      "title": "حسب الولاية",
+      "state": "الولاية",
+      "state_desc": "اسم الولاية",
+      "allocated": "المخصص",
+      "allocated_desc": "إجمالي المُسند",
+      "committed": "المُلتزم",
+      "committed_desc": "إنفاق مُعتمد",
+      "pending": "المعلق",
+      "pending_desc": "غير مُلتزم بعد",
+      "remaining": "المتبقي",
+      "remaining_desc": "المخصص − المُلتزم − المعلق",
+      "proposed": "المُقترح",
+      "proposed_desc": "هذا الرفع",
+      "remainder": "المتبقي بعد التطبيق",
+      "remainder_desc": "بعد الاقتراح"
+    },
+    "by_donor": {
+      "title": "حسب المانح/المنحة",
+      "donor": "المانح",
+      "donor_desc": "اسم الممول",
+      "grant": "المنحة",
+      "grant_desc": "نداء المنحة",
+      "included": "المُضاف",
+      "included_desc": "المضاف للمجمّع",
+      "committed": "المُلتزم",
+      "committed_desc": "إنفاق مُعتمد",
+      "pending": "المعلق",
+      "pending_desc": "غير مُلتزم بعد",
+      "remaining": "المتبقي",
+      "remaining_desc": "المضاف − المُلتزم − المعلق",
+      "proposed": "المُقترح",
+      "proposed_desc": "هذا الرفع",
+      "remainder": "المتبقي بعد التطبيق",
+      "remainder_desc": "بعد الاقتراح"
+    }
+  }
+  ,
+  "err_tabs": {
+    "new": "مشاريع جديدة",
+    "feedback": "بحاجة لتعليقات",
+    "declined": "مشاريع مرفوضة",
+    "assignment": "تخصيص المشاريع"
+  }
+}

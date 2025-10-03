@@ -1,0 +1,173 @@
+'use client'
+
+import React from 'react'
+import { useTranslation } from 'react-i18next'
+import { DollarSign, TrendingUp, TrendingDown, RefreshCw } from 'lucide-react'
+import { cn } from '@/lib/utils'
+
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+
+import type { FundingCycle, CycleBudgetSummary } from '@/types/cycles'
+
+interface CycleBudgetDashboardProps {
+  cycle: FundingCycle
+  budgetSummary: CycleBudgetSummary
+  onRefresh?: () => void
+  isRefreshing?: boolean
+}
+
+export default function CycleBudgetDashboard({ 
+  cycle, 
+  budgetSummary,
+  onRefresh,
+  isRefreshing = false
+}: CycleBudgetDashboardProps) {
+  const { t } = useTranslation(['err', 'common'])
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
+    }).format(amount)
+  }
+
+  const getUtilizationPercentage = () => {
+    if (budgetSummary.total_available === 0) return 0
+    return Math.round(((budgetSummary.total_committed + budgetSummary.total_pending) / budgetSummary.total_available) * 100)
+  }
+
+  const getRemainingPercentage = () => {
+    if (budgetSummary.total_available === 0) return 0
+    return Math.round((budgetSummary.remaining / budgetSummary.total_available) * 100)
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Budget Summary Header with Refresh Button */}
+      <div className="flex items-center justify-between">
+        <h3 className="text-lg font-semibold">{t('err:cycles.budget.title')}</h3>
+        {onRefresh && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onRefresh}
+            disabled={isRefreshing}
+            className="flex items-center gap-2"
+          >
+            <RefreshCw className={cn("h-4 w-4", isRefreshing && "animate-spin")} />
+            {isRefreshing ? t('err:cycles.budget.refreshing') : t('err:cycles.budget.refresh')}
+          </Button>
+        )}
+      </div>
+
+      {/* Budget Summary */}
+      <div className="space-y-4">
+        {/* Total Available */}
+        <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
+          <div className="flex items-center gap-2">
+            <DollarSign className="h-4 w-4 text-blue-600" />
+            <span className="font-medium text-blue-900">{t('err:cycles.budget.total_available')}</span>
+          </div>
+          <span className="text-lg font-bold text-blue-900">
+            {formatCurrency(budgetSummary.total_available)}
+          </span>
+        </div>
+
+        {/* Total Allocated */}
+        <div className="flex items-center justify-between p-3 bg-amber-50 rounded-lg">
+          <div className="flex items-center gap-2">
+            <TrendingUp className="h-4 w-4 text-amber-600" />
+            <span className="font-medium text-amber-900">{t('err:cycles.budget.total_allocated')}</span>
+          </div>
+          <span className="text-lg font-bold text-amber-900">
+            {formatCurrency(budgetSummary.total_allocated)}
+          </span>
+        </div>
+
+        {/* Total Committed */}
+        <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg">
+          <div className="flex items-center gap-2">
+            <TrendingUp className="h-4 w-4 text-green-600" />
+            <span className="font-medium text-green-900">{t('err:cycles.budget.total_committed')}</span>
+          </div>
+          <span className="text-lg font-bold text-green-900">
+            {formatCurrency(budgetSummary.total_committed)}
+          </span>
+        </div>
+
+        {/* Total Pending */}
+        <div className="flex items-center justify-between p-3 bg-orange-50 rounded-lg">
+          <div className="flex items-center gap-2">
+            <TrendingUp className="h-4 w-4 text-orange-600" />
+            <span className="font-medium text-orange-900">{t('err:cycles.budget.total_pending')}</span>
+          </div>
+          <span className="text-lg font-bold text-orange-900">
+            {formatCurrency(budgetSummary.total_pending)}
+          </span>
+        </div>
+
+        {/* Remaining */}
+        <div className={cn(
+          "flex items-center justify-between p-3 rounded-lg",
+          budgetSummary.remaining >= 0 
+            ? "bg-green-50" 
+            : "bg-red-50"
+        )}>
+          <div className="flex items-center gap-2">
+            <TrendingDown className={cn(
+              "h-4 w-4",
+              budgetSummary.remaining >= 0 ? "text-green-600" : "text-red-600"
+            )} />
+            <span className={cn(
+              "font-medium",
+              budgetSummary.remaining >= 0 ? "text-green-900" : "text-red-900"
+            )}>
+              {t('err:cycles.budget.remaining')}
+            </span>
+          </div>
+          <span className={cn(
+            "text-lg font-bold",
+            budgetSummary.remaining >= 0 ? "text-green-900" : "text-red-900"
+          )}>
+            {formatCurrency(budgetSummary.remaining)}
+          </span>
+        </div>
+
+        {/* Unused from Previous */}
+        {budgetSummary.unused_from_previous > 0 && (
+          <div className="flex items-center justify-between p-3 bg-purple-50 rounded-lg">
+            <div className="flex items-center gap-2">
+              <TrendingUp className="h-4 w-4 text-purple-600" />
+              <span className="font-medium text-purple-900">{t('err:cycles.budget.rollover_previous')}</span>
+            </div>
+            <span className="text-lg font-bold text-purple-900">
+              {formatCurrency(budgetSummary.unused_from_previous)}
+            </span>
+          </div>
+        )}
+
+        {/* Utilization Progress */}
+        <div className="space-y-2">
+          <div className="flex justify-between text-sm">
+            <span className="text-muted-foreground">{t('err:cycles.budget.utilization')}</span>
+            <span className="font-medium">{getUtilizationPercentage()}%</span>
+          </div>
+          <div className="w-full bg-gray-200 rounded-full h-2">
+            <div 
+              className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+              style={{ width: `${getUtilizationPercentage()}%` }}
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}

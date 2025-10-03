@@ -12,6 +12,10 @@ import projectsEN from './locales/en/projects.json'
 import roomsEN from './locales/en/rooms.json'
 import usersEN from './locales/en/users.json'
 import fsystemEN from './locales/en/fsystem.json'
+import f2EN from './locales/en/f2.json'
+import f1_plansEN from './locales/en/f1_plans.json'
+import f3EN from './locales/en/f3.json'
+import f4f5EN from './locales/en/f4f5.json'
 
 // Arabic translations
 import commonAR from './locales/ar/common.json'
@@ -24,6 +28,10 @@ import projectsAR from './locales/ar/projects.json'
 import roomsAR from './locales/ar/rooms.json'
 import usersAR from './locales/ar/users.json'
 import fsystemAR from './locales/ar/fsystem.json'
+import f2AR from './locales/ar/f2.json'
+import f1_plansAR from './locales/ar/f1_plans.json'
+import f3AR from './locales/ar/f3.json'
+import f4f5AR from './locales/ar/f4f5.json'
 
 const resources = {
   en: {
@@ -36,7 +44,11 @@ const resources = {
     projects: projectsEN,
     rooms: roomsEN,
     users: usersEN,
-    fsystem: fsystemEN
+    fsystem: fsystemEN,
+    f2: f2EN,
+    f1_plans: f1_plansEN,
+    f3: f3EN,
+    f4f5: f4f5EN
   },
   ar: {
     common: commonAR,
@@ -48,7 +60,11 @@ const resources = {
     projects: projectsAR,
     rooms: roomsAR,
     users: usersAR,
-    fsystem: fsystemAR
+    fsystem: fsystemAR,
+    f2: f2AR,
+    f1_plans: f1_plansAR,
+    f3: f3AR,
+    f4f5: f4f5AR
   }
 }
 
@@ -72,7 +88,11 @@ i18n
       'projects',
       'rooms',
       'users',
-      'fsystem'
+                'fsystem',
+      'f2',
+      'f1_plans',
+      'f3',
+      'f4f5'
     ]
   })
 

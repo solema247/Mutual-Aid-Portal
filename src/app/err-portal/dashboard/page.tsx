@@ -20,8 +20,33 @@ export default function DashboardPage() {
           variant="primary"
           defaultOpen={true}
         >
-          <div className="p-4 text-muted-foreground">
-            {t('dashboard:coming_soon')}
+          <div className="p-4">
+            <iframe 
+              width="100%" 
+              height="443" 
+              src="https://lookerstudio.google.com/embed/reporting/128061d9-8499-414d-ac14-1c04068a2d4d/page/cPRTF" 
+              frameBorder="0" 
+              style={{border: 0}} 
+              allowFullScreen 
+              sandbox="allow-storage-access-by-user-activation allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox"
+            />
+          </div>
+        </CollapsibleRow>
+
+        <CollapsibleRow
+          title={t('dashboard:map_title')}
+          defaultOpen={false}
+        >
+          <div className="p-4">
+            <iframe
+              src="https://felt.com/embed/map/SudanERRQGIS-z2CDxQ3DRnCUTluniOvKIA"
+              width="100%"
+              height="600"
+              style={{ border: "none" }}
+              allowFullScreen
+              loading="lazy"
+              title="Sudan ERR Map"
+            />
           </div>
         </CollapsibleRow>
 

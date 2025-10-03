@@ -6,6 +6,14 @@ export interface User {
   status: 'pending' | 'active' | 'suspended'
   created_at: string
   updated_at: string | null
+  emergency_rooms?: {
+    name: string
+    name_ar: string | null
+    err_code: string | null
+    state: {
+      state_name: string
+    }
+  }
 }
 
 export interface PendingUserListItem {
@@ -15,6 +23,9 @@ export interface PendingUserListItem {
   role: 'admin' | 'state_err' | 'base_err'
   createdAt: string
   status: 'pending' | 'active' | 'suspended'
+  err_name?: string
+  err_code?: string
+  state_name?: string
 }
 
 export interface ActiveUserListItem {
@@ -25,4 +36,7 @@ export interface ActiveUserListItem {
   status: 'active' | 'suspended'
   createdAt: string
   updatedAt: string | null
+  err_name?: string
+  err_code?: string
+  state_name?: string
 } 

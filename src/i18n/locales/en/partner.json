@@ -2,5 +2,42 @@
   "title": "Mutual Aid Partner Portal",
   "welcome": "Welcome, {{name}}",
   "forecast": "Forecasting Tool",
-  "forecast_desc": "Plan and manage your forecasts"
-} 
+  "forecast_desc": "Plan and manage your forecasts",
+  "grants": {
+    "title": "Grant Management",
+    "description": "Manage your grant calls and applications",
+    "form": {
+      "title": "Create New Grant Call",
+      "description": "Create a new grant call with donor information, amount, and timeline",
+      "donor": "Donor",
+      "select_donor": "Select donor",
+      "name": "Grant Name",
+      "shortname": "Short Name",
+      "amount": "Amount",
+      "status": "Status",
+      "start_date": "Start Date",
+      "end_date": "End Date",
+      "submit": "Create Grant Call"
+    },
+    "table": {
+      "title": "Grant Calls Overview",
+      "description": "View and manage all your grant calls with filtering options",
+      "donor": "Donor",
+      "shortname": "Short Name",
+      "name": "Name",
+      "amount": "Amount",
+      "status": "Status",
+      "start_date": "Start Date",
+      "end_date": "End Date",
+      "filter": {
+        "all": "All",
+        "open": "Open",
+        "closed": "Closed"
+      }
+    },
+    "toast": {
+      "success": "Grant call created successfully",
+      "error": "Failed to create grant call"
+    }
+  }
+}
