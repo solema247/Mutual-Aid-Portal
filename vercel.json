@@ -3,13 +3,11 @@
   "functions": {
     "src/app/api/f4/parse/route.ts": {
       "maxDuration": 600,
-      "memory": 1536,
-      "regions": ["iad1"]
+      "memory": 1536
     },
     "src/app/api/fsystem/process/route.ts": {
       "maxDuration": 600,
-      "memory": 1536,
-      "regions": ["iad1"]
+      "memory": 1536
     }
   }
 }
