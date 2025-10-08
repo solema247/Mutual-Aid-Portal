@@ -194,7 +194,7 @@ export async function POST(request: Request) {
       // Assign in order to rows still missing amounts
       let cursor = 0
       // Trim to the tail of the amounts list to match count if needed
-      const missingCount = expensesDraft.filter(r => r.expense_activity && (r.expense_amount == null && r.expense_amount_sdg == null)).length
+      const missingCount = expensesDraft.filter((r: any) => r.expense_activity && (r.expense_amount == null && r.expense_amount_sdg == null)).length
       if (numericCandidates.length > missingCount && missingCount > 0) {
         numericCandidates.splice(0, numericCandidates.length - missingCount)
       }
@@ -211,17 +211,17 @@ export async function POST(request: Request) {
     try {
       const A = num(totalExpensesStr)
       if (A != null) {
-        let sum = expensesDraft.reduce((s, r) => s + (Number(r.expense_amount_sdg ?? r.expense_amount) || 0), 0)
+        let sum = expensesDraft.reduce((s: number, r: any) => s + (Number(r.expense_amount_sdg ?? r.expense_amount) || 0), 0)
         const diff = Math.abs(sum - A)
         if (A > 0 && diff / A > 0.15) {
           // Recompute ignoring small values
-          sum = expensesDraft.reduce((s, r) => {
+          sum = expensesDraft.reduce((s: number, r: any) => {
             const v = Number(r.expense_amount_sdg ?? r.expense_amount) || 0
             return s + (v >= 1000 ? v : 0)
           }, 0)
           // If improved, zero-out small values
           if (Math.abs(sum - A) < diff) {
-            expensesDraft = expensesDraft.map(r => {
+            expensesDraft = expensesDraft.map((r: any) => {
               const v = Number(r.expense_amount_sdg ?? r.expense_amount) || 0
               if (v > 0 && v < 1000) {
                 r.expense_amount_sdg = null
