@@ -3,9 +3,24 @@ import vision from '@google-cloud/vision'
 import OpenAI from 'openai'
 import path from 'path'
 
+export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic'
+export const maxDuration = 60
+
 // Initialize Google Vision client
 const visionClient = new vision.ImageAnnotatorClient({
-  credentials: JSON.parse(process.env.GOOGLE_VISION || '{}')
+  credentials: (() => {
+    try {
+      const raw = process.env.GOOGLE_VISION || '{}'
+      const creds = JSON.parse(raw)
+      if (creds && typeof creds.private_key === 'string') {
+        creds.private_key = creds.private_key.replace(/\\n/g, '\n')
+      }
+      return creds
+    } catch {
+      return {}
+    }
+  })()
 })
 
 // Initialize OpenAI client
@@ -140,6 +155,7 @@ function detectLanguage(text: string): 'ar' | 'en' {
 
 export async function POST(req: Request) {
   try {
+    const start = Date.now()
     const formData = await req.formData()
     const file = formData.get('file') as File
     const metadataStr = formData.get('metadata') as string
@@ -191,42 +207,10 @@ export async function POST(req: Request) {
         allTexts.push(pageText)
       })
 
-      // Continue only up to the max pages hint
-      if (firstBatchResponses.length === firstBatchPages.length && maxPagesHint > firstBatchPages.length) {
-        try {
-          // Try next batch within the max pages hint
-          const nextCount = Math.min(5, maxPagesHint - firstBatchPages.length)
-          const nextPages = Array.from({ length: nextCount }, (_, i) => firstBatchPages.length + i + 1)
-          const [nextBatch] = await visionClient.batchAnnotateFiles({
-            requests: [{
-              inputConfig: {
-                mimeType: 'application/pdf',
-                content: base64
-              },
-              features: [{
-                type: 'DOCUMENT_TEXT_DETECTION'
-              }],
-              imageContext: {
-                languageHints: ['ar', 'en']
-              },
-              pages: nextPages
-            }]
-          })
-
-          const nextBatchResponses = nextBatch.responses?.[0]?.responses || []
-          nextBatchResponses.forEach((response, idx) => {
-            const pageText = response?.fullTextAnnotation?.text || ''
-            console.log(`Page ${idx + firstBatchPages.length + 1} text length:`, pageText.length)
-            allTexts.push(pageText)
-          })
-          // No further batches if we reached the max pages hint
-        } catch (error) {
-          // If error occurs on second batch, just use what we have
-          console.log('Note: Could not process beyond page 5, using available pages')
-        }
-      }
+      // Remove second-batch attempts to bound runtime strictly to first batch only
 
       console.log('Total pages processed:', allTexts.length)
+      // timing
 
       if (allTexts.length === 0) {
         // Gracefully handle empty OCR: return minimal structure
@@ -268,8 +252,7 @@ export async function POST(req: Request) {
       text = result.fullTextAnnotation?.text || ''
     }
 
-    console.log('Extracted text length:', text.length)
-    console.log('Raw OCR output:', text)
+    // extracted text
 
     // Log the first and last 100 characters to check text boundaries
     if (text.length > 0) {
@@ -310,9 +293,11 @@ export async function POST(req: Request) {
     const isF5 = formType === 'F5'
 
     // Process with OpenAI
+    const aiStart = Date.now()
     const completion = await openai.chat.completions.create({
       model: "gpt-3.5-turbo",
       max_tokens: 3000,
+      response_format: (isF4 || isF5) ? { type: 'json_object' } as any : undefined,
       messages: [
         {
           role: "system",
@@ -490,6 +475,7 @@ Return all fields in this format:
     }
 
     console.log('Raw GPT response:', content)
+    // ai duration
 
     // Sanitize the JSON string (basic cleanup only)
     const sanitizedContent = content
@@ -716,7 +702,7 @@ Return all fields in this format:
       // Attach raw OCR for transparency/debugging
       structuredData.raw_ocr = text
       
-      console.log('Validated data:', structuredData)
+      // validated data
       return NextResponse.json(structuredData)
     } catch (error) {
       console.error('JSON parse error:', error)

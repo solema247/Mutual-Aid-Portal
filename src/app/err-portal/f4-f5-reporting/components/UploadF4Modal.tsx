@@ -37,6 +37,8 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved }: UploadF4M
   const [fxRate, setFxRate] = useState<number | null>(null)
   const [fileUrl, setFileUrl] = useState<string>('')
   const [activeTab, setActiveTab] = useState('form')
+  const [rawOcr, setRawOcr] = useState<string>('')
+  const [aiOutput, setAiOutput] = useState<any | null>(null)
 
   useEffect(() => {
     if (!open) return
@@ -160,9 +162,13 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved }: UploadF4M
       }
 
       const parseRes = await fetch('/api/f4/parse', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ project_id: projectId, file_key_temp: key }) })
-      const parseJson = await parseRes.json()
+      const text = await parseRes.text()
+      let parseJson: any
+      try { parseJson = JSON.parse(text) } catch { throw new Error(`Parse failed: ${parseRes.status} ${parseRes.statusText} — ${text.slice(0, 200)}`) }
       if (!parseRes.ok) throw new Error(parseJson.error || 'Parse failed')
       setSummaryDraft({ ...(parseJson.summaryDraft || {}), report_date: reportDate || (parseJson.summaryDraft?.report_date || '') })
+      setRawOcr(parseJson.summaryDraft?.raw_ocr || '')
+      setAiOutput(parseJson.aiOutput || null)
       setExpensesDraft((parseJson.expensesDraft || []).map((ex: any) => ({
         ...ex,
         // initialize display amount to SDG if present, else fallback to USD
@@ -214,6 +220,7 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved }: UploadF4M
     setTempKey('')
     setFileUrl('')
     setActiveTab('form')
+    setAiOutput(null)
   }
 
   return (
@@ -275,9 +282,10 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved }: UploadF4M
           </div>
         ) : (
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <TabsList className="grid w-full grid-cols-2">
+            <TabsList className="grid w-full grid-cols-3">
               <TabsTrigger value="form">{t('f4.preview.tabs.edit_form')}</TabsTrigger>
               <TabsTrigger value="file">{t('f4.preview.tabs.view_file')}</TabsTrigger>
+              <TabsTrigger value="ocr">OCR Text</TabsTrigger>
             </TabsList>
             
             <TabsContent value="form" className="space-y-6 select-text mt-6">
@@ -492,6 +500,34 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved }: UploadF4M
                       No file preview available
                     </div>
                   )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="ocr" className="mt-6 space-y-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>AI Output (Parsed JSON)</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="bg-muted/30 p-4 rounded font-mono text-sm whitespace-pre whitespace-pre-wrap max-h-[400px] overflow-y-auto">
+                    {aiOutput ? (
+                      <pre>{JSON.stringify(aiOutput, null, 2)}</pre>
+                    ) : (
+                      'No AI output available'
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Full OCR Text</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="bg-muted/30 p-4 rounded font-mono text-sm whitespace-pre-wrap max-h-[400px] overflow-y-auto" dir="rtl">
+                    {rawOcr || 'No OCR text available'}
+                  </div>
                 </CardContent>
               </Card>
             </TabsContent>
