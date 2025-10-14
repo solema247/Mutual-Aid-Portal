@@ -1,5 +1,10 @@
 # Sudan Mutual Aid Portal
 
+<p align="center">
+  <img src="public/logo.jpg" alt="LCC Sudan Logo" width="220" />
+  
+</p>
+
 A modern web application built with Next.js that facilitates coordination and support for Emergency Response Rooms in Sudan. This platform connects aid providers, volunteers, and those in need during the ongoing humanitarian crisis.
 
 ## Features
