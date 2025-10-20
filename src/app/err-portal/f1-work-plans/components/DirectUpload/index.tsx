@@ -211,8 +211,15 @@ export default function DirectUpload() {
         throw new Error('Missing pooled selections (state, grant call, YYMM)')
       }
 
+      // Detect language and translate if needed
+      const sourceLanguage = editedData.language || 'en'
+      console.log('Detected source language:', sourceLanguage)
+      
+      const { translatedData, originalText } = await translateFields(editedData, sourceLanguage)
+      console.log('Translation completed. Original text preserved:', Object.keys(originalText).length > 0)
+
       // Validate against pooled remaining
-      const amountUSD: number = (editedData.expenses || []).reduce((s: number, e: any) => s + (e.total_cost_usd || 0), 0)
+      const amountUSD: number = (translatedData.expenses || []).reduce((s: number, e: any) => s + (e.total_cost_usd || 0), 0)
       const stateRes = await fetch('/api/pool/by-state')
       const stateRows = await stateRes.json()
       const stateRow = (Array.isArray(stateRows) ? stateRows : []).find((r: any) => r.state_name === stateName)
@@ -286,7 +293,7 @@ export default function DirectUpload() {
       if (!finalizeResp.ok) throw new Error('Failed to finalize file upload')
 
       // Convert expenses to DB format (USD only)
-      const expensesForDB = (editedData.expenses || []).map((e: any) => ({ activity: e.activity, total_cost: e.total_cost_usd || 0 }))
+      const expensesForDB = (translatedData.expenses || []).map((e: any) => ({ activity: e.activity, total_cost: e.total_cost_usd || 0 }))
 
       // Sector names
       const primaryNames = sectors.filter(s => formData.primary_sectors.includes(s.id)).map(s => s.sector_name_en).join(', ')
@@ -296,7 +303,7 @@ export default function DirectUpload() {
       const selectedRoom = (rooms as any[]).find(r => r.id === formData.emergency_room_id)
 
       // Prepare data for DB
-      const { form_currency, exchange_rate, raw_ocr, _selected_state_name, _selected_grant_call_id, _yymm, _existing_serial, _selected_funding_cycle_id, _cycle_state_allocation_id, ...dataForDB } = editedData
+      const { form_currency, exchange_rate, raw_ocr, _selected_state_name, _selected_grant_call_id, _yymm, _existing_serial, _selected_funding_cycle_id, _cycle_state_allocation_id, ...dataForDB } = translatedData
 
       // Normalize date for DB (MMYY -> YYYY-MM-01)
       let dbDate: string | null = null
@@ -334,7 +341,9 @@ export default function DirectUpload() {
           cycle_state_allocation_id: _cycle_state_allocation_id || null,
           grant_call_id: grantCallId,
           funding_status: 'allocated',
-          file_key: filePath
+          file_key: filePath,
+          original_text: originalText,
+          language: sourceLanguage
         }])
       if (insertError) throw insertError
 
@@ -390,6 +399,108 @@ export default function DirectUpload() {
   const handleCancelReview = () => {
     setProcessedData(null)
     setIsReviewing(false)
+  }
+
+  // Translation helper function
+  const translateFields = async (data: any, sourceLanguage: string) => {
+    if (sourceLanguage !== 'ar') {
+      // If not Arabic, return data as-is with empty original_text
+      return {
+        translatedData: data,
+        originalText: {
+          source_language: sourceLanguage,
+          project_objectives: null,
+          intended_beneficiaries: null,
+          estimated_timeframe: null,
+          additional_support: null,
+          banking_details: null,
+          program_officer_name: null,
+          reporting_officer_name: null,
+          finance_officer_name: null,
+          planned_activities: [],
+          expenses: []
+        }
+      }
+    }
+
+    const translateText = async (text: string | null): Promise<string | null> => {
+      if (!text || text.trim() === '') return text
+      
+      try {
+        const response = await fetch('/api/translate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ q: text, source: 'ar', target: 'en' })
+        })
+        
+        if (!response.ok) {
+          console.warn('Translation failed for text:', text.substring(0, 50))
+          return text // Fallback to original
+        }
+        
+        const result = await response.json()
+        return result.translatedText || text
+      } catch (error) {
+        console.warn('Translation error:', error)
+        return text // Fallback to original
+      }
+    }
+
+    const translateArray = async (items: string[]): Promise<string[]> => {
+      if (!Array.isArray(items) || items.length === 0) return []
+      
+      const translatedItems = []
+      for (const item of items) {
+        const translated = await translateText(item)
+        translatedItems.push(translated || item)
+      }
+      return translatedItems
+    }
+
+    const translateExpenses = async (expenses: any[]): Promise<any[]> => {
+      if (!Array.isArray(expenses) || expenses.length === 0) return []
+      
+      const translatedExpenses = []
+      for (const expense of expenses) {
+        const translatedActivity = await translateText(expense.activity)
+        translatedExpenses.push({
+          ...expense,
+          activity: translatedActivity || expense.activity
+        })
+      }
+      return translatedExpenses
+    }
+
+    // Build original text object
+    const originalText = {
+      source_language: sourceLanguage,
+      project_objectives: data.project_objectives,
+      intended_beneficiaries: data.intended_beneficiaries,
+      estimated_timeframe: data.estimated_timeframe,
+      additional_support: data.additional_support,
+      banking_details: data.banking_details,
+      program_officer_name: data.program_officer_name,
+      reporting_officer_name: data.reporting_officer_name,
+      finance_officer_name: data.finance_officer_name,
+      planned_activities: Array.isArray(data.planned_activities) ? [...data.planned_activities] : [],
+      expenses: Array.isArray(data.expenses) ? data.expenses.map((e: any) => ({ activity: e.activity })) : []
+    }
+
+    // Translate all text fields
+    const translatedData = { ...data }
+    
+    translatedData.project_objectives = await translateText(data.project_objectives)
+    translatedData.intended_beneficiaries = await translateText(data.intended_beneficiaries)
+    translatedData.estimated_timeframe = await translateText(data.estimated_timeframe)
+    translatedData.additional_support = await translateText(data.additional_support)
+    translatedData.banking_details = await translateText(data.banking_details)
+    translatedData.program_officer_name = await translateText(data.program_officer_name)
+    translatedData.reporting_officer_name = await translateText(data.reporting_officer_name)
+    translatedData.finance_officer_name = await translateText(data.finance_officer_name)
+    translatedData.planned_activities = await translateArray(data.planned_activities)
+    translatedData.expenses = await translateExpenses(data.expenses)
+
+    return { translatedData, originalText }
   }
 
   // No allocation info in upload-first step
