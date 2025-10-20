@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabaseClient'
+import { translateF5Report, translateF5Reach } from '@/lib/translateHelper'
 
 export async function POST(req: Request) {
   try {
@@ -23,19 +24,57 @@ export async function POST(req: Request) {
       err_code = (prj as any)?.emergency_rooms?.err_code || null
     } catch {}
 
+    // Detect language and translate if needed
+    const sourceLanguage = summary.language || 'en'
+    console.log('F5 detected source language:', sourceLanguage)
+    
+    const { translatedData: translatedSummary, originalText: summaryOriginalText } = await translateF5Report(summary, sourceLanguage)
+    console.log('F5 summary translation completed. Original text preserved:', Object.keys(summaryOriginalText).length > 0)
+
+    // Helper function to clean and validate dates
+    const cleanDate = (dateStr: string | null): string | null => {
+      if (!dateStr || typeof dateStr !== 'string') return null
+      
+      // Handle malformed dates like "18/7/202" -> "18/7/2024"
+      const cleaned = dateStr.trim()
+      
+      // If it looks like a partial year (3 digits), assume current decade
+      if (/^\d{1,2}\/\d{1,2}\/\d{3}$/.test(cleaned)) {
+        const parts = cleaned.split('/')
+        const year = parts[2]
+        if (year.length === 3) {
+          // Assume 20xx for 3-digit years
+          parts[2] = '20' + year
+          return parts.join('/')
+        }
+      }
+      
+      // Try to parse as date and return ISO format if valid
+      try {
+        const date = new Date(cleaned)
+        if (!isNaN(date.getTime())) {
+          return date.toISOString().split('T')[0] // Return YYYY-MM-DD format
+        }
+      } catch {}
+      
+      return null
+    }
+
     // Insert program report summary
     const { data: inserted, error: insErr } = await supabase
       .from('err_program_report')
       .insert({
         project_id,
-        report_date: summary.report_date || null,
-        positive_changes: summary.positive_changes || null,
-        negative_results: summary.negative_results || null,
-        unexpected_results: summary.unexpected_results || null,
-        lessons_learned: summary.lessons_learned || null,
-        suggestions: summary.suggestions || null,
-        reporting_person: summary.reporting_person || null,
-        is_draft: summary.is_draft || false
+        report_date: cleanDate(translatedSummary.report_date),
+        positive_changes: translatedSummary.positive_changes || null,
+        negative_results: translatedSummary.negative_results || null,
+        unexpected_results: translatedSummary.unexpected_results || null,
+        lessons_learned: translatedSummary.lessons_learned || null,
+        suggestions: translatedSummary.suggestions || null,
+        reporting_person: translatedSummary.reporting_person || null,
+        is_draft: translatedSummary.is_draft || false,
+        original_text: summaryOriginalText,
+        language: sourceLanguage
       })
       .select('id')
       .single()
@@ -89,20 +128,26 @@ export async function POST(req: Request) {
     // Insert reach activities
     let reach_ids: string[] = []
     if (Array.isArray(reach) && reach.length) {
-      const payload = reach.map((r: any) => ({
+      // Translate reach activities if needed
+      const { translatedData: translatedReach, originalText: reachOriginalText } = await translateF5Reach(reach, sourceLanguage)
+      console.log('F5 reach translation completed. Original text preserved for', reachOriginalText.length, 'activities')
+
+      const payload = translatedReach.map((r: any, index: number) => ({
         report_id,
         activity_name: r.activity_name || null,
         activity_goal: r.activity_goal || null,
         location: r.location || null,
-        start_date: r.start_date || null,
-        end_date: r.end_date || null,
+        start_date: cleanDate(r.start_date),
+        end_date: cleanDate(r.end_date),
         individual_count: r.individual_count ?? null,
         household_count: r.household_count ?? null,
         male_count: r.male_count ?? null,
         female_count: r.female_count ?? null,
         under18_male: r.under18_male ?? null,
         under18_female: r.under18_female ?? null,
-        is_draft: r.is_draft || false
+        is_draft: r.is_draft || false,
+        original_text: reachOriginalText[index] || null,
+        language: sourceLanguage
       }))
       const { data: reachRows, error: reachErr } = await supabase
         .from('err_program_reach')

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabaseClient'
+import { translateF4Summary, translateF4Expenses } from '@/lib/translateHelper'
 
 export async function POST(req: Request) {
   try {
@@ -23,20 +24,29 @@ export async function POST(req: Request) {
       err_code = (prj as any)?.emergency_rooms?.err_code || null
     } catch {}
 
+    // Detect language and translate if needed
+    const sourceLanguage = summary.language || 'en'
+    console.log('F4 detected source language:', sourceLanguage)
+    
+    const { translatedData: translatedSummary, originalText: summaryOriginalText } = await translateF4Summary(summary, sourceLanguage)
+    console.log('F4 summary translation completed. Original text preserved:', Object.keys(summaryOriginalText).length > 0)
+
     // Insert summary
     const { data: inserted, error: insErr } = await supabase
       .from('err_summary')
       .insert({
         project_id,
         err_id,
-        report_date: summary.report_date || null,
-        total_grant: summary.total_grant ?? null,
-        total_expenses: summary.total_expenses ?? null,
-        remainder: summary.remainder ?? null,
-        beneficiaries: summary.beneficiaries || null,
-        lessons: summary.lessons || null,
-        training: summary.training || null,
-        project_objectives: summary.project_objectives || null
+        report_date: translatedSummary.report_date || null,
+        total_grant: translatedSummary.total_grant ?? null,
+        total_expenses: translatedSummary.total_expenses ?? null,
+        remainder: translatedSummary.remainder ?? null,
+        beneficiaries: translatedSummary.beneficiaries || null,
+        lessons: translatedSummary.lessons || null,
+        training: translatedSummary.training || null,
+        project_objectives: translatedSummary.project_objectives || null,
+        original_text: summaryOriginalText,
+        language: sourceLanguage
       })
       .select('id')
       .single()
@@ -85,7 +95,11 @@ export async function POST(req: Request) {
     // Insert expenses
     let expense_ids: number[] = []
     if (Array.isArray(expenses) && expenses.length) {
-      const payload = expenses.map((e: any) => ({
+      // Translate expenses if needed
+      const { translatedData: translatedExpenses, originalText: expensesOriginalText } = await translateF4Expenses(expenses, sourceLanguage)
+      console.log('F4 expenses translation completed. Original text preserved for', expensesOriginalText.length, 'expenses')
+
+      const payload = translatedExpenses.map((e: any, index: number) => ({
         project_id,
         summary_id,
         expense_activity: e.expense_activity || null,
@@ -95,7 +109,9 @@ export async function POST(req: Request) {
         payment_method: e.payment_method || null,
         receipt_no: e.receipt_no || null,
         seller: e.seller || null,
-        uploaded_by: uploaded_by || null
+        uploaded_by: uploaded_by || null,
+        original_text: expensesOriginalText[index] || null,
+        language: sourceLanguage
       }))
       const { data: expRows, error: expErr } = await supabase
         .from('err_expense')

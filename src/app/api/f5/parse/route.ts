@@ -81,6 +81,7 @@ export async function POST(request: Request) {
       reporting_person: ocrJson.reporting_person || null,
       demographics: ocrJson.demographics || null,
       raw_ocr: ocrJson.raw_ocr || null,
+      language: ocrJson.language || null,
       is_draft: true
     }
 
