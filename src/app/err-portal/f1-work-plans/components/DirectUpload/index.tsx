@@ -12,7 +12,8 @@ import { supabase } from '@/lib/supabaseClient'
 import type { F1FormData, EmergencyRoom, Sector, State } from '@/app/api/fsystem/types/fsystem'
 import ExtractedDataReview from './ExtractedDataReview'
 import { cn } from '@/lib/utils'
-import { X } from 'lucide-react'
+import { X, Plus } from 'lucide-react'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 
 export default function DirectUpload() {
   const { t } = useTranslation(['common', 'fsystem'])
@@ -42,6 +43,10 @@ export default function DirectUpload() {
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [processedData, setProcessedData] = useState<any>(null)
   const [isReviewing, setIsReviewing] = useState(false)
+  const [showCreateRoomDialog, setShowCreateRoomDialog] = useState(false)
+  const [newRoomName, setNewRoomName] = useState('')
+  const [newRoomNameAr, setNewRoomNameAr] = useState('')
+  const [isCreatingRoom, setIsCreatingRoom] = useState(false)
   
 
   useEffect(() => {
@@ -120,6 +125,90 @@ export default function DirectUpload() {
 
   const handleInputChange = (field: keyof F1FormData, value: string | string[] | number) => {
     setFormData(prev => ({ ...prev, [field]: value }))
+  }
+
+  const handleCreateRoom = async () => {
+    if (!newRoomName.trim()) {
+      alert('Please enter a room name')
+      return
+    }
+
+    if (!formData.state_id) {
+      alert('Please select a state first')
+      return
+    }
+
+    setIsCreatingRoom(true)
+    try {
+      const selectedState = states.find(s => s.id === formData.state_id)
+      if (!selectedState) {
+        alert('State not found')
+        return
+      }
+
+      // Get the state short code
+      const stateShort = selectedState.state_short?.toUpperCase() || 'XX'
+
+      // Get existing rooms for this state to determine the next number
+      const { data: existingRooms, error: existingError } = await supabase
+        .from('emergency_rooms')
+        .select('err_code')
+        .eq('state_reference', formData.state_id)
+        .not('err_code', 'is', null)
+
+      let roomNumber = '01' // Default to 01
+      if (!existingError && existingRooms && existingRooms.length > 0) {
+        // Find the highest room number
+        const numbers = existingRooms
+          .map((room: any) => {
+            const match = room.err_code?.match(/ERR-[A-Z]+-(\d+)-(\d+)/)
+            return match ? parseInt(match[1]) : 0
+          })
+          .filter((n: number) => !isNaN(n))
+        
+        if (numbers.length > 0) {
+          roomNumber = String(Math.max(...numbers) + 1).padStart(2, '0')
+        }
+      }
+
+      // Generate a unique 3-digit identifier
+      const uniqueId = String(Math.floor(Math.random() * 1000)).padStart(3, '0')
+
+      // Construct the err_code: ERR-{StateShort}-{RoomNumber}-{UniqueID}
+      const errCode = `ERR-${stateShort}-${roomNumber}-${uniqueId}`
+
+      // Create the new room
+      const { data: newRoom, error: createError } = await supabase
+        .from('emergency_rooms')
+        .insert({
+          name: newRoomName.trim(),
+          name_ar: newRoomNameAr.trim() || null,
+          state_reference: formData.state_id,
+          type: 'base',
+          status: 'active',
+          err_code: errCode
+        })
+        .select()
+        .single()
+
+      if (createError) {
+        throw createError
+      }
+
+      // Add the new room to the list and select it
+      setRooms(prev => [...prev, newRoom as EmergencyRoom])
+      handleInputChange('emergency_room_id', newRoom.id)
+      
+      // Close dialog and reset form
+      setShowCreateRoomDialog(false)
+      setNewRoomName('')
+      setNewRoomNameAr('')
+    } catch (error: any) {
+      console.error('Error creating room:', error)
+      alert('Failed to create room: ' + (error.message || 'Unknown error'))
+    } finally {
+      setIsCreatingRoom(false)
+    }
   }
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -496,22 +585,36 @@ export default function DirectUpload() {
 
             <div className="col-span-1">
                   <Label className="mb-2">{t('fsystem:f1.emergency_response_room')}</Label>
-                  <Select
-                    value={formData.emergency_room_id}
-                    onValueChange={(value) => handleInputChange('emergency_room_id', value)}
-                    disabled={rooms.length === 0}
-                  >
-                                <SelectTrigger className="h-[38px] w-full">
-                      <SelectValue placeholder={t('fsystem:f1.select_emergency_room')} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {rooms.map((room) => (
-                        <SelectItem key={room.id} value={room.id}>
-                          {room.name_ar || room.name} {room.err_code ? `(${room.err_code})` : ''}
-                        </SelectItem>
+                  <div className="flex gap-2">
+                    <div className="flex-1">
+                      <Select
+                        value={formData.emergency_room_id}
+                        onValueChange={(value) => handleInputChange('emergency_room_id', value)}
+                        disabled={rooms.length === 0}
+                      >
+                        <SelectTrigger className="h-[38px] w-full">
+                        <SelectValue placeholder={t('fsystem:f1.select_emergency_room')} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {rooms.map((room) => (
+                          <SelectItem key={room.id} value={room.id}>
+                            {room.name_ar || room.name} {room.err_code ? `(${room.err_code})` : ''}
+                          </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      onClick={() => setShowCreateRoomDialog(true)}
+                      disabled={!formData.state_id}
+                      className="h-[38px] w-[38px]"
+                    >
+                      <Plus className="h-4 w-4" />
+                    </Button>
+                  </div>
               </div>
             
             {/* No date/serial selection in upload-first step */}
@@ -651,6 +754,70 @@ export default function DirectUpload() {
           {isLoading ? t('fsystem:f1.uploading') : t('fsystem:f1.upload_button')}
         </Button>
       )}
+
+      {/* Create Room Dialog */}
+      <Dialog open={showCreateRoomDialog} onOpenChange={setShowCreateRoomDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create New Emergency Response Room</DialogTitle>
+            <DialogDescription>
+              Add a new emergency response room for {states.find(s => s.id === formData.state_id)?.state_name || 'the selected state'}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 mt-4">
+            <div>
+              <Label htmlFor="room-name">Room Name (English) *</Label>
+              <Input
+                id="room-name"
+                value={newRoomName}
+                onChange={(e) => setNewRoomName(e.target.value)}
+                placeholder="e.g., North Adila"
+                disabled={isCreatingRoom}
+              />
+            </div>
+            <div>
+              <Label htmlFor="room-name-ar">Room Name (Arabic)</Label>
+              <Input
+                id="room-name-ar"
+                value={newRoomNameAr}
+                onChange={(e) => setNewRoomNameAr(e.target.value)}
+                placeholder="e.g., شمال عديلة"
+                disabled={isCreatingRoom}
+              />
+            </div>
+            <div>
+              <Label>Generated ERR Code</Label>
+              <div className="p-3 bg-muted rounded-md font-mono">
+                {(() => {
+                  const selectedState = states.find(s => s.id === formData.state_id)
+                  const stateShort = selectedState?.state_short?.toUpperCase() || 'XX'
+                  // This would be calculated when saving, shown as preview
+                  return `ERR-${stateShort}-XX-XXX`
+                })()}
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 pt-4">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowCreateRoomDialog(false)
+                  setNewRoomName('')
+                  setNewRoomNameAr('')
+                }}
+                disabled={isCreatingRoom}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleCreateRoom}
+                disabled={isCreatingRoom || !newRoomName.trim()}
+              >
+                {isCreatingRoom ? 'Creating...' : 'Create Room'}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
