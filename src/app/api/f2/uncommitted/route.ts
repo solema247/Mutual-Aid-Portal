@@ -24,7 +24,7 @@ export async function GET() {
         temp_file_key,
         grant_id
       `)
-      .eq('status', 'pending_metadata')
+      .eq('status', 'pending')
       .order('submitted_at', { ascending: false })
 
     if (error) throw error

@@ -258,7 +258,7 @@ export default function DirectUpload() {
           project_id: formData.project_id,
           emergency_room_id: formData.emergency_room_id,
           err_id: selectedRoom?.err_code || null,
-          status: 'pending_metadata', // New status for files awaiting metadata
+          status: 'pending', // Status for files awaiting F2 approval
           source: 'mutual_aid_portal',
           state: stateName,
           "Sector (Primary)": primaryNames,
@@ -276,7 +276,7 @@ export default function DirectUpload() {
         }])
       if (insertError) throw insertError
 
-      alert('F1 workplan uploaded successfully! File will be moved to final location after F2 approval.')
+      alert('F1 workplan uploaded successfully!')
       // Reset form
       setFormData({
         donor_id: '',

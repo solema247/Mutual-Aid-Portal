@@ -20,14 +20,14 @@ export async function GET() {
     // Usage from err_projects with CSA link; fallback by state if CSA missing
     const { data: projects, error: projErr } = await supabase
       .from('err_projects')
-      .select('expenses, funding_status, state')
+      .select('expenses, funding_status, status, state')
 
     if (projErr) throw projErr
 
-    const sumBy = (status: 'allocated' | 'committed') => {
+    const sumByCommitted = () => {
       const byState = new Map<string, number>()
       for (const p of projects || []) {
-        if (p.funding_status !== status) continue
+        if (p.funding_status !== 'committed') continue
         try {
           const exps = typeof p.expenses === 'string' ? JSON.parse(p.expenses) : p.expenses
           const amount = (exps || []).reduce((s: number, e: any) => s + (e.total_cost || 0), 0)
@@ -38,8 +38,24 @@ export async function GET() {
       return byState
     }
 
-    const committedByState = sumBy('committed')
-    const pendingByState = sumBy('allocated')
+    const sumByPending = () => {
+      const byState = new Map<string, number>()
+      for (const p of projects || []) {
+        // Include both 'allocated' funding_status and 'pending' status (new uploads without metadata)
+        if (p.funding_status === 'allocated' || (p.funding_status === 'unassigned' && p.status === 'pending')) {
+          try {
+            const exps = typeof p.expenses === 'string' ? JSON.parse(p.expenses) : p.expenses
+            const amount = (exps || []).reduce((s: number, e: any) => s + (e.total_cost || 0), 0)
+            const key = p.state || 'Unknown'
+            byState.set(key, (byState.get(key) || 0) + amount)
+          } catch { /* ignore */ }
+        }
+      }
+      return byState
+    }
+
+    const committedByState = sumByCommitted()
+    const pendingByState = sumByPending()
 
     const states = Array.from(new Set<string>([
       ...Array.from(capByState.keys()),
