@@ -360,6 +360,52 @@ export default function UncommittedF1sTab() {
       
       const stateShort = stateData?.[0]?.state_short || 'XX'
 
+      // Get cycle_state_allocation_id based on funding_cycle_id and state
+      const { data: cycleAllocationData } = await supabase
+        .from('cycle_state_allocations')
+        .select('id')
+        .eq('cycle_id', fundingCycleId)
+        .eq('state_name', f1.state)
+        .limit(1)
+      
+      const cycleStateAllocationId = cycleAllocationData?.[0]?.id || null
+
+      // Determine grant_serial_id and workplan_number
+      let grantSerialId: string | null = null
+      let workplanNumber: number | null = null
+      
+      if (grantSerial === 'new') {
+        // Creating new serial - this will be handled by the API
+        grantSerialId = null
+      } else {
+        // Using existing serial
+        grantSerialId = grantSerial
+        
+        // Get last workplan number and increment
+        const { data: seqData } = await supabase
+          .from('grant_workplan_seq')
+          .select('last_workplan_number')
+          .eq('grant_serial', grantSerial)
+          .single()
+        
+        workplanNumber = seqData ? seqData.last_workplan_number + 1 : 1
+        
+        // Update workplan sequence
+        if (seqData) {
+          await supabase
+            .from('grant_workplan_seq')
+            .update({ last_workplan_number: workplanNumber })
+            .eq('grant_serial', grantSerial)
+        } else {
+          await supabase
+            .from('grant_workplan_seq')
+            .insert({ grant_serial: grantSerial, last_workplan_number: workplanNumber })
+        }
+      }
+
+      // Construct final workplan ID for filename
+      const grantId = grantSerialId ? `${grantSerialId}-${String(workplanNumber).padStart(3, '0')}` : `TEMP-${f1Id}`
+
       // Move file from temp to final location
       const moveResponse = await fetch('/api/f2/move-file', {
         method: 'POST',
@@ -370,7 +416,7 @@ export default function UncommittedF1sTab() {
           donor_id: grantCall.donor_id,
           state_short: stateShort,
           mmyy: mmyy,
-          grant_id: f1.grant_id || `TEMP-${f1Id}`
+          grant_id: grantId
         })
       })
 
@@ -387,7 +433,9 @@ export default function UncommittedF1sTab() {
           donor_id: grantCall.donor_id,
           grant_call_id: grantCallId,
           funding_cycle_id: fundingCycleId,
-          grant_serial_id: grantSerial === 'new' ? null : grantSerial
+          grant_serial_id: grantSerialId,
+          workplan_number: workplanNumber,
+          cycle_state_allocation_id: cycleStateAllocationId
         })
       })
 
