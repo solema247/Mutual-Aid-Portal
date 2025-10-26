@@ -12,7 +12,8 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Badge } from '@/components/ui/badge'
 import { supabase } from '@/lib/supabaseClient'
 import { cn } from '@/lib/utils'
-import { Edit2, Save, X, ArrowRightLeft } from 'lucide-react'
+import { Edit2, Save, X, ArrowRightLeft, Plus } from 'lucide-react'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import ProjectEditor from './ProjectEditor'
 import type { UncommittedF1, GrantCallOption } from '../types'
 
@@ -25,15 +26,165 @@ export default function UncommittedF1sTab() {
   const [editingGrantCall, setEditingGrantCall] = useState<Record<string, boolean>>({})
   const [tempExpenses, setTempExpenses] = useState<Record<string, Array<{ activity: string; total_cost: number }>>>({})
   const [tempGrantCall, setTempGrantCall] = useState<Record<string, string>>({})
+  const [tempFundingCycle, setTempFundingCycle] = useState<Record<string, string>>({})
+  const [tempMMYY, setTempMMYY] = useState<Record<string, string>>({})
+  const [tempGrantSerial, setTempGrantSerial] = useState<Record<string, string>>({})
+  const [fundingCycles, setFundingCycles] = useState<any[]>([])
+  const [grantCallsForCycle, setGrantCallsForCycle] = useState<Record<string, any[]>>({})
+  const [donors, setDonors] = useState<any[]>([])
+  const [grantSerials, setGrantSerials] = useState<any[]>([])
+  const [stateShorts, setStateShorts] = useState<Record<string, string>>({})
+  const [lastWorkplanNums, setLastWorkplanNums] = useState<Record<string, number>>({})
   const [isLoading, setIsLoading] = useState(true)
   const [isCommitting, setIsCommitting] = useState(false)
   const [editorOpen, setEditorOpen] = useState(false)
   const [editorProjectId, setEditorProjectId] = useState<string | null>(null)
+  const [assignModalOpen, setAssignModalOpen] = useState(false)
+  const [assigningF1Id, setAssigningF1Id] = useState<string | null>(null)
 
   useEffect(() => {
     fetchUncommittedF1s()
     fetchGrantCalls()
+    fetchFundingCycles()
+    fetchDonors()
   }, [])
+
+  useEffect(() => {
+    if (f1s.length > 0) {
+      fetchStateShorts()
+    }
+  }, [f1s])
+
+  useEffect(() => {
+    // When grant serial changes, fetch last workplan number for it
+    const fetchLastWorkplanNum = async () => {
+      const f1 = f1s.find(f => f.id === assigningF1Id)
+      if (!f1 || !tempGrantSerial[f1.id] || tempGrantSerial[f1.id] === 'new') {
+        return
+      }
+
+      try {
+        const { data } = await supabase
+          .from('grant_workplan_seq')
+          .select('last_workplan_number')
+          .eq('grant_serial', tempGrantSerial[f1.id])
+          .single()
+
+        if (data) {
+          setLastWorkplanNums(prev => ({
+            ...prev,
+            [f1.id]: data.last_workplan_number
+          }))
+        } else {
+          // No sequence found, default to 0
+          setLastWorkplanNums(prev => ({
+            ...prev,
+            [f1.id]: 0
+          }))
+        }
+      } catch (error) {
+        console.error('Error fetching last workplan number:', error)
+        setLastWorkplanNums(prev => ({
+          ...prev,
+          [f1.id]: 0
+        }))
+      }
+    }
+
+    if (assigningF1Id) {
+      fetchLastWorkplanNum()
+    }
+  }, [tempGrantSerial, assigningF1Id, f1s])
+
+  const fetchStateShorts = async () => {
+    try {
+      const states = [...new Set(f1s.map(f => f.state).filter(Boolean))]
+      const { data } = await supabase
+        .from('states')
+        .select('state_name, state_short')
+        .in('state_name', states)
+      
+      const shorts: Record<string, string> = {}
+      ;(data || []).forEach((row: any) => {
+        shorts[row.state_name] = row.state_short
+      })
+      setStateShorts(shorts)
+    } catch (error) {
+      console.error('Error fetching state shorts:', error)
+    }
+  }
+
+  const fetchFundingCycles = async () => {
+    try {
+      const { data } = await supabase
+        .from('funding_cycles')
+        .select('id, name, type, status')
+        .eq('status', 'open')
+        .order('created_at', { ascending: false })
+      setFundingCycles(data || [])
+    } catch (error) {
+      console.error('Error fetching funding cycles:', error)
+    }
+  }
+
+  const fetchDonors = async () => {
+    try {
+      const { data } = await supabase
+        .from('donors')
+        .select('id, name, short_name')
+        .order('name')
+      setDonors(data || [])
+    } catch (error) {
+      console.error('Error fetching donors:', error)
+    }
+  }
+
+  const fetchGrantCallsForCycle = async (cycleId: string) => {
+    try {
+      const { data } = await supabase
+        .from('cycle_grant_inclusions')
+        .select(`
+          grant_call_id,
+          grant_calls (
+            id,
+            name,
+            donor_id,
+            donors (
+              id,
+              name,
+              short_name
+            )
+          )
+        `)
+        .eq('cycle_id', cycleId)
+      
+      const grantCalls = (data || []).map((item: any) => ({
+        id: item.grant_call_id,
+        name: item.grant_calls?.name || '',
+        donor_id: item.grant_calls?.donor_id || '',
+        donor_name: item.grant_calls?.donors?.name || '',
+        donor_short: item.grant_calls?.donors?.short_name || ''
+      }))
+      
+      setGrantCallsForCycle(prev => ({ ...prev, [cycleId]: grantCalls }))
+    } catch (error) {
+      console.error('Error fetching grant calls for cycle:', error)
+    }
+  }
+
+  const fetchGrantSerials = async (grantCallId: string, stateName: string, mmyy: string) => {
+    try {
+      const { data } = await supabase
+        .from('grant_serials')
+        .select('grant_serial')
+        .eq('grant_call_id', grantCallId)
+        .eq('state_name', stateName)
+        .eq('yymm', mmyy)
+      setGrantSerials(data || [])
+    } catch (error) {
+      console.error('Error fetching grant serials:', error)
+    }
+  }
 
   const fetchUncommittedF1s = async () => {
     try {
@@ -58,6 +209,16 @@ export default function UncommittedF1sTab() {
       console.error('Error fetching grant calls:', error)
     }
   }
+
+  // Load grant serials when MMYY changes
+  useEffect(() => {
+    Object.entries(tempMMYY).forEach(([f1Id, mmyy]) => {
+      const f1 = f1s.find(f => f.id === f1Id)
+      if (f1 && tempGrantCall[f1Id] && mmyy && mmyy.length === 4) {
+        fetchGrantSerials(tempGrantCall[f1Id], f1.state, mmyy)
+      }
+    })
+  }, [tempMMYY, tempGrantCall])
 
   const calculateTotalAmount = (expenses: Array<{ activity: string; total_cost: number }>) => {
     return expenses.reduce((sum, exp) => sum + (exp.total_cost || 0), 0)
@@ -159,6 +320,91 @@ export default function UncommittedF1sTab() {
     } catch (error) {
       console.error('Error reassigning grant call:', error)
       alert('Failed to reassign grant call')
+    }
+  }
+
+  const handleSaveMetadata = async (f1Id: string) => {
+    try {
+      const f1 = f1s.find(f => f.id === f1Id)
+      if (!f1 || !f1.temp_file_key) {
+        console.error('F1:', f1, 'temp_file_key:', f1?.temp_file_key)
+        alert('No temp file found for this F1')
+        return
+      }
+      
+      console.log('Moving file from:', f1.temp_file_key)
+
+      const fundingCycleId = tempFundingCycle[f1Id]
+      const grantCallId = tempGrantCall[f1Id]
+      const mmyy = tempMMYY[f1Id]
+      const grantSerial = tempGrantSerial[f1Id]
+
+      if (!fundingCycleId || !grantCallId || !mmyy || !grantSerial) {
+        alert('Please fill all metadata fields (Funding Cycle, Grant Call, MMYY, and Grant Serial)')
+        return
+      }
+
+      // Get grant call details to find donor
+      const grantCall = grantCallsForCycle[fundingCycleId]?.find((gc: any) => gc.id === grantCallId)
+      if (!grantCall) {
+        alert('Grant call not found')
+        return
+      }
+
+      // Get state short name
+      const { data: stateData } = await supabase
+        .from('states')
+        .select('state_short')
+        .eq('state_name', f1.state)
+        .limit(1)
+      
+      const stateShort = stateData?.[0]?.state_short || 'XX'
+
+      // Move file from temp to final location
+      const moveResponse = await fetch('/api/f2/move-file', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          project_id: f1Id,
+          temp_file_key: f1.temp_file_key,
+          donor_id: grantCall.donor_id,
+          state_short: stateShort,
+          mmyy: mmyy,
+          grant_id: f1.grant_id || `TEMP-${f1Id}`
+        })
+      })
+
+      if (!moveResponse.ok) {
+        throw new Error('Failed to move file')
+      }
+
+      // Update F1 metadata in database
+      const updateResponse = await fetch('/api/f2/uncommitted', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: f1Id,
+          donor_id: grantCall.donor_id,
+          grant_call_id: grantCallId,
+          funding_cycle_id: fundingCycleId,
+          grant_serial_id: grantSerial === 'new' ? null : grantSerial
+        })
+      })
+
+      if (!updateResponse.ok) {
+        throw new Error('Failed to update metadata')
+      }
+
+      alert('Metadata assigned and file moved successfully!')
+      // Clear temp values
+      setTempFundingCycle(prev => { const { [f1Id]: _, ...rest } = prev; return rest })
+      setTempGrantCall(prev => { const { [f1Id]: _, ...rest } = prev; return rest })
+      setTempMMYY(prev => { const { [f1Id]: _, ...rest } = prev; return rest })
+      setTempGrantSerial(prev => { const { [f1Id]: _, ...rest } = prev; return rest })
+      await fetchUncommittedF1s()
+    } catch (error) {
+      console.error('Error saving metadata:', error)
+      alert('Failed to save metadata')
     }
   }
 
@@ -305,11 +551,9 @@ export default function UncommittedF1sTab() {
                 <TableHead>{t('f2:date') || 'Date'}</TableHead>
                 <TableHead>{t('f2:state')}</TableHead>
                 <TableHead>{t('f2:locality')}</TableHead>
-                <TableHead>{t('f2:grant_name')}</TableHead>
-                <TableHead>{t('f2:donor')}</TableHead>
                 <TableHead className="text-right">{t('f2:requested_amount')}</TableHead>
                 <TableHead>{t('f2:community_approval')}</TableHead>
-                <TableHead>Metadata Assignment</TableHead>
+                <TableHead>Assignment</TableHead>
                 {/* Status column removed visually */}
               </TableRow>
             </TableHeader>
@@ -330,68 +574,6 @@ export default function UncommittedF1sTab() {
                   <TableCell>{new Date(f1.date).toLocaleDateString()}</TableCell>
                   <TableCell>{f1.state}</TableCell>
                   <TableCell>{f1.locality}</TableCell>
-                  <TableCell>
-                    {editingGrantCall[f1.id] ? (
-                      <div className="space-y-2">
-                        <Select
-                          value={tempGrantCall[f1.id] || ''}
-                          onValueChange={(value) => {
-                            setTempGrantCall(prev => ({ ...prev, [f1.id]: value }))
-                            try {
-                              const amt = calculateTotalAmount(f1.expenses)
-                              window.dispatchEvent(new CustomEvent('f1-proposal', { detail: { state: f1.state, grant_call_id: value, amount: amt } }))
-                            } catch {}
-                          }}
-                        >
-                          <SelectTrigger className="w-48">
-                            <SelectValue placeholder="Select Grant Call" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {grantCalls.map(gc => (
-                              <SelectItem key={gc.id} value={gc.id}>
-                                {gc.donor_name} — {gc.name} (Rem: {gc.remaining_amount.toLocaleString()})
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <div className="flex gap-1">
-                          <Button
-                            size="sm"
-                            onClick={() => handleReassignGrantCall(f1.id)}
-                            disabled={!tempGrantCall[f1.id]}
-                          >
-                            <Save className="w-3 h-3" />
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => {
-                              setEditingGrantCall(prev => ({ ...prev, [f1.id]: false }))
-                              delete tempGrantCall[f1.id]
-                            }}
-                          >
-                            <X className="w-3 h-3" />
-                          </Button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="font-medium truncate">{f1.grant_call_name || 'Unassigned'}</div>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => {
-                            setTempGrantCall(prev => ({ ...prev, [f1.id]: f1.grant_call_id || '' }))
-                            setEditingGrantCall(prev => ({ ...prev, [f1.id]: true }))
-                          }}
-                          title={t('f2:reassign') as string}
-                        >
-                          <ArrowRightLeft className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    )}
-                  </TableCell>
-                  <TableCell>{f1.donor_name || '-'}</TableCell>
                   <TableCell className="text-right">
                     {editingExpenses[f1.id] ? (
                       <div className="space-y-2">
@@ -496,35 +678,22 @@ export default function UncommittedF1sTab() {
                       </div>
                     )}
                   </TableCell>
+                  {/* Assignment Column */}
                   <TableCell>
                     {f1.temp_file_key ? (
-                      <div className="flex items-center gap-2">
-                        <Badge variant="secondary" className="text-muted-foreground">Pending Metadata</Badge>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => {
-                            // Simple metadata assignment - in a real implementation, this would open a dialog
-                            const donorId = prompt('Enter Donor ID:')
-                            const grantCallId = prompt('Enter Grant Call ID:')
-                            const fundingCycleId = prompt('Enter Funding Cycle ID:')
-                            const mmyy = prompt('Enter MMYY (e.g., 0825):')
-                            
-                            if (donorId && grantCallId && fundingCycleId && mmyy) {
-                              handleAssignMetadata(f1.id, {
-                                donor_id: donorId,
-                                grant_call_id: grantCallId,
-                                funding_cycle_id: fundingCycleId,
-                                mmyy: mmyy
-                              })
-                            }
-                          }}
-                        >
-                          Assign Metadata
-                        </Button>
-                      </div>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setAssigningF1Id(f1.id)
+                          setAssignModalOpen(true)
+                        }}
+                      >
+                        <Plus className="w-4 h-4 mr-2" />
+                        Assign Work Plan
+                      </Button>
                     ) : (
-                      <Badge variant="default">File Moved</Badge>
+                      <Badge variant="default">Assigned</Badge>
                     )}
                   </TableCell>
                   {/* Status cell removed visually */}
@@ -540,6 +709,170 @@ export default function UncommittedF1sTab() {
         projectId={editorProjectId}
         onSaved={async () => { await fetchUncommittedF1s() }}
       />
+
+      {/* Assign Work Plan Modal */}
+      <Dialog open={assignModalOpen} onOpenChange={setAssignModalOpen}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Assign Work Plan</DialogTitle>
+          </DialogHeader>
+          {assigningF1Id && (() => {
+            const f1 = f1s.find(f => f.id === assigningF1Id)
+            if (!f1) return null
+
+            return (
+              <div className="space-y-4 mt-4">
+                <div>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    Assign funding cycle, grant call, MMYY, and grant serial for: {f1.err_id}
+                  </p>
+                </div>
+
+                {/* Row 1: Funding Cycle, Grant Call, Donor */}
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <Label>Funding Cycle *</Label>
+                    <Select 
+                      value={tempFundingCycle[f1.id] || ''} 
+                      onValueChange={(value) => {
+                        setTempFundingCycle(prev => ({ ...prev, [f1.id]: value }))
+                        fetchGrantCallsForCycle(value)
+                      }}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {fundingCycles.map(fc => (
+                          <SelectItem key={fc.id} value={fc.id}>{fc.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div>
+                    <Label>Grant Call *</Label>
+                    <Select 
+                      value={tempGrantCall[f1.id] || ''} 
+                      onValueChange={(value) => setTempGrantCall(prev => ({ ...prev, [f1.id]: value }))}
+                      disabled={!tempFundingCycle[f1.id]}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {(grantCallsForCycle[tempFundingCycle[f1.id]] || []).map((gc: any) => (
+                          <SelectItem key={gc.id} value={gc.id}>{gc.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div>
+                    <Label>Donor</Label>
+                    <Input
+                      value={tempGrantCall[f1.id] && grantCallsForCycle[tempFundingCycle[f1.id]]?.find((gc: any) => gc.id === tempGrantCall[f1.id])?.donor_name || ''}
+                      disabled
+                      className="bg-muted"
+                    />
+                  </div>
+                </div>
+
+                {/* Row 2: MMYY and Grant Serial */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label>MMYY *</Label>
+                    <Input
+                      value={tempMMYY[f1.id] || ''}
+                      onChange={(e) => setTempMMYY(prev => ({ ...prev, [f1.id]: e.target.value.replace(/[^0-9]/g, '').slice(0, 4) }))}
+                      placeholder="0825"
+                      maxLength={4}
+                    />
+                  </div>
+
+                  <div>
+                    <Label>Grant Serial *</Label>
+                    <Select 
+                      value={tempGrantSerial[f1.id] || ''} 
+                      onValueChange={(value) => setTempGrantSerial(prev => ({ ...prev, [f1.id]: value }))}
+                      disabled={!tempGrantCall[f1.id] || !tempMMYY[f1.id]}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select or create" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="new">Create new serial</SelectItem>
+                        {grantSerials.map(gs => (
+                          <SelectItem key={gs.grant_serial} value={gs.grant_serial}>{gs.grant_serial}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                {/* Generated Serial ID Preview */}
+                <div>
+                  <Label>Generated Workplan Serial</Label>
+                  <div className="p-3 bg-muted rounded-md font-mono text-lg">
+                    {(() => {
+                      const grantCall = tempGrantCall[f1.id] && grantCallsForCycle[tempFundingCycle[f1.id]]?.find((gc: any) => gc.id === tempGrantCall[f1.id])
+                      const donorShort = grantCall?.donor_short
+                      const stateShort = stateShorts[f1.state] || ''
+                      const mmyy = tempMMYY[f1.id] || ''
+                      const grantSerial = tempGrantSerial[f1.id]
+                      
+                      // Get the last workplan number and add 1 for the next one
+                      const lastNum = lastWorkplanNums[f1.id] || 0
+                      const nextWorkplanNum = String(lastNum + 1).padStart(3, '0')
+                      
+                      // If selecting an existing serial, use it as-is with next workplan number
+                      if (grantSerial && grantSerial !== 'new' && grantSerial.includes('-')) {
+                        return `${grantSerial}-${nextWorkplanNum}`
+                      }
+                      
+                      // Otherwise, build new serial from components
+                      if (donorShort && stateShort && mmyy) {
+                        const serialNum = grantSerial === 'new' ? '0001' : '0001'
+                        return `LCC-${donorShort}-${stateShort}-${mmyy}-${serialNum}-${nextWorkplanNum}`
+                      }
+                      return 'LCC-XXX-XX-XXXX-XXXX-XXX'
+                    })()}
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-2 pt-4">
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setAssignModalOpen(false)
+                      setAssigningF1Id(null)
+                      // Clear temp values
+                      if (f1.id) {
+                        setTempFundingCycle(prev => { const { [f1.id]: _, ...rest } = prev; return rest })
+                        setTempGrantCall(prev => { const { [f1.id]: _, ...rest } = prev; return rest })
+                        setTempMMYY(prev => { const { [f1.id]: _, ...rest } = prev; return rest })
+                        setTempGrantSerial(prev => { const { [f1.id]: _, ...rest } = prev; return rest })
+                      }
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={async () => {
+                      await handleSaveMetadata(f1.id)
+                      setAssignModalOpen(false)
+                      setAssigningF1Id(null)
+                    }}
+                    disabled={!tempFundingCycle[f1.id] || !tempGrantCall[f1.id] || !tempMMYY[f1.id] || !tempGrantSerial[f1.id]}
+                  >
+                    Save & Assign
+                  </Button>
+                </div>
+              </div>
+            )
+          })()}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
