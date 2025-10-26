@@ -10,6 +10,7 @@ import { useTranslation } from 'react-i18next'
 import { Plus } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { supabase } from '@/lib/supabaseClient'
 
 interface AllocationInfo {
@@ -47,6 +48,7 @@ interface ExtractedData {
   language: 'ar' | 'en' | null;
   form_currency?: string;
   exchange_rate?: number;
+  raw_ocr?: string;
 }
 
 interface ExtractedDataReviewProps {
@@ -64,10 +66,14 @@ export default function ExtractedDataReview({
   onCancel,
   allocationInfo,
   onValidationError,
-  selectedState
-}: ExtractedDataReviewProps & { selectedState?: string }) {
+  selectedState,
+  selectedFile,
+  tempFileKey
+}: ExtractedDataReviewProps & { selectedState?: string; selectedFile?: File | null; tempFileKey?: string }) {
   const { t } = useTranslation(['common', 'fsystem'])
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [activeTab, setActiveTab] = useState('form')
+  const [fileUrl, setFileUrl] = useState<string>('')
   // Pooled selections to be made here (State, Grant Call, MMYY)
   const [pooledStates, setPooledStates] = useState<{ state_name: string; remaining: number }[]>([])
   
@@ -90,6 +96,32 @@ export default function ExtractedDataReview({
   useEffect(() => {
     getStateNameFromId().then(setStateName)
   }, [selectedState])
+
+  // Generate file URL from temp file
+  useEffect(() => {
+    const generateFileUrl = async () => {
+      if (selectedFile) {
+        // Create object URL for local file
+        const url = URL.createObjectURL(selectedFile)
+        setFileUrl(url)
+      } else if (tempFileKey) {
+        // Get signed URL for temp file in storage
+        const { data } = await supabase.storage
+          .from('images')
+          .createSignedUrl(tempFileKey, 3600)
+        if (data?.signedUrl) {
+          setFileUrl(data.signedUrl)
+        }
+      }
+    }
+    generateFileUrl()
+    return () => {
+      if (fileUrl && selectedFile) {
+        URL.revokeObjectURL(fileUrl)
+      }
+    }
+  }, [selectedFile, tempFileKey])
+
   const [grantOptions, setGrantOptions] = useState<{ grant_call_id: string; grant_call_name: string; donor_name: string; remaining: number }[]>([])
   const [grantCallId, setGrantCallId] = useState<string>('')
   const deriveMMYY = (value?: string | null) => {
@@ -458,7 +490,15 @@ export default function ExtractedDataReview({
          <CardTitle>Review Extracted F1 Form</CardTitle>
          <CardDescription>Review and confirm the extracted information from your F1 workplan</CardDescription>
        </CardHeader>
-       <CardContent className="space-y-6">
+       <CardContent>
+         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+           <TabsList className="grid w-full grid-cols-3">
+             <TabsTrigger value="form">Extracted Form</TabsTrigger>
+             <TabsTrigger value="file">Original File</TabsTrigger>
+             <TabsTrigger value="ocr">OCR Text</TabsTrigger>
+           </TabsList>
+
+           <TabsContent value="form" className="space-y-6 mt-6">
          {/* State Pool Selection - Auto-populated from user's pre-selection */}
          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
            <div>
@@ -800,6 +840,52 @@ export default function ExtractedDataReview({
             {isSubmitting ? t('fsystem:review.submitting') : t('fsystem:review.submit')}
           </Button>
         </div>
+      </TabsContent>
+
+      <TabsContent value="file" className="mt-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>Uploaded File</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {fileUrl ? (
+              <div className="w-full h-[600px] border rounded">
+                {selectedFile?.type === 'application/pdf' ? (
+                  <iframe 
+                    src={fileUrl} 
+                    className="w-full h-full rounded"
+                    title="F1 Workplan PDF"
+                  />
+                ) : (
+                  <img 
+                    src={fileUrl} 
+                    alt="F1 Workplan" 
+                    className="w-full h-full object-contain rounded"
+                  />
+                )}
+              </div>
+            ) : (
+              <div className="w-full h-[600px] border rounded flex items-center justify-center text-muted-foreground">
+                No file preview available
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </TabsContent>
+
+      <TabsContent value="ocr" className="mt-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>OCR Text</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="bg-muted/30 p-4 rounded font-mono text-sm whitespace-pre-wrap max-h-[600px] overflow-y-auto">
+              {data.raw_ocr || 'No OCR text available'}
+            </div>
+          </CardContent>
+        </Card>
+      </TabsContent>
+    </Tabs>
       </CardContent>
     </Card>
   )

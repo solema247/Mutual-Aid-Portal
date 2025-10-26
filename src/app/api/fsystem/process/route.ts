@@ -182,26 +182,38 @@ export async function POST(req: Request) {
       // Respect max pages hint (default 5, capped 20)
       const maxPagesHint = Math.max(1, Math.min(Number(formMetadata?.ocr_max_pages) || 5, 20))
       const firstBatchPages = Array.from({ length: Math.min(5, maxPagesHint) }, (_, i) => i + 1)
-      const [pageInfo] = await visionClient.batchAnnotateFiles({
-        requests: [{
-          inputConfig: {
-            mimeType: 'application/pdf',
-            content: base64
-          },
-          features: [{
-            type: 'DOCUMENT_TEXT_DETECTION'
-          }],
-          imageContext: {
-            languageHints: ['ar', 'en']
-          },
-          pages: firstBatchPages  // First batch pages
-        }]
-      })
+      
+      let pageInfo: any
+      try {
+        const result = await visionClient.batchAnnotateFiles({
+          requests: [{
+            inputConfig: {
+              mimeType: 'application/pdf',
+              content: base64
+            },
+            features: [{
+              type: 'DOCUMENT_TEXT_DETECTION'
+            }],
+            imageContext: {
+              languageHints: ['ar', 'en']
+            },
+            pages: firstBatchPages  // First batch pages
+          }]
+        })
+        pageInfo = result[0]
+      } catch (visionError: any) {
+        console.error('Vision API error:', visionError)
+        // Handle Vision API errors gracefully
+        if (visionError.code === 13 || visionError.message?.includes('INTERNAL')) {
+          throw new Error('Google Vision API encountered an internal error. Please try uploading the file again. If the problem persists, the file may be corrupted or too large.')
+        }
+        throw new Error(`Vision API error: ${visionError.message || 'Unknown error occurred'}`)
+      }
 
       // Get initial text and count of first batch
       let allTexts: string[] = []
       const firstBatchResponses = pageInfo.responses?.[0]?.responses || []
-      firstBatchResponses.forEach((response, idx) => {
+      firstBatchResponses.forEach((response: any, idx: number) => {
         const pageText = response?.fullTextAnnotation?.text || ''
         console.log(`Page ${idx + 1} text length:`, pageText.length)
         allTexts.push(pageText)

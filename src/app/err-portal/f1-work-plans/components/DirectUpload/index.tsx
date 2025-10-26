@@ -640,6 +640,8 @@ export default function DirectUpload() {
             setIsReviewing(false)
           }}
           selectedState={formData.state_id}
+          selectedFile={selectedFile}
+          tempFileKey={(window as any).__f1_temp_key__}
         />
       )}
 
