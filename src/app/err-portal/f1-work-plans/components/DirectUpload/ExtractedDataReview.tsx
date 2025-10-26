@@ -63,13 +63,33 @@ export default function ExtractedDataReview({
   onConfirm,
   onCancel,
   allocationInfo,
-  onValidationError
-}: ExtractedDataReviewProps) {
+  onValidationError,
+  selectedState
+}: ExtractedDataReviewProps & { selectedState?: string }) {
   const { t } = useTranslation(['common', 'fsystem'])
   const [isSubmitting, setIsSubmitting] = useState(false)
   // Pooled selections to be made here (State, Grant Call, MMYY)
   const [pooledStates, setPooledStates] = useState<{ state_name: string; remaining: number }[]>([])
-  const [stateName, setStateName] = useState<string>(data.state || '')
+  
+  // Auto-populate state from user's pre-selection
+  const getStateNameFromId = async () => {
+    if (selectedState) {
+      const { data: stateData } = await supabase
+        .from('states')
+        .select('state_name')
+        .eq('id', selectedState)
+        .single()
+      return stateData?.state_name || ''
+    }
+    return ''
+  }
+  
+  const [stateName, setStateName] = useState<string>('')
+  
+  // Auto-set state on mount
+  useEffect(() => {
+    getStateNameFromId().then(setStateName)
+  }, [selectedState])
   const [grantOptions, setGrantOptions] = useState<{ grant_call_id: string; grant_call_name: string; donor_name: string; remaining: number }[]>([])
   const [grantCallId, setGrantCallId] = useState<string>('')
   const deriveMMYY = (value?: string | null) => {
@@ -413,153 +433,56 @@ export default function ExtractedDataReview({
   }
 
   const handleConfirm = () => {
-    // Basic pooled validations
-    if (!stateName || !grantCallId || !yymm) {
-      alert('Please select State, Grant Call and enter MMYY')
+    // Only require state selection - other metadata will be set in F2
+    if (!stateName) {
+      alert('Please select State')
       return
     }
-    if (!selectedFundingCycleId) {
-      alert('Please select a Funding Cycle')
-      return
-    }
-    // Note: remaining per state/grant already filtered; optional extra checks could be added here
     setIsSubmitting(true)
-    // Send pooled selections back in the editedData payload (namespaced fields)
+    // Send only state selection back in the editedData payload
     onConfirm({
       ...editedData,
-      // attach pooled metadata for parent to use
-      _selected_state_name: stateName,
-      _selected_grant_call_id: grantCallId,
-      _yymm: yymm,
-      _existing_serial: selectedSerial !== 'new' ? selectedSerial : '',
-      _selected_funding_cycle_id: selectedFundingCycleId,
-      _cycle_state_allocation_id: cycleStateAllocationId
+      // Only attach state metadata - other fields will be set in F2
+      _selected_state_name: stateName
     } as any)
   }
 
-  // Get available amount from selected funding cycle
-  const selectedCycle = fundingCycles.find(c => c.id === selectedFundingCycleId)
-  const availableAmount = selectedCycle ? selectedCycle.available : Math.min(
-    stateRemaining || 0,
-    grantRemainingForState || 0
-  )
+  // Calculate total expenses
   const totalAmountCalc = calculateTotalExpenses()
-  const isOverBudget = totalAmountCalc > availableAmount
+  // No budget validation at this stage - will be handled in F2 approval
+  const isOverBudget = false
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle>Review Extracted F1 Form and Assign to Pool and Grant Call</CardTitle>
-        <CardDescription>{t('fsystem:review.description')}</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-6">
-        {/* Pooled selections */}
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-          <div>
-            <Label>State (pooled)</Label>
-            <Select value={stateName} onValueChange={setStateName}>
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Select State" />
-              </SelectTrigger>
-              <SelectContent>
-                {pooledStates.map(s => (
-                  <SelectItem key={s.state_name} value={s.state_name}>
-                    {s.state_name} (Rem: {s.remaining.toLocaleString()})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <Label>Funding Cycle</Label>
-            <Select value={selectedFundingCycleId} onValueChange={(value) => {
-              setSelectedFundingCycleId(value)
-              const cycle = fundingCycles.find(c => c.id === value)
-              setCycleStateAllocationId(cycle?.allocationId || '')
-            }}>
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Select Funding Cycle" />
-              </SelectTrigger>
-              <SelectContent>
-                {fundingCycles.map(c => (
-                  <SelectItem key={c.id} value={c.id}>
-                    {c.name} ({c.type}) - {c.available.toLocaleString()}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <Label>Grant Call</Label>
-            <Select value={grantCallId} onValueChange={setGrantCallId}>
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Select Grant Call" />
-              </SelectTrigger>
-              <SelectContent>
-                {grantOptions.map(g => (
-                  <SelectItem key={g.grant_call_id} value={g.grant_call_id}>
-                    {g.donor_name} — {g.grant_call_name} (Rem: {g.remaining.toLocaleString()})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <Label>Donor</Label>
-            <div className="p-2 bg-muted rounded-md">
-              {donorShort || '-'}
-            </div>
-          </div>
-          <div>
-            <Label>MMYY</Label>
-            <Input value={yymm} onChange={(e) => setYymm(e.target.value.replace(/[^0-9]/g, '').slice(0, 4))} placeholder="0825" maxLength={4} />
-          </div>
-        </div>
-        {/* Simple Allocation Summary + Serial selection */}
-        <div className="mb-6">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div>
-              <Label>State</Label>
-              <div className="text-lg font-medium">{stateName || '-'}</div>
-            </div>
-            <div>
-              <Label>{t('fsystem:review.fields.available_amount')}</Label>
-              <div className="text-lg font-medium">{availableAmount.toLocaleString()}</div>
-            </div>
-            <div>
-              <Label>{t('fsystem:review.fields.f1_amount')}</Label>
-              <div className={cn(
-                "text-lg font-medium",
-                isOverBudget && "text-destructive"
-              )}>
-                {totalAmountCalc.toLocaleString()}
-              </div>
-            </div>
-            <div>
-              <Label>Assign to Serial</Label>
-              <Select value={selectedSerial} onValueChange={setSelectedSerial}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select or create serial" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="new">Create new serial for {yymm || 'MMYY'}</SelectItem>
-                  {existingSerials.map(s => (
-                    <SelectItem key={s} value={s}>{s}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        </div>
-        {/* Serial Preview */}
-        <div className="mb-2">
-          <Label>Generated Form Serial (preview)</Label>
-          <div className="p-2 bg-muted rounded-md font-mono">
-            {selectedSerial !== 'new'
-              ? `${selectedSerial}-${nextWorkplanPreview || '___'}`
-              : (donorShort && stateShort && yymm ? `LCC-${donorShort}-${stateShort.toUpperCase()}-${yymm}-XXX` : '-')}
-          </div>
-        </div>
+       <CardHeader>
+         <CardTitle>Review Extracted F1 Form</CardTitle>
+         <CardDescription>Review and confirm the extracted information from your F1 workplan</CardDescription>
+       </CardHeader>
+       <CardContent className="space-y-6">
+         {/* State Pool Selection - Auto-populated from user's pre-selection */}
+         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+           <div>
+             <Label>State (Pooled)</Label>
+             <Select value={stateName} onValueChange={setStateName}>
+               <SelectTrigger className="w-full">
+                 <SelectValue placeholder="Select State" />
+               </SelectTrigger>
+               <SelectContent>
+                 {pooledStates.map(s => (
+                   <SelectItem key={s.state_name} value={s.state_name}>
+                     {s.state_name} (Rem: {s.remaining.toLocaleString()})
+                   </SelectItem>
+                 ))}
+               </SelectContent>
+             </Select>
+           </div>
+           <div>
+             <Label>F1 Amount</Label>
+             <div className="p-2 bg-muted rounded-md text-lg font-medium">
+               {totalAmountCalc.toLocaleString()}
+             </div>
+           </div>
+         </div>
 
         {/* Basic Information */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

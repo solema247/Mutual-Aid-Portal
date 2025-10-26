@@ -59,7 +59,7 @@ export default function DirectUpload() {
         // Fetch states with distinct state names
         const { data: statesData, error: statesError } = await supabase
           .from('states')
-          .select('id, state_name, state_name_ar, state_short')
+          .select('id, state_name, state_name_ar, state_short, locality, locality_ar')
           .not('state_name', 'is', null)
           .order('state_name')
 
@@ -172,6 +172,8 @@ export default function DirectUpload() {
         state_name: selectedState?.state_name || null,
         state_name_ar: selectedState?.state_name_ar || null,
         state_id: selectedState?.id || null,
+        locality: selectedState?.locality || null,
+        locality_ar: selectedState?.locality_ar || null,
         currency: formData.currency,
         exchange_rate: formData.exchange_rate
       }
@@ -202,13 +204,11 @@ export default function DirectUpload() {
   const handleConfirmUpload = async (editedData: any) => {
     setIsLoading(true)
     try {
-      // Extract pooled selections from child payload
-      const stateName: string = editedData._selected_state_name
-      const grantCallId: string = editedData._selected_grant_call_id
-      const yymm: string = editedData._yymm
+      // Only require state selection - other metadata will be set in F2
+      const stateName: string = editedData._selected_state_name || formData.state_id
 
-      if (!stateName || !grantCallId || !yymm) {
-        throw new Error('Missing pooled selections (state, grant call, YYMM)')
+      if (!stateName) {
+        throw new Error('State selection is required')
       }
 
       // Detect language and translate if needed
@@ -218,79 +218,9 @@ export default function DirectUpload() {
       const { translatedData, originalText } = await translateFields(editedData, sourceLanguage)
       console.log('Translation completed. Original text preserved:', Object.keys(originalText).length > 0)
 
-      // Validate against pooled remaining
-      const amountUSD: number = (translatedData.expenses || []).reduce((s: number, e: any) => s + (e.total_cost_usd || 0), 0)
-      const stateRes = await fetch('/api/pool/by-state')
-      const stateRows = await stateRes.json()
-      const stateRow = (Array.isArray(stateRows) ? stateRows : []).find((r: any) => r.state_name === stateName)
-      if (stateRow && amountUSD > (stateRow.remaining || 0)) {
-        throw new Error(`Amount exceeds remaining for state ${stateName}. Remaining: ${(stateRow.remaining || 0).toLocaleString()}`)
-      }
-      const grantRes = await fetch(`/api/pool/by-grant-for-state?state=${encodeURIComponent(stateName)}`)
-      const grantRows = await grantRes.json()
-      const grantRow = (Array.isArray(grantRows) ? grantRows : []).find((r: any) => r.grant_call_id === grantCallId)
-      if (grantRow && amountUSD > (grantRow.remaining_for_state || 0)) {
-        throw new Error(`Amount exceeds remaining for selected grant. Remaining: ${(grantRow.remaining_for_state || 0).toLocaleString()}`)
-      }
-
-      // Use existing serial if provided, otherwise create new
-      let grantSerialId: string
-      if (editedData._existing_serial) {
-        grantSerialId = editedData._existing_serial
-      } else {
-        const serialResp = await fetch('/api/fsystem/grant-serials/create', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ grant_call_id: grantCallId, state_name: stateName, yymm })
-        })
-        if (!serialResp.ok) throw new Error('Failed to create grant serial')
-        const newSerial = await serialResp.json()
-        grantSerialId = newSerial.grant_serial
-      }
-
-      // Commit workplan number
-      const commitResp = await fetch('/api/fsystem/workplans/commit', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ grant_serial: grantSerialId })
-      })
-      if (!commitResp.ok) throw new Error('Failed to commit workplan number')
-      const { workplan_number, grant_id } = await commitResp.json()
-
-      // Resolve donor and donor short via grant call
-      const { data: gc, error: gcErr }: any = await supabase
-        .from('grant_calls')
-        .select('donor_id, name')
-        .eq('id', grantCallId)
-        .single()
-      if (gcErr) throw gcErr
-      const { data: donor, error: donorErr }: any = await supabase
-        .from('donors')
-        .select('id, name, short_name')
-        .eq('id', gc.donor_id)
-        .single()
-      if (donorErr) throw donorErr
-
-      // Resolve state short
-      const { data: st, error: stErr }: any = await supabase
-        .from('states')
-        .select('state_name, state_short')
-        .eq('state_name', stateName)
-        .limit(1)
-      if (stErr) throw stErr
-      const stateShort: string = st?.[0]?.state_short || 'XX'
-
-      // Move file from temp to final path
+      // Get temp file key - file stays in temp folder until F2 assignment
       const tempKey = (window as any).__f1_temp_key__ as string
       if (!tempKey) throw new Error('Temp file key missing')
-      const ext = selectedFile?.name.split('.').pop()
-      const filePath = `f1-forms/${donor.short_name || 'UNKNOWN'}/${stateShort}/${yymm}/${grant_id}.${ext}`
-      const finalizeResp = await fetch('/api/fsystem/finalize-upload', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ temp_key: tempKey, final_path: filePath })
-      })
-      if (!finalizeResp.ok) throw new Error('Failed to finalize file upload')
 
       // Convert expenses to DB format (USD only)
       const expensesForDB = (translatedData.expenses || []).map((e: any) => ({ activity: e.activity, total_cost: e.total_cost_usd || 0 }))
@@ -302,7 +232,7 @@ export default function DirectUpload() {
       // ERR room
       const selectedRoom = (rooms as any[]).find(r => r.id === formData.emergency_room_id)
 
-      // Prepare data for DB
+      // Prepare data for DB - remove metadata fields that will be set in F2
       const { form_currency, exchange_rate, raw_ocr, _selected_state_name, _selected_grant_call_id, _yymm, _existing_serial, _selected_funding_cycle_id, _cycle_state_allocation_id, ...dataForDB } = translatedData
 
       // Normalize date for DB (MMYY -> YYYY-MM-01)
@@ -318,57 +248,36 @@ export default function DirectUpload() {
         }
       }
 
+      // Insert into database with temp file path - NO FINAL FILE MOVE
       const { error: insertError } = await supabase
         .from('err_projects')
         .insert([{
           ...dataForDB,
           date: dbDate,
           expenses: expensesForDB,
-          donor_id: donor.id,
           project_id: formData.project_id,
           emergency_room_id: formData.emergency_room_id,
           err_id: selectedRoom?.err_code || null,
-          grant_id: grant_id,
-          grant_serial: grantSerialId,
-          grant_serial_id: grantSerialId,
-          workplan_number: parseInt(workplan_number),
-          status: 'pending',
+          status: 'pending_metadata', // New status for files awaiting metadata
           source: 'mutual_aid_portal',
           state: stateName,
           "Sector (Primary)": primaryNames,
           "Sector (Secondary)": secondaryNames,
-          funding_cycle_id: _selected_funding_cycle_id || null,
-          cycle_state_allocation_id: _cycle_state_allocation_id || null,
-          grant_call_id: grantCallId,
-          funding_status: 'allocated',
-          file_key: filePath,
+          temp_file_key: tempKey, // Store temp file path
           original_text: originalText,
-          language: sourceLanguage
+          language: sourceLanguage,
+          // Remove these fields - will be set in F2:
+          // donor_id: null,
+          // grant_call_id: null,
+          // funding_cycle_id: null,
+          // grant_id: null,
+          // grant_serial: null,
+          // workplan_number: null
         }])
       if (insertError) throw insertError
 
-      // Update Google Sheet (best-effort)
-      try {
-        const sheetPayload = {
-          ...dataForDB,
-          expenses: expensesForDB,
-          grant_id,
-          err_id: selectedRoom?.err_code || null,
-          err_name: selectedRoom?.name_ar || selectedRoom?.name,
-          donor_name: donor.name,
-          emergency_room_id: formData.emergency_room_id,
-          state_name: stateName,
-          primary_sectors: primaryNames,
-          secondary_sectors: secondaryNames
-        }
-        await fetch('/api/sheets/update', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(sheetPayload) })
-      } catch {}
-
-      alert('Form uploaded successfully!')
-      // Reset
-      try {
-        window.dispatchEvent(new CustomEvent('pool-refresh'))
-      } catch {}
+      alert('F1 workplan uploaded successfully! File will be moved to final location after F2 approval.')
+      // Reset form
       setFormData({
         donor_id: '',
         state_id: '',
@@ -389,8 +298,8 @@ export default function DirectUpload() {
       setProcessedData(null)
       setIsReviewing(false)
     } catch (e: any) {
-      console.error('Finalize error:', e)
-      alert('Upload failed. Please try again in a minute.')
+      console.error('Upload error:', e)
+      alert('Upload failed. Please try again.')
     } finally {
       setIsLoading(false)
     }
@@ -730,6 +639,7 @@ export default function DirectUpload() {
             alert(message)
             setIsReviewing(false)
           }}
+          selectedState={formData.state_id}
         />
       )}
 

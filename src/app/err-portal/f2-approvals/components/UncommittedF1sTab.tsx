@@ -162,6 +162,65 @@ export default function UncommittedF1sTab() {
     }
   }
 
+  const handleAssignMetadata = async (f1Id: string, metadata: any) => {
+    try {
+      const f1 = f1s.find(f => f.id === f1Id)
+      if (!f1 || !f1.temp_file_key) {
+        alert('No temp file found for this F1')
+        return
+      }
+
+      // Get state short name
+      const { data: stateData } = await supabase
+        .from('states')
+        .select('state_short')
+        .eq('state_name', f1.state)
+        .limit(1)
+      
+      const stateShort = stateData?.[0]?.state_short || 'XX'
+
+      // Move file from temp to final location
+      const moveResponse = await fetch('/api/f2/move-file', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          project_id: f1Id,
+          temp_file_key: f1.temp_file_key,
+          donor_id: metadata.donor_id,
+          state_short: stateShort,
+          mmyy: metadata.mmyy,
+          grant_id: f1.grant_id || `TEMP-${f1Id}`
+        })
+      })
+
+      if (!moveResponse.ok) {
+        throw new Error('Failed to move file')
+      }
+
+      // Update F1 metadata in database
+      const updateResponse = await fetch('/api/f2/uncommitted', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: f1Id,
+          donor_id: metadata.donor_id,
+          grant_call_id: metadata.grant_call_id,
+          funding_cycle_id: metadata.funding_cycle_id
+        })
+      })
+
+      if (!updateResponse.ok) {
+        throw new Error('Failed to update metadata')
+      }
+
+      alert('Metadata assigned and file moved successfully!')
+      await fetchUncommittedF1s()
+    } catch (error) {
+      console.error('Error assigning metadata:', error)
+      alert('Failed to assign metadata')
+    }
+  }
+
   const handleCommitSelected = async () => {
     if (selectedF1s.length === 0) {
       alert('Please select F1s to commit')
@@ -250,6 +309,7 @@ export default function UncommittedF1sTab() {
                 <TableHead>{t('f2:donor')}</TableHead>
                 <TableHead className="text-right">{t('f2:requested_amount')}</TableHead>
                 <TableHead>{t('f2:community_approval')}</TableHead>
+                <TableHead>Metadata Assignment</TableHead>
                 {/* Status column removed visually */}
               </TableRow>
             </TableHeader>
@@ -434,6 +494,37 @@ export default function UncommittedF1sTab() {
                           {t('f2:upload')}
                         </Button>
                       </div>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {f1.temp_file_key ? (
+                      <div className="flex items-center gap-2">
+                        <Badge variant="secondary" className="text-muted-foreground">Pending Metadata</Badge>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            // Simple metadata assignment - in a real implementation, this would open a dialog
+                            const donorId = prompt('Enter Donor ID:')
+                            const grantCallId = prompt('Enter Grant Call ID:')
+                            const fundingCycleId = prompt('Enter Funding Cycle ID:')
+                            const mmyy = prompt('Enter MMYY (e.g., 0825):')
+                            
+                            if (donorId && grantCallId && fundingCycleId && mmyy) {
+                              handleAssignMetadata(f1.id, {
+                                donor_id: donorId,
+                                grant_call_id: grantCallId,
+                                funding_cycle_id: fundingCycleId,
+                                mmyy: mmyy
+                              })
+                            }
+                          }}
+                        >
+                          Assign Metadata
+                        </Button>
+                      </div>
+                    ) : (
+                      <Badge variant="default">File Moved</Badge>
                     )}
                   </TableCell>
                   {/* Status cell removed visually */}

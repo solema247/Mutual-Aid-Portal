@@ -427,16 +427,19 @@ CURRENCY CONVERSION:
 - Form currency: ${formMetadata.currency || 'USD'}
 - Exchange rate (USD to SDG): ${formMetadata.exchange_rate || '1'}
 - If form currency is SDG, convert all amounts to USD using the exchange rate (divide SDG amount by exchange rate)
-- Always return amounts in USD in the final JSON
-- Also include the original amount in SDG if conversion was applied
+- If form currency is USD, keep amounts in USD (do NOT convert)
+- Return both USD and SDG amounts in the final JSON
+- For USD forms: total_cost_usd should be the original USD amount, total_cost_sdg should be null
+- For SDG forms: total_cost_sdg should be the original SDG amount, total_cost_usd should be the converted USD amount
 
-Example (Arabic form):
+Example (USD form):
 الإجمالي: $3,900 | سعر الوحدة: $32.5 | المصروفات: مشتريات طبية
 Should extract: { activity: "مشتريات طبية", total_cost_usd: 3900, total_cost_sdg: null, currency: "USD" }
 
 Example (SDG form with exchange rate 2700):
 الإجمالي: 5,000,000 SDG | المصروفات: مشتريات طبية
 Should extract: { activity: "مشتريات طبية", total_cost_usd: 1851.85, total_cost_sdg: 5000000, currency: "SDG" }
+Note: Always include the original SDG amount in total_cost_sdg when form currency is SDG
 
 Return all fields in this format:
 {
@@ -502,13 +505,18 @@ Return all fields in this format:
         }
       }
 
-      // Override the state from OCR with the selected state from form metadata
-      if (!isF4 && formMetadata.state_name_ar) {
+      // Override the state and locality from OCR with the selected values from form metadata
+      if (!isF4 && formMetadata.state_name) {
         console.log('Overriding OCR state with selected state:', {
           original: structuredData.state,
-          new: formMetadata.state_name_ar
+          new: formMetadata.state_name
         })
-        structuredData.state = formMetadata.state_name_ar
+        structuredData.state = formMetadata.state_name
+        
+        // Override locality if available from database
+        if (formMetadata.locality) {
+          structuredData.locality = formMetadata.locality
+        }
       }
       
       // If F5, normalize reach rows and parse demographics from raw OCR
