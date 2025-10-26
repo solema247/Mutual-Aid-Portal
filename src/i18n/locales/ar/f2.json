@@ -93,6 +93,7 @@
   "all_donors_label": "جميع المانحين",
   "all_cycles": "جميع الدورات",
   "funding_cycle_label": "دورة التمويل",
+  "funding_cycle": "دورة التمويل",
   "all_states": "جميع الولايات",
   "state_label": "الولاية",
   "clear_filters": "مسح عوامل التصفية",
@@ -101,5 +102,17 @@
   "no_committed": "لا توجد خطط F1 ملتزم بها مطابقة لعوامل التصفية الحالية",
   "view_mou": "عرض مذكرة التفاهم",
   "committed": "ملتزم به",
-  "allocated": "مخصص"
+  "allocated": "مخصص",
+  "assign_work_plan": "تعيين خطة العمل",
+  "assign_work_plan_button": "تعيين خطة العمل",
+  "assigned": "متعين",
+  "assign_metadata_description": "تعيين دورة التمويل ونداء المنحة والـ MMYY ورقم التسلسل للمنحة:",
+  "mmyy": "MMYY",
+  "grant_serial": "رقم تسلسل المنحة",
+  "select": "اختر",
+  "select_or_create": "اختر أو أنشئ",
+  "create_new_serial": "إنشاء رقم تسلسلي جديد",
+  "generated_workplan_serial": "رقم تسلسل خطة العمل المُولد",
+  "save_assign": "حفظ وتعيين",
+  "total_pending": "إجمالي قيد الانتظار"
 }

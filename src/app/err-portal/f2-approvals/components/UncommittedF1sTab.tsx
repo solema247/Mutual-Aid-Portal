@@ -738,10 +738,10 @@ export default function UncommittedF1sTab() {
                         }}
                       >
                         <Plus className="w-4 h-4 mr-2" />
-                        Assign Work Plan
+                        {t('f2:assign_work_plan_button')}
                       </Button>
                     ) : (
-                      <Badge variant="default">Assigned</Badge>
+                      <Badge variant="default">{t('f2:assigned')}</Badge>
                     )}
                   </TableCell>
                   {/* Status cell removed visually */}
@@ -762,7 +762,7 @@ export default function UncommittedF1sTab() {
       <Dialog open={assignModalOpen} onOpenChange={setAssignModalOpen}>
         <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Assign Work Plan</DialogTitle>
+            <DialogTitle>{t('f2:assign_work_plan')}</DialogTitle>
           </DialogHeader>
           {assigningF1Id && (() => {
             const f1 = f1s.find(f => f.id === assigningF1Id)
@@ -772,14 +772,14 @@ export default function UncommittedF1sTab() {
               <div className="space-y-4 mt-4">
                 <div>
                   <p className="text-sm text-muted-foreground mb-4">
-                    Assign funding cycle, grant call, MMYY, and grant serial for: {f1.err_id}
+                    {t('f2:assign_metadata_description')} {f1.err_id}
                   </p>
                 </div>
 
                 {/* Row 1: Funding Cycle, Grant Call, Donor */}
                 <div className="grid grid-cols-3 gap-4">
                   <div>
-                    <Label>Funding Cycle *</Label>
+                    <Label>{t('f2:funding_cycle')} *</Label>
                     <Select 
                       value={tempFundingCycle[f1.id] || ''} 
                       onValueChange={(value) => {
@@ -787,8 +787,8 @@ export default function UncommittedF1sTab() {
                         fetchGrantCallsForCycle(value)
                       }}
                     >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select" />
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder={t('f2:select')} />
                       </SelectTrigger>
                       <SelectContent>
                         {fundingCycles.map(fc => (
@@ -799,14 +799,14 @@ export default function UncommittedF1sTab() {
                   </div>
 
                   <div>
-                    <Label>Grant Call *</Label>
+                    <Label>{t('f2:grant_call')} *</Label>
                     <Select 
                       value={tempGrantCall[f1.id] || ''} 
                       onValueChange={(value) => setTempGrantCall(prev => ({ ...prev, [f1.id]: value }))}
                       disabled={!tempFundingCycle[f1.id]}
                     >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select" />
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder={t('f2:select')} />
                       </SelectTrigger>
                       <SelectContent>
                         {(grantCallsForCycle[tempFundingCycle[f1.id]] || []).map((gc: any) => (
@@ -817,11 +817,11 @@ export default function UncommittedF1sTab() {
                   </div>
 
                   <div>
-                    <Label>Donor</Label>
+                    <Label>{t('f2:donor')}</Label>
                     <Input
                       value={tempGrantCall[f1.id] && grantCallsForCycle[tempFundingCycle[f1.id]]?.find((gc: any) => gc.id === tempGrantCall[f1.id])?.donor_name || ''}
                       disabled
-                      className="bg-muted"
+                      className="bg-muted w-full"
                     />
                   </div>
                 </div>
@@ -829,27 +829,28 @@ export default function UncommittedF1sTab() {
                 {/* Row 2: MMYY and Grant Serial */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <Label>MMYY *</Label>
+                    <Label>{t('f2:mmyy')} *</Label>
                     <Input
                       value={tempMMYY[f1.id] || ''}
                       onChange={(e) => setTempMMYY(prev => ({ ...prev, [f1.id]: e.target.value.replace(/[^0-9]/g, '').slice(0, 4) }))}
                       placeholder="0825"
                       maxLength={4}
+                      className="w-full"
                     />
                   </div>
 
                   <div>
-                    <Label>Grant Serial *</Label>
+                    <Label>{t('f2:grant_serial')} *</Label>
                     <Select 
                       value={tempGrantSerial[f1.id] || ''} 
                       onValueChange={(value) => setTempGrantSerial(prev => ({ ...prev, [f1.id]: value }))}
                       disabled={!tempGrantCall[f1.id] || !tempMMYY[f1.id]}
                     >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select or create" />
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder={t('f2:select_or_create')} />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="new">Create new serial</SelectItem>
+                        <SelectItem value="new">{t('f2:create_new_serial')}</SelectItem>
                         {grantSerials.map(gs => (
                           <SelectItem key={gs.grant_serial} value={gs.grant_serial}>{gs.grant_serial}</SelectItem>
                         ))}
@@ -860,7 +861,7 @@ export default function UncommittedF1sTab() {
 
                 {/* Generated Serial ID Preview */}
                 <div>
-                  <Label>Generated Workplan Serial</Label>
+                  <Label>{t('f2:generated_workplan_serial')}</Label>
                   <div className="p-3 bg-muted rounded-md font-mono text-lg">
                     {(() => {
                       const grantCall = tempGrantCall[f1.id] && grantCallsForCycle[tempFundingCycle[f1.id]]?.find((gc: any) => gc.id === tempGrantCall[f1.id])
@@ -903,7 +904,7 @@ export default function UncommittedF1sTab() {
                       }
                     }}
                   >
-                    Cancel
+                    {t('common:cancel')}
                   </Button>
                   <Button
                     onClick={async () => {
@@ -913,7 +914,7 @@ export default function UncommittedF1sTab() {
                     }}
                     disabled={!tempFundingCycle[f1.id] || !tempGrantCall[f1.id] || !tempMMYY[f1.id] || !tempGrantSerial[f1.id]}
                   >
-                    Save & Assign
+                    {t('f2:save_assign')}
                   </Button>
                 </div>
               </div>

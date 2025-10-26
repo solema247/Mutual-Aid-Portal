@@ -93,6 +93,7 @@
   "all_donors_label": "All Donors",
   "all_cycles": "All Cycles",
   "funding_cycle_label": "Funding Cycle",
+  "funding_cycle": "Funding Cycle",
   "all_states": "All States",
   "state_label": "State",
   "clear_filters": "Clear Filters",
@@ -101,5 +102,17 @@
   "no_committed": "No committed F1s found matching the current filters",
   "view_mou": "View MOU",
   "committed": "Committed",
-  "allocated": "Allocated"
+  "allocated": "Allocated",
+  "assign_work_plan": "Assign Work Plan",
+  "assign_work_plan_button": "Assign Work Plan",
+  "assigned": "Assigned",
+  "assign_metadata_description": "Assign funding cycle, grant call, MMYY, and grant serial for:",
+  "mmyy": "MMYY",
+  "grant_serial": "Grant Serial",
+  "select": "Select",
+  "select_or_create": "Select or create",
+  "create_new_serial": "Create new serial",
+  "generated_workplan_serial": "Generated Workplan Serial",
+  "save_assign": "Save & Assign",
+  "total_pending": "Total Pending"
 }
