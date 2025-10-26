@@ -40,6 +40,7 @@ interface GrantCall {
   donor: Donor | null
   total_allocated: number
   total_committed: number
+  total_pending: number
   grant_remaining: number
 }
 
@@ -189,37 +190,47 @@ export default function GrantSelectionTable({
           }
 
           // Get total committed amount from approved and committed projects
+          // Also include unassigned pending projects that have been assigned to a grant call
           const { data: committedProjectsData, error: committedError } = await supabase
             .from('err_projects')
-            .select('expenses')
+            .select('expenses, funding_status, status')
             .eq('grant_call_id', grantCall.id)
-            .eq('status', 'approved')
-            .eq('funding_status', 'committed')
+            .or('funding_status.eq.committed,funding_status.eq.allocated,and(funding_status.eq.unassigned,status.eq.pending)')
 
           if (committedError) {
             console.error('Error fetching committed projects:', committedError)
           }
 
-          const totalCommitted = (committedProjectsData || []).reduce((sum, project) => {
+          let totalCommitted = 0
+          let totalPending = 0
+          
+          for (const project of committedProjectsData || []) {
             try {
               const expenses = typeof project.expenses === 'string' 
                 ? JSON.parse(project.expenses) 
                 : project.expenses
               
-              return sum + expenses.reduce((expSum: number, exp: any) => 
+              const amount = expenses.reduce((expSum: number, exp: any) => 
                 expSum + (exp.total_cost || 0), 0)
+              
+              if (project.funding_status === 'committed') {
+                totalCommitted += amount
+              } else if (project.funding_status === 'allocated' || project.funding_status === 'unassigned') {
+                // Include both allocated and unassigned (pending assignment) projects as pending
+                totalPending += amount
+              }
             } catch (error) {
               console.warn('Error parsing expenses:', error)
-              return sum
             }
-          }, 0)
+          }
 
-          const grantRemaining = (grantCall.amount || 0) - totalCommitted
+          const grantRemaining = (grantCall.amount || 0) - totalCommitted - totalPending
 
           return {
             ...grantCall,
             total_allocated: totalAllocated,
             total_committed: totalCommitted,
+            total_pending: totalPending,
             grant_remaining: grantRemaining
           }
         })
@@ -302,7 +313,8 @@ export default function GrantSelectionTable({
                   <TableHead className="text-right">{t('f2:total_grant_amount')}</TableHead>
                   <TableHead className="text-right">{t('f2:total_allocated')}</TableHead>
                   <TableHead className="text-right">{t('f2:total_committed')}</TableHead>
-                                     <TableHead className="text-right" title="Available for new commitments (Total Grant - Total Committed)">
+                  <TableHead className="text-right">{t('f2:total_pending')}</TableHead>
+                  <TableHead className="text-right" title="Available for new commitments (Total Grant - Total Committed - Total Pending)">
                      <div className="flex items-center justify-end gap-1">
                        {t('f2:grant_remaining')}
                        <Info className="h-4 w-4 text-blue-700" />
@@ -359,6 +371,9 @@ export default function GrantSelectionTable({
                     </TableCell>
                     <TableCell className="text-right">
                       {formatCurrency(grantCall.total_committed)}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {formatCurrency(grantCall.total_pending)}
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="font-medium">
