@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useTranslation } from 'react-i18next'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 
-export default function PoolDashboard({ showProposals = true }: { showProposals?: boolean }) {
+export default function PoolDashboard({ showProposals = true, showByDonor = true }: { showProposals?: boolean; showByDonor?: boolean }) {
   const { t } = useTranslation(['f1_plans'])
   const [summary, setSummary] = useState<{ total_included: number; total_committed: number; total_pending: number; remaining: number; total_grants: number; total_not_included: number } | null>(null)
   const [byState, setByState] = useState<any[]>([])
@@ -148,73 +148,76 @@ export default function PoolDashboard({ showProposals = true }: { showProposals?
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader><CardTitle>{t('pool.by_donor.title')}</CardTitle></CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>
-                  <div className="font-semibold">{t('pool.by_donor.donor')}</div>
-                  <div className="text-xs text-muted-foreground">{t('pool.by_donor.donor_desc')}</div>
-                </TableHead>
-                <TableHead>
-                  <div className="font-semibold">{t('pool.by_donor.grant')}</div>
-                  <div className="text-xs text-muted-foreground">{t('pool.by_donor.grant_desc')}</div>
-                </TableHead>
-                <TableHead className="text-right">
-                  <div className="font-semibold">{t('pool.by_donor.included')}</div>
-                  <div className="text-xs text-muted-foreground">{t('pool.by_donor.included_desc')}</div>
-                </TableHead>
-                <TableHead className="text-right">
-                  <div className="font-semibold">{t('pool.by_donor.committed')}</div>
-                  <div className="text-xs text-muted-foreground">{t('pool.by_donor.committed_desc')}</div>
-                </TableHead>
-                <TableHead className="text-right">
-                  <div className="font-semibold">{t('pool.by_donor.pending')}</div>
-                  <div className="text-xs text-muted-foreground">{t('pool.by_donor.pending_desc')}</div>
-                </TableHead>
-                <TableHead className="text-right">
-                  <div className="font-semibold">{t('pool.by_donor.remaining')}</div>
-                  <div className="text-xs text-muted-foreground">{t('pool.by_donor.remaining_desc')}</div>
-                </TableHead>
-                {showProposals && (
-                  <>
-                    <TableHead className="text-right">
-                      <div className="font-semibold">{t('pool.by_donor.proposed')}</div>
-                      <div className="text-xs text-muted-foreground">{t('pool.by_donor.proposed_desc')}</div>
-                    </TableHead>
-                    <TableHead className="text-right">
-                      <div className="font-semibold">{t('pool.by_donor.remainder')}</div>
-                      <div className="text-xs text-muted-foreground">{t('pool.by_donor.remainder_desc')}</div>
-                    </TableHead>
-                  </>
-                )}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {byDonor.map((r, i) => (
-                <TableRow key={`${r.grant_call_id}-${i}`}>
-                  <TableCell>{r.donor_name || '-'}</TableCell>
-                  <TableCell>{r.grant_call_name || r.grant_call_id}</TableCell>
-                  <TableCell className="text-right">{fmt(r.included)}</TableCell>
-                  <TableCell className="text-right">{fmt(r.committed)}</TableCell>
-                  <TableCell className="text-right">{fmt(r.pending)}</TableCell>
-                  <TableCell className={`text-right ${r.remaining >= 0 ? 'text-green-700' : 'text-red-700'}`}>{fmt(r.remaining)}</TableCell>
+      {showByDonor && (
+        <Card>
+          <CardHeader><CardTitle>{t('pool.by_donor.title')}</CardTitle></CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>
+                    <div className="font-semibold">{t('pool.by_donor.donor')}</div>
+                    <div className="text-xs text-muted-foreground">{t('pool.by_donor.donor_desc')}</div>
+                  </TableHead>
+                  <TableHead>
+                    <div className="font-semibold">{t('pool.by_donor.grant')}</div>
+                    <div className="text-xs text-muted-foreground">{t('pool.by_donor.grant_desc')}</div>
+                  </TableHead>
+                  <TableHead className="text-right">
+                    <div className="font-semibold">{t('pool.by_donor.included')}</div>
+                    <div className="text-xs text-muted-foreground">{t('pool.by_donor.included_desc')}</div>
+                  </TableHead>
+                  <TableHead className="text-right">
+                    <div className="font-semibold">{t('pool.by_donor.committed')}</div>
+                    <div className="text-xs text-muted-foreground">{t('pool.by_donor.committed_desc')}</div>
+                  </TableHead>
+                  <TableHead className="text-right">
+                    <div className="font-semibold">{t('pool.by_donor.pending')}</div>
+                    <div className="text-xs text-muted-foreground">{t('pool.by_donor.pending_desc')}</div>
+                  </TableHead>
+                  <TableHead className="text-right">
+                    <div className="font-semibold">{t('pool.by_donor.remaining')}</div>
+                    <div className="text-xs text-muted-foreground">{t('pool.by_donor.remaining_desc')}</div>
+                  </TableHead>
                   {showProposals && (
                     <>
-                      <TableCell className="text-right">{proposal.grantCallId === r.grant_call_id ? fmt(proposal.amount) : fmt(0)}</TableCell>
-                      <TableCell className={`text-right ${((r.remaining - (proposal.grantCallId === r.grant_call_id ? proposal.amount : 0)) >= 0) ? 'text-green-700' : 'text-red-700'}`}>
-                        {fmt(r.remaining - (proposal.grantCallId === r.grant_call_id ? proposal.amount : 0))}
-                      </TableCell>
+                      <TableHead className="text-right">
+                        <div className="font-semibold">{t('pool.by_donor.proposed')}</div>
+                        <div className="text-xs text-muted-foreground">{t('pool.by_donor.proposed_desc')}</div>
+                      </TableHead>
+                      <TableHead className="text-right">
+                        <div className="font-semibold">{t('pool.by_donor.remainder')}</div>
+                        <div className="text-xs text-muted-foreground">{t('pool.by_donor.remainder_desc')}</div>
+                      </TableHead>
                     </>
                   )}
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+              </TableHeader>
+              <TableBody>
+                {byDonor.map((r, i) => (
+                  <TableRow key={`${r.grant_call_id}-${i}`}>
+                    <TableCell>{r.donor_name || '-'}</TableCell>
+                    <TableCell>{r.grant_call_name || r.grant_call_id}</TableCell>
+                    <TableCell className="text-right">{fmt(r.included)}</TableCell>
+                    <TableCell className="text-right">{fmt(r.committed)}</TableCell>
+                    <TableCell className="text-right">{fmt(r.pending)}</TableCell>
+                    <TableCell className={`text-right ${r.remaining >= 0 ? 'text-green-700' : 'text-red-700'}`}>{fmt(r.remaining)}</TableCell>
+                    {showProposals && (
+                      <>
+                        <TableCell className="text-right">{proposal.grantCallId === r.grant_call_id ? fmt(proposal.amount) : fmt(0)}</TableCell>
+                        <TableCell className={`text-right ${((r.remaining - (proposal.grantCallId === r.grant_call_id ? proposal.amount : 0)) >= 0) ? 'text-green-700' : 'text-red-700'}`}>
+                          {fmt(r.remaining - (proposal.grantCallId === r.grant_call_id ? proposal.amount : 0))}
+                        </TableCell>
+                      </>
+                    )}
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
+
     </div>
   )
 }
