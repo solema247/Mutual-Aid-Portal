@@ -4,6 +4,8 @@ import React, { useEffect, useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useTranslation } from 'react-i18next'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Button } from '@/components/ui/button'
+import { RefreshCw } from 'lucide-react'
 
 export default function PoolDashboard({ showProposals = true, showByDonor = true }: { showProposals?: boolean; showByDonor?: boolean }) {
   const { t } = useTranslation(['f1_plans'])
@@ -72,7 +74,27 @@ export default function PoolDashboard({ showProposals = true, showByDonor = true
 
   const fmt = (n: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n || 0)
 
-  if (loading) return <div className="text-sm text-muted-foreground">{t('pool.loading')}</div>
+  const handleRefresh = async () => {
+    try {
+      setLoading(true)
+      const [s, bs, bd] = await Promise.all([
+        fetch('/api/pool/summary').then(r => r.json()),
+        fetch('/api/pool/by-state').then(r => r.json()),
+        fetch('/api/pool/by-donor').then(r => r.json())
+      ])
+      setSummary(s)
+      setByState(Array.isArray(bs) ? bs : [])
+      setByDonor(Array.isArray(bd) ? bd : [])
+      // Clear proposal overlays
+      setProposal({ amount: 0 })
+    } catch (e) {
+      console.error('Pool dashboard refresh error:', e)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  if (loading && !summary) return <div className="text-sm text-muted-foreground">{t('pool.loading')}</div>
 
   return (
     <div className="space-y-6">
@@ -86,7 +108,18 @@ export default function PoolDashboard({ showProposals = true, showByDonor = true
       )}
 
       <Card>
-        <CardHeader><CardTitle>{t('pool.by_state.title')}</CardTitle></CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+          <CardTitle>{t('pool.by_state.title')}</CardTitle>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleRefresh}
+            disabled={loading}
+          >
+            <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+            Refresh
+          </Button>
+        </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
