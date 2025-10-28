@@ -35,6 +35,10 @@ export interface UncommittedF1 {
   err_name: string | null
   submitted_at: string
   approval_file_key?: string | null
+  temp_file_key?: string | null
+  grant_id?: string | null
+  grant_serial_id?: string | null
+  workplan_number?: number | null
 }
 
 export interface CommittedF1 {
