@@ -375,8 +375,27 @@ export default function UncommittedF1sTab() {
       let workplanNumber: number | null = null
       
       if (grantSerial === 'new') {
-        // Creating new serial - this will be handled by the API
-        grantSerialId = null
+        // Create a new grant serial via API
+        try {
+          const createResp = await fetch('/api/fsystem/grant-serials/create', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              funding_cycle_id: fundingCycleId,
+              cycle_state_allocation_id: cycleStateAllocationId,
+              grant_call_id: grantCallId,
+              state_name: f1.state,
+              yymm: mmyy
+            })
+          })
+          if (!createResp.ok) throw new Error('Failed to create grant serial')
+          const created = await createResp.json()
+          grantSerialId = created?.grant_serial || null
+        } catch (e) {
+          console.error('Create serial error:', e)
+          alert('Failed to create grant serial')
+          return
+        }
       } else {
         // Using existing serial
         grantSerialId = grantSerial
@@ -401,6 +420,19 @@ export default function UncommittedF1sTab() {
             .from('grant_workplan_seq')
             .insert({ grant_serial: grantSerial, last_workplan_number: workplanNumber })
         }
+      }
+
+      // If a new serial was created above, initialize workplan number
+      if (grantSerial === 'new' && grantSerialId) {
+        // First workplan number for a new serial is 1
+        workplanNumber = 1
+        // Update the workplan sequence to reflect first use
+        try {
+          await supabase
+            .from('grant_workplan_seq')
+            .update({ last_workplan_number: workplanNumber, last_used: new Date().toISOString() })
+            .eq('grant_serial', grantSerialId)
+        } catch {}
       }
 
       // Construct final workplan ID for filename
@@ -435,7 +467,8 @@ export default function UncommittedF1sTab() {
           funding_cycle_id: fundingCycleId,
           grant_serial_id: grantSerialId,
           workplan_number: workplanNumber,
-          cycle_state_allocation_id: cycleStateAllocationId
+          cycle_state_allocation_id: cycleStateAllocationId,
+          grant_id: grantId
         })
       })
 
@@ -600,8 +633,8 @@ export default function UncommittedF1sTab() {
                 <TableHead>{t('f2:state')}</TableHead>
                 <TableHead>{t('f2:locality')}</TableHead>
                 <TableHead className="text-right">{t('f2:requested_amount')}</TableHead>
-                <TableHead>{t('f2:community_approval')}</TableHead>
                 <TableHead>Assignment</TableHead>
+                <TableHead>{t('f2:community_approval')}</TableHead>
                 {/* Status column removed visually */}
               </TableRow>
             </TableHeader>
@@ -689,43 +722,6 @@ export default function UncommittedF1sTab() {
                       </div>
                     )}
                   </TableCell>
-                  <TableCell>
-                    {f1.approval_file_key ? (
-                      <Badge variant="default">{t('f2:approval_uploaded')}</Badge>
-                    ) : (
-                      <div className="flex items-center gap-2">
-                        <Badge variant="secondary" className="text-muted-foreground">{t('f2:approval_required')}</Badge>
-                        <input
-                          id={`approval-file-${f1.id}`}
-                          type="file"
-                          className="hidden"
-                          accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                          onChange={async (e) => {
-                            const file = e.target.files?.[0]
-                            if (!file) return
-                            try {
-                              const key = `f2-approvals/${f1.id}/${Date.now()}-${file.name.replace(/\s+/g,'_')}`
-                              const { error: upErr } = await supabase.storage.from('images').upload(key, file, { upsert: true })
-                              if (upErr) { alert(t('f2:upload_failed')); return }
-                              const resp = await fetch('/api/f2/uncommitted', {
-                                method: 'PATCH',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ id: f1.id, approval_file_key: key })
-                              })
-                              if (!resp.ok) { alert(t('f2:upload_failed')); return }
-                              await fetchUncommittedF1s()
-                            } catch (err) {
-                              console.error('Upload error', err)
-                              alert(t('f2:upload_failed'))
-                            }
-                          }}
-                        />
-                        <Button size="sm" variant="outline" onClick={() => document.getElementById(`approval-file-${f1.id}`)?.click()}>
-                          {t('f2:upload')}
-                        </Button>
-                      </div>
-                    )}
-                  </TableCell>
                   {/* Assignment Column */}
                   <TableCell>
                     {f1.temp_file_key ? (
@@ -742,6 +738,63 @@ export default function UncommittedF1sTab() {
                       </Button>
                     ) : (
                       <Badge variant="default">{t('f2:assigned')}</Badge>
+                    )}
+                  </TableCell>
+                  {/* Community Approval - only after assignment */}
+                  <TableCell>
+                    {f1.approval_file_key ? (
+                      <Badge variant="default">{t('f2:approval_uploaded')}</Badge>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <Badge variant="secondary" className="text-muted-foreground">{t('f2:approval_required')}</Badge>
+                        <input
+                          id={`approval-file-${f1.id}`}
+                          type="file"
+                          className="hidden"
+                          accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                          onChange={async (e) => {
+                            const file = e.target.files?.[0]
+                            if (!file) return
+                            try {
+                              // Build final path mirroring F1 storage logic, but under f2-approvals
+                              // Expect grant_id like: LCC-DKH-WK-1025-0001-002
+                              const grantId: string | undefined = (f1 as any).grant_id || (f1 as any).grant_serial_id && (f1 as any).workplan_number ? `${(f1 as any).grant_serial_id}-${String((f1 as any).workplan_number).padStart(3,'0')}` : undefined
+                              let key = `f2-approvals/${f1.id}/${Date.now()}-${file.name.replace(/\s+/g,'_')}`
+                              if (grantId) {
+                                const m = /^LCC-([A-Z0-9]+)-([A-Z]+)-(\d{4})-/.exec(grantId)
+                                if (m) {
+                                  const donorShort = m[1]
+                                  const stateShort = m[2]
+                                  const mmyy = m[3]
+                                  const ext = (file.name.split('.').pop() || 'pdf').toLowerCase()
+                                  key = `f2-approvals/${donorShort}/${stateShort}/${mmyy}/${grantId}-approval.${ext}`
+                                }
+                              }
+                              const { error: upErr } = await supabase.storage.from('images').upload(key, file, { upsert: true })
+                              if (upErr) { alert(t('f2:upload_failed')); return }
+                              const resp = await fetch('/api/f2/uncommitted', {
+                                method: 'PATCH',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ id: f1.id, approval_file_key: key })
+                              })
+                              if (!resp.ok) { alert(t('f2:upload_failed')); return }
+                              await fetchUncommittedF1s()
+                            } catch (err) {
+                              console.error('Upload error', err)
+                              alert(t('f2:upload_failed'))
+                            }
+                          }}
+                        />
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => document.getElementById(`approval-file-${f1.id}`)?.click()}
+                          disabled={!!f1.temp_file_key}
+                          title={f1.temp_file_key ? t('f2:assign_work_plan') : undefined}
+                        >
+                          {t('f2:upload')}
+                        </Button>
+                      </div>
                     )}
                   </TableCell>
                   {/* Status cell removed visually */}

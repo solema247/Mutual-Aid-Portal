@@ -141,22 +141,9 @@ export async function POST(request: Request) {
     const nextNumber = (count || 0) + 1
     const paddedSerial = nextNumber.toString().padStart(4, '0')
 
-    // Build the serial string
-    let serial
-    if (funding_cycle_id) {
-      // For cycle-based system, use cycle name and donor short name format
-      const { data: cycleData, error: cycleError } = await supabase
-        .from('funding_cycles')
-        .select('name')
-        .eq('id', funding_cycle_id)
-        .single()
-      
-      if (cycleError) throw cycleError
-      serial = `LCC-CYCLE${cycleData.name}-${donor.short_name}-${state.state_short.toUpperCase()}-${yymm}-${paddedSerial}`
-    } else {
-      // For old grant-call-based system, use donor short name
-      serial = `LCC-${donor.short_name}-${state.state_short.toUpperCase()}-${yymm}-${paddedSerial}`
-    }
+    // Build the serial string (unified format for both systems)
+    // Desired format: LCC-DonorShort-StateShort-MMYY-Serial
+    const serial = `LCC-${donor.short_name}-${state.state_short.toUpperCase()}-${yymm}-${paddedSerial}`
 
     // Insert the new serial
     const insertData = {
