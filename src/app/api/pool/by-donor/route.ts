@@ -1,4 +1,8 @@
 import { NextResponse } from 'next/server'
+
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+export const fetchCache = 'force-no-store'
 import { supabase } from '@/lib/supabaseClient'
 
 // GET /api/pool/by-donor - Aggregated by donor and grant call
@@ -68,10 +72,10 @@ export async function GET() {
       return { donor_id: v.donor_id, donor_name: v.donor_name, grant_call_id, grant_call_name: v.grant_call_name, included: v.included, committed, pending, remaining }
     })
 
-    return NextResponse.json(rows)
+    return NextResponse.json(rows, { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } })
   } catch (error) {
     console.error('Pool by-donor error:', error)
-    return NextResponse.json({ error: 'Failed to compute by-donor' }, { status: 500 })
+    return NextResponse.json({ error: 'Failed to compute by-donor' }, { status: 500, headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } })
   }
 }
 

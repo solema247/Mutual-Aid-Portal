@@ -19,9 +19,9 @@ export default function PoolDashboard({ showProposals = true, showByDonor = true
     const load = async () => {
       try {
         const [s, bs, bd] = await Promise.all([
-          fetch('/api/pool/summary').then(r => r.json()),
-          fetch('/api/pool/by-state').then(r => r.json()),
-          fetch('/api/pool/by-donor').then(r => r.json())
+          fetch('/api/pool/summary', { cache: 'no-store' }).then(r => r.json()),
+          fetch('/api/pool/by-state', { cache: 'no-store' }).then(r => r.json()),
+          fetch('/api/pool/by-donor', { cache: 'no-store' }).then(r => r.json())
         ])
         setSummary(s)
         setByState(Array.isArray(bs) ? bs : [])
@@ -52,9 +52,9 @@ export default function PoolDashboard({ showProposals = true, showByDonor = true
       try {
         setLoading(true)
         const [s, bs, bd] = await Promise.all([
-          fetch('/api/pool/summary').then(r => r.json()),
-          fetch('/api/pool/by-state').then(r => r.json()),
-          fetch('/api/pool/by-donor').then(r => r.json())
+          fetch('/api/pool/summary', { cache: 'no-store' }).then(r => r.json()),
+          fetch('/api/pool/by-state', { cache: 'no-store' }).then(r => r.json()),
+          fetch('/api/pool/by-donor', { cache: 'no-store' }).then(r => r.json())
         ])
         setSummary(s)
         setByState(Array.isArray(bs) ? bs : [])

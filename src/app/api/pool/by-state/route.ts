@@ -1,4 +1,8 @@
 import { NextResponse } from 'next/server'
+
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+export const fetchCache = 'force-no-store'
 import { supabase } from '@/lib/supabaseClient'
 
 // GET /api/pool/by-state - Aggregated view across cycles
@@ -71,10 +75,12 @@ export async function GET() {
       return { state_name: state, allocated, committed, pending, remaining }
     })
 
-    return NextResponse.json(rows)
+    return NextResponse.json(rows, {
+      headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' }
+    })
   } catch (error) {
     console.error('Pool by-state error:', error)
-    return NextResponse.json({ error: 'Failed to compute by-state' }, { status: 500 })
+    return NextResponse.json({ error: 'Failed to compute by-state' }, { status: 500, headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } })
   }
 }
 
