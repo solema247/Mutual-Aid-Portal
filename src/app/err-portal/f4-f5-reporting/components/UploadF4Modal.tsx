@@ -168,11 +168,11 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved }: UploadF4M
     ;(async () => {
       const { data } = await supabase
         .from('err_projects')
-        .select('id, project_objectives, submitted_at')
+        .select('id, project_name, submitted_at')
         .eq('status', 'active')
         .eq('emergency_room_id', selectedRoomId)
         .order('submitted_at', { ascending: false })
-      setProjects(((data as any[]) || []).map((p:any)=> ({ id: p.id, label: p.project_objectives || p.id })))
+      setProjects(((data as any[]) || []).map((p:any)=> ({ id: p.id, label: p.project_name || p.id })))
     })()
   }, [selectedRoomId])
 

@@ -324,6 +324,11 @@ export default function DirectUpload() {
       // Prepare data for DB - remove metadata fields that will be set in F2
       const { form_currency, exchange_rate, raw_ocr, _selected_state_name, _selected_grant_call_id, _yymm, _existing_serial, _selected_funding_cycle_id, _cycle_state_allocation_id, ...dataForDB } = translatedData
 
+      // Generate project_name: Primary Sector - Secondary Sector - Locality
+      const locality = dataForDB.locality || ''
+      const projectNameParts = [primaryNames, secondaryNames, locality].filter(Boolean)
+      const projectName = projectNameParts.length > 0 ? projectNameParts.join(' - ') : null
+
       // Normalize date for DB (MMYY -> YYYY-MM-01)
       let dbDate: string | null = null
       if (typeof dataForDB.date === 'string') {
@@ -344,7 +349,6 @@ export default function DirectUpload() {
           ...dataForDB,
           date: dbDate,
           expenses: expensesForDB,
-          project_id: formData.project_id,
           emergency_room_id: formData.emergency_room_id,
           err_id: selectedRoom?.err_code || null,
           status: 'pending', // Status for files awaiting F2 approval
@@ -352,6 +356,7 @@ export default function DirectUpload() {
           state: stateName,
           "Sector (Primary)": primaryNames,
           "Sector (Secondary)": secondaryNames,
+          project_name: projectName,
           temp_file_key: tempKey, // Store temp file path
           original_text: originalText,
           language: sourceLanguage,

@@ -347,6 +347,11 @@ export default function F1Upload() {
       const primarySectorNames = primarySectorData.map(s => s.sector_name_en).join(', ')
       const secondarySectorNames = secondarySectorData.map(s => s.sector_name_en).join(', ')
 
+      // Generate project_name: Primary Sector - Secondary Sector - Locality
+      const locality = editedData.locality || ''
+      const projectNameParts = [primarySectorNames, secondarySectorNames, locality].filter(Boolean)
+      const projectName = projectNameParts.length > 0 ? projectNameParts.join(' - ') : null
+
       // Get file extension and generate path
       const fileExtension = selectedFile.name.split('.').pop()
       const filePath = `f1-forms/${selectedDonor.short_name}/${selectedState.state_short}/${formData.date}/${grant_id}.${fileExtension}`
@@ -371,7 +376,6 @@ export default function F1Upload() {
           donor_id: formData.donor_id,
           grant_serial_id: formData.grant_serial_id,
           workplan_number: parseInt(workplan_number),
-          project_id: formData.project_id,
           emergency_room_id: formData.emergency_room_id,
           err_id: selectedRoom.err_code,
           grant_id: grant_id,
@@ -379,7 +383,8 @@ export default function F1Upload() {
           source: 'mutual_aid_portal',
           state: selectedState.state_name,
           "Sector (Primary)": primarySectorNames,
-          "Sector (Secondary)": secondarySectorNames
+          "Sector (Secondary)": secondarySectorNames,
+          project_name: projectName
         }])
 
       if (insertError) {
