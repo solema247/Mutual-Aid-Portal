@@ -3,6 +3,7 @@
 import { useTranslation } from 'react-i18next'
 import { useState, useEffect } from 'react'
 import MainLayout from '@/components/layout/MainLayout'
+import { useRouter } from 'next/navigation'
 import { Users, FileText, ClipboardList, BarChart2, PieChart, UserCog, Home, CheckSquare, BookOpen, PenTool, Cog } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 
@@ -22,6 +23,8 @@ export default function ErrPortalLayout({
 }) {
   const { t } = useTranslation(['err'])
   const [user, setUser] = useState<User | null>(null)
+  const [minimizedType, setMinimizedType] = useState<'f4'|'f5'|null>(null)
+  const router = useRouter()
 
   useEffect(() => {
     const getUser = async () => {
@@ -39,6 +42,25 @@ export default function ErrPortalLayout({
       }
     }
     getUser()
+  }, [])
+
+  // Watch localStorage to show minimized upload bar across pages
+  useEffect(() => {
+    const read = () => {
+      try {
+        const v = (typeof window !== 'undefined') ? window.localStorage.getItem('err_minimized_modal') : null
+        if (v === 'f4' || v === 'f5') setMinimizedType(v)
+        else setMinimizedType(null)
+      } catch {}
+    }
+    read()
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === 'err_minimized_modal') read()
+    }
+    const onCustom = (_e: any) => read()
+    window.addEventListener('storage', onStorage)
+    window.addEventListener('err_minimized_modal_change', onCustom as any)
+    return () => window.removeEventListener('storage', onStorage)
   }, [])
 
   const canManageRooms = user?.role === 'admin' || user?.role === 'state_err'
@@ -96,5 +118,29 @@ export default function ErrPortalLayout({
     }
   ]
 
-  return <MainLayout sidebarItems={sidebarItems}>{children}</MainLayout>
+  return (
+    <MainLayout sidebarItems={sidebarItems}>
+      {children}
+      {minimizedType && (
+        <div className="fixed bottom-4 right-4 z-50 w-80 rounded border bg-background shadow-lg">
+          <div className="flex items-center justify-between px-3 py-2">
+            <div className="text-sm font-medium">{minimizedType === 'f4' ? 'F4 Financial Report' : 'F5 Program Report'}</div>
+            <div className="flex items-center gap-2">
+              <button
+                className="h-7 px-2 text-sm rounded border"
+                onClick={() => {
+                  try { window.localStorage.setItem('err_restore', String(minimizedType)) } catch {}
+                  router.push(`/err-portal/f4-f5-reporting?restore=${minimizedType}`)
+                }}
+              >Restore</button>
+              <button
+                className="h-7 px-2 text-sm rounded"
+                onClick={() => { try { window.localStorage.removeItem('err_minimized_modal') } catch {}; setMinimizedType(null) }}
+              >X</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </MainLayout>
+  )
 }

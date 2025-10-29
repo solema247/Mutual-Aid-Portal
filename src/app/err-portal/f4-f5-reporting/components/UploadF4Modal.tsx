@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
@@ -39,6 +39,10 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved }: UploadF4M
   const [activeTab, setActiveTab] = useState('form')
   const [rawOcr, setRawOcr] = useState<string>('')
   const [aiOutput, setAiOutput] = useState<any | null>(null)
+  const [minimized, setMinimized] = useState(false)
+  const isMinimizingRef = useRef(false)
+  const isRestoringRef = useRef(false)
+  const [isRestoring, setIsRestoring] = useState(false)
 
   useEffect(() => {
     if (!open) return
@@ -53,9 +57,82 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved }: UploadF4M
     })()
   }, [open])
 
+  // Restore from minimized snapshot if present
+  useEffect(() => {
+    if (!open) return
+    // If opening fresh (not via restore flags), clear any stale snapshot and reset state
+    try {
+      const sp = (typeof window !== 'undefined') ? new URLSearchParams(window.location.search) : null
+      const hasRestoreParam = sp?.get('restore')
+      const hasLocalRestore = (typeof window !== 'undefined') ? (window.localStorage.getItem('err_restore') || window.localStorage.getItem('err_minimized_modal')) : null
+      if (!hasRestoreParam && !hasLocalRestore) {
+        try { window.localStorage.removeItem('err_minimized_payload'); window.dispatchEvent(new CustomEvent('err_minimized_modal_change')) } catch {}
+        // Ensure fresh state for new uploads - reset all form fields
+        setStep('select')
+        setProjectId('')
+        setFile(null)
+        setReportDate('')
+        setSelectedState('')
+        setSelectedRoomId('')
+        setSummaryDraft(null)
+        setExpensesDraft([])
+        setTempKey('')
+        setFileUrl('')
+        setRawOcr('')
+        setActiveTab('form')
+        setAiOutput(null)
+        return
+      }
+    } catch {}
+    try {
+      const raw = window.localStorage.getItem('err_minimized_payload')
+      const type = window.localStorage.getItem('err_minimized_modal')
+      if (raw && type === 'f4') {
+        const p = JSON.parse(raw)
+        if (p?.type === 'f4') {
+          isRestoringRef.current = true
+          setIsRestoring(true)
+          if (p.step) setStep(p.step)
+          if (p.summaryDraft) setSummaryDraft(p.summaryDraft)
+          if (Array.isArray(p.expensesDraft)) setExpensesDraft(p.expensesDraft)
+          if (p.projectId) setProjectId(p.projectId)
+          if (p.reportDate) setReportDate(p.reportDate)
+          if (p.selectedState) setSelectedState(p.selectedState)
+          if (p.selectedRoomId) setSelectedRoomId(p.selectedRoomId)
+          if (p.activeTab) setActiveTab(p.activeTab)
+          if (p.tempKey) {
+            setTempKey(p.tempKey)
+            ;(async () => {
+              try {
+                const { data: signed } = await supabase.storage.from('images').createSignedUrl(p.tempKey, 3600)
+                if (signed?.signedUrl) setFileUrl(signed.signedUrl)
+              } catch {}
+            })()
+          } else if (p.fileUrl) {
+            setFileUrl(p.fileUrl)
+          }
+          try { window.localStorage.removeItem('err_minimized_modal'); window.localStorage.removeItem('err_minimized_payload'); window.dispatchEvent(new CustomEvent('err_minimized_modal_change')) } catch {}
+          // Reset restore flag after a brief delay to allow all state updates to propagate
+          setTimeout(() => { 
+            isRestoringRef.current = false
+            setIsRestoring(false)
+          }, 500)
+        }
+      }
+    } catch {}
+  }, [open])
+
   // When state changes, load ERR rooms in that state with active projects
   useEffect(() => {
-    if (!selectedState) { setRooms([]); setSelectedRoomId(''); setProjects([]); setProjectId(''); return }
+    if (!selectedState) { 
+      if (!isRestoringRef.current) {
+        setRooms([]); 
+        setSelectedRoomId(''); 
+        setProjects([]); 
+        setProjectId('')
+      }
+      return 
+    }
     ;(async () => {
       const { data } = await supabase
         .from('err_projects')
@@ -71,15 +148,23 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved }: UploadF4M
         }
       }
       setRooms(Array.from(map.values()))
-      setSelectedRoomId('')
-      setProjects([])
-      setProjectId('')
+      if (!isRestoringRef.current) {
+        setSelectedRoomId('')
+        setProjects([])
+        setProjectId('')
+      }
     })()
   }, [selectedState])
 
   // When room changes, load its active projects
   useEffect(() => {
-    if (!selectedRoomId) { setProjects([]); setProjectId(''); return }
+    if (!selectedRoomId) { 
+      if (!isRestoringRef.current) {
+        setProjects([]); 
+        setProjectId('')
+      }
+      return 
+    }
     ;(async () => {
       const { data } = await supabase
         .from('err_projects')
@@ -186,7 +271,14 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved }: UploadF4M
   }
 
   const handleSave = async () => {
-    if (!projectId || !summaryDraft) return
+    if (isRestoring || isRestoringRef.current) {
+      console.warn('Cannot save while restoring state')
+      return
+    }
+    if (!projectId || !summaryDraft) {
+      console.warn('Missing required fields:', { projectId, hasSummaryDraft: !!summaryDraft })
+      return
+    }
     setIsLoading(true)
     try {
       const totalFromTable = expensesDraft.reduce((s, ex) => s + (Number(ex.expense_amount) || 0), 0)
@@ -200,6 +292,7 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved }: UploadF4M
       const res = await fetch('/api/f4/save', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ project_id: projectId, summary: summaryToSave, expenses: expensesDraft, file_key_temp: tempKey }) })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error || 'Save failed')
+      try { window.localStorage.removeItem('err_minimized_modal') } catch {}
       onOpenChange(false)
       onSaved()
     } catch (e) {
@@ -214,18 +307,58 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved }: UploadF4M
     setProjectId('')
     setFile(null)
     setReportDate('')
+    setSelectedState('')
+    setSelectedRoomId('')
     setSummaryDraft(null)
     setExpensesDraft([])
     setStep('select')
     setTempKey('')
     setFileUrl('')
+    setRawOcr('')
     setActiveTab('form')
     setAiOutput(null)
   }
 
   return (
-    <Dialog open={open} onOpenChange={(v) => { onOpenChange(v); if (!v) reset() }}>
-      <DialogContent className="max-w-7xl w-[95vw] max-h-[85vh] overflow-y-auto select-text">
+    <>
+    <Dialog open={open} onOpenChange={(v) => { 
+      onOpenChange(v); 
+      if (!v) {
+        if (isMinimizingRef.current) {
+          isMinimizingRef.current = false
+        } else {
+          try { window.localStorage.removeItem('err_minimized_modal'); window.localStorage.removeItem('err_minimized_payload'); window.dispatchEvent(new CustomEvent('err_minimized_modal_change')) } catch {}
+          // Reset all form fields on explicit close
+          setStep('select')
+          setProjectId('')
+          setFile(null)
+          setReportDate('')
+          setSelectedState('')
+          setSelectedRoomId('')
+          setSummaryDraft(null)
+          setExpensesDraft([])
+          setTempKey('')
+          setFileUrl('')
+          setRawOcr('')
+          setActiveTab('form')
+          setAiOutput(null)
+        }
+      }
+    }}>
+      <DialogContent 
+        className="max-w-7xl w-[95vw] max-h-[85vh] overflow-y-auto select-text"
+        onInteractOutside={(e:any)=>{ 
+          e.preventDefault(); 
+          try { 
+            const snapshot = JSON.stringify({ type: 'f4', step, summaryDraft, expensesDraft, projectId, reportDate, selectedState, selectedRoomId, activeTab, tempKey, fileUrl })
+            window.localStorage.setItem('err_minimized_modal','f4'); 
+            window.localStorage.setItem('err_minimized_payload', snapshot);
+            window.dispatchEvent(new CustomEvent('err_minimized_modal_change', { detail: 'f4' } as any)) 
+          } catch {} 
+          isMinimizingRef.current = true
+          onOpenChange(false) 
+        }}
+      >
         <DialogHeader>
           <DialogTitle>{t('f4.modal.title')}</DialogTitle>
         </DialogHeader>
@@ -469,7 +602,7 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved }: UploadF4M
 
             <div className="flex justify-between">
               <Button variant="outline" onClick={()=>setStep('select')}>{t('f4.preview.buttons.back')}</Button>
-              <Button onClick={handleSave} disabled={isLoading}>{isLoading ? t('f4.preview.buttons.saving') : t('f4.preview.buttons.save')}</Button>
+              <Button onClick={handleSave} disabled={isLoading || isRestoring}>{isLoading ? t('f4.preview.buttons.saving') : t('f4.preview.buttons.save')}</Button>
             </div>
             </TabsContent>
             
@@ -481,7 +614,7 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved }: UploadF4M
                 <CardContent>
                   {fileUrl ? (
                     <div className="w-full h-[600px] border rounded">
-                      {file?.type === 'application/pdf' ? (
+                      {(file?.type === 'application/pdf' || /\.pdf$/i.test(String(tempKey || ''))) ? (
                         <iframe 
                           src={fileUrl} 
                           className="w-full h-full rounded"
@@ -535,6 +668,18 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved }: UploadF4M
         )}
       </DialogContent>
     </Dialog>
+    {minimized && (
+      <div className="fixed bottom-4 right-4 z-50 w-80 rounded border bg-background shadow-lg">
+        <div className="flex items-center justify-between px-3 py-2">
+          <div className="text-sm font-medium">{t('f4.modal.title')}</div>
+          <div className="flex items-center gap-2">
+            <Button size="sm" variant="outline" onClick={() => { setMinimized(false); onOpenChange(true) }}>Restore</Button>
+            <Button size="sm" variant="ghost" onClick={() => { setMinimized(false); try { window.localStorage.removeItem('err_minimized_modal'); window.localStorage.removeItem('err_minimized_payload'); window.dispatchEvent(new CustomEvent('err_minimized_modal_change')) } catch {}; reset() }}>X</Button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   )
 }
 

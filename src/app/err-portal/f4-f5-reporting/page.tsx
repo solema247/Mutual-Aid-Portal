@@ -12,6 +12,7 @@ import { useTranslation } from 'react-i18next'
 import ViewF4Modal from './components/ViewF4Modal'
 import UploadF5Modal from './components/UploadF5Modal'
 import ViewF5Modal from './components/ViewF5Modal'
+import { useSearchParams, useRouter } from 'next/navigation'
 
 interface F4Row {
   id: number
@@ -43,6 +44,8 @@ interface F5Row {
 
 export default function F4F5ReportingPage() {
   const { t } = useTranslation(['f4f5'])
+  const searchParams = useSearchParams()
+  const router = useRouter()
   const [tab, setTab] = useState<'f4'|'f5'>('f4')
   const [rows, setRows] = useState<F4Row[]>([])
   const [loading, setLoading] = useState(false)
@@ -98,6 +101,28 @@ export default function F4F5ReportingPage() {
   useEffect(() => { load() }, [])
   useEffect(() => { if (tab === 'f5') loadF5() }, [tab])
 
+  // Handle restore from minimized across pages and when search params change
+  useEffect(() => {
+    const restore = searchParams.get('restore')
+    const localRestore = (typeof window !== 'undefined') ? window.localStorage.getItem('err_restore') : null
+
+    const target = restore || localRestore || null
+    if (target === 'f4') {
+      // Ensure F4 tab is active so modal component is mounted
+      setTab('f4')
+      setUploadOpen(true)
+      if (restore) router.replace('/err-portal/f4-f5-reporting')
+      try { window.localStorage.removeItem('err_restore') } catch {}
+    } else if (target === 'f5') {
+      // Ensure F5 tab is active so modal component is mounted
+      setTab('f5')
+      setUploadF5Open(true)
+      if (restore) router.replace('/err-portal/f4-f5-reporting')
+      try { window.localStorage.removeItem('err_restore') } catch {}
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams])
+
   return (
     <div className="max-w-7xl mx-auto p-6 space-y-6">
       <Tabs value={tab} onValueChange={(v) => setTab(v as any)}>
@@ -109,7 +134,7 @@ export default function F4F5ReportingPage() {
         <TabsContent value="f4" className="mt-4 space-y-4">
           <div className="flex items-center justify-between">
             <div className="text-lg font-semibold">{t('f4.title')}</div>
-            <Button className="bg-green-700 hover:bg-green-800 text-white font-bold" onClick={() => setUploadOpen(true)}>{t('f4.upload')}</Button>
+            <Button className="bg-green-700 hover:bg-green-800 text-white font-bold" onClick={() => { try { window.localStorage.removeItem('err_minimized_modal'); window.localStorage.removeItem('err_minimized_payload'); window.localStorage.removeItem('err_restore'); window.dispatchEvent(new CustomEvent('err_minimized_modal_change')) } catch {}; setUploadOpen(true) }}>{t('f4.upload')}</Button>
           </div>
 
           <div className="flex flex-wrap md:flex-nowrap gap-2 items-center">
@@ -215,7 +240,7 @@ export default function F4F5ReportingPage() {
         <TabsContent value="f5" className="mt-4 space-y-4">
           <div className="flex items-center justify-between">
             <div className="text-lg font-semibold">{t('f5.title')}</div>
-            <Button className="bg-green-700 hover:bg-green-800 text-white font-bold" onClick={() => setUploadF5Open(true)}>{t('f5.upload')}</Button>
+            <Button className="bg-green-700 hover:bg-green-800 text-white font-bold" onClick={() => { try { window.localStorage.removeItem('err_minimized_modal'); window.localStorage.removeItem('err_minimized_payload'); window.localStorage.removeItem('err_restore'); window.dispatchEvent(new CustomEvent('err_minimized_modal_change')) } catch {}; setUploadF5Open(true) }}>{t('f5.upload')}</Button>
           </div>
 
           <div className="flex flex-wrap md:flex-nowrap gap-2 items-center">
