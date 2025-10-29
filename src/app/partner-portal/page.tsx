@@ -81,11 +81,30 @@ export default function PartnerPortalPage() {
       <Button 
         className="w-full justify-start text-left mt-8" 
         variant="outline"
-        onClick={() => {
-          localStorage.clear()
-          document.cookie = 'isAuthenticated=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT'
-          document.cookie = 'userType=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT'
-          window.location.href = '/login'
+        onClick={async () => {
+          try {
+            const { supabase } = await import('@/lib/supabaseClient')
+            
+            // Clear cookies first (before signOut) to prevent redirect loop
+            localStorage.clear()
+            document.cookie = 'isAuthenticated=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT; SameSite=Lax'
+            document.cookie = 'userType=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT; SameSite=Lax'
+            
+            // Sign out from Supabase (await to ensure it completes)
+            await supabase.auth.signOut()
+            
+            // Small delay to ensure cookies are cleared before redirect
+            await new Promise(resolve => setTimeout(resolve, 100))
+            
+            window.location.href = '/login'
+          } catch (error) {
+            console.error('Logout error:', error)
+            // Even if signOut fails, clear cookies and redirect
+            localStorage.clear()
+            document.cookie = 'isAuthenticated=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT; SameSite=Lax'
+            document.cookie = 'userType=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT; SameSite=Lax'
+            window.location.href = '/login'
+          }
         }}
       >
         <LogOut className="h-5 w-5 mr-2" />

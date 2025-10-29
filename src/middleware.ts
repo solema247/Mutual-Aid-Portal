@@ -43,7 +43,9 @@ export async function middleware(req: NextRequest) {
 
   // Allow login and change-password pages access
   if (req.nextUrl.pathname === '/login' || req.nextUrl.pathname === '/change-password') {
-    if ((session || isAuthenticated) && req.nextUrl.pathname === '/login') {
+    // Only redirect away from login if we have BOTH session AND cookies
+    // This prevents redirect loop after logout when cookies are cleared but session might still exist briefly
+    if (session && isAuthenticated && req.nextUrl.pathname === '/login') {
       return NextResponse.redirect(new URL('/', req.url))
     }
     return res
