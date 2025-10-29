@@ -1,13 +1,14 @@
 import { NextResponse } from 'next/server'
+import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 export const fetchCache = 'force-no-store'
-import { supabase } from '@/lib/supabaseClient'
 
 // GET /api/pool/by-donor - Aggregated by donor and grant call
 export async function GET() {
   try {
+    const supabase = getSupabaseRouteClient()
     // Inclusions with grant and donor
     const { data: inclusions, error: incErr } = await supabase
       .from('cycle_grant_inclusions')

@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabaseClient'
+import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 
 export async function POST(request: Request) {
   try {
+    const supabase = getSupabaseRouteClient()
     const { grant_serial, grant_serial_id } = await request.json()
     const serialId = grant_serial || grant_serial_id
 

@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabaseClient'
+import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 
 // GET /api/pool/by-grant-for-state?state=Kassala
 export async function GET(request: Request) {
   try {
+    const supabase = getSupabaseRouteClient()
     const { searchParams } = new URL(request.url)
     const state = searchParams.get('state')
     if (!state) return NextResponse.json({ error: 'state is required' }, { status: 400 })

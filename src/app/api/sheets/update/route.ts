@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { google } from 'googleapis'
 import path from 'path'
-import { supabase } from '@/lib/supabaseClient'
+import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import OpenAI from 'openai'
 
 // Initialize Google Sheets
@@ -43,6 +43,7 @@ async function translateToEnglish(text: string): Promise<string> {
 
 export async function POST(req: Request) {
   try {
+    const supabase = getSupabaseRouteClient()
     const data = await req.json()
     
     console.log('Received data:', {

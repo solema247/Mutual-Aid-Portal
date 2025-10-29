@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabaseClient'
+import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 
 // DELETE /api/cycles/[id]/grants/[grantId] - Remove a grant from a cycle
 export async function DELETE(
@@ -7,6 +7,7 @@ export async function DELETE(
   { params }: { params: { id: string; grantId: string } }
 ) {
   try {
+    const supabase = getSupabaseRouteClient()
     const { id: cycleId, grantId } = params
 
     // Delete the inclusion directly

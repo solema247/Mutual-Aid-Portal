@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabaseClient'
+import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 
 // GET /api/f2/committed - Get all committed F1s with optional filtering
 export async function GET(request: Request) {
   try {
+    const supabase = getSupabaseRouteClient()
     const { searchParams } = new URL(request.url)
     const search = searchParams.get('search')
     const grantCall = searchParams.get('grant_call')

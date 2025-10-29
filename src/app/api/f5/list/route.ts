@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabaseClient'
+import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 
 export async function GET() {
   try {
+    const supabase = getSupabaseRouteClient()
     const { data: reports, error } = await supabase
       .from('err_program_report')
       .select(`

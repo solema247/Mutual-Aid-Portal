@@ -1,15 +1,16 @@
 import { NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabaseClient'
+import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 
 export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url)
-  const allocation_id = searchParams.get('allocation_id')
-
-  if (!allocation_id) {
-    return NextResponse.json({ error: 'Missing allocation_id' }, { status: 400 })
-  }
-
   try {
+    const supabase = getSupabaseRouteClient()
+    const { searchParams } = new URL(request.url)
+    const allocation_id = searchParams.get('allocation_id')
+
+    if (!allocation_id) {
+      return NextResponse.json({ error: 'Missing allocation_id' }, { status: 400 })
+    }
+
     // Get all committed projects for this allocation (funding_status = 'committed')
     const { data: committedProjects, error: committedError } = await supabase
       .from('err_projects')

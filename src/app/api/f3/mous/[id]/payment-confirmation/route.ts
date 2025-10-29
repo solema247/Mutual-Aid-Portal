@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabaseClient'
+import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 
 // POST /api/f3/mous/[id]/payment-confirmation - Upload payment confirmation file
 export async function POST(
@@ -7,6 +7,7 @@ export async function POST(
   { params }: { params: { id: string } }
 ) {
   try {
+    const supabase = getSupabaseRouteClient()
     const { id: mouId } = params
     const formData = await request.formData()
     const file = formData.get('file') as File

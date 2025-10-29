@@ -1,19 +1,35 @@
 import { NextResponse } from 'next/server'
+import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
+
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
-import { supabase } from '@/lib/supabaseClient'
 
 // GET /api/pool/summary - Overall pool across cycles
 export async function GET() {
   try {
+    const supabase = getSupabaseRouteClient()
+    // Debug: Check if we have a session
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+    const hasSession = !!session
+    
     // Get all grant calls and their amounts
     const { data: grantCalls, error: grantErr } = await supabase
       .from('grant_calls')
       .select('id, amount')
       .eq('status', 'open')
 
-    if (grantErr) throw grantErr
-
+    if (grantErr) {
+      return NextResponse.json({ 
+        error: 'Failed to compute pool summary',
+        debug: {
+          hasSession,
+          sessionError: sessionError?.message,
+          grantCallsError: grantErr.message,
+          grantCallsCode: grantErr.code
+        }
+      }, { status: 500 })
+    }
+    
     const total_grants = (grantCalls || []).reduce((sum, grant) => sum + (grant.amount || 0), 0)
 
     // Get all inclusions with their grant calls
@@ -27,7 +43,17 @@ export async function GET() {
         )
       `)
 
-    if (incErr) throw incErr
+    if (incErr) {
+      return NextResponse.json({ 
+        error: 'Failed to compute pool summary',
+        debug: {
+          hasSession,
+          sessionError: sessionError?.message,
+          inclusionsError: incErr.message,
+          inclusionsCode: incErr.code
+        }
+      }, { status: 500 })
+    }
 
     // Calculate total included and total available from grants
     const total_included = (inclusions || []).reduce((sum, inc) => sum + (inc.amount_included || 0), 0)
@@ -61,7 +87,12 @@ export async function GET() {
       total_pending: pending, 
       remaining,
       total_grants,
-      total_not_included
+      total_not_included,
+      debug: {
+        hasSession,
+        grantCallsCount: grantCalls?.length || 0,
+        inclusionsCount: inclusions?.length || 0
+      }
     }, { headers: { 'Cache-Control': 'no-store' } })
   } catch (error) {
     console.error('Pool summary error:', error)

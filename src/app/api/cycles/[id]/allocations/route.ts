@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabaseClient'
+import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 
 // GET /api/cycles/[id]/allocations - Get state allocations for a cycle
 export async function GET(
@@ -7,6 +7,7 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
+    const supabase = getSupabaseRouteClient()
     const { data, error } = await supabase
       .from('cycle_state_allocations')
       .select(`
@@ -72,6 +73,7 @@ export async function POST(
   { params }: { params: { id: string } }
 ) {
   try {
+    const supabase = getSupabaseRouteClient()
     const body = await request.json()
     const { allocations } = body
 

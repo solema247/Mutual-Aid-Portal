@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabaseClient'
+import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { translateF4Summary, translateF4Expenses } from '@/lib/translateHelper'
 
 export async function POST(req: Request) {
   try {
+    const supabase = getSupabaseRouteClient()
     const { project_id, summary, expenses, file_key_temp, uploaded_by } = await req.json()
     if (!project_id || !summary) return NextResponse.json({ error: 'project_id and summary required' }, { status: 400 })
 

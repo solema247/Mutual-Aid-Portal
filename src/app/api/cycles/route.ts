@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabaseClient'
+import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 
 // GET /api/cycles - Get all funding cycles
 export async function GET(request: Request) {
   try {
+    const supabase = getSupabaseRouteClient()
     const { searchParams } = new URL(request.url)
     const status = searchParams.get('status')
     const year = searchParams.get('year')
@@ -59,6 +60,7 @@ export async function GET(request: Request) {
 // POST /api/cycles - Create new funding cycle
 export async function POST(request: Request) {
   try {
+    const supabase = getSupabaseRouteClient()
     const body = await request.json()
     const { cycle_number, year, name, start_date, end_date, grant_inclusions, type, tranche_count, pool_amount, tranche_splits } = body
 

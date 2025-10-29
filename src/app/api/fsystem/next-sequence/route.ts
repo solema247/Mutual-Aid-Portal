@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabaseClient'
+import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 
 export async function POST(req: Request) {
   try {
+    const supabase = getSupabaseRouteClient()
     const { base_pattern, preview_only = false } = await req.json()
 
     if (!base_pattern) {

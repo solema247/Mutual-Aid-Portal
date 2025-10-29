@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabaseClient'
+import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 
 // POST /api/f1/pre-assign { workplan_id, grant_call_id }
 export async function POST(req: Request) {
   try {
+    const supabase = getSupabaseRouteClient()
     const { workplan_id, grant_call_id } = await req.json()
     if (!workplan_id || !grant_call_id) {
       return NextResponse.json({ error: 'workplan_id and grant_call_id are required' }, { status: 400 })

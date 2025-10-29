@@ -1,11 +1,12 @@
 import { NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabaseClient'
+import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 
 export async function GET(
   _req: Request,
   { params }: { params: { id: string } }
 ) {
   try {
+    const supabase = getSupabaseRouteClient()
     const id = params.id
     if (!id) return NextResponse.json({ error: 'Invalid id' }, { status: 400 })
 

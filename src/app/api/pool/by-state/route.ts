@@ -1,13 +1,14 @@
 import { NextResponse } from 'next/server'
+import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 export const fetchCache = 'force-no-store'
-import { supabase } from '@/lib/supabaseClient'
 
 // GET /api/pool/by-state - Aggregated view across cycles
 export async function GET() {
   try {
+    const supabase = getSupabaseRouteClient()
     // Caps: sum allocations by state across cycles
     // Sum allocations by state across all tranches and cycles
     const { data: allocs, error: allocErr } = await supabase

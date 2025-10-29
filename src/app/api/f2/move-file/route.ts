@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabaseClient'
+import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 
 export async function POST(request: Request) {
   try {
+    const supabase = getSupabaseRouteClient()
     const { project_id, temp_file_key, donor_id, state_short, mmyy, grant_id } = await request.json()
     
     if (!project_id || !temp_file_key || !donor_id || !state_short || !mmyy || !grant_id) {

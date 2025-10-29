@@ -1,15 +1,16 @@
 import { NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabaseClient'
+import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 
 export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url)
-  const grant_serial = searchParams.get('grant_serial_id')
-
-  if (!grant_serial) {
-    return NextResponse.json({ error: 'Missing grant_serial' }, { status: 400 })
-  }
-
   try {
+    const supabase = getSupabaseRouteClient()
+    const { searchParams } = new URL(request.url)
+    const grant_serial = searchParams.get('grant_serial_id')
+
+    if (!grant_serial) {
+      return NextResponse.json({ error: 'Missing grant_serial' }, { status: 400 })
+    }
+
     // Get the next workplan number
     const { data: workplans, error: workplanError } = await supabase
       .from('grant_workplan_seq')

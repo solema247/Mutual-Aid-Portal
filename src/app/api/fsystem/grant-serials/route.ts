@@ -1,24 +1,25 @@
 import { NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabaseClient'
+import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 
 export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url)
-  const grant_call_id = searchParams.get('grant_call_id')
-  const funding_cycle_id = searchParams.get('funding_cycle_id')
-  const state_name = searchParams.get('state_name')
-  const yymm = searchParams.get('yymm')
-
-  // Validate required parameters
-  if (!state_name || !yymm) {
-    return NextResponse.json({ error: 'Missing required parameters: state_name and yymm' }, { status: 400 })
-  }
-
-  // Must have either grant_call_id (old system) or funding_cycle_id (new system)
-  if (!grant_call_id && !funding_cycle_id) {
-    return NextResponse.json({ error: 'Missing required parameter: grant_call_id or funding_cycle_id' }, { status: 400 })
-  }
-
   try {
+    const supabase = getSupabaseRouteClient()
+    const { searchParams } = new URL(request.url)
+    const grant_call_id = searchParams.get('grant_call_id')
+    const funding_cycle_id = searchParams.get('funding_cycle_id')
+    const state_name = searchParams.get('state_name')
+    const yymm = searchParams.get('yymm')
+
+    // Validate required parameters
+    if (!state_name || !yymm) {
+      return NextResponse.json({ error: 'Missing required parameters: state_name and yymm' }, { status: 400 })
+    }
+
+    // Must have either grant_call_id (old system) or funding_cycle_id (new system)
+    if (!grant_call_id && !funding_cycle_id) {
+      return NextResponse.json({ error: 'Missing required parameter: grant_call_id or funding_cycle_id' }, { status: 400 })
+    }
+
     let query = supabase
       .from('grant_serials')
       .select('*')

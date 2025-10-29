@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabaseClient'
+import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 
 export async function POST(request: Request) {
   try {
+    const supabase = getSupabaseRouteClient()
     const { grant_call_id, funding_cycle_id, cycle_state_allocation_id, state_name, yymm } = await request.json()
 
     // Debug logging

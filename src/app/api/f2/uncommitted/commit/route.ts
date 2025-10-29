@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabaseClient'
+import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 
 // POST /api/f2/uncommitted/commit - Commit selected F1s (set funding_status to committed and status to approved)
 export async function POST(request: Request) {
   try {
+    const supabase = getSupabaseRouteClient()
     const { f1_ids } = await request.json()
 
     if (!f1_ids || !Array.isArray(f1_ids) || f1_ids.length === 0) {

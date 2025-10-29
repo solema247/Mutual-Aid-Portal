@@ -1,11 +1,12 @@
 import { NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabaseClient'
+import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 
 export async function POST(
   _request: Request,
   { params }: { params: { id: string } }
 ) {
   try {
+    const supabase = getSupabaseRouteClient()
     const id = params.id
     const { data: mou, error: mouErr } = await supabase.from('mous').select('*').eq('id', id).single()
     if (mouErr || !mou) throw mouErr || new Error('MOU not found')

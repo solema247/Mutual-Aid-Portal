@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabaseClient'
+import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 
 // GET /api/f2/grant-calls - Get grant calls with remaining amounts for reassignment
 export async function GET() {
   try {
+    const supabase = getSupabaseRouteClient()
     const { data, error } = await supabase
       .from('grant_calls')
       .select(`

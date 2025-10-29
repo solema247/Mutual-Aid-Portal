@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabaseClient'
+import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 
 function sumPlanFromPlannedActivities(planned: any): number {
   try {
@@ -24,6 +24,7 @@ function sumPlanFromExpenses(expenses: any): number {
 
 export async function GET(request: Request) {
   try {
+    const supabase = getSupabaseRouteClient()
     const { searchParams } = new URL(request.url)
     const donor = searchParams.get('donor')
     const grant = searchParams.get('grant')

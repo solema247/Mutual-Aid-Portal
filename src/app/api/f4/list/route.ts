@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabaseClient'
+import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 
 export async function GET() {
   try {
+    const supabase = getSupabaseRouteClient()
     // Get F4 summaries with attachment counts and project/room/grant context
     const { data: summaries, error } = await supabase
       .from('err_summary')

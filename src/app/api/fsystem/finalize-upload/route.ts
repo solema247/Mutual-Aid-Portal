@@ -1,10 +1,11 @@
 import { NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabaseClient'
+import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 
 // POST /api/fsystem/finalize-upload
 // body: { temp_key: string, final_path: string }
 export async function POST(request: Request) {
   try {
+    const supabase = getSupabaseRouteClient()
     const { temp_key, final_path } = await request.json()
     if (!temp_key || !final_path) {
       return NextResponse.json({ error: 'temp_key and final_path are required' }, { status: 400 })

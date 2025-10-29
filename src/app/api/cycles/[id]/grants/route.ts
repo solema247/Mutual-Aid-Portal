@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabaseClient'
+import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 
 // POST /api/cycles/[id]/grants - Add grants to a cycle
 export async function POST(
@@ -7,6 +7,7 @@ export async function POST(
   { params }: { params: { id: string } }
 ) {
   try {
+    const supabase = getSupabaseRouteClient()
     const { id: cycleId } = params
     const { grant_inclusions } = await request.json()
 
@@ -98,6 +99,7 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
+    const supabase = getSupabaseRouteClient()
     const { id: cycleId } = params
 
     const { data, error } = await supabase

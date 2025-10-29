@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabaseClient'
+import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 
 // GET /api/cycles/[id] - Get specific funding cycle
 export async function GET(
@@ -7,6 +7,7 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
+    const supabase = getSupabaseRouteClient()
     const { data, error } = await supabase
       .from('funding_cycles')
       .select(`
@@ -52,6 +53,7 @@ export async function PUT(
   { params }: { params: { id: string } }
 ) {
   try {
+    const supabase = getSupabaseRouteClient()
     const body = await request.json()
     const { name, start_date, end_date, status, type, tranche_count, tranche_splits } = body
 
@@ -86,6 +88,7 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
+    const supabase = getSupabaseRouteClient()
     // Check if cycle has any workplans or allocations
     const { data: workplans, error: workplansError } = await supabase
       .from('err_projects')

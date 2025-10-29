@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabaseClient'
+import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { processFForm } from '@/lib/ocrProcess'
 
 export const runtime = 'nodejs'
@@ -8,6 +8,7 @@ export const maxDuration = 60
 
 export async function POST(request: Request) {
   try {
+    const supabase = getSupabaseRouteClient()
     const routeStart = Date.now()
     const { project_id, file_key_temp } = await request.json()
     if (!project_id || !file_key_temp) return NextResponse.json({ error: 'project_id and file_key_temp required' }, { status: 400 })

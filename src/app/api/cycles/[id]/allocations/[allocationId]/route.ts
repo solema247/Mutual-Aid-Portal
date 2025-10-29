@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabaseClient'
+import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 
 // PUT /api/cycles/[id]/allocations/[allocationId] - Update a specific allocation
 export async function PUT(
@@ -7,6 +7,7 @@ export async function PUT(
   { params }: { params: { id: string; allocationId: string } }
 ) {
   try {
+    const supabase = getSupabaseRouteClient()
     const body = await request.json()
     const { amount } = body
 
