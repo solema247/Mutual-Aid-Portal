@@ -459,8 +459,8 @@ export default function F3MOUsPage() {
               <div className="rounded-lg border p-4" data-mou-section="true">
                 <div className="font-semibold mb-2">6. {t('f3:approved_accounts')}</div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="rounded-md border p-3 text-sm whitespace-pre-wrap">{detail?.project?.banking_details || t('f3:approved_accounts_en_desc')}</div>
-                  <div className="rounded-md border p-3 text-sm whitespace-pre-wrap" dir="rtl">{detail?.project?.banking_details || t('f3:approved_accounts_ar_desc')}</div>
+                  <div className="rounded-md border p-3 text-sm whitespace-pre-wrap">{(detail?.projects?.[0]?.banking_details) || t('f3:approved_accounts_en_desc')}</div>
+                  <div className="rounded-md border p-3 text-sm whitespace-pre-wrap" dir="rtl">{(detail?.projects?.[0]?.banking_details) || t('f3:approved_accounts_ar_desc')}</div>
                 </div>
               </div>
 
