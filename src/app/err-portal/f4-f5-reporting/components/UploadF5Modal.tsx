@@ -11,6 +11,8 @@ import { supabase } from '@/lib/supabaseClient'
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '@/components/ui/table'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { Pencil, Flag } from 'lucide-react'
 
 interface UploadF5ModalProps {
   open: boolean
@@ -87,6 +89,107 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved }: UploadF5M
   const [fileUrl, setFileUrl] = useState<string>('')
   const [rawOcr, setRawOcr] = useState<string>('')
   const [activeTab, setActiveTab] = useState('form')
+  const [adjustOpen, setAdjustOpen] = useState<{ row: number; key: string } | null>(null)
+  const [adjustTempValue, setAdjustTempValue] = useState<number | ''>('')
+  const [adjustTempNote, setAdjustTempNote] = useState<string>('')
+  const [adjustDialogOpen, setAdjustDialogOpen] = useState(false)
+  const [adjustDialogTitle, setAdjustDialogTitle] = useState<string>('')
+
+  const keyToOriginal = (row: any, key: string): number => {
+    switch (key) {
+      case 'individuals': return Number(row.individual_count || 0)
+      case 'households': return Number(row.household_count || 0)
+      case 'male': return Number(row.male_count || 0)
+      case 'female': return Number(row.female_count || 0)
+      case 'under18_male': return Number(row.under18_male || 0)
+      case 'under18_female': return Number(row.under18_female || 0)
+      default: return 0
+    }
+  }
+
+  const keyAdjustedValue = (row: any, key: string): number | undefined => {
+    const obj = row?.adjusted_counts || {}
+    const entry = obj ? obj[key] : undefined
+    if (entry == null) return undefined
+    // support both plain number and object shape { v, note }
+    const raw = typeof entry === 'object' && entry !== null && 'v' in entry ? (entry as any).v : entry
+    const n = Number(raw)
+    return isNaN(n) ? undefined : n
+  }
+
+  const keyAdjustedNote = (row: any, key: string): string | undefined => {
+    const obj = row?.adjusted_counts || {}
+    const entry = obj ? obj[key] : undefined
+    if (entry && typeof entry === 'object' && 'note' in entry) {
+      return (entry as any).note || undefined
+    }
+    return undefined
+  }
+
+  const keyEffective = (row: any, key: string): number => {
+    const adj = keyAdjustedValue(row, key)
+    return adj != null ? Number(adj) : keyToOriginal(row, key)
+  }
+
+  const deltaInfo = (row: any, key: string): string => {
+    const adj = keyAdjustedValue(row, key)
+    if (adj == null) return ''
+    const orig = keyToOriginal(row, key)
+    const noteForKey = keyAdjustedNote(row, key)
+    const note = noteForKey ? `\nNote: ${noteForKey}` : ''
+    return `${orig} → ${adj}${note}`
+  }
+
+  const openAdjustFor = (rowIdx: number, key: string) => {
+    const row = reachDraft[rowIdx]
+    const current = keyAdjustedValue(row, key)
+    setAdjustTempValue(current == null ? '' : Number(current))
+    setAdjustTempNote(keyAdjustedNote(row, key) || '')
+    setAdjustOpen({ row: rowIdx, key })
+    const titleMap: Record<string, string> = {
+      individuals: 'Adjusted individuals',
+      households: 'Adjusted households',
+      male: 'Adjusted male',
+      female: 'Adjusted female',
+      under18_male: 'Adjusted male \u003c 18',
+      under18_female: 'Adjusted female \u003c 18'
+    }
+    setAdjustDialogTitle(titleMap[key] || 'Adjustment')
+    setAdjustDialogOpen(true)
+  }
+
+  const saveAdjust = () => {
+    if (!adjustOpen) return
+    const { row, key } = adjustOpen
+    const arr = [...reachDraft]
+    const r = { ...(arr[row] || {}) }
+    const counts = { ...(r.adjusted_counts || {}) } as any
+    if (adjustTempValue === '' || adjustTempValue == null) {
+      delete counts[key]
+    } else {
+      counts[key] = adjustTempNote ? { v: Number(adjustTempValue), note: adjustTempNote } : { v: Number(adjustTempValue) }
+    }
+    r.adjusted_counts = counts
+    arr[row] = r
+    setReachDraft(arr)
+    setAdjustOpen(null)
+    setAdjustDialogOpen(false)
+  }
+
+  const resetAdjust = () => {
+    if (!adjustOpen) return
+    const { row, key } = adjustOpen
+    const arr = [...reachDraft]
+    const r = { ...(arr[row] || {}) }
+    const counts = { ...(r.adjusted_counts || {}) }
+    delete counts[key]
+    r.adjusted_counts = counts
+    arr[row] = r
+    setReachDraft(arr)
+    setAdjustTempValue('')
+    setAdjustOpen(null)
+    setAdjustDialogOpen(false)
+  }
 
   useEffect(() => {
     if (!open) return
@@ -202,6 +305,7 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved }: UploadF5M
   }
 
   return (
+    <>
     <Dialog open={open} onOpenChange={(v) => { onOpenChange(v); if (!v) reset() }}>
       <DialogContent className="max-w-7xl w-[95vw] max-h-[85vh] overflow-y-auto select-text">
         <DialogHeader>
@@ -351,8 +455,34 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved }: UploadF5M
                           <TableCell className="py-1 px-2"><Input className="h-8" placeholder={t('f5.preview.activities.cols.location') as string} value={row.location || ''} onChange={(e)=>{ const arr=[...reachDraft]; arr[idx]={...arr[idx], location: e.target.value}; setReachDraft(arr) }} /></TableCell>
                           <TableCell className="py-1 px-2"><Input className="h-8" type="date" value={row.start_date || ''} onChange={(e)=>{ const arr=[...reachDraft]; arr[idx]={...arr[idx], start_date: e.target.value}; setReachDraft(arr) }} /></TableCell>
                           <TableCell className="py-1 px-2"><Input className="h-8" type="date" value={row.end_date || ''} onChange={(e)=>{ const arr=[...reachDraft]; arr[idx]={...arr[idx], end_date: e.target.value}; setReachDraft(arr) }} /></TableCell>
-                          <TableCell className="py-1 px-2"><Input className="h-8" type="number" value={row.individual_count ?? ''} onChange={(e)=>{ const arr=[...reachDraft]; arr[idx]={...arr[idx], individual_count: parseInt(e.target.value)||0}; setReachDraft(arr) }} /></TableCell>
-                          <TableCell className="py-1 px-2"><Input className="h-8" type="number" value={row.household_count ?? ''} onChange={(e)=>{ const arr=[...reachDraft]; arr[idx]={...arr[idx], household_count: parseInt(e.target.value)||0}; setReachDraft(arr) }} /></TableCell>
+                          <TableCell className="py-1 px-2">
+                            <div className="relative flex items-center gap-2">
+                              <Input className="h-8" type="number" value={row.individual_count ?? ''} onChange={(e)=>{ const arr=[...reachDraft]; arr[idx]={...arr[idx], individual_count: parseInt(e.target.value)||0}; setReachDraft(arr) }} />
+                              {keyAdjustedValue(row, 'individuals') != null && (
+                                <span className="absolute right-10 top-1.5 z-10 cursor-help pointer-events-auto" title={deltaInfo(row, 'individuals')}>
+                                  <Flag className="h-3.5 w-3.5 text-red-500" />
+                                </span>
+                              )}
+                              <Button type="button" variant="ghost" size="icon" className="h-7 w-7" onClick={()=>openAdjustFor(idx,'individuals')}>
+                                <Pencil className="w-4 h-4" />
+                              </Button>
+                              {/* adjustment handled via modal */}
+                            </div>
+                          </TableCell>
+                          <TableCell className="py-1 px-2">
+                            <div className="relative flex items-center gap-2">
+                              <Input className="h-8" type="number" value={row.household_count ?? ''} onChange={(e)=>{ const arr=[...reachDraft]; arr[idx]={...arr[idx], household_count: parseInt(e.target.value)||0}; setReachDraft(arr) }} />
+                              {keyAdjustedValue(row, 'households') != null && (
+                                <span className="absolute right-10 top-1.5 z-10 cursor-help pointer-events-auto" title={deltaInfo(row, 'households')}>
+                                  <Flag className="h-3.5 w-3.5 text-red-500" />
+                                </span>
+                              )}
+                              <Button type="button" variant="ghost" size="icon" className="h-7 w-7" onClick={()=>openAdjustFor(idx,'households')}>
+                                <Pencil className="w-4 h-4" />
+                              </Button>
+                              {/* adjustment handled via modal */}
+                            </div>
+                          </TableCell>
                           <TableCell className="py-1 px-2 text-right">
                             <Button variant="destructive" size="sm" onClick={()=>{ const arr=[...reachDraft]; arr.splice(idx,1); setReachDraft(arr) }}>{t('f5.preview.activities.cols.delete')}</Button>
                           </TableCell>
@@ -386,10 +516,62 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved }: UploadF5M
                       {reachDraft.map((row, idx) => (
                         <TableRow key={idx} className="text-sm">
                           <TableCell className="py-1 px-2">{row.activity_name || '-'}</TableCell>
-                          <TableCell className="py-1 px-2"><Input className="h-8" type="number" value={row.male_count ?? ''} onChange={(e)=>{ const arr=[...reachDraft]; arr[idx]={...arr[idx], male_count: parseInt(e.target.value)||0}; setReachDraft(arr) }} /></TableCell>
-                          <TableCell className="py-1 px-2"><Input className="h-8" type="number" value={row.female_count ?? ''} onChange={(e)=>{ const arr=[...reachDraft]; arr[idx]={...arr[idx], female_count: parseInt(e.target.value)||0}; setReachDraft(arr) }} /></TableCell>
-                          <TableCell className="py-1 px-2"><Input className="h-8" type="number" value={row.under18_male ?? ''} onChange={(e)=>{ const arr=[...reachDraft]; arr[idx]={...arr[idx], under18_male: parseInt(e.target.value)||0}; setReachDraft(arr) }} /></TableCell>
-                          <TableCell className="py-1 px-2"><Input className="h-8" type="number" value={row.under18_female ?? ''} onChange={(e)=>{ const arr=[...reachDraft]; arr[idx]={...arr[idx], under18_female: parseInt(e.target.value)||0}; setReachDraft(arr) }} /></TableCell>
+                          <TableCell className="py-1 px-2">
+                            <div className="relative flex items-center gap-2">
+                              <Input className="h-8" type="number" value={row.male_count ?? ''} onChange={(e)=>{ const arr=[...reachDraft]; arr[idx]={...arr[idx], male_count: parseInt(e.target.value)||0}; setReachDraft(arr) }} />
+                              {keyAdjustedValue(row,'male') != null && (
+                                <span className="absolute right-10 top-1.5 z-10 cursor-help pointer-events-auto" title={deltaInfo(row,'male')}>
+                                  <Flag className="h-3.5 w-3.5 text-red-500" />
+                                </span>
+                              )}
+                              <Button type="button" variant="ghost" size="icon" className="h-7 w-7" onClick={()=>openAdjustFor(idx,'male')}>
+                                <Pencil className="w-4 h-4" />
+                              </Button>
+                              {/* adjustment handled via modal */}
+                            </div>
+                          </TableCell>
+                          <TableCell className="py-1 px-2">
+                            <div className="relative flex items-center gap-2">
+                              <Input className="h-8" type="number" value={row.female_count ?? ''} onChange={(e)=>{ const arr=[...reachDraft]; arr[idx]={...arr[idx], female_count: parseInt(e.target.value)||0}; setReachDraft(arr) }} />
+                              {keyAdjustedValue(row,'female') != null && (
+                                <span className="absolute right-10 top-1.5 z-10 cursor-help pointer-events-auto" title={deltaInfo(row,'female')}>
+                                  <Flag className="h-3.5 w-3.5 text-red-500" />
+                                </span>
+                              )}
+                              <Button type="button" variant="ghost" size="icon" className="h-7 w-7" onClick={()=>openAdjustFor(idx,'female')}>
+                                <Pencil className="w-4 h-4" />
+                              </Button>
+                              {/* adjustment handled via modal */}
+                            </div>
+                          </TableCell>
+                          <TableCell className="py-1 px-2">
+                            <div className="relative flex items-center gap-2">
+                              <Input className="h-8" type="number" value={row.under18_male ?? ''} onChange={(e)=>{ const arr=[...reachDraft]; arr[idx]={...arr[idx], under18_male: parseInt(e.target.value)||0}; setReachDraft(arr) }} />
+                              {keyAdjustedValue(row,'under18_male') != null && (
+                                <span className="absolute right-10 top-1.5 z-10 cursor-help pointer-events-auto" title={deltaInfo(row,'under18_male')}>
+                                  <Flag className="h-3.5 w-3.5 text-red-500" />
+                                </span>
+                              )}
+                              <Button type="button" variant="ghost" size="icon" className="h-7 w-7" onClick={()=>openAdjustFor(idx,'under18_male')}>
+                                <Pencil className="w-4 h-4" />
+                              </Button>
+                              {/* adjustment handled via modal */}
+                            </div>
+                          </TableCell>
+                          <TableCell className="py-1 px-2">
+                            <div className="relative flex items-center gap-2">
+                              <Input className="h-8" type="number" value={row.under18_female ?? ''} onChange={(e)=>{ const arr=[...reachDraft]; arr[idx]={...arr[idx], under18_female: parseInt(e.target.value)||0}; setReachDraft(arr) }} />
+                              {keyAdjustedValue(row,'under18_female') != null && (
+                                <span className="absolute right-10 top-1.5 z-10 cursor-help pointer-events-auto" title={deltaInfo(row,'under18_female')}>
+                                  <Flag className="h-3.5 w-3.5 text-red-500" />
+                                </span>
+                              )}
+                              <Button type="button" variant="ghost" size="icon" className="h-7 w-7" onClick={()=>openAdjustFor(idx,'under18_female')}>
+                                <Pencil className="w-4 h-4" />
+                              </Button>
+                              {/* adjustment handled via modal */}
+                            </div>
+                          </TableCell>
                           <TableCell className="py-1 px-2"><Input className="h-8" type="number" value={summaryDraft?.demographics?.special_needs ?? ''} onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), demographics: { ...(s?.demographics||{}), special_needs: parseInt(e.target.value)||0 } }))} /></TableCell>
                         </TableRow>
                       ))}
@@ -483,6 +665,35 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved }: UploadF5M
         )}
       </DialogContent>
     </Dialog>
+
+    {/* Adjustment modal */}
+    <Dialog open={adjustDialogOpen} onOpenChange={(v)=>{ setAdjustDialogOpen(v); if (!v) { setAdjustOpen(null) } }}>
+      <DialogContent className="sm:max-w-[380px]">
+        <DialogHeader>
+          <DialogTitle>{adjustDialogTitle || 'Adjustment'}</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div className="space-y-1">
+            <Label className="text-xs">New value</Label>
+            <Input className="h-9" type="number" value={adjustTempValue} onChange={(e)=>setAdjustTempValue(e.target.value===''?'':parseInt(e.target.value)||0)} />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Note (optional)</Label>
+            <Input className="h-9" value={adjustTempNote} onChange={(e)=>setAdjustTempNote(e.target.value)} />
+          </div>
+          {adjustOpen && (
+            <div className="text-xs text-muted-foreground">
+              Original: {keyToOriginal(reachDraft[adjustOpen.row], adjustOpen.key)}
+            </div>
+          )}
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" onClick={resetAdjust}>Reset</Button>
+            <Button onClick={saveAdjust}>Save</Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+    </>
   )
 }
 

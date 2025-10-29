@@ -145,6 +145,8 @@ export async function POST(req: Request) {
         female_count: r.female_count ?? null,
         under18_male: r.under18_male ?? null,
         under18_female: r.under18_female ?? null,
+        adjusted_counts: r.adjusted_counts ?? null,
+        adjusted_note: r.adjusted_note ?? null,
         is_draft: r.is_draft || false,
         original_text: reachOriginalText[index] || null,
         language: sourceLanguage
