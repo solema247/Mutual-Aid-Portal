@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, Suspense } from 'react'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -42,7 +42,7 @@ interface F5Row {
   updated_at: string
 }
 
-export default function F4F5ReportingPage() {
+function F4F5ReportingPageContent() {
   const { t } = useTranslation(['f4f5'])
   const searchParams = useSearchParams()
   const router = useRouter()
@@ -338,6 +338,14 @@ export default function F4F5ReportingPage() {
         </TabsContent>
       </Tabs>
     </div>
+  )
+}
+
+export default function F4F5ReportingPage() {
+  return (
+    <Suspense fallback={<div className="max-w-7xl mx-auto p-6">Loading...</div>}>
+      <F4F5ReportingPageContent />
+    </Suspense>
   )
 }
 

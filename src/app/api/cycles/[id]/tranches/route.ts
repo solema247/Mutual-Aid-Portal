@@ -28,6 +28,7 @@ export async function POST(
   { params }: { params: { id: string } }
 ) {
   try {
+    const supabase = getSupabaseRouteClient()
     const body = await request.json()
     const { tranche_no, planned_cap, status } = body
 
@@ -62,6 +63,7 @@ export async function PATCH(
   { params }: { params: { id: string } }
 ) {
   try {
+    const supabase = getSupabaseRouteClient()
     const body = await request.json()
     const { tranche_no, status, planned_cap } = body
 

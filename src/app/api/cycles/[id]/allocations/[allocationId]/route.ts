@@ -38,6 +38,7 @@ export async function DELETE(
   { params }: { params: { id: string; allocationId: string } }
 ) {
   try {
+    const supabase = getSupabaseRouteClient()
     // Check if allocation has any committed or pending projects
     const { data: projects, error: projectsError } = await supabase
       .from('err_projects')
