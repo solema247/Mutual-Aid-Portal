@@ -43,6 +43,7 @@ export async function GET(request: Request) {
 // POST /api/f3/mous - create an MOU and link committed projects
 export async function POST(request: Request) {
   try {
+    const supabase = getSupabaseRouteClient()
     const body = await request.json()
     const { project_ids, mou_code, end_date, partner_name, partner_id, err_name, state } = body || {}
 
