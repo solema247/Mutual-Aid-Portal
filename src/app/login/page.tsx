@@ -31,6 +31,30 @@ export default function LoginPage() {
 
   useEffect(() => {
     const handleMagicLinkAuth = async () => {
+      const hash = window.location.hash
+      if (!hash) return
+      
+      // Parse hash parameters
+      const hashParams = new URLSearchParams(hash.substring(1))
+      const type = hashParams.get('type')
+      const accessToken = hashParams.get('access_token')
+      
+      // If it's a recovery type, the Supabase client will handle the session
+      // We just need to redirect to change password
+      if (type === 'recovery' && accessToken) {
+        // Wait a moment for Supabase to process the hash and set the session
+        await new Promise(resolve => setTimeout(resolve, 100))
+        
+        const { data: { session }, error } = await supabase.auth.getSession()
+        
+        if (session && !error) {
+          // Redirect to change password page
+          window.location.href = '/change-password'
+          return
+        }
+      }
+      
+      // Handle other magic link types
       const { data: { session }, error } = await supabase.auth.getSession()
       
       if (session && !error) {
@@ -40,7 +64,7 @@ export default function LoginPage() {
       }
     }
     
-    // Check if we're coming from a magic link
+    // Check if we're coming from a magic link or recovery
     const hash = window.location.hash
     if (hash) {
       handleMagicLinkAuth()
