@@ -10,6 +10,20 @@ export default function Home() {
   const [userType, setUserType] = useState<'donor' | 'err' | null>(null)
 
   useEffect(() => {
+    // Check for recovery hash fragments first (before any other checks)
+    const hash = window.location.hash
+    if (hash) {
+      const hashParams = new URLSearchParams(hash.substring(1))
+      const type = hashParams.get('type')
+      const accessToken = hashParams.get('access_token')
+      
+      // If it's a recovery type, redirect to login with hash preserved
+      if (type === 'recovery' && accessToken) {
+        window.location.href = '/login' + hash
+        return
+      }
+    }
+    
     // Wrap in setTimeout to allow initial render
     setTimeout(() => {
       const isAuthenticated = localStorage.getItem('isAuthenticated')
