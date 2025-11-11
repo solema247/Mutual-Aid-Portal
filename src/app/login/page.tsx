@@ -39,19 +39,39 @@ export default function LoginPage() {
       const type = hashParams.get('type')
       const accessToken = hashParams.get('access_token')
       
-      // If it's a recovery type, the Supabase client will handle the session
-      // We just need to redirect to change password
+      // If it's a recovery type, poll for session to be established
       if (type === 'recovery' && accessToken) {
-        // Wait a moment for Supabase to process the hash and set the session
-        await new Promise(resolve => setTimeout(resolve, 100))
+        let attempts = 0
+        const maxAttempts = 20 // Try for 4 seconds (20 × 200ms)
         
-        const { data: { session }, error } = await supabase.auth.getSession()
-        
-        if (session && !error) {
-          // Redirect to change password page
-          window.location.href = '/change-password'
-          return
+        const checkSession = async (): Promise<boolean> => {
+          const { data: { session }, error } = await supabase.auth.getSession()
+          
+          if (session && !error) {
+            // Clean up the hash from URL
+            window.history.replaceState(null, '', window.location.pathname)
+            // Redirect to change password page
+            window.location.href = '/change-password'
+            return true
+          }
+          return false
         }
+        
+        // Try immediately first
+        const hasSession = await checkSession()
+        if (hasSession) return
+        
+        // If not found, poll with interval
+        const pollInterval = setInterval(async () => {
+          attempts++
+          const foundSession = await checkSession()
+          
+          if (foundSession || attempts >= maxAttempts) {
+            clearInterval(pollInterval)
+          }
+        }, 200)
+        
+        return
       }
       
       // Handle other magic link types
