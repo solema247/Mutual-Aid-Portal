@@ -39,9 +39,10 @@ export default function LoginPage() {
       const type = hashParams.get('type')
       const accessToken = hashParams.get('access_token')
       
-      // If it's a recovery type, manually set the session from hash tokens
-      if (type === 'recovery' && accessToken) {
-        console.log('Recovery flow detected, manually setting session...')
+      // Handle recovery or magic link types - both use hash fragments with tokens
+      if (accessToken && (type === 'recovery' || type === 'magiclink' || !type)) {
+        const flowType = type === 'recovery' ? 'recovery' : 'magic link'
+        console.log(`${flowType} flow detected, manually setting session...`)
         
         // Extract all tokens from hash
         const refreshToken = hashParams.get('refresh_token')
@@ -72,14 +73,6 @@ export default function LoginPage() {
         } else {
           console.error('setSession returned no session')
         }
-      }
-      
-      // Handle other magic link types
-      const { data: { session }, error } = await supabase.auth.getSession()
-      
-      if (session && !error) {
-        // If we have a session after magic link auth, redirect to change password
-        window.location.href = '/change-password'
       }
     }
     
