@@ -30,94 +30,51 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
 
   useEffect(() => {
-    const hash = window.location.hash
-    if (!hash) return
-    
-    // Parse hash parameters
-    const hashParams = new URLSearchParams(hash.substring(1))
-    const type = hashParams.get('type')
-    const accessToken = hashParams.get('access_token')
-    
-    // If it's a recovery type, use onAuthStateChange + polling
-    if (type === 'recovery' && accessToken) {
-      console.log('Recovery flow detected, waiting for session...')
+    const handleMagicLinkAuth = async () => {
+      const hash = window.location.hash
+      if (!hash) return
       
-      let redirectHandled = false
-      let pollInterval: NodeJS.Timeout | null = null
-      let subscription: { unsubscribe: () => void } | null = null
+      // Parse hash parameters
+      const hashParams = new URLSearchParams(hash.substring(1))
+      const type = hashParams.get('type')
+      const accessToken = hashParams.get('access_token')
       
-      const handleRedirect = () => {
-        if (redirectHandled) return
-        redirectHandled = true
+      // If it's a recovery type, manually set the session from hash tokens
+      if (type === 'recovery' && accessToken) {
+        console.log('Recovery flow detected, manually setting session...')
         
-        // Clean up the hash from URL
-        window.history.replaceState(null, '', window.location.pathname)
-        // Redirect to change password page
-        console.log('Session established, redirecting to change-password')
-        window.location.href = '/change-password'
-      }
-      
-      // Use onAuthStateChange to listen for session establishment
-      const { data: { subscription: authSubscription } } = supabase.auth.onAuthStateChange((event, session) => {
-        console.log('Auth state change:', event, session ? 'session exists' : 'no session')
-        if (event === 'SIGNED_IN' && session) {
-          handleRedirect()
-        }
-      })
-      subscription = authSubscription
-      
-      // Also poll as a fallback (in case onAuthStateChange doesn't fire)
-      let attempts = 0
-      const maxAttempts = 25 // Try for 5 seconds (25 × 200ms)
-      
-      const checkSession = async (): Promise<boolean> => {
-        const { data: { session }, error } = await supabase.auth.getSession()
+        // Extract all tokens from hash
+        const refreshToken = hashParams.get('refresh_token')
         
-        if (error) {
-          console.error('Error getting session:', error)
-          return false
-        }
-        
-        if (session) {
-          console.log('Session found via polling')
-          handleRedirect()
-          return true
-        }
-        return false
-      }
-      
-      // Try immediately first
-      checkSession().then((hasSession) => {
-        if (hasSession) {
-          if (subscription) subscription.unsubscribe()
+        if (!refreshToken) {
+          console.error('No refresh token found in hash')
           return
         }
         
-        // If not found, poll with interval
-        pollInterval = setInterval(async () => {
-          attempts++
-          const foundSession = await checkSession()
-          
-          if (foundSession || attempts >= maxAttempts) {
-            if (pollInterval) clearInterval(pollInterval)
-            if (subscription) subscription.unsubscribe()
-            
-            if (attempts >= maxAttempts && !foundSession) {
-              console.error('Max attempts reached, session not found')
-            }
-          }
-        }, 200)
-      })
-      
-      // Cleanup function
-      return () => {
-        if (pollInterval) clearInterval(pollInterval)
-        if (subscription) subscription.unsubscribe()
+        // Manually set the session using the tokens from hash
+        const { data: { session }, error: setSessionError } = await supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken,
+        })
+        
+        if (setSessionError) {
+          console.error('Error setting session:', setSessionError)
+          return
+        }
+        
+        if (session) {
+          console.log('Session set successfully, redirecting to change-password')
+          // Clean up the hash from URL
+          window.history.replaceState(null, '', window.location.pathname)
+          // Redirect to change password page
+          window.location.href = '/change-password'
+          return
+        } else {
+          console.error('setSession returned no session')
+        }
       }
-    }
-    
-    // Handle other magic link types
-    const handleOtherMagicLink = async () => {
+      
+      // Handle other magic link types
       const { data: { session }, error } = await supabase.auth.getSession()
       
       if (session && !error) {
@@ -126,7 +83,7 @@ export default function LoginPage() {
       }
     }
     
-    handleOtherMagicLink()
+    handleMagicLinkAuth()
   }, [])
 
   const handleErrLogin = async (e: React.FormEvent) => {
