@@ -29,6 +29,37 @@ export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
 
+  // Clear stale/invalid Supabase sessions on login page load
+  // This prevents automatic token refresh attempts with invalid tokens
+  // while preserving valid concurrent sessions for the same account on other devices
+  useEffect(() => {
+    const clearStaleSession = async () => {
+      // Skip if we're handling a magic link/recovery flow (needs the session)
+      const hash = window.location.hash
+      if (hash) {
+        const hashParams = new URLSearchParams(hash.substring(1))
+        const accessToken = hashParams.get('access_token')
+        if (accessToken) {
+          // Don't clear if we're in the middle of a magic link/recovery flow
+          return
+        }
+      }
+
+      try {
+        // Clear any existing local session to prevent automatic token refresh attempts
+        // This only clears the local browser's session, not server-side sessions
+        // Other users/devices with the same account will keep their sessions (concurrent sessions supported)
+        // This prevents stale/invalid refresh tokens from causing rate limit errors
+        await supabase.auth.signOut({ scope: 'local' })
+      } catch (error) {
+        // Ignore errors when clearing - we're just trying to prevent refresh attempts
+        // If clearing fails, the worst case is we might hit rate limits, but we've tried
+      }
+    }
+
+    clearStaleSession()
+  }, [])
+
   useEffect(() => {
     const handleMagicLinkAuth = async () => {
       const hash = window.location.hash

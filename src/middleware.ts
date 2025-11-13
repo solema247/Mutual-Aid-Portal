@@ -4,29 +4,67 @@ import type { NextRequest } from 'next/server'
 
 export async function middleware(req: NextRequest) {
   const res = NextResponse.next()
-  const supabase = createMiddlewareClient({ req, res })
-  
-  // Check if this is a magic link sign in
   const requestUrl = new URL(req.url)
-  const token = requestUrl.searchParams.get('token')
-  const type = requestUrl.searchParams.get('type')
+  const path = req.nextUrl.pathname
   
-  // Handle magic link authentication
-  if (token && type === 'magiclink') {
-    const { data: { session }, error } = await supabase.auth.verifyOtp({
-      token_hash: token,
-      type: 'magiclink'
-    })
-    
-    if (session && !error) {
-      return NextResponse.redirect(new URL('/change-password', req.url))
+  // Early return for login and change-password pages - skip session checks to avoid rate limits
+  if (path === '/login' || path === '/change-password') {
+    // Only check session if we need to redirect authenticated users away from login
+    // But do it safely with error handling
+    try {
+      const supabase = createMiddlewareClient({ req, res })
+      
+      // Check if this is a magic link sign in
+      const token = requestUrl.searchParams.get('token')
+      const type = requestUrl.searchParams.get('type')
+      
+      // Handle magic link authentication
+      if (token && type === 'magiclink') {
+        const { data: { session }, error } = await supabase.auth.verifyOtp({
+          token_hash: token,
+          type: 'magiclink'
+        })
+        
+        if (session && !error) {
+          return NextResponse.redirect(new URL('/change-password', req.url))
+        }
+      }
+      
+      // Only check session if we have cookies indicating authentication
+      // This prevents unnecessary token refresh attempts
+      const isAuthenticated = req.cookies.get('isAuthenticated')
+      if (isAuthenticated && path === '/login') {
+        // Only call getSession if cookies suggest user is authenticated
+        // This reduces unnecessary refresh attempts
+        const { data: { session } } = await supabase.auth.getSession()
+        if (session) {
+          return NextResponse.redirect(new URL('/', req.url))
+        }
+      }
+    } catch (error) {
+      // If we get a 429 or any other error, just allow the request through
+      // The login page will handle authentication
+      console.error('Middleware auth check error (non-blocking):', error)
     }
+    
+    return res
   }
 
-  const { data: { session } } = await supabase.auth.getSession()
+  // For all other pages, check authentication
+  // But handle errors gracefully to avoid blocking on rate limits
+  let session = null
+  try {
+    const supabase = createMiddlewareClient({ req, res })
+    const { data: { session: sessionData } } = await supabase.auth.getSession()
+    session = sessionData
+  } catch (error) {
+    // If we hit a rate limit or other error, fall back to cookie check
+    // Don't block the request - let the page handle auth errors
+    console.error('Middleware session check error (non-blocking):', error)
+  }
+
   const isAuthenticated = req.cookies.get('isAuthenticated')
   const userType = req.cookies.get('userType')
-  const path = req.nextUrl.pathname
 
   // If trying to access root, redirect based on user type
   if (path === '/') {
@@ -39,16 +77,6 @@ export async function middleware(req: NextRequest) {
     if (userType?.value === 'partner') {
       return NextResponse.redirect(new URL('/partner-portal', req.url))
     }
-  }
-
-  // Allow login and change-password pages access
-  if (req.nextUrl.pathname === '/login' || req.nextUrl.pathname === '/change-password') {
-    // Only redirect away from login if we have BOTH session AND cookies
-    // This prevents redirect loop after logout when cookies are cleared but session might still exist briefly
-    if (session && isAuthenticated && req.nextUrl.pathname === '/login') {
-      return NextResponse.redirect(new URL('/', req.url))
-    }
-    return res
   }
 
   // Require authentication for all other pages
