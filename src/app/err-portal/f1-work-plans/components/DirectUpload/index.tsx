@@ -47,6 +47,8 @@ export default function DirectUpload() {
   const [newRoomName, setNewRoomName] = useState('')
   const [newRoomNameAr, setNewRoomNameAr] = useState('')
   const [isCreatingRoom, setIsCreatingRoom] = useState(false)
+  const [selectedLocality, setSelectedLocality] = useState<string>('')
+  const [availableLocalities, setAvailableLocalities] = useState<Array<{id: string, locality: string | null, locality_ar: string | null}>>([])
   
 
   useEffect(() => {
@@ -117,6 +119,64 @@ export default function DirectUpload() {
     fetchRoomsForState()
   }, [formData.state_id, states])
 
+  // Fetch localities for the selected state when modal opens or state changes
+  useEffect(() => {
+    const fetchLocalities = async () => {
+      if (!formData.state_id || !showCreateRoomDialog) {
+        setAvailableLocalities([])
+        setSelectedLocality('')
+        return
+      }
+
+      try {
+        const selectedState = states.find(s => s.id === formData.state_id)
+        if (!selectedState) {
+          setAvailableLocalities([])
+          setSelectedLocality('')
+          return
+        }
+
+        // Fetch all state rows with the same state_name to get all localities
+        const { data: stateRows, error } = await supabase
+          .from('states')
+          .select('id, locality, locality_ar')
+          .eq('state_name', selectedState.state_name)
+          .order('locality')
+
+        if (error) throw error
+
+        // Create unique localities list (group by locality value, keep first id)
+        const localityMap = new Map<string, {id: string, locality: string | null, locality_ar: string | null}>()
+        stateRows?.forEach((row: any) => {
+          const localityKey = row.locality || 'null'
+          if (!localityMap.has(localityKey)) {
+            localityMap.set(localityKey, {
+              id: row.id,
+              locality: row.locality,
+              locality_ar: row.locality_ar
+            })
+          }
+        })
+
+        const localities = Array.from(localityMap.values())
+        setAvailableLocalities(localities)
+        
+        // If only one locality, auto-select it
+        if (localities.length === 1) {
+          setSelectedLocality(localities[0].id)
+        } else {
+          setSelectedLocality('')
+        }
+      } catch (error) {
+        console.error('Error fetching localities:', error)
+        setAvailableLocalities([])
+        setSelectedLocality('')
+      }
+    }
+
+    fetchLocalities()
+  }, [formData.state_id, showCreateRoomDialog, states])
+
   // Removed cycle/serial preview logic in upload-first flow
 
   const hasRequiredFields = () => !!(selectedFile && formData.state_id && formData.emergency_room_id)
@@ -138,6 +198,11 @@ export default function DirectUpload() {
       return
     }
 
+    if (!selectedLocality) {
+      alert('Please select a locality')
+      return
+    }
+
     setIsCreatingRoom(true)
     try {
       const selectedState = states.find(s => s.id === formData.state_id)
@@ -146,14 +211,43 @@ export default function DirectUpload() {
         return
       }
 
-      // Get the state short code
-      const stateShort = selectedState.state_short?.toUpperCase() || 'XX'
+      // Find the state row that matches both state_name and the selected locality
+      const selectedLocalityData = availableLocalities.find(l => l.id === selectedLocality)
+      if (!selectedLocalityData) {
+        alert('Locality not found')
+        return
+      }
+
+      // Query for the state row with matching state_name and locality
+      const { data: stateRow, error: stateRowError } = await supabase
+        .from('states')
+        .select('id, state_short')
+        .eq('state_name', selectedState.state_name)
+        .eq('locality', selectedLocalityData.locality)
+        .single()
+
+      if (stateRowError || !stateRow) {
+        // Fallback: if exact match not found, use the selected locality's state_reference id
+        console.warn('Exact state row not found, using selected locality state_reference')
+      }
+
+      const correctStateReference = stateRow?.id || selectedLocality
+      const stateShort = stateRow?.state_short?.toUpperCase() || selectedState.state_short?.toUpperCase() || 'XX'
 
       // Get existing rooms for this state to determine the next number
+      // Query across all state rows with the same state_name
+      const { data: allStateIds, error: allStateIdsError } = await supabase
+        .from('states')
+        .select('id')
+        .eq('state_name', selectedState.state_name)
+      
+      if (allStateIdsError) throw allStateIdsError
+      
+      const stateIds = (allStateIds || []).map((s: any) => s.id)
       const { data: existingRooms, error: existingError } = await supabase
         .from('emergency_rooms')
         .select('err_code')
-        .eq('state_reference', formData.state_id)
+        .in('state_reference', stateIds)
         .not('err_code', 'is', null)
 
       let roomNumber = '01' // Default to 01
@@ -177,13 +271,13 @@ export default function DirectUpload() {
       // Construct the err_code: ERR-{StateShort}-{RoomNumber}-{UniqueID}
       const errCode = `ERR-${stateShort}-${roomNumber}-${uniqueId}`
 
-      // Create the new room
+      // Create the new room with the correct state_reference
       const { data: newRoom, error: createError } = await supabase
         .from('emergency_rooms')
         .insert({
           name: newRoomName.trim(),
           name_ar: newRoomNameAr.trim() || null,
-          state_reference: formData.state_id,
+          state_reference: correctStateReference,
           type: 'base',
           status: 'active',
           err_code: errCode
@@ -203,6 +297,7 @@ export default function DirectUpload() {
       setShowCreateRoomDialog(false)
       setNewRoomName('')
       setNewRoomNameAr('')
+      setSelectedLocality('')
     } catch (error: any) {
       console.error('Error creating room:', error)
       alert('Failed to create room: ' + (error.message || 'Unknown error'))
@@ -771,6 +866,30 @@ export default function DirectUpload() {
           </DialogHeader>
           <div className="space-y-4 mt-4">
             <div>
+              <Label htmlFor="room-locality">Locality *</Label>
+              <Select
+                value={selectedLocality}
+                onValueChange={setSelectedLocality}
+                disabled={isCreatingRoom || availableLocalities.length === 0}
+              >
+                <SelectTrigger className="h-[38px] w-full">
+                  <SelectValue placeholder={availableLocalities.length === 0 ? "Loading localities..." : "Select locality"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableLocalities.map((loc) => (
+                    <SelectItem key={loc.id} value={loc.id}>
+                      {loc.locality || '(No locality)'} {loc.locality_ar ? `(${loc.locality_ar})` : ''}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {availableLocalities.length === 0 && formData.state_id && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  No localities found for this state
+                </p>
+              )}
+            </div>
+            <div>
               <Label htmlFor="room-name">Room Name (English) *</Label>
               <Input
                 id="room-name"
@@ -808,6 +927,7 @@ export default function DirectUpload() {
                   setShowCreateRoomDialog(false)
                   setNewRoomName('')
                   setNewRoomNameAr('')
+                  setSelectedLocality('')
                 }}
                 disabled={isCreatingRoom}
               >
@@ -815,7 +935,7 @@ export default function DirectUpload() {
               </Button>
               <Button
                 onClick={handleCreateRoom}
-                disabled={isCreatingRoom || !newRoomName.trim()}
+                disabled={isCreatingRoom || !newRoomName.trim() || !selectedLocality}
               >
                 {isCreatingRoom ? 'Creating...' : 'Create Room'}
               </Button>
