@@ -165,10 +165,16 @@ export default function ProjectEditor({ open, onOpenChange, projectId, onSaved }
         if (error) throw error
 
         // Auto-sync: Check if state/locality match the room's actual state/locality
-        if (data.emergency_rooms && Array.isArray(data.emergency_rooms) && data.emergency_rooms.length > 0) {
-          const room = data.emergency_rooms[0]
-          if (room?.state) {
-            const roomState = room.state
+        const emergencyRoom = Array.isArray(data.emergency_rooms) 
+          ? data.emergency_rooms[0] 
+          : data.emergency_rooms
+
+        if (emergencyRoom) {
+          const roomState = Array.isArray(emergencyRoom.state) 
+            ? emergencyRoom.state[0] 
+            : emergencyRoom.state
+
+          if (roomState && typeof roomState === 'object' && 'state_name' in roomState) {
             const needsUpdate = 
               data.state !== roomState.state_name || 
               data.locality !== roomState.locality
@@ -189,33 +195,6 @@ export default function ProjectEditor({ open, onOpenChange, projectId, onSaved }
             }
 
             // Set state filter to current state for room selection
-            const currentState = availableStates.find(s => s.name === roomState.state_name)
-            if (currentState) {
-              setSelectedStateFilter(currentState.id)
-            }
-          }
-        } else if (data.emergency_rooms && !Array.isArray(data.emergency_rooms)) {
-          // Handle single object (non-array) response
-          const room = data.emergency_rooms as any
-          if (room?.state) {
-            const roomState = room.state
-            const needsUpdate = 
-              data.state !== roomState.state_name || 
-              data.locality !== roomState.locality
-            
-            if (needsUpdate) {
-              await supabase
-                .from('err_projects')
-                .update({
-                  state: roomState.state_name,
-                  locality: roomState.locality
-                })
-                .eq('id', projectId)
-              
-              data.state = roomState.state_name
-              data.locality = roomState.locality
-            }
-
             const currentState = availableStates.find(s => s.name === roomState.state_name)
             if (currentState) {
               setSelectedStateFilter(currentState.id)
@@ -260,18 +239,24 @@ export default function ProjectEditor({ open, onOpenChange, projectId, onSaved }
       if (error) throw error
 
       if (roomData?.state) {
-        // Auto-update state and locality from the room
-        setForm((prev: any) => ({
-          ...prev,
-          emergency_room_id: roomId,
-          state: roomData.state.state_name,
-          locality: roomData.state.locality || ''
-        }))
+        const roomState = Array.isArray(roomData.state) 
+          ? roomData.state[0] 
+          : roomData.state
 
-        // Update state filter to match the room's state
-        const roomState = availableStates.find(s => s.name === roomData.state.state_name)
-        if (roomState) {
-          setSelectedStateFilter(roomState.id)
+        if (roomState && typeof roomState === 'object' && 'state_name' in roomState) {
+          // Auto-update state and locality from the room
+          setForm((prev: any) => ({
+            ...prev,
+            emergency_room_id: roomId,
+            state: roomState.state_name,
+            locality: roomState.locality || ''
+          }))
+
+          // Update state filter to match the room's state
+          const matchingState = availableStates.find(s => s.name === roomState.state_name)
+          if (matchingState) {
+            setSelectedStateFilter(matchingState.id)
+          }
         }
       }
     } catch (error) {
@@ -309,9 +294,15 @@ export default function ProjectEditor({ open, onOpenChange, projectId, onSaved }
           .single()
 
         if (roomData?.state) {
-          // Auto-sync: Always use the room's actual state and locality
-          finalState = roomData.state.state_name
-          finalLocality = roomData.state.locality || null
+          const roomState = Array.isArray(roomData.state) 
+            ? roomData.state[0] 
+            : roomData.state
+
+          if (roomState && typeof roomState === 'object' && 'state_name' in roomState) {
+            // Auto-sync: Always use the room's actual state and locality
+            finalState = roomState.state_name
+            finalLocality = roomState.locality || null
+          }
         }
       }
 
