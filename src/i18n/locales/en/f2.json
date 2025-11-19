@@ -114,5 +114,10 @@
   "create_new_serial": "Create new serial",
   "generated_workplan_serial": "Generated Workplan Serial",
   "save_assign": "Save & Assign",
-  "total_pending": "Total Pending"
+  "total_pending": "Total Pending",
+  "delete_project": "Delete Project",
+  "delete": "Delete",
+  "deleting": "Deleting...",
+  "delete_confirmation": "Are you sure you want to delete this F1 project submission? This action cannot be undone.",
+  "delete_failed": "Failed to delete project"
 }

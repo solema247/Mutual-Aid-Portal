@@ -12,7 +12,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Badge } from '@/components/ui/badge'
 import { supabase } from '@/lib/supabaseClient'
 import { cn } from '@/lib/utils'
-import { Edit2, Save, X, ArrowRightLeft, Plus } from 'lucide-react'
+import { Edit2, Save, X, ArrowRightLeft, Plus, Trash2 } from 'lucide-react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import ProjectEditor from './ProjectEditor'
 import type { UncommittedF1, GrantCallOption } from '../types'
@@ -41,6 +41,9 @@ export default function UncommittedF1sTab() {
   const [editorProjectId, setEditorProjectId] = useState<string | null>(null)
   const [assignModalOpen, setAssignModalOpen] = useState(false)
   const [assigningF1Id, setAssigningF1Id] = useState<string | null>(null)
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [deletingF1Id, setDeletingF1Id] = useState<string | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
 
   useEffect(() => {
     fetchUncommittedF1s()
@@ -595,6 +598,41 @@ export default function UncommittedF1sTab() {
     }
   }
 
+  const handleDeleteClick = (f1Id: string) => {
+    setDeletingF1Id(f1Id)
+    setDeleteDialogOpen(true)
+  }
+
+  const handleDeleteConfirm = async () => {
+    if (!deletingF1Id) return
+
+    setIsDeleting(true)
+    try {
+      const response = await fetch('/api/f2/uncommitted', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: deletingF1Id })
+      })
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ error: 'Failed to delete F1' }))
+        alert(error.error || t('f2:delete_failed'))
+        return
+      }
+
+      // Remove from selected if it was selected
+      setSelectedF1s(prev => prev.filter(id => id !== deletingF1Id))
+      await fetchUncommittedF1s()
+      setDeleteDialogOpen(false)
+      setDeletingF1Id(null)
+    } catch (error) {
+      console.error('Error deleting F1:', error)
+      alert(t('f2:delete_failed'))
+    } finally {
+      setIsDeleting(false)
+    }
+  }
+
   if (isLoading) {
     return <div className="text-center py-8">{t('common:loading')}</div>
   }
@@ -635,6 +673,7 @@ export default function UncommittedF1sTab() {
                 <TableHead className="text-right">{t('f2:requested_amount')}</TableHead>
                 <TableHead>Assignment</TableHead>
                 <TableHead>{t('f2:community_approval')}</TableHead>
+                <TableHead>{t('f2:actions') || 'Actions'}</TableHead>
                 {/* Status column removed visually */}
               </TableRow>
             </TableHeader>
@@ -709,17 +748,7 @@ export default function UncommittedF1sTab() {
                         </div>
                       </div>
                     ) : (
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="font-medium">{calculateTotalAmount(f1.expenses).toLocaleString()}</div>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => { setEditorProjectId(f1.id); setEditorOpen(true) }}
-                          title={t('projects:edit_project') as string}
-                        >
-                          <Edit2 className="w-4 h-4" />
-                        </Button>
-                      </div>
+                      <div className="font-medium">{calculateTotalAmount(f1.expenses).toLocaleString()}</div>
                     )}
                   </TableCell>
                   {/* Assignment Column */}
@@ -796,6 +825,27 @@ export default function UncommittedF1sTab() {
                         </Button>
                       </div>
                     )}
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => { setEditorProjectId(f1.id); setEditorOpen(true) }}
+                        title={t('projects:edit_project') as string}
+                      >
+                        <Edit2 className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleDeleteClick(f1.id)}
+                        title={t('f2:delete_project') as string}
+                        className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
                   </TableCell>
                   {/* Status cell removed visually */}
                 </TableRow>
@@ -973,6 +1023,51 @@ export default function UncommittedF1sTab() {
               </div>
             )
           })()}
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t('f2:delete_project') || 'Delete Project'}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              {t('f2:delete_confirmation') || 'Are you sure you want to delete this F1 project submission? This action cannot be undone.'}
+            </p>
+            {deletingF1Id && (() => {
+              const f1 = f1s.find(f => f.id === deletingF1Id)
+              if (!f1) return null
+              return (
+                <div className="p-3 bg-muted rounded-md">
+                  <div className="font-medium">{f1.err_id}</div>
+                  <div className="text-sm text-muted-foreground">
+                    {f1.state} - {f1.locality}
+                  </div>
+                </div>
+              )
+            })()}
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setDeleteDialogOpen(false)
+                  setDeletingF1Id(null)
+                }}
+                disabled={isDeleting}
+              >
+                {t('common:cancel')}
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={handleDeleteConfirm}
+                disabled={isDeleting}
+              >
+                {isDeleting ? t('f2:deleting') || 'Deleting...' : t('f2:delete') || 'Delete'}
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
