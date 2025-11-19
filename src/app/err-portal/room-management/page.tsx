@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { CollapsibleRow } from '@/components/ui/collapsible'
 import RoomManagement from './components/RoomManagement'
+import InactiveRoomsList from './components/InactiveRoomsList'
 import { supabase } from '@/lib/supabaseClient'
 
 interface User {
@@ -82,9 +83,11 @@ export default function RoomManagementPage() {
           title={t('rooms:inactive_rooms_title')}
           defaultOpen={false}
         >
-          <div className="p-4 text-muted-foreground">
-            {t('rooms:coming_soon')}
-          </div>
+          <InactiveRoomsList 
+            isLoading={false}
+            userRole={user?.role}
+            userErrId={user?.err_id}
+          />
         </CollapsibleRow>
       </div>
     </div>

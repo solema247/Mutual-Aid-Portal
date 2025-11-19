@@ -27,5 +27,19 @@
   "filter_by_locality": "تصفية حسب المحلية",
   "previous": "السابق",
   "next": "التالي",
-  "showing_results": "عرض {{from}} إلى {{to}} من {{total}} نتيجة"
+  "showing_results": "عرض {{from}} إلى {{to}} من {{total}} نتيجة",
+  "modify": "تعديل",
+  "deactivate": "إلغاء التفعيل",
+  "modify_room": "تعديل الغرفة",
+  "modify_room_description": "تحديث الولاية والمحلية لهذه الغرفة",
+  "select_state": "اختر الولاية",
+  "select_locality": "اختر المحلية",
+  "loading_localities": "جاري تحميل المحليات...",
+  "cancel": "إلغاء",
+  "save": "حفظ",
+  "saving": "جاري الحفظ...",
+  "delete": "حذف",
+  "delete_room": "حذف الغرفة",
+  "delete_room_confirmation": "هل أنت متأكد من حذف هذه الغرفة؟ لا يمكن التراجع عن هذا الإجراء.",
+  "no_inactive_rooms": "لا توجد غرف غير نشطة"
 } 

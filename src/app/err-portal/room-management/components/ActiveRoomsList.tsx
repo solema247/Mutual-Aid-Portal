@@ -9,8 +9,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
+import { Label } from '@/components/ui/label'
 import { RoomWithState } from '@/app/api/rooms/types/rooms'
-import { getActiveRooms } from '@/app/api/rooms/utils/rooms'
+import { getActiveRooms, deactivateRoom, updateRoomStateReference } from '@/app/api/rooms/utils/rooms'
+import { supabase } from '@/lib/supabaseClient'
+import { Pencil, X } from 'lucide-react'
 
 const PAGE_SIZE = 50; // Increased page size
 
@@ -36,6 +41,14 @@ export default function ActiveRoomsList({
   const [localities, setLocalities] = useState<string[]>([])
   const [currentPage, setCurrentPage] = useState(1)
   const [totalRooms, setTotalRooms] = useState(0)
+  const [modifyDialogOpen, setModifyDialogOpen] = useState(false)
+  const [selectedRoom, setSelectedRoom] = useState<RoomWithState | null>(null)
+  const [modifyStateId, setModifyStateId] = useState<string>('')
+  const [modifyLocalityId, setModifyLocalityId] = useState<string>('')
+  const [modifyStates, setModifyStates] = useState<Array<{id: string, name: string, name_ar: string | null, state_name: string}>>([])
+  const [modifyLocalities, setModifyLocalities] = useState<Array<{id: string, locality: string | null, locality_ar: string | null}>>([])
+  const [isModifying, setIsModifying] = useState(false)
+  const [processingId, setProcessingId] = useState<string | null>(null)
 
   const fetchRooms = useCallback(async () => {
     try {
@@ -52,13 +65,56 @@ export default function ActiveRoomsList({
       
       setTotalRooms(total)
       
+      // Extract unique states and localities for filters first
+      // Group by state_name instead of state.id to avoid duplicates
+      const stateMap = new Map<string, {id: string, name: string, localities: string[]}>()
+      
+      fetchedRooms
+        .filter(room => room.state && room.state.state_name)
+        .forEach(room => {
+          const stateName = room.state?.state_name || ''
+          const stateNameDisplay = i18n.language === 'ar' 
+            ? (room.state?.state_name_ar || room.state?.state_name || '') 
+            : (room.state?.state_name || '')
+          const locality = i18n.language === 'ar' 
+            ? (room.state?.locality_ar || room.state?.locality || '') 
+            : (room.state?.locality || '')
+          
+          if (!stateName) return
+          
+          if (!stateMap.has(stateName)) {
+            // Use the first state.id we encounter for this state_name
+            stateMap.set(stateName, {
+              id: room.state?.id || '',
+              name: stateNameDisplay,
+              localities: locality ? [locality] : []
+            })
+          } else {
+            const existing = stateMap.get(stateName)!
+            if (locality && !existing.localities.includes(locality)) {
+              existing.localities.push(locality)
+            }
+          }
+        })
+      
+      const uniqueStates = Array.from(stateMap.values())
+      
       // Apply client-side filtering for state and locality
       let filteredRooms = fetchedRooms;
       
       if (selectedState !== 'all') {
-        filteredRooms = filteredRooms.filter(
-          room => room.state?.id === selectedState
-        );
+        // Find the state_name for the selected state id
+        const selectedStateObj = uniqueStates.find(s => s.id === selectedState)
+        if (selectedStateObj) {
+          // Get state_name from any room with this state id
+          const selectedStateName = fetchedRooms.find(r => r.state?.id === selectedState)?.state?.state_name
+          
+          if (selectedStateName) {
+            filteredRooms = filteredRooms.filter(
+              room => room.state?.state_name === selectedStateName
+            )
+          }
+        }
       }
       
       if (selectedLocality !== 'all') {
@@ -66,30 +122,6 @@ export default function ActiveRoomsList({
           room => room.state?.locality === selectedLocality
         );
       }
-
-      // Extract unique states and localities for filters
-      const uniqueStates = Array.from(
-        new Set(
-          fetchedRooms
-            .filter(room => room.state && room.state.id)
-            .map(room => ({ 
-              id: room.state?.id || '', 
-              name: i18n.language === 'ar' ? (room.state?.state_name_ar || room.state?.state_name || '') : (room.state?.state_name || ''),
-              locality: i18n.language === 'ar' ? (room.state?.locality_ar || room.state?.locality || '') : (room.state?.locality || '')
-            }))
-        )
-      ).reduce((acc, { id, name, locality }) => {
-        if (!id) return acc;
-        const existingState = acc.find(s => s.id === id);
-        if (existingState) {
-          if (locality && !existingState.localities.includes(locality)) {
-            existingState.localities.push(locality);
-          }
-        } else {
-          acc.push({ id, name, localities: locality ? [locality] : [] });
-        }
-        return acc;
-      }, [] as {id: string, name: string, localities: string[]}[]);
       
       setStates(uniqueStates);
       
@@ -137,6 +169,172 @@ export default function ActiveRoomsList({
   }, [selectedState, states]);
 
   const totalPages = Math.ceil(totalRooms / PAGE_SIZE)
+
+  // Fetch all states for modify dialog
+  useEffect(() => {
+    const fetchStates = async () => {
+      if (!modifyDialogOpen) return
+      
+      try {
+        const { data: statesData, error } = await supabase
+          .from('states')
+          .select('id, state_name, state_name_ar')
+          .not('state_name', 'is', null)
+          .order('state_name')
+
+        if (error) throw error
+
+        // Get unique states by state_name
+        const stateMap = new Map<string, {id: string, name: string, name_ar: string | null, state_name: string}>()
+        statesData?.forEach((state: any) => {
+          if (!stateMap.has(state.state_name)) {
+            stateMap.set(state.state_name, {
+              id: state.id,
+              name: i18n.language === 'ar' ? (state.state_name_ar || state.state_name) : state.state_name,
+              name_ar: state.state_name_ar,
+              state_name: state.state_name
+            })
+          }
+        })
+
+        const uniqueStates = Array.from(stateMap.values())
+        setModifyStates(uniqueStates)
+
+        // Set initial state if room is selected
+        if (selectedRoom?.state?.state_name) {
+          const matchingState = uniqueStates.find(s => s.state_name === selectedRoom.state?.state_name)
+          if (matchingState) {
+            setModifyStateId(matchingState.id)
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching states:', error)
+      }
+    }
+
+    fetchStates()
+  }, [modifyDialogOpen, i18n.language])
+
+  // Fetch localities when state is selected in modify dialog
+  useEffect(() => {
+    const fetchLocalities = async () => {
+      if (!modifyStateId || !modifyDialogOpen) {
+        setModifyLocalities([])
+        setModifyLocalityId('')
+        return
+      }
+
+      try {
+        const selectedState = modifyStates.find(s => s.id === modifyStateId)
+        if (!selectedState) return
+
+        // Get state_name from the selected state
+        const { data: stateRow } = await supabase
+          .from('states')
+          .select('state_name')
+          .eq('id', modifyStateId)
+          .single()
+
+        if (!stateRow) return
+
+        // Fetch all state rows with the same state_name
+        const { data: stateRows, error } = await supabase
+          .from('states')
+          .select('id, locality, locality_ar')
+          .eq('state_name', stateRow.state_name)
+          .order('locality')
+
+        if (error) throw error
+
+        // Create unique localities list
+        const localityMap = new Map<string, {id: string, locality: string | null, locality_ar: string | null}>()
+        stateRows?.forEach((row: any) => {
+          const localityKey = row.locality || 'null'
+          if (!localityMap.has(localityKey)) {
+            localityMap.set(localityKey, {
+              id: row.id,
+              locality: row.locality,
+              locality_ar: row.locality_ar
+            })
+          }
+        })
+
+        const localities = Array.from(localityMap.values())
+        setModifyLocalities(localities)
+
+        // If room has a locality, try to match it
+        if (selectedRoom?.state?.locality) {
+          const matchingLocality = localities.find(l => 
+            l.locality === selectedRoom.state?.locality || 
+            l.locality_ar === selectedRoom.state?.locality_ar
+          )
+          if (matchingLocality) {
+            setModifyLocalityId(matchingLocality.id)
+          } else if (localities.length === 1) {
+            setModifyLocalityId(localities[0].id)
+          }
+        } else if (localities.length === 1) {
+          setModifyLocalityId(localities[0].id)
+        }
+      } catch (error) {
+        console.error('Error fetching localities:', error)
+      }
+    }
+
+    fetchLocalities()
+  }, [modifyStateId, modifyDialogOpen, modifyStates, selectedRoom, i18n.language])
+
+  const handleModify = (room: RoomWithState) => {
+    setSelectedRoom(room)
+    setModifyDialogOpen(true)
+    
+    // Set initial state if states are already loaded
+    if (modifyStates.length > 0 && room.state?.state_name) {
+      const matchingState = modifyStates.find(s => s.state_name === room.state?.state_name)
+      if (matchingState) {
+        setModifyStateId(matchingState.id)
+      }
+    }
+  }
+
+  const handleModifySubmit = async () => {
+    if (!selectedRoom || !modifyLocalityId) {
+      alert('Please select both state and locality')
+      return
+    }
+
+    setIsModifying(true)
+    try {
+      await updateRoomStateReference(selectedRoom.id, modifyLocalityId)
+      setModifyDialogOpen(false)
+      setSelectedRoom(null)
+      setModifyStateId('')
+      setModifyLocalityId('')
+      fetchRooms() // Refresh the list
+    } catch (error: any) {
+      console.error('Error modifying room:', error)
+      alert('Failed to modify room: ' + (error.message || 'Unknown error'))
+    } finally {
+      setIsModifying(false)
+    }
+  }
+
+  const handleDeactivate = async (roomId: string) => {
+    if (!confirm('Are you sure you want to deactivate this room?')) {
+      return
+    }
+
+    setProcessingId(roomId)
+    try {
+      await deactivateRoom(roomId)
+      fetchRooms() // Refresh the list
+    } catch (error: any) {
+      console.error('Error deactivating room:', error)
+      alert('Failed to deactivate room: ' + (error.message || 'Unknown error'))
+    } finally {
+      setProcessingId(null)
+    }
+  }
 
   return (
     <div className="space-y-4">
@@ -216,7 +414,26 @@ export default function ActiveRoomsList({
                   <div>{i18n.language === 'ar' ? room.state?.state_name_ar : room.state?.state_name}</div>
                   <div>{i18n.language === 'ar' ? room.state?.locality_ar : room.state?.locality}</div>
                   <div>{new Date(room.created_at || '').toLocaleDateString()}</div>
-                  <div>-</div>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleModify(room)}
+                      disabled={processingId === room.id}
+                      title={t('rooms:modify')}
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleDeactivate(room.id)}
+                      disabled={processingId === room.id}
+                      title={t('rooms:deactivate')}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -249,6 +466,78 @@ export default function ActiveRoomsList({
           </div>
         </>
       )}
+
+      {/* Modify Room Dialog */}
+      <Dialog open={modifyDialogOpen} onOpenChange={setModifyDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t('rooms:modify_room')}</DialogTitle>
+            <DialogDescription>
+              {t('rooms:modify_room_description')}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 mt-4">
+            <div>
+              <Label>{t('rooms:state')} *</Label>
+              <Select
+                value={modifyStateId}
+                onValueChange={setModifyStateId}
+                disabled={isModifying}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder={t('rooms:select_state')} />
+                </SelectTrigger>
+                <SelectContent>
+                  {modifyStates.map((state) => (
+                    <SelectItem key={state.id} value={state.id}>
+                      {state.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>{t('rooms:locality')} *</Label>
+              <Select
+                value={modifyLocalityId}
+                onValueChange={setModifyLocalityId}
+                disabled={isModifying || !modifyStateId || modifyLocalities.length === 0}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder={modifyLocalities.length === 0 ? t('rooms:loading_localities') : t('rooms:select_locality')} />
+                </SelectTrigger>
+                <SelectContent>
+                  {modifyLocalities.map((loc) => (
+                    <SelectItem key={loc.id} value={loc.id}>
+                      {loc.locality || '(No locality)'} {loc.locality_ar ? `(${loc.locality_ar})` : ''}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex justify-end gap-2 pt-4">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setModifyDialogOpen(false)
+                  setSelectedRoom(null)
+                  setModifyStateId('')
+                  setModifyLocalityId('')
+                }}
+                disabled={isModifying}
+              >
+                {t('rooms:cancel')}
+              </Button>
+              <Button
+                onClick={handleModifySubmit}
+                disabled={isModifying || !modifyStateId || !modifyLocalityId}
+              >
+                {isModifying ? t('rooms:saving') : t('rooms:save')}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 } 

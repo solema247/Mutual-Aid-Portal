@@ -7,6 +7,7 @@ import { PendingRoomListItem } from '@/app/api/rooms/types/rooms'
 import { getPendingRooms } from '@/app/api/rooms/utils/rooms'
 import PendingRoomsList from './PendingRoomsList'
 import ActiveRoomsList from './ActiveRoomsList'
+import InactiveRoomsList from './InactiveRoomsList'
 
 interface RoomManagementProps {
   userRole?: string;
