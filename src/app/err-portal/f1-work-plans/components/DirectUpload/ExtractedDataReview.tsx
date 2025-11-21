@@ -27,6 +27,14 @@ interface Expense {
   currency: string;
 }
 
+interface PlannedActivity {
+  activity: string;
+  category_id: string | null;
+  individuals: number | null;
+  families: number | null;
+  planned_activity_cost: number | null;
+}
+
 interface ExtractedData {
   date: string | null;
   state: string | null;
@@ -43,7 +51,7 @@ interface ExtractedData {
   reporting_officer_phone: string | null;
   finance_officer_name: string | null;
   finance_officer_phone: string | null;
-  planned_activities: string[];
+  planned_activities: PlannedActivity[] | string[]; // Support both old (string[]) and new (PlannedActivity[]) formats
   expenses: Expense[];
   language: 'ar' | 'en' | null;
   form_currency?: string;
@@ -76,6 +84,7 @@ export default function ExtractedDataReview({
   const [fileUrl, setFileUrl] = useState<string>('')
   // Pooled selections to be made here (State, Grant Call, MMYY)
   const [pooledStates, setPooledStates] = useState<{ state_name: string; remaining: number }[]>([])
+  const [sectors, setSectors] = useState<Array<{ id: string; sector_name_en: string; sector_name_ar: string | null }>>([])
   
   // Auto-populate state from user's pre-selection
   const getStateNameFromId = async () => {
@@ -96,6 +105,24 @@ export default function ExtractedDataReview({
   useEffect(() => {
     getStateNameFromId().then(setStateName)
   }, [selectedState])
+
+  // Load sectors for category dropdown
+  useEffect(() => {
+    const loadSectors = async () => {
+      try {
+        const { data: sectorsData, error } = await supabase
+          .from('sectors')
+          .select('id, sector_name_en, sector_name_ar')
+          .order('sector_name_en')
+        
+        if (error) throw error
+        setSectors(sectorsData || [])
+      } catch (error) {
+        console.error('Error loading sectors:', error)
+      }
+    }
+    loadSectors()
+  }, [])
 
   // Generate file URL from temp file
   useEffect(() => {
@@ -406,10 +433,30 @@ export default function ExtractedDataReview({
     loadNextWorkplan()
   }, [selectedSerial])
 
+  // Convert old format (string[]) to new format (PlannedActivity[])
+  const normalizePlannedActivities = (activities: PlannedActivity[] | string[]): PlannedActivity[] => {
+    if (!Array.isArray(activities)) return []
+    if (activities.length === 0) return []
+    
+    // Check if it's already in new format (objects with activity property)
+    if (typeof activities[0] === 'object' && activities[0] !== null && 'activity' in activities[0]) {
+      return activities as PlannedActivity[]
+    }
+    
+    // Convert old format (string[]) to new format
+    return (activities as string[]).map(activity => ({
+      activity: activity || '',
+      category_id: null,
+      individuals: null,
+      families: null,
+      planned_activity_cost: null
+    }))
+  }
+
   const [editedData, setEditedData] = useState<ExtractedData>({
     ...data,
     date: deriveMMYY(data.date),
-    planned_activities: Array.isArray(data.planned_activities) ? data.planned_activities : [],
+    planned_activities: normalizePlannedActivities(Array.isArray(data.planned_activities) ? data.planned_activities : []),
     expenses: Array.isArray(data.expenses) ? data.expenses.map(exp => ({
       activity: exp.activity || '',
       total_cost_usd: typeof exp.total_cost_usd === 'number' ? exp.total_cost_usd : 0,
@@ -592,54 +639,141 @@ export default function ExtractedDataReview({
         <div>
           <Label className="text-lg font-semibold mb-2">{t('fsystem:review.fields.planned_activities')}</Label>
           <div className="border rounded-lg overflow-hidden">
-            <table className="w-full">
-              <thead className="bg-muted">
-                <tr>
-                  <th className="px-4 py-2 text-left">{t('fsystem:review.fields.activity')}</th>
-                  <th className="w-16 px-4 py-2"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {editedData.planned_activities.map((activity, index) => (
-                  <tr key={index} className="border-t">
-                    <td className="px-4 py-2">
-                      <Input
-                        value={activity}
-                        onChange={(e) => {
-                          const newActivities = [...editedData.planned_activities]
-                          newActivities[index] = e.target.value
-                          handleInputChange('planned_activities', newActivities)
-                        }}
-                        className="border-0 focus-visible:ring-0 px-0 py-0 h-8"
-                      />
-                    </td>
-                    <td className="px-4 py-2 text-center">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => {
-                          const newActivities = editedData.planned_activities.filter((_, i) => i !== index)
-                          handleInputChange('planned_activities', newActivities)
-                        }}
-                        className="h-8 w-8 p-0"
-                      >
-                        ×
-                      </Button>
-                    </td>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-muted">
+                  <tr>
+                    <th className="px-4 py-2 text-left min-w-[200px]">{t('fsystem:review.fields.activity')}</th>
+                    <th className="px-4 py-2 text-left min-w-[180px]">Category</th>
+                    <th className="px-4 py-2 text-left min-w-[120px]">Individuals</th>
+                    <th className="px-4 py-2 text-left min-w-[120px]">Families</th>
+                    <th className="px-4 py-2 text-left min-w-[150px]">Planned Activity Cost</th>
+                    <th className="w-16 px-4 py-2"></th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {(editedData.planned_activities as PlannedActivity[]).map((activity, index) => (
+                    <tr key={index} className="border-t">
+                      <td className="px-4 py-2">
+                        <Input
+                          value={activity.activity || ''}
+                          onChange={(e) => {
+                            const newActivities = [...(editedData.planned_activities as PlannedActivity[])]
+                            newActivities[index] = { ...newActivities[index], activity: e.target.value }
+                            handleInputChange('planned_activities', newActivities)
+                          }}
+                          className="border-0 focus-visible:ring-0 px-0 py-0 h-8"
+                          placeholder="Activity name"
+                        />
+                      </td>
+                      <td className="px-4 py-2">
+                        <Select
+                          value={activity.category_id || undefined}
+                          onValueChange={(value) => {
+                            const newActivities = [...(editedData.planned_activities as PlannedActivity[])]
+                            newActivities[index] = { ...newActivities[index], category_id: value || null }
+                            handleInputChange('planned_activities', newActivities)
+                          }}
+                        >
+                          <SelectTrigger className="h-8 w-full">
+                            <SelectValue placeholder="Select category" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {sectors.map((sector) => (
+                              <SelectItem key={sector.id} value={sector.id}>
+                                {sector.sector_name_en} {sector.sector_name_ar && `(${sector.sector_name_ar})`}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </td>
+                      <td className="px-4 py-2">
+                        <Input
+                          type="number"
+                          value={activity.individuals || ''}
+                          onChange={(e) => {
+                            const newActivities = [...(editedData.planned_activities as PlannedActivity[])]
+                            newActivities[index] = { 
+                              ...newActivities[index], 
+                              individuals: e.target.value ? parseInt(e.target.value) : null 
+                            }
+                            handleInputChange('planned_activities', newActivities)
+                          }}
+                          className="border-0 focus-visible:ring-0 px-0 py-0 h-8"
+                          placeholder="0"
+                          min="0"
+                        />
+                      </td>
+                      <td className="px-4 py-2">
+                        <Input
+                          type="number"
+                          value={activity.families || ''}
+                          onChange={(e) => {
+                            const newActivities = [...(editedData.planned_activities as PlannedActivity[])]
+                            newActivities[index] = { 
+                              ...newActivities[index], 
+                              families: e.target.value ? parseInt(e.target.value) : null 
+                            }
+                            handleInputChange('planned_activities', newActivities)
+                          }}
+                          className="border-0 focus-visible:ring-0 px-0 py-0 h-8"
+                          placeholder="0"
+                          min="0"
+                        />
+                      </td>
+                      <td className="px-4 py-2">
+                        <Input
+                          type="number"
+                          step="0.01"
+                          value={activity.planned_activity_cost || ''}
+                          onChange={(e) => {
+                            const newActivities = [...(editedData.planned_activities as PlannedActivity[])]
+                            newActivities[index] = { 
+                              ...newActivities[index], 
+                              planned_activity_cost: e.target.value ? parseFloat(e.target.value) : null 
+                            }
+                            handleInputChange('planned_activities', newActivities)
+                          }}
+                          className="border-0 focus-visible:ring-0 px-0 py-0 h-8"
+                          placeholder="0.00"
+                          min="0"
+                        />
+                      </td>
+                      <td className="px-4 py-2 text-center">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            const newActivities = (editedData.planned_activities as PlannedActivity[]).filter((_, i) => i !== index)
+                            handleInputChange('planned_activities', newActivities)
+                          }}
+                          className="h-8 w-8 p-0"
+                        >
+                          ×
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
             <div className="p-4 border-t">
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
                 onClick={() => {
-                  handleInputChange('planned_activities', [
-                    ...editedData.planned_activities,
-                    ''
-                  ])
+                  const newActivities = [
+                    ...(editedData.planned_activities as PlannedActivity[]),
+                    {
+                      activity: '',
+                      category_id: null,
+                      individuals: null,
+                      families: null,
+                      planned_activity_cost: null
+                    }
+                  ]
+                  handleInputChange('planned_activities', newActivities)
                 }}
               >
                 <Plus className="w-4 h-4 mr-2" />

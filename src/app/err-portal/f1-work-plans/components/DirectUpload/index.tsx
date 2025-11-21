@@ -409,7 +409,10 @@ export default function DirectUpload() {
       // Convert expenses to DB format (USD only)
       const expensesForDB = (translatedData.expenses || []).map((e: any) => ({ activity: e.activity, total_cost: e.total_cost_usd || 0 }))
 
-      // Sector names
+      // Normalize planned_activities to new format and ensure it's an array of objects
+      const plannedActivitiesForDB = normalizePlannedActivities(translatedData.planned_activities || [])
+
+      // Sector names (for project_name generation only, not saved to DB)
       const primaryNames = sectors.filter(s => formData.primary_sectors.includes(s.id)).map(s => s.sector_name_en).join(', ')
       const secondaryNames = sectors.filter(s => formData.secondary_sectors.includes(s.id)).map(s => s.sector_name_en).join(', ')
 
@@ -444,13 +447,13 @@ export default function DirectUpload() {
           ...dataForDB,
           date: dbDate,
           expenses: expensesForDB,
+          planned_activities: plannedActivitiesForDB, // Save as array of objects with category, individuals, families, cost
           emergency_room_id: formData.emergency_room_id,
           err_id: selectedRoom?.err_code || null,
           status: 'pending', // Status for files awaiting F2 approval
           source: 'mutual_aid_portal',
           state: stateName,
-          "Sector (Primary)": primaryNames,
-          "Sector (Secondary)": secondaryNames,
+          // Primary and Secondary categories removed - will be set per activity in planned_activities
           project_name: projectName,
           temp_file_key: tempKey, // Store temp file path
           original_text: originalText,
@@ -497,6 +500,26 @@ export default function DirectUpload() {
   const handleCancelReview = () => {
     setProcessedData(null)
     setIsReviewing(false)
+  }
+
+  // Normalize planned_activities to new format if needed
+  const normalizePlannedActivities = (activities: any[]): any[] => {
+    if (!Array.isArray(activities)) return []
+    if (activities.length === 0) return []
+    
+    // Check if already in new format
+    if (typeof activities[0] === 'object' && activities[0] !== null && 'activity' in activities[0]) {
+      return activities
+    }
+    
+    // Convert old format (string[]) to new format
+    return (activities as string[]).map(activity => ({
+      activity: activity || '',
+      category_id: null,
+      individuals: null,
+      families: null,
+      planned_activity_cost: null
+    }))
   }
 
   // Translation helper function
@@ -555,6 +578,33 @@ export default function DirectUpload() {
       return translatedItems
     }
 
+    const translatePlannedActivities = async (activities: any[]): Promise<any[]> => {
+      if (!Array.isArray(activities) || activities.length === 0) return []
+      
+      const translatedActivities = []
+      for (const activity of activities) {
+        // Handle both old format (string) and new format (object)
+        if (typeof activity === 'string') {
+          const translated = await translateText(activity)
+          translatedActivities.push({
+            activity: translated || activity,
+            category_id: null,
+            individuals: null,
+            families: null,
+            planned_activity_cost: null
+          })
+        } else if (typeof activity === 'object' && activity !== null) {
+          // New format: object with activity, category_id, etc.
+          const translatedActivity = await translateText(activity.activity)
+          translatedActivities.push({
+            ...activity,
+            activity: translatedActivity || activity.activity
+          })
+        }
+      }
+      return translatedActivities
+    }
+
     const translateExpenses = async (expenses: any[]): Promise<any[]> => {
       if (!Array.isArray(expenses) || expenses.length === 0) return []
       
@@ -580,7 +630,11 @@ export default function DirectUpload() {
       program_officer_name: data.program_officer_name,
       reporting_officer_name: data.reporting_officer_name,
       finance_officer_name: data.finance_officer_name,
-      planned_activities: Array.isArray(data.planned_activities) ? [...data.planned_activities] : [],
+      planned_activities: Array.isArray(data.planned_activities) 
+        ? data.planned_activities.map((a: any) => 
+            typeof a === 'string' ? a : { activity: a.activity }
+          ) 
+        : [],
       expenses: Array.isArray(data.expenses) ? data.expenses.map((e: any) => ({ activity: e.activity })) : []
     }
 
@@ -595,7 +649,7 @@ export default function DirectUpload() {
     translatedData.program_officer_name = await translateText(data.program_officer_name)
     translatedData.reporting_officer_name = await translateText(data.reporting_officer_name)
     translatedData.finance_officer_name = await translateText(data.finance_officer_name)
-    translatedData.planned_activities = await translateArray(data.planned_activities)
+    translatedData.planned_activities = await translatePlannedActivities(data.planned_activities)
     translatedData.expenses = await translateExpenses(data.expenses)
 
     return { translatedData, originalText }
