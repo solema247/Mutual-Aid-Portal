@@ -52,19 +52,23 @@ export async function middleware(req: NextRequest) {
 
   // For all other pages, check authentication
   // But handle errors gracefully to avoid blocking on rate limits
-  let session = null
-  try {
-    const supabase = createMiddlewareClient({ req, res })
-    const { data: { session: sessionData } } = await supabase.auth.getSession()
-    session = sessionData
-  } catch (error) {
-    // If we hit a rate limit or other error, fall back to cookie check
-    // Don't block the request - let the page handle auth errors
-    console.error('Middleware session check error (non-blocking):', error)
-  }
-
   const isAuthenticated = req.cookies.get('isAuthenticated')
   const userType = req.cookies.get('userType')
+  
+  // Only call getSession() if we have cookies indicating authentication
+  // This prevents unnecessary token refresh attempts with invalid/stale tokens
+  let session = null
+  if (isAuthenticated) {
+    try {
+      const supabase = createMiddlewareClient({ req, res })
+      const { data: { session: sessionData } } = await supabase.auth.getSession()
+      session = sessionData
+    } catch (error) {
+      // If we hit a rate limit or other error, fall back to cookie check
+      // Don't block the request - let the page handle auth errors
+      console.error('Middleware session check error (non-blocking):', error)
+    }
+  }
 
   // If trying to access root, redirect based on user type
   if (path === '/') {
