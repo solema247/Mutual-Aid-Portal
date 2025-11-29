@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Button } from '@/components/ui/button'
 import { FileUp } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
-import type { F1FormData, EmergencyRoom, Sector, State } from '@/app/api/fsystem/types/fsystem'
+import type { F1FormData, EmergencyRoom, State } from '@/app/api/fsystem/types/fsystem'
 import ExtractedDataReview from './ExtractedDataReview'
 import { cn } from '@/lib/utils'
 import { X, Plus } from 'lucide-react'
@@ -19,7 +19,6 @@ export default function DirectUpload() {
   const { t } = useTranslation(['common', 'fsystem'])
   const [rooms, setRooms] = useState<EmergencyRoom[]>([])
   const [states, setStates] = useState<State[]>([])
-  const [sectors, setSectors] = useState<Sector[]>([])
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   
 
@@ -54,15 +53,6 @@ export default function DirectUpload() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // Fetch sectors
-        const { data: sectorsData, error: sectorsError } = await supabase
-          .from('sectors')
-          .select('*')
-          .order('sector_name_en')
-
-        if (sectorsError) throw sectorsError
-        setSectors(sectorsData)
-
         // Fetch states with distinct state names
         const { data: statesData, error: statesError } = await supabase
           .from('states')
@@ -412,20 +402,15 @@ export default function DirectUpload() {
       // Normalize planned_activities to new format and ensure it's an array of objects
       const plannedActivitiesForDB = normalizePlannedActivities(translatedData.planned_activities || [])
 
-      // Sector names (for project_name generation only, not saved to DB)
-      const primaryNames = sectors.filter(s => formData.primary_sectors.includes(s.id)).map(s => s.sector_name_en).join(', ')
-      const secondaryNames = sectors.filter(s => formData.secondary_sectors.includes(s.id)).map(s => s.sector_name_en).join(', ')
-
       // ERR room
       const selectedRoom = (rooms as any[]).find(r => r.id === formData.emergency_room_id)
 
       // Prepare data for DB - remove metadata fields that will be set in F2
       const { form_currency, exchange_rate, raw_ocr, _selected_state_name, _selected_grant_call_id, _yymm, _existing_serial, _selected_funding_cycle_id, _cycle_state_allocation_id, ...dataForDB } = translatedData
 
-      // Generate project_name: Primary Sector - Secondary Sector - Locality
+      // Generate project_name from locality only (sectors are now set per activity)
       const locality = dataForDB.locality || ''
-      const projectNameParts = [primaryNames, secondaryNames, locality].filter(Boolean)
-      const projectName = projectNameParts.length > 0 ? projectNameParts.join(' - ') : null
+      const projectName = locality || null
 
       // Normalize date for DB (MMYY -> YYYY-MM-01)
       let dbDate: string | null = null
@@ -515,7 +500,7 @@ export default function DirectUpload() {
     // Convert old format (string[]) to new format
     return (activities as string[]).map(activity => ({
       activity: activity || '',
-      category_id: null,
+      category: null,
       individuals: null,
       families: null,
       planned_activity_cost: null
@@ -594,7 +579,7 @@ export default function DirectUpload() {
             planned_activity_cost: null
           })
         } else if (typeof activity === 'object' && activity !== null) {
-          // New format: object with activity, category_id, etc.
+          // New format: object with activity, category, etc.
           const translatedActivity = await translateText(activity.activity)
           translatedActivities.push({
             ...activity,
@@ -774,118 +759,6 @@ export default function DirectUpload() {
             {/* No date/serial selection in upload-first step */}
               </div>
 
-          {/* Row 4: Primary and Secondary Sectors */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <Label className="mb-2">{t('fsystem:f1.primary_sectors')}</Label>
-              <Select
-                value={formData.primary_sectors[0] || ''}
-                onValueChange={(value) => {
-                  if (!value) return
-                  const newValues = [...formData.primary_sectors]
-                  if (!newValues.includes(value)) {
-                    newValues.push(value)
-                    handleInputChange('primary_sectors', newValues)
-                  }
-                }}
-              >
-                <SelectTrigger className="h-[38px] w-full">
-                  <SelectValue placeholder={t('fsystem:f1.select_primary_sectors')}>
-                    {formData.primary_sectors.length > 0
-                      ? `${formData.primary_sectors.length} selected`
-                      : t('fsystem:f1.select_primary_sectors')}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  {sectors
-                    .filter(sector => !formData.primary_sectors.includes(sector.id))
-                    .map((sector) => (
-                      <SelectItem key={sector.id} value={sector.id}>
-                        {sector.sector_name_en} {sector.sector_name_ar && `(${sector.sector_name_ar})`}
-                      </SelectItem>
-                    ))}
-                </SelectContent>
-              </Select>
-              {formData.primary_sectors.length > 0 && (
-                <div className="flex flex-wrap gap-1 mt-2">
-                  {formData.primary_sectors.map(sectorId => {
-                    const sector = sectors.find(s => s.id === sectorId)
-                    if (!sector) return null
-                    return (
-                      <Button
-                        key={sector.id}
-                        variant="secondary"
-                        size="sm"
-                        className="bg-emerald-100 hover:bg-emerald-200 text-emerald-700 border-emerald-200"
-                        onClick={() => {
-                          const newValues = formData.primary_sectors.filter(id => id !== sector.id)
-                          handleInputChange('primary_sectors', newValues)
-                        }}
-                      >
-                        {sector.sector_name_en}
-                        <X className="w-4 h-4 ml-2" />
-                      </Button>
-                    )
-                  })}
-                </div>
-              )}
-            </div>
-
-            <div>
-              <Label className="mb-2">{t('fsystem:f1.secondary_sectors')}</Label>
-              <Select
-                value={formData.secondary_sectors[0] || ''}
-                onValueChange={(value) => {
-                  if (!value) return
-                  const newValues = [...formData.secondary_sectors]
-                  if (!newValues.includes(value)) {
-                    newValues.push(value)
-                    handleInputChange('secondary_sectors', newValues)
-                  }
-                }}
-              >
-                <SelectTrigger className="h-[38px] w-full">
-                  <SelectValue placeholder={t('fsystem:f1.select_secondary_sectors')}>
-                    {formData.secondary_sectors.length > 0
-                      ? `${formData.secondary_sectors.length} selected`
-                      : t('fsystem:f1.select_secondary_sectors')}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  {sectors
-                    .filter(sector => !formData.secondary_sectors.includes(sector.id))
-                    .map((sector) => (
-                      <SelectItem key={sector.id} value={sector.id}>
-                        {sector.sector_name_en} {sector.sector_name_ar && `(${sector.sector_name_ar})`}
-                      </SelectItem>
-                    ))}
-                </SelectContent>
-              </Select>
-              {formData.secondary_sectors.length > 0 && (
-                <div className="flex flex-wrap gap-1 mt-2">
-                  {formData.secondary_sectors.map(sectorId => {
-                    const sector = sectors.find(s => s.id === sectorId)
-                    if (!sector) return null
-                    return (
-                      <Button
-                        key={sector.id}
-                        variant="secondary"
-                        size="sm"
-                        className="bg-emerald-100 hover:bg-emerald-200 text-emerald-700 border-emerald-200"
-                        onClick={() => {
-                          const newValues = formData.secondary_sectors.filter(id => id !== sector.id)
-                          handleInputChange('secondary_sectors', newValues)
-                        }}
-                      >
-                        {sector.sector_name_en}
-                        <X className="w-4 h-4 ml-2" />
-                      </Button>
-                    )
-                  })}
-                </div>
-              )}
-            </div>
-          </div>
             </div>
       ) : (
         <ExtractedDataReview

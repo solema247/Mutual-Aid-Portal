@@ -29,7 +29,7 @@ interface Expense {
 
 interface PlannedActivity {
   activity: string;
-  category_id: string | null;
+  category: string | null; // Store sector name instead of ID for readability
   individuals: number | null;
   families: number | null;
   planned_activity_cost: number | null;
@@ -440,13 +440,22 @@ export default function ExtractedDataReview({
     
     // Check if it's already in new format (objects with activity property)
     if (typeof activities[0] === 'object' && activities[0] !== null && 'activity' in activities[0]) {
-      return activities as PlannedActivity[]
+      // Convert category_id to category if needed (backward compatibility)
+      return (activities as any[]).map((activity: any) => {
+        // Remove category_id if it exists (we'll convert it in useEffect if needed)
+        const { category_id, ...rest } = activity
+        // If category_id exists but category doesn't, we'll need to look it up
+        if (category_id && !rest.category) {
+          rest.category = null // Will be populated in useEffect
+        }
+        return rest as PlannedActivity
+      })
     }
     
     // Convert old format (string[]) to new format
     return (activities as string[]).map(activity => ({
       activity: activity || '',
-      category_id: null,
+      category: null,
       individuals: null,
       families: null,
       planned_activity_cost: null
@@ -464,6 +473,38 @@ export default function ExtractedDataReview({
       currency: exp.currency || 'USD'
     })) : []
   })
+
+  // Convert category_id to category name for backward compatibility
+  useEffect(() => {
+    const convertCategoryIds = async () => {
+      const activities = editedData.planned_activities as PlannedActivity[]
+      const needsConversion = activities.some((a: any) => a.category_id && !a.category)
+      
+      if (needsConversion && sectors.length > 0) {
+        const converted = await Promise.all(activities.map(async (activity: any) => {
+          if (activity.category_id && !activity.category) {
+            const sector = sectors.find(s => s.id === activity.category_id)
+            return {
+              ...activity,
+              category: sector?.sector_name_en || null,
+              category_id: undefined
+            }
+          }
+          const { category_id, ...rest } = activity
+          return rest
+        }))
+        
+        setEditedData(prev => ({
+          ...prev,
+          planned_activities: converted
+        }))
+      }
+    }
+    
+    if (sectors.length > 0) {
+      convertCategoryIds()
+    }
+  }, [sectors.length])
 
   // Proposed amount for live preview
   const totalAmount = useMemo(() => editedData.expenses.reduce((s, e) => s + (e.total_cost_usd || 0), 0), [editedData.expenses])
@@ -668,10 +709,14 @@ export default function ExtractedDataReview({
                       </td>
                       <td className="px-4 py-2">
                         <Select
-                          value={activity.category_id || undefined}
+                          value={sectors.find(s => s.sector_name_en === activity.category)?.id || undefined}
                           onValueChange={(value) => {
+                            const selectedSector = sectors.find(s => s.id === value)
                             const newActivities = [...(editedData.planned_activities as PlannedActivity[])]
-                            newActivities[index] = { ...newActivities[index], category_id: value || null }
+                            newActivities[index] = { 
+                              ...newActivities[index], 
+                              category: selectedSector ? selectedSector.sector_name_en : null 
+                            }
                             handleInputChange('planned_activities', newActivities)
                           }}
                         >
@@ -767,7 +812,7 @@ export default function ExtractedDataReview({
                     ...(editedData.planned_activities as PlannedActivity[]),
                     {
                       activity: '',
-                      category_id: null,
+                      category: null,
                       individuals: null,
                       families: null,
                       planned_activity_cost: null
