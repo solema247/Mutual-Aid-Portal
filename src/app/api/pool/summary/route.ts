@@ -78,7 +78,8 @@ export async function GET() {
     }, 0)
 
     const committed = sumExpenses((projects || []).filter(p => p.funding_status === 'committed'))
-    const pending = sumExpenses((projects || []).filter(p => p.funding_status === 'allocated'))
+    // Pending = all projects that are not yet committed (allocated, unassigned, reassigned, etc.)
+    const pending = sumExpenses((projects || []).filter(p => p.funding_status !== 'committed'))
     const remaining = total_included - committed - pending
 
     return NextResponse.json({ 

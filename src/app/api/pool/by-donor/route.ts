@@ -60,10 +60,15 @@ export async function GET() {
     const byGrantCommitted = new Map<string, number>()
     const byGrantPending = new Map<string, number>()
     for (const p of projects || []) {
-      if (!p.grant_call_id) continue
+      if (!p.grant_call_id) continue // Only count projects assigned to a grant call
       const amt = sumExpenses([p])
-      if (p.funding_status === 'committed') byGrantCommitted.set(p.grant_call_id, (byGrantCommitted.get(p.grant_call_id) || 0) + amt)
-      if (p.funding_status === 'allocated') byGrantPending.set(p.grant_call_id, (byGrantPending.get(p.grant_call_id) || 0) + amt)
+      if (p.funding_status === 'committed') {
+        byGrantCommitted.set(p.grant_call_id, (byGrantCommitted.get(p.grant_call_id) || 0) + amt)
+      }
+      // Pending = assigned to grant call but not yet committed
+      if (p.funding_status !== 'committed') {
+        byGrantPending.set(p.grant_call_id, (byGrantPending.get(p.grant_call_id) || 0) + amt)
+      }
     }
 
     const rows = Array.from(includedByGrant.entries()).map(([grant_call_id, v]) => {
