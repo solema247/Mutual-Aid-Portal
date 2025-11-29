@@ -27,7 +27,7 @@ import ProjectDetails from './ProjectDetails'
 import { F1Project } from '../../types'
 import type { FundingCycle } from '@/types/cycles'
 
-type ProjectStatus = 'new' | 'feedback' | 'assignment' | 'declined' | 'draft' | 'pending' | 'approved'
+type ProjectStatus = 'new' | 'feedback' | 'staging' | 'declined' | 'draft' | 'pending' | 'approved'
 
 type Feedback = {
   id: string
@@ -53,7 +53,7 @@ export default function ERRAppSubmissions() {
   const [selectedProject, setSelectedProject] = useState<F1Project | null>(null)
   const [currentStatus, setCurrentStatus] = useState<ProjectStatus>('new')
   const [isDialogOpen, setIsDialogOpen] = useState(false)
-  const [selectedTab, setSelectedTab] = useState<'details' | 'feedback' | 'assignment'>('details')
+  const [selectedTab, setSelectedTab] = useState<'details' | 'feedback' | 'staging'>('details')
   const [feedbackHistory, setFeedbackHistory] = useState<Feedback[]>([])
   const [user, setUser] = useState<User | null>(null)
   const [fundingCycles, setFundingCycles] = useState<FundingCycle[]>([])
@@ -61,11 +61,7 @@ export default function ERRAppSubmissions() {
   const [selectedFundingCycle, setSelectedFundingCycle] = useState<string>('')
   const [selectedGrantSerial, setSelectedGrantSerial] = useState<string>('')
   const [isCreatingSerial, setIsCreatingSerial] = useState<boolean>(false)
-  const [grantOptions, setGrantOptions] = useState<{ grant_call_id: string; grant_call_name: string; donor_name: string; remaining: number }[]>([])
-  const [selectedGrantCallId, setSelectedGrantCallId] = useState<string>('')
   const [isAssigningGrant, setIsAssigningGrant] = useState<boolean>(false)
-  const [inlineGrantChoice, setInlineGrantChoice] = useState<Record<string, string>>({})
-  const [stagedAssignments, setStagedAssignments] = useState<Record<string, string>>({})
   const [selectedRows, setSelectedRows] = useState<Record<string, boolean>>({})
 
   const filterProjectsByStatus = useCallback(() => {
@@ -81,7 +77,7 @@ export default function ERRAppSubmissions() {
           (p.status === 'draft' && p.current_feedback_id !== null)
         )
         break
-      case 'assignment':
+      case 'staging':
         filteredProjects = allProjects.filter(p => 
           p.status === 'approved' && 
           (p.funding_status?.toLowerCase?.() === 'unassigned')
@@ -130,32 +126,10 @@ export default function ERRAppSubmissions() {
     }
   }, [selectedFundingCycle])
 
-  // Fetch pooled grant options with remaining for pre-assignment
-  useEffect(() => {
-    const loadGrants = async () => {
-      try {
-        const res = await fetch('/api/pool/by-donor')
-        const data = await res.json()
-        const rows = Array.isArray(data) ? data : []
-        const options = rows
-          .filter((r: any) => (r.remaining || 0) > 0)
-          .map((r: any) => ({
-            grant_call_id: r.grant_call_id,
-            grant_call_name: r.grant_call_name || r.grant_call_id,
-            donor_name: r.donor_name || '-',
-            remaining: r.remaining || 0
-          }))
-        setGrantOptions(options)
-      } catch (e) {
-        console.error('Error loading grant options:', e)
-      }
-    }
-    loadGrants()
-  }, [])
 
-  // When opening a project in Assignment tab, preselect the project's funding cycle
+  // When opening a project in Staging tab, preselect the project's funding cycle
   useEffect(() => {
-    if (isDialogOpen && selectedTab === 'assignment' && selectedProject?.funding_cycle_id) {
+    if (isDialogOpen && selectedTab === 'staging' && selectedProject?.funding_cycle_id) {
       setSelectedFundingCycle(selectedProject.funding_cycle_id)
     }
   }, [isDialogOpen, selectedTab, selectedProject])
@@ -484,91 +458,88 @@ export default function ERRAppSubmissions() {
     setIsDialogOpen(true)
   }
 
-  const handlePreAssignGrant = async () => {
-    if (!selectedProject || !selectedGrantCallId) return
-    try {
-      setIsAssigningGrant(true)
-      const resp = await fetch('/api/f1/pre-assign', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ workplan_id: selectedProject.id, grant_call_id: selectedGrantCallId })
-      })
-      const body = await resp.json()
-      if (!resp.ok) {
-        const msg = body?.error || 'Failed to assign to grant call'
-        alert(`${msg}${body?.remaining !== undefined ? ` (Remaining: ${body.remaining.toLocaleString()})` : ''}`)
-        return
-      }
-      await fetchAllProjects()
-      alert('Assigned to grant call successfully.')
-    } catch (e) {
-      console.error('Pre-assign error:', e)
-      alert('Error assigning to grant call.')
-    } finally {
-      setIsAssigningGrant(false)
-    }
-  }
 
-  // Inline pre-assign per project
-  const handleInlineGrantChange = (project: F1Project, grantCallId: string) => {
-    setInlineGrantChoice(prev => ({ ...prev, [project.id]: grantCallId }))
-    // emit proposal for dashboard overlays based on this project's amount
-    try {
-      const expenses = typeof (project as any).expenses === 'string' ? JSON.parse((project as any).expenses) : (project as any).expenses
-      const amount = (expenses || []).reduce((s: number, e: any) => s + (e.total_cost || 0), 0)
-      window.dispatchEvent(new CustomEvent('f1-proposal', { detail: { state: project.state, grant_call_id: grantCallId, amount } }))
-    } catch {}
-  }
-
-  // Stage (no DB write)
-  const handleStage = (project: F1Project) => {
-    const grantCallId = inlineGrantChoice[project.id]
-    if (!grantCallId) return
-    setStagedAssignments(prev => ({ ...prev, [project.id]: grantCallId }))
-    setSelectedRows(prev => ({ ...prev, [project.id]: true }))
-  }
-
-  // Confirm Allocation: batch pre-assign for selected staged projects
-  const handleConfirmAllocation = async () => {
-    const entries = Object.entries(stagedAssignments).filter(([pid]) => selectedRows[pid])
-    if (entries.length === 0) return
-    try {
-      setIsAssigningGrant(true)
-      for (const [projectId, grantCallId] of entries) {
-        const resp = await fetch('/api/f1/pre-assign', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ workplan_id: projectId, grant_call_id: grantCallId })
-        })
-        const body = await resp.json().catch(() => ({}))
-        if (!resp.ok) {
-          const msg = body?.error || 'Failed to assign to grant call'
-          alert(`${msg}${body?.remaining !== undefined ? ` (Remaining: ${body.remaining.toLocaleString()})` : ''}`)
-          // continue others
-        } else {
-          // clear overlay for this item
+  // Update proposal display when selected rows change
+  useEffect(() => {
+    // Calculate total amount by state for all selected projects
+    const amountsByState = new Map<string, number>()
+    
+    Object.keys(selectedRows).forEach(projectId => {
+      if (selectedRows[projectId]) {
+        const project = projects.find(p => p.id === projectId)
+        if (project) {
           try {
-            const proj = projects.find(p => p.id === projectId)
-            const expenses = proj ? (typeof (proj as any).expenses === 'string' ? JSON.parse((proj as any).expenses) : (proj as any).expenses) : []
+            const expenses = typeof (project as any).expenses === 'string' ? JSON.parse((project as any).expenses) : (project as any).expenses
             const amount = (expenses || []).reduce((s: number, e: any) => s + (e.total_cost || 0), 0)
-            window.dispatchEvent(new CustomEvent('f1-proposal', { detail: { state: proj?.state, grant_call_id: grantCallId, amount: 0 } }))
+            const state = project.state || 'Unknown'
+            amountsByState.set(state, (amountsByState.get(state) || 0) + amount)
           } catch {}
         }
       }
-      await fetchAllProjects()
-      try { window.dispatchEvent(new CustomEvent('pool-refresh')) } catch {}
-      // Clear staged selection for confirmed rows
+    })
+
+    // Emit proposal events for each state (PoolDashboard shows one at a time, so we'll show the first state with projects)
+    // For simplicity, we'll aggregate all states into a single event showing the total
+    // The UI will show the impact state by state as projects are selected
+    if (amountsByState.size > 0) {
+      // Get the first state (or we could show the largest one)
+      const firstState = Array.from(amountsByState.keys())[0]
+      const totalAmount = Array.from(amountsByState.values()).reduce((sum, amt) => sum + amt, 0)
+      // For now, show the first state's total. In a more sophisticated version, we'd track all states
+      window.dispatchEvent(new CustomEvent('f1-proposal', { detail: { state: firstState, amount: totalAmount } }))
+    } else {
+      // Clear proposals when nothing is selected
+      window.dispatchEvent(new CustomEvent('f1-proposal', { detail: { amount: 0 } }))
+    }
+  }, [selectedRows, projects])
+
+  // Stage project (just checkbox selection, no grant call)
+  const handleStageToggle = (project: F1Project, checked: boolean) => {
+    if (checked) {
+      setSelectedRows(prev => ({ ...prev, [project.id]: true }))
+    } else {
       setSelectedRows(prev => {
         const copy = { ...prev }
-        for (const [pid] of entries) delete copy[pid]
+        delete copy[project.id]
         return copy
       })
-      setStagedAssignments(prev => {
-        const copy = { ...prev }
-        for (const [pid] of entries) delete copy[pid]
-        return copy
-      })
-      alert('Allocation confirmed for selected projects.')
+    }
+  }
+
+  // Move staged projects to F2 Uncommitted List
+  const handleMoveToF2 = async () => {
+    const selectedProjectIds = Object.keys(selectedRows).filter(pid => selectedRows[pid])
+    if (selectedProjectIds.length === 0) {
+      alert('Please select at least one project to move to F2.')
+      return
+    }
+
+    try {
+      setIsAssigningGrant(true)
+      
+      // Update status to 'pending' (which makes them appear in F2 Uncommitted List)
+      // Do NOT set grant_call_id or funding_status - that happens in F2
+      const { error } = await supabase
+        .from('err_projects')
+        .update({ status: 'pending' })
+        .in('id', selectedProjectIds)
+
+      if (error) throw error
+
+      // Clear proposals
+      try {
+        window.dispatchEvent(new CustomEvent('f1-proposal', { detail: { amount: 0 } }))
+        window.dispatchEvent(new CustomEvent('pool-refresh'))
+      } catch {}
+
+      // Clear staging
+      setSelectedRows({})
+
+      await fetchAllProjects()
+      alert(`Successfully moved ${selectedProjectIds.length} project(s) to F2 Uncommitted List.`)
+    } catch (error) {
+      console.error('Error moving projects to F2:', error)
+      alert('Error moving projects to F2. Please try again.')
     } finally {
       setIsAssigningGrant(false)
     }
@@ -594,8 +565,8 @@ export default function ERRAppSubmissions() {
           <TabsTrigger value="declined">
             {t('f1_plans:err_tabs.declined')} ({allProjects.filter(p => p.status === 'declined').length})
           </TabsTrigger>
-          <TabsTrigger value="assignment">
-            {t('f1_plans:err_tabs.assignment')} ({allProjects.filter(p => 
+          <TabsTrigger value="staging">
+            {t('f1_plans:err_tabs.staging')} ({allProjects.filter(p => 
               p.status === 'approved' && p.funding_status?.toLowerCase?.() === 'unassigned'
             ).length})
           </TabsTrigger>
@@ -624,8 +595,8 @@ export default function ERRAppSubmissions() {
           {currentStatus === 'declined' && (
             <span>{t('projects:explainers.declined')}</span>
           )}
-          {currentStatus === 'assignment' && (
-            <span>{t('projects:explainers.assignment')}</span>
+          {currentStatus === 'staging' && (
+            <span>{t('projects:explainers.staging')}</span>
           )}
         </div>
 
@@ -645,10 +616,12 @@ export default function ERRAppSubmissions() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      {currentStatus === 'assignment' && <TableHead><input type="checkbox" className="h-4 w-4" onChange={(e) => {
+                      {currentStatus === 'staging' && <TableHead><input type="checkbox" className="h-4 w-4" onChange={(e) => {
                         const checked = e.target.checked
                         const next: Record<string, boolean> = {}
-                        projects.forEach(p => { if (stagedAssignments[p.id]) next[p.id] = checked })
+                        projects.forEach(p => {
+                          next[p.id] = checked
+                        })
                         setSelectedRows(next)
                       }} /></TableHead>}
                       <TableHead>{t('projects:err_id')}</TableHead>
@@ -663,11 +636,14 @@ export default function ERRAppSubmissions() {
                   <TableBody>
                     {projects.map((project) => (
                       <TableRow key={project.id}>
-                        {currentStatus === 'assignment' && (
+                        {currentStatus === 'staging' && (
                           <TableCell>
-                            {stagedAssignments[project.id] ? (
-                              <input type="checkbox" className="h-4 w-4" checked={!!selectedRows[project.id]} onChange={(e) => setSelectedRows(prev => ({ ...prev, [project.id]: e.target.checked }))} />
-                            ) : null}
+                            <input 
+                              type="checkbox" 
+                              className="h-4 w-4" 
+                              checked={!!selectedRows[project.id]} 
+                              onChange={(e) => handleStageToggle(project, e.target.checked)} 
+                            />
                           </TableCell>
                         )}
                         <TableCell>{project.emergency_rooms?.err_code || project.err_id || '-'}</TableCell>
@@ -677,32 +653,10 @@ export default function ERRAppSubmissions() {
                         <TableCell>{project.funding_cycles?.name || project.funding_cycle_id || '-'}</TableCell>
                         <TableCell>{t(`projects:status.${project.funding_status}`)}</TableCell>
                         <TableCell>
-                          {currentStatus === 'assignment' ? (
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-2 items-center">
-                              <div className="md:col-span-2">
-                                <label className="block text-xs font-medium mb-1">Grant Call (Remaining)</label>
-                                <select
-                                  value={inlineGrantChoice[project.id] || ''}
-                                  onChange={(e) => handleInlineGrantChange(project, e.target.value)}
-                                  className="w-full p-2 border rounded-md"
-                                >
-                                  <option value="">Select a grant call…</option>
-                                  {grantOptions.map(opt => (
-                                    <option key={opt.grant_call_id} value={opt.grant_call_id}>
-                                      {opt.donor_name} — {opt.grant_call_name} (Remaining: {opt.remaining.toLocaleString()})
-                                    </option>
-                                  ))}
-                                </select>
-                              </div>
-                              <div>
-                                <Button className="w-full" disabled={!inlineGrantChoice[project.id]} onClick={() => handleStage(project)}>
-                                  Stage
-                                </Button>
-                              </div>
-                              {stagedAssignments[project.id] && (
-                                <div className="col-span-3 text-xs text-muted-foreground">Staged to: {stagedAssignments[project.id]}</div>
-                              )}
-                            </div>
+                          {currentStatus === 'staging' ? (
+                            selectedRows[project.id] && (
+                              <span className="text-xs text-muted-foreground">{t('projects:staging_selected')}</span>
+                            )
                           ) : (
                             <Button
                               variant="outline"
@@ -718,11 +672,16 @@ export default function ERRAppSubmissions() {
                 </Table>
               )}
             </CardContent>
-            {currentStatus === 'assignment' && (
+            {currentStatus === 'staging' && (
               <div className="p-4 flex items-center justify-end gap-2">
-                <Button variant="outline" onClick={() => { setStagedAssignments({}); setSelectedRows({}); try { window.dispatchEvent(new CustomEvent('f1-proposal', { detail: { amount: 0 } })) } catch {} }}>{t('projects:clear_staging')}</Button>
-                <Button onClick={handleConfirmAllocation} disabled={isAssigningGrant || Object.keys(selectedRows).filter(k => selectedRows[k]).length === 0}>
-                  {isAssigningGrant ? t('common:loading') : t('projects:confirm_allocation')}
+                <Button variant="outline" onClick={() => { 
+                  setSelectedRows({})
+                  try { window.dispatchEvent(new CustomEvent('f1-proposal', { detail: { amount: 0 } })) } catch {} 
+                }}>
+                  {t('projects:clear_staging')}
+                </Button>
+                <Button onClick={handleMoveToF2} disabled={isAssigningGrant || Object.keys(selectedRows).filter(k => selectedRows[k]).length === 0}>
+                  {isAssigningGrant ? t('common:loading') : t('projects:move_to_f2')}
                 </Button>
               </div>
             )}
@@ -742,7 +701,7 @@ export default function ERRAppSubmissions() {
                </DialogTitle>
             </DialogHeader>
 
-            <Tabs value={selectedTab} className="w-full" onValueChange={(value) => setSelectedTab(value as 'details' | 'feedback' | 'assignment')}>
+            <Tabs value={selectedTab} className="w-full" onValueChange={(value) => setSelectedTab(value as 'details' | 'feedback' | 'staging')}>
               <TabsList className="grid w-full grid-cols-3">
                 <TabsTrigger value="details">
                   {t('projects:details_tab')}
@@ -750,9 +709,9 @@ export default function ERRAppSubmissions() {
                 <TabsTrigger value="feedback">
                   {t('projects:feedback_tab')}
                 </TabsTrigger>
-                {currentStatus === 'assignment' && (
-                  <TabsTrigger value="assignment">
-                    {t('projects:assignment_tab')}
+                {currentStatus === 'staging' && (
+                  <TabsTrigger value="staging">
+                    {t('projects:staging_tab')}
                   </TabsTrigger>
                 )}
               </TabsList>
@@ -779,99 +738,16 @@ export default function ERRAppSubmissions() {
                 </div>
               </TabsContent>
 
-              <TabsContent value="assignment" className="py-6">
+              <TabsContent value="staging" className="py-6">
                 <div className="space-y-6">
                   <div>
-                    <h3 className="text-lg font-semibold mb-4">Assign to Grant Call</h3>
+                    <h3 className="text-lg font-semibold mb-4">Project Staging</h3>
                     <p className="text-sm text-muted-foreground mb-4">
-                      Select a grant call with sufficient remaining to pre-assign this ERR App submission.
+                      This project has been approved and is ready to be moved to F2 Uncommitted List. Grant allocation will occur in F2.
                     </p>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
-                      <div className="md:col-span-2">
-                        <label className="block text-sm font-medium mb-2">Grant Call (Remaining)</label>
-                        <select
-                          value={selectedGrantCallId}
-                          onChange={(e) => setSelectedGrantCallId(e.target.value)}
-                          className="w-full p-2 border rounded-md"
-                        >
-                          <option value="">Select a grant call…</option>
-                          {grantOptions.map(opt => (
-                            <option key={opt.grant_call_id} value={opt.grant_call_id}>
-                              {opt.donor_name} — {opt.grant_call_name} (Remaining: {opt.remaining.toLocaleString()})
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <div>
-                        <Button className="w-full" disabled={!selectedGrantCallId || isAssigningGrant} onClick={handlePreAssignGrant}>
-                          {isAssigningGrant ? t('common:loading') : 'Assign to Grant'}
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div>
-                    <h3 className="text-lg font-semibold mb-4">{t('projects:assign_grant_serial')}</h3>
-                    <p className="text-sm text-muted-foreground mb-4">
-                      {t('projects:assign_grant_serial_desc')}
+                    <p className="text-sm text-muted-foreground">
+                      Use the staging list to select multiple projects and preview their budget impact in the "By State" view above before moving them to F2.
                     </p>
-                    
-                    <div className="space-y-4">
-                      <div>
-                        <label className="block text-sm font-medium mb-2">
-                          {t('projects:select_funding_cycle')}
-                        </label>
-                        <select
-                          value={selectedFundingCycle}
-                          onChange={(e) => setSelectedFundingCycle(e.target.value)}
-                          className="w-full p-2 border rounded-md"
-                          disabled
-                        >
-                          <option value={selectedFundingCycle}>
-                            {selectedProject?.funding_cycles?.name || selectedProject?.funding_cycle_id || t('projects:select_funding_cycle_placeholder')}
-                          </option>
-                        </select>
-                      </div>
-
-                      {selectedFundingCycle && (
-                        <div>
-                          <label className="block text-sm font-medium mb-2">
-                            {t('projects:select_grant_serial')}
-                          </label>
-                          <select
-                            value={selectedGrantSerial}
-                            onChange={(e) => setSelectedGrantSerial(e.target.value)}
-                            className="w-full p-2 border rounded-md"
-                          >
-                            <option value="">{t('projects:select_grant_serial_placeholder')}</option>
-                            {grantSerials.map((serial) => (
-                              <option key={serial.grant_serial} value={serial.grant_serial}>
-                                {serial.grant_serial} - {serial.state_name} ({serial.yymm})
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                      )}
-
-                      {!selectedGrantSerial && selectedProject && (
-                        <div className="pt-2">
-                          <Button onClick={handleCreateSerialForProject} className="w-full" disabled={isCreatingSerial}>
-                            {isCreatingSerial ? t('common:loading') : 'Create serial and assign'}
-                          </Button>
-                        </div>
-                      )}
-
-                      {selectedGrantSerial && (
-                        <div className="pt-4">
-                          <Button
-                            onClick={() => handleGrantAssignment(selectedProject.id, selectedGrantSerial)}
-                            className="w-full"
-                          >
-                            {t('projects:assign_project')}
-                          </Button>
-                        </div>
-                      )}
-                    </div>
                   </div>
                 </div>
               </TabsContent>
