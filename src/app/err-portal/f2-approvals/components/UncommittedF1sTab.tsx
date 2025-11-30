@@ -191,8 +191,6 @@ export default function UncommittedF1sTab() {
 
   const fetchGrantSerials = async (f1Id: string, grantCallId: string, stateName: string, mmyy: string) => {
     try {
-      console.log('[fetchGrantSerials] Called with:', { f1Id, grantCallId, stateName, mmyy })
-      
       // Show ALL grant serials for this state and MMYY combination (regardless of grant call)
       // This allows users to see existing serials when reassigning to a different grant call
       const { data, error } = await supabase
@@ -202,14 +200,10 @@ export default function UncommittedF1sTab() {
         .eq('yymm', mmyy)
         .order('grant_serial', { ascending: true })
       
-      console.log('[fetchGrantSerials] Query result for state/MMYY:', { data, error, queryParams: { stateName, mmyy } })
-      
       // Filter to only return the grant_serial field for the dropdown
       const serials = (data || []).map(s => ({ grant_serial: s.grant_serial }))
-      console.log('[fetchGrantSerials] Setting serials for f1Id:', f1Id, 'serials:', serials)
       setGrantSerials(prev => {
         const updated = { ...prev, [f1Id]: serials }
-        console.log('[fetchGrantSerials] Updated grantSerials state:', updated)
         return updated
       })
     } catch (error) {
@@ -560,14 +554,12 @@ export default function UncommittedF1sTab() {
   const handleSaveMetadata = async (f1Id: string) => {
     try {
       const f1 = f1s.find(f => f.id === f1Id)
-      if (!f1 || !f1.temp_file_key) {
-        console.error('F1:', f1, 'temp_file_key:', f1?.temp_file_key)
-        alert('No temp file found for this F1')
+      if (!f1) {
+        alert('F1 project not found')
         return
       }
-      
-      console.log('Moving file from:', f1.temp_file_key)
 
+      // Get metadata from form (common for both ERR App and Direct Upload)
       const fundingCycleId = tempFundingCycle[f1Id]
       const grantCallId = tempGrantCall[f1Id]
       const mmyy = tempMMYY[f1Id]
@@ -669,28 +661,31 @@ export default function UncommittedF1sTab() {
         } catch {}
       }
 
-      // Construct final workplan ID for filename
+      // Construct final workplan ID
       const grantId = grantSerialId ? `${grantSerialId}-${String(workplanNumber).padStart(3, '0')}` : `TEMP-${f1Id}`
 
-      // Move file from temp to final location
-      const moveResponse = await fetch('/api/f2/move-file', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          project_id: f1Id,
-          temp_file_key: f1.temp_file_key,
-          donor_id: grantCall.donor_id,
-          state_short: stateShort,
-          mmyy: mmyy,
-          grant_id: grantId
+      // Only move file if temp_file_key exists (Direct Upload F1s)
+      if (f1.temp_file_key) {
+        // Move file from temp to final location
+        const moveResponse = await fetch('/api/f2/move-file', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            project_id: f1Id,
+            temp_file_key: f1.temp_file_key,
+            donor_id: grantCall.donor_id,
+            state_short: stateShort,
+            mmyy: mmyy,
+            grant_id: grantId
+          })
         })
-      })
 
-      if (!moveResponse.ok) {
-        throw new Error('Failed to move file')
+        if (!moveResponse.ok) {
+          throw new Error('Failed to move file')
+        }
       }
 
-      // Update F1 metadata in database
+      // Update F1 metadata in database (for both ERR App and Direct Upload)
       const updateResponse = await fetch('/api/f2/uncommitted', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -710,7 +705,7 @@ export default function UncommittedF1sTab() {
         throw new Error('Failed to update metadata')
       }
 
-      alert('Metadata assigned and file moved successfully!')
+      alert(f1.temp_file_key ? 'Metadata assigned and file moved successfully!' : 'Metadata assigned successfully!')
       // Clear temp values
       setTempFundingCycle(prev => { const { [f1Id]: _, ...rest } = prev; return rest })
       setTempGrantCall(prev => { const { [f1Id]: _, ...rest } = prev; return rest })
@@ -984,7 +979,7 @@ export default function UncommittedF1sTab() {
                   </TableCell>
                   {/* Assignment Column */}
                   <TableCell>
-                    {f1.temp_file_key ? (
+                    {!f1.grant_call_id ? (
                       <Button
                         size="sm"
                         variant="outline"
@@ -996,7 +991,7 @@ export default function UncommittedF1sTab() {
                         <Plus className="w-4 h-4 mr-2" />
                         {t('f2:assign_work_plan_button')}
                       </Button>
-                    ) : f1.grant_call_id ? (
+                    ) : (
                       <div className="flex items-center gap-2">
                         <div className="flex flex-col">
                           <div className="text-sm font-medium">{f1.grant_call_name || 'Unknown Grant Call'}</div>
@@ -1021,8 +1016,6 @@ export default function UncommittedF1sTab() {
                           <Edit2 className="w-3 h-3" />
                         </Button>
                       </div>
-                    ) : (
-                      <Badge variant="secondary">{t('f2:unassigned')}</Badge>
                     )}
                   </TableCell>
                   {/* Community Approval - only after assignment */}
@@ -1177,7 +1170,6 @@ export default function UncommittedF1sTab() {
                     <Select 
                       value={tempGrantCall[f1.id] || ''} 
                       onValueChange={(value) => {
-                        console.log('[GrantCall Select] onValueChange:', value, 'f1.id:', f1.id, 'current MMYY:', tempMMYY[f1.id])
                         setTempGrantCall(prev => ({ ...prev, [f1.id]: value }))
                         // Clear grant serial and grant serials when grant call changes
                         setTempGrantSerial(prev => ({ ...prev, [f1.id]: '' }))
@@ -1185,10 +1177,7 @@ export default function UncommittedF1sTab() {
                         setLastWorkplanNums(prev => ({ ...prev, [f1.id]: 0 }))
                         // Load grant serials if MMYY is already set
                         if (value && tempMMYY[f1.id] && tempMMYY[f1.id].length === 4) {
-                          console.log('[GrantCall Select] MMYY already set, calling fetchGrantSerials')
                           fetchGrantSerials(f1.id, value, f1.state, tempMMYY[f1.id])
-                        } else {
-                          console.log('[GrantCall Select] MMYY not ready:', { value, mmyy: tempMMYY[f1.id], mmyyLength: tempMMYY[f1.id]?.length })
                         }
                       }}
                       disabled={!tempFundingCycle[f1.id]}
@@ -1222,7 +1211,6 @@ export default function UncommittedF1sTab() {
                       value={tempMMYY[f1.id] || ''}
                       onChange={(e) => {
                         const newMMYY = e.target.value.replace(/[^0-9]/g, '').slice(0, 4)
-                        console.log('[MMYY Input] onChange:', newMMYY, 'f1.id:', f1.id, 'current grantCall:', tempGrantCall[f1.id])
                         setTempMMYY(prev => ({ ...prev, [f1.id]: newMMYY }))
                         // Clear grant serial and grant serials when MMYY changes
                         if (newMMYY.length !== 4) {
@@ -1232,10 +1220,7 @@ export default function UncommittedF1sTab() {
                         }
                         // Load grant serials when MMYY is complete and grant call is selected
                         if (newMMYY.length === 4 && tempGrantCall[f1.id]) {
-                          console.log('[MMYY Input] MMYY complete and grant call selected, calling fetchGrantSerials')
                           fetchGrantSerials(f1.id, tempGrantCall[f1.id], f1.state, newMMYY)
-                        } else {
-                          console.log('[MMYY Input] Not calling fetchGrantSerials:', { newMMYYLength: newMMYY.length, hasGrantCall: !!tempGrantCall[f1.id] })
                         }
                       }}
                       placeholder="0825"
@@ -1264,7 +1249,6 @@ export default function UncommittedF1sTab() {
                         <SelectItem value="new">{t('f2:create_new_serial')}</SelectItem>
                         {(() => {
                           const serials = grantSerials[f1.id] || []
-                          console.log('[SelectContent] Rendering grant serials for f1.id:', f1.id, 'serials:', serials, 'all grantSerials:', grantSerials)
                           return serials.map(gs => (
                             <SelectItem key={gs.grant_serial} value={gs.grant_serial}>{gs.grant_serial}</SelectItem>
                           ))
@@ -1333,7 +1317,7 @@ export default function UncommittedF1sTab() {
                       setAssignModalOpen(false)
                       setAssigningF1Id(null)
                     }}
-                    disabled={!tempGrantCall[f1.id] || !tempMMYY[f1.id] || !tempGrantSerial[f1.id] || (f1.temp_file_key && (!tempFundingCycle[f1.id] || !tempMMYY[f1.id] || !tempGrantSerial[f1.id]))}
+                    disabled={!tempGrantCall[f1.id] || !tempMMYY[f1.id] || !tempGrantSerial[f1.id] || !tempFundingCycle[f1.id]}
                   >
                     {t('f2:save_assign')}
                   </Button>
