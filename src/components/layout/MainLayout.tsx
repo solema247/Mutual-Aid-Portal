@@ -18,8 +18,8 @@ export default function MainLayout({ children, sidebarItems }: MainLayoutProps) 
     <div className="min-h-screen overflow-x-hidden">
       <div className="flex">
         <Sidebar items={sidebarItems} />
-        <main className="flex-1 transition-all duration-300 min-w-0">
-          <div className="container mx-auto px-4 sm:px-6 py-6 max-w-full">
+        <main className="flex-1 transition-all duration-300 min-w-0 w-full">
+          <div className="container mx-auto px-4 sm:px-6 py-6 max-w-full pt-20 lg:pt-6">
             <div className="flex justify-end mb-6">
               <LanguageSwitch />
             </div>
