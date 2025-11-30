@@ -552,25 +552,27 @@ export default function ERRAppSubmissions() {
   return (
     <div className="space-y-6">
       <Tabs defaultValue="new" className="w-full" onValueChange={(value) => setCurrentStatus(value as ProjectStatus)}>
-        <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="new">
-            {t('f1_plans:err_tabs.new')} ({allProjects.filter(p => ['new', 'pending'].includes(p.status)).length})
-          </TabsTrigger>
-          <TabsTrigger value="feedback">
-            {t('f1_plans:err_tabs.feedback')} ({allProjects.filter(p => 
-              p.status === 'feedback' || 
-              (p.status === 'draft' && p.current_feedback_id !== null)
-            ).length})
-          </TabsTrigger>
-          <TabsTrigger value="declined">
-            {t('f1_plans:err_tabs.declined')} ({allProjects.filter(p => p.status === 'declined').length})
-          </TabsTrigger>
-          <TabsTrigger value="staging">
-            {t('f1_plans:err_tabs.staging')} ({allProjects.filter(p => 
-              p.status === 'approved' && p.funding_status?.toLowerCase?.() === 'unassigned'
-            ).length})
-          </TabsTrigger>
-        </TabsList>
+        <div className="overflow-x-auto -mx-1 px-1">
+          <TabsList className="inline-flex w-auto lg:grid lg:w-full lg:grid-cols-4">
+            <TabsTrigger value="new" className="text-sm sm:text-base px-4 sm:px-6 py-2.5 whitespace-nowrap min-w-[140px] lg:min-w-0">
+              {t('f1_plans:err_tabs.new')} ({allProjects.filter(p => ['new', 'pending'].includes(p.status)).length})
+            </TabsTrigger>
+            <TabsTrigger value="feedback" className="text-sm sm:text-base px-4 sm:px-6 py-2.5 whitespace-nowrap min-w-[140px] lg:min-w-0">
+              {t('f1_plans:err_tabs.feedback')} ({allProjects.filter(p => 
+                p.status === 'feedback' || 
+                (p.status === 'draft' && p.current_feedback_id !== null)
+              ).length})
+            </TabsTrigger>
+            <TabsTrigger value="declined" className="text-sm sm:text-base px-4 sm:px-6 py-2.5 whitespace-nowrap min-w-[140px] lg:min-w-0">
+              {t('f1_plans:err_tabs.declined')} ({allProjects.filter(p => p.status === 'declined').length})
+            </TabsTrigger>
+            <TabsTrigger value="staging" className="text-sm sm:text-base px-4 sm:px-6 py-2.5 whitespace-nowrap min-w-[140px] lg:min-w-0">
+              {t('f1_plans:err_tabs.staging')} ({allProjects.filter(p => 
+                p.status === 'approved' && p.funding_status?.toLowerCase?.() === 'unassigned'
+              ).length})
+            </TabsTrigger>
+          </TabsList>
+        </div>
 
         {/* Quick refresh for ERR App Submissions */}
         <div className="flex justify-end mt-3">

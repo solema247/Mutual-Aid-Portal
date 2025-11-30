@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter, Cairo } from "next/font/google";
 import "./globals.css";
 import Providers from "@/components/providers/Providers";
@@ -16,6 +16,12 @@ const cairo = Cairo({
 export const metadata: Metadata = {
   title: 'Mutual Aid Sudan',
   description: 'Mutual Aid Sudan Partner Portal',
+};
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 5,
 };
 
 export default function RootLayout({
