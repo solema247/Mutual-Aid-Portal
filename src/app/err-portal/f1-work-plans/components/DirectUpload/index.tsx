@@ -10,6 +10,13 @@ import { Button } from '@/components/ui/button'
 import { FileUp } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 import type { F1FormData, EmergencyRoom, State } from '@/app/api/fsystem/types/fsystem'
+import type { RoomWithState } from '@/app/api/rooms/types/rooms'
+
+// Extended type that includes state and all room properties
+type EmergencyRoomWithState = RoomWithState & {
+  err_code: string | null
+  state_reference: string
+}
 import ExtractedDataReview from './ExtractedDataReview'
 import { cn } from '@/lib/utils'
 import { X, Plus } from 'lucide-react'
@@ -17,7 +24,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 
 export default function DirectUpload() {
   const { t } = useTranslation(['common', 'fsystem'])
-  const [rooms, setRooms] = useState<EmergencyRoom[]>([])
+  const [rooms, setRooms] = useState<EmergencyRoomWithState[]>([])
   const [states, setStates] = useState<State[]>([])
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   
@@ -96,7 +103,16 @@ export default function DirectUpload() {
         const stateIds = (allStateIds || []).map((s: any) => s.id)
         const { data: roomsData, error: roomsError } = await supabase
           .from('emergency_rooms')
-          .select('*')
+          .select(`
+            *,
+            state:states!emergency_rooms_state_reference_fkey(
+              id,
+              state_name,
+              locality,
+              state_name_ar,
+              locality_ar
+            )
+          `)
           .in('state_reference', stateIds)
           .eq('status', 'active')
         if (roomsError) throw roomsError
@@ -280,7 +296,7 @@ export default function DirectUpload() {
       }
 
       // Add the new room to the list and select it
-      setRooms(prev => [...prev, newRoom as EmergencyRoom])
+      setRooms(prev => [...prev, newRoom as EmergencyRoomWithState])
       handleInputChange('emergency_room_id', newRoom.id)
       
       // Close dialog and reset form
@@ -339,6 +355,16 @@ export default function DirectUpload() {
 
       // Add minimal metadata for initial processing
       const selectedState = states.find(s => s.id === formData.state_id)
+      
+      // Get the state from the emergency room's state_reference (this has the correct locality)
+      const roomState = Array.isArray(selectedRoom?.state) 
+        ? selectedRoom?.state[0] 
+        : selectedRoom?.state
+      
+      // Use locality from the room's state_reference, fallback to selected state
+      const locality = roomState?.locality || selectedState?.locality || null
+      const locality_ar = roomState?.locality_ar || selectedState?.locality_ar || null
+      
       const metadata = {
         err_code: selectedRoom?.err_code,
         err_name: selectedRoom?.name_ar || selectedRoom?.name,
@@ -346,8 +372,8 @@ export default function DirectUpload() {
         state_name: selectedState?.state_name || null,
         state_name_ar: selectedState?.state_name_ar || null,
         state_id: selectedState?.id || null,
-        locality: selectedState?.locality || null,
-        locality_ar: selectedState?.locality_ar || null,
+        locality: locality,
+        locality_ar: locality_ar,
         currency: formData.currency,
         exchange_rate: formData.exchange_rate
       }
