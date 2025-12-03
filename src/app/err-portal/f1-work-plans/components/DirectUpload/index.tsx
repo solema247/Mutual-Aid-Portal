@@ -422,8 +422,14 @@ export default function DirectUpload() {
       const tempKey = (window as any).__f1_temp_key__ as string
       if (!tempKey) throw new Error('Temp file key missing')
 
-      // Convert expenses to DB format (USD only)
-      const expensesForDB = (translatedData.expenses || []).map((e: any) => ({ activity: e.activity, total_cost: e.total_cost_usd || 0 }))
+      // Convert expenses to DB format (USD only, preserve category and planned_activity tags)
+      const expensesForDB = (translatedData.expenses || []).map((e: any) => ({ 
+        activity: e.activity, 
+        total_cost: e.total_cost_usd || 0,
+        category: e.category || null,
+        planned_activity: e.planned_activity || null,
+        planned_activity_other: e.planned_activity_other || null
+      }))
 
       // Normalize planned_activities to new format and ensure it's an array of objects
       const plannedActivitiesForDB = normalizePlannedActivities(translatedData.planned_activities || [])
@@ -622,9 +628,17 @@ export default function DirectUpload() {
       const translatedExpenses = []
       for (const expense of expenses) {
         const translatedActivity = await translateText(expense.activity)
+        const translatedPlannedActivity = expense.planned_activity 
+          ? await translateText(expense.planned_activity) 
+          : expense.planned_activity
+        const translatedPlannedActivityOther = expense.planned_activity_other 
+          ? await translateText(expense.planned_activity_other) 
+          : expense.planned_activity_other
         translatedExpenses.push({
           ...expense,
-          activity: translatedActivity || expense.activity
+          activity: translatedActivity || expense.activity,
+          planned_activity: translatedPlannedActivity || expense.planned_activity,
+          planned_activity_other: translatedPlannedActivityOther || expense.planned_activity_other
         })
       }
       return translatedExpenses
@@ -646,7 +660,11 @@ export default function DirectUpload() {
             typeof a === 'string' ? a : { activity: a.activity }
           ) 
         : [],
-      expenses: Array.isArray(data.expenses) ? data.expenses.map((e: any) => ({ activity: e.activity })) : []
+      expenses: Array.isArray(data.expenses) ? data.expenses.map((e: any) => ({ 
+        activity: e.activity,
+        planned_activity: e.planned_activity || null,
+        planned_activity_other: e.planned_activity_other || null
+      })) : []
     }
 
     // Translate all text fields

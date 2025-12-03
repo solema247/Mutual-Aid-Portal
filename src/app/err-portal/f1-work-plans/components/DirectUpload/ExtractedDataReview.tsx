@@ -25,6 +25,9 @@ interface Expense {
   total_cost_usd: number;
   total_cost_sdg: number | null;
   currency: string;
+  category: string | null; // Category (sector) tag for this expense
+  planned_activity: string | null; // Planned activity tag for this expense
+  planned_activity_other: string | null; // Custom text when "Other" is selected
 }
 
 interface PlannedActivity {
@@ -85,6 +88,7 @@ export default function ExtractedDataReview({
   // Pooled selections to be made here (State, Grant Call, MMYY)
   const [pooledStates, setPooledStates] = useState<{ state_name: string; remaining: number }[]>([])
   const [sectors, setSectors] = useState<Array<{ id: string; sector_name_en: string; sector_name_ar: string | null }>>([])
+  const [plannedActivities, setPlannedActivities] = useState<Array<{ id: string; activity_name: string; activity_name_ar: string | null; language: string | null }>>([])
   
   // Auto-populate state from user's pre-selection
   const getStateNameFromId = async () => {
@@ -106,7 +110,7 @@ export default function ExtractedDataReview({
     getStateNameFromId().then(setStateName)
   }, [selectedState])
 
-  // Load sectors for category dropdown
+  // Load sectors for sector dropdown
   useEffect(() => {
     const loadSectors = async () => {
       try {
@@ -122,6 +126,24 @@ export default function ExtractedDataReview({
       }
     }
     loadSectors()
+  }, [])
+
+  // Load planned activities for dropdown
+  useEffect(() => {
+    const loadPlannedActivities = async () => {
+      try {
+        const { data: activitiesData, error } = await supabase
+          .from('planned_activities')
+          .select('id, activity_name, activity_name_ar, language')
+          .order('activity_name')
+        
+        if (error) throw error
+        setPlannedActivities(activitiesData || [])
+      } catch (error) {
+        console.error('Error loading planned activities:', error)
+      }
+    }
+    loadPlannedActivities()
   }, [])
 
   // Generate file URL from temp file
@@ -470,7 +492,10 @@ export default function ExtractedDataReview({
       activity: exp.activity || '',
       total_cost_usd: typeof exp.total_cost_usd === 'number' ? exp.total_cost_usd : 0,
       total_cost_sdg: typeof exp.total_cost_sdg === 'number' ? exp.total_cost_sdg : null,
-      currency: exp.currency || 'USD'
+      currency: exp.currency || 'USD',
+      category: (exp as any).category || null,
+      planned_activity: (exp as any).planned_activity || null,
+      planned_activity_other: (exp as any).planned_activity_other || null
     })) : []
   })
 
@@ -508,6 +533,93 @@ export default function ExtractedDataReview({
 
   // Proposed amount for live preview
   const totalAmount = useMemo(() => editedData.expenses.reduce((s, e) => s + (e.total_cost_usd || 0), 0), [editedData.expenses])
+
+  // Auto-populate planned activities from tagged expenses
+  useEffect(() => {
+    // Group expenses by unique planned_activity (not category)
+    // Use custom "Other" text if specified, otherwise use the activity name
+    const activityMap = new Map<string, { activity: string; cost: number }>()
+    
+    editedData.expenses.forEach((expense) => {
+      // Check if expense has a planned activity
+      if (expense.planned_activity && expense.planned_activity.trim()) {
+        // If it's "Other" and has custom text, use the custom text; otherwise use the activity name
+        const plannedActivityLower = expense.planned_activity.toLowerCase()
+        const isOther = plannedActivityLower.includes('other') || expense.planned_activity.includes('أخرى')
+        
+        let activityName: string
+        if (isOther && expense.planned_activity_other && expense.planned_activity_other.trim()) {
+          // Use custom "Other" text
+          activityName = expense.planned_activity_other.trim()
+        } else {
+          // Use the activity name from dropdown
+          activityName = expense.planned_activity.trim()
+        }
+        
+        // Process the activity
+        if (activityName) {
+          const key = activityName
+          const existing = activityMap.get(key)
+          if (existing) {
+            existing.cost += expense.total_cost_usd || 0
+          } else {
+            activityMap.set(key, {
+              activity: activityName,
+              cost: expense.total_cost_usd || 0
+            })
+          }
+        }
+      }
+    })
+
+    // Convert map to planned activities array
+    const autoPlannedActivities: PlannedActivity[] = Array.from(activityMap.values()).map(item => ({
+      activity: item.activity,
+      category: null, // Category will be set by user in planned activities table
+      individuals: null,
+      families: null,
+      planned_activity_cost: item.cost
+    }))
+
+    // Merge with existing planned activities, preserving user-entered category, individuals and families
+    const existingActivities = editedData.planned_activities as PlannedActivity[]
+    const mergedActivities = autoPlannedActivities.map(autoActivity => {
+      // Find existing activity with same activity name
+      const existing = existingActivities.find(
+        existing => existing.activity === autoActivity.activity
+      )
+      return {
+        ...autoActivity,
+        category: existing?.category ?? null, // Preserve user-entered category
+        individuals: existing?.individuals ?? null,
+        families: existing?.families ?? null
+      }
+    })
+
+    // Only update if the structure has changed (new activities, removed activities, or cost changes)
+    // Compare by checking if all existing activities still exist and costs match
+    const needsUpdate = 
+      mergedActivities.length !== existingActivities.length ||
+      mergedActivities.some(merged => {
+        const existing = existingActivities.find(
+          e => e.activity === merged.activity
+        )
+        return !existing || existing.planned_activity_cost !== merged.planned_activity_cost
+      }) ||
+      existingActivities.some(existing => {
+        const merged = mergedActivities.find(
+          m => m.activity === existing.activity
+        )
+        return !merged
+      })
+
+    if (needsUpdate) {
+      setEditedData(prev => ({
+        ...prev,
+        planned_activities: mergedActivities.length > 0 ? mergedActivities : []
+      }))
+    }
+  }, [editedData.expenses])
 
   useEffect(() => {
     try {
@@ -550,6 +662,7 @@ export default function ExtractedDataReview({
       ...prev,
       expenses: newExpenses
     }))
+    // Note: Auto-population of planned activities happens in useEffect above
   }
 
   const handleConfirm = () => {
@@ -685,7 +798,7 @@ export default function ExtractedDataReview({
                 <thead className="bg-muted">
                   <tr>
                     <th className="px-4 py-2 text-left min-w-[200px]">{t('fsystem:review.fields.activity')}</th>
-                    <th className="px-4 py-2 text-left min-w-[180px]">Category</th>
+                    <th className="px-4 py-2 text-left min-w-[180px]">Sector</th>
                     <th className="px-4 py-2 text-left min-w-[120px]">Individuals</th>
                     <th className="px-4 py-2 text-left min-w-[120px]">Families</th>
                     <th className="px-4 py-2 text-left min-w-[150px]">Planned Activity Cost</th>
@@ -696,16 +809,9 @@ export default function ExtractedDataReview({
                   {(editedData.planned_activities as PlannedActivity[]).map((activity, index) => (
                     <tr key={index} className="border-t">
                       <td className="px-4 py-2">
-                        <Input
-                          value={activity.activity || ''}
-                          onChange={(e) => {
-                            const newActivities = [...(editedData.planned_activities as PlannedActivity[])]
-                            newActivities[index] = { ...newActivities[index], activity: e.target.value }
-                            handleInputChange('planned_activities', newActivities)
-                          }}
-                          className="border-0 focus-visible:ring-0 px-0 py-0 h-8"
-                          placeholder="Activity name"
-                        />
+                        <div className="p-2 bg-muted rounded-md text-sm h-8 flex items-center">
+                          {activity.activity || '-'}
+                        </div>
                       </td>
                       <td className="px-4 py-2">
                         <Select
@@ -721,7 +827,7 @@ export default function ExtractedDataReview({
                           }}
                         >
                           <SelectTrigger className="h-8 w-full">
-                            <SelectValue placeholder="Select category" />
+                            <SelectValue placeholder="Select sector" />
                           </SelectTrigger>
                           <SelectContent>
                             {sectors.map((sector) => (
@@ -767,22 +873,9 @@ export default function ExtractedDataReview({
                         />
                       </td>
                       <td className="px-4 py-2">
-                        <Input
-                          type="number"
-                          step="0.01"
-                          value={activity.planned_activity_cost || ''}
-                          onChange={(e) => {
-                            const newActivities = [...(editedData.planned_activities as PlannedActivity[])]
-                            newActivities[index] = { 
-                              ...newActivities[index], 
-                              planned_activity_cost: e.target.value ? parseFloat(e.target.value) : null 
-                            }
-                            handleInputChange('planned_activities', newActivities)
-                          }}
-                          className="border-0 focus-visible:ring-0 px-0 py-0 h-8"
-                          placeholder="0.00"
-                          min="0"
-                        />
+                        <div className="p-2 bg-muted rounded-md text-sm h-8 flex items-center justify-end font-medium">
+                          {activity.planned_activity_cost?.toLocaleString() || '0.00'}
+                        </div>
                       </td>
                       <td className="px-4 py-2 text-center">
                         <Button
@@ -803,27 +896,9 @@ export default function ExtractedDataReview({
               </table>
             </div>
             <div className="p-4 border-t">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  const newActivities = [
-                    ...(editedData.planned_activities as PlannedActivity[]),
-                    {
-                      activity: '',
-                      category: null,
-                      individuals: null,
-                      families: null,
-                      planned_activity_cost: null
-                    }
-                  ]
-                  handleInputChange('planned_activities', newActivities)
-                }}
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                {t('fsystem:review.fields.add_activity')}
-              </Button>
+              <p className="text-sm text-muted-foreground mb-2">
+                Planned activities are automatically populated from tagged expenses. Select Sector and add Individuals and Families for each activity.
+              </p>
             </div>
           </div>
         </div>
@@ -843,7 +918,8 @@ export default function ExtractedDataReview({
             <table className="w-full">
               <thead className="bg-muted">
                 <tr>
-                  <th className="px-4 py-2 text-left">{t('fsystem:review.fields.activity')}</th>
+                  <th className="px-4 py-2 text-left">Expenses</th>
+                  <th className="px-4 py-2 text-left min-w-[200px]">Planned Activity</th>
                   <th className="px-4 py-2 text-right">USD</th>
                   {data.form_currency === 'SDG' && (
                     <th className="px-4 py-2 text-right">SDG (Original)</th>
@@ -859,7 +935,68 @@ export default function ExtractedDataReview({
                         value={expense.activity}
                         onChange={(e) => handleExpenseChange(index, 'activity', e.target.value)}
                         className="border-0 focus-visible:ring-0 px-0 py-0 h-8"
+                        placeholder="Expense description"
                       />
+                    </td>
+                    <td className="px-4 py-2">
+                      <div className="space-y-2">
+                        <Select
+                          value={plannedActivities.find(pa => pa.activity_name === expense.planned_activity)?.id || undefined}
+                          onValueChange={(value) => {
+                            const selectedActivity = plannedActivities.find(pa => pa.id === value)
+                            const activityName = selectedActivity ? selectedActivity.activity_name : null
+                            
+                            // Update both fields in a single state update to avoid race conditions
+                            const newExpenses = [...editedData.expenses]
+                            const isOther = activityName && (activityName.toLowerCase().includes('other') || activityName.includes('أخرى'))
+                            
+                            newExpenses[index] = {
+                              ...newExpenses[index],
+                              planned_activity: activityName,
+                              planned_activity_other: isOther ? newExpenses[index].planned_activity_other : null
+                            }
+                            
+                            // Calculate new total
+                            const newTotal = newExpenses.reduce((sum, exp) => sum + (exp.total_cost_usd || 0), 0)
+                            const availableAmount = (allocationInfo?.amount ?? Number.POSITIVE_INFINITY) - (allocationInfo?.amountUsed ?? 0)
+                            
+                            // Validate against remaining allocation
+                            if (newTotal > availableAmount) {
+                              alert(t('fsystem:review.errors.amount_too_high', {
+                                remaining: availableAmount.toLocaleString()
+                              }))
+                              return
+                            }
+                            
+                            setEditedData(prev => ({
+                              ...prev,
+                              expenses: newExpenses
+                            }))
+                          }}
+                        >
+                          <SelectTrigger className="h-8 w-full">
+                            <SelectValue placeholder="Select planned activity" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {plannedActivities.map((activity) => (
+                              <SelectItem key={activity.id} value={activity.id}>
+                                {activity.activity_name} {activity.activity_name_ar && `(${activity.activity_name_ar})`}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {/* Show input field when "Other" is selected */}
+                        {expense.planned_activity && (
+                          (expense.planned_activity.toLowerCase().includes('other') || expense.planned_activity.includes('أخرى')) && (
+                            <Input
+                              value={expense.planned_activity_other || ''}
+                              onChange={(e) => handleExpenseChange(index, 'planned_activity_other', e.target.value)}
+                              className="h-8 text-sm"
+                              placeholder="Please specify what 'Other' is"
+                            />
+                          )
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-2">
                       <Input
@@ -895,7 +1032,7 @@ export default function ExtractedDataReview({
                   </tr>
                 ))}
                 <tr className="border-t bg-muted/50">
-                  <td className="px-4 py-2 font-medium text-right">{t('fsystem:review.fields.total')}</td>
+                  <td colSpan={2} className="px-4 py-2 font-medium text-right">{t('fsystem:review.fields.total')}</td>
                   <td className={cn(
                     "px-4 py-2 font-medium text-right",
                     isOverBudget && "text-destructive"
@@ -919,7 +1056,15 @@ export default function ExtractedDataReview({
                 onClick={() => {
                   handleInputChange('expenses', [
                     ...editedData.expenses,
-                    { activity: '', total_cost_usd: 0, total_cost_sdg: null, currency: data.form_currency || 'USD' }
+                    { 
+                      activity: '', 
+                      total_cost_usd: 0, 
+                      total_cost_sdg: null, 
+                      currency: data.form_currency || 'USD',
+                      category: null,
+                      planned_activity: null,
+                      planned_activity_other: null
+                    }
                   ])
                 }}
               >
