@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
 import { RefreshCw } from 'lucide-react'
+import { CollapsibleRow } from '@/components/ui/collapsible'
 
 export default function PoolDashboard({ showProposals = true, showByDonor = true }: { showProposals?: boolean; showByDonor?: boolean }) {
   const { t } = useTranslation(['f1_plans'])
@@ -107,9 +108,11 @@ export default function PoolDashboard({ showProposals = true, showByDonor = true
         </div>
       )}
 
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
-          <CardTitle>{t('pool.by_state.title')}</CardTitle>
+      <CollapsibleRow title={t('pool.by_state.title')} defaultOpen={true}>
+        <div className="flex flex-row items-center justify-between mb-4">
+          <div className="text-sm text-muted-foreground">
+            {t('pool.by_state.title')}
+          </div>
           <Button
             variant="outline"
             size="sm"
@@ -119,67 +122,65 @@ export default function PoolDashboard({ showProposals = true, showByDonor = true
             <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
             Refresh
           </Button>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>
-                  <div className="font-semibold">{t('pool.by_state.state')}</div>
-                  <div className="text-xs text-muted-foreground">{t('pool.by_state.state_desc')}</div>
-                </TableHead>
-                <TableHead className="text-right">
-                  <div className="font-semibold">{t('pool.by_state.allocated')}</div>
-                  <div className="text-xs text-muted-foreground">{t('pool.by_state.allocated_desc')}</div>
-                </TableHead>
-                <TableHead className="text-right">
-                  <div className="font-semibold">{t('pool.by_state.committed')}</div>
-                  <div className="text-xs text-muted-foreground">{t('pool.by_state.committed_desc')}</div>
-                </TableHead>
-                <TableHead className="text-right">
-                  <div className="font-semibold">{t('pool.by_state.pending')}</div>
-                  <div className="text-xs text-muted-foreground">{t('pool.by_state.pending_desc')}</div>
-                </TableHead>
-                <TableHead className="text-right">
-                  <div className="font-semibold">{t('pool.by_state.remaining')}</div>
-                  <div className="text-xs text-muted-foreground">{t('pool.by_state.remaining_desc')}</div>
-                </TableHead>
+        </div>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>
+                <div className="font-semibold">{t('pool.by_state.state')}</div>
+                <div className="text-xs text-muted-foreground">{t('pool.by_state.state_desc')}</div>
+              </TableHead>
+              <TableHead className="text-right">
+                <div className="font-semibold">{t('pool.by_state.allocated')}</div>
+                <div className="text-xs text-muted-foreground">{t('pool.by_state.allocated_desc')}</div>
+              </TableHead>
+              <TableHead className="text-right">
+                <div className="font-semibold">{t('pool.by_state.committed')}</div>
+                <div className="text-xs text-muted-foreground">{t('pool.by_state.committed_desc')}</div>
+              </TableHead>
+              <TableHead className="text-right">
+                <div className="font-semibold">{t('pool.by_state.pending')}</div>
+                <div className="text-xs text-muted-foreground">{t('pool.by_state.pending_desc')}</div>
+              </TableHead>
+              <TableHead className="text-right">
+                <div className="font-semibold">{t('pool.by_state.remaining')}</div>
+                <div className="text-xs text-muted-foreground">{t('pool.by_state.remaining_desc')}</div>
+              </TableHead>
+              {showProposals && (
+                <>
+                  <TableHead className="text-right">
+                    <div className="font-semibold">{t('pool.by_state.proposed')}</div>
+                    <div className="text-xs text-muted-foreground">{t('pool.by_state.proposed_desc')}</div>
+                  </TableHead>
+                  <TableHead className="text-right">
+                    <div className="font-semibold">{t('pool.by_state.remainder')}</div>
+                    <div className="text-xs text-muted-foreground">{t('pool.by_state.remainder_desc')}</div>
+                  </TableHead>
+                </>
+              )}
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {byState.map(r => (
+              <TableRow key={r.state_name}>
+                <TableCell>{r.state_name}</TableCell>
+                <TableCell className="text-right">{fmt(r.allocated)}</TableCell>
+                <TableCell className="text-right">{fmt(r.committed)}</TableCell>
+                <TableCell className="text-right">{fmt(r.pending)}</TableCell>
+                <TableCell className={`text-right ${r.remaining >= 0 ? 'text-green-700' : 'text-red-700'}`}>{fmt(r.remaining)}</TableCell>
                 {showProposals && (
                   <>
-                    <TableHead className="text-right">
-                      <div className="font-semibold">{t('pool.by_state.proposed')}</div>
-                      <div className="text-xs text-muted-foreground">{t('pool.by_state.proposed_desc')}</div>
-                    </TableHead>
-                    <TableHead className="text-right">
-                      <div className="font-semibold">{t('pool.by_state.remainder')}</div>
-                      <div className="text-xs text-muted-foreground">{t('pool.by_state.remainder_desc')}</div>
-                    </TableHead>
+                    <TableCell className="text-right">{proposal.state === r.state_name ? fmt(proposal.amount) : fmt(0)}</TableCell>
+                    <TableCell className={`text-right ${((r.remaining - (proposal.state === r.state_name ? proposal.amount : 0)) >= 0) ? 'text-green-700' : 'text-red-700'}`}>
+                      {fmt(r.remaining - (proposal.state === r.state_name ? proposal.amount : 0))}
+                    </TableCell>
                   </>
                 )}
               </TableRow>
-            </TableHeader>
-            <TableBody>
-              {byState.map(r => (
-                <TableRow key={r.state_name}>
-                  <TableCell>{r.state_name}</TableCell>
-                  <TableCell className="text-right">{fmt(r.allocated)}</TableCell>
-                  <TableCell className="text-right">{fmt(r.committed)}</TableCell>
-                  <TableCell className="text-right">{fmt(r.pending)}</TableCell>
-                  <TableCell className={`text-right ${r.remaining >= 0 ? 'text-green-700' : 'text-red-700'}`}>{fmt(r.remaining)}</TableCell>
-                  {showProposals && (
-                    <>
-                      <TableCell className="text-right">{proposal.state === r.state_name ? fmt(proposal.amount) : fmt(0)}</TableCell>
-                      <TableCell className={`text-right ${((r.remaining - (proposal.state === r.state_name ? proposal.amount : 0)) >= 0) ? 'text-green-700' : 'text-red-700'}`}>
-                        {fmt(r.remaining - (proposal.state === r.state_name ? proposal.amount : 0))}
-                      </TableCell>
-                    </>
-                  )}
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+            ))}
+          </TableBody>
+        </Table>
+      </CollapsibleRow>
 
       {showByDonor && (
         <Card>

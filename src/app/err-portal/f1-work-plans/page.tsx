@@ -19,7 +19,7 @@ export default function F1WorkPlansPage() {
       </div>
 
       {/* Pool Dashboard */}
-      <Card>
+      <Card className="border-0">
         <CardHeader>
           <CardTitle>{t('f1_plans:pool_overview')}</CardTitle>
         </CardHeader>
@@ -28,7 +28,7 @@ export default function F1WorkPlansPage() {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="border-0">
         <CardHeader>
           <CardTitle>{t('f1_plans:description')}</CardTitle>
         </CardHeader>
