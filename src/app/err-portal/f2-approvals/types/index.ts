@@ -61,6 +61,11 @@ export interface CommittedF1 {
   funding_cycle_id: string | null
   funding_cycle_name: string | null
   mou_id?: string | null
+  file_key?: string | null
+  temp_file_key?: string | null
+  grant_id?: string | null
+  grant_serial_id?: string | null
+  workplan_number?: number | null
 }
 
 export interface GrantCallOption {

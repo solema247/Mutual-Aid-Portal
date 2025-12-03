@@ -30,7 +30,12 @@ export async function GET(request: Request) {
         submitted_at,
         funding_cycle_id,
         funding_cycles (id, name, year),
-        mou_id
+        mou_id,
+        file_key,
+        temp_file_key,
+        grant_id,
+        grant_serial_id,
+        workplan_number
       `)
       .eq('funding_status', 'committed')
       .order('submitted_at', { ascending: false })
@@ -69,7 +74,12 @@ export async function GET(request: Request) {
       committed_at: f1.submitted_at,
       funding_cycle_id: f1.funding_cycle_id,
       funding_cycle_name: f1.funding_cycles?.name || null,
-      mou_id: f1.mou_id || null
+      mou_id: f1.mou_id || null,
+      file_key: f1.file_key || null,
+      temp_file_key: f1.temp_file_key || null,
+      grant_id: f1.grant_id || null,
+      grant_serial_id: f1.grant_serial_id || null,
+      workplan_number: f1.workplan_number || null
     }))
 
     // Apply client-side filters that can't be done in SQL
