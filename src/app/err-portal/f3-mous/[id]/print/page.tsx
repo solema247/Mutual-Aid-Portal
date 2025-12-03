@@ -1,7 +1,8 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { useParams } from 'next/navigation'
+import { aggregateObjectives, aggregateBeneficiaries, aggregatePlannedActivities, aggregateLocations, getBankingDetails } from '@/lib/mou-aggregation'
 
 export default function PrintMOUPage() {
   const params = useParams() as { id: string }
@@ -17,7 +18,17 @@ export default function PrintMOUPage() {
   }, [params.id])
 
   if (!data) return <div className="p-6">Loading…</div>
-  const { mou, project, partner } = data
+  const { mou, projects, project, partner } = data
+  
+  // Use projects array if available, otherwise fall back to single project
+  const projectList = projects || (project ? [project] : [])
+  const aggregated = useMemo(() => ({
+    objectives: aggregateObjectives(projectList),
+    beneficiaries: aggregateBeneficiaries(projectList),
+    activities: aggregatePlannedActivities(projectList),
+    locations: aggregateLocations(projectList),
+    banking: getBankingDetails(projectList)
+  }), [projectList])
 
   return (
     <div className="p-6 print:p-0">
@@ -43,22 +54,27 @@ export default function PrintMOUPage() {
           <div className="grid grid-cols-2 gap-4 mt-2">
             <Box>
               <div className="font-medium mb-1">{mou.err_name} shall</div>
-              {project?.project_objectives && (
+              {aggregated.objectives && (
                 <div className="mb-1">
                   <div className="font-semibold">Objectives</div>
-                  <div className="whitespace-pre-wrap">{project.project_objectives}</div>
+                  <div className="whitespace-pre-wrap">{aggregated.objectives}</div>
                 </div>
               )}
-              {project?.intended_beneficiaries && (
+              {aggregated.beneficiaries && (
                 <div className="mb-1">
                   <div className="font-semibold">Target Beneficiaries</div>
-                  <div className="whitespace-pre-wrap">{project.intended_beneficiaries}</div>
+                  <div className="whitespace-pre-wrap">{aggregated.beneficiaries}</div>
                 </div>
               )}
-              {project?.planned_activities && (
+              {aggregated.activities && (
                 <div className="mb-1">
                   <div className="font-semibold">Planned Activities</div>
-                  <div className="whitespace-pre-wrap">{project.planned_activities}</div>
+                  <div className="whitespace-pre-wrap">{aggregated.activities}</div>
+                </div>
+              )}
+              {(aggregated.locations.localities || aggregated.locations.state) && (
+                <div className="mb-1 text-xs text-muted-foreground">
+                  Location: {aggregated.locations.localities || '-'} / {aggregated.locations.state || '-'}
                 </div>
               )}
             </Box>
@@ -83,7 +99,7 @@ export default function PrintMOUPage() {
 
         <TwoCol title="5. Budget" left="A detailed budget is maintained in the F1(s) linked to this MOU. Procurement procedures apply; changes or obstacles must be reported at least 24 hours in advance." right="يتم الاحتفاظ بميزانية تفصيلية في نماذج F1 المرتبطة بهذه المذكرة. تُطبق إجراءات الشراء، ويجب الإبلاغ عن أي تغييرات أو عوائق قبل 24 ساعة على الأقل." />
 
-        <TwoCol title="6. Approved Accounts" left={project?.banking_details || 'Account details as shared and approved by ERR will be used for disbursement.'} right={project?.banking_details || 'تُستخدم تفاصيل الحساب المعتمدة من غرفة الطوارئ في عمليات الصرف.'} preWrap />
+        <TwoCol title="6. Approved Accounts" left={aggregated.banking || 'Account details as shared and approved by ERR will be used for disbursement.'} right={aggregated.banking || 'تُستخدم تفاصيل الحساب المعتمدة من غرفة الطوارئ في عمليات الصرف.'} preWrap />
       </div>
     </div>
   )

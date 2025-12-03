@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
+import { aggregateObjectives, aggregateBeneficiaries, aggregatePlannedActivities, aggregateLocations, getBankingDetails } from '@/lib/mou-aggregation'
 
 export async function POST(
   _request: Request,
@@ -11,12 +12,20 @@ export async function POST(
     const { data: mou, error: mouErr } = await supabase.from('mous').select('*').eq('id', id).single()
     if (mouErr || !mou) throw mouErr || new Error('MOU not found')
 
-    const { data: proj } = await supabase
+    // Load all projects for aggregation
+    const { data: projects } = await supabase
       .from('err_projects')
-      .select('project_objectives, intended_beneficiaries, planned_activities, locality, state, banking_details')
+      .select('project_objectives, intended_beneficiaries, planned_activities, planned_activities_resolved, locality, state, banking_details')
       .eq('mou_id', id)
-      .limit(1)
-      .maybeSingle()
+    
+    // Aggregate data from all projects
+    const aggregated = {
+      objectives: aggregateObjectives(projects || []),
+      beneficiaries: aggregateBeneficiaries(projects || []),
+      activities: aggregatePlannedActivities(projects || []),
+      locations: aggregateLocations(projects || []),
+      banking: getBankingDetails(projects || [])
+    }
 
     const total = Number(mou.total_amount || 0)
     const endDate = mou.end_date as string | null
@@ -36,10 +45,10 @@ export async function POST(
     <div class="muted">This will be accomplished by undertaking the following activities:</div>
     <div class="row">
       <div class="col"><div class="box"><div style="font-weight:600;margin-bottom:6px;">${mou.err_name} shall</div>
-      ${proj?.project_objectives ? `<div><strong>Objectives</strong><div>${String(proj.project_objectives).replace(/\n/g,'<br/>')}</div></div>` : ''}
-      ${proj?.intended_beneficiaries ? `<div style="margin-top:6px;"><strong>Target Beneficiaries</strong><div>${String(proj.intended_beneficiaries).replace(/\n/g,'<br/>')}</div></div>` : ''}
-      ${proj?.planned_activities ? `<div style="margin-top:6px;"><strong>Planned Activities</strong><div>${String(proj.planned_activities).replace(/\n/g,'<br/>')}</div></div>` : ''}
-      ${(proj?.locality || proj?.state) ? `<div class=muted style=margin-top:6px;>Location: ${proj?.locality || ''} / ${proj?.state || ''}</div>` : ''}
+      ${aggregated.objectives ? `<div><strong>Objectives</strong><div>${String(aggregated.objectives).replace(/\n/g,'<br/>')}</div></div>` : ''}
+      ${aggregated.beneficiaries ? `<div style="margin-top:6px;"><strong>Target Beneficiaries</strong><div>${String(aggregated.beneficiaries).replace(/\n/g,'<br/>')}</div></div>` : ''}
+      ${aggregated.activities ? `<div style="margin-top:6px;"><strong>Planned Activities</strong><div>${String(aggregated.activities).replace(/\n/g,'<br/>')}</div></div>` : ''}
+      ${(aggregated.locations.localities || aggregated.locations.state) ? `<div class=muted style=margin-top:6px;>Location: ${aggregated.locations.localities || ''} / ${aggregated.locations.state || ''}</div>` : ''}
       </div></div>
       <div class="col"><div class="box"><div style="font-weight:600;margin-bottom:6px;">${mou.partner_name} shall</div>
         <ul>
@@ -68,9 +77,9 @@ export async function POST(
     <div class=row><div class=col><div class=box>A detailed budget is maintained in the F1(s) linked to this MOU. Procurement procedures apply; changes or obstacles must be reported at least 24 hours in advance.</div></div>
     <div class=col><div class="box rtl">يتم الاحتفاظ بميزانية تفصيلية في نماذج F1 المرتبطة بهذه المذكرة. تُطبق إجراءات الشراء، ويجب الإبلاغ عن أي تغييرات أو عوائق قبل 24 ساعة على الأقل.</div></div></div>
   </div>
-  <div class="section"><h2>6. Approved Accounts</h2>
-    <div class=row><div class=col><div class=box>${proj?.banking_details ? String(proj.banking_details).replace(/\n/g,'<br/>') : 'Account details as shared and approved by ERR will be used for disbursement.'}</div></div>
-    <div class=col><div class="box rtl">${proj?.banking_details ? String(proj.banking_details).replace(/\n/g,'<br/>') : 'تُستخدم تفاصيل الحساب المعتمدة من غرفة الطوارئ في عمليات الصرف.'}</div></div></div>
+    <div class="section"><h2>6. Approved Accounts</h2>
+    <div class=row><div class=col><div class=box>${aggregated.banking ? String(aggregated.banking).replace(/\n/g,'<br/>') : 'Account details as shared and approved by ERR will be used for disbursement.'}</div></div>
+    <div class=col><div class="box rtl">${aggregated.banking ? String(aggregated.banking).replace(/\n/g,'<br/>') : 'تُستخدم تفاصيل الحساب المعتمدة من غرفة الطوارئ في عمليات الصرف.'}</div></div></div>
   </div>
   <div class="section"><h2>7. Duration</h2>
     <div>This MOU is effective upon signature by authorized officials of both parties. ${endDate ? `It will terminate on ${endDate}.` : ''} Either party may terminate with written notification.</div>

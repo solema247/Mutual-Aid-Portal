@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import dynamic from 'next/dynamic'
+import { aggregateObjectives, aggregateBeneficiaries, aggregatePlannedActivities, aggregateLocations, getBankingDetails } from '@/lib/mou-aggregation'
 
 interface MOU {
   id: string
@@ -98,6 +99,28 @@ export default function F3MOUsPage() {
     }
   }
 
+  // Aggregate data from all projects
+  const aggregatedData = useMemo(() => {
+    const projects = detail?.projects || (detail?.project ? [detail.project] : [])
+    if (projects.length === 0) {
+      return {
+        objectives: null,
+        beneficiaries: null,
+        activities: null,
+        locations: { localities: '', state: null },
+        banking: null
+      }
+    }
+
+    return {
+      objectives: aggregateObjectives(projects),
+      beneficiaries: aggregateBeneficiaries(projects),
+      activities: aggregatePlannedActivities(projects),
+      locations: aggregateLocations(projects),
+      banking: getBankingDetails(projects)
+    }
+  }, [detail])
+
   const fetchMous = async () => {
     try {
       const qs = search ? `?search=${encodeURIComponent(search)}` : ''
@@ -164,11 +187,11 @@ export default function F3MOUsPage() {
                             const res = await fetch(`/api/f3/mous/${m.id}`)
                             const data = await res.json()
                             setDetail(data)
-                            // Attempt lightweight auto-translation for project fields
-                            const p0 = (data?.projects && data.projects[0]) || data?.project || {}
-                            const objStr = toDisplay(p0?.project_objectives)
-                            const benStr = toDisplay(p0?.intended_beneficiaries)
-                            const actStr = toDisplay(p0?.planned_activities_resolved || p0?.planned_activities)
+                            // Attempt lightweight auto-translation for aggregated project fields
+                            const projects = data?.projects || (data?.project ? [data.project] : [])
+                            const objStr = aggregateObjectives(projects) || ''
+                            const benStr = aggregateBeneficiaries(projects) || ''
+                            const actStr = aggregatePlannedActivities(projects) || ''
                             const hasArabic = (s?: string) => !!s && /[\u0600-\u06FF]/.test(s)
 
                             const translate = async (q: string, source: 'ar'|'en', target: 'ar'|'en') => {
@@ -348,26 +371,26 @@ export default function F3MOUsPage() {
                   <div className="rounded-md border p-3">
                     <div className="font-medium mb-2">{t('f3:shall_err', { err: activeMou.err_name })}</div>
                     <div className="text-sm space-y-2">
-                      {(translations.objectives_en || (detail?.projects?.[0]?.project_objectives ?? detail?.project?.project_objectives)) && (
+                      {(translations.objectives_en || aggregatedData.objectives) && (
                         <div>
                           <div className="font-semibold">{t('f3:objectives')}</div>
-                          <div className="whitespace-pre-wrap">{translations.objectives_en || toDisplay(detail?.projects?.[0]?.project_objectives ?? detail?.project?.project_objectives)}</div>
+                          <div className="whitespace-pre-wrap">{translations.objectives_en || aggregatedData.objectives || ''}</div>
                         </div>
                       )}
-                      {(translations.beneficiaries_en || (detail?.projects?.[0]?.intended_beneficiaries ?? detail?.project?.intended_beneficiaries)) && (
+                      {(translations.beneficiaries_en || aggregatedData.beneficiaries) && (
                         <div>
                           <div className="font-semibold">{t('f3:target_beneficiaries')}</div>
-                          <div className="whitespace-pre-wrap">{translations.beneficiaries_en || toDisplay(detail?.projects?.[0]?.intended_beneficiaries ?? detail?.project?.intended_beneficiaries)}</div>
+                          <div className="whitespace-pre-wrap">{translations.beneficiaries_en || aggregatedData.beneficiaries || ''}</div>
                         </div>
                       )}
-                      {(translations.activities_en || (detail?.projects?.[0]?.planned_activities_resolved ?? detail?.project?.planned_activities_resolved) || (detail?.projects?.[0]?.planned_activities ?? detail?.project?.planned_activities)) && (
+                      {(translations.activities_en || aggregatedData.activities) && (
                         <div>
                           <div className="font-semibold">{t('f3:planned_activities')}</div>
-                          <div className="whitespace-pre-wrap">{translations.activities_en || toDisplay((detail?.projects?.[0]?.planned_activities_resolved ?? detail?.project?.planned_activities_resolved) || (detail?.projects?.[0]?.planned_activities ?? detail?.project?.planned_activities))}</div>
+                          <div className="whitespace-pre-wrap">{translations.activities_en || aggregatedData.activities || ''}</div>
                         </div>
                       )}
-                      {((detail?.projects?.[0]?.locality ?? detail?.project?.locality) || (detail?.projects?.[0]?.state ?? detail?.project?.state)) && (
-                        <div className="text-xs text-muted-foreground">{t('f3:location', { lng: 'en' })}: {(detail?.projects?.[0]?.locality ?? detail?.project?.locality) || '-'} / {(detail?.projects?.[0]?.state ?? detail?.project?.state) || '-'}</div>
+                      {(aggregatedData.locations.localities || aggregatedData.locations.state) && (
+                        <div className="text-xs text-muted-foreground">{t('f3:location', { lng: 'en' })}: {aggregatedData.locations.localities || '-'} / {aggregatedData.locations.state || '-'}</div>
                       )}
                     </div>
                   </div>
@@ -388,26 +411,26 @@ export default function F3MOUsPage() {
                   <div className="rounded-md border p-3" dir="rtl">
                     <div className="font-medium mb-2">تلتزم {activeMou.err_name}</div>
                     <div className="text-sm space-y-2">
-                      {(translations.objectives_ar || (detail?.projects?.[0]?.project_objectives ?? detail?.project?.project_objectives)) && (
+                      {(translations.objectives_ar || aggregatedData.objectives) && (
                         <div>
                           <div className="font-semibold">الأهداف</div>
-                          <div className="whitespace-pre-wrap">{translations.objectives_ar || toDisplay(detail?.projects?.[0]?.project_objectives ?? detail?.project?.project_objectives)}</div>
+                          <div className="whitespace-pre-wrap">{translations.objectives_ar || aggregatedData.objectives || ''}</div>
                         </div>
                       )}
-                      {(translations.beneficiaries_ar || (detail?.projects?.[0]?.intended_beneficiaries ?? detail?.project?.intended_beneficiaries)) && (
+                      {(translations.beneficiaries_ar || aggregatedData.beneficiaries) && (
                         <div>
                           <div className="font-semibold">المستفيدون المستهدفون</div>
-                          <div className="whitespace-pre-wrap">{translations.beneficiaries_ar || toDisplay(detail?.projects?.[0]?.intended_beneficiaries ?? detail?.project?.intended_beneficiaries)}</div>
+                          <div className="whitespace-pre-wrap">{translations.beneficiaries_ar || aggregatedData.beneficiaries || ''}</div>
                         </div>
                       )}
-                      {(translations.activities_ar || (detail?.projects?.[0]?.planned_activities_resolved ?? detail?.project?.planned_activities_resolved) || (detail?.projects?.[0]?.planned_activities ?? detail?.project?.planned_activities)) && (
+                      {(translations.activities_ar || aggregatedData.activities) && (
                         <div>
                           <div className="font-semibold">الأنشطة المخططة</div>
-                          <div className="whitespace-pre-wrap">{translations.activities_ar || toDisplay((detail?.projects?.[0]?.planned_activities_resolved ?? detail?.project?.planned_activities_resolved) || (detail?.projects?.[0]?.planned_activities ?? detail?.project?.planned_activities))}</div>
+                          <div className="whitespace-pre-wrap">{translations.activities_ar || aggregatedData.activities || ''}</div>
                         </div>
                       )}
-                      {((detail?.projects?.[0]?.locality ?? detail?.project?.locality) || (detail?.projects?.[0]?.state ?? detail?.project?.state)) && (
-                        <div className="text-xs text-muted-foreground">الموقع: {(detail?.projects?.[0]?.locality ?? detail?.project?.locality) || '-'} / {(detail?.projects?.[0]?.state ?? detail?.project?.state) || '-'}</div>
+                      {(aggregatedData.locations.localities || aggregatedData.locations.state) && (
+                        <div className="text-xs text-muted-foreground">الموقع: {aggregatedData.locations.localities || '-'} / {aggregatedData.locations.state || '-'}</div>
                       )}
                     </div>
                   </div>
@@ -459,8 +482,8 @@ export default function F3MOUsPage() {
               <div className="rounded-lg border p-4" data-mou-section="true">
                 <div className="font-semibold mb-2">6. {t('f3:approved_accounts')}</div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="rounded-md border p-3 text-sm whitespace-pre-wrap">{(detail?.projects?.[0]?.banking_details) || t('f3:approved_accounts_en_desc')}</div>
-                  <div className="rounded-md border p-3 text-sm whitespace-pre-wrap" dir="rtl">{(detail?.projects?.[0]?.banking_details) || t('f3:approved_accounts_ar_desc')}</div>
+                  <div className="rounded-md border p-3 text-sm whitespace-pre-wrap">{(aggregatedData.banking) || t('f3:approved_accounts_en_desc')}</div>
+                  <div className="rounded-md border p-3 text-sm whitespace-pre-wrap" dir="rtl">{(aggregatedData.banking) || t('f3:approved_accounts_ar_desc')}</div>
                 </div>
               </div>
 
@@ -498,11 +521,11 @@ export default function F3MOUsPage() {
                   <div>
                     <div className="font-medium mb-1">{t('f3:err_label', { lng: 'en' })}</div>
                     <div>{activeMou.err_name}</div>
-                    {detail?.project?.program_officer_name && (
-                      <div>{t('f3:representative', { lng: 'en' })}: {detail.project.program_officer_name}</div>
+                    {((detail?.projects && detail.projects[0]?.program_officer_name) || detail?.project?.program_officer_name) && (
+                      <div>{t('f3:representative', { lng: 'en' })}: {(detail?.projects && detail.projects[0]?.program_officer_name) || detail?.project?.program_officer_name}</div>
                     )}
-                    {detail?.project?.program_officer_phone && (
-                      <div>{t('f3:phone', { lng: 'en' })}: {detail.project.program_officer_phone}</div>
+                    {((detail?.projects && detail.projects[0]?.program_officer_phone) || detail?.project?.program_officer_phone) && (
+                      <div>{t('f3:phone', { lng: 'en' })}: {(detail?.projects && detail.projects[0]?.program_officer_phone) || detail?.project?.program_officer_phone}</div>
                     )}
                   </div>
                 </div>
@@ -527,11 +550,11 @@ export default function F3MOUsPage() {
                   <div>
                     <div className="font-medium mb-1">{t('f3:err_label', { lng: 'ar' })}</div>
                     <div>{activeMou.err_name}</div>
-                    {detail?.project?.program_officer_name && (
-                      <div>{t('f3:representative', { lng: 'ar' })}: {detail.project.program_officer_name}</div>
+                    {((detail?.projects && detail.projects[0]?.program_officer_name) || detail?.project?.program_officer_name) && (
+                      <div>{t('f3:representative', { lng: 'ar' })}: {(detail?.projects && detail.projects[0]?.program_officer_name) || detail?.project?.program_officer_name}</div>
                     )}
-                    {detail?.project?.program_officer_phone && (
-                      <div>{t('f3:phone', { lng: 'ar' })}: {detail.project.program_officer_phone}</div>
+                    {((detail?.projects && detail.projects[0]?.program_officer_phone) || detail?.project?.program_officer_phone) && (
+                      <div>{t('f3:phone', { lng: 'ar' })}: {(detail?.projects && detail.projects[0]?.program_officer_phone) || detail?.project?.program_officer_phone}</div>
                     )}
                   </div>
                 </div>

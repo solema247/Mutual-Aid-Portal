@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
+import { aggregateObjectives, aggregateBeneficiaries, aggregatePlannedActivities, aggregateLocations, getBankingDetails } from '@/lib/mou-aggregation'
 
 // GET /api/f3/mous - list MOUs (simple)
 export async function GET(request: Request) {
@@ -131,13 +132,20 @@ export async function POST(request: Request) {
 
     // Generate a styled Word-compatible HTML document (.doc) and upload
     try {
-      // Load one linked project for details
-      const { data: proj } = await supabase
+      // Load all linked projects for aggregation
+      const { data: projects } = await supabase
         .from('err_projects')
-        .select('project_objectives, intended_beneficiaries, planned_activities, locality, state, banking_details')
+        .select('project_objectives, intended_beneficiaries, planned_activities, planned_activities_resolved, locality, state, banking_details')
         .eq('mou_id', inserted.id)
-        .limit(1)
-        .maybeSingle()
+      
+      // Aggregate data from all projects
+      const aggregated = {
+        objectives: aggregateObjectives(projects || []),
+        beneficiaries: aggregateBeneficiaries(projects || []),
+        activities: aggregatePlannedActivities(projects || []),
+        locations: aggregateLocations(projects || []),
+        banking: getBankingDetails(projects || [])
+      }
 
       const html = `<!DOCTYPE html>
 <html>
@@ -176,10 +184,10 @@ export async function POST(request: Request) {
       <div class="col">
         <div class="box">
           <div style="font-weight:600; margin-bottom:6px;">${inserted.err_name} shall</div>
-          ${proj?.project_objectives ? `<div><strong>Objectives</strong><div>${String(proj.project_objectives).replace(/\n/g,'<br/>')}</div></div>` : ''}
-          ${proj?.intended_beneficiaries ? `<div style="margin-top:6px;"><strong>Target Beneficiaries</strong><div>${String(proj.intended_beneficiaries).replace(/\n/g,'<br/>')}</div></div>` : ''}
-          ${proj?.planned_activities ? `<div style="margin-top:6px;"><strong>Planned Activities</strong><div>${String(proj.planned_activities).replace(/\n/g,'<br/>')}</div></div>` : ''}
-          ${(proj?.locality || proj?.state) ? `<div class="muted" style="margin-top:6px;">Location: ${proj?.locality || ''} / ${proj?.state || ''}</div>` : ''}
+          ${aggregated.objectives ? `<div><strong>Objectives</strong><div>${String(aggregated.objectives).replace(/\n/g,'<br/>')}</div></div>` : ''}
+          ${aggregated.beneficiaries ? `<div style="margin-top:6px;"><strong>Target Beneficiaries</strong><div>${String(aggregated.beneficiaries).replace(/\n/g,'<br/>')}</div></div>` : ''}
+          ${aggregated.activities ? `<div style="margin-top:6px;"><strong>Planned Activities</strong><div>${String(aggregated.activities).replace(/\n/g,'<br/>')}</div></div>` : ''}
+          ${(aggregated.locations.localities || aggregated.locations.state) ? `<div class="muted" style="margin-top:6px;">Location: ${aggregated.locations.localities || ''} / ${aggregated.locations.state || ''}</div>` : ''}
         </div>
       </div>
       <div class="col">
@@ -232,8 +240,8 @@ export async function POST(request: Request) {
   <div class="section">
     <h2>6. Approved Accounts</h2>
     <div class="row">
-      <div class="col"><div class="box">${proj?.banking_details ? String(proj.banking_details).replace(/\n/g,'<br/>') : 'Account details as shared and approved by ERR will be used for disbursement.'}</div></div>
-      <div class="col"><div class="box rtl">${proj?.banking_details ? String(proj.banking_details).replace(/\n/g,'<br/>') : 'تُستخدم تفاصيل الحساب المعتمدة من غرفة الطوارئ في عمليات الصرف.'}</div></div>
+      <div class="col"><div class="box">${aggregated.banking ? String(aggregated.banking).replace(/\n/g,'<br/>') : 'Account details as shared and approved by ERR will be used for disbursement.'}</div></div>
+      <div class="col"><div class="box rtl">${aggregated.banking ? String(aggregated.banking).replace(/\n/g,'<br/>') : 'تُستخدم تفاصيل الحساب المعتمدة من غرفة الطوارئ في عمليات الصرف.'}</div></div>
     </div>
   </div>
 
