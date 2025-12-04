@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useMemo } from 'react'
 import { useParams } from 'next/navigation'
-import { aggregateObjectives, aggregateBeneficiaries, aggregatePlannedActivities, aggregateLocations, getBankingDetails } from '@/lib/mou-aggregation'
+import { aggregateObjectives, aggregateBeneficiaries, aggregatePlannedActivities, aggregatePlannedActivitiesDetailed, aggregateLocations, getBankingDetails } from '@/lib/mou-aggregation'
 
 export default function PrintMOUPage() {
   const params = useParams() as { id: string }
@@ -26,6 +26,7 @@ export default function PrintMOUPage() {
     objectives: aggregateObjectives(projectList),
     beneficiaries: aggregateBeneficiaries(projectList),
     activities: aggregatePlannedActivities(projectList),
+    activitiesDetailed: aggregatePlannedActivitiesDetailed(projectList),
     locations: aggregateLocations(projectList),
     banking: getBankingDetails(projectList)
   }), [projectList])
@@ -66,10 +67,10 @@ export default function PrintMOUPage() {
                   <div className="whitespace-pre-wrap">{aggregated.beneficiaries}</div>
                 </div>
               )}
-              {aggregated.activities && (
+              {(aggregated.activitiesDetailed || aggregated.activities) && (
                 <div className="mb-1">
                   <div className="font-semibold">Planned Activities</div>
-                  <div className="whitespace-pre-wrap">{aggregated.activities}</div>
+                  <div className="whitespace-pre-wrap">{aggregated.activitiesDetailed || aggregated.activities}</div>
                 </div>
               )}
               {(aggregated.locations.localities || aggregated.locations.state) && (

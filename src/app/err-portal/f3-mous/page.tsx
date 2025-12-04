@@ -12,7 +12,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Eye, Upload, Receipt, FileSignature, FileCheck } from 'lucide-react'
 import dynamic from 'next/dynamic'
-import { aggregateObjectives, aggregateBeneficiaries, aggregatePlannedActivities, aggregateLocations, getBankingDetails } from '@/lib/mou-aggregation'
+import { aggregateObjectives, aggregateBeneficiaries, aggregatePlannedActivities, aggregatePlannedActivitiesDetailed, aggregateLocations, getBankingDetails } from '@/lib/mou-aggregation'
 
 interface MOU {
   id: string
@@ -115,23 +115,35 @@ export default function F3MOUsPage() {
   // Aggregate data from all projects
   const aggregatedData = useMemo(() => {
     const projects = detail?.projects || (detail?.project ? [detail.project] : [])
+    console.log('[F3MOUsPage] Aggregating data with projects:', projects?.length || 0, projects)
+    
     if (projects.length === 0) {
+      console.log('[F3MOUsPage] No projects, returning empty aggregated data')
       return {
         objectives: null,
         beneficiaries: null,
         activities: null,
+        activitiesDetailed: null,
         locations: { localities: '', state: null },
         banking: null
       }
     }
 
-    return {
+    const activitiesDetailed = aggregatePlannedActivitiesDetailed(projects)
+    console.log('[F3MOUsPage] Activities detailed result:', activitiesDetailed)
+    
+    const result = {
       objectives: aggregateObjectives(projects),
       beneficiaries: aggregateBeneficiaries(projects),
       activities: aggregatePlannedActivities(projects),
+      activitiesDetailed: activitiesDetailed,
       locations: aggregateLocations(projects),
       banking: getBankingDetails(projects)
     }
+    
+    console.log('[F3MOUsPage] Final aggregated data:', result)
+    
+    return result
   }, [detail])
 
   const fetchMous = async () => {
@@ -227,7 +239,7 @@ export default function F3MOUsPage() {
                             const projects = data?.projects || (data?.project ? [data.project] : [])
                             const objStr = aggregateObjectives(projects) || ''
                             const benStr = aggregateBeneficiaries(projects) || ''
-                            const actStr = aggregatePlannedActivities(projects) || ''
+                            const actStr = aggregatePlannedActivitiesDetailed(projects) || aggregatePlannedActivities(projects) || ''
                             const hasArabic = (s?: string) => !!s && /[\u0600-\u06FF]/.test(s)
 
                             const translate = async (q: string, source: 'ar'|'en', target: 'ar'|'en') => {
@@ -517,10 +529,10 @@ export default function F3MOUsPage() {
                           <div className="whitespace-pre-wrap">{translations.beneficiaries_en || aggregatedData.beneficiaries || ''}</div>
                         </div>
                       )}
-                      {(translations.activities_en || aggregatedData.activities) && (
+                      {(aggregatedData.activitiesDetailed || translations.activities_en || aggregatedData.activities) && (
                         <div>
                           <div className="font-semibold">{t('f3:planned_activities')}</div>
-                          <div className="whitespace-pre-wrap">{translations.activities_en || aggregatedData.activities || ''}</div>
+                          <div className="whitespace-pre-wrap">{aggregatedData.activitiesDetailed || translations.activities_en || aggregatedData.activities || ''}</div>
                         </div>
                       )}
                       {(aggregatedData.locations.localities || aggregatedData.locations.state) && (
@@ -557,10 +569,10 @@ export default function F3MOUsPage() {
                           <div className="whitespace-pre-wrap">{translations.beneficiaries_ar || aggregatedData.beneficiaries || ''}</div>
                         </div>
                       )}
-                      {(translations.activities_ar || aggregatedData.activities) && (
+                      {(aggregatedData.activitiesDetailed || translations.activities_ar || aggregatedData.activities) && (
                         <div>
                           <div className="font-semibold">الأنشطة المخططة</div>
-                          <div className="whitespace-pre-wrap">{translations.activities_ar || aggregatedData.activities || ''}</div>
+                          <div className="whitespace-pre-wrap">{aggregatedData.activitiesDetailed || translations.activities_ar || aggregatedData.activities || ''}</div>
                         </div>
                       )}
                       {(aggregatedData.locations.localities || aggregatedData.locations.state) && (

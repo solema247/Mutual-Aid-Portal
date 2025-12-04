@@ -125,6 +125,108 @@ export function aggregatePlannedActivities(projects: Project[]): string | null {
 }
 
 /**
+ * Aggregates planned activities with detailed information (cost/amount).
+ * Returns formatted string showing activity name -> amount.
+ */
+export function aggregatePlannedActivitiesDetailed(projects: Project[]): string | null {
+  console.log('[aggregatePlannedActivitiesDetailed] Starting with projects:', projects?.length || 0)
+  
+  if (!projects || projects.length === 0) {
+    console.log('[aggregatePlannedActivitiesDetailed] No projects, returning null')
+    return null
+  }
+  
+  interface ActivityDetail {
+    activity: string
+    cost: number | null
+  }
+  
+  const activityMap = new Map<string, ActivityDetail>()
+  
+  projects.forEach((project, projectIndex) => {
+    console.log(`[aggregatePlannedActivitiesDetailed] Processing project ${projectIndex}:`, {
+      hasPlannedActivities: !!project.planned_activities,
+      plannedActivitiesType: typeof project.planned_activities,
+      plannedActivitiesValue: project.planned_activities
+    })
+    
+    if (project.planned_activities) {
+      try {
+        const raw = typeof project.planned_activities === 'string' 
+          ? JSON.parse(project.planned_activities) 
+          : project.planned_activities
+        
+        console.log(`[aggregatePlannedActivitiesDetailed] Parsed raw data for project ${projectIndex}:`, raw)
+        
+        if (Array.isArray(raw)) {
+          console.log(`[aggregatePlannedActivitiesDetailed] Raw is array with ${raw.length} items`)
+          raw.forEach((item: any, itemIndex: number) => {
+            console.log(`[aggregatePlannedActivitiesDetailed] Processing item ${itemIndex}:`, item)
+            const activityName = item?.activity || item?.selectedActivity || item?.activity_name
+            console.log(`[aggregatePlannedActivitiesDetailed] Extracted activity name:`, activityName)
+            
+            if (activityName && typeof activityName === 'string') {
+              const key = activityName.trim()
+              const existing = activityMap.get(key)
+              const cost = item?.planned_activity_cost || item?.cost || null
+              
+              console.log(`[aggregatePlannedActivitiesDetailed] Activity: ${key}, Cost: ${cost}, Existing:`, existing)
+              
+              if (existing) {
+                // Aggregate cost if activity already exists
+                if (cost !== null && cost > 0) {
+                  existing.cost = (existing.cost || 0) + cost
+                  console.log(`[aggregatePlannedActivitiesDetailed] Updated existing activity cost to:`, existing.cost)
+                }
+              } else {
+                // Add new activity
+                activityMap.set(key, {
+                  activity: key,
+                  cost: cost
+                })
+                console.log(`[aggregatePlannedActivitiesDetailed] Added new activity to map:`, key, cost)
+              }
+            } else {
+              console.log(`[aggregatePlannedActivitiesDetailed] Skipping item ${itemIndex} - no valid activity name`)
+            }
+          })
+        } else {
+          console.log(`[aggregatePlannedActivitiesDetailed] Raw is not an array, type:`, typeof raw)
+        }
+      } catch (error) {
+        console.error(`[aggregatePlannedActivitiesDetailed] Error parsing planned_activities for project ${projectIndex}:`, error)
+        // If parsing fails, fall back to simple aggregation
+        return aggregatePlannedActivities(projects)
+      }
+    } else {
+      console.log(`[aggregatePlannedActivitiesDetailed] Project ${projectIndex} has no planned_activities`)
+    }
+  })
+  
+  console.log(`[aggregatePlannedActivitiesDetailed] Final activityMap size:`, activityMap.size)
+  console.log(`[aggregatePlannedActivitiesDetailed] Final activityMap:`, Array.from(activityMap.entries()))
+  
+  if (activityMap.size === 0) {
+    console.log('[aggregatePlannedActivitiesDetailed] Activity map is empty, returning null')
+    return null
+  }
+  
+  // Format activities as: "• Activity Name -> $Amount"
+  const formatted = Array.from(activityMap.values()).map(act => {
+    if (act.cost !== null && act.cost > 0) {
+      return `• ${act.activity} -> $${act.cost.toLocaleString()}`
+    } else {
+      return `• ${act.activity}`
+    }
+  })
+  
+  const result = formatted.join('\n')
+  console.log('[aggregatePlannedActivitiesDetailed] Final formatted result:', result)
+  
+  return result
+}
+
+/**
  * Aggregates locations from all projects.
  * Returns a comma-separated list of unique localities, or a count if there are many.
  */

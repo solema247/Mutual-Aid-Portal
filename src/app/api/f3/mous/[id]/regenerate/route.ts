@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
-import { aggregateObjectives, aggregateBeneficiaries, aggregatePlannedActivities, aggregateLocations, getBankingDetails } from '@/lib/mou-aggregation'
+import { aggregateObjectives, aggregateBeneficiaries, aggregatePlannedActivities, aggregatePlannedActivitiesDetailed, aggregateLocations, getBankingDetails } from '@/lib/mou-aggregation'
 
 export async function POST(
   _request: Request,
@@ -23,6 +23,7 @@ export async function POST(
       objectives: aggregateObjectives(projects || []),
       beneficiaries: aggregateBeneficiaries(projects || []),
       activities: aggregatePlannedActivities(projects || []),
+      activitiesDetailed: aggregatePlannedActivitiesDetailed(projects || []),
       locations: aggregateLocations(projects || []),
       banking: getBankingDetails(projects || [])
     }
@@ -47,7 +48,7 @@ export async function POST(
       <div class="col"><div class="box"><div style="font-weight:600;margin-bottom:6px;">${mou.err_name} shall</div>
       ${aggregated.objectives ? `<div><strong>Objectives</strong><div>${String(aggregated.objectives).replace(/\n/g,'<br/>')}</div></div>` : ''}
       ${aggregated.beneficiaries ? `<div style="margin-top:6px;"><strong>Target Beneficiaries</strong><div>${String(aggregated.beneficiaries).replace(/\n/g,'<br/>')}</div></div>` : ''}
-      ${aggregated.activities ? `<div style="margin-top:6px;"><strong>Planned Activities</strong><div>${String(aggregated.activities).replace(/\n/g,'<br/>')}</div></div>` : ''}
+      ${(aggregated.activitiesDetailed || aggregated.activities) ? `<div style="margin-top:6px;"><strong>Planned Activities</strong><div>${String(aggregated.activitiesDetailed || aggregated.activities).replace(/\n/g,'<br/>')}</div></div>` : ''}
       ${(aggregated.locations.localities || aggregated.locations.state) ? `<div class=muted style=margin-top:6px;>Location: ${aggregated.locations.localities || ''} / ${aggregated.locations.state || ''}</div>` : ''}
       </div></div>
       <div class="col"><div class="box"><div style="font-weight:600;margin-bottom:6px;">${mou.partner_name} shall</div>
