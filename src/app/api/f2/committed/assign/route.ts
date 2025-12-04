@@ -81,11 +81,8 @@ export async function POST(request: Request) {
       const cycleStateAllocationId = cycleAllocationData?.[0]?.id || null
       
       // Create grant serial - we'll call the API route
-      // In production, use the full URL; in development, use localhost
-      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 
-        (process.env.NODE_ENV === 'production' 
-          ? `https://${process.env.VERCEL_URL || 'your-domain.com'}` 
-          : 'http://localhost:3000')
+      // Use the request origin to automatically get the correct port
+      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || new URL(request.url).origin
       const createResp = await fetch(`${baseUrl}/api/fsystem/grant-serials/create`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -122,6 +119,16 @@ export async function POST(request: Request) {
     
     const cycleStateAllocationId = cycleAllocationData?.[0]?.id || null
     
+    // Get initial workplan number from grant_workplan_seq table BEFORE processing F1s
+    // This ensures sequential numbering when assigning multiple F1s
+    const { data: initialSeqData } = await supabase
+      .from('grant_workplan_seq')
+      .select('last_workplan_number')
+      .eq('grant_serial', grantSerialId)
+      .single()
+    
+    let currentWorkplanNumber = initialSeqData?.last_workplan_number || 0
+    
     // Process each F1
     let assignedCount = 0
     const errors: string[] = []
@@ -137,37 +144,28 @@ export async function POST(request: Request) {
         
         const stateShort = stateData?.[0]?.state_short || 'XX'
         
-        // Get workplan number
-        let workplanNumber = 1
+        // Increment workplan number for this F1
+        currentWorkplanNumber += 1
+        const workplanNumber = currentWorkplanNumber
         
-        if (grant_serial !== 'new') {
-          // Get last workplan number for this serial
-          const { data: seqData } = await supabase
-            .from('grant_workplan_seq')
-            .select('last_workplan_number')
-            .eq('grant_serial', grantSerialId)
-            .single()
-          
-          workplanNumber = seqData ? seqData.last_workplan_number + 1 : 1
-          
-          // Update sequence
-          if (seqData) {
-            await supabase
-              .from('grant_workplan_seq')
-              .update({ last_workplan_number: workplanNumber })
-              .eq('grant_serial', grantSerialId)
-          } else {
-            await supabase
-              .from('grant_workplan_seq')
-              .insert({ grant_serial: grantSerialId, last_workplan_number: workplanNumber })
-          }
-        } else {
-          // New serial, first workplan is 1
-          workplanNumber = 1
+        // Update sequence table after each assignment to keep it in sync
+        if (initialSeqData) {
           await supabase
             .from('grant_workplan_seq')
-            .update({ last_workplan_number: workplanNumber, last_used: new Date().toISOString() })
+            .update({ 
+              last_workplan_number: workplanNumber,
+              last_used: new Date().toISOString()
+            })
             .eq('grant_serial', grantSerialId)
+        } else {
+          await supabase
+            .from('grant_workplan_seq')
+            .insert({ 
+              grant_serial: grantSerialId, 
+              last_workplan_number: workplanNumber,
+              last_used: new Date().toISOString(),
+              funding_cycle_id: funding_cycle_id || null
+            })
         }
         
         // Generate grant_id

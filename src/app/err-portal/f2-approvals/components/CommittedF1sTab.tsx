@@ -851,6 +851,9 @@ export default function CommittedF1sTab() {
                     if (grantSerial && grantSerial !== 'new') {
                       const baseNum = lastWorkplanNums[id] || 0
                       workplanNum = baseNum + 1 + idx
+                    } else if (grantSerial === 'new') {
+                      // For new serials, increment workplan number for each F1 (1, 2, 3, etc.)
+                      workplanNum = idx + 1
                     }
                     
                     if (grantSerial && grantSerial !== 'new' && grantSerial.includes('-')) {
@@ -858,7 +861,29 @@ export default function CommittedF1sTab() {
                     }
                     
                     if (grantSerial === 'new' && donorShort && stateShort && mmyy) {
-                      const serialNum = '0001'
+                      // Calculate next serial number from existing grant serials
+                      const serialPrefix = `LCC-${donorShort}-${stateShort}-${mmyy}-`
+                      let maxSerialNumber = 0
+                      
+                      // Filter grant serials for this donor/state/yymm combination
+                      const relevantSerials = grantSerials.filter((gs: any) => 
+                        gs.grant_serial && gs.grant_serial.startsWith(serialPrefix)
+                      )
+                      
+                      // Extract serial numbers and find the maximum
+                      for (const gs of relevantSerials) {
+                        const serialStr = gs.grant_serial || ''
+                        if (serialStr.startsWith(serialPrefix)) {
+                          const serialNumberStr = serialStr.substring(serialPrefix.length)
+                          const serialNumber = parseInt(serialNumberStr, 10)
+                          if (!isNaN(serialNumber) && serialNumber > maxSerialNumber) {
+                            maxSerialNumber = serialNumber
+                          }
+                        }
+                      }
+                      
+                      const nextSerialNumber = maxSerialNumber + 1
+                      const serialNum = String(nextSerialNumber).padStart(4, '0')
                       return <div key={id}>LCC-{donorShort}-{stateShort}-{mmyy}-{serialNum}-{String(workplanNum).padStart(3, '0')}</div>
                     }
                     return <div key={id}>LCC-XXX-XX-XXXX-XXXX-XXX</div>

@@ -75,11 +75,8 @@ export async function POST(request: Request) {
       const cycleStateAllocationId = cycleAllocationData?.[0]?.id || null
       
       // Create grant serial - we'll call the API route
-      // In production, use the full URL; in development, use localhost
-      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 
-        (process.env.NODE_ENV === 'production' 
-          ? `https://${process.env.VERCEL_URL || 'your-domain.com'}` 
-          : 'http://localhost:3000')
+      // Use the request origin to automatically get the correct port
+      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || new URL(request.url).origin
       const createResp = await fetch(`${baseUrl}/api/fsystem/grant-serials/create`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -195,17 +192,30 @@ export async function POST(request: Request) {
           newFileKey = `f1-forms/${donor.short_name}/${stateShort}/${mmyy}/${newGrantId}.${ext}`
           
           if (oldFileKey !== newFileKey) {
+            // Try to move the file
             const { error: moveError } = await supabase.storage
               .from('images')
               .move(oldFileKey, newFileKey)
             
             if (moveError) {
-              // Fallback: copy then remove
-              const { error: copyErr } = await supabase.storage.from('images').copy(oldFileKey, newFileKey)
-              if (copyErr) {
-                throw new Error(`Failed to move file: ${copyErr.message}`)
+              // If destination already exists, just remove the old file
+              if (moveError.message === 'The resource already exists') {
+                await supabase.storage.from('images').remove([oldFileKey])
+              } else {
+                // Fallback: copy then remove
+                const { error: copyErr } = await supabase.storage.from('images').copy(oldFileKey, newFileKey)
+                if (copyErr) {
+                  // If copy also fails because destination exists, just remove old file
+                  if (copyErr.message === 'The resource already exists') {
+                    await supabase.storage.from('images').remove([oldFileKey])
+                  } else {
+                    throw new Error(`Failed to move file: ${copyErr.message}`)
+                  }
+                } else {
+                  // Copy succeeded, remove old file
+                  await supabase.storage.from('images').remove([oldFileKey])
+                }
               }
-              await supabase.storage.from('images').remove([oldFileKey])
             }
           }
         }
