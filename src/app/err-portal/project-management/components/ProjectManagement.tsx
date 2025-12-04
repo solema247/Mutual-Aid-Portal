@@ -6,7 +6,12 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import ProjectDetailModal from './ProjectDetailModal'
+import UploadF4Modal from '@/app/err-portal/f4-f5-reporting/components/UploadF4Modal'
+import UploadF5Modal from '@/app/err-portal/f4-f5-reporting/components/UploadF5Modal'
+import ViewF4Modal from '@/app/err-portal/f4-f5-reporting/components/ViewF4Modal'
+import ViewF5Modal from '@/app/err-portal/f4-f5-reporting/components/ViewF5Modal'
 
 type Donor = { id: string; name: string; short_name?: string }
 type Grant = { id: string; name: string; shortname?: string; donor_id: string }
@@ -34,6 +39,20 @@ export default function ProjectManagement() {
   const [selectedErrId, setSelectedErrId] = useState<string>('')
   const [detailOpen, setDetailOpen] = useState(false)
   const [detailProjectId, setDetailProjectId] = useState<string | null>(null)
+  
+  // F4/F5 modals state
+  const [uploadF4Open, setUploadF4Open] = useState(false)
+  const [uploadF5Open, setUploadF5Open] = useState(false)
+  const [viewF4Open, setViewF4Open] = useState(false)
+  const [viewF5Open, setViewF5Open] = useState(false)
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
+  const [selectedF4Id, setSelectedF4Id] = useState<number | null>(null)
+  const [selectedF5Id, setSelectedF5Id] = useState<string | null>(null)
+  const [f4ListOpen, setF4ListOpen] = useState(false)
+  const [f5ListOpen, setF5ListOpen] = useState(false)
+  const [f4Reports, setF4Reports] = useState<any[]>([])
+  const [f5Reports, setF5Reports] = useState<any[]>([])
+  const [loadingReports, setLoadingReports] = useState(false)
 
   const loadOptions = async () => {
     const qs = new URLSearchParams()
@@ -403,11 +422,81 @@ export default function ProjectManagement() {
                     <TableCell>{r.last_f5_date ? new Date(r.last_f5_date).toLocaleDateString() : '-'}</TableCell>
                     {level === 'project' && (
                         <TableCell>
-                          <Button
-                            variant="outline"
-                          size="sm"
-                          onClick={(e)=>{ e.stopPropagation(); setDetailProjectId(r.project_id || null); setDetailOpen(true) }}
-                        >{t('management.table.view')}</Button>
+                          <div className="flex gap-1 flex-wrap">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={(e)=>{ e.stopPropagation(); setDetailProjectId(r.project_id || null); setDetailOpen(true) }}
+                            >{t('management.table.view')}</Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="bg-green-50 hover:bg-green-100"
+                              onClick={async (e)=>{ 
+                                e.stopPropagation(); 
+                                const projectId = r.project_id || null;
+                                setSelectedProjectId(projectId);
+                                // Load existing F4 reports for this project
+                                if (projectId) {
+                                  setLoadingReports(true);
+                                  try {
+                                    const res = await fetch('/api/f4/list');
+                                    const data = await res.json();
+                                    const projectF4s = (data || []).filter((f4: any) => f4.project_id === projectId);
+                                    setF4Reports(projectF4s);
+                                    if (projectF4s.length > 0) {
+                                      // If reports exist, show list (edit only)
+                                      setF4ListOpen(true);
+                                    } else {
+                                      // If no reports, allow upload
+                                      setUploadF4Open(true);
+                                    }
+                                  } catch (err) {
+                                    console.error(err);
+                                    setUploadF4Open(true);
+                                  } finally {
+                                    setLoadingReports(false);
+                                  }
+                                } else {
+                                  setUploadF4Open(true);
+                                }
+                              }}
+                            >F4 {r.f4_count > 0 ? `(${r.f4_count})` : ''}</Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="bg-blue-50 hover:bg-blue-100"
+                              onClick={async (e)=>{ 
+                                e.stopPropagation(); 
+                                const projectId = r.project_id || null;
+                                setSelectedProjectId(projectId);
+                                // Load existing F5 reports for this project
+                                if (projectId) {
+                                  setLoadingReports(true);
+                                  try {
+                                    const res = await fetch('/api/f5/list');
+                                    const data = await res.json();
+                                    const projectF5s = (data || []).filter((f5: any) => f5.project_id === projectId);
+                                    setF5Reports(projectF5s);
+                                    if (projectF5s.length > 0) {
+                                      // If reports exist, show list (edit only)
+                                      setF5ListOpen(true);
+                                    } else {
+                                      // If no reports, allow upload
+                                      setUploadF5Open(true);
+                                    }
+                                  } catch (err) {
+                                    console.error(err);
+                                    setUploadF5Open(true);
+                                  } finally {
+                                    setLoadingReports(false);
+                                  }
+                                } else {
+                                  setUploadF5Open(true);
+                                }
+                              }}
+                            >F5 {r.f5_count > 0 ? `(${r.f5_count})` : ''}</Button>
+                          </div>
                         </TableCell>
                     )}
                       </TableRow>
@@ -424,6 +513,110 @@ export default function ProjectManagement() {
         open={detailOpen}
         onOpenChange={(v)=> setDetailOpen(v)}
       />
+
+      {/* F4/F5 Modals */}
+      <UploadF4Modal 
+        open={uploadF4Open} 
+        onOpenChange={(v)=>{ 
+          setUploadF4Open(v); 
+          if (!v) setSelectedProjectId(null);
+        }} 
+        onSaved={loadRollup}
+        initialProjectId={selectedProjectId}
+      />
+      <UploadF5Modal 
+        open={uploadF5Open} 
+        onOpenChange={(v)=>{ 
+          setUploadF5Open(v); 
+          if (!v) setSelectedProjectId(null);
+        }} 
+        onSaved={loadRollup}
+        initialProjectId={selectedProjectId}
+      />
+      <ViewF4Modal 
+        summaryId={selectedF4Id} 
+        open={viewF4Open} 
+        onOpenChange={(v)=>{ 
+          setViewF4Open(v); 
+          if (!v) setSelectedF4Id(null);
+        }} 
+        onSaved={loadRollup}
+      />
+      <ViewF5Modal 
+        reportId={selectedF5Id} 
+        open={viewF5Open} 
+        onOpenChange={(v)=>{ 
+          setViewF5Open(v); 
+          if (!v) setSelectedF5Id(null);
+        }} 
+        onSaved={loadRollup}
+      />
+
+      {/* F4 Reports List Modal */}
+      <Dialog open={f4ListOpen} onOpenChange={setF4ListOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>F4 Reports</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2 max-h-[400px] overflow-y-auto">
+            {f4Reports.length === 0 ? (
+              <p className="text-muted-foreground text-center py-4">No F4 reports found</p>
+            ) : (
+              f4Reports.map((f4: any) => (
+                <div key={f4.id} className="flex items-center justify-between p-3 border rounded">
+                  <div>
+                    <div className="font-medium">Report Date: {f4.report_date ? new Date(f4.report_date).toLocaleDateString() : '-'}</div>
+                    <div className="text-sm text-muted-foreground">
+                      Total Expenses: {Number(f4.total_expenses || 0).toLocaleString()} USD
+                    </div>
+                  </div>
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      setF4ListOpen(false);
+                      setSelectedF4Id(f4.id);
+                      setViewF4Open(true);
+                    }}
+                  >View/Edit</Button>
+                </div>
+              ))
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* F5 Reports List Modal */}
+      <Dialog open={f5ListOpen} onOpenChange={setF5ListOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>F5 Reports</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2 max-h-[400px] overflow-y-auto">
+            {f5Reports.length === 0 ? (
+              <p className="text-muted-foreground text-center py-4">No F5 reports found</p>
+            ) : (
+              f5Reports.map((f5: any) => (
+                <div key={f5.id} className="flex items-center justify-between p-3 border rounded">
+                  <div>
+                    <div className="font-medium">Report Date: {f5.report_date ? new Date(f5.report_date).toLocaleDateString() : '-'}</div>
+                    <div className="text-sm text-muted-foreground">
+                      Activities: {f5.activities_count || 0}
+                    </div>
+                  </div>
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      setF5ListOpen(false);
+                      setSelectedF5Id(f5.id);
+                      setViewF5Open(true);
+                    }}
+                  >View/Edit</Button>
+                </div>
+              ))
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 } 

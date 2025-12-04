@@ -18,6 +18,7 @@ interface UploadF5ModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   onSaved: () => void
+  initialProjectId?: string | null
 }
 
 // Helper function to extract table data from raw OCR
@@ -71,7 +72,7 @@ const extractTables = (rawOcr: string) => {
   return { activitiesTable, demographicsTable }
 }
 
-export default function UploadF5Modal({ open, onOpenChange, onSaved }: UploadF5ModalProps) {
+export default function UploadF5Modal({ open, onOpenChange, onSaved, initialProjectId }: UploadF5ModalProps) {
   const { t } = useTranslation(['f4f5'])
   const [states, setStates] = useState<string[]>([])
   const [selectedState, setSelectedState] = useState('')
@@ -271,6 +272,29 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved }: UploadF5M
       }
     } catch {}
   }, [open])
+
+  // Auto-select project when initialProjectId is provided
+  useEffect(() => {
+    if (!open || !initialProjectId) return
+    ;(async () => {
+      try {
+        const { data: projectData, error } = await supabase
+          .from('err_projects')
+          .select('id, state, emergency_room_id, emergency_rooms (id, name, name_ar, err_code)')
+          .eq('id', initialProjectId)
+          .eq('status', 'active')
+          .single()
+        
+        if (error || !projectData) return
+        
+        setSelectedState(projectData.state || '')
+        setSelectedRoomId(projectData.emergency_room_id || '')
+        setProjectId(projectData.id)
+      } catch (e) {
+        console.error('Failed to load initial project', e)
+      }
+    })()
+  }, [open, initialProjectId])
 
   useEffect(() => {
     if (!selectedState) { 

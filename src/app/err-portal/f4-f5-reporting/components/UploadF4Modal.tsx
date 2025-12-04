@@ -16,9 +16,10 @@ interface UploadF4ModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   onSaved: () => void
+  initialProjectId?: string | null
 }
 
-export default function UploadF4Modal({ open, onOpenChange, onSaved }: UploadF4ModalProps) {
+export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProjectId }: UploadF4ModalProps) {
   const { t } = useTranslation(['f4f5'])
   const [states, setStates] = useState<string[]>([])
   const [selectedState, setSelectedState] = useState('')
@@ -121,6 +122,29 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved }: UploadF4M
       }
     } catch {}
   }, [open])
+
+  // Auto-select project when initialProjectId is provided
+  useEffect(() => {
+    if (!open || !initialProjectId) return
+    ;(async () => {
+      try {
+        const { data: projectData, error } = await supabase
+          .from('err_projects')
+          .select('id, state, emergency_room_id, emergency_rooms (id, name, name_ar, err_code)')
+          .eq('id', initialProjectId)
+          .eq('status', 'active')
+          .single()
+        
+        if (error || !projectData) return
+        
+        setSelectedState(projectData.state || '')
+        setSelectedRoomId(projectData.emergency_room_id || '')
+        setProjectId(projectData.id)
+      } catch (e) {
+        console.error('Failed to load initial project', e)
+      }
+    })()
+  }, [open, initialProjectId])
 
   // When state changes, load ERR rooms in that state with active projects
   useEffect(() => {

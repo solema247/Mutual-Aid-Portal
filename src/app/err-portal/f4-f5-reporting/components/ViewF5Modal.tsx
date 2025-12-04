@@ -9,9 +9,10 @@ interface ViewF5ModalProps {
   reportId: string | null
   open: boolean
   onOpenChange: (open: boolean) => void
+  onSaved?: () => void
 }
 
-export default function ViewF5Modal({ reportId, open, onOpenChange }: ViewF5ModalProps) {
+export default function ViewF5Modal({ reportId, open, onOpenChange, onSaved }: ViewF5ModalProps) {
   const [loading, setLoading] = useState(false)
   const [data, setData] = useState<any | null>(null)
 
