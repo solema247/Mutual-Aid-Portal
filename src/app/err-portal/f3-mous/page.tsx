@@ -115,10 +115,7 @@ export default function F3MOUsPage() {
   // Aggregate data from all projects
   const aggregatedData = useMemo(() => {
     const projects = detail?.projects || (detail?.project ? [detail.project] : [])
-    console.log('[F3MOUsPage] Aggregating data with projects:', projects?.length || 0, projects)
-    
     if (projects.length === 0) {
-      console.log('[F3MOUsPage] No projects, returning empty aggregated data')
       return {
         objectives: null,
         beneficiaries: null,
@@ -129,21 +126,14 @@ export default function F3MOUsPage() {
       }
     }
 
-    const activitiesDetailed = aggregatePlannedActivitiesDetailed(projects)
-    console.log('[F3MOUsPage] Activities detailed result:', activitiesDetailed)
-    
-    const result = {
+    return {
       objectives: aggregateObjectives(projects),
       beneficiaries: aggregateBeneficiaries(projects),
       activities: aggregatePlannedActivities(projects),
-      activitiesDetailed: activitiesDetailed,
+      activitiesDetailed: aggregatePlannedActivitiesDetailed(projects),
       locations: aggregateLocations(projects),
       banking: getBankingDetails(projects)
     }
-    
-    console.log('[F3MOUsPage] Final aggregated data:', result)
-    
-    return result
   }, [detail])
 
   const fetchMous = async () => {
