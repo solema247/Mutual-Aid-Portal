@@ -84,4 +84,47 @@ export async function GET(
   }
 }
 
+// PATCH /api/f3/mous/[id] - update MOU editable fields
+export async function PATCH(
+  request: Request,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const supabase = getSupabaseRouteClient()
+    const id = params.id
+    const body = await request.json()
 
+    // Only allow updating specific editable fields
+    const allowedFields = [
+      'partner_name',
+      'err_name',
+      'start_date',
+      'end_date',
+      'banking_details_override',
+      'partner_contact_override',
+      'err_contact_override'
+    ]
+
+    const updates: any = {}
+    for (const field of allowedFields) {
+      if (field in body) {
+        updates[field] = body[field] === '' ? null : body[field]
+      }
+    }
+
+    // Update the MOU
+    const { data: updated, error: updateErr } = await supabase
+      .from('mous')
+      .update(updates)
+      .eq('id', id)
+      .select('*')
+      .single()
+
+    if (updateErr) throw updateErr
+
+    return NextResponse.json(updated)
+  } catch (error) {
+    console.error('Error updating MOU:', error)
+    return NextResponse.json({ error: 'Failed to update MOU' }, { status: 500 })
+  }
+}

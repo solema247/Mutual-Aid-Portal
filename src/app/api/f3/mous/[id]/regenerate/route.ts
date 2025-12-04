@@ -78,13 +78,18 @@ export async function POST(
     <div class=col><div class="box rtl">يتم الاحتفاظ بميزانية تفصيلية في نماذج F1 المرتبطة بهذه المذكرة. تُطبق إجراءات الشراء، ويجب الإبلاغ عن أي تغييرات أو عوائق قبل 24 ساعة على الأقل.</div></div></div>
   </div>
     <div class="section"><h2>6. Approved Accounts</h2>
-    <div class=row><div class=col><div class=box>${aggregated.banking ? String(aggregated.banking).replace(/\n/g,'<br/>') : 'Account details as shared and approved by ERR will be used for disbursement.'}</div></div>
-    <div class=col><div class="box rtl">${aggregated.banking ? String(aggregated.banking).replace(/\n/g,'<br/>') : 'تُستخدم تفاصيل الحساب المعتمدة من غرفة الطوارئ في عمليات الصرف.'}</div></div></div>
+    <div class=row><div class=col><div class=box>${mou.banking_details_override ? String(mou.banking_details_override).replace(/\n/g,'<br/>') : (aggregated.banking ? String(aggregated.banking).replace(/\n/g,'<br/>') : 'Account details as shared and approved by ERR will be used for disbursement.')}</div></div>
+    <div class=col><div class="box rtl">${mou.banking_details_override ? String(mou.banking_details_override).replace(/\n/g,'<br/>') : (aggregated.banking ? String(aggregated.banking).replace(/\n/g,'<br/>') : 'تُستخدم تفاصيل الحساب المعتمدة من غرفة الطوارئ في عمليات الصرف.')}</div></div></div>
   </div>
   <div class="section"><h2>7. Duration</h2>
-    <div>This MOU is effective upon signature by authorized officials of both parties. ${endDate ? `It will terminate on ${endDate}.` : ''} Either party may terminate with written notification.</div>
+    <div>This MOU is effective ${mou.start_date ? `from ${mou.start_date}` : 'upon signature by authorized officials of both parties'}. ${endDate ? `It will terminate on ${endDate}.` : ''} Either party may terminate with written notification.</div>
   </div>
-  <div class="section"><h2>8. Contact Information</h2><div>Partner: ${mou.partner_name}<br/>ERR: ${mou.err_name}</div></div>
+  <div class="section"><h2>8. Contact Information</h2>
+    <div class=row>
+      <div class=col><div class=box>${mou.partner_contact_override ? String(mou.partner_contact_override).replace(/\n/g,'<br/>') : `Partner: ${mou.partner_name}`}</div></div>
+      <div class=col><div class=box>${mou.err_contact_override ? String(mou.err_contact_override).replace(/\n/g,'<br/>') : `ERR: ${mou.err_name}`}</div></div>
+    </div>
+  </div>
   </body></html>`
 
     const filePath = `f3-mous/${mou.id}/${mou.mou_code}.doc`

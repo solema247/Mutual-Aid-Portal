@@ -7,6 +7,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Textarea } from '@/components/ui/textarea'
+import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Eye, Upload, Receipt, FileSignature, FileCheck } from 'lucide-react'
 import dynamic from 'next/dynamic'
 import { aggregateObjectives, aggregateBeneficiaries, aggregatePlannedActivities, aggregateLocations, getBankingDetails } from '@/lib/mou-aggregation'
 
@@ -17,9 +21,14 @@ interface MOU {
   err_name: string
   state: string | null
   total_amount: number
+  start_date: string | null
   end_date: string | null
   file_key: string | null
   payment_confirmation_file: string | null
+  signed_mou_file_key: string | null
+  banking_details_override: string | null
+  partner_contact_override: string | null
+  err_contact_override: string | null
   created_at: string
 }
 
@@ -72,13 +81,17 @@ interface MOUDetail {
 export default function F3MOUsPage() {
   const { t, i18n } = useTranslation(['f3', 'common'])
   const [mous, setMous] = useState<MOU[]>([])
-  const [search, setSearch] = useState('')
+  const [selectedState, setSelectedState] = useState<string>('all')
+  const [availableStates, setAvailableStates] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
   const [previewOpen, setPreviewOpen] = useState(false)
   const [activeMou, setActiveMou] = useState<MOU | null>(null)
   const [detail, setDetail] = useState<MOUDetail | null>(null)
   const [translations, setTranslations] = useState<{ objectives_en?: string; beneficiaries_en?: string; activities_en?: string; objectives_ar?: string; beneficiaries_ar?: string; activities_ar?: string }>({})
   const [exporting, setExporting] = useState(false)
+  const [editMode, setEditMode] = useState(false)
+  const [editingMou, setEditingMou] = useState<Partial<MOU>>({})
+  const [saving, setSaving] = useState(false)
   const previewId = 'mou-preview-content'
 
   const toDisplay = (value: any): string => {
@@ -123,10 +136,17 @@ export default function F3MOUsPage() {
 
   const fetchMous = async () => {
     try {
-      const qs = search ? `?search=${encodeURIComponent(search)}` : ''
-      const res = await fetch(`/api/f3/mous${qs}`)
+      setLoading(true)
+      const params = new URLSearchParams()
+      if (selectedState && selectedState !== 'all') params.append('state', selectedState)
+      
+      const res = await fetch(`/api/f3/mous?${params.toString()}`)
       const data = await res.json()
       setMous(data)
+      
+      // Extract unique states from MOUs for the filter dropdown
+      const uniqueStates = Array.from(new Set(data.map((m: MOU) => m.state).filter(Boolean))) as string[]
+      setAvailableStates(uniqueStates.sort())
     } catch (e) {
       console.error('Failed to load MOUs', e)
     } finally {
@@ -137,7 +157,7 @@ export default function F3MOUsPage() {
   useEffect(() => {
     fetchMous()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [selectedState])
 
   return (
     <div className="max-w-7xl mx-auto p-6 space-y-6">
@@ -147,8 +167,17 @@ export default function F3MOUsPage() {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex items-center gap-2">
-            <Input placeholder={t('f3:search_placeholder') as string} value={search} onChange={(e) => setSearch(e.target.value)} />
-            <Button variant="outline" onClick={fetchMous}>{t('f3:search')}</Button>
+            <Select value={selectedState} onValueChange={setSelectedState}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Filter by State" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All States</SelectItem>
+                {availableStates.map(state => (
+                  <SelectItem key={state} value={state}>{state}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           {loading ? (
@@ -176,17 +205,24 @@ export default function F3MOUsPage() {
                     <TableCell>{m.end_date ? new Date(m.end_date).toLocaleDateString() : '-'}</TableCell>
                     <TableCell>{new Date(m.created_at).toLocaleDateString()}</TableCell>
                     <TableCell>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1">
                         <Button
-                          variant="outline"
-                          size="sm"
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
                           onClick={async () => {
                           setActiveMou(m)
+                          setEditMode(false)
+                          setEditingMou({})
                           setPreviewOpen(true)
                           try {
                             const res = await fetch(`/api/f3/mous/${m.id}`)
                             const data = await res.json()
                             setDetail(data)
+                            // Update activeMou with latest data including override fields
+                            if (data.mou) {
+                              setActiveMou(data.mou)
+                            }
                             // Attempt lightweight auto-translation for aggregated project fields
                             const projects = data?.projects || (data?.project ? [data.project] : [])
                             const objStr = aggregateObjectives(projects) || ''
@@ -241,8 +277,9 @@ export default function F3MOUsPage() {
                             console.error('Failed loading detail', e)
                           }
                         }}
+                        title={t('f3:preview')}
                       >
-                        {t('f3:preview')}
+                        <Eye className="h-4 w-4" />
                       </Button>
                         <input
                           type="file"
@@ -279,47 +316,117 @@ export default function F3MOUsPage() {
                           }}
                         />
                         <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={m.payment_confirmation_file ? async () => {
+                            try {
+                              // First get the signed URL
+                              const response = await fetch(`/api/storage/signed-url?path=${encodeURIComponent(m.payment_confirmation_file || '')}`)
+                              if (!response.ok) {
+                                throw new Error('Failed to get signed URL')
+                              }
+                              const { url, error } = await response.json()
+                              if (error || !url) {
+                                throw new Error(error || 'No URL returned')
+                              }
+
+                              // Create a link and click it
+                              const link = document.createElement('a')
+                              link.href = url
+                              link.target = '_blank'
+                              link.rel = 'noopener noreferrer'
+                              document.body.appendChild(link)
+                              link.click()
+                              document.body.removeChild(link)
+                            } catch (error) {
+                              console.error('Error getting signed URL:', error)
+                              alert('Failed to open payment confirmation')
+                            }
+                          } : () => {
                             document.getElementById(`payment-upload-${m.id}`)?.click()
                           }}
+                          title={m.payment_confirmation_file ? t('f3:view_payment') : t('f3:add_payment')}
                         >
-                          {m.payment_confirmation_file ? t('f3:update_payment') : t('f3:add_payment')}
+                          {m.payment_confirmation_file ? (
+                            <Receipt className="h-4 w-4 text-green-600" />
+                          ) : (
+                            <Upload className="h-4 w-4 text-amber-600" />
+                          )}
                         </Button>
-                        {m.payment_confirmation_file && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={async () => {
-                              try {
-                                // First get the signed URL
-                                const response = await fetch(`/api/storage/signed-url?path=${encodeURIComponent(m.payment_confirmation_file || '')}`)
-                                if (!response.ok) {
-                                  throw new Error('Failed to get signed URL')
-                                }
-                                const { url, error } = await response.json()
-                                if (error || !url) {
-                                  throw new Error(error || 'No URL returned')
-                                }
+                        <input
+                          type="file"
+                          id={`signed-mou-upload-${m.id}`}
+                          className="hidden"
+                          accept=".pdf"
+                          onChange={async (e) => {
+                            const file = e.target.files?.[0]
+                            if (!file) return
 
-                                // Create a link and click it
-                                const link = document.createElement('a')
-                                link.href = url
-                                link.target = '_blank'
-                                link.rel = 'noopener noreferrer'
-                                document.body.appendChild(link)
-                                link.click()
-                                document.body.removeChild(link)
-                              } catch (error) {
-                                console.error('Error getting signed URL:', error)
-                                alert('Failed to open payment confirmation')
+                            try {
+                              const formData = new FormData()
+                              formData.append('file', file)
+
+                              const response = await fetch(`/api/f3/mous/${m.id}/signed-mou`, {
+                                method: 'POST',
+                                body: formData
+                              })
+
+                              if (!response.ok) {
+                                throw new Error('Failed to upload signed MOU')
                               }
-                            }}
-                            >
-                            {t('f3:view_payment')}
-                          </Button>
-                        )}
+
+                              // Refresh the MOUs list
+                              await fetchMous()
+                              alert('Signed MOU uploaded successfully')
+                            } catch (error) {
+                              console.error('Error uploading signed MOU:', error)
+                              alert('Failed to upload signed MOU')
+                            }
+
+                            // Clear the input
+                            e.target.value = ''
+                          }}
+                        />
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={m.signed_mou_file_key ? async () => {
+                            try {
+                              // First get the signed URL
+                              const response = await fetch(`/api/storage/signed-url?path=${encodeURIComponent(m.signed_mou_file_key || '')}`)
+                              if (!response.ok) {
+                                throw new Error('Failed to get signed URL')
+                              }
+                              const { url, error } = await response.json()
+                              if (error || !url) {
+                                throw new Error(error || 'No URL returned')
+                              }
+
+                              // Create a link and click it
+                              const link = document.createElement('a')
+                              link.href = url
+                              link.target = '_blank'
+                              link.rel = 'noopener noreferrer'
+                              document.body.appendChild(link)
+                              link.click()
+                              document.body.removeChild(link)
+                            } catch (error) {
+                              console.error('Error getting signed URL:', error)
+                              alert('Failed to open signed MOU')
+                            }
+                          } : () => {
+                            document.getElementById(`signed-mou-upload-${m.id}`)?.click()
+                          }}
+                          title={m.signed_mou_file_key ? 'View Signed MOU' : 'Upload Signed MOU'}
+                        >
+                          {m.signed_mou_file_key ? (
+                            <FileCheck className="h-4 w-4 text-green-600" />
+                          ) : (
+                            <FileSignature className="h-4 w-4 text-amber-600" />
+                          )}
+                        </Button>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -330,7 +437,13 @@ export default function F3MOUsPage() {
         </CardContent>
       </Card>
 
-      <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
+      <Dialog open={previewOpen} onOpenChange={(open) => {
+        setPreviewOpen(open)
+        if (!open) {
+          setEditMode(false)
+          setEditingMou({})
+        }
+      }}>
         <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{activeMou?.mou_code || 'MOU'}</DialogTitle>
@@ -342,18 +455,39 @@ export default function F3MOUsPage() {
                   {t('f3:mou_agreement', { lng: 'en' })}
                   <div className="text-sm text-muted-foreground" dir="rtl">{t('f3:mou_agreement', { lng: 'ar' })}</div>
                 </div>
-                <div className="text-sm">
-                  <div className="font-medium">{t('f3:between', { lng: 'en' })}</div>
-                  <div>{activeMou.partner_name}</div>
-                  <div className="font-medium mt-2">{t('f3:and', { lng: 'en' })}</div>
-                  <div>{activeMou.err_name}</div>
-                  <div className="mt-3" dir="rtl">
-                    <div className="font-medium">{t('f3:between', { lng: 'ar' })}</div>
-                    <div>{activeMou.partner_name}</div>
-                    <div className="font-medium mt-2">{t('f3:and', { lng: 'ar' })}</div>
-                    <div>{activeMou.err_name}</div>
+                {editMode ? (
+                  <div className="space-y-4">
+                    <div>
+                      <Label>{t('f3:between', { lng: 'en' })}</Label>
+                      <Input
+                        value={editingMou.partner_name || ''}
+                        onChange={(e) => setEditingMou({ ...editingMou, partner_name: e.target.value })}
+                        className="mt-1"
+                      />
+                    </div>
+                    <div>
+                      <Label>{t('f3:and', { lng: 'en' })}</Label>
+                      <Input
+                        value={editingMou.err_name || ''}
+                        onChange={(e) => setEditingMou({ ...editingMou, err_name: e.target.value })}
+                        className="mt-1"
+                      />
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  <div className="text-sm">
+                    <div className="font-medium">{t('f3:between', { lng: 'en' })}</div>
+                    <div>{activeMou.partner_name}</div>
+                    <div className="font-medium mt-2">{t('f3:and', { lng: 'en' })}</div>
+                    <div>{activeMou.err_name}</div>
+                    <div className="mt-3" dir="rtl">
+                      <div className="font-medium">{t('f3:between', { lng: 'ar' })}</div>
+                      <div>{activeMou.partner_name}</div>
+                      <div className="font-medium mt-2">{t('f3:and', { lng: 'ar' })}</div>
+                      <div>{activeMou.err_name}</div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="rounded-lg border p-4" data-mou-section="true">
@@ -481,10 +615,23 @@ export default function F3MOUsPage() {
 
               <div className="rounded-lg border p-4" data-mou-section="true">
                 <div className="font-semibold mb-2">6. {t('f3:approved_accounts')}</div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="rounded-md border p-3 text-sm whitespace-pre-wrap">{(aggregatedData.banking) || t('f3:approved_accounts_en_desc')}</div>
-                  <div className="rounded-md border p-3 text-sm whitespace-pre-wrap" dir="rtl">{(aggregatedData.banking) || t('f3:approved_accounts_ar_desc')}</div>
-                </div>
+                {editMode ? (
+                  <div>
+                    <Label>Banking Details</Label>
+                    <Textarea
+                      value={editingMou.banking_details_override ?? ''}
+                      onChange={(e) => setEditingMou({ ...editingMou, banking_details_override: e.target.value })}
+                      className="mt-1 min-h-[100px]"
+                      placeholder="Enter banking details..."
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">Leave empty to use aggregated data from projects</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="rounded-md border p-3 text-sm whitespace-pre-wrap">{(activeMou.banking_details_override || aggregatedData.banking) || t('f3:approved_accounts_en_desc')}</div>
+                    <div className="rounded-md border p-3 text-sm whitespace-pre-wrap" dir="rtl">{(activeMou.banking_details_override || aggregatedData.banking) || t('f3:approved_accounts_ar_desc')}</div>
+                  </div>
+                )}
               </div>
 
               <div className="rounded-lg border p-4" data-mou-section="true">
@@ -492,77 +639,168 @@ export default function F3MOUsPage() {
                   7. {t('f3:duration', { lng: 'en' })}
                   <div className="text-sm text-muted-foreground" dir="rtl">{t('f3:duration', { lng: 'ar' })}</div>
                 </div>
-                <p className="text-sm">{activeMou.end_date ? t('f3:duration_en_until', { lng: 'en', date: new Date(activeMou.end_date).toLocaleDateString() }) : t('f3:duration_en_open', { lng: 'en' })}</p>
-                <p className="text-sm" dir="rtl">{activeMou.end_date ? t('f3:duration_en_until', { lng: 'ar', date: new Date(activeMou.end_date).toLocaleDateString() }) : t('f3:duration_en_open', { lng: 'ar' })}</p>
+                {editMode ? (
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label>Start Date</Label>
+                      <Input
+                        type="date"
+                        value={editingMou.start_date ? new Date(editingMou.start_date).toISOString().split('T')[0] : ''}
+                        onChange={(e) => setEditingMou({ ...editingMou, start_date: e.target.value || null })}
+                        className="mt-1"
+                      />
+                    </div>
+                    <div>
+                      <Label>End Date</Label>
+                      <Input
+                        type="date"
+                        value={editingMou.end_date ? new Date(editingMou.end_date).toISOString().split('T')[0] : ''}
+                        onChange={(e) => setEditingMou({ ...editingMou, end_date: e.target.value || null })}
+                        className="mt-1"
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <p className="text-sm">
+                      {activeMou.start_date && activeMou.end_date
+                        ? `From ${new Date(activeMou.start_date).toLocaleDateString()} to ${new Date(activeMou.end_date).toLocaleDateString()}`
+                        : activeMou.end_date
+                        ? `Until ${new Date(activeMou.end_date).toLocaleDateString()}`
+                        : t('f3:duration_en_open', { lng: 'en' })}
+                    </p>
+                    <p className="text-sm" dir="rtl">
+                      {activeMou.start_date && activeMou.end_date
+                        ? `من ${new Date(activeMou.start_date).toLocaleDateString('ar')} إلى ${new Date(activeMou.end_date).toLocaleDateString('ar')}`
+                        : activeMou.end_date
+                        ? `حتى ${new Date(activeMou.end_date).toLocaleDateString('ar')}`
+                        : t('f3:duration_en_open', { lng: 'ar' })}
+                    </p>
+                  </>
+                )}
               </div>
 
               <div className="rounded-lg border p-4" data-mou-section="true">
                 <div className="font-semibold mb-2">8. {t('f3:contact_info', { lng: 'en' })}
                   <div className="text-sm text-muted-foreground" dir="rtl">{t('f3:contact_info', { lng: 'ar' })}</div>
                 </div>
-                {/* English labels */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <div className="font-medium mb-1">{t('f3:partner_label', { lng: 'en' })}</div>
-                    <div>{detail?.partner?.name || activeMou.partner_name}</div>
-                    {detail?.partner?.contact_person && (
-                      <div>{t('f3:representative', { lng: 'en' })}: {detail.partner.contact_person}</div>
-                    )}
-                    {detail?.partner?.position && (
-                      <div>{t('f3:position', { lng: 'en' })}: {detail.partner.position}</div>
-                    )}
-                    {detail?.partner?.email && (
-                      <div>{t('f3:email', { lng: 'en' })}: {detail.partner.email}</div>
-                    )}
-                    {detail?.partner?.phone_number && (
-                      <div>{t('f3:phone', { lng: 'en' })}: {detail.partner.phone_number}</div>
-                    )}
+                {editMode ? (
+                  <div className="space-y-4">
+                    <div>
+                      <Label>Partner Contact Information</Label>
+                      <Textarea
+                        value={editingMou.partner_contact_override ?? ''}
+                        onChange={(e) => setEditingMou({ ...editingMou, partner_contact_override: e.target.value })}
+                        className="mt-1 min-h-[80px]"
+                        placeholder="Enter partner contact information..."
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">Leave empty to use data from partners table</p>
+                    </div>
+                    <div>
+                      <Label>ERR Contact Information</Label>
+                      <Textarea
+                        value={editingMou.err_contact_override ?? ''}
+                        onChange={(e) => setEditingMou({ ...editingMou, err_contact_override: e.target.value })}
+                        className="mt-1 min-h-[80px]"
+                        placeholder="Enter ERR contact information..."
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">Leave empty to use data from projects</p>
+                    </div>
                   </div>
-                  <div>
-                    <div className="font-medium mb-1">{t('f3:err_label', { lng: 'en' })}</div>
-                    <div>{activeMou.err_name}</div>
-                    {((detail?.projects && detail.projects[0]?.program_officer_name) || detail?.project?.program_officer_name) && (
-                      <div>{t('f3:representative', { lng: 'en' })}: {(detail?.projects && detail.projects[0]?.program_officer_name) || detail?.project?.program_officer_name}</div>
-                    )}
-                    {((detail?.projects && detail.projects[0]?.program_officer_phone) || detail?.project?.program_officer_phone) && (
-                      <div>{t('f3:phone', { lng: 'en' })}: {(detail?.projects && detail.projects[0]?.program_officer_phone) || detail?.project?.program_officer_phone}</div>
-                    )}
-                  </div>
-                </div>
-                {/* Arabic labels */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm mt-4" dir="rtl">
-                  <div>
-                    <div className="font-medium mb-1">{t('f3:partner_label', { lng: 'ar' })}</div>
-                    <div>{detail?.partner?.name || activeMou.partner_name}</div>
-                    {detail?.partner?.contact_person && (
-                      <div>{t('f3:representative', { lng: 'ar' })}: {detail.partner.contact_person}</div>
-                    )}
-                    {detail?.partner?.position && (
-                      <div>{t('f3:position', { lng: 'ar' })}: {detail.partner.position}</div>
-                    )}
-                    {detail?.partner?.email && (
-                      <div>{t('f3:email', { lng: 'ar' })}: {detail.partner.email}</div>
-                    )}
-                    {detail?.partner?.phone_number && (
-                      <div>{t('f3:phone', { lng: 'ar' })}: {detail.partner.phone_number}</div>
-                    )}
-                  </div>
-                  <div>
-                    <div className="font-medium mb-1">{t('f3:err_label', { lng: 'ar' })}</div>
-                    <div>{activeMou.err_name}</div>
-                    {((detail?.projects && detail.projects[0]?.program_officer_name) || detail?.project?.program_officer_name) && (
-                      <div>{t('f3:representative', { lng: 'ar' })}: {(detail?.projects && detail.projects[0]?.program_officer_name) || detail?.project?.program_officer_name}</div>
-                    )}
-                    {((detail?.projects && detail.projects[0]?.program_officer_phone) || detail?.project?.program_officer_phone) && (
-                      <div>{t('f3:phone', { lng: 'ar' })}: {(detail?.projects && detail.projects[0]?.program_officer_phone) || detail?.project?.program_officer_phone}</div>
-                    )}
-                  </div>
-                </div>
+                ) : (
+                  <>
+                    {/* English labels */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                      <div>
+                        <div className="font-medium mb-1">{t('f3:partner_label', { lng: 'en' })}</div>
+                        <div className="whitespace-pre-wrap">{activeMou.partner_contact_override || (detail?.partner ? `${detail.partner.name}${detail.partner.contact_person ? `\n${t('f3:representative', { lng: 'en' })}: ${detail.partner.contact_person}` : ''}${detail.partner.position ? `\n${t('f3:position', { lng: 'en' })}: ${detail.partner.position}` : ''}${detail.partner.email ? `\n${t('f3:email', { lng: 'en' })}: ${detail.partner.email}` : ''}${detail.partner.phone_number ? `\n${t('f3:phone', { lng: 'en' })}: ${detail.partner.phone_number}` : ''}` : activeMou.partner_name)}</div>
+                      </div>
+                      <div>
+                        <div className="font-medium mb-1">{t('f3:err_label', { lng: 'en' })}</div>
+                        <div className="whitespace-pre-wrap">{activeMou.err_contact_override || `${activeMou.err_name}${((detail?.projects && detail.projects[0]?.program_officer_name) || detail?.project?.program_officer_name) ? `\n${t('f3:representative', { lng: 'en' })}: ${(detail?.projects && detail.projects[0]?.program_officer_name) || detail?.project?.program_officer_name}` : ''}${((detail?.projects && detail.projects[0]?.program_officer_phone) || detail?.project?.program_officer_phone) ? `\n${t('f3:phone', { lng: 'en' })}: ${(detail?.projects && detail.projects[0]?.program_officer_phone) || detail?.project?.program_officer_phone}` : ''}`}</div>
+                      </div>
+                    </div>
+                    {/* Arabic labels */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm mt-4" dir="rtl">
+                      <div>
+                        <div className="font-medium mb-1">{t('f3:partner_label', { lng: 'ar' })}</div>
+                        <div className="whitespace-pre-wrap">{activeMou.partner_contact_override || (detail?.partner ? `${detail.partner.name}${detail.partner.contact_person ? `\n${t('f3:representative', { lng: 'ar' })}: ${detail.partner.contact_person}` : ''}${detail.partner.position ? `\n${t('f3:position', { lng: 'ar' })}: ${detail.partner.position}` : ''}${detail.partner.email ? `\n${t('f3:email', { lng: 'ar' })}: ${detail.partner.email}` : ''}${detail.partner.phone_number ? `\n${t('f3:phone', { lng: 'ar' })}: ${detail.partner.phone_number}` : ''}` : activeMou.partner_name)}</div>
+                      </div>
+                      <div>
+                        <div className="font-medium mb-1">{t('f3:err_label', { lng: 'ar' })}</div>
+                        <div className="whitespace-pre-wrap">{activeMou.err_contact_override || `${activeMou.err_name}${((detail?.projects && detail.projects[0]?.program_officer_name) || detail?.project?.program_officer_name) ? `\n${t('f3:representative', { lng: 'ar' })}: ${(detail?.projects && detail.projects[0]?.program_officer_name) || detail?.project?.program_officer_name}` : ''}${((detail?.projects && detail.projects[0]?.program_officer_phone) || detail?.project?.program_officer_phone) ? `\n${t('f3:phone', { lng: 'ar' })}: ${(detail?.projects && detail.projects[0]?.program_officer_phone) || detail?.project?.program_officer_phone}` : ''}`}</div>
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
 
               <div className="mt-2 flex justify-end gap-2">
-                <Button variant="outline" onClick={() => setPreviewOpen(false)}>Close</Button>
-                <Button
+                {editMode ? (
+                  <>
+                    <Button variant="outline" onClick={() => {
+                      setEditMode(false)
+                      setEditingMou({})
+                    }} disabled={saving}>
+                      Cancel
+                    </Button>
+                    <Button
+                      onClick={async () => {
+                        try {
+                          setSaving(true)
+                          const response = await fetch(`/api/f3/mous/${activeMou.id}`, {
+                            method: 'PATCH',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(editingMou)
+                          })
+                          if (!response.ok) {
+                            throw new Error('Failed to save changes')
+                          }
+                          const updated = await response.json()
+                          setActiveMou(updated)
+                          setEditMode(false)
+                          setEditingMou({})
+                          // Refresh the MOUs list
+                          await fetchMous()
+                          alert('MOU updated successfully')
+                        } catch (error) {
+                          console.error('Error saving MOU:', error)
+                          alert('Failed to save changes')
+                        } finally {
+                          setSaving(false)
+                        }
+                      }}
+                      disabled={saving}
+                    >
+                      {saving ? 'Saving...' : 'Save Changes'}
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <Button variant="outline" onClick={() => setPreviewOpen(false)}>Close</Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setEditMode(true)
+                        // Initialize with current display values (override if exists, otherwise aggregated/fallback data)
+                        const currentBanking = activeMou?.banking_details_override || aggregatedData.banking || ''
+                        const currentPartnerContact = activeMou?.partner_contact_override || (detail?.partner ? `${detail.partner.name}${detail.partner.contact_person ? `\nRepresentative: ${detail.partner.contact_person}` : ''}${detail.partner.position ? `\nPosition: ${detail.partner.position}` : ''}${detail.partner.email ? `\nEmail: ${detail.partner.email}` : ''}${detail.partner.phone_number ? `\nPhone: ${detail.partner.phone_number}` : ''}` : activeMou?.partner_name || '')
+                        const currentErrContact = activeMou?.err_contact_override || `${activeMou?.err_name || ''}${((detail?.projects && detail.projects[0]?.program_officer_name) || detail?.project?.program_officer_name) ? `\nRepresentative: ${(detail?.projects && detail.projects[0]?.program_officer_name) || detail?.project?.program_officer_name}` : ''}${((detail?.projects && detail.projects[0]?.program_officer_phone) || detail?.project?.program_officer_phone) ? `\nPhone: ${(detail?.projects && detail.projects[0]?.program_officer_phone) || detail?.project?.program_officer_phone}` : ''}`
+                        
+                        setEditingMou({
+                          partner_name: activeMou?.partner_name || '',
+                          err_name: activeMou?.err_name || '',
+                          banking_details_override: activeMou?.banking_details_override !== null && activeMou?.banking_details_override !== undefined ? activeMou.banking_details_override : currentBanking,
+                          partner_contact_override: activeMou?.partner_contact_override !== null && activeMou?.partner_contact_override !== undefined ? activeMou.partner_contact_override : currentPartnerContact,
+                          err_contact_override: activeMou?.err_contact_override !== null && activeMou?.err_contact_override !== undefined ? activeMou.err_contact_override : currentErrContact,
+                          start_date: activeMou?.start_date || null,
+                          end_date: activeMou?.end_date || null
+                        })
+                      }}
+                    >
+                      Edit
+                    </Button>
+                    <Button
                   onClick={async () => {
                     try {
                       setExporting(true)
@@ -694,10 +932,12 @@ export default function F3MOUsPage() {
                       setExporting(false)
                     }
                   }}
-                  disabled={exporting}
+                  disabled={exporting || editMode}
                 >
                   {exporting ? 'Generating…' : 'Download PDF'}
                 </Button>
+                  </>
+                )}
               </div>
             </div>
           )}

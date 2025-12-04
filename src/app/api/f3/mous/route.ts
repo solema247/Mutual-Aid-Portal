@@ -188,6 +188,7 @@ export async function POST(request: Request) {
           ${aggregated.beneficiaries ? `<div style="margin-top:6px;"><strong>Target Beneficiaries</strong><div>${String(aggregated.beneficiaries).replace(/\n/g,'<br/>')}</div></div>` : ''}
           ${aggregated.activities ? `<div style="margin-top:6px;"><strong>Planned Activities</strong><div>${String(aggregated.activities).replace(/\n/g,'<br/>')}</div></div>` : ''}
           ${(aggregated.locations.localities || aggregated.locations.state) ? `<div class="muted" style="margin-top:6px;">Location: ${aggregated.locations.localities || ''} / ${aggregated.locations.state || ''}</div>` : ''}
+          ${inserted.start_date ? `<div class="muted" style="margin-top:6px;">Start Date: ${inserted.start_date}</div>` : ''}
         </div>
       </div>
       <div class="col">
@@ -240,19 +241,22 @@ export async function POST(request: Request) {
   <div class="section">
     <h2>6. Approved Accounts</h2>
     <div class="row">
-      <div class="col"><div class="box">${aggregated.banking ? String(aggregated.banking).replace(/\n/g,'<br/>') : 'Account details as shared and approved by ERR will be used for disbursement.'}</div></div>
-      <div class="col"><div class="box rtl">${aggregated.banking ? String(aggregated.banking).replace(/\n/g,'<br/>') : 'تُستخدم تفاصيل الحساب المعتمدة من غرفة الطوارئ في عمليات الصرف.'}</div></div>
+      <div class="col"><div class="box">${inserted.banking_details_override ? String(inserted.banking_details_override).replace(/\n/g,'<br/>') : (aggregated.banking ? String(aggregated.banking).replace(/\n/g,'<br/>') : 'Account details as shared and approved by ERR will be used for disbursement.')}</div></div>
+      <div class="col"><div class="box rtl">${inserted.banking_details_override ? String(inserted.banking_details_override).replace(/\n/g,'<br/>') : (aggregated.banking ? String(aggregated.banking).replace(/\n/g,'<br/>') : 'تُستخدم تفاصيل الحساب المعتمدة من غرفة الطوارئ في عمليات الصرف.')}</div></div>
     </div>
   </div>
 
   <div class="section">
     <h2>7. Duration</h2>
-    <div>This MOU is effective upon signature by authorized officials of both parties. ${end_date ? `It will terminate on ${end_date}.` : ''} Either party may terminate with written notification.</div>
+    <div>This MOU is effective ${inserted.start_date ? `from ${inserted.start_date}` : 'upon signature by authorized officials of both parties'}. ${end_date ? `It will terminate on ${end_date}.` : ''} Either party may terminate with written notification.</div>
   </div>
 
   <div class="section">
     <h2>8. Contact Information</h2>
-    <div>Partner: ${inserted.partner_name}<br/>ERR: ${inserted.err_name}</div>
+    <div class="row">
+      <div class="col"><div class="box">${inserted.partner_contact_override ? String(inserted.partner_contact_override).replace(/\n/g,'<br/>') : `Partner: ${inserted.partner_name}`}</div></div>
+      <div class="col"><div class="box">${inserted.err_contact_override ? String(inserted.err_contact_override).replace(/\n/g,'<br/>') : `ERR: ${inserted.err_name}`}</div></div>
+    </div>
   </div>
 
 </body>
