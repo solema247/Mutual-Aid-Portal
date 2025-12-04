@@ -300,8 +300,9 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved }: UploadF4M
       setAiOutput(parseJson.aiOutput || null)
       setExpensesDraft((parseJson.expensesDraft || []).map((ex: any) => ({
         ...ex,
-        // initialize display amount to SDG if present, else fallback to USD
-        expense_amount: ex.expense_amount_sdg ?? ex.expense_amount ?? 0,
+        // Ensure both SDG and USD amounts are preserved
+        expense_amount_sdg: ex.expense_amount_sdg ?? null,
+        expense_amount: ex.expense_amount ?? null,
         // default payment method so it persists even if user doesn't touch the select
         payment_method: ex.payment_method || 'Bank Transfer'
       })))
@@ -325,13 +326,17 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved }: UploadF4M
     }
     setIsLoading(true)
     try {
-      const totalFromTable = expensesDraft.reduce((s, ex) => s + (Number(ex.expense_amount) || 0), 0)
-      const remainderComputed = (projectMeta?.total_grant_from_project || 0) - totalFromTable
+      const totalExpensesSDG = expensesDraft.reduce((s, ex) => s + (Number(ex.expense_amount_sdg) || 0), 0)
+      const totalExpensesUSD = expensesDraft.reduce((s, ex) => s + (Number(ex.expense_amount) || 0), 0)
+      const totalGrantUSD = projectMeta?.total_grant_from_project ?? 0
+      const remainderUSD = totalGrantUSD - totalExpensesUSD
+      
       const summaryToSave = {
         ...summaryDraft,
-        total_grant: projectMeta?.total_grant_from_project ?? null,
-        total_expenses: totalFromTable,
-        remainder: remainderComputed
+        total_grant: totalGrantUSD,
+        total_expenses: totalExpensesUSD,
+        total_expenses_sdg: totalExpensesSDG,
+        remainder: remainderUSD
       }
       const res = await fetch('/api/f4/save', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ project_id: projectId, summary: summaryToSave, expenses: expensesDraft, file_key_temp: tempKey }) })
       const json = await res.json()
@@ -361,6 +366,7 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved }: UploadF4M
     setRawOcr('')
     setActiveTab('form')
     setAiOutput(null)
+    setFxRate(null)
   }
 
   return (
@@ -493,13 +499,17 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved }: UploadF4M
                   <Input type="number" value={fxRate ?? ''} onChange={(e)=>{
                     const v = parseFloat(e.target.value)
                     setFxRate(isNaN(v) ? null : v)
+                    // When exchange rate is set, calculate USD from SDG for all expenses
                     if (!isNaN(v) && v > 0) {
                       setExpensesDraft(prev => prev.map((ex:any)=>{
-                        const sdg = ex.expense_amount_sdg ?? ex.expense_amount
-                        return {
-                          ...ex,
-                          expense_amount: typeof sdg === 'number' ? +(sdg / v).toFixed(2) : ex.expense_amount
+                        const sdg = ex.expense_amount_sdg
+                        if (typeof sdg === 'number' && sdg > 0) {
+                          return {
+                            ...ex,
+                            expense_amount: +(sdg / v).toFixed(2)
+                          }
                         }
+                        return ex
                       }))
                     }
                   }} placeholder={t('f4.preview.labels.fx_placeholder') as string} />
@@ -517,7 +527,8 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved }: UploadF4M
                   onClick={() => setExpensesDraft(prev => ([...prev, {
                     expense_activity: '',
                     expense_description: '',
-                    expense_amount: 0,
+                    expense_amount_sdg: null,
+                    expense_amount: null,
                     payment_date: '',
                     payment_method: 'Bank Transfer',
                     receipt_no: '',
@@ -533,13 +544,14 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved }: UploadF4M
                   <Table className="select-text">
                     <TableHeader>
                       <TableRow>
-                        <TableHead className="w-[16%] py-1 px-2 text-xs">{t('f4.preview.expenses.cols.activity')}</TableHead>
-                        <TableHead className="w-[24%] py-1 px-2 text-xs">{t('f4.preview.expenses.cols.description')}</TableHead>
-                        <TableHead className="w-[14%] py-1 px-2 text-right text-xs">{t('f4.preview.expenses.cols.amount')}</TableHead>
-                        <TableHead className="w-[14%] py-1 px-2 text-xs">{t('f4.preview.expenses.cols.payment_date')}</TableHead>
-                        <TableHead className="w-[12%] py-1 px-2 text-xs">{t('f4.preview.expenses.cols.method')}</TableHead>
-                        <TableHead className="w-[12%] py-1 px-2 text-xs">{t('f4.preview.expenses.cols.receipt_no')}</TableHead>
-                        <TableHead className="w-[18%] py-1 px-2 text-xs">{t('f4.preview.expenses.cols.seller')}</TableHead>
+                        <TableHead className="w-[14%] py-1 px-2 text-xs">{t('f4.preview.expenses.cols.activity')}</TableHead>
+                        <TableHead className="w-[20%] py-1 px-2 text-xs">{t('f4.preview.expenses.cols.description')}</TableHead>
+                        <TableHead className="w-[10%] py-1 px-2 text-right text-xs">Amount (SDG)</TableHead>
+                        <TableHead className="w-[10%] py-1 px-2 text-right text-xs">Amount (USD)</TableHead>
+                        <TableHead className="w-[12%] py-1 px-2 text-xs">{t('f4.preview.expenses.cols.payment_date')}</TableHead>
+                        <TableHead className="w-[10%] py-1 px-2 text-xs">{t('f4.preview.expenses.cols.method')}</TableHead>
+                        <TableHead className="w-[10%] py-1 px-2 text-xs">{t('f4.preview.expenses.cols.receipt_no')}</TableHead>
+                        <TableHead className="w-[14%] py-1 px-2 text-xs">{t('f4.preview.expenses.cols.seller')}</TableHead>
                         <TableHead className="w-[8%] py-1 px-2 text-xs text-right">{t('f4.preview.expenses.cols.actions')}</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -557,8 +569,29 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved }: UploadF4M
                             }} />
                           </TableCell>
                           <TableCell className="py-1 px-2 text-right">
-                            <Input className="h-8" type="number" placeholder={t('f4.preview.expenses.cols.amount') as string} value={ex.expense_amount ?? ''} onChange={(e)=>{
-                              const arr=[...expensesDraft]; arr[idx]={...arr[idx], expense_amount: parseFloat(e.target.value)||0}; setExpensesDraft(arr)
+                            <Input className="h-8" type="number" placeholder="SDG" value={ex.expense_amount_sdg ?? ''} onChange={(e)=>{
+                              const enteredValue = parseFloat(e.target.value) || 0
+                              const arr = [...expensesDraft]
+                              arr[idx] = {
+                                ...arr[idx],
+                                expense_amount_sdg: enteredValue || null,
+                                // Auto-calculate USD if exchange rate is set
+                                expense_amount: (fxRate && fxRate > 0 && enteredValue > 0) ? +(enteredValue / fxRate).toFixed(2) : arr[idx].expense_amount
+                              }
+                              setExpensesDraft(arr)
+                            }} />
+                          </TableCell>
+                          <TableCell className="py-1 px-2 text-right">
+                            <Input className="h-8" type="number" placeholder="USD" value={ex.expense_amount ?? ''} onChange={(e)=>{
+                              const enteredValue = parseFloat(e.target.value) || 0
+                              const arr = [...expensesDraft]
+                              arr[idx] = {
+                                ...arr[idx],
+                                expense_amount: enteredValue || null,
+                                // Auto-calculate SDG if exchange rate is set
+                                expense_amount_sdg: (fxRate && fxRate > 0 && enteredValue > 0) ? +(enteredValue * fxRate).toFixed(2) : arr[idx].expense_amount_sdg
+                              }
+                              setExpensesDraft(arr)
                             }} />
                           </TableCell>
                           <TableCell className="py-1 px-2">
@@ -611,15 +644,19 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved }: UploadF4M
             {/* Financials */}
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label>{t('f4.preview.financials.total_grant')}</Label>
+                <Label>{t('f4.preview.financials.total_grant')} (USD)</Label>
                 <div className="h-10 flex items-center px-3 rounded border bg-muted/50">{(projectMeta?.total_grant_from_project ?? 0).toLocaleString()}</div>
               </div>
               <div>
-                <Label>{t('f4.preview.financials.total_expenses')}</Label>
-                <div className="h-10 flex items-center px-3 rounded border bg-muted/50">{expensesDraft.reduce((s, ex) => s + (ex.expense_amount || 0), 0).toLocaleString()}</div>
+                <Label>{t('f4.preview.financials.total_expenses')} (USD)</Label>
+                <div className="h-10 flex items-center px-3 rounded border bg-muted/50">{expensesDraft.reduce((s, ex) => s + (Number(ex.expense_amount) || 0), 0).toLocaleString()}</div>
               </div>
               <div>
-                <Label>{t('f4.preview.financials.remainder')}</Label>
+                <Label>{t('f4.preview.financials.total_expenses')} (SDG)</Label>
+                <div className="h-10 flex items-center px-3 rounded border bg-muted/50">{expensesDraft.reduce((s, ex) => s + (Number(ex.expense_amount_sdg) || 0), 0).toLocaleString()}</div>
+              </div>
+              <div>
+                <Label>{t('f4.preview.financials.remainder')} (USD)</Label>
                 <Input type="number" value={(projectMeta?.total_grant_from_project || 0) - expensesDraft.reduce((s, ex) => s + (Number(ex.expense_amount) || 0), 0)} readOnly />
               </div>
               <div>
