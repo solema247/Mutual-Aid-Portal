@@ -194,6 +194,11 @@ export async function POST(request: Request) {
     const state = states[0]
     console.log('[grant-serials/create] Successfully got state:', state.state_short)
 
+    // Ensure donor is defined
+    if (!donor || !donor.short_name) {
+      throw new Error('Donor information is missing')
+    }
+
     // Get the next serial number by extracting the highest existing serial number
     // Format: LCC-{donor}-{state}-{yymm}-{serialNumber}
     // We need to find the highest serialNumber for this donor/state/yymm/grant_call combination
