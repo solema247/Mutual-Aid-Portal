@@ -39,6 +39,8 @@
     "select_grant_serial": "Select Grant Serial",
     "grant_serial_placeholder": "4-digit serial",
     "create_new_serial": "Create New Serial",
+    "grant_segment": "Grant Segment",
+    "select_grant_segment": "Select Grant Segment",
     "generated_id": "Generated Form ID",
     "generating": "Generating...",
     "complete_fields": "Complete required fields to generate ID",

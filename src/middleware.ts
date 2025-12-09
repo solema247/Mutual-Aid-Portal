@@ -7,8 +7,8 @@ export async function middleware(req: NextRequest) {
   const requestUrl = new URL(req.url)
   const path = req.nextUrl.pathname
   
-  // Early return for login and change-password pages - skip session checks to avoid rate limits
-  if (path === '/login' || path === '/change-password') {
+  // Early return for login, change-password, and create-test-user pages - skip session checks to avoid rate limits
+  if (path === '/login' || path === '/change-password' || path === '/create-test-user') {
     // Only check session if we need to redirect authenticated users away from login
     // But do it safely with error handling
     try {

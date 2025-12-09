@@ -36,7 +36,8 @@ export default function DirectUpload() {
     cycle_state_allocation_id: '',
     grant_serial_id: '',
     currency: 'USD',
-    exchange_rate: 2700
+    exchange_rate: 2700,
+    grant_segment: undefined
   })
   
   const [isLoading, setIsLoading] = useState(false)
@@ -455,6 +456,7 @@ export default function DirectUpload() {
           temp_file_key: tempKey, // Store temp file path
           original_text: originalText,
           language: sourceLanguage,
+          grant_segment: formData.grant_segment || null,
           // Remove these fields - will be set in F2:
           // donor_id: null,
           // grant_call_id: null,
@@ -480,7 +482,8 @@ export default function DirectUpload() {
         cycle_state_allocation_id: '',
         grant_serial_id: '',
         currency: 'USD',
-        exchange_rate: 2700
+        exchange_rate: 2700,
+        grant_segment: undefined
       })
       setSelectedFile(null)
       ;(window as any).__f1_temp_key__ = null
@@ -720,7 +723,28 @@ export default function DirectUpload() {
             {/* No date/serial selection in upload-first step */}
               </div>
 
-          {/* Row 4: Primary and Secondary Sectors */}
+          {/* Row 4: Grant Segment */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <Label className="mb-2">{t('fsystem:f1.grant_segment')}</Label>
+              <Select
+                value={formData.grant_segment || ''}
+                onValueChange={(value) => handleInputChange('grant_segment', value ? (value as 'Flexible' | 'Sustainability' | 'WRR' | 'Capacity Building') : undefined)}
+              >
+                <SelectTrigger className="h-[38px] w-full">
+                  <SelectValue placeholder={t('fsystem:f1.select_grant_segment')} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Flexible">Flexible</SelectItem>
+                  <SelectItem value="Sustainability">Sustainability</SelectItem>
+                  <SelectItem value="WRR">WRR</SelectItem>
+                  <SelectItem value="Capacity Building">Capacity Building</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {/* Row 5: Primary and Secondary Sectors */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <Label className="mb-2">{t('fsystem:f1.primary_sectors')}</Label>
