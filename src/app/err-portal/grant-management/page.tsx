@@ -8,7 +8,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import { ArrowLeft } from 'lucide-react'
 
-import { CycleManager } from './components'
+import { CycleManager, GrantCallsManager } from './components'
 
 export default function GrantManagementPage() {
   const { t } = useTranslation(['err', 'common'])
@@ -139,6 +139,9 @@ export default function GrantManagementPage() {
           <CardContent className="text-2xl font-bold">{counts.committed}</CardContent>
         </Card>
       </div>
+
+      {/* Grant Calls Management */}
+      <GrantCallsManager />
 
       {/* Cycle Management System */}
       <CycleManager />

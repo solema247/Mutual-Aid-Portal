@@ -391,8 +391,8 @@ export default function F3MOUsPage() {
     }
   }
   
-  const calculateGrantRemaining = async (grantCallId: string, fundingCycleId: string) => {
-    if (!grantCallId || !fundingCycleId) {
+  const calculateGrantRemaining = async (grantCallId: string, fundingCycleId?: string) => {
+    if (!grantCallId) {
       setGrantRemaining(null)
       return
     }
@@ -400,15 +400,16 @@ export default function F3MOUsPage() {
     try {
       setGrantRemaining(prev => prev ? { ...prev, loading: true } : { total: 0, committed: 0, allocated: 0, remaining: 0, loading: true })
       
-      // Get total included amount from cycle_grant_inclusions
+      // Get total included amount from ALL cycle_grant_inclusions for this grant call
+      // Sum across all cycles (not just the selected cycle)
       const { data: inclusions, error: inclusionsError } = await supabase
         .from('cycle_grant_inclusions')
         .select('amount_included')
         .eq('grant_call_id', grantCallId)
-        .eq('cycle_id', fundingCycleId)
       
       if (inclusionsError) throw inclusionsError
       
+      // Sum all amount_included values across all cycles for this grant call
       const totalIncluded = (inclusions || []).reduce((sum: number, inc: any) => sum + (inc.amount_included || 0), 0)
       
       // Get committed and allocated amounts from projects

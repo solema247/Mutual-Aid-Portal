@@ -23,6 +23,13 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import {
   Dialog,
   DialogContent,
   DialogHeader,
@@ -41,11 +48,10 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
 
-import type { FundingCycle, CycleBudgetSummary } from '@/types/cycles'
+import type { FundingCycle } from '@/types/cycles'
 import CycleCreationForm from './CycleCreationForm'
-import GrantPoolSelector from './GrantPoolSelector'
-import CycleBudgetDashboard from './CycleBudgetDashboard'
-import StateAllocationManager from './StateAllocationManager'
+import CycleDetailsTable from './CycleDetailsTable'
+import { supabase } from '@/lib/supabaseClient'
 
 const formSchema = z.object({
   cycle_number: z.number().min(1, "Cycle number must be at least 1"),
@@ -60,14 +66,13 @@ type FormData = z.infer<typeof formSchema>
 export default function CycleManager() {
   const { t } = useTranslation(['err', 'common'])
   const [cycles, setCycles] = useState<FundingCycle[]>([])
+  const [filteredCycles, setFilteredCycles] = useState<FundingCycle[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isCreateOpen, setIsCreateOpen] = useState(false)
-  const [selectedCycle, setSelectedCycle] = useState<FundingCycle | null>(null)
-  const [budgetSummary, setBudgetSummary] = useState<CycleBudgetSummary | null>(null)
-  const [isRefreshingBudget, setIsRefreshingBudget] = useState(false)
   const [allocRefreshToken, setAllocRefreshToken] = useState(0)
-  const [isBudgetSummaryExpanded, setIsBudgetSummaryExpanded] = useState(true)
-  const [isFundingCyclesExpanded, setIsFundingCyclesExpanded] = useState(true)
+  const [donors, setDonors] = useState<Array<{ id: string; name: string; short_name: string | null }>>([])
+  const [selectedDonorFilter, setSelectedDonorFilter] = useState<string>('all')
+  const [cyclesWithGrants, setCyclesWithGrants] = useState<Record<string, { grant_call_id: string; donor_id: string }>>({})
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
@@ -82,7 +87,69 @@ export default function CycleManager() {
 
   useEffect(() => {
     fetchCycles()
+    fetchDonors()
   }, [])
+
+  useEffect(() => {
+    fetchCyclesWithGrants()
+  }, [cycles])
+
+  useEffect(() => {
+    filterCyclesByDonor()
+  }, [selectedDonorFilter, cycles, cyclesWithGrants])
+
+  const fetchDonors = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('donors')
+        .select('id, name, short_name')
+        .eq('status', 'active')
+        .order('name', { ascending: true })
+
+      if (error) throw error
+      setDonors(data || [])
+    } catch (error) {
+      console.error('Error fetching donors:', error)
+    }
+  }
+
+  const fetchCyclesWithGrants = async () => {
+    try {
+      const grantData: Record<string, { grant_call_id: string; donor_id: string }> = {}
+      
+      for (const cycle of cycles) {
+        const response = await fetch(`/api/cycles/${cycle.id}/grants`)
+        if (response.ok) {
+          const grantsData = await response.json()
+          if (grantsData && grantsData.length > 0) {
+            // The grantsData already includes grant_calls with donor information
+            const grantCall = grantsData[0]?.grant_calls
+            if (grantCall?.id && grantCall?.donor?.id) {
+              grantData[cycle.id] = {
+                grant_call_id: grantCall.id,
+                donor_id: grantCall.donor.id
+              }
+            }
+          }
+        }
+      }
+      setCyclesWithGrants(grantData)
+    } catch (error) {
+      console.error('Error fetching cycles with grants:', error)
+    }
+  }
+
+  const filterCyclesByDonor = () => {
+    if (selectedDonorFilter === 'all') {
+      setFilteredCycles(cycles)
+    } else {
+      const filtered = cycles.filter(cycle => {
+        const cycleGrant = cyclesWithGrants[cycle.id]
+        return cycleGrant?.donor_id === selectedDonorFilter
+      })
+      setFilteredCycles(filtered)
+    }
+  }
 
   const fetchCycles = async () => {
     try {
@@ -91,6 +158,7 @@ export default function CycleManager() {
       if (!response.ok) throw new Error('Failed to fetch cycles')
       const data = await response.json()
       setCycles(data)
+      setFilteredCycles(data) // Initialize filtered cycles with all cycles
     } catch (error) {
       console.error('Error fetching cycles:', error)
     } finally {
@@ -98,105 +166,22 @@ export default function CycleManager() {
     }
   }
 
-  const fetchBudgetSummary = async (cycleId: string) => {
-    try {
-      const response = await fetch(`/api/cycles/budget-summary/${cycleId}`)
-      if (!response.ok) throw new Error('Failed to fetch budget summary')
-      const data = await response.json()
-      setBudgetSummary(data)
-    } catch (error) {
-      console.error('Error fetching budget summary:', error)
-    }
-  }
-
-  const handleRefreshBudget = async () => {
-    if (!selectedCycle) return
-    
-    try {
-      setIsRefreshingBudget(true)
-      await fetchBudgetSummary(selectedCycle.id)
-    } catch (error) {
-      console.error('Error refreshing budget summary:', error)
-    } finally {
-      setIsRefreshingBudget(false)
-    }
-  }
-
-  const handleGrantsChanged = async () => {
-    await handleRefreshBudget()
+  const handleGrantsChanged = () => {
     setAllocRefreshToken((t) => t + 1)
   }
 
-  const handleCycleSelect = (cycle: FundingCycle) => {
-    setSelectedCycle(cycle)
-    fetchBudgetSummary(cycle.id)
+  const handleRefreshBudget = () => {
+    setAllocRefreshToken((t) => t + 1)
   }
 
   const handleCycleCreated = () => {
     setIsCreateOpen(false)
-    fetchCycles()
+    fetchCycles().then(() => {
+      // Filter will be applied automatically via useEffect
+    })
     form.reset()
   }
 
-  const handleCloseCycle = async (cycleId: string) => {
-    if (!confirm(t('err:cycles.confirm_close'))) {
-      return
-    }
-
-    try {
-      const response = await fetch(`/api/cycles/${cycleId}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ status: 'closed' }),
-      })
-
-      if (!response.ok) throw new Error('Failed to close cycle')
-
-      // Refresh cycles and update selected cycle if it was the one closed
-      await fetchCycles()
-      if (selectedCycle?.id === cycleId) {
-        const updatedCycle = cycles.find(c => c.id === cycleId)
-        if (updatedCycle) {
-          setSelectedCycle({ ...updatedCycle, status: 'closed' })
-        }
-      }
-    } catch (error) {
-      console.error('Error closing cycle:', error)
-      alert('Failed to close cycle. Please try again.')
-    }
-  }
-
-  const handleReopenCycle = async (cycleId: string) => {
-    if (!confirm(t('err:cycles.confirm_reopen'))) {
-      return
-    }
-
-    try {
-      const response = await fetch(`/api/cycles/${cycleId}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ status: 'open' }),
-      })
-
-      if (!response.ok) throw new Error('Failed to reopen cycle')
-
-      // Refresh cycles and update selected cycle if it was the one reopened
-      await fetchCycles()
-      if (selectedCycle?.id === cycleId) {
-        const updatedCycle = cycles.find(c => c.id === cycleId)
-        if (updatedCycle) {
-          setSelectedCycle({ ...updatedCycle, status: 'open' })
-        }
-      }
-    } catch (error) {
-      console.error('Error reopening cycle:', error)
-      alert('Failed to reopen cycle. Please try again.')
-    }
-  }
 
   const getStatusBadge = (status: string) => {
     return (
@@ -227,263 +212,89 @@ export default function CycleManager() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto p-6 space-y-8">
-      <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-semibold">{t('err:cycles.title')}</h2>
-        <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-          <DialogTrigger asChild>
-            <Button className="bg-[#007229] hover:bg-[#007229]/90 text-white">
-              <Plus className="h-4 w-4 mr-2" />
-              {t('err:cycles.create_new')}
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[600px]">
-            <DialogHeader>
-              <DialogTitle>{t('err:cycles.create_dialog_title')}</DialogTitle>
-            </DialogHeader>
-            <CycleCreationForm onSuccess={handleCycleCreated} />
-          </DialogContent>
-        </Dialog>
-      </div>
-
-      {/* 1. Funding Cycles Table */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle className="flex items-center gap-2">
-              <Calendar className="h-5 w-5" />
-              {t('err:cycles.table_title')}
-            </CardTitle>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setIsFundingCyclesExpanded(!isFundingCyclesExpanded)}
-              className="h-8 w-8 p-0"
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <CardTitle className="flex items-center gap-2">
+            <Calendar className="h-5 w-5" />
+            {t('err:cycles.table_title')}
+          </CardTitle>
+          <div className="flex items-center gap-2">
+            <Select
+              value={selectedDonorFilter}
+              onValueChange={setSelectedDonorFilter}
             >
-              {isFundingCyclesExpanded ? (
-                <ChevronUp className="h-4 w-4" />
-              ) : (
-                <ChevronDown className="h-4 w-4" />
-              )}
-            </Button>
+              <SelectTrigger className="w-40">
+                <SelectValue placeholder="Filter by Donor" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Donors</SelectItem>
+                {donors.map((donor) => (
+                  <SelectItem key={donor.id} value={donor.id}>
+                    {donor.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+              <DialogTrigger asChild>
+                <Button className="bg-[#007229] hover:bg-[#007229]/90 text-white">
+                  <Plus className="h-4 w-4 mr-2" />
+                  {t('err:cycles.create_new')}
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-[600px]">
+                <DialogHeader>
+                  <DialogTitle>{t('err:cycles.create_dialog_title')}</DialogTitle>
+                </DialogHeader>
+                <CycleCreationForm onSuccess={handleCycleCreated} />
+              </DialogContent>
+            </Dialog>
           </div>
-        </CardHeader>
-        {isFundingCyclesExpanded && (
-          <CardContent>
-            <div className="max-h-96 overflow-y-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>{t('err:cycles.headers.cycle')}</TableHead>
-                    <TableHead>{t('err:cycles.headers.year')}</TableHead>
-                    <TableHead>{t('err:cycles.headers.status')}</TableHead>
-                    <TableHead>{t('err:cycles.headers.period')}</TableHead>
-                    <TableHead>{t('err:cycles.headers.actions')}</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {cycles.map((cycle) => (
-                    <TableRow 
+        </div>
+      </CardHeader>
+      <CardContent>
+        <div className="overflow-x-auto">
+          {filteredCycles.length === 0 && cycles.length > 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              No cycles found for the selected donor filter.
+            </div>
+          ) : filteredCycles.length > 0 ? (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-[50px]"></TableHead>
+                  <TableHead>Cycle</TableHead>
+                  <TableHead>Year</TableHead>
+                  <TableHead>Grant</TableHead>
+                  <TableHead>Period</TableHead>
+                  <TableHead>Total Available</TableHead>
+                  <TableHead>Remaining</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredCycles.map((cycle) => {
+                  return (
+                    <CycleDetailsTable
                       key={cycle.id}
-                      className={cn(
-                        selectedCycle?.id === cycle.id && "bg-muted/50",
-                        "cursor-pointer hover:bg-muted/30"
-                      )}
-                      onClick={() => handleCycleSelect(cycle)}
-                    >
-                      <TableCell>
-                        <div>
-                          <div className="font-medium">{cycle.name}</div>
-                          <div className="text-sm text-muted-foreground">
-                            {t('err:cycles.cycle_number', { num: cycle.cycle_number })}
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>{cycle.year}</TableCell>
-                      <TableCell>{getStatusBadge(cycle.status)}</TableCell>
-                      <TableCell>
-                        {cycle.start_date && cycle.end_date ? (
-                          <div className="text-sm">
-                            <div>{new Date(cycle.start_date).toLocaleDateString()}</div>
-                            <div className="text-muted-foreground">
-                              {t('err:cycles.to')} {new Date(cycle.end_date).toLocaleDateString()}
-                            </div>
-                          </div>
-                        ) : (
-                          <span className="text-muted-foreground">{t('err:cycles.no_dates')}</span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <Button
-                            variant={selectedCycle?.id === cycle.id ? "default" : "outline"}
-                            size="sm"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              handleCycleSelect(cycle)
-                            }}
-                          >
-                            {selectedCycle?.id === cycle.id ? t('err:cycles.selected') : t('err:cycles.select')}
-                          </Button>
-                          {cycle.status === 'open' ? (
-                            <Button
-                              variant="destructive"
-                              size="sm"
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                handleCloseCycle(cycle.id)
-                              }}
-                            >
-                              {t('err:cycles.close')}
-                            </Button>
-                          ) : (
-                            <Button
-                              variant="default"
-                              size="sm"
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                handleReopenCycle(cycle.id)
-                              }}
-                              className="bg-green-600 hover:bg-green-700 text-white"
-                            >
-                              {t('err:cycles.reopen')}
-                            </Button>
-                          )}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                      cycle={cycle}
+                      onGrantsChanged={() => {
+                        handleGrantsChanged()
+                        fetchCyclesWithGrants()
+                      }}
+                      onAllocationsChanged={handleRefreshBudget}
+                    />
+                  )
+                })}
+              </TableBody>
+            </Table>
+          ) : (
+            <div className="text-center py-8 text-muted-foreground">
+              No funding cycles found. Create a new cycle to get started.
             </div>
-          </CardContent>
-        )}
-      </Card>
-
-      {/* 2. Funding Cycle Details */}
-      {selectedCycle && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center justify-between">
-              <span className="flex items-center gap-2">
-                <TrendingUp className="h-5 w-5" />
-                {t('err:cycles.details')} - {selectedCycle.name}
-              </span>
-              {selectedCycle.status === 'open' ? (
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  onClick={() => handleCloseCycle(selectedCycle.id)}
-                >
-                  {t('err:cycles.close_cycle')}
-                </Button>
-              ) : (
-                <Button
-                  variant="default"
-                  size="sm"
-                  onClick={() => handleReopenCycle(selectedCycle.id)}
-                  className="bg-green-600 hover:bg-green-700 text-white"
-                >
-                  {t('err:cycles.reopen_cycle')}
-                </Button>
-              )}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-              <div className="space-y-2">
-                <div className="text-sm font-medium text-muted-foreground">{t('err:cycles.detail_labels.cycle_number')}</div>
-                <div className="text-2xl font-bold">#{selectedCycle.cycle_number}</div>
-              </div>
-              <div className="space-y-2">
-                <div className="text-sm font-medium text-muted-foreground">{t('err:cycles.detail_labels.year')}</div>
-                <div className="text-2xl font-bold">{selectedCycle.year}</div>
-              </div>
-              <div className="space-y-2">
-                <div className="text-sm font-medium text-muted-foreground">{t('err:cycles.detail_labels.status')}</div>
-                <div className="text-2xl">{getStatusBadge(selectedCycle.status)}</div>
-              </div>
-              <div className="space-y-2">
-                <div className="text-sm font-medium text-muted-foreground">{t('err:cycles.detail_labels.period')}</div>
-                <div className="text-sm">
-                  {selectedCycle.start_date && selectedCycle.end_date ? (
-                    <>
-                      <div>{new Date(selectedCycle.start_date).toLocaleDateString()}</div>
-                      <div className="text-muted-foreground">
-                        {t('err:cycles.to')} {new Date(selectedCycle.end_date).toLocaleDateString()}
-                      </div>
-                    </>
-                  ) : (
-                    <span className="text-muted-foreground">{t('err:cycles.no_dates')}</span>
-                  )}
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* 3. Budget Summary */}
-      {selectedCycle && budgetSummary && (
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle className="flex items-center gap-2">
-                <DollarSign className="h-5 w-5" />
-                {t('err:cycles.budget_summary')}
-              </CardTitle>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setIsBudgetSummaryExpanded(!isBudgetSummaryExpanded)}
-                className="h-8 w-8 p-0"
-              >
-                {isBudgetSummaryExpanded ? (
-                  <ChevronUp className="h-4 w-4" />
-                ) : (
-                  <ChevronDown className="h-4 w-4" />
-                )}
-              </Button>
-            </div>
-          </CardHeader>
-          {isBudgetSummaryExpanded && (
-            <CardContent>
-              <CycleBudgetDashboard 
-                cycle={selectedCycle}
-                budgetSummary={budgetSummary}
-                onRefresh={handleRefreshBudget}
-                isRefreshing={isRefreshingBudget}
-              />
-            </CardContent>
           )}
-        </Card>
-      )}
-
-      {/* 4. Grant Pool */}
-      {selectedCycle && (
-        <Card>
-          <CardContent className="pt-6">
-            <GrantPoolSelector 
-              cycleId={selectedCycle.id} 
-              onGrantsChanged={handleGrantsChanged}
-            />
-          </CardContent>
-        </Card>
-      )}
-
-      {/* 5. State Allocations */}
-      {selectedCycle && (
-        <Card>
-          <CardContent className="pt-6">
-            <StateAllocationManager 
-              cycleId={selectedCycle.id} 
-              cycle={selectedCycle}
-              refreshToken={allocRefreshToken}
-              onAllocationsChanged={handleRefreshBudget}
-            />
-          </CardContent>
-        </Card>
-      )}
-    </div>
+        </div>
+      </CardContent>
+    </Card>
   )
 }

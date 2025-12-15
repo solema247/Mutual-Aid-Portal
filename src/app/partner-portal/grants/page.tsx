@@ -77,7 +77,6 @@ export default function GrantsPage() {
   const [currentDonorId, setCurrentDonorId] = useState<string>('')
   const [isAdminPartner, setIsAdminPartner] = useState<boolean>(false)
   const [isLoading, setIsLoading] = useState(true)
-  const [isFormOpen, setIsFormOpen] = useState(false)
   const [isTableOpen, setIsTableOpen] = useState(true)
   const [currentDonorName, setCurrentDonorName] = useState<string>('')
 
@@ -247,34 +246,6 @@ export default function GrantsPage() {
     }
   }
 
-  const onSubmit = async (values: FormData) => {
-    try {
-      // Ensure donor_id is present for non-admin partners
-      const donorIdFinal = isAdminPartner ? values.donor_id : (values.donor_id || currentDonorId)
-      if (!donorIdFinal) {
-        window.alert(t('common:error_fetching_data'))
-        return
-      }
-      const submissionData = {
-        ...values,
-        donor_id: donorIdFinal,
-        amount: values.amount ? parseFloat(values.amount) : null
-      }
-
-      const { error } = await supabase
-        .from('grant_calls')
-        .insert([submissionData])
-
-      if (error) throw error
-
-      window.alert(t('partner:grants.toast.success'))
-      form.reset()
-      fetchGrants()
-    } catch (error) {
-      console.error('Error creating grant:', error)
-      window.alert(t('partner:grants.toast.error'))
-    }
-  }
 
   if (isLoading) return <div>Loading...</div>
 
@@ -292,187 +263,15 @@ export default function GrantsPage() {
         </Button>
       </div>
 
-      {/* Add explainer section similar to forecast page */}
-      <div className="grid grid-cols-2 gap-4 p-4 bg-muted/20 rounded-lg">
-        <div className="space-y-2">
-          <div className="flex items-center gap-2 font-medium">
-            <FileText className="h-5 w-5" />
-            {t('partner:grants.form.title')}
-          </div>
-          <p className="text-sm text-muted-foreground">
-            {t('partner:grants.form.description')}
+      {/* Info message */}
+      <Card className="bg-blue-50 border-blue-200">
+        <CardContent className="pt-6">
+          <p className="text-sm text-blue-800">
+            <strong>Note:</strong> Grant call creation and management has been moved to the Grant Management page in the ERR Portal.
+            This page is now read-only for viewing grant calls.
           </p>
-        </div>
-        <div className="space-y-2">
-          <div className="flex items-center gap-2 font-medium">
-            <BarChart2 className="h-5 w-5" />
-            {t('partner:grants.table.title')}
-          </div>
-          <p className="text-sm text-muted-foreground">
-            {t('partner:grants.table.description')}
-          </p>
-        </div>
-      </div>
-
-      {/* Form Section */}
-      <Collapsible
-        open={isFormOpen}
-        onOpenChange={setIsFormOpen}
-        className="w-full"
-      >
-        <CollapsibleTrigger 
-          className={cn(
-            "flex w-full items-center justify-between rounded-md border px-4 py-2 font-medium",
-            'bg-[#007229]/10 border-[#007229]/20 text-[#007229] hover:bg-[#007229]/20'
-          )}
-        >
-          <span>{t('partner:grants.form.title')}</span>
-          <ChevronDown
-            className={cn("h-4 w-4 transition-transform", {
-              "transform rotate-180": isFormOpen,
-            })}
-          />
-        </CollapsibleTrigger>
-        <CollapsibleContent className="pt-2 pb-4">
-          <Card>
-            <CardContent className="pt-6">
-              <Form {...form}>
-                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {isAdminPartner ? (
-                    <FormField
-                      control={form.control}
-                      name="donor_id"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>{t('partner:grants.form.donor')}</FormLabel>
-                          <Select
-                            onValueChange={field.onChange}
-                            value={field.value || ''}
-                          >
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder={t('partner:grants.form.select_donor')} />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              {donors.map((donor) => (
-                                <SelectItem key={donor.id} value={donor.id}>
-                                  {donor.name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  ) : (
-                    <>
-                      <FormField
-                        control={form.control}
-                        name="donor_id"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>{t('partner:grants.form.donor')}</FormLabel>
-                            <Input value={currentDonorName || '—'} readOnly />
-                            {/* Keep donor_id in the form model */}
-                            <input type="hidden" value={currentDonorId} onChange={() => {}} />
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    </>
-                  )}
-
-                    <FormField
-                      control={form.control}
-                      name="name"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>{t('partner:grants.form.name')}</FormLabel>
-                          <FormControl>
-                            <Input {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="shortname"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>{t('partner:grants.form.shortname')}</FormLabel>
-                          <FormControl>
-                            <Input {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="amount"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>{t('partner:grants.form.amount')}</FormLabel>
-                          <FormControl>
-                            <Input
-                              type="number"
-                              {...field}
-                              value={field.value || ''}
-                              onChange={(e) => field.onChange(e.target.value)}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="start_date"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>{t('partner:grants.form.start_date')}</FormLabel>
-                          <FormControl>
-                            <Input type="date" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="end_date"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>{t('partner:grants.form.end_date')}</FormLabel>
-                          <FormControl>
-                            <Input type="date" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-
-                  <Button 
-                    type="submit" 
-                    className="w-full bg-[#007229] hover:bg-[#007229]/90 text-white"
-                  >
-                    {t('partner:grants.form.submit')}
-                  </Button>
-                </form>
-              </Form>
-            </CardContent>
-          </Card>
-        </CollapsibleContent>
-      </Collapsible>
+        </CardContent>
+      </Card>
 
       {/* Table Section */}
       <Collapsible

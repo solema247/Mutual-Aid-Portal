@@ -11,6 +11,43 @@ export async function POST(
     const { id: cycleId } = params
     const { grant_inclusions } = await request.json()
 
+    // Enforce single grant call per cycle: check if cycle already has a grant call
+    const { data: existingInclusions, error: checkError } = await supabase
+      .from('cycle_grant_inclusions')
+      .select('id')
+      .eq('cycle_id', cycleId)
+
+    if (checkError) {
+      console.error('Error checking existing inclusions:', checkError)
+      return NextResponse.json(
+        { error: 'Failed to check existing inclusions' },
+        { status: 500 }
+      )
+    }
+
+    // If cycle already has a grant call, reject the request
+    if (existingInclusions && existingInclusions.length > 0) {
+      return NextResponse.json(
+        { error: 'This cycle already has a grant call. Only one grant call per cycle is allowed.' },
+        { status: 400 }
+      )
+    }
+
+    // Validate that only one grant inclusion is being added
+    if (!grant_inclusions || grant_inclusions.length === 0) {
+      return NextResponse.json(
+        { error: 'At least one grant inclusion is required' },
+        { status: 400 }
+      )
+    }
+
+    if (grant_inclusions.length > 1) {
+      return NextResponse.json(
+        { error: 'Only one grant call per cycle is allowed' },
+        { status: 400 }
+      )
+    }
+
     // Validate each grant inclusion
     for (const inclusion of grant_inclusions) {
       // Get the grant call
