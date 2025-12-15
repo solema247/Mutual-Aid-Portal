@@ -112,6 +112,23 @@ export default function F3MOUsPage() {
   const [mouProjects, setMouProjects] = useState<Array<{ id: string; err_id: string | null; state: string; locality: string | null }>>([])
   const [stateShorts, setStateShorts] = useState<Record<string, string>>({})
   const [lastWorkplanNums, setLastWorkplanNums] = useState<Record<string, number>>({})
+  
+  // Remaining amounts state
+  const [grantRemaining, setGrantRemaining] = useState<{
+    total: number;
+    committed: number;
+    allocated: number;
+    remaining: number;
+    loading: boolean;
+  } | null>(null)
+  const [stateAllocationRemaining, setStateAllocationRemaining] = useState<{
+    total: number;
+    committed: number;
+    allocated: number;
+    remaining: number;
+    loading: boolean;
+  } | null>(null)
+  const [mouTotalAmount, setMouTotalAmount] = useState<number>(0)
 
   const toDisplay = (value: any): string => {
     if (value == null) return ''
@@ -326,7 +343,7 @@ export default function F3MOUsPage() {
     try {
       const { data: projects, error } = await supabase
         .from('err_projects')
-        .select('id, err_id, state, locality')
+        .select('id, err_id, state, locality, expenses')
         .eq('mou_id', mouId)
         .eq('funding_status', 'committed')
         .eq('status', 'approved')
@@ -335,8 +352,22 @@ export default function F3MOUsPage() {
       if (error) {
         console.error('Error fetching MOU projects:', error)
         setMouProjects([])
+        setMouTotalAmount(0)
       } else {
-        setMouProjects(projects || [])
+        setMouProjects((projects || []).map(p => ({ id: p.id, err_id: p.err_id, state: p.state, locality: p.locality })))
+        
+        // Calculate MOU total amount
+        const totalAmount = (projects || []).reduce((sum: number, project: any) => {
+          try {
+            const expenses = typeof project.expenses === 'string' 
+              ? JSON.parse(project.expenses) 
+              : project.expenses || []
+            return sum + expenses.reduce((expSum: number, exp: any) => expSum + (exp.total_cost || 0), 0)
+          } catch {
+            return sum
+          }
+        }, 0)
+        setMouTotalAmount(totalAmount)
         
         // Fetch state shorts for the projects
         const states = [...new Set((projects || []).map(p => p.state).filter(Boolean))]
@@ -356,6 +387,128 @@ export default function F3MOUsPage() {
     } catch (error) {
       console.error('Error fetching MOU projects:', error)
       setMouProjects([])
+      setMouTotalAmount(0)
+    }
+  }
+  
+  const calculateGrantRemaining = async (grantCallId: string, fundingCycleId: string) => {
+    if (!grantCallId || !fundingCycleId) {
+      setGrantRemaining(null)
+      return
+    }
+    
+    try {
+      setGrantRemaining(prev => prev ? { ...prev, loading: true } : { total: 0, committed: 0, allocated: 0, remaining: 0, loading: true })
+      
+      // Get total included amount from cycle_grant_inclusions
+      const { data: inclusions, error: inclusionsError } = await supabase
+        .from('cycle_grant_inclusions')
+        .select('amount_included')
+        .eq('grant_call_id', grantCallId)
+        .eq('cycle_id', fundingCycleId)
+      
+      if (inclusionsError) throw inclusionsError
+      
+      const totalIncluded = (inclusions || []).reduce((sum: number, inc: any) => sum + (inc.amount_included || 0), 0)
+      
+      // Get committed and allocated amounts from projects
+      const { data: projects, error: projectsError } = await supabase
+        .from('err_projects')
+        .select('expenses, funding_status')
+        .eq('grant_call_id', grantCallId)
+      
+      if (projectsError) throw projectsError
+      
+      const sumExpenses = (exp: any): number => {
+        try {
+          const arr = typeof exp === 'string' ? JSON.parse(exp || '[]') : (exp || [])
+          return arr.reduce((s: number, e: any) => s + (e?.total_cost || 0), 0)
+        } catch {
+          return 0
+        }
+      }
+      
+      const totalCommitted = (projects || [])
+        .filter((p: any) => p.funding_status === 'committed')
+        .reduce((sum: number, p: any) => sum + sumExpenses(p.expenses), 0)
+      
+      const totalAllocated = (projects || [])
+        .filter((p: any) => p.funding_status === 'allocated')
+        .reduce((sum: number, p: any) => sum + sumExpenses(p.expenses), 0)
+      
+      const remaining = totalIncluded - totalCommitted - totalAllocated
+      
+      setGrantRemaining({
+        total: totalIncluded,
+        committed: totalCommitted,
+        allocated: totalAllocated,
+        remaining,
+        loading: false
+      })
+    } catch (error) {
+      console.error('Error calculating grant remaining:', error)
+      setGrantRemaining(null)
+    }
+  }
+  
+  const calculateStateAllocationRemaining = async (fundingCycleId: string, stateName: string) => {
+    if (!fundingCycleId || !stateName) {
+      setStateAllocationRemaining(null)
+      return
+    }
+    
+    try {
+      setStateAllocationRemaining(prev => prev ? { ...prev, loading: true } : { total: 0, committed: 0, allocated: 0, remaining: 0, loading: true })
+      
+      // Get all state allocations for this cycle and state
+      const { data: allocations, error: allocationsError } = await supabase
+        .from('cycle_state_allocations')
+        .select('id, amount')
+        .eq('cycle_id', fundingCycleId)
+        .eq('state_name', stateName)
+      
+      if (allocationsError) throw allocationsError
+      
+      const totalAllocated = (allocations || []).reduce((sum: number, alloc: any) => sum + (alloc.amount || 0), 0)
+      const allocationIds = (allocations || []).map((alloc: any) => alloc.id)
+      
+      // Get committed and allocated amounts from projects
+      const { data: projects, error: projectsError } = await supabase
+        .from('err_projects')
+        .select('expenses, funding_status')
+        .in('cycle_state_allocation_id', allocationIds)
+      
+      if (projectsError) throw projectsError
+      
+      const sumExpenses = (exp: any): number => {
+        try {
+          const arr = typeof exp === 'string' ? JSON.parse(exp || '[]') : (exp || [])
+          return arr.reduce((s: number, e: any) => s + (e?.total_cost || 0), 0)
+        } catch {
+          return 0
+        }
+      }
+      
+      const totalCommitted = (projects || [])
+        .filter((p: any) => p.funding_status === 'committed')
+        .reduce((sum: number, p: any) => sum + sumExpenses(p.expenses), 0)
+      
+      const totalAllocatedProjects = (projects || [])
+        .filter((p: any) => p.funding_status === 'allocated')
+        .reduce((sum: number, p: any) => sum + sumExpenses(p.expenses), 0)
+      
+      const remaining = totalAllocated - totalCommitted - totalAllocatedProjects
+      
+      setStateAllocationRemaining({
+        total: totalAllocated,
+        committed: totalCommitted,
+        allocated: totalAllocatedProjects,
+        remaining,
+        loading: false
+      })
+    } catch (error) {
+      console.error('Error calculating state allocation remaining:', error)
+      setStateAllocationRemaining(null)
     }
   }
   
@@ -416,6 +569,27 @@ export default function F3MOUsPage() {
       fetchLastWorkplanNum(tempGrantSerial)
     }
   }, [tempGrantSerial, assignModalOpen, mouProjects])
+  
+  // Calculate grant remaining when grant call or funding cycle changes
+  useEffect(() => {
+    if (tempGrantCall && tempFundingCycle && assignModalOpen) {
+      calculateGrantRemaining(tempGrantCall, tempFundingCycle)
+    } else {
+      setGrantRemaining(null)
+    }
+  }, [tempGrantCall, tempFundingCycle, assignModalOpen])
+  
+  // Calculate state allocation remaining when funding cycle changes
+  useEffect(() => {
+    if (tempFundingCycle && assignModalOpen && mouProjects.length > 0) {
+      const stateName = mouProjects[0]?.state
+      if (stateName) {
+        calculateStateAllocationRemaining(tempFundingCycle, stateName)
+      }
+    } else {
+      setStateAllocationRemaining(null)
+    }
+  }, [tempFundingCycle, assignModalOpen, mouProjects])
 
   return (
     <div className="max-w-7xl mx-auto p-6 space-y-6">
@@ -1321,6 +1495,131 @@ export default function F3MOUsPage() {
               </div>
             </div>
 
+            {/* Remaining Amounts Display */}
+            {(grantRemaining || stateAllocationRemaining) && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Grant Remaining */}
+                {grantRemaining && (
+                  <div className="p-4 border rounded-lg">
+                    <div className="flex items-center justify-between mb-2">
+                      <Label className="text-sm font-semibold">Grant Remaining</Label>
+                      {grantRemaining.loading && (
+                        <span className="text-xs text-muted-foreground">Calculating...</span>
+                      )}
+                    </div>
+                    {!grantRemaining.loading && (
+                      <>
+                        <div className="space-y-1 text-sm">
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Total:</span>
+                            <span className="font-medium">${grantRemaining.total.toLocaleString()}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Committed:</span>
+                            <span>${grantRemaining.committed.toLocaleString()}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Allocated:</span>
+                            <span>${grantRemaining.allocated.toLocaleString()}</span>
+                          </div>
+                          <div className="pt-2 border-t flex justify-between items-center">
+                            <span className="font-semibold">Remaining:</span>
+                            <span className={`font-bold text-lg ${
+                              grantRemaining.remaining < 0 ? 'text-red-600' :
+                              grantRemaining.remaining < mouTotalAmount ? 'text-yellow-600' :
+                              'text-green-600'
+                            }`}>
+                              ${grantRemaining.remaining.toLocaleString()}
+                            </span>
+                          </div>
+                          {mouTotalAmount > 0 && (
+                            <div className="pt-1 text-xs">
+                              <div className="flex justify-between text-muted-foreground">
+                                <span>After assignment:</span>
+                                <span className={`font-medium ${
+                                  (grantRemaining.remaining - mouTotalAmount) < 0 ? 'text-red-600' :
+                                  (grantRemaining.remaining - mouTotalAmount) < mouTotalAmount ? 'text-yellow-600' :
+                                  'text-green-600'
+                                }`}>
+                                  ${(grantRemaining.remaining - mouTotalAmount).toLocaleString()}
+                                </span>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+
+                {/* State Allocation Remaining */}
+                {stateAllocationRemaining && mouProjects.length > 0 && (
+                  <div className="p-4 border rounded-lg">
+                    <div className="flex items-center justify-between mb-2">
+                      <Label className="text-sm font-semibold">
+                        State Allocation Remaining ({mouProjects[0]?.state})
+                      </Label>
+                      {stateAllocationRemaining.loading && (
+                        <span className="text-xs text-muted-foreground">Calculating...</span>
+                      )}
+                    </div>
+                    {!stateAllocationRemaining.loading && (
+                      <>
+                        <div className="space-y-1 text-sm">
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Total:</span>
+                            <span className="font-medium">${stateAllocationRemaining.total.toLocaleString()}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Committed:</span>
+                            <span>${stateAllocationRemaining.committed.toLocaleString()}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Allocated:</span>
+                            <span>${stateAllocationRemaining.allocated.toLocaleString()}</span>
+                          </div>
+                          <div className="pt-2 border-t flex justify-between items-center">
+                            <span className="font-semibold">Remaining:</span>
+                            <span className={`font-bold text-lg ${
+                              stateAllocationRemaining.remaining < 0 ? 'text-red-600' :
+                              stateAllocationRemaining.remaining < mouTotalAmount ? 'text-yellow-600' :
+                              'text-green-600'
+                            }`}>
+                              ${stateAllocationRemaining.remaining.toLocaleString()}
+                            </span>
+                          </div>
+                          {mouTotalAmount > 0 && (
+                            <div className="pt-1 text-xs">
+                              <div className="flex justify-between text-muted-foreground">
+                                <span>After assignment:</span>
+                                <span className={`font-medium ${
+                                  (stateAllocationRemaining.remaining - mouTotalAmount) < 0 ? 'text-red-600' :
+                                  (stateAllocationRemaining.remaining - mouTotalAmount) < mouTotalAmount ? 'text-yellow-600' :
+                                  'text-green-600'
+                                }`}>
+                                  ${(stateAllocationRemaining.remaining - mouTotalAmount).toLocaleString()}
+                                </span>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* MOU Total Amount Info */}
+            {mouTotalAmount > 0 && (
+              <div className="p-3 bg-blue-50 border border-blue-200 rounded-md">
+                <p className="text-sm">
+                  <span className="font-semibold">MOU Total Amount:</span>{' '}
+                  <span className="font-mono">${mouTotalAmount.toLocaleString()}</span>
+                </p>
+              </div>
+            )}
+
             {/* Generated Grant ID Preview */}
             {mouProjects.length > 0 && tempGrantCall && tempMMYY && tempMMYY.length === 4 && tempGrantSerial && (
               <div>
@@ -1421,6 +1720,9 @@ export default function F3MOUsPage() {
                   setMouProjects([])
                   setStateShorts({})
                   setLastWorkplanNums({})
+                  setGrantRemaining(null)
+                  setStateAllocationRemaining(null)
+                  setMouTotalAmount(0)
                 }}
               >
                 Cancel
