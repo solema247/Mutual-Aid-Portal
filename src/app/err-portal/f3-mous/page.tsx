@@ -10,9 +10,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Eye, Upload, Receipt, FileSignature, FileCheck } from 'lucide-react'
+import { Eye, Upload, Receipt, FileSignature, FileCheck, Link2 } from 'lucide-react'
 import dynamic from 'next/dynamic'
 import { aggregateObjectives, aggregateBeneficiaries, aggregatePlannedActivities, aggregatePlannedActivitiesDetailed, aggregateLocations, getBankingDetails } from '@/lib/mou-aggregation'
+import { supabase } from '@/lib/supabaseClient'
 
 interface MOU {
   id: string
@@ -93,6 +94,24 @@ export default function F3MOUsPage() {
   const [editingMou, setEditingMou] = useState<Partial<MOU>>({})
   const [saving, setSaving] = useState(false)
   const previewId = 'mou-preview-content'
+  
+  // Assignment state
+  const [assignModalOpen, setAssignModalOpen] = useState(false)
+  const [assigningMouId, setAssigningMouId] = useState<string | null>(null)
+  const [isAssigning, setIsAssigning] = useState(false)
+  const [mouAssignmentStatus, setMouAssignmentStatus] = useState<Record<string, { hasUnassigned: boolean; projectCount: number }>>({})
+  
+  // Assignment form state
+  const [tempFundingCycle, setTempFundingCycle] = useState<string>('')
+  const [tempGrantCall, setTempGrantCall] = useState<string>('')
+  const [tempMMYY, setTempMMYY] = useState<string>('')
+  const [tempGrantSerial, setTempGrantSerial] = useState<string>('')
+  const [fundingCycles, setFundingCycles] = useState<any[]>([])
+  const [grantCallsForCycle, setGrantCallsForCycle] = useState<any[]>([])
+  const [grantSerials, setGrantSerials] = useState<any[]>([])
+  const [mouProjects, setMouProjects] = useState<Array<{ id: string; err_id: string | null; state: string; locality: string | null }>>([])
+  const [stateShorts, setStateShorts] = useState<Record<string, string>>({})
+  const [lastWorkplanNums, setLastWorkplanNums] = useState<Record<string, number>>({})
 
   const toDisplay = (value: any): string => {
     if (value == null) return ''
@@ -149,17 +168,254 @@ export default function F3MOUsPage() {
       // Extract unique states from MOUs for the filter dropdown
       const uniqueStates = Array.from(new Set(data.map((m: MOU) => m.state).filter(Boolean))) as string[]
       setAvailableStates(uniqueStates.sort())
+      
+      // Check assignment status for each MOU
+      await checkMouAssignmentStatus(data.map((m: MOU) => m.id))
     } catch (e) {
       console.error('Failed to load MOUs', e)
     } finally {
       setLoading(false)
     }
   }
+  
+  const checkMouAssignmentStatus = async (mouIds: string[]) => {
+    try {
+      const statusMap: Record<string, { hasUnassigned: boolean; projectCount: number }> = {}
+      
+      for (const mouId of mouIds) {
+        const { data: projects, error } = await supabase
+          .from('err_projects')
+          .select('id, grant_call_id')
+          .eq('mou_id', mouId)
+        
+        if (error) {
+          console.error(`Error checking MOU ${mouId}:`, error)
+          continue
+        }
+        
+        const projectCount = projects?.length || 0
+        const hasUnassigned = projectCount > 0 && projects?.some((p: any) => !p.grant_call_id) || false
+        
+        statusMap[mouId] = { hasUnassigned, projectCount }
+      }
+      
+      setMouAssignmentStatus(statusMap)
+    } catch (error) {
+      console.error('Error checking MOU assignment status:', error)
+    }
+  }
+  
+  const fetchFundingCycles = async () => {
+    try {
+      const { data } = await supabase
+        .from('funding_cycles')
+        .select('id, name, type, status')
+        .eq('status', 'open')
+        .order('created_at', { ascending: false })
+      setFundingCycles(data || [])
+    } catch (error) {
+      console.error('Error fetching funding cycles:', error)
+    }
+  }
+  
+  const fetchGrantCallsForCycle = async (cycleId: string) => {
+    try {
+      const { data } = await supabase
+        .from('cycle_grant_inclusions')
+        .select(`
+          grant_call_id,
+          grant_calls (
+            id,
+            name,
+            donor_id,
+            donors (
+              id,
+              name,
+              short_name
+            )
+          )
+        `)
+        .eq('cycle_id', cycleId)
+      
+      const grantCalls = (data || []).map((item: any) => ({
+        id: item.grant_call_id,
+        name: item.grant_calls?.name || '',
+        donor_id: item.grant_calls?.donor_id || '',
+        donor_name: item.grant_calls?.donors?.name || '',
+        donor_short: item.grant_calls?.donors?.short_name || ''
+      }))
+      
+      setGrantCallsForCycle(grantCalls)
+    } catch (error) {
+      console.error('Error fetching grant calls for cycle:', error)
+    }
+  }
+  
+  const fetchGrantSerials = async (stateName: string, mmyy: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('grant_serials')
+        .select('grant_serial, grant_call_id')
+        .eq('state_name', stateName)
+        .eq('yymm', mmyy)
+        .order('grant_serial', { ascending: true })
+      
+      const serials = (data || []).map(s => ({ grant_serial: s.grant_serial }))
+      setGrantSerials(serials)
+    } catch (error) {
+      console.error('Error fetching grant serials:', error)
+    }
+  }
+  
+  const handleAssignMou = async () => {
+    if (!assigningMouId || !tempFundingCycle || !tempGrantCall || !tempMMYY || !tempGrantSerial) {
+      alert('Please fill all assignment fields')
+      return
+    }
+    
+    if (tempMMYY.length !== 4) {
+      alert('MMYY must be 4 digits')
+      return
+    }
+    
+    setIsAssigning(true)
+    try {
+      const response = await fetch(`/api/f3/mous/${assigningMouId}/assign`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          funding_cycle_id: tempFundingCycle,
+          grant_call_id: tempGrantCall,
+          mmyy: tempMMYY,
+          grant_serial: tempGrantSerial
+        })
+      })
+      
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ error: 'Failed to assign MOU' }))
+        alert(error.error || 'Failed to assign MOU')
+        return
+      }
+      
+      const result = await response.json()
+      alert(`Successfully assigned ${result.assigned_count} work plan(s) to grant`)
+      
+      // Clear form
+      setTempFundingCycle('')
+      setTempGrantCall('')
+      setTempMMYY('')
+      setTempGrantSerial('')
+      setAssignModalOpen(false)
+      setAssigningMouId(null)
+      
+      // Refresh MOUs and assignment status
+      await fetchMous()
+    } catch (error) {
+      console.error('Error assigning MOU:', error)
+      alert('Failed to assign MOU')
+    } finally {
+      setIsAssigning(false)
+    }
+  }
+  
+  const openAssignModal = async (mouId: string) => {
+    setAssigningMouId(mouId)
+    setAssignModalOpen(true)
+    
+    // Fetch projects in this MOU
+    try {
+      const { data: projects, error } = await supabase
+        .from('err_projects')
+        .select('id, err_id, state, locality')
+        .eq('mou_id', mouId)
+        .eq('funding_status', 'committed')
+        .eq('status', 'approved')
+        .order('submitted_at', { ascending: true })
+      
+      if (error) {
+        console.error('Error fetching MOU projects:', error)
+        setMouProjects([])
+      } else {
+        setMouProjects(projects || [])
+        
+        // Fetch state shorts for the projects
+        const states = [...new Set((projects || []).map(p => p.state).filter(Boolean))]
+        if (states.length > 0) {
+          const { data: stateData } = await supabase
+            .from('states')
+            .select('state_name, state_short')
+            .in('state_name', states)
+          
+          const shorts: Record<string, string> = {}
+          ;(stateData || []).forEach((row: any) => {
+            shorts[row.state_name] = row.state_short
+          })
+          setStateShorts(shorts)
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching MOU projects:', error)
+      setMouProjects([])
+    }
+  }
+  
+  const fetchLastWorkplanNum = async (grantSerial: string) => {
+    try {
+      const { data: existingProjects, error: projectsError } = await supabase
+        .from('err_projects')
+        .select('workplan_number')
+        .eq('grant_serial_id', grantSerial)
+        .not('workplan_number', 'is', null)
+
+      if (projectsError) {
+        console.error('Error fetching existing workplans:', projectsError)
+        return
+      }
+
+      const existingWorkplanNumbers = (existingProjects || [])
+        .map((p: any) => p.workplan_number)
+        .filter((n: number) => typeof n === 'number' && n > 0)
+        .sort((a: number, b: number) => b - a)
+
+      const highestNumber = existingWorkplanNumbers.length > 0 ? existingWorkplanNumbers[0] : 0
+      
+      // Store for each project in the MOU
+      const nums: Record<string, number> = {}
+      mouProjects.forEach(project => {
+        nums[project.id] = highestNumber
+      })
+      setLastWorkplanNums(nums)
+    } catch (error) {
+      console.error('Error fetching last workplan number:', error)
+    }
+  }
 
   useEffect(() => {
     fetchMous()
+    fetchFundingCycles()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedState])
+  
+  useEffect(() => {
+    if (tempFundingCycle) {
+      fetchGrantCallsForCycle(tempFundingCycle)
+    }
+  }, [tempFundingCycle])
+  
+  useEffect(() => {
+    if (tempGrantCall && tempMMYY && tempMMYY.length === 4 && assigningMouId) {
+      const mou = mous.find(m => m.id === assigningMouId)
+      if (mou?.state) {
+        fetchGrantSerials(mou.state, tempMMYY)
+      }
+    }
+  }, [tempGrantCall, tempMMYY, assigningMouId, mous])
+  
+  useEffect(() => {
+    if (tempGrantSerial && tempGrantSerial !== 'new' && assignModalOpen && mouProjects.length > 0) {
+      fetchLastWorkplanNum(tempGrantSerial)
+    }
+  }, [tempGrantSerial, assignModalOpen, mouProjects])
 
   return (
     <div className="max-w-7xl mx-auto p-6 space-y-6">
@@ -208,6 +464,17 @@ export default function F3MOUsPage() {
                     <TableCell>{new Date(m.created_at).toLocaleDateString()}</TableCell>
                     <TableCell>
                       <div className="flex items-center gap-1">
+                        {mouAssignmentStatus[m.id]?.hasUnassigned && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={() => openAssignModal(m.id)}
+                            title="Assign to Grant"
+                          >
+                            <Link2 className="h-4 w-4 text-blue-600" />
+                          </Button>
+                        )}
                         <Button
                           variant="ghost"
                           size="icon"
@@ -943,6 +1210,230 @@ export default function F3MOUsPage() {
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Assignment Modal */}
+      <Dialog open={assignModalOpen} onOpenChange={setAssignModalOpen}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Assign MOU to Grant</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 mt-4">
+            <div>
+              <p className="text-sm text-muted-foreground mb-4">
+                Assigning all work plans in MOU {mous.find(m => m.id === assigningMouId)?.mou_code || ''} to a grant call
+              </p>
+              {mouAssignmentStatus[assigningMouId || ''] && (
+                <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
+                  <p className="text-sm font-medium text-blue-800">
+                    This MOU contains {mouAssignmentStatus[assigningMouId || ''].projectCount} work plan(s) that will be assigned together.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Row 1: Funding Cycle, Grant Call, Donor */}
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <Label>Funding Cycle *</Label>
+                <Select value={tempFundingCycle} onValueChange={setTempFundingCycle}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Select" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {fundingCycles.map(fc => (
+                      <SelectItem key={fc.id} value={fc.id}>{fc.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label>Grant Call *</Label>
+                <Select 
+                  value={tempGrantCall} 
+                  onValueChange={(value) => {
+                    setTempGrantCall(value)
+                    setTempGrantSerial('')
+                    setGrantSerials([])
+                  }}
+                  disabled={!tempFundingCycle}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Select" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {grantCallsForCycle.map((gc: any) => (
+                      <SelectItem key={gc.id} value={gc.id}>{gc.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label>Donor</Label>
+                <Input
+                  value={grantCallsForCycle.find((gc: any) => gc.id === tempGrantCall)?.donor_name || ''}
+                  disabled
+                  className="bg-muted w-full"
+                />
+              </div>
+            </div>
+
+            {/* Row 2: MMYY and Grant Serial */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>MMYY *</Label>
+                <Input
+                  value={tempMMYY}
+                  onChange={(e) => {
+                    const newMMYY = e.target.value.replace(/[^0-9]/g, '').slice(0, 4)
+                    setTempMMYY(newMMYY)
+                    if (newMMYY.length !== 4) {
+                      setTempGrantSerial('')
+                      setGrantSerials([])
+                    }
+                  }}
+                  placeholder="0825"
+                  maxLength={4}
+                  className="w-full"
+                />
+              </div>
+
+              <div>
+                <Label>Grant Serial *</Label>
+                <Select 
+                  value={tempGrantSerial} 
+                  onValueChange={setTempGrantSerial}
+                  disabled={!tempGrantCall || !tempMMYY || tempMMYY.length !== 4}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Select or create" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="new">Create New Serial</SelectItem>
+                    {grantSerials.map(gs => (
+                      <SelectItem key={gs.grant_serial} value={gs.grant_serial}>{gs.grant_serial}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* Generated Grant ID Preview */}
+            {mouProjects.length > 0 && tempGrantCall && tempMMYY && tempMMYY.length === 4 && tempGrantSerial && (
+              <div>
+                <Label>Generated Workplan Grant IDs</Label>
+                <div className="p-3 bg-muted rounded-md font-mono text-sm max-h-64 overflow-y-auto mt-2">
+                  {mouProjects.map((project, idx) => {
+                    const grantCall = grantCallsForCycle.find((gc: any) => gc.id === tempGrantCall)
+                    const donorShort = grantCall?.donor_short || ''
+                    const stateShort = stateShorts[project.state] || ''
+                    const mmyy = tempMMYY
+                    const grantSerial = tempGrantSerial
+                    
+                    let workplanNum = 1
+                    if (grantSerial && grantSerial !== 'new') {
+                      const baseNum = lastWorkplanNums[project.id] || 0
+                      workplanNum = baseNum + 1 + idx
+                    } else if (grantSerial === 'new') {
+                      // For new serials, increment workplan number for each project (1, 2, 3, etc.)
+                      workplanNum = idx + 1
+                    }
+                    
+                    // If using existing grant serial, format as: grantSerial-workplanNumber
+                    if (grantSerial && grantSerial !== 'new' && grantSerial.includes('-')) {
+                      const grantId = `${grantSerial}-${String(workplanNum).padStart(3, '0')}`
+                      return (
+                        <div key={project.id} className="py-1 border-b border-border/50 last:border-0">
+                          <div className="font-semibold">{grantId}</div>
+                          <div className="text-xs text-muted-foreground">
+                            {project.err_id || project.id.slice(0, 8)} - {project.state} - {project.locality || 'N/A'}
+                          </div>
+                        </div>
+                      )
+                    }
+                    
+                    // If creating new serial, calculate the full grant ID
+                    if (grantSerial === 'new' && donorShort && stateShort && mmyy) {
+                      // Calculate next serial number from existing grant serials
+                      const serialPrefix = `LCC-${donorShort}-${stateShort}-${mmyy}-`
+                      let maxSerialNumber = 0
+                      
+                      // Filter grant serials for this donor/state/yymm combination
+                      const relevantSerials = grantSerials.filter((gs: any) => 
+                        gs.grant_serial && gs.grant_serial.startsWith(serialPrefix)
+                      )
+                      
+                      // Extract serial numbers and find the maximum
+                      for (const gs of relevantSerials) {
+                        const serialStr = gs.grant_serial || ''
+                        if (serialStr.startsWith(serialPrefix)) {
+                          const serialNumberStr = serialStr.substring(serialPrefix.length)
+                          const serialNumber = parseInt(serialNumberStr, 10)
+                          if (!isNaN(serialNumber) && serialNumber > maxSerialNumber) {
+                            maxSerialNumber = serialNumber
+                          }
+                        }
+                      }
+                      
+                      const nextSerialNumber = maxSerialNumber + 1
+                      const serialNum = String(nextSerialNumber).padStart(4, '0')
+                      const grantSerialId = `LCC-${donorShort}-${stateShort}-${mmyy}-${serialNum}`
+                      const grantId = `${grantSerialId}-${String(workplanNum).padStart(3, '0')}`
+                      return (
+                        <div key={project.id} className="py-1 border-b border-border/50 last:border-0">
+                          <div className="font-semibold">{grantId}</div>
+                          <div className="text-xs text-muted-foreground">
+                            {project.err_id || project.id.slice(0, 8)} - {project.state} - {project.locality || 'N/A'}
+                          </div>
+                        </div>
+                      )
+                    }
+                    
+                    return (
+                      <div key={project.id} className="py-1 border-b border-border/50 last:border-0 text-muted-foreground">
+                        LCC-XXX-XX-XXXX-XXXX-XXX
+                        <div className="text-xs">
+                          {project.err_id || project.id.slice(0, 8)} - {project.state} - {project.locality || 'N/A'}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+                <p className="text-xs text-muted-foreground mt-2">
+                  These are the grant IDs that will be assigned to each work plan in this MOU.
+                </p>
+              </div>
+            )}
+
+            <div className="flex justify-end gap-2 pt-4">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setAssignModalOpen(false)
+                  setAssigningMouId(null)
+                  setTempFundingCycle('')
+                  setTempGrantCall('')
+                  setTempMMYY('')
+                  setTempGrantSerial('')
+                  setMouProjects([])
+                  setStateShorts({})
+                  setLastWorkplanNums({})
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleAssignMou}
+                disabled={!tempGrantCall || !tempMMYY || tempMMYY.length !== 4 || !tempGrantSerial || !tempFundingCycle || isAssigning}
+                className="bg-green-600 hover:bg-green-700 text-white"
+              >
+                {isAssigning ? 'Assigning...' : 'Assign to Grant'}
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

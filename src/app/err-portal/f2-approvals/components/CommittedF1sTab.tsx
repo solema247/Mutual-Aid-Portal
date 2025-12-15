@@ -37,12 +37,13 @@ export default function CommittedF1sTab() {
   const [selectedPartnerId, setSelectedPartnerId] = useState<string>('')
   const [partnerModalOpen, setPartnerModalOpen] = useState(false)
   
-  // Assignment modal state
-  const [assignModalOpen, setAssignModalOpen] = useState(false)
+  // Reassignment state (for already assigned F1s)
+  const [reassignModalOpen, setReassignModalOpen] = useState(false)
+  const [reassigningF1Id, setReassigningF1Id] = useState<string | null>(null)
+  const [isReassigning, setIsReassigning] = useState(false)
   const [assigningF1Ids, setAssigningF1Ids] = useState<string[]>([])
-  const [isAssigning, setIsAssigning] = useState(false)
   
-  // Assignment form state
+  // Reassignment form state
   const [tempFundingCycle, setTempFundingCycle] = useState<string>('')
   const [tempGrantCall, setTempGrantCall] = useState<string>('')
   const [tempMMYY, setTempMMYY] = useState<string>('')
@@ -52,11 +53,6 @@ export default function CommittedF1sTab() {
   const [grantSerials, setGrantSerials] = useState<any[]>([])
   const [stateShorts, setStateShorts] = useState<Record<string, string>>({})
   const [lastWorkplanNums, setLastWorkplanNums] = useState<Record<string, number>>({})
-  
-  // Reassignment state
-  const [reassignModalOpen, setReassignModalOpen] = useState(false)
-  const [reassigningF1Id, setReassigningF1Id] = useState<string | null>(null)
-  const [isReassigning, setIsReassigning] = useState(false)
 
   const toggleAll = (checked: boolean) => {
     if (!checked) return setSelected([])
@@ -65,59 +61,6 @@ export default function CommittedF1sTab() {
   const toggleOne = (id: string, checked: boolean) => {
     if (checked) setSelected(prev => [...prev, id])
     else setSelected(prev => prev.filter(x => x !== id))
-  }
-  const handleAssignMultipleF1s = async () => {
-    if (!tempFundingCycle || !tempGrantCall || !tempMMYY || !tempGrantSerial) {
-      alert('Please fill all assignment fields')
-      return
-    }
-    
-    if (tempMMYY.length !== 4) {
-      alert('MMYY must be 4 digits')
-      return
-    }
-    
-    setIsAssigning(true)
-    try {
-      const response = await fetch('/api/f2/committed/assign', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          f1_ids: assigningF1Ids,
-          funding_cycle_id: tempFundingCycle,
-          grant_call_id: tempGrantCall,
-          mmyy: tempMMYY,
-          grant_serial: tempGrantSerial
-        })
-      })
-      
-      if (!response.ok) {
-        const error = await response.json().catch(() => ({ error: 'Failed to assign F1s' }))
-        alert(error.error || 'Failed to assign F1s')
-        return
-      }
-      
-      const result = await response.json()
-      alert(`Successfully assigned ${result.assigned_count} F1(s)`)
-      
-      // Clear assignment form
-      setTempFundingCycle('')
-      setTempGrantCall('')
-      setTempMMYY('')
-      setTempGrantSerial('')
-      setAssignModalOpen(false)
-      
-      // Refresh data
-      await fetchCommittedF1s()
-      
-      // Open partner modal for MOU creation
-      setPartnerModalOpen(true)
-    } catch (error) {
-      console.error('Error assigning F1s:', error)
-      alert('Failed to assign F1s')
-    } finally {
-      setIsAssigning(false)
-    }
   }
   
   const createMOU = async () => {
@@ -357,35 +300,29 @@ export default function CommittedF1sTab() {
   }
   
   const openPartnerModal = () => {
-    if (selected.length === 0) { alert('Please select committed projects'); return }
-    setPartnerModalOpen(true)
-  }
-  
-  const openAssignModal = () => {
     if (selected.length === 0) { 
-      alert('Please select committed projects to assign'); 
+      alert('Please select committed projects'); 
       return 
     }
     
-    // Check if any selected F1s are already assigned
-    const alreadyAssigned = selected.filter(id => {
+    // Check if any selected F1s already have an MOU
+    const alreadyHasMOU = selected.filter(id => {
       const f1 = f1s.find(f => f.id === id)
-      return f1?.grant_call_id
+      return f1?.mou_id
     })
     
-    if (alreadyAssigned.length > 0) {
-      alert('Some selected F1s are already assigned. Please reassign them separately or select unassigned F1s.')
+    if (alreadyHasMOU.length > 0) {
+      alert('Some selected F1s already have an MOU. Please select F1s without an MOU.')
       return
     }
     
-    setAssigningF1Ids(selected)
-    setAssignModalOpen(true)
+    setPartnerModalOpen(true)
   }
 
   useEffect(() => {
     fetchCommittedF1s()
     fetchFilterOptions()
-    fetchFundingCycles()
+    fetchFundingCycles() // Still needed for reassignment
     ;(async () => {
       const { data } = await supabase
         .from('partners')
@@ -409,19 +346,19 @@ export default function CommittedF1sTab() {
   }, [tempFundingCycle])
   
   useEffect(() => {
-    if (tempGrantCall && tempMMYY && tempMMYY.length === 4 && assigningF1Ids.length > 0) {
+    if (tempGrantCall && tempMMYY && tempMMYY.length === 4 && reassignModalOpen && assigningF1Ids.length > 0) {
       const firstF1 = f1s.find(f => f.id === assigningF1Ids[0])
       if (firstF1) {
         fetchGrantSerials(firstF1.state, tempMMYY)
       }
     }
-  }, [tempGrantCall, tempMMYY, assigningF1Ids, f1s])
+  }, [tempGrantCall, tempMMYY, reassignModalOpen, assigningF1Ids, f1s])
   
   useEffect(() => {
-    if (tempGrantSerial && tempGrantSerial !== 'new' && assigningF1Ids.length > 0) {
+    if (tempGrantSerial && tempGrantSerial !== 'new' && reassignModalOpen && assigningF1Ids.length > 0) {
       fetchLastWorkplanNum(tempGrantSerial)
     }
-  }, [tempGrantSerial, assigningF1Ids])
+  }, [tempGrantSerial, reassignModalOpen, assigningF1Ids])
 
   useEffect(() => {
     applyFilters()
@@ -522,14 +459,14 @@ export default function CommittedF1sTab() {
         </div>
         <div className="flex items-center gap-2">
           <Button
-            onClick={openAssignModal}
+            onClick={openPartnerModal}
             disabled={selected.length === 0 || selected.some(id => {
               const f1 = f1s.find(f => f.id === id)
-              return !!f1?.mou_id || !!f1?.grant_call_id
+              return !!f1?.mou_id
             })}
             className="bg-green-600 hover:bg-green-700 text-white"
           >
-            Assign F1 and Create F3 MOU
+            Create F3 MOU
           </Button>
         </div>
       </div>
@@ -724,197 +661,6 @@ export default function CommittedF1sTab() {
           )}
         </CardContent>
       </Card>
-
-      {/* Assignment Modal */}
-      <Dialog open={assignModalOpen} onOpenChange={setAssignModalOpen}>
-        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Assign Work Plans</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 mt-4">
-            <div>
-              <p className="text-sm text-muted-foreground mb-4">
-                Assigning {assigningF1Ids.length} F1 work plan(s) to a grant call
-              </p>
-              <div className="max-h-32 overflow-y-auto mb-4 p-2 bg-muted rounded-md">
-                {assigningF1Ids.map(id => {
-                  const f1 = f1s.find(f => f.id === id)
-                  return f1 ? (
-                    <div key={id} className="text-sm">{f1.err_id} - {f1.state} - {f1.locality}</div>
-                  ) : null
-                })}
-              </div>
-            </div>
-
-            {/* Row 1: Funding Cycle, Grant Call, Donor */}
-            <div className="grid grid-cols-3 gap-4">
-              <div>
-                <Label>Funding Cycle *</Label>
-                <Select value={tempFundingCycle} onValueChange={setTempFundingCycle}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {fundingCycles.map(fc => (
-                      <SelectItem key={fc.id} value={fc.id}>{fc.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div>
-                <Label>Grant Call *</Label>
-                <Select 
-                  value={tempGrantCall} 
-                  onValueChange={(value) => {
-                    setTempGrantCall(value)
-                    setTempGrantSerial('')
-                    setGrantSerials([])
-                  }}
-                  disabled={!tempFundingCycle}
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {grantCallsForCycle.map((gc: any) => (
-                      <SelectItem key={gc.id} value={gc.id}>{gc.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div>
-                <Label>Donor</Label>
-                <Input
-                  value={grantCallsForCycle.find((gc: any) => gc.id === tempGrantCall)?.donor_name || ''}
-                  disabled
-                  className="bg-muted w-full"
-                />
-              </div>
-            </div>
-
-            {/* Row 2: MMYY and Grant Serial */}
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label>MMYY *</Label>
-                <Input
-                  value={tempMMYY}
-                  onChange={(e) => {
-                    const newMMYY = e.target.value.replace(/[^0-9]/g, '').slice(0, 4)
-                    setTempMMYY(newMMYY)
-                    if (newMMYY.length !== 4) {
-                      setTempGrantSerial('')
-                      setGrantSerials([])
-                    }
-                  }}
-                  placeholder="0825"
-                  maxLength={4}
-                  className="w-full"
-                />
-              </div>
-
-              <div>
-                <Label>Grant Serial *</Label>
-                <Select 
-                  value={tempGrantSerial} 
-                  onValueChange={setTempGrantSerial}
-                  disabled={!tempGrantCall || !tempMMYY || tempMMYY.length !== 4}
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select or create" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="new">Create New Serial</SelectItem>
-                    {grantSerials.map(gs => (
-                      <SelectItem key={gs.grant_serial} value={gs.grant_serial}>{gs.grant_serial}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            {/* Generated Serial ID Preview */}
-            {assigningF1Ids.length > 0 && (
-              <div>
-                <Label>Generated Workplan Serial(s)</Label>
-                <div className="p-3 bg-muted rounded-md font-mono text-sm max-h-32 overflow-y-auto">
-                  {assigningF1Ids.map((id, idx) => {
-                    const grantCall = grantCallsForCycle.find((gc: any) => gc.id === tempGrantCall)
-                    const donorShort = grantCall?.donor_short
-                    const f1 = f1s.find(f => f.id === id)
-                    const stateShort = f1 ? (stateShorts[f1.state] || '') : ''
-                    const mmyy = tempMMYY
-                    const grantSerial = tempGrantSerial
-                    
-                    let workplanNum = 1
-                    if (grantSerial && grantSerial !== 'new') {
-                      const baseNum = lastWorkplanNums[id] || 0
-                      workplanNum = baseNum + 1 + idx
-                    } else if (grantSerial === 'new') {
-                      // For new serials, increment workplan number for each F1 (1, 2, 3, etc.)
-                      workplanNum = idx + 1
-                    }
-                    
-                    if (grantSerial && grantSerial !== 'new' && grantSerial.includes('-')) {
-                      return <div key={id}>{grantSerial}-{String(workplanNum).padStart(3, '0')}</div>
-                    }
-                    
-                    if (grantSerial === 'new' && donorShort && stateShort && mmyy) {
-                      // Calculate next serial number from existing grant serials
-                      const serialPrefix = `LCC-${donorShort}-${stateShort}-${mmyy}-`
-                      let maxSerialNumber = 0
-                      
-                      // Filter grant serials for this donor/state/yymm combination
-                      const relevantSerials = grantSerials.filter((gs: any) => 
-                        gs.grant_serial && gs.grant_serial.startsWith(serialPrefix)
-                      )
-                      
-                      // Extract serial numbers and find the maximum
-                      for (const gs of relevantSerials) {
-                        const serialStr = gs.grant_serial || ''
-                        if (serialStr.startsWith(serialPrefix)) {
-                          const serialNumberStr = serialStr.substring(serialPrefix.length)
-                          const serialNumber = parseInt(serialNumberStr, 10)
-                          if (!isNaN(serialNumber) && serialNumber > maxSerialNumber) {
-                            maxSerialNumber = serialNumber
-                          }
-                        }
-                      }
-                      
-                      const nextSerialNumber = maxSerialNumber + 1
-                      const serialNum = String(nextSerialNumber).padStart(4, '0')
-                      return <div key={id}>LCC-{donorShort}-{stateShort}-{mmyy}-{serialNum}-{String(workplanNum).padStart(3, '0')}</div>
-                    }
-                    return <div key={id}>LCC-XXX-XX-XXXX-XXXX-XXX</div>
-                  })}
-                </div>
-              </div>
-            )}
-
-            <div className="flex justify-end gap-2 pt-4">
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setAssignModalOpen(false)
-                  setTempFundingCycle('')
-                  setTempGrantCall('')
-                  setTempMMYY('')
-                  setTempGrantSerial('')
-                }}
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={handleAssignMultipleF1s}
-                disabled={!tempGrantCall || !tempMMYY || tempMMYY.length !== 4 || !tempGrantSerial || !tempFundingCycle || isAssigning}
-              >
-                {isAssigning ? 'Assigning...' : 'Assign and Continue'}
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
 
       {/* Reassignment Modal */}
       <Dialog open={reassignModalOpen} onOpenChange={setReassignModalOpen}>

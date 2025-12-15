@@ -1,14 +1,14 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 
-export async function POST(request: Request) {
+export async function POST(
+  request: Request,
+  { params }: { params: { id: string } }
+) {
   try {
     const supabase = getSupabaseRouteClient()
-    const { f1_ids, funding_cycle_id, grant_call_id, mmyy, grant_serial } = await request.json()
-    
-    if (!f1_ids || !Array.isArray(f1_ids) || f1_ids.length === 0) {
-      return NextResponse.json({ error: 'F1 IDs array is required' }, { status: 400 })
-    }
+    const mouId = params.id
+    const { funding_cycle_id, grant_call_id, mmyy, grant_serial } = await request.json()
     
     if (!funding_cycle_id || !grant_call_id || !mmyy || !grant_serial) {
       return NextResponse.json({ error: 'Missing required assignment fields' }, { status: 400 })
@@ -18,22 +18,23 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'MMYY must be 4 digits' }, { status: 400 })
     }
     
-    // Fetch F1s to get their states and validate
+    // Fetch all projects linked to this MOU
     const { data: f1s, error: fetchError } = await supabase
       .from('err_projects')
-      .select('id, state, temp_file_key, file_key, grant_call_id')
-      .in('id', f1_ids)
+      .select('id, state, temp_file_key, file_key, grant_call_id, mou_id')
+      .eq('mou_id', mouId)
       .eq('funding_status', 'committed')
+      .eq('status', 'approved')
     
     if (fetchError) throw fetchError
-    if (!f1s || f1s.length !== f1_ids.length) {
-      return NextResponse.json({ error: 'Some F1s not found or not committed' }, { status: 400 })
+    if (!f1s || f1s.length === 0) {
+      return NextResponse.json({ error: 'No committed and approved projects found for this MOU' }, { status: 400 })
     }
     
     // Check if any are already assigned
     const alreadyAssigned = f1s.filter((f1: any) => f1.grant_call_id)
     if (alreadyAssigned.length > 0) {
-      return NextResponse.json({ error: 'Some F1s are already assigned' }, { status: 400 })
+      return NextResponse.json({ error: 'Some projects in this MOU are already assigned to a grant' }, { status: 400 })
     }
     
     // Get grant call details
@@ -81,7 +82,6 @@ export async function POST(request: Request) {
       const cycleStateAllocationId = cycleAllocationData?.[0]?.id || null
       
       // Create grant serial - we'll call the API route
-      // Use the request origin to automatically get the correct port
       const baseUrl = process.env.NEXT_PUBLIC_APP_URL || new URL(request.url).origin
       const createResp = await fetch(`${baseUrl}/api/fsystem/grant-serials/create`, {
         method: 'POST',
@@ -120,7 +120,6 @@ export async function POST(request: Request) {
     const cycleStateAllocationId = cycleAllocationData?.[0]?.id || null
     
     // Get initial workplan number from grant_workplan_seq table BEFORE processing F1s
-    // This ensures sequential numbering when assigning multiple F1s
     const { data: initialSeqData } = await supabase
       .from('grant_workplan_seq')
       .select('last_workplan_number')
@@ -220,7 +219,7 @@ export async function POST(request: Request) {
     
     if (assignedCount === 0) {
       return NextResponse.json({ 
-        error: 'Failed to assign any F1s', 
+        error: 'Failed to assign any projects', 
         details: errors 
       }, { status: 500 })
     }
@@ -231,8 +230,8 @@ export async function POST(request: Request) {
       errors: errors.length > 0 ? errors : undefined
     })
   } catch (error) {
-    console.error('Error assigning F1s:', error)
-    return NextResponse.json({ error: 'Failed to assign F1s' }, { status: 500 })
+    console.error('Error assigning MOU to grant:', error)
+    return NextResponse.json({ error: 'Failed to assign MOU to grant' }, { status: 500 })
   }
 }
 
