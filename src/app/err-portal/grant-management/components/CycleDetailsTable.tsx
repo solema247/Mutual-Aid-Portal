@@ -71,8 +71,7 @@ export default function CycleDetailsTable({
 }: CycleDetailsTableProps) {
   const { t } = useTranslation(['err', 'common'])
   const [isExpanded, setIsExpanded] = useState(false)
-  const [isGrantExpanded, setIsGrantExpanded] = useState(false)
-  const [isBudgetExpanded, setIsBudgetExpanded] = useState(false)
+  const [isGrantBudgetExpanded, setIsGrantBudgetExpanded] = useState(false)
   const [isStatesExpanded, setIsStatesExpanded] = useState(false)
   
   const [includedGrants, setIncludedGrants] = useState<CycleGrantInclusion[]>([])
@@ -402,7 +401,7 @@ export default function CycleDetailsTable({
 
       {isExpanded && (
         <>
-          {/* Grant Pool Row */}
+          {/* Distribution Decision Summary Row */}
           <TableRow className="bg-blue-50/50">
             <TableCell></TableCell>
             <TableCell colSpan={7}>
@@ -410,98 +409,111 @@ export default function CycleDetailsTable({
                 className="flex items-center justify-between py-2 cursor-pointer"
                 onClick={(e) => {
                   e.stopPropagation()
-                  setIsGrantExpanded(!isGrantExpanded)
+                  setIsGrantBudgetExpanded(!isGrantBudgetExpanded)
                 }}
               >
                 <div className="flex items-center gap-2">
-                  {isGrantExpanded ? (
+                  {isGrantBudgetExpanded ? (
                     <ChevronDown className="h-4 w-4" />
                   ) : (
                     <ChevronRight className="h-4 w-4" />
                   )}
                   <Building2 className="h-4 w-4" />
-                  <span className="font-semibold">Grant Pool</span>
-                  {includedGrants.length > 0 && (
-                    <Badge variant="outline">{formatCurrency(getTotalIncluded())}</Badge>
+                  <span className="font-semibold">Distribution Decision Summary</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  {localBudgetSummary && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        fetchBudgetSummary()
+                      }}
+                      disabled={isRefreshingBudget}
+                    >
+                      <RefreshCw className={cn("h-4 w-4", isRefreshingBudget && "animate-spin")} />
+                    </Button>
+                  )}
+                  {includedGrants.length === 0 && (
+                    <Dialog open={isAddGrantOpen} onOpenChange={setIsAddGrantOpen}>
+                      <DialogTrigger asChild>
+                        <Button 
+                          size="sm" 
+                          className="bg-[#007229] hover:bg-[#007229]/90 text-white"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <Plus className="h-4 w-4 mr-2" />
+                          Add Grant
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent onClick={(e) => e.stopPropagation()}>
+                        <DialogHeader>
+                          <DialogTitle>Add Grant to Cycle</DialogTitle>
+                        </DialogHeader>
+                        <div className="space-y-4">
+                          <div>
+                            <label className="text-sm font-medium">Select Grant</label>
+                            <Select value={selectedGrant} onValueChange={setSelectedGrant}>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Choose grant" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {availableGrants
+                                  .filter(g => !includedGrants.some(inc => inc.grant_calls?.id === g.id))
+                                  .map((grant) => (
+                                  <SelectItem key={grant.id} value={grant.id}>
+                                    <div>
+                                      <div className="font-medium">{grant.name}</div>
+                                      <div className="text-sm text-muted-foreground">
+                                        {grant.donor.name} - {formatCurrency(grant.amount || 0)}
+                                      </div>
+                                    </div>
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div>
+                            <label className="text-sm font-medium">Amount to Include</label>
+                            <Input
+                              type="number"
+                              value={amountIncluded}
+                              onChange={(e) => setAmountIncluded(e.target.value)}
+                              placeholder="Enter amount"
+                            />
+                          </div>
+                          <div className="flex justify-end gap-2">
+                            <Button variant="outline" onClick={() => setIsAddGrantOpen(false)}>
+                              Cancel
+                            </Button>
+                            <Button 
+                              onClick={handleAddGrant}
+                              disabled={!selectedGrant || !amountIncluded}
+                              className="bg-[#007229] hover:bg-[#007229]/90 text-white"
+                            >
+                              Add
+                            </Button>
+                          </div>
+                        </div>
+                      </DialogContent>
+                    </Dialog>
                   )}
                 </div>
-                {includedGrants.length === 0 && (
-                  <Dialog open={isAddGrantOpen} onOpenChange={setIsAddGrantOpen}>
-                    <DialogTrigger asChild>
-                      <Button 
-                        size="sm" 
-                        className="bg-[#007229] hover:bg-[#007229]/90 text-white"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <Plus className="h-4 w-4 mr-2" />
-                        Add Grant
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent onClick={(e) => e.stopPropagation()}>
-                      <DialogHeader>
-                        <DialogTitle>Add Grant to Cycle</DialogTitle>
-                      </DialogHeader>
-                      <div className="space-y-4">
-                        <div>
-                          <label className="text-sm font-medium">Select Grant</label>
-                          <Select value={selectedGrant} onValueChange={setSelectedGrant}>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Choose grant" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {availableGrants
-                                .filter(g => !includedGrants.some(inc => inc.grant_calls?.id === g.id))
-                                .map((grant) => (
-                                <SelectItem key={grant.id} value={grant.id}>
-                                  <div>
-                                    <div className="font-medium">{grant.name}</div>
-                                    <div className="text-sm text-muted-foreground">
-                                      {grant.donor.name} - {formatCurrency(grant.amount || 0)}
-                                    </div>
-                                  </div>
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div>
-                          <label className="text-sm font-medium">Amount to Include</label>
-                          <Input
-                            type="number"
-                            value={amountIncluded}
-                            onChange={(e) => setAmountIncluded(e.target.value)}
-                            placeholder="Enter amount"
-                          />
-                        </div>
-                        <div className="flex justify-end gap-2">
-                          <Button variant="outline" onClick={() => setIsAddGrantOpen(false)}>
-                            Cancel
-                          </Button>
-                          <Button 
-                            onClick={handleAddGrant}
-                            disabled={!selectedGrant || !amountIncluded}
-                            className="bg-[#007229] hover:bg-[#007229]/90 text-white"
-                          >
-                            Add
-                          </Button>
-                        </div>
-                      </div>
-                    </DialogContent>
-                  </Dialog>
-                )}
               </div>
               
-              {isGrantExpanded && (
-                <div className="pl-6 mt-2 space-y-2">
+              {isGrantBudgetExpanded && (
+                <div className="pl-6 mt-2">
                   {includedGrants.length === 0 ? (
                     <div className="text-sm text-muted-foreground py-2">No grants added</div>
                   ) : (
-                    includedGrants.map((inclusion) => (
-                      <div key={inclusion.id} className="flex items-center justify-between py-2 border-b">
+                    <div className="flex items-center gap-8 py-2">
+                      {/* Grant Info */}
+                      <div className="flex items-center gap-2">
                         <div>
-                          <div className="font-medium">{inclusion.grant_calls?.name || 'Unknown'}</div>
+                          <div className="font-medium">{includedGrants[0]?.grant_calls?.name || 'Unknown'}</div>
                           <div className="text-sm text-muted-foreground">
-                            {inclusion.grant_calls?.donor?.name} • {formatCurrency(inclusion.amount_included)}
+                            {includedGrants[0]?.grant_calls?.donor?.name} • {formatCurrency(includedGrants[0]?.amount_included || 0)}
                           </div>
                         </div>
                         <Button
@@ -509,86 +521,50 @@ export default function CycleDetailsTable({
                           size="icon"
                           onClick={(e) => {
                             e.stopPropagation()
-                            handleRemoveGrant(inclusion.grant_calls?.id || '')
+                            handleRemoveGrant(includedGrants[0]?.grant_calls?.id || '')
                           }}
                           className="h-8 w-8 text-destructive"
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
-                    ))
+
+                      {/* Budget Summary */}
+                      {localBudgetSummary && (
+                        <div className="flex items-center gap-6">
+                          <div>
+                            <div className="text-xs text-muted-foreground">Total Available</div>
+                            <div className="font-semibold">{formatCurrency(localBudgetSummary.total_available)}</div>
+                          </div>
+                          <div>
+                            <div className="text-xs text-muted-foreground">Total Allocated</div>
+                            <div className="font-semibold">{formatCurrency(localBudgetSummary.total_allocated)}</div>
+                          </div>
+                          <div>
+                            <div className="text-xs text-muted-foreground">Committed</div>
+                            <div className="font-semibold text-green-600">{formatCurrency(localBudgetSummary.total_committed)}</div>
+                          </div>
+                          <div>
+                            <div className="text-xs text-muted-foreground">Pending</div>
+                            <div className="font-semibold text-orange-600">{formatCurrency(localBudgetSummary.total_pending)}</div>
+                          </div>
+                          <div>
+                            <div className="text-xs text-muted-foreground">Remaining</div>
+                            <div className={cn(
+                              "font-semibold",
+                              localBudgetSummary.remaining >= 0 ? "text-green-600" : "text-red-600"
+                            )}>
+                              {formatCurrency(localBudgetSummary.remaining)}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   )}
                 </div>
               )}
             </TableCell>
           </TableRow>
-
-          {/* Budget Summary Row */}
-          {localBudgetSummary && (
-            <TableRow className="bg-green-50/50">
-              <TableCell></TableCell>
-              <TableCell colSpan={7}>
-                <div 
-                  className="flex items-center justify-between py-2 cursor-pointer"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    setIsBudgetExpanded(!isBudgetExpanded)
-                  }}
-                >
-                  <div className="flex items-center gap-2">
-                    {isBudgetExpanded ? (
-                      <ChevronDown className="h-4 w-4" />
-                    ) : (
-                      <ChevronRight className="h-4 w-4" />
-                    )}
-                    <DollarSign className="h-4 w-4" />
-                    <span className="font-semibold">Budget Summary</span>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      fetchBudgetSummary()
-                    }}
-                    disabled={isRefreshingBudget}
-                  >
-                    <RefreshCw className={cn("h-4 w-4", isRefreshingBudget && "animate-spin")} />
-                  </Button>
-                </div>
-                
-                {isBudgetExpanded && (
-                  <div className="pl-6 mt-2 grid grid-cols-2 md:grid-cols-5 gap-4">
-                    <div>
-                      <div className="text-xs text-muted-foreground">Total Available</div>
-                      <div className="font-semibold">{formatCurrency(localBudgetSummary.total_available)}</div>
-                    </div>
-                    <div>
-                      <div className="text-xs text-muted-foreground">Total Allocated</div>
-                      <div className="font-semibold">{formatCurrency(localBudgetSummary.total_allocated)}</div>
-                    </div>
-                    <div>
-                      <div className="text-xs text-muted-foreground">Committed</div>
-                      <div className="font-semibold text-green-600">{formatCurrency(localBudgetSummary.total_committed)}</div>
-                    </div>
-                    <div>
-                      <div className="text-xs text-muted-foreground">Pending</div>
-                      <div className="font-semibold text-orange-600">{formatCurrency(localBudgetSummary.total_pending)}</div>
-                    </div>
-                    <div>
-                      <div className="text-xs text-muted-foreground">Remaining</div>
-                      <div className={cn(
-                        "font-semibold",
-                        localBudgetSummary.remaining >= 0 ? "text-green-600" : "text-red-600"
-                      )}>
-                        {formatCurrency(localBudgetSummary.remaining)}
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </TableCell>
-            </TableRow>
-          )}
 
           {/* State Allocations Row */}
           <TableRow className="bg-purple-50/50">
@@ -690,58 +666,91 @@ export default function CycleDetailsTable({
                   {allocations.length === 0 ? (
                     <div className="text-sm text-muted-foreground py-2">No state allocations</div>
                   ) : (
-                    <div className="space-y-1">
-                      {allocations.map((allocation) => (
-                        <div key={allocation.id} className="flex items-center justify-between py-2 border-b">
-                          <div className="flex-1">
-                            <div className="font-medium">{allocation.state_name}</div>
-                            <div className="text-sm text-muted-foreground">
-                              Allocated: {formatCurrency(allocation.amount)} • 
-                              Committed: {formatCurrency(allocation.total_committed || 0)} • 
-                              Remaining: {formatCurrency(allocation.remaining || allocation.amount)}
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            {editingAllocation === allocation.id ? (
-                              <>
-                                <Input
-                                  type="number"
-                                  value={editAmount}
-                                  onChange={(e) => setEditAmount(e.target.value)}
-                                  className="w-24"
-                                />
-                                <Button size="sm" onClick={handleSaveEdit}>Save</Button>
-                                <Button size="sm" variant="outline" onClick={() => setEditingAllocation(null)}>Cancel</Button>
-                              </>
-                            ) : (
-                              <>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    handleEditAllocation(allocation.id, allocation.amount)
-                                  }}
-                                  className="h-8 w-8"
-                                >
-                                  <Pencil className="h-4 w-4" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    handleDeleteAllocation(allocation.id, allocation.state_name)
-                                  }}
-                                  className="h-8 w-8 text-destructive"
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              </>
-                            )}
-                          </div>
-                        </div>
-                      ))}
+                    <div className="overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>State</TableHead>
+                            <TableHead className="text-right">Allocated</TableHead>
+                            <TableHead className="text-right">Committed</TableHead>
+                            <TableHead className="text-right">Remaining</TableHead>
+                            <TableHead className="w-[100px]">Actions</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {allocations.map((allocation) => (
+                            <TableRow key={allocation.id}>
+                              <TableCell className="font-medium">{allocation.state_name}</TableCell>
+                              <TableCell className="text-right">{formatCurrency(allocation.amount)}</TableCell>
+                              <TableCell className="text-right text-green-600">
+                                {formatCurrency(allocation.total_committed || 0)}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                {formatCurrency(allocation.remaining || allocation.amount)}
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex items-center gap-2">
+                                  {editingAllocation === allocation.id ? (
+                                    <>
+                                      <Input
+                                        type="number"
+                                        value={editAmount}
+                                        onChange={(e) => setEditAmount(e.target.value)}
+                                        className="w-24"
+                                        onClick={(e) => e.stopPropagation()}
+                                      />
+                                      <Button 
+                                        size="sm" 
+                                        onClick={(e) => {
+                                          e.stopPropagation()
+                                          handleSaveEdit()
+                                        }}
+                                      >
+                                        Save
+                                      </Button>
+                                      <Button 
+                                        size="sm" 
+                                        variant="outline" 
+                                        onClick={(e) => {
+                                          e.stopPropagation()
+                                          setEditingAllocation(null)
+                                        }}
+                                      >
+                                        Cancel
+                                      </Button>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        onClick={(e) => {
+                                          e.stopPropagation()
+                                          handleEditAllocation(allocation.id, allocation.amount)
+                                        }}
+                                        className="h-8 w-8"
+                                      >
+                                        <Pencil className="h-4 w-4" />
+                                      </Button>
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        onClick={(e) => {
+                                          e.stopPropagation()
+                                          handleDeleteAllocation(allocation.id, allocation.state_name)
+                                        }}
+                                        className="h-8 w-8 text-destructive"
+                                      >
+                                        <Trash2 className="h-4 w-4" />
+                                      </Button>
+                                    </>
+                                  )}
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
                     </div>
                   )}
                 </div>

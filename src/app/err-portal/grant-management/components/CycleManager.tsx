@@ -217,7 +217,7 @@ export default function CycleManager() {
         <div className="flex items-center justify-between">
           <CardTitle className="flex items-center gap-2">
             <Calendar className="h-5 w-5" />
-            {t('err:cycles.table_title')}
+            Distribution Decisions
           </CardTitle>
           <div className="flex items-center gap-2">
             <Select
@@ -240,12 +240,12 @@ export default function CycleManager() {
               <DialogTrigger asChild>
                 <Button className="bg-[#007229] hover:bg-[#007229]/90 text-white">
                   <Plus className="h-4 w-4 mr-2" />
-                  {t('err:cycles.create_new')}
+                  Create New Distribution Decision
                 </Button>
               </DialogTrigger>
               <DialogContent className="sm:max-w-[600px]">
                 <DialogHeader>
-                  <DialogTitle>{t('err:cycles.create_dialog_title')}</DialogTitle>
+                  <DialogTitle>Create New Distribution Decision</DialogTitle>
                 </DialogHeader>
                 <CycleCreationForm onSuccess={handleCycleCreated} />
               </DialogContent>
@@ -257,7 +257,7 @@ export default function CycleManager() {
         <div className="overflow-x-auto">
           {filteredCycles.length === 0 && cycles.length > 0 ? (
             <div className="text-center py-8 text-muted-foreground">
-              No cycles found for the selected donor filter.
+              No distribution decisions found for the selected donor filter.
             </div>
           ) : filteredCycles.length > 0 ? (
             <Table>
@@ -290,7 +290,7 @@ export default function CycleManager() {
             </Table>
           ) : (
             <div className="text-center py-8 text-muted-foreground">
-              No funding cycles found. Create a new cycle to get started.
+              No distribution decisions found. Create a new distribution decision to get started.
             </div>
           )}
         </div>
