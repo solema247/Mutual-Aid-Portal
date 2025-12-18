@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { useState } from 'react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { ChevronDown, ChevronUp, BarChart } from 'lucide-react'
 import ERRAppSubmissions from './components/ERRAppSubmissions'
 import DirectUpload from './components/DirectUpload'
 import PoolDashboard from './components/PoolDashboard'
@@ -11,6 +12,7 @@ import PoolDashboard from './components/PoolDashboard'
 export default function F1WorkPlansPage() {
   const { t } = useTranslation(['f1_plans', 'common'])
   const [currentTab, setCurrentTab] = useState<'err_app' | 'direct_upload'>('err_app')
+  const [isByStateCollapsed, setIsByStateCollapsed] = useState(true)
 
   return (
     <div className="space-y-6">
@@ -62,11 +64,26 @@ export default function F1WorkPlansPage() {
       {/* Pool Dashboard - By State Table */}
       <Card className="border-0">
         <CardHeader>
-          <CardTitle>{t('f1_plans:pool_overview')}</CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle 
+              className="flex items-center gap-2 cursor-pointer"
+              onClick={() => setIsByStateCollapsed(!isByStateCollapsed)}
+            >
+              <BarChart className="h-5 w-5" />
+              {t('f1_plans:pool_overview')}
+              {isByStateCollapsed ? (
+                <ChevronDown className="h-4 w-4" />
+              ) : (
+                <ChevronUp className="h-4 w-4" />
+              )}
+            </CardTitle>
+          </div>
         </CardHeader>
-        <CardContent>
-          <PoolDashboard showByDonor={false} showSummaryCards={false} showByState={true} />
-        </CardContent>
+        {!isByStateCollapsed && (
+          <CardContent>
+            <PoolDashboard showByDonor={false} showSummaryCards={false} showByState={true} />
+          </CardContent>
+        )}
       </Card>
     </div>
   )

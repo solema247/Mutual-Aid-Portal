@@ -156,7 +156,7 @@ export default function PoolDashboard({ showProposals = true, showByDonor = true
       )}
 
       {showByState && (
-        <CollapsibleRow title={t('pool.by_state.title')} defaultOpen={true}>
+        <div>
         <div className="flex flex-row items-center justify-between mb-4">
           <div className="text-sm text-muted-foreground">
             {t('pool.by_state.title')}
@@ -296,7 +296,7 @@ export default function PoolDashboard({ showProposals = true, showByDonor = true
             })()}
           </TableBody>
         </Table>
-      </CollapsibleRow>
+        </div>
       )}
 
       {showByDonor && (
