@@ -5,50 +5,86 @@ export const dynamic = 'force-dynamic'
 export const revalidate = 0
 export const fetchCache = 'force-no-store'
 
-// GET /api/pool/by-donor - Aggregated by donor and grant call
+// Helper function to fetch all rows with pagination
+async function fetchAllRows<T>(
+  supabase: any,
+  table: string,
+  select: string,
+  filter?: (query: any) => any
+): Promise<T[]> {
+  const allRows: T[] = []
+  let from = 0
+  const pageSize = 1000
+
+  while (true) {
+    let query = supabase.from(table).select(select).range(from, from + pageSize - 1)
+    if (filter) {
+      query = filter(query)
+    }
+    const { data, error } = await query
+    if (error) throw error
+    if (!data || data.length === 0) break
+    allRows.push(...data)
+    if (data.length < pageSize) break
+    from += pageSize
+  }
+  return allRows
+}
+
+// GET /api/pool/by-donor - Aggregated by donor and grant from grants_grid_view
 export async function GET() {
   try {
     const supabase = getSupabaseRouteClient()
-    // Inclusions with grant and donor
-    const { data: inclusions, error: incErr } = await supabase
-      .from('cycle_grant_inclusions')
-      .select(`
-        amount_included,
-        grant_call_id,
-        grant_calls (
-          id, name, donor_id,
-          donors ( id, name, short_name )
-        )
-      `)
+    
+    // Fetch all grants from grants_grid_view with activities
+    const grants = await fetchAllRows(
+      supabase,
+      'grants_grid_view',
+      'grant_id, donor_name, project_name, donor_id, sum_activity_amount, activities',
+      (q) => q.order('grant_id', { ascending: true })
+    )
 
-    if (incErr) throw incErr
-
-    // Normalize inclusions
-    type Row = { donor_id: string | null; donor_name: string | null; grant_call_id: string; grant_call_name: string | null; amount_included: number }
-    const norm: Row[] = (inclusions || []).map((r: any) => {
-      const donorObj = r.grant_calls?.donors || null
-      return {
-        donor_id: donorObj?.id || r.grant_calls?.donor_id || null,
-        donor_name: donorObj?.name || null,
-        grant_call_id: r.grant_call_id,
-        grant_call_name: r.grant_calls?.name || null,
-        amount_included: r.amount_included || 0
+    // Get unique grants (group by grant_id and donor_name)
+    const uniqueGrants = new Map<string, { 
+      grant_id: string; 
+      donor_name: string; 
+      project_name: string | null; 
+      donor_id: string | null; 
+      included: number;
+      activitySerials: string[];
+    }>()
+    
+    for (const grant of grants) {
+      const key = `${grant.grant_id}|${grant.donor_name}`
+      const activitySerials = grant.activities 
+        ? grant.activities.split(',').map((s: string) => s.trim()).filter(Boolean)
+        : []
+      
+      if (!uniqueGrants.has(key)) {
+        uniqueGrants.set(key, {
+          grant_id: grant.grant_id,
+          donor_name: grant.donor_name || 'Unknown',
+          project_name: grant.project_name || grant.grant_id,
+          donor_id: grant.donor_id || null,
+          included: grant.sum_activity_amount || 0,
+          activitySerials
+        })
+      } else {
+        // If duplicate, sum the amounts and merge activity serials
+        const existing = uniqueGrants.get(key)!
+        existing.included += (grant.sum_activity_amount || 0)
+        // Merge activity serials (avoid duplicates)
+        const newSerials = activitySerials.filter(s => !existing.activitySerials.includes(s))
+        existing.activitySerials.push(...newSerials)
       }
-    })
-
-    const includedByGrant = new Map<string, { donor_id: string | null; donor_name: string | null; grant_call_name: string | null; included: number }>()
-    for (const r of norm) {
-      const cur = includedByGrant.get(r.grant_call_id) || { donor_id: r.donor_id, donor_name: r.donor_name, grant_call_name: r.grant_call_name, included: 0 }
-      cur.included += r.amount_included
-      includedByGrant.set(r.grant_call_id, cur)
     }
 
-    // Usage from err_projects by grant_call_id
-    const { data: projects, error: projErr } = await supabase
-      .from('err_projects')
-      .select('expenses, funding_status, grant_call_id')
-
-    if (projErr) throw projErr
+    // Fetch all projects to calculate committed and pending
+    const projects = await fetchAllRows(
+      supabase,
+      'err_projects',
+      'expenses, funding_status, grant_id'
+    )
 
     const sumExpenses = (rows: any[]) => rows.reduce((sum, p) => {
       try {
@@ -57,25 +93,50 @@ export async function GET() {
       } catch { return sum }
     }, 0)
 
-    const byGrantCommitted = new Map<string, number>()
-    const byGrantPending = new Map<string, number>()
-    for (const p of projects || []) {
-      if (!p.grant_call_id) continue // Only count projects assigned to a grant call
-      const amt = sumExpenses([p])
-      if (p.funding_status === 'committed') {
-        byGrantCommitted.set(p.grant_call_id, (byGrantCommitted.get(p.grant_call_id) || 0) + amt)
-      }
-      // Pending = assigned to grant call but not yet committed
-      if (p.funding_status !== 'committed') {
-        byGrantPending.set(p.grant_call_id, (byGrantPending.get(p.grant_call_id) || 0) + amt)
+    // Build a map of project serial to grant key for quick lookup
+    const projectSerialToGrantKey = new Map<string, string>()
+    for (const [grantKey, grant] of uniqueGrants.entries()) {
+      for (const serial of grant.activitySerials) {
+        projectSerialToGrantKey.set(serial, grantKey)
       }
     }
 
-    const rows = Array.from(includedByGrant.entries()).map(([grant_call_id, v]) => {
-      const committed = byGrantCommitted.get(grant_call_id) || 0
-      const pending = byGrantPending.get(grant_call_id) || 0
-      const remaining = v.included - committed - pending
-      return { donor_id: v.donor_id, donor_name: v.donor_name, grant_call_id, grant_call_name: v.grant_call_name, included: v.included, committed, pending, remaining }
+    // Calculate committed and pending by grant key
+    const byGrantCommitted = new Map<string, number>()
+    const byGrantPending = new Map<string, number>()
+    
+    for (const p of projects) {
+      if (!p.grant_id) continue // Only count projects assigned to a grant
+      
+      // Find which grant this project belongs to by checking if its grant_id (serial) is in any grant's activities
+      const grantKey = projectSerialToGrantKey.get(p.grant_id)
+      if (!grantKey) continue // Project serial not found in any grant's activities
+      
+      const amt = sumExpenses([p])
+      if (p.funding_status === 'committed') {
+        byGrantCommitted.set(grantKey, (byGrantCommitted.get(grantKey) || 0) + amt)
+      }
+      // Pending = assigned to grant but not yet committed
+      if (p.funding_status !== 'committed') {
+        byGrantPending.set(grantKey, (byGrantPending.get(grantKey) || 0) + amt)
+      }
+    }
+
+    // Build result rows
+    const rows = Array.from(uniqueGrants.entries()).map(([grantKey, grant]) => {
+      const committed = byGrantCommitted.get(grantKey) || 0
+      const pending = byGrantPending.get(grantKey) || 0
+      const remaining = grant.included - committed - pending
+      return {
+        donor_id: grant.donor_id,
+        donor_name: grant.donor_name,
+        grant_id: grant.grant_id,
+        grant_call_name: grant.project_name || grant.grant_id,
+        included: grant.included,
+        committed,
+        pending,
+        remaining
+      }
     })
 
     return NextResponse.json(rows, { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } })

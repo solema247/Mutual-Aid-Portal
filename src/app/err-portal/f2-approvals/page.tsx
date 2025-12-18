@@ -8,6 +8,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { supabase } from '@/lib/supabaseClient'
 import PoolDashboard from '../f1-work-plans/components/PoolDashboard'
+import PoolByState from './components/PoolByState'
+import PoolByDonor from './components/PoolByDonor'
 import UncommittedF1sTab from './components/UncommittedF1sTab'
 import CommittedF1sTab from './components/CommittedF1sTab'
 
@@ -74,16 +76,10 @@ export default function F2ApprovalsPage() {
         </Button>
       </div>
 
-      {/* Allocation overview dashboard (by State and by Donor/Grant) */}
-      <Card>
-        <CardHeader>
-          <CardTitle>{t('f2:allocation_overview')}</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <PoolDashboard showProposals={false} />
-        </CardContent>
-      </Card>
+      {/* Summary Cards */}
+      <PoolDashboard showProposals={false} showByDonor={false} showSummaryCards={true} showByState={false} />
 
+      {/* F2 Approvals - Final Review and Commitment */}
       <Card>
         <CardHeader>
           <CardTitle>{t('f2:page_header')}</CardTitle>
@@ -109,6 +105,12 @@ export default function F2ApprovalsPage() {
           </Tabs>
         </CardContent>
       </Card>
+
+      {/* Allocation Overview - By State */}
+      <PoolByState />
+
+      {/* Allocation Overview - By Donor/Grant */}
+      <PoolByDonor />
     </div>
   )
 }

@@ -31,6 +31,8 @@ export default function UncommittedF1sTab() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [deletingF1Id, setDeletingF1Id] = useState<string | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [currentPage, setCurrentPage] = useState(1)
+  const itemsPerPage = 10
 
   useEffect(() => {
     fetchUncommittedF1s()
@@ -43,6 +45,7 @@ export default function UncommittedF1sTab() {
       if (!response.ok) throw new Error('Failed to fetch uncommitted F1s')
       const data = await response.json()
       setF1s(data)
+      setCurrentPage(1) // Reset to first page when data refreshes
     } catch (error) {
       console.error('Error fetching uncommitted F1s:', error)
     } finally {
@@ -227,6 +230,11 @@ export default function UncommittedF1sTab() {
     return <div className="text-center py-8">{t('common:loading')}</div>
   }
 
+  const totalPages = Math.ceil(f1s.length / itemsPerPage)
+  const startIndex = (currentPage - 1) * itemsPerPage
+  const endIndex = startIndex + itemsPerPage
+  const paginatedF1s = f1s.slice(startIndex, endIndex)
+
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
@@ -267,7 +275,7 @@ export default function UncommittedF1sTab() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {f1s.map((f1) => (
+              {paginatedF1s.map((f1) => (
                 <TableRow key={f1.id}>
                   <TableCell className="px-4">
                     <Checkbox
@@ -411,6 +419,33 @@ export default function UncommittedF1sTab() {
           </Table>
         </CardContent>
       </Card>
+
+      {/* Pagination */}
+      {f1s.length > itemsPerPage && (
+        <div className="flex items-center justify-between">
+          <div className="text-sm text-muted-foreground">
+            Showing {startIndex + 1} to {Math.min(endIndex, f1s.length)} of {f1s.length} projects
+          </div>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+              disabled={currentPage === 1}
+            >
+              Previous
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+              disabled={currentPage === totalPages}
+            >
+              Next
+            </Button>
+          </div>
+        </div>
+      )}
       <ProjectEditor
         open={editorOpen}
         onOpenChange={setEditorOpen}

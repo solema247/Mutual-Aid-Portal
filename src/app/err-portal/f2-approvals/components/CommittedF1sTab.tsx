@@ -42,6 +42,8 @@ export default function CommittedF1sTab() {
   const [reassigningF1Id, setReassigningF1Id] = useState<string | null>(null)
   const [isReassigning, setIsReassigning] = useState(false)
   const [assigningF1Ids, setAssigningF1Ids] = useState<string[]>([])
+  const [currentPage, setCurrentPage] = useState(1)
+  const itemsPerPage = 10
   
   // Reassignment form state
   const [tempFundingCycle, setTempFundingCycle] = useState<string>('')
@@ -378,6 +380,7 @@ export default function CommittedF1sTab() {
       if (!response.ok) throw new Error('Failed to fetch committed F1s')
       const data = await response.json()
       setF1s(data)
+      setCurrentPage(1) // Reset to first page when data refreshes
     } catch (error) {
       console.error('Error fetching committed F1s:', error)
     } finally {
@@ -429,6 +432,7 @@ export default function CommittedF1sTab() {
 
   const applyFilters = () => {
     // Since the API now handles most filtering, we just need to refresh the data
+    setCurrentPage(1) // Reset to first page when filters change
     fetchCommittedF1s()
   }
 
@@ -449,6 +453,11 @@ export default function CommittedF1sTab() {
   if (isLoading) {
     return <div className="text-center py-8">{t('common:loading')}</div>
   }
+
+  const totalPages = Math.ceil(f1s.length / itemsPerPage)
+  const startIndex = (currentPage - 1) * itemsPerPage
+  const endIndex = startIndex + itemsPerPage
+  const paginatedF1s = f1s.slice(startIndex, endIndex)
 
   return (
     <div className="space-y-4">
@@ -599,7 +608,7 @@ export default function CommittedF1sTab() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {f1s.map((f1) => (
+              {paginatedF1s.map((f1) => (
                 <TableRow key={f1.id}>
                   <TableCell className="px-4">
                     <Checkbox disabled={!!f1.mou_id} checked={selected.includes(f1.id)} onCheckedChange={(c) => toggleOne(f1.id, c as boolean)} />
@@ -661,6 +670,33 @@ export default function CommittedF1sTab() {
           )}
         </CardContent>
       </Card>
+
+      {/* Pagination */}
+      {f1s.length > itemsPerPage && (
+        <div className="flex items-center justify-between">
+          <div className="text-sm text-muted-foreground">
+            Showing {startIndex + 1} to {Math.min(endIndex, f1s.length)} of {f1s.length} projects
+          </div>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+              disabled={currentPage === 1}
+            >
+              Previous
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+              disabled={currentPage === totalPages}
+            >
+              Next
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Reassignment Modal */}
       <Dialog open={reassignModalOpen} onOpenChange={setReassignModalOpen}>
