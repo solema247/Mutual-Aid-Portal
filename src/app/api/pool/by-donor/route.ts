@@ -44,7 +44,7 @@ export async function GET() {
       (q) => q.order('grant_id', { ascending: true })
     )
 
-    // Get unique grants (group by grant_id and donor_name)
+    // Get unique grants (group by grant_id only)
     const uniqueGrants = new Map<string, { 
       grant_id: string; 
       donor_name: string; 
@@ -55,7 +55,10 @@ export async function GET() {
     }>()
     
     for (const grant of grants) {
-      const key = `${grant.grant_id}|${grant.donor_name}`
+      // Skip if grant_id is null or empty
+      if (!grant.grant_id || grant.grant_id.trim() === '') continue
+      
+      const key = grant.grant_id.trim() // Group by grant_id only (normalized)
       const activitySerials = grant.activities 
         ? grant.activities.split(',').map((s: string) => s.trim()).filter(Boolean)
         : []
@@ -70,16 +73,48 @@ export async function GET() {
           activitySerials
         })
       } else {
-        // If duplicate, sum the amounts and merge activity serials
+        // If duplicate grant_id, sum the amounts and merge activity serials
         const existing = uniqueGrants.get(key)!
         existing.included += (grant.sum_activity_amount || 0)
         // Merge activity serials (avoid duplicates)
         const newSerials = activitySerials.filter(s => !existing.activitySerials.includes(s))
         existing.activitySerials.push(...newSerials)
+        // Keep the first donor_name encountered (or update if needed)
+        // For now, keep the first one
       }
     }
 
-    // Fetch all projects to calculate committed and pending
+    // Fetch historical data from activities_raw_import
+    const historicalData = await fetchAllRows(
+      supabase,
+      'activities_raw_import',
+      '"Project Donor",USD'
+    )
+
+    // Calculate historical by grant_id (matching Project Donor to grant_id)
+    const byGrantHistorical = new Map<string, number>()
+    for (const row of historicalData || []) {
+      const rawDonor = row['Project Donor'] || row['project_donor'] || row['Project Donor']
+      const rawUSD = row['USD'] || row['usd'] || row.USD
+      
+      if (!rawDonor) continue
+      
+      const grantId = String(rawDonor).trim()
+      if (!grantId) continue
+      
+      let usd = 0
+      if (rawUSD !== null && rawUSD !== undefined) {
+        usd = Number(rawUSD)
+        if (isNaN(usd) || usd === 0) continue
+      } else {
+        continue
+      }
+      
+      // Use normalized grant_id (same as grouping key)
+      byGrantHistorical.set(grantId, (byGrantHistorical.get(grantId) || 0) + usd)
+    }
+
+    // Fetch all projects to calculate assigned
     const projects = await fetchAllRows(
       supabase,
       'err_projects',
@@ -93,51 +128,48 @@ export async function GET() {
       } catch { return sum }
     }, 0)
 
-    // Build a map of project serial to grant key for quick lookup
-    const projectSerialToGrantKey = new Map<string, string>()
-    for (const [grantKey, grant] of uniqueGrants.entries()) {
+    // Build a map of project serial to grant_id for quick lookup
+    const projectSerialToGrantId = new Map<string, string>()
+    for (const [grantId, grant] of uniqueGrants.entries()) {
       for (const serial of grant.activitySerials) {
-        projectSerialToGrantKey.set(serial, grantKey)
+        projectSerialToGrantId.set(serial, grantId)
       }
     }
 
-    // Calculate committed and pending by grant key
-    const byGrantCommitted = new Map<string, number>()
-    const byGrantPending = new Map<string, number>()
+    // Calculate assigned by grant_id (projects assigned to a grant after MOU)
+    const byGrantAssigned = new Map<string, number>()
     
     for (const p of projects) {
       if (!p.grant_id) continue // Only count projects assigned to a grant
       
       // Find which grant this project belongs to by checking if its grant_id (serial) is in any grant's activities
-      const grantKey = projectSerialToGrantKey.get(p.grant_id)
-      if (!grantKey) continue // Project serial not found in any grant's activities
+      const grantId = projectSerialToGrantId.get(p.grant_id)
+      if (!grantId) continue // Project serial not found in any grant's activities
       
+      // Only count projects that are assigned (have a grant_id that matches a serial in activities)
+      // This means they've been assigned after MOU
       const amt = sumExpenses([p])
-      if (p.funding_status === 'committed') {
-        byGrantCommitted.set(grantKey, (byGrantCommitted.get(grantKey) || 0) + amt)
-      }
-      // Pending = assigned to grant but not yet committed
-      if (p.funding_status !== 'committed') {
-        byGrantPending.set(grantKey, (byGrantPending.get(grantKey) || 0) + amt)
-      }
+      byGrantAssigned.set(grantId, (byGrantAssigned.get(grantId) || 0) + amt)
     }
 
-    // Build result rows
-    const rows = Array.from(uniqueGrants.entries()).map(([grantKey, grant]) => {
-      const committed = byGrantCommitted.get(grantKey) || 0
-      const pending = byGrantPending.get(grantKey) || 0
-      const remaining = grant.included - committed - pending
-      return {
-        donor_id: grant.donor_id,
-        donor_name: grant.donor_name,
-        grant_id: grant.grant_id,
-        grant_call_name: grant.project_name || grant.grant_id,
-        included: grant.included,
-        committed,
-        pending,
-        remaining
-      }
-    })
+    // Build result rows (grouped by grant_id only)
+    const rows = Array.from(uniqueGrants.entries())
+      .map(([grantId, grant]) => {
+        const assigned = byGrantAssigned.get(grantId) || 0
+        const historical = byGrantHistorical.get(grantId) || 0
+        const remaining = grant.included - historical - assigned
+        return {
+          donor_id: grant.donor_id,
+          donor_name: grant.donor_name,
+          grant_id: grant.grant_id,
+          grant_call_name: grant.project_name || grant.grant_id,
+          included: grant.included,
+          historical,
+          assigned,
+          remaining
+        }
+      })
+      .sort((a, b) => (a.grant_id || '').localeCompare(b.grant_id || ''))
 
     return NextResponse.json(rows, { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } })
   } catch (error) {
