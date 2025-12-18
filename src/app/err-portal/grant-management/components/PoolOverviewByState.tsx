@@ -4,14 +4,15 @@ import React, { useEffect, useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
-import { RefreshCw, ArrowUpDown, ArrowUp, ArrowDown, ChevronDown, ChevronUp } from 'lucide-react'
+import { RefreshCw, ArrowUpDown, ArrowUp, ArrowDown, ChevronDown, ChevronUp, BarChart } from 'lucide-react'
 
 export default function PoolOverviewByState() {
   const [byState, setByState] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [totalAllocations, setTotalAllocations] = useState(0)
   const [sortColumn, setSortColumn] = useState<string | null>(null)
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc')
-  const [isCollapsed, setIsCollapsed] = useState(false)
+  const [isCollapsed, setIsCollapsed] = useState(true)
 
   useEffect(() => {
     loadData()
@@ -22,6 +23,23 @@ export default function PoolOverviewByState() {
       setLoading(true)
       const bs = await fetch('/api/pool/by-state', { cache: 'no-store' }).then(r => r.json())
       setByState(Array.isArray(bs) ? bs : [])
+      
+      // Fetch total allocation count from allocations_by_date
+      try {
+        const countRes = await fetch('/api/distribution-decisions/allocations/count', { cache: 'no-store' })
+        if (countRes.ok) {
+          const countData = await countRes.json()
+          setTotalAllocations(countData.count || 0)
+        } else {
+          // Fallback: count states with allocations > 0
+          const statesWithAllocations = Array.isArray(bs) ? bs.filter((s: any) => (s.allocated || 0) > 0).length : 0
+          setTotalAllocations(statesWithAllocations)
+        }
+      } catch {
+        // Fallback: count states with allocations > 0
+        const statesWithAllocations = Array.isArray(bs) ? bs.filter((s: any) => (s.allocated || 0) > 0).length : 0
+        setTotalAllocations(statesWithAllocations)
+      }
     } catch (e) {
       console.error('Pool by-state load error:', e)
     } finally {
@@ -90,7 +108,13 @@ export default function PoolOverviewByState() {
             className="flex items-center gap-2 cursor-pointer"
             onClick={() => setIsCollapsed(!isCollapsed)}
           >
+            <BarChart className="h-5 w-5" />
             Pool Overview By State
+            {isCollapsed && totalAllocations > 0 && (
+              <span className="text-sm font-normal text-muted-foreground ml-2">
+                ({totalAllocations} {totalAllocations === 1 ? 'allocation' : 'allocations'})
+              </span>
+            )}
             {isCollapsed ? (
               <ChevronDown className="h-4 w-4" />
             ) : (

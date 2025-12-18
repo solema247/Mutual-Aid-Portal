@@ -98,9 +98,9 @@ export default function GrantCallsManager() {
   const [isLoading, setIsLoading] = useState(true)
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [editingGrant, setEditingGrant] = useState<GrantCall | null>(null)
-  const [statusFilter, setStatusFilter] = useState<'all' | 'Active' | 'Closed'>('all')
+  const [statusFilter, setStatusFilter] = useState<'all' | 'Active' | 'Complete'>('all')
   const [currentUser, setCurrentUser] = useState<User | null>(null)
-  const [isCollapsed, setIsCollapsed] = useState(false)
+  const [isCollapsed, setIsCollapsed] = useState(true)
   const [isEditMode, setIsEditMode] = useState(false)
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
   const [deleteConfirmText, setDeleteConfirmText] = useState('')
@@ -351,7 +351,12 @@ export default function GrantCallsManager() {
             onClick={() => setIsCollapsed(!isCollapsed)}
           >
             <Building2 className="h-5 w-5" />
-            Grant Calls Management
+            Grants Table
+            {isCollapsed && grants.length > 0 && (
+              <span className="text-sm font-normal text-muted-foreground ml-2">
+                ({grants.length} {grants.length === 1 ? 'grant' : 'grants'})
+              </span>
+            )}
             {isCollapsed ? (
               <ChevronDown className="h-4 w-4" />
             ) : (
@@ -361,7 +366,7 @@ export default function GrantCallsManager() {
           <div className="flex items-center gap-2">
             <Select
               value={statusFilter}
-              onValueChange={(value: 'all' | 'Active' | 'Closed') => setStatusFilter(value)}
+              onValueChange={(value: 'all' | 'Active' | 'Complete') => setStatusFilter(value)}
             >
               <SelectTrigger className="w-32">
                 <SelectValue />
@@ -369,7 +374,7 @@ export default function GrantCallsManager() {
               <SelectContent>
                 <SelectItem value="all">All</SelectItem>
                 <SelectItem value="Active">Active</SelectItem>
-                <SelectItem value="Closed">Closed</SelectItem>
+                <SelectItem value="Complete">Complete</SelectItem>
               </SelectContent>
             </Select>
             {currentUser?.role === 'admin' && (
@@ -512,7 +517,7 @@ export default function GrantCallsManager() {
                               </FormControl>
                               <SelectContent>
                                 <SelectItem value="Active">Active</SelectItem>
-                                <SelectItem value="Closed">Closed</SelectItem>
+                                <SelectItem value="Complete">Complete</SelectItem>
                               </SelectContent>
                             </Select>
                             <FormMessage />

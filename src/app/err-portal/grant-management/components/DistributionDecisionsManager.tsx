@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useEffect, useMemo, useState } from 'react'
-import { Plus, ChevronDown, ChevronUp, RefreshCw, Upload, FileSpreadsheet } from 'lucide-react'
+import { Plus, ChevronDown, ChevronUp, RefreshCw, Upload, FileSpreadsheet, FileText } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { supabase } from '@/lib/supabaseClient'
@@ -37,6 +37,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
 type Decision = {
   id: string
@@ -82,7 +83,7 @@ export default function DistributionDecisionsManager() {
   const [allocRows, setAllocRows] = useState<Array<{ state: string; amount: string }>>([{ state: '', amount: '' }])
   const [stateOptions, setStateOptions] = useState<string[]>([])
   const [isDeleting, setIsDeleting] = useState<Record<string, boolean>>({})
-  const [isCollapsed, setIsCollapsed] = useState(false)
+  const [isCollapsed, setIsCollapsed] = useState(true)
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
   const [deleteConfirmText, setDeleteConfirmText] = useState('')
   const [decisionToDelete, setDecisionToDelete] = useState<string | null>(null)
@@ -269,15 +270,12 @@ export default function DistributionDecisionsManager() {
 
   const fetchAllocations = async (decisionId: string) => {
     try {
-      console.log('[DD] fetchAllocations start', { decisionId })
       setIsAllocLoading((prev) => ({ ...prev, [decisionId]: true }))
       const res = await fetch(`/api/distribution-decisions/${decisionId}/allocations`)
       if (!res.ok) throw new Error('Failed to load allocations')
       const data = await res.json()
-      console.log('[DD] fetchAllocations data', { decisionId, count: (data || []).length, sample: data?.[0] })
       setAllocationsByDecision((prev) => ({ ...prev, [decisionId]: data || [] }))
     } catch (error) {
-      console.error('[DD] fetchAllocations error', error)
       alert('Failed to load allocations')
     } finally {
       setIsAllocLoading((prev) => ({ ...prev, [decisionId]: false }))
@@ -295,7 +293,6 @@ export default function DistributionDecisionsManager() {
     }
 
     try {
-      console.log('[DD] handleAddAllocation start', { decisionKey, rows: validRows })
       const res = await fetch(`/api/distribution-decisions/${decisionKey}/allocations`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -305,12 +302,10 @@ export default function DistributionDecisionsManager() {
         const err = await res.json()
         throw new Error(err.error || 'Failed to add allocation')
       }
-      console.log('[DD] handleAddAllocation success', { decisionKey })
       setAllocRows([{ state: '', amount: '' }])
       fetchAllocations(decisionKey)
       fetchDecisions()
     } catch (error: any) {
-      console.error('[DD] handleAddAllocation error', error)
       alert(error.message || 'Failed to add allocation')
     }
   }
@@ -376,26 +371,19 @@ export default function DistributionDecisionsManager() {
         Papa.parse(file, {
           complete: (results) => {
             try {
-              console.log('CSV parsing - Total rows:', results.data.length)
-              
               // B2 = row index 1, column index 1 (0-based: row 2, col B)
               let totalAmount: number | null = null
               if (results.data[1]?.[1]) {
                 totalAmount = parseCurrency(results.data[1][1])
               }
-              console.log('CSV parsing - Total Amount from B2 (row 1, col 1):', totalAmount, 'Raw:', results.data[1]?.[1])
               
               // C3:P3 = row index 2, columns C-P (indices 2-15, 0-based)
               const stateNames = (results.data[2]?.slice(2, 16) || []).map((s: any) => String(s || '').trim())
-              console.log('CSV parsing - State Names from row 3:', stateNames)
               
               // C36:P36 = row index 35, columns C-P (indices 2-15, 0-based)
               const amounts = (results.data[35]?.slice(2, 16) || []).map((a: any) => {
-                const parsed = parseCurrency(a)
-                console.log(`CSV parsing - Amount raw: "${a}", parsed: ${parsed}`)
-                return parsed
+                return parseCurrency(a)
               })
-              console.log('CSV parsing - Amounts from row 36:', amounts)
               
               const allocations = stateNames
                 .map((stateName, idx) => {
@@ -405,12 +393,8 @@ export default function DistributionDecisionsManager() {
                 })
                 .filter(a => a.state && a.amount > 0)
               
-              console.log('CSV parsing - Final allocations:', allocations)
-              console.log('CSV parsing - Allocations count:', allocations.length)
-              
               resolve({ totalAmount, allocations })
             } catch (error) {
-              console.error('CSV parsing error:', error)
               reject(error)
             }
           },
@@ -422,13 +406,8 @@ export default function DistributionDecisionsManager() {
       const workbook = XLSX.read(data, { type: 'array' })
       const sheet = workbook.Sheets[workbook.SheetNames[0]]
       
-      console.log('Excel parsing - B2:', sheet['B2'])
-      console.log('Excel parsing - C3:', sheet['C3'])
-      console.log('Excel parsing - C36:', sheet['C36'])
-      
       // B2 = cell B2
       const totalAmount = sheet['B2']?.v ? parseCurrency(sheet['B2'].v) : null
-      console.log('Excel parsing - Total Amount:', totalAmount, 'Raw:', sheet['B2']?.v)
       
       // C3:P3 and C36:P36
       const stateNames: string[] = []
@@ -444,19 +423,14 @@ export default function DistributionDecisionsManager() {
         amounts.push(amount)
       }
       
-      console.log('Excel parsing - State Names:', stateNames)
-      console.log('Excel parsing - Amounts:', amounts)
-      
       const allocations = stateNames
         .map((stateName, idx) => {
           const systemState = mapCsvStateToSystemState(stateName)
           const amount = amounts[idx] || 0
-          console.log(`Excel parsing - Mapping: "${stateName}" -> "${systemState}", amount: ${amount}`)
           return { state: systemState, amount }
         })
         .filter(a => a.state && a.amount > 0)
       
-      console.log('Excel parsing - Final allocations:', allocations)
       return { totalAmount, allocations }
     } else {
       throw new Error('Unsupported file format. Please upload CSV or Excel file.')
@@ -491,7 +465,6 @@ export default function DistributionDecisionsManager() {
         setCsvFile(null)
       }
     } catch (error: any) {
-      console.error('Error parsing CSV:', error)
       alert(error.message || 'Failed to parse CSV file. Please check the file format.')
       setCsvFile(null)
     } finally {
@@ -544,7 +517,19 @@ export default function DistributionDecisionsManager() {
             className="flex items-center gap-2 cursor-pointer"
             onClick={() => setIsCollapsed(!isCollapsed)}
           >
+            <FileText className="h-5 w-5" />
             Distribution Decisions
+            {isCollapsed && (() => {
+              const totalAllocations = Object.values(allocationsByDecision).reduce((sum, allocs) => sum + allocs.length, 0)
+              if (decisions.length === 0 && totalAllocations === 0) return null
+              return (
+                <span className="text-sm font-normal text-muted-foreground ml-2">
+                  {decisions.length > 0 && `${decisions.length} ${decisions.length === 1 ? 'decision' : 'decisions'}`}
+                  {decisions.length > 0 && totalAllocations > 0 && ' • '}
+                  {totalAllocations > 0 && `${totalAllocations} ${totalAllocations === 1 ? 'allocation' : 'allocations'}`}
+                </span>
+              )
+            })()}
             {isCollapsed ? (
               <ChevronDown className="h-4 w-4" />
             ) : (
@@ -579,6 +564,78 @@ export default function DistributionDecisionsManager() {
                 </DialogHeader>
                 <Form {...decisionForm}>
                   <form className="space-y-4" onSubmit={decisionForm.handleSubmit(handleCreateDecision)}>
+                    {/* Allocation Input Method - Moved to top */}
+                    <div className="space-y-4">
+                      <FormLabel>Allocation Input Method</FormLabel>
+                      <Tabs 
+                        value={useCsvUpload ? 'csv' : 'manual'} 
+                        onValueChange={(value) => {
+                          const isCsv = value === 'csv'
+                          setUseCsvUpload(isCsv)
+                          if (isCsv) {
+                            setManualFile(null)
+                          } else {
+                            setCsvFile(null)
+                            setAllocRows([{ state: '', amount: '' }])
+                          }
+                        }}
+                        className="w-full"
+                      >
+                        <TabsList className="grid w-full grid-cols-2">
+                          <TabsTrigger value="manual">Manual Entry</TabsTrigger>
+                          <TabsTrigger value="csv">Upload CSV/Excel</TabsTrigger>
+                        </TabsList>
+                        
+                        <TabsContent value="csv" className="mt-4">
+                          <div className="space-y-2 p-4 border rounded-md">
+                            <FormLabel>Upload CSV/Excel File</FormLabel>
+                            <div className="flex items-center gap-2">
+                              <Input
+                                type="file"
+                                accept=".csv,.xlsx,.xls"
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0] || null
+                                  handleCsvFileSelect(file)
+                                }}
+                                disabled={isParsingCsv}
+                              />
+                              {isParsingCsv && (
+                                <RefreshCw className="h-4 w-4 animate-spin" />
+                              )}
+                            </div>
+                            {csvFile && (
+                              <div className="text-sm text-muted-foreground flex items-center gap-2">
+                                <FileSpreadsheet className="h-4 w-4" />
+                                {csvFile.name}
+                              </div>
+                            )}
+                            <p className="text-xs text-muted-foreground">
+                              File structure: B2 = Total Amount, C3:P3 = State Names, C36:P36 = Amounts
+                            </p>
+                          </div>
+                        </TabsContent>
+                        
+                        <TabsContent value="manual" className="mt-4">
+                          <div className="space-y-2">
+                            <FormLabel>Upload File (Optional - for storage only)</FormLabel>
+                            <Input
+                              type="file"
+                              accept=".csv,.xlsx,.xls,.pdf"
+                              onChange={(e) => {
+                                setManualFile(e.target.files?.[0] || null)
+                              }}
+                            />
+                            {manualFile && (
+                              <div className="text-sm text-muted-foreground flex items-center gap-2">
+                                <Upload className="h-4 w-4" />
+                                {manualFile.name}
+                              </div>
+                            )}
+                          </div>
+                        </TabsContent>
+                      </Tabs>
+                    </div>
+
                     <FormField
                       control={decisionForm.control}
                       name="decision_id_proposed"
@@ -675,86 +732,6 @@ export default function DistributionDecisionsManager() {
                         </FormItem>
                       )}
                     />
-
-                    {/* Upload Mode Selection */}
-                    <div className="space-y-2">
-                      <FormLabel>Allocation Input Method</FormLabel>
-                      <div className="flex gap-4">
-                        <label className="flex items-center gap-2 cursor-pointer">
-                          <input
-                            type="radio"
-                            checked={!useCsvUpload}
-                            onChange={() => {
-                              setUseCsvUpload(false)
-                              setCsvFile(null)
-                              setAllocRows([{ state: '', amount: '' }])
-                            }}
-                          />
-                          <span>Manual Entry</span>
-                        </label>
-                        <label className="flex items-center gap-2 cursor-pointer">
-                          <input
-                            type="radio"
-                            checked={useCsvUpload}
-                            onChange={() => {
-                              setUseCsvUpload(true)
-                              setManualFile(null)
-                            }}
-                          />
-                          <span>Upload CSV/Excel</span>
-                        </label>
-                      </div>
-                    </div>
-
-                    {/* CSV Upload Section */}
-                    {useCsvUpload && (
-                      <div className="space-y-2 p-4 border rounded-md">
-                        <FormLabel>Upload CSV/Excel File</FormLabel>
-                        <div className="flex items-center gap-2">
-                          <Input
-                            type="file"
-                            accept=".csv,.xlsx,.xls"
-                            onChange={(e) => {
-                              const file = e.target.files?.[0] || null
-                              handleCsvFileSelect(file)
-                            }}
-                            disabled={isParsingCsv}
-                          />
-                          {isParsingCsv && (
-                            <RefreshCw className="h-4 w-4 animate-spin" />
-                          )}
-                        </div>
-                        {csvFile && (
-                          <div className="text-sm text-muted-foreground flex items-center gap-2">
-                            <FileSpreadsheet className="h-4 w-4" />
-                            {csvFile.name}
-                          </div>
-                        )}
-                        <p className="text-xs text-muted-foreground">
-                          File structure: B2 = Total Amount, C3:P3 = State Names, C36:P36 = Amounts
-                        </p>
-                      </div>
-                    )}
-
-                    {/* Manual File Upload (for storage only) */}
-                    {!useCsvUpload && (
-                      <div className="space-y-2">
-                        <FormLabel>Upload File (Optional - for storage only)</FormLabel>
-                        <Input
-                          type="file"
-                          accept=".csv,.xlsx,.xls,.pdf"
-                          onChange={(e) => {
-                            setManualFile(e.target.files?.[0] || null)
-                          }}
-                        />
-                        {manualFile && (
-                          <div className="text-sm text-muted-foreground flex items-center gap-2">
-                            <Upload className="h-4 w-4" />
-                            {manualFile.name}
-                          </div>
-                        )}
-                      </div>
-                    )}
 
                     <div className="flex justify-end gap-2">
                       <Button 
