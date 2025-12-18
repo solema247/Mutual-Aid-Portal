@@ -1,9 +1,12 @@
 'use client'
 
 import React, { useEffect, useMemo, useState } from 'react'
-import { Plus, ChevronDown, ChevronUp, RefreshCw } from 'lucide-react'
+import { Plus, ChevronDown, ChevronUp, RefreshCw, Upload, FileSpreadsheet } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { supabase } from '@/lib/supabaseClient'
+import Papa from 'papaparse'
+import * as XLSX from 'xlsx'
 import {
   Dialog,
   DialogContent,
@@ -85,6 +88,11 @@ export default function DistributionDecisionsManager() {
   const [decisionToDelete, setDecisionToDelete] = useState<string | null>(null)
   const [currentPage, setCurrentPage] = useState(1)
   const itemsPerPage = 10
+  const [useCsvUpload, setUseCsvUpload] = useState(false)
+  const [csvFile, setCsvFile] = useState<File | null>(null)
+  const [manualFile, setManualFile] = useState<File | null>(null)
+  const [isParsingCsv, setIsParsingCsv] = useState(false)
+  const [currentUser, setCurrentUser] = useState<{ id: string; role: string } | null>(null)
 
   const decisionForm = useForm<z.infer<typeof decisionSchema>>({
     resolver: zodResolver(decisionSchema),
@@ -117,7 +125,20 @@ export default function DistributionDecisionsManager() {
 
   useEffect(() => {
     fetchDecisions()
+    checkAuth()
   }, [])
+
+  const checkAuth = async () => {
+    try {
+      const res = await fetch('/api/users/me')
+      if (res.ok) {
+        const userData = await res.json()
+        setCurrentUser(userData)
+      }
+    } catch (error) {
+      console.error('Auth check error:', error)
+    }
+  }
 
   useEffect(() => {
     const loadStates = async () => {
@@ -137,10 +158,23 @@ export default function DistributionDecisionsManager() {
 
   const handleCreateDecision = async (values: z.infer<typeof decisionSchema>) => {
     try {
+      let fileLink: string | null = null
+      let fileName: string | null = null
+      
+      // Upload file if provided (either CSV for processing or manual file)
+      const fileToUpload = useCsvUpload ? csvFile : manualFile
+      if (fileToUpload) {
+        const decisionId = values.decision_id_proposed || values.decision_id || ''
+        fileLink = await uploadFileToStorage(fileToUpload, decisionId)
+        fileName = fileToUpload.name
+      }
+      
       // If user only enters proposed ID, use it for both fields
       const payload = {
         ...values,
         decision_id: values.decision_id_proposed, // mirror proposed into decision_id
+        file_name: fileName,
+        file_link: fileLink,
       }
       const res = await fetch('/api/distribution-decisions', {
         method: 'POST',
@@ -151,8 +185,42 @@ export default function DistributionDecisionsManager() {
         const err = await res.json()
         throw new Error(err.error || 'Failed to create decision')
       }
+      
+      const createdDecision = await res.json()
+      const decisionKey = createdDecision.decision_id_proposed || createdDecision.decision_id
+      
+      // If CSV was used, automatically add allocations
+      if (useCsvUpload && csvFile && allocRows.length > 0) {
+        try {
+          const validRows = allocRows
+            .map(r => ({ state: r.state.trim(), amount: Number(r.amount) }))
+            .filter(r => r.state && !Number.isNaN(r.amount) && r.amount > 0)
+          
+          if (validRows.length > 0) {
+            const allocRes = await fetch(`/api/distribution-decisions/${decisionKey}/allocations`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ allocations: validRows }),
+            })
+            
+            if (!allocRes.ok) {
+              const allocErr = await allocRes.json()
+              console.error('Failed to add allocations:', allocErr)
+              // Don't throw - decision was created successfully
+            }
+          }
+        } catch (allocError) {
+          console.error('Error adding allocations:', allocError)
+          // Don't throw - decision was created successfully
+        }
+      }
+      
       setIsCreateOpen(false)
       decisionForm.reset()
+      setUseCsvUpload(false)
+      setCsvFile(null)
+      setManualFile(null)
+      setAllocRows([{ state: '', amount: '' }])
       fetchDecisions()
     } catch (error: any) {
       console.error(error)
@@ -265,6 +333,191 @@ export default function DistributionDecisionsManager() {
     return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(amount)
   }
 
+  // Map CSV state names to system state names
+  const mapCsvStateToSystemState = (csvState: string): string | null => {
+    if (!csvState) return null
+    const normalized = String(csvState).trim()
+    
+    const mapping: Record<string, string> = {
+      'Khartoum': 'Khartoum',
+      'North Darfur': 'North Darfur',
+      'South Darfur': 'South Darfur',
+      'East Darfur': 'East Darfur',
+      'Central Darfur': 'Central Darfur',
+      'West Darfur': 'West Darfur',
+      'Kassala': 'Kassala',
+      'Al Jazirah': 'Al Jazeera', // CSV uses "Al Jazirah", system uses "Al Jazeera"
+      'Sennar': 'Sennar',
+      'North Kordofan': 'North Kordofan',
+      'South Kordofan': 'South Kordofan',
+      'West Kordofan': 'West Kordofan',
+      'River Nile': 'River Nile',
+      'Blue Nile': 'Blue Nile'
+    }
+    
+    return mapping[normalized] || normalized
+  }
+
+  // Helper function to parse currency values (removes $, commas, and converts to number)
+  const parseCurrency = (value: any): number => {
+    if (!value) return 0
+    const str = String(value).trim()
+    // Remove $, commas, and any whitespace
+    const cleaned = str.replace(/[$,\s]/g, '')
+    const num = Number(cleaned)
+    return isNaN(num) ? 0 : num
+  }
+
+  const parseCsvFile = async (file: File): Promise<{ totalAmount: number | null; allocations: Array<{ state: string; amount: number }> }> => {
+    const ext = file.name.split('.').pop()?.toLowerCase()
+    
+    if (ext === 'csv') {
+      return new Promise((resolve, reject) => {
+        Papa.parse(file, {
+          complete: (results) => {
+            try {
+              console.log('CSV parsing - Total rows:', results.data.length)
+              
+              // B2 = row index 1, column index 1 (0-based: row 2, col B)
+              let totalAmount: number | null = null
+              if (results.data[1]?.[1]) {
+                totalAmount = parseCurrency(results.data[1][1])
+              }
+              console.log('CSV parsing - Total Amount from B2 (row 1, col 1):', totalAmount, 'Raw:', results.data[1]?.[1])
+              
+              // C3:P3 = row index 2, columns C-P (indices 2-15, 0-based)
+              const stateNames = (results.data[2]?.slice(2, 16) || []).map((s: any) => String(s || '').trim())
+              console.log('CSV parsing - State Names from row 3:', stateNames)
+              
+              // C36:P36 = row index 35, columns C-P (indices 2-15, 0-based)
+              const amounts = (results.data[35]?.slice(2, 16) || []).map((a: any) => {
+                const parsed = parseCurrency(a)
+                console.log(`CSV parsing - Amount raw: "${a}", parsed: ${parsed}`)
+                return parsed
+              })
+              console.log('CSV parsing - Amounts from row 36:', amounts)
+              
+              const allocations = stateNames
+                .map((stateName, idx) => {
+                  const systemState = mapCsvStateToSystemState(stateName)
+                  const amount = amounts[idx] || 0
+                  return { state: systemState, amount }
+                })
+                .filter(a => a.state && a.amount > 0)
+              
+              console.log('CSV parsing - Final allocations:', allocations)
+              console.log('CSV parsing - Allocations count:', allocations.length)
+              
+              resolve({ totalAmount, allocations })
+            } catch (error) {
+              console.error('CSV parsing error:', error)
+              reject(error)
+            }
+          },
+          error: reject
+        })
+      })
+    } else if (ext === 'xlsx' || ext === 'xls') {
+      const data = await file.arrayBuffer()
+      const workbook = XLSX.read(data, { type: 'array' })
+      const sheet = workbook.Sheets[workbook.SheetNames[0]]
+      
+      console.log('Excel parsing - B2:', sheet['B2'])
+      console.log('Excel parsing - C3:', sheet['C3'])
+      console.log('Excel parsing - C36:', sheet['C36'])
+      
+      // B2 = cell B2
+      const totalAmount = sheet['B2']?.v ? parseCurrency(sheet['B2'].v) : null
+      console.log('Excel parsing - Total Amount:', totalAmount, 'Raw:', sheet['B2']?.v)
+      
+      // C3:P3 and C36:P36
+      const stateNames: string[] = []
+      const amounts: number[] = []
+      
+      // Excel columns: A=1, B=2, C=3, ..., P=16
+      const colLetters = ['C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P']
+      
+      for (const colLetter of colLetters) {
+        const stateName = sheet[`${colLetter}3`]?.v ? String(sheet[`${colLetter}3`].v).trim() : ''
+        const amount = sheet[`${colLetter}36`]?.v ? parseCurrency(sheet[`${colLetter}36`].v) : 0
+        stateNames.push(stateName)
+        amounts.push(amount)
+      }
+      
+      console.log('Excel parsing - State Names:', stateNames)
+      console.log('Excel parsing - Amounts:', amounts)
+      
+      const allocations = stateNames
+        .map((stateName, idx) => {
+          const systemState = mapCsvStateToSystemState(stateName)
+          const amount = amounts[idx] || 0
+          console.log(`Excel parsing - Mapping: "${stateName}" -> "${systemState}", amount: ${amount}`)
+          return { state: systemState, amount }
+        })
+        .filter(a => a.state && a.amount > 0)
+      
+      console.log('Excel parsing - Final allocations:', allocations)
+      return { totalAmount, allocations }
+    } else {
+      throw new Error('Unsupported file format. Please upload CSV or Excel file.')
+    }
+  }
+
+  const handleCsvFileSelect = async (file: File | null) => {
+    if (!file) {
+      setCsvFile(null)
+      return
+    }
+    
+    setIsParsingCsv(true)
+    try {
+      const { totalAmount, allocations } = await parseCsvFile(file)
+      
+      // Set decision amount if empty
+      if (totalAmount && !decisionForm.getValues('decision_amount')) {
+        decisionForm.setValue('decision_amount', totalAmount)
+      }
+      
+      // Populate allocation rows
+      if (allocations.length > 0) {
+        const rows = allocations.map(a => ({
+          state: a.state || '',
+          amount: a.amount.toString()
+        }))
+        setAllocRows(rows)
+        setCsvFile(file)
+      } else {
+        alert('No valid allocations found in the CSV file.')
+        setCsvFile(null)
+      }
+    } catch (error: any) {
+      console.error('Error parsing CSV:', error)
+      alert(error.message || 'Failed to parse CSV file. Please check the file format.')
+      setCsvFile(null)
+    } finally {
+      setIsParsingCsv(false)
+    }
+  }
+
+  const uploadFileToStorage = async (file: File, decisionId: string): Promise<string> => {
+    const fileExt = file.name.split('.').pop()
+    const fileName = `${decisionId}.${fileExt}`
+    const filePath = `f0-distribution-decisions/${fileName}`
+    
+    const { error: uploadError } = await supabase.storage
+      .from('images')
+      .upload(filePath, file, {
+        cacheControl: '3600',
+        upsert: true
+      })
+    
+    if (uploadError) {
+      throw uploadError
+    }
+    
+    return filePath
+  }
+
   const sortedDecisions = useMemo(() => {
     return [...decisions].sort((a, b) => {
       const da = a.decision_date ? new Date(a.decision_date).getTime() : 0
@@ -302,14 +555,25 @@ export default function DistributionDecisionsManager() {
             <Button variant="outline" size="icon" onClick={fetchDecisions} disabled={isLoading}>
               <RefreshCw className="h-4 w-4" />
             </Button>
-            <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-              <DialogTrigger asChild>
-                <Button className="bg-[#007229] hover:bg-[#007229]/90 text-white">
-                  <Plus className="h-4 w-4 mr-2" />
-                  New Decision
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-[520px]">
+            {currentUser?.role === 'admin' && (
+              <Dialog open={isCreateOpen} onOpenChange={(open) => {
+                setIsCreateOpen(open)
+                if (!open) {
+                  // Reset form and file states when closing
+                  decisionForm.reset()
+                  setUseCsvUpload(false)
+                  setCsvFile(null)
+                  setManualFile(null)
+                  setAllocRows([{ state: '', amount: '' }])
+                }
+              }}>
+                <DialogTrigger asChild>
+                  <Button className="bg-[#007229] hover:bg-[#007229]/90 text-white">
+                    <Plus className="h-4 w-4 mr-2" />
+                    New Decision
+                  </Button>
+                </DialogTrigger>
+              <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                   <DialogTitle>Create Distribution Decision</DialogTitle>
                 </DialogHeader>
@@ -411,11 +675,107 @@ export default function DistributionDecisionsManager() {
                         </FormItem>
                       )}
                     />
+
+                    {/* Upload Mode Selection */}
+                    <div className="space-y-2">
+                      <FormLabel>Allocation Input Method</FormLabel>
+                      <div className="flex gap-4">
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="radio"
+                            checked={!useCsvUpload}
+                            onChange={() => {
+                              setUseCsvUpload(false)
+                              setCsvFile(null)
+                              setAllocRows([{ state: '', amount: '' }])
+                            }}
+                          />
+                          <span>Manual Entry</span>
+                        </label>
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="radio"
+                            checked={useCsvUpload}
+                            onChange={() => {
+                              setUseCsvUpload(true)
+                              setManualFile(null)
+                            }}
+                          />
+                          <span>Upload CSV/Excel</span>
+                        </label>
+                      </div>
+                    </div>
+
+                    {/* CSV Upload Section */}
+                    {useCsvUpload && (
+                      <div className="space-y-2 p-4 border rounded-md">
+                        <FormLabel>Upload CSV/Excel File</FormLabel>
+                        <div className="flex items-center gap-2">
+                          <Input
+                            type="file"
+                            accept=".csv,.xlsx,.xls"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0] || null
+                              handleCsvFileSelect(file)
+                            }}
+                            disabled={isParsingCsv}
+                          />
+                          {isParsingCsv && (
+                            <RefreshCw className="h-4 w-4 animate-spin" />
+                          )}
+                        </div>
+                        {csvFile && (
+                          <div className="text-sm text-muted-foreground flex items-center gap-2">
+                            <FileSpreadsheet className="h-4 w-4" />
+                            {csvFile.name}
+                          </div>
+                        )}
+                        <p className="text-xs text-muted-foreground">
+                          File structure: B2 = Total Amount, C3:P3 = State Names, C36:P36 = Amounts
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Manual File Upload (for storage only) */}
+                    {!useCsvUpload && (
+                      <div className="space-y-2">
+                        <FormLabel>Upload File (Optional - for storage only)</FormLabel>
+                        <Input
+                          type="file"
+                          accept=".csv,.xlsx,.xls,.pdf"
+                          onChange={(e) => {
+                            setManualFile(e.target.files?.[0] || null)
+                          }}
+                        />
+                        {manualFile && (
+                          <div className="text-sm text-muted-foreground flex items-center gap-2">
+                            <Upload className="h-4 w-4" />
+                            {manualFile.name}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
                     <div className="flex justify-end gap-2">
-                      <Button variant="outline" type="button" onClick={() => setIsCreateOpen(false)}>
+                      <Button 
+                        variant="outline" 
+                        type="button" 
+                        onClick={() => {
+                          setIsCreateOpen(false)
+                          decisionForm.reset()
+                          setUseCsvUpload(false)
+                          setCsvFile(null)
+                          setManualFile(null)
+                          setAllocRows([{ state: '', amount: '' }])
+                        }}
+                      >
                         Cancel
                       </Button>
-                      <Button type="submit" className="bg-[#007229] hover:bg-[#007229]/90 text-white">
+                      <Button 
+                        type="submit" 
+                        className="bg-[#007229] hover:bg-[#007229]/90 text-white"
+                        disabled={useCsvUpload && !csvFile}
+                      >
                         Create
                       </Button>
                     </div>
@@ -423,6 +783,7 @@ export default function DistributionDecisionsManager() {
                 </Form>
               </DialogContent>
             </Dialog>
+            )}
           </div>
         </div>
       </CardHeader>
@@ -485,18 +846,16 @@ export default function DistributionDecisionsManager() {
                             )}
                           </TableCell>
                           <TableCell className="text-right">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="text-destructive hover:text-destructive/80"
-                              onClick={() => {
-                                if (confirm('Delete this distribution decision and its allocations?')) {
-                                  handleDeleteDecision(fetchKey)
-                                }
-                              }}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
+                            {currentUser?.role === 'admin' && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="text-destructive hover:text-destructive/80"
+                                onClick={() => handleDeleteClick(fetchKey)}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            )}
                           </TableCell>
                         </TableRow>
                         {isOpen && (
@@ -536,18 +895,42 @@ export default function DistributionDecisionsManager() {
                                             </TableCell>
                                           </TableRow>
                                         ) : (
-                                          (allocationsByDecision[fetchKey] || []).map((alloc) => (
-                                            <TableRow key={alloc.allocation_id}>
-                                              <TableCell className="font-medium">{alloc.state || '—'}</TableCell>
-                                              <TableCell className="text-right">{formatCurrency(alloc.amount)}</TableCell>
-                                              <TableCell className="text-right">
-                                              {alloc.amount !== null && alloc.amount !== undefined && decision.decision_amount
-                                                ? `${((Number(alloc.amount) / Number(decision.decision_amount)) * 100).toFixed(1)}%`
-                                                  : '—'}
-                                              </TableCell>
-                                              <TableCell />
-                                            </TableRow>
-                                          ))
+                                          <>
+                                            {(allocationsByDecision[fetchKey] || []).map((alloc) => (
+                                              <TableRow key={alloc.allocation_id}>
+                                                <TableCell className="font-medium">{alloc.state || '—'}</TableCell>
+                                                <TableCell className="text-right">{formatCurrency(alloc.amount)}</TableCell>
+                                                <TableCell className="text-right">
+                                                {alloc.amount !== null && alloc.amount !== undefined && decision.decision_amount
+                                                  ? `${((Number(alloc.amount) / Number(decision.decision_amount)) * 100).toFixed(1)}%`
+                                                    : '—'}
+                                                </TableCell>
+                                                <TableCell />
+                                              </TableRow>
+                                            ))}
+                                            {/* Totals Row */}
+                                            {(() => {
+                                              const allocations = allocationsByDecision[fetchKey] || []
+                                              const totalAmount = allocations.reduce((sum, alloc) => {
+                                                const amount = Number(alloc.amount) || 0
+                                                return sum + amount
+                                              }, 0)
+                                              const totalPercent = decision.decision_amount && totalAmount
+                                                ? ((totalAmount / Number(decision.decision_amount)) * 100).toFixed(1)
+                                                : '—'
+                                              
+                                              return (
+                                                <TableRow className="bg-muted/50 font-semibold">
+                                                  <TableCell className="font-semibold">Total</TableCell>
+                                                  <TableCell className="text-right font-semibold">{formatCurrency(totalAmount)}</TableCell>
+                                                  <TableCell className="text-right font-semibold">
+                                                    {totalPercent !== '—' ? `${totalPercent}%` : '—'}
+                                                  </TableCell>
+                                                  <TableCell />
+                                                </TableRow>
+                                              )
+                                            })()}
+                                          </>
                                         )}
                                         {allocRows.map((row, idx) => (
                                           <TableRow key={`new-${idx}`}>
