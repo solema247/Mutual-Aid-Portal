@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useTranslation } from 'react-i18next'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
-import { RefreshCw } from 'lucide-react'
+import { RefreshCw, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react'
 import { CollapsibleRow } from '@/components/ui/collapsible'
 
 export default function PoolDashboard({ showProposals = true, showByDonor = true }: { showProposals?: boolean; showByDonor?: boolean }) {
@@ -15,6 +15,8 @@ export default function PoolDashboard({ showProposals = true, showByDonor = true
   const [byDonor, setByDonor] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [proposal, setProposal] = useState<{ state?: string; grantCallId?: string; amount: number }>({ amount: 0 })
+  const [sortColumn, setSortColumn] = useState<string | null>(null)
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc')
 
   useEffect(() => {
     const load = async () => {
@@ -95,6 +97,51 @@ export default function PoolDashboard({ showProposals = true, showByDonor = true
     }
   }
 
+  const handleSort = (column: string) => {
+    if (sortColumn === column) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortColumn(column)
+      // Default to ascending for state_name, descending for numerical columns
+      setSortDirection(column === 'state_name' ? 'asc' : 'desc')
+    }
+  }
+
+  const getSortedByState = () => {
+    if (!sortColumn) return byState
+
+    const sorted = [...byState].sort((a, b) => {
+      let aVal: any
+      let bVal: any
+
+      if (sortColumn === 'state_name') {
+        aVal = a.state_name || ''
+        bVal = b.state_name || ''
+        return sortDirection === 'asc' 
+          ? aVal.localeCompare(bVal)
+          : bVal.localeCompare(aVal)
+      } else {
+        // Numerical columns: allocated, historical_commitments, committed, pending, remaining
+        aVal = a[sortColumn] || 0
+        bVal = b[sortColumn] || 0
+        return sortDirection === 'desc' 
+          ? bVal - aVal  // Highest to lowest
+          : aVal - bVal
+      }
+    })
+
+    return sorted
+  }
+
+  const getSortIcon = (column: string) => {
+    if (sortColumn !== column) {
+      return <ArrowUpDown className="h-4 w-4 ml-1 inline" />
+    }
+    return sortDirection === 'desc' 
+      ? <ArrowDown className="h-4 w-4 ml-1 inline" />
+      : <ArrowUp className="h-4 w-4 ml-1 inline" />
+  }
+
   if (loading && !summary) return <div className="text-sm text-muted-foreground">{t('pool.loading')}</div>
 
   return (
@@ -127,23 +174,63 @@ export default function PoolDashboard({ showProposals = true, showByDonor = true
           <TableHeader>
             <TableRow>
               <TableHead>
-                <div className="font-semibold">{t('pool.by_state.state')}</div>
+                <button
+                  onClick={() => handleSort('state_name')}
+                  className="flex items-center hover:text-primary cursor-pointer"
+                >
+                  <div className="font-semibold">{t('pool.by_state.state')}</div>
+                  {getSortIcon('state_name')}
+                </button>
                 <div className="text-xs text-muted-foreground">{t('pool.by_state.state_desc')}</div>
               </TableHead>
               <TableHead className="text-right">
-                <div className="font-semibold">{t('pool.by_state.allocated')}</div>
+                <button
+                  onClick={() => handleSort('allocated')}
+                  className="flex items-center justify-end hover:text-primary cursor-pointer w-full"
+                >
+                  <div className="font-semibold">{t('pool.by_state.allocated')}</div>
+                  {getSortIcon('allocated')}
+                </button>
                 <div className="text-xs text-muted-foreground">{t('pool.by_state.allocated_desc')}</div>
               </TableHead>
               <TableHead className="text-right">
-                <div className="font-semibold">{t('pool.by_state.committed')}</div>
+                <button
+                  onClick={() => handleSort('historical_commitments')}
+                  className="flex items-center justify-end hover:text-primary cursor-pointer w-full"
+                >
+                  <div className="font-semibold">Historical Commitments</div>
+                  {getSortIcon('historical_commitments')}
+                </button>
+                <div className="text-xs text-muted-foreground">Historical USD from activities</div>
+              </TableHead>
+              <TableHead className="text-right">
+                <button
+                  onClick={() => handleSort('committed')}
+                  className="flex items-center justify-end hover:text-primary cursor-pointer w-full"
+                >
+                  <div className="font-semibold">{t('pool.by_state.committed')}</div>
+                  {getSortIcon('committed')}
+                </button>
                 <div className="text-xs text-muted-foreground">{t('pool.by_state.committed_desc')}</div>
               </TableHead>
               <TableHead className="text-right">
-                <div className="font-semibold">{t('pool.by_state.pending')}</div>
+                <button
+                  onClick={() => handleSort('pending')}
+                  className="flex items-center justify-end hover:text-primary cursor-pointer w-full"
+                >
+                  <div className="font-semibold">{t('pool.by_state.pending')}</div>
+                  {getSortIcon('pending')}
+                </button>
                 <div className="text-xs text-muted-foreground">{t('pool.by_state.pending_desc')}</div>
               </TableHead>
               <TableHead className="text-right">
-                <div className="font-semibold">{t('pool.by_state.remaining')}</div>
+                <button
+                  onClick={() => handleSort('remaining')}
+                  className="flex items-center justify-end hover:text-primary cursor-pointer w-full"
+                >
+                  <div className="font-semibold">{t('pool.by_state.remaining')}</div>
+                  {getSortIcon('remaining')}
+                </button>
                 <div className="text-xs text-muted-foreground">{t('pool.by_state.remaining_desc')}</div>
               </TableHead>
               {showProposals && (
@@ -161,23 +248,51 @@ export default function PoolDashboard({ showProposals = true, showByDonor = true
             </TableRow>
           </TableHeader>
           <TableBody>
-            {byState.map(r => (
-              <TableRow key={r.state_name}>
-                <TableCell>{r.state_name}</TableCell>
-                <TableCell className="text-right">{fmt(r.allocated)}</TableCell>
-                <TableCell className="text-right">{fmt(r.committed)}</TableCell>
-                <TableCell className="text-right">{fmt(r.pending)}</TableCell>
-                <TableCell className={`text-right ${r.remaining >= 0 ? 'text-green-700' : 'text-red-700'}`}>{fmt(r.remaining)}</TableCell>
-                {showProposals && (
-                  <>
-                    <TableCell className="text-right">{proposal.state === r.state_name ? fmt(proposal.amount) : fmt(0)}</TableCell>
-                    <TableCell className={`text-right ${((r.remaining - (proposal.state === r.state_name ? proposal.amount : 0)) >= 0) ? 'text-green-700' : 'text-red-700'}`}>
-                      {fmt(r.remaining - (proposal.state === r.state_name ? proposal.amount : 0))}
-                    </TableCell>
-                  </>
-                )}
-              </TableRow>
-            ))}
+            {(() => {
+              const sortedByState = getSortedByState()
+              return (
+                <>
+                  {sortedByState.length > 0 && (
+                    <TableRow className="font-semibold">
+                      <TableCell>Total</TableCell>
+                      <TableCell className="text-right">{fmt(sortedByState.reduce((s, r) => s + (r.allocated || 0), 0))}</TableCell>
+                      <TableCell className="text-right">{fmt(sortedByState.reduce((s, r) => s + (r.historical_commitments || 0), 0))}</TableCell>
+                      <TableCell className="text-right">{fmt(sortedByState.reduce((s, r) => s + (r.committed || 0), 0))}</TableCell>
+                      <TableCell className="text-right">{fmt(sortedByState.reduce((s, r) => s + (r.pending || 0), 0))}</TableCell>
+                      <TableCell className={`text-right ${sortedByState.reduce((s, r) => s + (r.remaining || 0), 0) >= 0 ? 'text-green-700' : 'text-red-700'}`}>
+                        {fmt(sortedByState.reduce((s, r) => s + (r.remaining || 0), 0))}
+                      </TableCell>
+                      {showProposals && (
+                        <>
+                          <TableCell className="text-right">{fmt(proposal.amount || 0)}</TableCell>
+                          <TableCell className={`text-right ${(sortedByState.reduce((s, r) => s + (r.remaining || 0), 0) - (proposal.amount || 0)) >= 0 ? 'text-green-700' : 'text-red-700'}`}>
+                            {fmt(sortedByState.reduce((s, r) => s + (r.remaining || 0), 0) - (proposal.amount || 0))}
+                          </TableCell>
+                        </>
+                      )}
+                    </TableRow>
+                  )}
+                  {sortedByState.map(r => (
+                    <TableRow key={r.state_name}>
+                      <TableCell>{r.state_name}</TableCell>
+                      <TableCell className="text-right">{fmt(r.allocated)}</TableCell>
+                      <TableCell className="text-right">{fmt(r.historical_commitments || 0)}</TableCell>
+                      <TableCell className="text-right">{fmt(r.committed)}</TableCell>
+                      <TableCell className="text-right">{fmt(r.pending)}</TableCell>
+                      <TableCell className={`text-right ${r.remaining >= 0 ? 'text-green-700' : 'text-red-700'}`}>{fmt(r.remaining)}</TableCell>
+                      {showProposals && (
+                        <>
+                          <TableCell className="text-right">{proposal.state === r.state_name ? fmt(proposal.amount) : fmt(0)}</TableCell>
+                          <TableCell className={`text-right ${((r.remaining - (proposal.state === r.state_name ? proposal.amount : 0)) >= 0) ? 'text-green-700' : 'text-red-700'}`}>
+                            {fmt(r.remaining - (proposal.state === r.state_name ? proposal.amount : 0))}
+                          </TableCell>
+                        </>
+                      )}
+                    </TableRow>
+                  ))}
+                </>
+              )
+            })()}
           </TableBody>
         </Table>
       </CollapsibleRow>

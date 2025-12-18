@@ -5,29 +5,75 @@ export const dynamic = 'force-dynamic'
 export const revalidate = 0
 export const fetchCache = 'force-no-store'
 
-// GET /api/pool/by-state - Aggregated view across cycles
+// Helper function to normalize state names consistently
+function normalizeStateName(state: any): string {
+  if (!state) return 'Unknown'
+  const normalized = String(state).trim()
+  return normalized === '' ? 'Unknown' : normalized
+}
+
+// Helper function to fetch all rows using pagination
+const fetchAllRows = async (supabase: any, table: string, select: string) => {
+  let allData: any[] = []
+  let from = 0
+  const pageSize = 1000
+  let hasMore = true
+
+  while (hasMore) {
+    const { data: page, error } = await supabase
+      .from(table)
+      .select(select)
+      .range(from, from + pageSize - 1)
+    
+    if (error) throw error
+    
+    if (page && page.length > 0) {
+      allData = [...allData, ...page]
+      from += pageSize
+      hasMore = page.length === pageSize // If we got a full page, there might be more
+    } else {
+      hasMore = false
+    }
+  }
+  
+  return allData
+}
+
+// GET /api/pool/by-state - Aggregated view using allocations_by_date
 export async function GET() {
   try {
     const supabase = getSupabaseRouteClient()
-    // Caps: sum allocations by state across cycles
-    // Sum allocations by state across all tranches and cycles
-    const { data: allocs, error: allocErr } = await supabase
-      .from('cycle_state_allocations')
-      .select('state_name, amount')
-
-    if (allocErr) throw allocErr
-
-    const capByState = new Map<string, number>()
-    for (const a of allocs || []) {
-      capByState.set(a.state_name, (capByState.get(a.state_name) || 0) + (a.amount || 0))
+    
+    // 1. Get allocations from allocations_by_date (replaces cycle_state_allocations)
+    const allocData = await fetchAllRows(supabase, 'allocations_by_date', 'State,"Allocation Amount"')
+    
+    const allocatedByState = new Map<string, number>()
+    for (const row of allocData || []) {
+      const rawState = row['State'] || row['state'] || row.State
+      const state = normalizeStateName(rawState)
+      const amount = row['Allocation Amount'] ? Number(row['Allocation Amount']) : 0
+      allocatedByState.set(state, (allocatedByState.get(state) || 0) + amount)
     }
 
-    // Usage from err_projects with CSA link; fallback by state if CSA missing
-    const { data: projects, error: projErr } = await supabase
-      .from('err_projects')
-      .select('expenses, funding_status, status, state')
+    // 2. Get historical commitments from activities_raw_import
+    const historicalData = await fetchAllRows(supabase, 'activities_raw_import', 'State,USD')
+    
+    const historicalByState = new Map<string, number>()
+    for (const row of historicalData || []) {
+      const rawState = row['State'] || row['state'] || row.State
+      const state = normalizeStateName(rawState)
+      const rawUSD = row['USD'] || row['usd'] || row.USD
+      let usd = 0
+      if (rawUSD !== null && rawUSD !== undefined) {
+        usd = Number(rawUSD)
+        if (!isNaN(usd) && usd > 0) {
+          historicalByState.set(state, (historicalByState.get(state) || 0) + usd)
+        }
+      }
+    }
 
-    if (projErr) throw projErr
+    // 3. Get committed and pending from err_projects (fetch all rows)
+    const projects = await fetchAllRows(supabase, 'err_projects', 'expenses, funding_status, status, state')
 
     const sumByCommitted = () => {
       const byState = new Map<string, number>()
@@ -36,8 +82,8 @@ export async function GET() {
         try {
           const exps = typeof p.expenses === 'string' ? JSON.parse(p.expenses) : p.expenses
           const amount = (exps || []).reduce((s: number, e: any) => s + (e.total_cost || 0), 0)
-          const key = p.state || 'Unknown'
-          byState.set(key, (byState.get(key) || 0) + amount)
+          const state = normalizeStateName(p.state)
+          byState.set(state, (byState.get(state) || 0) + amount)
         } catch { /* ignore */ }
       }
       return byState
@@ -51,8 +97,8 @@ export async function GET() {
           try {
             const exps = typeof p.expenses === 'string' ? JSON.parse(p.expenses) : p.expenses
             const amount = (exps || []).reduce((s: number, e: any) => s + (e.total_cost || 0), 0)
-            const key = p.state || 'Unknown'
-            byState.set(key, (byState.get(key) || 0) + amount)
+            const state = normalizeStateName(p.state)
+            byState.set(state, (byState.get(state) || 0) + amount)
           } catch { /* ignore */ }
         }
       }
@@ -63,18 +109,20 @@ export async function GET() {
     const pendingByState = sumByPending()
 
     const states = Array.from(new Set<string>([
-      ...Array.from(capByState.keys()),
+      ...Array.from(allocatedByState.keys()),
+      ...Array.from(historicalByState.keys()),
       ...Array.from(committedByState.keys()),
       ...Array.from(pendingByState.keys())
     ]))
 
     const rows = states.map(state => {
-      const allocated = capByState.get(state) || 0
+      const allocated = allocatedByState.get(state) || 0
+      const historical_commitments = historicalByState.get(state) || 0
       const committed = committedByState.get(state) || 0
       const pending = pendingByState.get(state) || 0
-      const remaining = allocated - committed - pending
-      return { state_name: state, allocated, committed, pending, remaining }
-    })
+      const remaining = allocated - historical_commitments - committed - pending
+      return { state_name: state, allocated, historical_commitments, committed, pending, remaining }
+    }).sort((a, b) => a.state_name.localeCompare(b.state_name))
 
     return NextResponse.json(rows, {
       headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' }
