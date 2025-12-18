@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button'
 import { RefreshCw, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react'
 import { CollapsibleRow } from '@/components/ui/collapsible'
 
-export default function PoolDashboard({ showProposals = true, showByDonor = true }: { showProposals?: boolean; showByDonor?: boolean }) {
+export default function PoolDashboard({ showProposals = true, showByDonor = true, showSummaryCards = true, showByState = true }: { showProposals?: boolean; showByDonor?: boolean; showSummaryCards?: boolean; showByState?: boolean }) {
   const { t } = useTranslation(['f1_plans'])
   const [summary, setSummary] = useState<{ total_included: number; total_committed: number; total_pending: number; remaining: number; total_grants: number; total_not_included: number } | null>(null)
   const [byState, setByState] = useState<any[]>([])
@@ -146,7 +146,7 @@ export default function PoolDashboard({ showProposals = true, showByDonor = true
 
   return (
     <div className="space-y-6">
-      {summary && (
+      {showSummaryCards && summary && (
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <Card><CardHeader><CardTitle>{t('pool.total')}</CardTitle></CardHeader><CardContent className="text-2xl font-bold">{fmt(summary.total_included)}</CardContent></Card>
           <Card><CardHeader><CardTitle>{t('pool.committed')}</CardTitle></CardHeader><CardContent className="text-2xl font-bold">{fmt(summary.total_committed)}</CardContent></Card>
@@ -155,7 +155,8 @@ export default function PoolDashboard({ showProposals = true, showByDonor = true
         </div>
       )}
 
-      <CollapsibleRow title={t('pool.by_state.title')} defaultOpen={true}>
+      {showByState && (
+        <CollapsibleRow title={t('pool.by_state.title')} defaultOpen={true}>
         <div className="flex flex-row items-center justify-between mb-4">
           <div className="text-sm text-muted-foreground">
             {t('pool.by_state.title')}
@@ -296,6 +297,7 @@ export default function PoolDashboard({ showProposals = true, showByDonor = true
           </TableBody>
         </Table>
       </CollapsibleRow>
+      )}
 
       {showByDonor && (
         <Card>

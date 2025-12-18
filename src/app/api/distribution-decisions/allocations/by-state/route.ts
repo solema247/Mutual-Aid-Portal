@@ -47,12 +47,6 @@ export async function GET() {
     // 2. Get historical USD from activities_raw_import (fetch all rows)
     const historicalData = await fetchAllRows('activities_raw_import', 'State,USD')
 
-    console.log('[BY-STATE] Historical data count:', historicalData?.length || 0)
-    if (historicalData && historicalData.length > 0) {
-      console.log('[BY-STATE] First row sample:', JSON.stringify(historicalData[0]))
-      console.log('[BY-STATE] First row keys:', Object.keys(historicalData[0]))
-    }
-
     // 3. Get committed and pending from err_projects (fetch all rows)
     const projects = await fetchAllRows('err_projects', 'expenses, funding_status, status, state')
 
@@ -79,55 +73,23 @@ export async function GET() {
     }
 
     // Process activities_raw_import - normalize state names and skip null/zero USD
-    let alJazeeraCount = 0
-    let alJazeeraTotal = 0
-    let skippedCount = 0
-    const stateSamples: Record<string, string> = {} // Track raw state values
-    
     for (const row of historicalData || []) {
       // Handle both quoted and unquoted keys
       const rawState = row['State'] || row['state'] || row.State
       const rawUSD = row['USD'] || row['usd'] || row.USD
       const state = normalizeStateName(rawState)
       
-      // Track unique raw state values
-      if (!stateSamples[state]) {
-        stateSamples[state] = rawState || 'null'
-      }
-      
-      // Debug logging for states containing Jazeera, Sennar, or Gadaref
-      const lowerRaw = String(rawState || '').toLowerCase()
-      if (lowerRaw.includes('jazeera') || lowerRaw.includes('sennar') || lowerRaw.includes('gadaref')) {
-        console.log(`[BY-STATE] Found matching state:`, {
-          rawState,
-          rawStateType: typeof rawState,
-          rawStateLength: rawState ? String(rawState).length : 0,
-          normalizedState: state,
-          rawUSD,
-          rowKeys: Object.keys(row)
-        })
-        if (state === 'Al Jazeera') {
-          alJazeeraCount++
-        }
-      }
-      
       let usd = 0
       if (rawUSD !== null && rawUSD !== undefined) {
         usd = Number(rawUSD)
         if (isNaN(usd)) {
-          skippedCount++
           continue
         }
       }
       
       // Skip rows with zero USD
       if (usd === 0) {
-        skippedCount++
         continue
-      }
-      
-      if (state === 'Al Jazeera') {
-        alJazeeraTotal += usd
       }
       
       if (!grouped[state]) {
@@ -135,12 +97,6 @@ export async function GET() {
       }
       grouped[state].historical_usd += usd
     }
-    
-    console.log('[BY-STATE] State samples (first 30):', Object.entries(stateSamples).slice(0, 30))
-    
-    console.log('[BY-STATE] Al Jazeera summary:', { count: alJazeeraCount, total: alJazeeraTotal, finalInGrouped: grouped['Al Jazeera']?.historical_usd })
-    console.log('[BY-STATE] Total skipped rows:', skippedCount)
-    console.log('[BY-STATE] States with historical USD:', Object.keys(grouped).filter(s => grouped[s].historical_usd > 0))
 
     // Process err_projects for committed (funding_status === 'committed')
     for (const p of projects || []) {
@@ -184,11 +140,6 @@ export async function GET() {
         percent_total: totalAll > 0 ? (g.total_allocated / totalAll) * 100 : 0
       }))
       .sort((a, b) => b.total_allocated - a.total_allocated)
-
-    // Log final result for Al Jazeera
-    const alJazeeraResult = result.find(r => r.state === 'Al Jazeera')
-    console.log('[BY-STATE] Final result for Al Jazeera:', alJazeeraResult)
-    console.log('[BY-STATE] Total historical USD in result:', result.reduce((s, r) => s + r.historical_usd, 0))
 
     return NextResponse.json(result)
   } catch (error) {

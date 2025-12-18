@@ -820,7 +820,7 @@ export default function DirectUpload() {
       )}
 
       {!isReviewing && (
-        <Button type="button" onClick={handleSubmit} disabled={isLoading || !hasRequiredFields()} className="w-full">
+        <Button type="button" onClick={handleSubmit} disabled={isLoading || !hasRequiredFields()} className="w-full bg-green-700 hover:bg-green-800 text-white font-bold">
           <FileUp className="w-4 h-4 mr-2" />
           {isLoading ? t('fsystem:f1.uploading') : t('fsystem:f1.upload_button')}
         </Button>
