@@ -22,13 +22,12 @@ export default function CommittedF1sTab() {
     grantCalls: [],
     donors: [],
     cycles: [],
-    states: []
+    states: [],
+    grants: []
   })
   const [filters, setFilters] = useState({
     search: '',
-    grantCall: 'all',
-    donor: 'all',
-    cycle: 'all',
+    grant: 'all',
     state: 'all'
   })
   const [isLoading, setIsLoading] = useState(true)
@@ -45,16 +44,14 @@ export default function CommittedF1sTab() {
   const [currentPage, setCurrentPage] = useState(1)
   const itemsPerPage = 10
   
-  // Reassignment form state
-  const [tempFundingCycle, setTempFundingCycle] = useState<string>('')
-  const [tempGrantCall, setTempGrantCall] = useState<string>('')
+  // Reassignment form state (using grants_grid_view)
+  const [tempGrantId, setTempGrantId] = useState<string>('')
+  const [tempDonorName, setTempDonorName] = useState<string>('')
   const [tempMMYY, setTempMMYY] = useState<string>('')
-  const [tempGrantSerial, setTempGrantSerial] = useState<string>('')
-  const [fundingCycles, setFundingCycles] = useState<any[]>([])
-  const [grantCallsForCycle, setGrantCallsForCycle] = useState<any[]>([])
-  const [grantSerials, setGrantSerials] = useState<any[]>([])
+  const [grantsFromGridView, setGrantsFromGridView] = useState<any[]>([])
+  const [donorShortNames, setDonorShortNames] = useState<Record<string, string>>({})
+  const [selectedGrantMaxSequence, setSelectedGrantMaxSequence] = useState<number>(0)
   const [stateShorts, setStateShorts] = useState<Record<string, string>>({})
-  const [lastWorkplanNums, setLastWorkplanNums] = useState<Record<string, number>>({})
 
   const toggleAll = (checked: boolean) => {
     if (!checked) return setSelected([])
@@ -123,15 +120,12 @@ export default function CommittedF1sTab() {
     // Pre-populate with current values
     const f1 = f1s.find(f => f.id === f1Id)
     if (f1) {
-      if (f1.funding_cycle_id) setTempFundingCycle(f1.funding_cycle_id)
-      if (f1.grant_call_id) setTempGrantCall(f1.grant_call_id)
-      // Extract MMYY from grant_serial_id if available
-      if (f1.grant_serial_id) {
-        const mmyyMatch = f1.grant_serial_id.match(/-(\d{4})-/)
+      // Extract MMYY from grant_id if available (format: LCC-Donor-State-MMYY-WorkplanSeq)
+      if (f1.grant_id && f1.grant_id.startsWith('LCC-')) {
+        const mmyyMatch = f1.grant_id.match(/-(\d{4})-\d{4}$/)
         if (mmyyMatch) {
           setTempMMYY(mmyyMatch[1])
         }
-        setTempGrantSerial(f1.grant_serial_id.split('-').slice(0, -1).join('-'))
       }
     }
     
@@ -139,7 +133,7 @@ export default function CommittedF1sTab() {
   }
   
   const handleReassignMultipleF1s = async () => {
-    if (!tempFundingCycle || !tempGrantCall || !tempMMYY || !tempGrantSerial) {
+    if (!tempGrantId || !tempDonorName || !tempMMYY) {
       alert('Please fill all assignment fields')
       return
     }
@@ -156,10 +150,9 @@ export default function CommittedF1sTab() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           f1_ids: assigningF1Ids,
-          funding_cycle_id: tempFundingCycle,
-          grant_call_id: tempGrantCall,
-          mmyy: tempMMYY,
-          grant_serial: tempGrantSerial
+          grant_id: tempGrantId,
+          donor_name: tempDonorName,
+          mmyy: tempMMYY
         })
       })
       
@@ -173,10 +166,9 @@ export default function CommittedF1sTab() {
       alert(`Successfully reassigned ${result.reassigned_count} F1(s)`)
       
       // Clear form
-      setTempFundingCycle('')
-      setTempGrantCall('')
+      setTempGrantId('')
+      setTempDonorName('')
       setTempMMYY('')
-      setTempGrantSerial('')
       setReassignModalOpen(false)
       setReassigningF1Id(null)
       
@@ -208,96 +200,76 @@ export default function CommittedF1sTab() {
     }
   }
   
-  const fetchFundingCycles = async () => {
-    try {
-      const { data } = await supabase
-        .from('funding_cycles')
-        .select('id, name, type, status')
-        .eq('status', 'open')
-        .order('created_at', { ascending: false })
-      setFundingCycles(data || [])
-    } catch (error) {
-      console.error('Error fetching funding cycles:', error)
-    }
-  }
-  
-  const fetchGrantCallsForCycle = async (cycleId: string) => {
-    try {
-      const { data } = await supabase
-        .from('cycle_grant_inclusions')
-        .select(`
-          grant_call_id,
-          grant_calls (
-            id,
-            name,
-            donor_id,
-            donors (
-              id,
-              name,
-              short_name
-            )
-          )
-        `)
-        .eq('cycle_id', cycleId)
-      
-      const grantCalls = (data || []).map((item: any) => ({
-        id: item.grant_call_id,
-        name: item.grant_calls?.name || '',
-        donor_id: item.grant_calls?.donor_id || '',
-        donor_name: item.grant_calls?.donors?.name || '',
-        donor_short: item.grant_calls?.donors?.short_name || ''
-      }))
-      
-      setGrantCallsForCycle(grantCalls)
-    } catch (error) {
-      console.error('Error fetching grant calls for cycle:', error)
-    }
-  }
-  
-  const fetchGrantSerials = async (stateName: string, mmyy: string) => {
+  const fetchGrantsFromGridView = async () => {
     try {
       const { data, error } = await supabase
-        .from('grant_serials')
-        .select('grant_serial, grant_call_id')
-        .eq('state_name', stateName)
-        .eq('yymm', mmyy)
-        .order('grant_serial', { ascending: true })
+        .from('grants_grid_view')
+        .select('grant_id, donor_name, project_name, donor_id, max_workplan_sequence')
+        .order('grant_id', { ascending: true })
       
-      const serials = (data || []).map(s => ({ grant_serial: s.grant_serial }))
-      setGrantSerials(serials)
+      if (error) throw error
+      
+      // Get unique grants (group by grant_id and donor_name)
+      const uniqueGrants = new Map()
+      const donorIds = new Set<string>()
+      ;(data || []).forEach((grant: any) => {
+        const key = `${grant.grant_id}|${grant.donor_name}`
+        if (!uniqueGrants.has(key)) {
+          uniqueGrants.set(key, {
+            grant_id: grant.grant_id,
+            donor_name: grant.donor_name,
+            project_name: grant.project_name || grant.grant_id,
+            donor_id: grant.donor_id,
+            max_workplan_sequence: grant.max_workplan_sequence || 0
+          })
+          if (grant.donor_id) {
+            donorIds.add(grant.donor_id)
+          }
+        }
+      })
+      
+      setGrantsFromGridView(Array.from(uniqueGrants.values()))
+      
+      // Fetch donor short names for all unique donor_ids
+      if (donorIds.size > 0) {
+        const { data: donors, error: donorsError } = await supabase
+          .from('donors')
+          .select('id, short_name')
+          .in('id', Array.from(donorIds))
+        
+        if (!donorsError && donors) {
+          const shortNamesMap: Record<string, string> = {}
+          donors.forEach((donor: any) => {
+            if (donor.id && donor.short_name) {
+              shortNamesMap[donor.id] = donor.short_name
+            }
+          })
+          setDonorShortNames(shortNamesMap)
+        }
+      }
     } catch (error) {
-      console.error('Error fetching grant serials:', error)
+      console.error('Error fetching grants from grid view:', error)
     }
   }
   
-  const fetchLastWorkplanNum = async (grantSerial: string) => {
+  const fetchGrantMaxWorkplanSequence = async (grantId: string, donorName: string) => {
     try {
-      const { data: existingProjects, error: projectsError } = await supabase
-        .from('err_projects')
-        .select('workplan_number')
-        .eq('grant_serial_id', grantSerial)
-        .not('workplan_number', 'is', null)
-
-      if (projectsError) {
-        console.error('Error fetching existing workplans:', projectsError)
+      const { data, error } = await supabase
+        .from('grants_grid_view')
+        .select('max_workplan_sequence')
+        .eq('grant_id', grantId)
+        .eq('donor_name', donorName)
+        .single()
+      
+      if (error || !data) {
+        setSelectedGrantMaxSequence(0)
         return
       }
-
-      const existingWorkplanNumbers = (existingProjects || [])
-        .map((p: any) => p.workplan_number)
-        .filter((n: number) => typeof n === 'number' && n > 0)
-        .sort((a: number, b: number) => b - a)
-
-      const highestNumber = existingWorkplanNumbers.length > 0 ? existingWorkplanNumbers[0] : 0
       
-      // Store for each F1 being assigned
-      const nums: Record<string, number> = {}
-      assigningF1Ids.forEach(id => {
-        nums[id] = highestNumber
-      })
-      setLastWorkplanNums(nums)
+      setSelectedGrantMaxSequence(data.max_workplan_sequence || 0)
     } catch (error) {
-      console.error('Error fetching last workplan number:', error)
+      console.error('Error fetching grant max workplan sequence:', error)
+      setSelectedGrantMaxSequence(0)
     }
   }
   
@@ -324,7 +296,7 @@ export default function CommittedF1sTab() {
   useEffect(() => {
     fetchCommittedF1s()
     fetchFilterOptions()
-    fetchFundingCycles() // Still needed for reassignment
+    fetchGrantsFromGridView() // Fetch grants from grants_grid_view
     ;(async () => {
       const { data } = await supabase
         .from('partners')
@@ -342,25 +314,10 @@ export default function CommittedF1sTab() {
   }, [f1s])
   
   useEffect(() => {
-    if (tempFundingCycle) {
-      fetchGrantCallsForCycle(tempFundingCycle)
+    if (tempGrantId && tempDonorName && reassignModalOpen) {
+      fetchGrantMaxWorkplanSequence(tempGrantId, tempDonorName)
     }
-  }, [tempFundingCycle])
-  
-  useEffect(() => {
-    if (tempGrantCall && tempMMYY && tempMMYY.length === 4 && reassignModalOpen && assigningF1Ids.length > 0) {
-      const firstF1 = f1s.find(f => f.id === assigningF1Ids[0])
-      if (firstF1) {
-        fetchGrantSerials(firstF1.state, tempMMYY)
-      }
-    }
-  }, [tempGrantCall, tempMMYY, reassignModalOpen, assigningF1Ids, f1s])
-  
-  useEffect(() => {
-    if (tempGrantSerial && tempGrantSerial !== 'new' && reassignModalOpen && assigningF1Ids.length > 0) {
-      fetchLastWorkplanNum(tempGrantSerial)
-    }
-  }, [tempGrantSerial, reassignModalOpen, assigningF1Ids])
+  }, [tempGrantId, tempDonorName, reassignModalOpen])
 
   useEffect(() => {
     applyFilters()
@@ -390,22 +347,24 @@ export default function CommittedF1sTab() {
 
   const fetchFilterOptions = async () => {
     try {
-      // Fetch grant calls
-      const { data: grantCallsData } = await supabase
-        .from('grant_calls')
-        .select('id, name, donors (name)')
-        .eq('status', 'open')
+      // Fetch grants from grants_grid_view
+      const { data: grantsData } = await supabase
+        .from('grants_grid_view')
+        .select('grant_id, donor_name, project_name')
+        .order('grant_id', { ascending: true })
 
-      // Fetch donors
-      const { data: donorsData } = await supabase
-        .from('donors')
-        .select('id, name')
-
-      // Fetch funding cycles
-      const { data: cyclesData } = await supabase
-        .from('funding_cycles')
-        .select('id, name, year')
-        .order('year', { ascending: false })
+      // Get unique grants (group by grant_id and donor_name)
+      const uniqueGrants = new Map()
+      ;(grantsData || []).forEach((grant: any) => {
+        const key = `${grant.grant_id}|${grant.donor_name}`
+        if (!uniqueGrants.has(key)) {
+          uniqueGrants.set(key, {
+            grant_id: grant.grant_id,
+            donor_name: grant.donor_name,
+            project_name: grant.project_name || grant.grant_id
+          })
+        }
+      })
 
       // Fetch states (deduplicate by state_name)
       const { data: statesData } = await supabase
@@ -414,16 +373,13 @@ export default function CommittedF1sTab() {
         .not('state_name', 'is', null)
 
       setFilterOptions({
-        grantCalls: (grantCallsData || []).map((gc: any) => ({
-          id: gc.id,
-          name: gc.name,
-          donor_name: gc.donors?.name || 'Unknown'
-        })),
-        donors: donorsData || [],
-        cycles: cyclesData || [],
+        grantCalls: [],
+        donors: [],
+        cycles: [],
         states: Array.from(new Set(((statesData || []) as any[]).map((s: any) => s.state_name)))
           .filter(Boolean)
-          .map((name: string) => ({ name }))
+          .map((name: string) => ({ name })),
+        grants: Array.from(uniqueGrants.values())
       })
     } catch (error) {
       console.error('Error fetching filter options:', error)
@@ -443,9 +399,7 @@ export default function CommittedF1sTab() {
   const clearFilters = () => {
     setFilters({
       search: '',
-      grantCall: 'all',
-      donor: 'all',
-      cycle: 'all',
+      grant: 'all',
       state: 'all'
     })
   }
@@ -503,57 +457,19 @@ export default function CommittedF1sTab() {
               </div>
             </div>
             <div>
-              <Label>{t('f2:grant_call')}</Label>
+              <Label>Grant</Label>
               <Select
-                value={filters.grantCall}
-                onValueChange={(value) => setFilters(prev => ({ ...prev, grantCall: value }))}
+                value={filters.grant}
+                onValueChange={(value) => setFilters(prev => ({ ...prev, grant: value }))}
               >
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder={t('f2:all_grant_calls') as string} />
+                  <SelectValue placeholder="All Grants" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">{t('f2:all_grant_calls')}</SelectItem>
-                  {filterOptions.grantCalls.map(gc => (
-                    <SelectItem key={gc.id} value={gc.id}>
-                      {gc.donor_name} — {gc.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>{t('f2:donor')}</Label>
-              <Select
-                value={filters.donor}
-                onValueChange={(value) => setFilters(prev => ({ ...prev, donor: value }))}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder={t('f2:all_donors_label') as string} />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">{t('f2:all_donors_label')}</SelectItem>
-                  {filterOptions.donors.map(donor => (
-                    <SelectItem key={donor.id} value={donor.name}>
-                      {donor.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>{t('f2:funding_cycle_label')}</Label>
-              <Select
-                value={filters.cycle}
-                onValueChange={(value) => setFilters(prev => ({ ...prev, cycle: value }))}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder={t('f2:all_cycles') as string} />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">{t('f2:all_cycles')}</SelectItem>
-                  {filterOptions.cycles.map(cycle => (
-                    <SelectItem key={cycle.id} value={cycle.id}>
-                      {cycle.name} ({cycle.year})
+                  <SelectItem value="all">All Grants</SelectItem>
+                  {filterOptions.grants.map((grant: any) => (
+                    <SelectItem key={`${grant.grant_id}|${grant.donor_name}`} value={`${grant.grant_id}|${grant.donor_name}`}>
+                      {grant.grant_id} - {grant.donor_name}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -632,7 +548,7 @@ export default function CommittedF1sTab() {
                           <span className="text-muted-foreground">-</span>
                         )}
                       </div>
-                      {f1.grant_call_id && (
+                      {f1.grant_id && f1.grant_id.startsWith('LCC-') && (
                         <Button
                           size="sm"
                           variant="ghost"
@@ -707,7 +623,7 @@ export default function CommittedF1sTab() {
           <div className="space-y-4 mt-4">
             <div>
               <p className="text-sm text-muted-foreground mb-4">
-                Reassigning {assigningF1Ids.length} F1 work plan(s) to a different grant call
+                Reassigning {assigningF1Ids.length} F1 work plan(s) to a different grant
               </p>
               {assigningF1Ids.length > 1 && (
                 <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
@@ -726,55 +642,30 @@ export default function CommittedF1sTab() {
               </div>
             </div>
 
-            {/* Same form fields as assignment modal */}
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label>Funding Cycle *</Label>
-                <Select value={tempFundingCycle} onValueChange={setTempFundingCycle}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {fundingCycles.map(fc => (
-                      <SelectItem key={fc.id} value={fc.id}>{fc.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div>
-                <Label>Grant Call *</Label>
+                <Label>Grant *</Label>
                 <Select 
-                  value={tempGrantCall} 
+                  value={`${tempGrantId}|${tempDonorName}`}
                   onValueChange={(value) => {
-                    setTempGrantCall(value)
-                    setTempGrantSerial('')
-                    setGrantSerials([])
+                    const [grantId, donorName] = value.split('|')
+                    setTempGrantId(grantId)
+                    setTempDonorName(donorName)
                   }}
-                  disabled={!tempFundingCycle}
                 >
                   <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select" />
+                    <SelectValue placeholder="Select grant" />
                   </SelectTrigger>
                   <SelectContent>
-                    {grantCallsForCycle.map((gc: any) => (
-                      <SelectItem key={gc.id} value={gc.id}>{gc.name}</SelectItem>
+                    {grantsFromGridView.map((grant: any) => (
+                      <SelectItem key={`${grant.grant_id}|${grant.donor_name}`} value={`${grant.grant_id}|${grant.donor_name}`}>
+                        {grant.grant_id} - {grant.donor_name}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
 
-              <div>
-                <Label>Donor</Label>
-                <Input
-                  value={grantCallsForCycle.find((gc: any) => gc.id === tempGrantCall)?.donor_name || ''}
-                  disabled
-                  className="bg-muted w-full"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label>MMYY *</Label>
                 <Input
@@ -782,36 +673,36 @@ export default function CommittedF1sTab() {
                   onChange={(e) => {
                     const newMMYY = e.target.value.replace(/[^0-9]/g, '').slice(0, 4)
                     setTempMMYY(newMMYY)
-                    if (newMMYY.length !== 4) {
-                      setTempGrantSerial('')
-                      setGrantSerials([])
-                    }
                   }}
-                  placeholder="0825"
+                  placeholder="1225"
                   maxLength={4}
                   className="w-full"
                 />
               </div>
-
-              <div>
-                <Label>Grant Serial *</Label>
-                <Select 
-                  value={tempGrantSerial} 
-                  onValueChange={setTempGrantSerial}
-                  disabled={!tempGrantCall || !tempMMYY || tempMMYY.length !== 4}
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select or create" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="new">Create New Serial</SelectItem>
-                    {grantSerials.map(gs => (
-                      <SelectItem key={gs.grant_serial} value={gs.grant_serial}>{gs.grant_serial}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
             </div>
+
+            {/* Preview generated serials */}
+            {tempGrantId && tempDonorName && tempMMYY && tempMMYY.length === 4 && assigningF1Ids.length > 0 && (
+              <div className="p-3 bg-muted rounded-md">
+                <Label className="text-sm font-semibold mb-2 block">Generated Workplan Serial IDs:</Label>
+                <div className="space-y-1 max-h-32 overflow-y-auto">
+                  {assigningF1Ids.map((id, idx) => {
+                    const f1 = f1s.find(f => f.id === id)
+                    if (!f1) return null
+                    const donorShort = donorShortNames[grantsFromGridView.find((g: any) => g.grant_id === tempGrantId && g.donor_name === tempDonorName)?.donor_id || '']
+                    const stateShort = stateShorts[f1.state] || 'XX'
+                    const workplanSeq = String((selectedGrantMaxSequence || 0) + idx + 1).padStart(4, '0')
+                    const generatedSerial = `LCC-${donorShort || 'XXX'}-${stateShort}-${tempMMYY}-${workplanSeq}`
+                    const displayLabel = f1.err_id || `${f1.state} - ${f1.locality}` || 'F1'
+                    return (
+                      <div key={id} className="text-sm font-mono">
+                        {displayLabel}: {generatedSerial}
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
 
             <div className="flex justify-end gap-2 pt-4">
               <Button
@@ -819,17 +710,16 @@ export default function CommittedF1sTab() {
                 onClick={() => {
                   setReassignModalOpen(false)
                   setReassigningF1Id(null)
-                  setTempFundingCycle('')
-                  setTempGrantCall('')
+                  setTempGrantId('')
+                  setTempDonorName('')
                   setTempMMYY('')
-                  setTempGrantSerial('')
                 }}
               >
                 Cancel
               </Button>
               <Button
                 onClick={handleReassignMultipleF1s}
-                disabled={!tempGrantCall || !tempMMYY || tempMMYY.length !== 4 || !tempGrantSerial || !tempFundingCycle || isReassigning}
+                disabled={!tempGrantId || !tempDonorName || !tempMMYY || tempMMYY.length !== 4 || isReassigning}
               >
                 {isReassigning ? 'Reassigning...' : 'Reassign'}
               </Button>

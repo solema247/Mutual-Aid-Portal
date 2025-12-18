@@ -80,6 +80,7 @@ export interface FilterOptions {
   donors: Array<{ id: string; name: string }>
   cycles: Array<{ id: string; name: string; year: number }>
   states: Array<{ name: string }>
+  grants: Array<{ grant_id: string; donor_name: string; project_name: string }>
 }
 
 export interface StateAllocation {
