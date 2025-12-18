@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useEffect, useMemo, useState } from 'react'
-import { Plus, ChevronDown, ChevronUp, RefreshCw, Upload, FileSpreadsheet, FileText } from 'lucide-react'
+import { Plus, ChevronDown, ChevronUp, RefreshCw, Upload, FileSpreadsheet, FileText, Pencil, Save, X, Trash2 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { supabase } from '@/lib/supabaseClient'
@@ -23,7 +23,6 @@ import {
   FormMessage,
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
-import { Trash2 } from 'lucide-react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
@@ -94,6 +93,11 @@ export default function DistributionDecisionsManager() {
   const [manualFile, setManualFile] = useState<File | null>(null)
   const [isParsingCsv, setIsParsingCsv] = useState(false)
   const [currentUser, setCurrentUser] = useState<{ id: string; role: string } | null>(null)
+  const [editingAllocation, setEditingAllocation] = useState<string | null>(null)
+  const [editAllocationState, setEditAllocationState] = useState<string>('')
+  const [editAllocationAmount, setEditAllocationAmount] = useState<string>('')
+  const [isUpdatingAllocation, setIsUpdatingAllocation] = useState(false)
+  const [isDeletingAllocation, setIsDeletingAllocation] = useState<string | null>(null)
 
   const decisionForm = useForm<z.infer<typeof decisionSchema>>({
     resolver: zodResolver(decisionSchema),
@@ -519,17 +523,11 @@ export default function DistributionDecisionsManager() {
           >
             <FileText className="h-5 w-5" />
             Distribution Decisions
-            {isCollapsed && (() => {
-              const totalAllocations = Object.values(allocationsByDecision).reduce((sum, allocs) => sum + allocs.length, 0)
-              if (decisions.length === 0 && totalAllocations === 0) return null
-              return (
-                <span className="text-sm font-normal text-muted-foreground ml-2">
-                  {decisions.length > 0 && `${decisions.length} ${decisions.length === 1 ? 'decision' : 'decisions'}`}
-                  {decisions.length > 0 && totalAllocations > 0 && ' • '}
-                  {totalAllocations > 0 && `${totalAllocations} ${totalAllocations === 1 ? 'allocation' : 'allocations'}`}
-                </span>
-              )
-            })()}
+            {isCollapsed && decisions.length > 0 && (
+              <span className="text-sm font-normal text-muted-foreground ml-2">
+                ({decisions.length} {decisions.length === 1 ? 'decision' : 'decisions'})
+              </span>
+            )}
             {isCollapsed ? (
               <ChevronDown className="h-4 w-4" />
             ) : (
@@ -873,18 +871,160 @@ export default function DistributionDecisionsManager() {
                                           </TableRow>
                                         ) : (
                                           <>
-                                            {(allocationsByDecision[fetchKey] || []).map((alloc) => (
-                                              <TableRow key={alloc.allocation_id}>
-                                                <TableCell className="font-medium">{alloc.state || '—'}</TableCell>
-                                                <TableCell className="text-right">{formatCurrency(alloc.amount)}</TableCell>
-                                                <TableCell className="text-right">
-                                                {alloc.amount !== null && alloc.amount !== undefined && decision.decision_amount
-                                                  ? `${((Number(alloc.amount) / Number(decision.decision_amount)) * 100).toFixed(1)}%`
-                                                    : '—'}
-                                                </TableCell>
-                                                <TableCell />
-                                              </TableRow>
-                                            ))}
+                                            {(allocationsByDecision[fetchKey] || []).map((alloc) => {
+                                              const isEditing = editingAllocation === alloc.allocation_id
+                                              return (
+                                                <TableRow key={alloc.allocation_id}>
+                                                  <TableCell className="font-medium">
+                                                    {isEditing ? (
+                                                      <Select
+                                                        value={editAllocationState}
+                                                        onValueChange={setEditAllocationState}
+                                                      >
+                                                        <SelectTrigger className="w-full">
+                                                          <SelectValue placeholder="Select state" />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                          {stateOptions.map((s) => (
+                                                            <SelectItem key={s} value={s}>
+                                                              {s}
+                                                            </SelectItem>
+                                                          ))}
+                                                        </SelectContent>
+                                                      </Select>
+                                                    ) : (
+                                                      alloc.state || '—'
+                                                    )}
+                                                  </TableCell>
+                                                  <TableCell className="text-right">
+                                                    {isEditing ? (
+                                                      <Input
+                                                        type="number"
+                                                        value={editAllocationAmount}
+                                                        onChange={(e) => setEditAllocationAmount(e.target.value)}
+                                                        className="w-32 ml-auto"
+                                                      />
+                                                    ) : (
+                                                      formatCurrency(alloc.amount)
+                                                    )}
+                                                  </TableCell>
+                                                  <TableCell className="text-right">
+                                                    {isEditing ? (
+                                                      editAllocationAmount && decision.decision_amount
+                                                        ? `${((Number(editAllocationAmount) / Number(decision.decision_amount)) * 100).toFixed(1)}%`
+                                                        : '—'
+                                                    ) : (
+                                                      alloc.amount !== null && alloc.amount !== undefined && decision.decision_amount
+                                                        ? `${((Number(alloc.amount) / Number(decision.decision_amount)) * 100).toFixed(1)}%`
+                                                        : '—'
+                                                    )}
+                                                  </TableCell>
+                                                  <TableCell className="text-right">
+                                                    {currentUser?.role === 'admin' && (
+                                                      <div className="flex items-center justify-end gap-1">
+                                                        {isEditing ? (
+                                                          <>
+                                                            <Button
+                                                              variant="ghost"
+                                                              size="icon"
+                                                              className="h-7 w-7"
+                                                              onClick={async () => {
+                                                                if (!editAllocationState || !editAllocationAmount || Number(editAllocationAmount) <= 0) {
+                                                                  alert('Please enter a valid state and amount')
+                                                                  return
+                                                                }
+                                                                setIsUpdatingAllocation(true)
+                                                                try {
+                                                                  const res = await fetch(`/api/distribution-decisions/allocations/${alloc.allocation_id}`, {
+                                                                    method: 'PUT',
+                                                                    headers: { 'Content-Type': 'application/json' },
+                                                                    body: JSON.stringify({
+                                                                      state: editAllocationState,
+                                                                      amount: Number(editAllocationAmount)
+                                                                    })
+                                                                  })
+                                                                  if (!res.ok) {
+                                                                    const err = await res.json()
+                                                                    throw new Error(err.error || 'Failed to update allocation')
+                                                                  }
+                                                                  setEditingAllocation(null)
+                                                                  setEditAllocationState('')
+                                                                  setEditAllocationAmount('')
+                                                                  fetchAllocations(fetchKey)
+                                                                  fetchDecisions()
+                                                                } catch (error: any) {
+                                                                  alert(error.message || 'Failed to update allocation')
+                                                                } finally {
+                                                                  setIsUpdatingAllocation(false)
+                                                                }
+                                                              }}
+                                                              disabled={isUpdatingAllocation}
+                                                            >
+                                                              <Save className="h-3 w-3" />
+                                                            </Button>
+                                                            <Button
+                                                              variant="ghost"
+                                                              size="icon"
+                                                              className="h-7 w-7"
+                                                              onClick={() => {
+                                                                setEditingAllocation(null)
+                                                                setEditAllocationState('')
+                                                                setEditAllocationAmount('')
+                                                              }}
+                                                              disabled={isUpdatingAllocation}
+                                                            >
+                                                              <X className="h-3 w-3" />
+                                                            </Button>
+                                                          </>
+                                                        ) : (
+                                                          <>
+                                                            <Button
+                                                              variant="ghost"
+                                                              size="icon"
+                                                              className="h-7 w-7"
+                                                              onClick={() => {
+                                                                setEditingAllocation(alloc.allocation_id)
+                                                                setEditAllocationState(alloc.state || '')
+                                                                setEditAllocationAmount(alloc.amount?.toString() || '')
+                                                              }}
+                                                            >
+                                                              <Pencil className="h-3 w-3" />
+                                                            </Button>
+                                                            <Button
+                                                              variant="ghost"
+                                                              size="icon"
+                                                              className="h-7 w-7 text-destructive hover:text-destructive/80"
+                                                              onClick={async () => {
+                                                                if (!confirm(`Delete allocation for ${alloc.state || 'this state'}?`)) return
+                                                                setIsDeletingAllocation(alloc.allocation_id)
+                                                                try {
+                                                                  const res = await fetch(`/api/distribution-decisions/allocations/${alloc.allocation_id}`, {
+                                                                    method: 'DELETE'
+                                                                  })
+                                                                  if (!res.ok) {
+                                                                    const err = await res.json()
+                                                                    throw new Error(err.error || 'Failed to delete allocation')
+                                                                  }
+                                                                  fetchAllocations(fetchKey)
+                                                                  fetchDecisions()
+                                                                } catch (error: any) {
+                                                                  alert(error.message || 'Failed to delete allocation')
+                                                                } finally {
+                                                                  setIsDeletingAllocation(null)
+                                                                }
+                                                              }}
+                                                              disabled={isDeletingAllocation === alloc.allocation_id}
+                                                            >
+                                                              <Trash2 className="h-3 w-3" />
+                                                            </Button>
+                                                          </>
+                                                        )}
+                                                      </div>
+                                                    )}
+                                                  </TableCell>
+                                                </TableRow>
+                                              )
+                                            })}
                                             {/* Totals Row */}
                                             {(() => {
                                               const allocations = allocationsByDecision[fetchKey] || []
