@@ -30,24 +30,17 @@ export default function F2ApprovalsPage() {
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+        const res = await fetch('/api/users/me')
         
-        if (sessionError || !session) {
-          router.push('/login')
-          return
+        if (!res.ok) {
+          if (res.status === 401) {
+            router.push('/login')
+            return
+          }
+          throw new Error('Failed to fetch user data')
         }
 
-        const { data: userData, error: userError } = await supabase
-          .from('users')
-          .select('*')
-          .eq('auth_user_id', session.user.id)
-          .single()
-
-        if (userError || !userData) {
-          console.error('Error fetching user data:', userError)
-          router.push('/login')
-          return
-        }
+        const userData = await res.json()
 
         if (userData.status !== 'active') {
           console.error('User account is not active')

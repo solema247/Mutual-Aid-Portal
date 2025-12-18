@@ -79,6 +79,10 @@ export default function DistributionDecisionsManager() {
   const [allocRows, setAllocRows] = useState<Array<{ state: string; amount: string }>>([{ state: '', amount: '' }])
   const [stateOptions, setStateOptions] = useState<string[]>([])
   const [isDeleting, setIsDeleting] = useState<Record<string, boolean>>({})
+  const [isCollapsed, setIsCollapsed] = useState(false)
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
+  const [deleteConfirmText, setDeleteConfirmText] = useState('')
+  const [decisionToDelete, setDecisionToDelete] = useState<string | null>(null)
 
   const decisionForm = useForm<z.infer<typeof decisionSchema>>({
     resolver: zodResolver(decisionSchema),
@@ -152,6 +156,26 @@ export default function DistributionDecisionsManager() {
       console.error(error)
       alert(error.message || 'Failed to create decision')
     }
+  }
+
+  const handleDeleteClick = (decisionKey: string) => {
+    setDecisionToDelete(decisionKey)
+    setDeleteConfirmOpen(true)
+    setDeleteConfirmText('')
+  }
+
+  const handleDeleteConfirm = async () => {
+    if (deleteConfirmText !== 'Confirm') {
+      alert('Please type "Confirm" to delete this distribution decision')
+      return
+    }
+
+    if (!decisionToDelete) return
+
+    await handleDeleteDecision(decisionToDelete)
+    setDeleteConfirmOpen(false)
+    setDeleteConfirmText('')
+    setDecisionToDelete(null)
   }
 
   const handleDeleteDecision = async (decisionKey: string) => {
@@ -251,8 +275,16 @@ export default function DistributionDecisionsManager() {
     <Card>
       <CardHeader>
         <div className="flex items-center justify-between">
-          <CardTitle className="flex items-center gap-2">
+          <CardTitle 
+            className="flex items-center gap-2 cursor-pointer"
+            onClick={() => setIsCollapsed(!isCollapsed)}
+          >
             Distribution Decisions
+            {isCollapsed ? (
+              <ChevronDown className="h-4 w-4" />
+            ) : (
+              <ChevronUp className="h-4 w-4" />
+            )}
           </CardTitle>
           <div className="flex items-center gap-2">
             <Button variant="outline" size="icon" onClick={fetchDecisions} disabled={isLoading}>
@@ -382,7 +414,8 @@ export default function DistributionDecisionsManager() {
           </div>
         </div>
       </CardHeader>
-      <CardContent>
+      {!isCollapsed && (
+        <CardContent>
         {isLoading ? (
           <div className="py-6 text-center text-muted-foreground">Loading...</div>
         ) : (
@@ -595,6 +628,48 @@ export default function DistributionDecisionsManager() {
           </div>
         )}
       </CardContent>
+      )}
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Delete Distribution Decision</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Are you sure you want to delete this distribution decision and all its allocations? This action cannot be undone.
+            </p>
+            <p className="text-sm font-medium">
+              Type <span className="font-bold text-destructive">Confirm</span> to proceed:
+            </p>
+            <Input
+              value={deleteConfirmText}
+              onChange={(e) => setDeleteConfirmText(e.target.value)}
+              placeholder="Type 'Confirm' here"
+            />
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setDeleteConfirmOpen(false)
+                  setDeleteConfirmText('')
+                  setDecisionToDelete(null)
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={handleDeleteConfirm}
+                disabled={deleteConfirmText !== 'Confirm'}
+              >
+                Delete
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </Card>
   )
 }
