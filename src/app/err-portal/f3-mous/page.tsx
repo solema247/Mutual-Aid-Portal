@@ -102,16 +102,14 @@ export default function F3MOUsPage() {
   const [mouAssignmentStatus, setMouAssignmentStatus] = useState<Record<string, { hasUnassigned: boolean; projectCount: number }>>({})
   
   // Assignment form state
-  const [tempFundingCycle, setTempFundingCycle] = useState<string>('')
-  const [tempGrantCall, setTempGrantCall] = useState<string>('')
+  const [tempGrantId, setTempGrantId] = useState<string>('')
+  const [tempDonorName, setTempDonorName] = useState<string>('')
   const [tempMMYY, setTempMMYY] = useState<string>('')
-  const [tempGrantSerial, setTempGrantSerial] = useState<string>('')
-  const [fundingCycles, setFundingCycles] = useState<any[]>([])
-  const [grantCallsForCycle, setGrantCallsForCycle] = useState<any[]>([])
-  const [grantSerials, setGrantSerials] = useState<any[]>([])
+  const [grantsFromGridView, setGrantsFromGridView] = useState<any[]>([])
   const [mouProjects, setMouProjects] = useState<Array<{ id: string; err_id: string | null; state: string; locality: string | null }>>([])
   const [stateShorts, setStateShorts] = useState<Record<string, string>>({})
-  const [lastWorkplanNums, setLastWorkplanNums] = useState<Record<string, number>>({})
+  const [donorShortNames, setDonorShortNames] = useState<Record<string, string>>({})
+  const [selectedGrantMaxSequence, setSelectedGrantMaxSequence] = useState<number>(0)
   
   // Remaining amounts state
   const [grantRemaining, setGrantRemaining] = useState<{
@@ -202,7 +200,7 @@ export default function F3MOUsPage() {
       for (const mouId of mouIds) {
         const { data: projects, error } = await supabase
           .from('err_projects')
-          .select('id, grant_call_id')
+          .select('id, grant_id')
           .eq('mou_id', mouId)
         
         if (error) {
@@ -211,7 +209,8 @@ export default function F3MOUsPage() {
         }
         
         const projectCount = projects?.length || 0
-        const hasUnassigned = projectCount > 0 && projects?.some((p: any) => !p.grant_call_id) || false
+        // A project is assigned if it has a grant_id that looks like a serial (starts with LCC-)
+        const hasUnassigned = projectCount > 0 && projects?.some((p: any) => !p.grant_id || !p.grant_id.startsWith('LCC-')) || false
         
         statusMap[mouId] = { hasUnassigned, projectCount }
       }
@@ -222,70 +221,59 @@ export default function F3MOUsPage() {
     }
   }
   
-  const fetchFundingCycles = async () => {
-    try {
-      const { data } = await supabase
-        .from('funding_cycles')
-        .select('id, name, type, status')
-        .eq('status', 'open')
-        .order('created_at', { ascending: false })
-      setFundingCycles(data || [])
-    } catch (error) {
-      console.error('Error fetching funding cycles:', error)
-    }
-  }
-  
-  const fetchGrantCallsForCycle = async (cycleId: string) => {
-    try {
-      const { data } = await supabase
-        .from('cycle_grant_inclusions')
-        .select(`
-          grant_call_id,
-          grant_calls (
-            id,
-            name,
-            donor_id,
-            donors (
-              id,
-              name,
-              short_name
-            )
-          )
-        `)
-        .eq('cycle_id', cycleId)
-      
-      const grantCalls = (data || []).map((item: any) => ({
-        id: item.grant_call_id,
-        name: item.grant_calls?.name || '',
-        donor_id: item.grant_calls?.donor_id || '',
-        donor_name: item.grant_calls?.donors?.name || '',
-        donor_short: item.grant_calls?.donors?.short_name || ''
-      }))
-      
-      setGrantCallsForCycle(grantCalls)
-    } catch (error) {
-      console.error('Error fetching grant calls for cycle:', error)
-    }
-  }
-  
-  const fetchGrantSerials = async (stateName: string, mmyy: string) => {
+  const fetchGrantsFromGridView = async () => {
     try {
       const { data, error } = await supabase
-        .from('grant_serials')
-        .select('grant_serial, grant_call_id')
-        .eq('state_name', stateName)
-        .eq('yymm', mmyy)
-        .order('grant_serial', { ascending: true })
+        .from('grants_grid_view')
+        .select('grant_id, donor_name, project_name, donor_id')
+        .order('grant_id', { ascending: true })
       
-      const serials = (data || []).map(s => ({ grant_serial: s.grant_serial }))
-      setGrantSerials(serials)
+      if (error) throw error
+      
+      // Get unique grants (group by grant_id and donor_name)
+      const uniqueGrants = new Map()
+      const donorIds = new Set<string>()
+      ;(data || []).forEach((grant: any) => {
+        const key = `${grant.grant_id}|${grant.donor_name}`
+        if (!uniqueGrants.has(key)) {
+          uniqueGrants.set(key, {
+            grant_id: grant.grant_id,
+            donor_name: grant.donor_name,
+            project_name: grant.project_name || grant.grant_id,
+            donor_id: grant.donor_id
+          })
+          if (grant.donor_id) {
+            donorIds.add(grant.donor_id)
+          }
+        }
+      })
+      
+      setGrantsFromGridView(Array.from(uniqueGrants.values()))
+      
+      // Fetch donor short names for all unique donor_ids
+      if (donorIds.size > 0) {
+        const { data: donors, error: donorsError } = await supabase
+          .from('donors')
+          .select('id, short_name')
+          .in('id', Array.from(donorIds))
+        
+        if (!donorsError && donors) {
+          const shortNamesMap: Record<string, string> = {}
+          donors.forEach((donor: any) => {
+            if (donor.id && donor.short_name) {
+              shortNamesMap[donor.id] = donor.short_name
+            }
+          })
+          setDonorShortNames(shortNamesMap)
+        }
+      }
     } catch (error) {
-      console.error('Error fetching grant serials:', error)
+      console.error('Error fetching grants from grid view:', error)
     }
   }
   
   const handleAssignMou = async () => {
-    if (!assigningMouId || !tempFundingCycle || !tempGrantCall || !tempMMYY || !tempGrantSerial) {
+    if (!assigningMouId || !tempGrantId || !tempDonorName || !tempMMYY) {
       alert('Please fill all assignment fields')
       return
     }
@@ -301,10 +289,9 @@ export default function F3MOUsPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          funding_cycle_id: tempFundingCycle,
-          grant_call_id: tempGrantCall,
-          mmyy: tempMMYY,
-          grant_serial: tempGrantSerial
+          grant_id: tempGrantId,
+          donor_name: tempDonorName,
+          mmyy: tempMMYY
         })
       })
       
@@ -318,10 +305,9 @@ export default function F3MOUsPage() {
       alert(`Successfully assigned ${result.assigned_count} work plan(s) to grant`)
       
       // Clear form
-      setTempFundingCycle('')
-      setTempGrantCall('')
+      setTempGrantId('')
+      setTempDonorName('')
       setTempMMYY('')
-      setTempGrantSerial('')
       setAssignModalOpen(false)
       setAssigningMouId(null)
       
@@ -391,8 +377,8 @@ export default function F3MOUsPage() {
     }
   }
   
-  const calculateGrantRemaining = async (grantCallId: string, fundingCycleId?: string) => {
-    if (!grantCallId) {
+  const calculateGrantRemaining = async (grantId: string, donorName: string) => {
+    if (!grantId || !donorName) {
       setGrantRemaining(null)
       return
     }
@@ -400,23 +386,45 @@ export default function F3MOUsPage() {
     try {
       setGrantRemaining(prev => prev ? { ...prev, loading: true } : { total: 0, committed: 0, allocated: 0, remaining: 0, loading: true })
       
-      // Get total included amount from ALL cycle_grant_inclusions for this grant call
-      // Sum across all cycles (not just the selected cycle)
-      const { data: inclusions, error: inclusionsError } = await supabase
-        .from('cycle_grant_inclusions')
-        .select('amount_included')
-        .eq('grant_call_id', grantCallId)
+      // Get grant from grants_grid_view
+      const { data: grant, error: grantError } = await supabase
+        .from('grants_grid_view')
+        .select('total_transferred_amount_usd, sum_activity_amount, activities')
+        .eq('grant_id', grantId)
+        .eq('donor_name', donorName)
+        .single()
       
-      if (inclusionsError) throw inclusionsError
+      if (grantError || !grant) {
+        setGrantRemaining(null)
+        return
+      }
       
-      // Sum all amount_included values across all cycles for this grant call
-      const totalIncluded = (inclusions || []).reduce((sum: number, inc: any) => sum + (inc.amount_included || 0), 0)
+      // Total is the sum_activity_amount from grants_grid_view
+      const totalIncluded = Number(grant.sum_activity_amount || 0)
       
-      // Get committed and allocated amounts from projects
+      // Get allocated amounts from projects that match this grant
+      // Projects assigned to this grant will have grant_id in the activities list
+      const activitySerials = grant.activities 
+        ? grant.activities.split(',').map((s: string) => s.trim()).filter(Boolean)
+        : []
+      
+      if (activitySerials.length === 0) {
+        // No activities yet, so no committed or allocated
+        setGrantRemaining({
+          total: totalIncluded,
+          committed: 0,
+          allocated: 0,
+          remaining: totalIncluded,
+          loading: false
+        })
+        return
+      }
+      
+      // Get projects that match these serials
       const { data: projects, error: projectsError } = await supabase
         .from('err_projects')
-        .select('expenses, funding_status')
-        .eq('grant_call_id', grantCallId)
+        .select('expenses, funding_status, grant_id')
+        .in('grant_id', activitySerials)
       
       if (projectsError) throw projectsError
       
@@ -429,12 +437,14 @@ export default function F3MOUsPage() {
         }
       }
       
+      // Committed = projects with funding_status = 'committed'
       const totalCommitted = (projects || [])
         .filter((p: any) => p.funding_status === 'committed')
         .reduce((sum: number, p: any) => sum + sumExpenses(p.expenses), 0)
       
+      // Allocated = projects with funding_status = 'allocated' or (unassigned + pending)
       const totalAllocated = (projects || [])
-        .filter((p: any) => p.funding_status === 'allocated')
+        .filter((p: any) => p.funding_status === 'allocated' || (p.funding_status === 'unassigned' && p.status === 'pending'))
         .reduce((sum: number, p: any) => sum + sumExpenses(p.expenses), 0)
       
       const remaining = totalIncluded - totalCommitted - totalAllocated
@@ -452,8 +462,8 @@ export default function F3MOUsPage() {
     }
   }
   
-  const calculateStateAllocationRemaining = async (fundingCycleId: string, stateName: string) => {
-    if (!fundingCycleId || !stateName) {
+  const calculateStateAllocationRemaining = async (stateName: string) => {
+    if (!stateName) {
       setStateAllocationRemaining(null)
       return
     }
@@ -461,23 +471,24 @@ export default function F3MOUsPage() {
     try {
       setStateAllocationRemaining(prev => prev ? { ...prev, loading: true } : { total: 0, committed: 0, allocated: 0, remaining: 0, loading: true })
       
-      // Get all state allocations for this cycle and state
+      // Get all allocations for this state from allocations_by_date
       const { data: allocations, error: allocationsError } = await supabase
-        .from('cycle_state_allocations')
-        .select('id, amount')
-        .eq('cycle_id', fundingCycleId)
-        .eq('state_name', stateName)
+        .from('allocations_by_date')
+        .select('"Allocation Amount", State')
+        .eq('State', stateName)
       
       if (allocationsError) throw allocationsError
       
-      const totalAllocated = (allocations || []).reduce((sum: number, alloc: any) => sum + (alloc.amount || 0), 0)
-      const allocationIds = (allocations || []).map((alloc: any) => alloc.id)
+      const totalAllocated = (allocations || []).reduce((sum: number, alloc: any) => {
+        const amount = alloc['Allocation Amount'] ? Number(alloc['Allocation Amount']) : 0
+        return sum + amount
+      }, 0)
       
-      // Get committed and allocated amounts from projects
+      // Get committed and allocated amounts from projects for this state
       const { data: projects, error: projectsError } = await supabase
         .from('err_projects')
-        .select('expenses, funding_status')
-        .in('cycle_state_allocation_id', allocationIds)
+        .select('expenses, funding_status, state')
+        .eq('state', stateName)
       
       if (projectsError) throw projectsError
       
@@ -495,7 +506,7 @@ export default function F3MOUsPage() {
         .reduce((sum: number, p: any) => sum + sumExpenses(p.expenses), 0)
       
       const totalAllocatedProjects = (projects || [])
-        .filter((p: any) => p.funding_status === 'allocated')
+        .filter((p: any) => p.funding_status === 'allocated' || (p.funding_status === 'unassigned' && p.status === 'pending'))
         .reduce((sum: number, p: any) => sum + sumExpenses(p.expenses), 0)
       
       const remaining = totalAllocated - totalCommitted - totalAllocatedProjects
@@ -513,84 +524,33 @@ export default function F3MOUsPage() {
     }
   }
   
-  const fetchLastWorkplanNum = async (grantSerial: string) => {
-    try {
-      const { data: existingProjects, error: projectsError } = await supabase
-        .from('err_projects')
-        .select('workplan_number')
-        .eq('grant_serial_id', grantSerial)
-        .not('workplan_number', 'is', null)
-
-      if (projectsError) {
-        console.error('Error fetching existing workplans:', projectsError)
-        return
-      }
-
-      const existingWorkplanNumbers = (existingProjects || [])
-        .map((p: any) => p.workplan_number)
-        .filter((n: number) => typeof n === 'number' && n > 0)
-        .sort((a: number, b: number) => b - a)
-
-      const highestNumber = existingWorkplanNumbers.length > 0 ? existingWorkplanNumbers[0] : 0
-      
-      // Store for each project in the MOU
-      const nums: Record<string, number> = {}
-      mouProjects.forEach(project => {
-        nums[project.id] = highestNumber
-      })
-      setLastWorkplanNums(nums)
-    } catch (error) {
-      console.error('Error fetching last workplan number:', error)
-    }
-  }
 
   useEffect(() => {
     fetchMous()
-    fetchFundingCycles()
+    fetchGrantsFromGridView()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedState])
   
+  // Calculate grant remaining when grant changes
   useEffect(() => {
-    if (tempFundingCycle) {
-      fetchGrantCallsForCycle(tempFundingCycle)
-    }
-  }, [tempFundingCycle])
-  
-  useEffect(() => {
-    if (tempGrantCall && tempMMYY && tempMMYY.length === 4 && assigningMouId) {
-      const mou = mous.find(m => m.id === assigningMouId)
-      if (mou?.state) {
-        fetchGrantSerials(mou.state, tempMMYY)
-      }
-    }
-  }, [tempGrantCall, tempMMYY, assigningMouId, mous])
-  
-  useEffect(() => {
-    if (tempGrantSerial && tempGrantSerial !== 'new' && assignModalOpen && mouProjects.length > 0) {
-      fetchLastWorkplanNum(tempGrantSerial)
-    }
-  }, [tempGrantSerial, assignModalOpen, mouProjects])
-  
-  // Calculate grant remaining when grant call or funding cycle changes
-  useEffect(() => {
-    if (tempGrantCall && tempFundingCycle && assignModalOpen) {
-      calculateGrantRemaining(tempGrantCall, tempFundingCycle)
+    if (tempGrantId && tempDonorName && assignModalOpen) {
+      calculateGrantRemaining(tempGrantId, tempDonorName)
     } else {
       setGrantRemaining(null)
     }
-  }, [tempGrantCall, tempFundingCycle, assignModalOpen])
+  }, [tempGrantId, tempDonorName, assignModalOpen])
   
-  // Calculate state allocation remaining when funding cycle changes
+  // Calculate state allocation remaining when modal opens
   useEffect(() => {
-    if (tempFundingCycle && assignModalOpen && mouProjects.length > 0) {
+    if (assignModalOpen && mouProjects.length > 0) {
       const stateName = mouProjects[0]?.state
       if (stateName) {
-        calculateStateAllocationRemaining(tempFundingCycle, stateName)
+        calculateStateAllocationRemaining(stateName)
       }
     } else {
       setStateAllocationRemaining(null)
     }
-  }, [tempFundingCycle, assignModalOpen, mouProjects])
+  }, [assignModalOpen, mouProjects])
 
   return (
     <div className="max-w-7xl mx-auto p-6 space-y-6">
@@ -1408,39 +1368,49 @@ export default function F3MOUsPage() {
               )}
             </div>
 
-            {/* Row 1: Funding Cycle, Grant Call, Donor */}
-            <div className="grid grid-cols-3 gap-4">
+            {/* Row 1: Grant and Donor */}
+            <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label>Funding Cycle *</Label>
-                <Select value={tempFundingCycle} onValueChange={setTempFundingCycle}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {fundingCycles.map(fc => (
-                      <SelectItem key={fc.id} value={fc.id}>{fc.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div>
-                <Label>Grant Call *</Label>
+                <Label>Grant *</Label>
                 <Select 
-                  value={tempGrantCall} 
-                  onValueChange={(value) => {
-                    setTempGrantCall(value)
-                    setTempGrantSerial('')
-                    setGrantSerials([])
+                  value={tempGrantId} 
+                  onValueChange={async (value) => {
+                    const selectedGrant = grantsFromGridView.find((g: any) => g.grant_id === value)
+                    setTempGrantId(value)
+                    setTempDonorName(selectedGrant?.donor_name || '')
+                    
+                    // Fetch max_workplan_sequence from grants_grid_view
+                    if (value && selectedGrant?.donor_name) {
+                      try {
+                        const { data: grantData, error } = await supabase
+                          .from('grants_grid_view')
+                          .select('max_workplan_sequence')
+                          .eq('grant_id', value)
+                          .eq('donor_name', selectedGrant.donor_name)
+                          .single()
+                        
+                        if (!error && grantData) {
+                          setSelectedGrantMaxSequence(grantData.max_workplan_sequence || 0)
+                        } else {
+                          setSelectedGrantMaxSequence(0)
+                        }
+                      } catch (error) {
+                        console.error('Error fetching max workplan sequence:', error)
+                        setSelectedGrantMaxSequence(0)
+                      }
+                    } else {
+                      setSelectedGrantMaxSequence(0)
+                    }
                   }}
-                  disabled={!tempFundingCycle}
                 >
                   <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select" />
+                    <SelectValue placeholder="Select Grant" />
                   </SelectTrigger>
                   <SelectContent>
-                    {grantCallsForCycle.map((gc: any) => (
-                      <SelectItem key={gc.id} value={gc.id}>{gc.name}</SelectItem>
+                    {grantsFromGridView.map((grant: any) => (
+                      <SelectItem key={`${grant.grant_id}|${grant.donor_name}`} value={grant.grant_id}>
+                        {grant.grant_id} - {grant.project_name || grant.grant_id} ({grant.donor_name})
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -1449,15 +1419,15 @@ export default function F3MOUsPage() {
               <div>
                 <Label>Donor</Label>
                 <Input
-                  value={grantCallsForCycle.find((gc: any) => gc.id === tempGrantCall)?.donor_name || ''}
+                  value={tempDonorName}
                   disabled
                   className="bg-muted w-full"
                 />
               </div>
             </div>
 
-            {/* Row 2: MMYY and Grant Serial */}
-            <div className="grid grid-cols-2 gap-4">
+            {/* Row 2: MMYY */}
+            <div className="grid grid-cols-1 gap-4">
               <div>
                 <Label>MMYY *</Label>
                 <Input
@@ -1465,34 +1435,11 @@ export default function F3MOUsPage() {
                   onChange={(e) => {
                     const newMMYY = e.target.value.replace(/[^0-9]/g, '').slice(0, 4)
                     setTempMMYY(newMMYY)
-                    if (newMMYY.length !== 4) {
-                      setTempGrantSerial('')
-                      setGrantSerials([])
-                    }
                   }}
-                  placeholder="0825"
+                  placeholder="1224"
                   maxLength={4}
                   className="w-full"
                 />
-              </div>
-
-              <div>
-                <Label>Grant Serial *</Label>
-                <Select 
-                  value={tempGrantSerial} 
-                  onValueChange={setTempGrantSerial}
-                  disabled={!tempGrantCall || !tempMMYY || tempMMYY.length !== 4}
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select or create" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="new">Create New Serial</SelectItem>
-                    {grantSerials.map(gs => (
-                      <SelectItem key={gs.grant_serial} value={gs.grant_serial}>{gs.grant_serial}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
               </div>
             </div>
 
@@ -1622,80 +1569,29 @@ export default function F3MOUsPage() {
             )}
 
             {/* Generated Grant ID Preview */}
-            {mouProjects.length > 0 && tempGrantCall && tempMMYY && tempMMYY.length === 4 && tempGrantSerial && (
+            {mouProjects.length > 0 && tempGrantId && tempDonorName && tempMMYY && tempMMYY.length === 4 && (
               <div>
-                <Label>Generated Workplan Grant IDs</Label>
+                <Label>Generated Workplan Serial IDs</Label>
                 <div className="p-3 bg-muted rounded-md font-mono text-sm max-h-64 overflow-y-auto mt-2">
                   {mouProjects.map((project, idx) => {
-                    const grantCall = grantCallsForCycle.find((gc: any) => gc.id === tempGrantCall)
-                    const donorShort = grantCall?.donor_short || ''
-                    const stateShort = stateShorts[project.state] || ''
+                    const stateShort = stateShorts[project.state] || 'XX'
                     const mmyy = tempMMYY
-                    const grantSerial = tempGrantSerial
                     
-                    let workplanNum = 1
-                    if (grantSerial && grantSerial !== 'new') {
-                      const baseNum = lastWorkplanNums[project.id] || 0
-                      workplanNum = baseNum + 1 + idx
-                    } else if (grantSerial === 'new') {
-                      // For new serials, increment workplan number for each project (1, 2, 3, etc.)
-                      workplanNum = idx + 1
-                    }
+                    // Get donor short name from the grants_grid_view grant
+                    const selectedGrant = grantsFromGridView.find((g: any) => g.grant_id === tempGrantId && g.donor_name === tempDonorName)
+                    const donorShort = selectedGrant?.donor_id ? (donorShortNames[selectedGrant.donor_id] || 'XXX') : 'XXX'
                     
-                    // If using existing grant serial, format as: grantSerial-workplanNumber
-                    if (grantSerial && grantSerial !== 'new' && grantSerial.includes('-')) {
-                      const grantId = `${grantSerial}-${String(workplanNum).padStart(3, '0')}`
-                      return (
-                        <div key={project.id} className="py-1 border-b border-border/50 last:border-0">
-                          <div className="font-semibold">{grantId}</div>
-                          <div className="text-xs text-muted-foreground">
-                            {project.err_id || project.id.slice(0, 8)} - {project.state} - {project.locality || 'N/A'}
-                          </div>
-                        </div>
-                      )
-                    }
+                    // Get max workplan sequence from grants_grid_view for preview
+                    // Start from max_workplan_sequence + 1 for the first project, then increment
+                    const workplanNum = selectedGrantMaxSequence + idx + 1
                     
-                    // If creating new serial, calculate the full grant ID
-                    if (grantSerial === 'new' && donorShort && stateShort && mmyy) {
-                      // Calculate next serial number from existing grant serials
-                      const serialPrefix = `LCC-${donorShort}-${stateShort}-${mmyy}-`
-                      let maxSerialNumber = 0
-                      
-                      // Filter grant serials for this donor/state/yymm combination
-                      const relevantSerials = grantSerials.filter((gs: any) => 
-                        gs.grant_serial && gs.grant_serial.startsWith(serialPrefix)
-                      )
-                      
-                      // Extract serial numbers and find the maximum
-                      for (const gs of relevantSerials) {
-                        const serialStr = gs.grant_serial || ''
-                        if (serialStr.startsWith(serialPrefix)) {
-                          const serialNumberStr = serialStr.substring(serialPrefix.length)
-                          const serialNumber = parseInt(serialNumberStr, 10)
-                          if (!isNaN(serialNumber) && serialNumber > maxSerialNumber) {
-                            maxSerialNumber = serialNumber
-                          }
-                        }
-                      }
-                      
-                      const nextSerialNumber = maxSerialNumber + 1
-                      const serialNum = String(nextSerialNumber).padStart(4, '0')
-                      const grantSerialId = `LCC-${donorShort}-${stateShort}-${mmyy}-${serialNum}`
-                      const grantId = `${grantSerialId}-${String(workplanNum).padStart(3, '0')}`
-                      return (
-                        <div key={project.id} className="py-1 border-b border-border/50 last:border-0">
-                          <div className="font-semibold">{grantId}</div>
-                          <div className="text-xs text-muted-foreground">
-                            {project.err_id || project.id.slice(0, 8)} - {project.state} - {project.locality || 'N/A'}
-                          </div>
-                        </div>
-                      )
-                    }
+                    // Format: LCC-DonorShort-StateShort-MMYY-WorkplanSeq
+                    const generatedSerial = `LCC-${donorShort}-${stateShort}-${mmyy}-${String(workplanNum).padStart(4, '0')}`
                     
                     return (
-                      <div key={project.id} className="py-1 border-b border-border/50 last:border-0 text-muted-foreground">
-                        LCC-XXX-XX-XXXX-XXXX-XXX
-                        <div className="text-xs">
+                      <div key={project.id} className="py-1 border-b border-border/50 last:border-0">
+                        <div className="font-semibold">{generatedSerial}</div>
+                        <div className="text-xs text-muted-foreground">
                           {project.err_id || project.id.slice(0, 8)} - {project.state} - {project.locality || 'N/A'}
                         </div>
                       </div>
@@ -1703,7 +1599,7 @@ export default function F3MOUsPage() {
                   })}
                 </div>
                 <p className="text-xs text-muted-foreground mt-2">
-                  These are the grant IDs that will be assigned to each work plan in this MOU.
+                  These are the serial IDs that will be assigned to each work plan in this MOU. Format: LCC-DonorShort-StateShort-MMYY-WorkplanSeq
                 </p>
               </div>
             )}
@@ -1714,23 +1610,22 @@ export default function F3MOUsPage() {
                 onClick={() => {
                   setAssignModalOpen(false)
                   setAssigningMouId(null)
-                  setTempFundingCycle('')
-                  setTempGrantCall('')
+                  setTempGrantId('')
+                  setTempDonorName('')
                   setTempMMYY('')
-                  setTempGrantSerial('')
                   setMouProjects([])
                   setStateShorts({})
-                  setLastWorkplanNums({})
                   setGrantRemaining(null)
                   setStateAllocationRemaining(null)
                   setMouTotalAmount(0)
+                  setSelectedGrantMaxSequence(0)
                 }}
               >
                 Cancel
               </Button>
               <Button
                 onClick={handleAssignMou}
-                disabled={!tempGrantCall || !tempMMYY || tempMMYY.length !== 4 || !tempGrantSerial || !tempFundingCycle || isAssigning}
+                disabled={!tempGrantId || !tempDonorName || !tempMMYY || tempMMYY.length !== 4 || isAssigning}
                 className="bg-green-600 hover:bg-green-700 text-white"
               >
                 {isAssigning ? 'Assigning...' : 'Assign to Grant'}
