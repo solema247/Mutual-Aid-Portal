@@ -14,6 +14,7 @@ import { Eye, Upload, Receipt, FileSignature, FileCheck, Link2 } from 'lucide-re
 import dynamic from 'next/dynamic'
 import { aggregateObjectives, aggregateBeneficiaries, aggregatePlannedActivities, aggregatePlannedActivitiesDetailed, aggregateLocations, getBankingDetails } from '@/lib/mou-aggregation'
 import { supabase } from '@/lib/supabaseClient'
+import PoolByDonor from '@/app/err-portal/f2-approvals/components/PoolByDonor'
 
 interface MOU {
   id: string
@@ -127,6 +128,10 @@ export default function F3MOUsPage() {
     loading: boolean;
   } | null>(null)
   const [mouTotalAmount, setMouTotalAmount] = useState<number>(0)
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1)
+  const itemsPerPage = 10
 
   const toDisplay = (value: any): string => {
     if (value == null) return ''
@@ -179,6 +184,7 @@ export default function F3MOUsPage() {
       const res = await fetch(`/api/f3/mous?${params.toString()}`)
       const data = await res.json()
       setMous(data)
+      setCurrentPage(1) // Reset to first page when data refreshes
       
       // Extract unique states from MOUs for the filter dropdown
       const uniqueStates = Array.from(new Set(data.map((m: MOU) => m.state).filter(Boolean))) as string[]
@@ -576,21 +582,28 @@ export default function F3MOUsPage() {
           {loading ? (
             <div className="py-8 text-center text-muted-foreground">{t('common:loading') || 'Loading...'}</div>
           ) : (
-            <Table dir={i18n.language === 'ar' ? 'rtl' : 'ltr'}>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>{t('f3:headers.mou_code')}</TableHead>
-                  <TableHead>{t('f3:headers.partner')}</TableHead>
-                  <TableHead>{t('f3:headers.err_state')}</TableHead>
-                  <TableHead className="text-right">{t('f3:headers.total')}</TableHead>
-                  <TableHead>{t('f3:headers.end_date')}</TableHead>
-                  <TableHead>{t('f3:headers.created')}</TableHead>
-                  <TableHead>{t('f3:headers.actions')}</TableHead>
-                </TableRow>
-              </TableHeader>
+            <>
+              <Table dir={i18n.language === 'ar' ? 'rtl' : 'ltr'}>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>{t('f3:headers.mou_code')}</TableHead>
+                    <TableHead>{t('f3:headers.partner')}</TableHead>
+                    <TableHead>{t('f3:headers.err_state')}</TableHead>
+                    <TableHead className="text-right">{t('f3:headers.total')}</TableHead>
+                    <TableHead>{t('f3:headers.end_date')}</TableHead>
+                    <TableHead>{t('f3:headers.created')}</TableHead>
+                    <TableHead>{t('f3:headers.actions')}</TableHead>
+                  </TableRow>
+                </TableHeader>
               <TableBody>
-                {mous.map(m => (
-                  <TableRow key={m.id}>
+                {(() => {
+                    const totalPages = Math.ceil(mous.length / itemsPerPage)
+                    const startIndex = (currentPage - 1) * itemsPerPage
+                    const endIndex = startIndex + itemsPerPage
+                    const paginatedMous = mous.slice(startIndex, endIndex)
+                    
+                    return paginatedMous.map(m => (
+                      <TableRow key={m.id}>
                     <TableCell className="font-medium">{m.mou_code}</TableCell>
                     <TableCell>{m.partner_name}</TableCell>
                     <TableCell>{m.err_name}{m.state ? ` — ${m.state}` : ''}</TableCell>
@@ -833,13 +846,45 @@ export default function F3MOUsPage() {
                         </Button>
                       </div>
                     </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                      </TableRow>
+                    ))
+                  })()}
+                </TableBody>
+              </Table>
+              
+              {/* Pagination Controls */}
+              {mous.length > itemsPerPage && (
+                <div className="flex items-center justify-between mt-4">
+                  <div className="text-sm text-muted-foreground">
+                    Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, mous.length)} of {mous.length} MOUs
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                      disabled={currentPage === 1}
+                    >
+                      Previous
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage(prev => Math.min(Math.ceil(mous.length / itemsPerPage), prev + 1))}
+                      disabled={currentPage >= Math.ceil(mous.length / itemsPerPage)}
+                    >
+                      Next
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </CardContent>
       </Card>
+
+      {/* By Grant Table */}
+      <PoolByDonor />
 
       <Dialog open={previewOpen} onOpenChange={(open) => {
         setPreviewOpen(open)
