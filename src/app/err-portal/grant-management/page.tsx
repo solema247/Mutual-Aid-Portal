@@ -8,7 +8,8 @@ import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import { ArrowLeft } from 'lucide-react'
 
-import { CycleManager, GrantCallsManager } from './components'
+import { GrantCallsManager } from './components'
+import DistributionDecisionsManager from './components/DistributionDecisionsManager'
 
 export default function GrantManagementPage() {
   const { t } = useTranslation(['err', 'common'])
@@ -143,8 +144,8 @@ export default function GrantManagementPage() {
       {/* Grant Calls Management */}
       <GrantCallsManager />
 
-      {/* Cycle Management System */}
-      <CycleManager />
+      {/* Distribution Decisions (decoupled from grants) */}
+      <DistributionDecisionsManager />
     </div>
   )
 }

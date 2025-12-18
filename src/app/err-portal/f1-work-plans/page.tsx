@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import ERRAppSubmissions from './components/ERRAppSubmissions'
 import DirectUpload from './components/DirectUpload'
 import PoolDashboard from './components/PoolDashboard'
+import HistoricalDistributionDecisions from './components/HistoricalDistributionDecisions'
 
 export default function F1WorkPlansPage() {
   const { t } = useTranslation(['f1_plans', 'common'])
@@ -57,6 +58,8 @@ export default function F1WorkPlansPage() {
           </Tabs>
         </CardContent>
       </Card>
+
+      <HistoricalDistributionDecisions />
     </div>
   )
 }
