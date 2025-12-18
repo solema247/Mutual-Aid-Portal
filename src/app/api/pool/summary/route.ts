@@ -82,13 +82,23 @@ export async function GET() {
     // 5. Remaining = Total - Committed - Pending
     const remaining = total_included - total_committed - pending
 
+    // 6. Get Total Grants from grants_grid_view (sum of sum_activity_amount)
+    const grantsData = await fetchAllRows(supabase, 'grants_grid_view', 'sum_activity_amount')
+    const total_grants = (grantsData || []).reduce((sum, row) => {
+      const amount = row['sum_activity_amount'] ? Number(row['sum_activity_amount']) : 0
+      return sum + amount
+    }, 0)
+
+    // 7. Total Not Included = Total Grants - Total Included
+    const total_not_included = total_grants - total_included
+
     return NextResponse.json({ 
       total_included, 
       total_committed, 
       total_pending: pending, 
       remaining,
-      total_grants: 0, // Deprecated, keeping for compatibility
-      total_not_included: 0 // Deprecated, keeping for compatibility
+      total_grants,
+      total_not_included
     }, { headers: { 'Cache-Control': 'no-store' } })
   } catch (error) {
     console.error('Pool summary error:', error)

@@ -83,6 +83,8 @@ export default function DistributionDecisionsManager() {
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
   const [deleteConfirmText, setDeleteConfirmText] = useState('')
   const [decisionToDelete, setDecisionToDelete] = useState<string | null>(null)
+  const [currentPage, setCurrentPage] = useState(1)
+  const itemsPerPage = 10
 
   const decisionForm = useForm<z.infer<typeof decisionSchema>>({
     resolver: zodResolver(decisionSchema),
@@ -271,6 +273,16 @@ export default function DistributionDecisionsManager() {
     })
   }, [decisions])
 
+  const totalPages = Math.ceil(sortedDecisions.length / itemsPerPage)
+  const startIndex = (currentPage - 1) * itemsPerPage
+  const endIndex = startIndex + itemsPerPage
+  const paginatedDecisions = sortedDecisions.slice(startIndex, endIndex)
+
+  // Reset to page 1 when decisions change
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [decisions.length])
+
   return (
     <Card>
       <CardHeader>
@@ -442,7 +454,7 @@ export default function DistributionDecisionsManager() {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  sortedDecisions.map((decision) => {
+                  paginatedDecisions.map((decision) => {
                     const allocated = decision.sum_allocation_amount || 0
                     const displayId = decision.decision_id_proposed || decision.decision_id || '—'
                     const fetchKey = decision.decision_id_proposed || decision.decision_id || decision.id
@@ -625,6 +637,34 @@ export default function DistributionDecisionsManager() {
                 )}
               </TableBody>
             </Table>
+          </div>
+        )}
+        {sortedDecisions.length > itemsPerPage && (
+          <div className="flex items-center justify-between mt-4">
+            <div className="text-sm text-muted-foreground">
+              Showing {startIndex + 1}-{Math.min(endIndex, sortedDecisions.length)} of {sortedDecisions.length}
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                disabled={currentPage === 1}
+              >
+                Previous
+              </Button>
+              <div className="text-sm">
+                Page {currentPage} of {totalPages}
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                disabled={currentPage === totalPages}
+              >
+                Next
+              </Button>
+            </div>
           </div>
         )}
       </CardContent>

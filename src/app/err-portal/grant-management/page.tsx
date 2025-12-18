@@ -9,6 +9,7 @@ import { ArrowLeft } from 'lucide-react'
 
 import { GrantCallsManager } from './components'
 import DistributionDecisionsManager from './components/DistributionDecisionsManager'
+import PoolOverviewByState from './components/PoolOverviewByState'
 
 export default function GrantManagementPage() {
   const { t } = useTranslation(['err', 'common'])
@@ -67,7 +68,7 @@ export default function GrantManagementPage() {
             <div className="text-sm text-muted-foreground mt-2">
               {t('err:gm.total_grants')}: {summary ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(summary.total_grants) : '—'}
             </div>
-            <div className="text-sm text-green-600 mt-1">
+            <div className={`text-sm mt-1 ${summary && summary.total_not_included >= 0 ? 'text-green-600' : 'text-red-600'}`}>
               {t('err:gm.not_included')}: {summary ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(summary.total_not_included) : '—'}
             </div>
           </CardContent>
@@ -100,6 +101,9 @@ export default function GrantManagementPage() {
 
       {/* Distribution Decisions (decoupled from grants) */}
       <DistributionDecisionsManager />
+
+      {/* Pool Overview By State */}
+      <PoolOverviewByState />
     </div>
   )
 }
