@@ -4,10 +4,9 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { RefreshCw } from 'lucide-react'
+import { RefreshCw, ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import ProjectDetailModal from './ProjectDetailModal'
 import UploadF4Modal from '@/app/err-portal/f4-f5-reporting/components/UploadF4Modal'
@@ -15,21 +14,8 @@ import UploadF5Modal from '@/app/err-portal/f4-f5-reporting/components/UploadF5M
 import ViewF4Modal from '@/app/err-portal/f4-f5-reporting/components/ViewF4Modal'
 import ViewF5Modal from '@/app/err-portal/f4-f5-reporting/components/ViewF5Modal'
 
-type Donor = { id: string; name: string; short_name?: string }
-type Grant = { id: string; name: string; shortname?: string; donor_id: string }
-type Room = { id: string; name?: string; name_ar?: string; err_code?: string }
-
 export default function ProjectManagement() {
   const { t } = useTranslation(['projects', 'common'])
-  const [donors, setDonors] = useState<Donor[]>([])
-  const [grants, setGrants] = useState<Grant[]>([])
-  const [states, setStates] = useState<string[]>([])
-  const [rooms, setRooms] = useState<Room[]>([])
-
-  const [donor, setDonor] = useState('')
-  const [grant, setGrant] = useState('')
-  const [state, setState] = useState('')
-  const [err, setErr] = useState('')
 
   const [loading, setLoading] = useState(false)
   const [kpis, setKpis] = useState<any>({})
@@ -56,27 +42,9 @@ export default function ProjectManagement() {
   const [f5Reports, setF5Reports] = useState<any[]>([])
   const [loadingReports, setLoadingReports] = useState(false)
 
-  const loadOptions = async () => {
-    const qs = new URLSearchParams()
-    if (donor) qs.set('donor', donor)
-    if (grant) qs.set('grant', grant)
-    if (state) qs.set('state', state)
-    const res = await fetch(`/api/overview/options?${qs.toString()}`)
-    const j = await res.json()
-    setDonors(j.donors || [])
-    setGrants(j.grants || [])
-    setStates(j.states || [])
-    setRooms(j.rooms || [])
-  }
-
   const loadRollup = async () => {
     setLoading(true)
-    const qs = new URLSearchParams()
-    if (donor) qs.set('donor', donor)
-    if (grant) qs.set('grant', grant)
-    if (state) qs.set('state', state)
-    if (err) qs.set('err', err)
-    const res = await fetch(`/api/overview/rollup?${qs.toString()}`)
+    const res = await fetch(`/api/overview/rollup`)
     const j = await res.json()
     setKpis(j.kpis || {})
     setRows(j.rows || [])
@@ -84,18 +52,12 @@ export default function ProjectManagement() {
   }
 
   const handleRefresh = async () => {
-    await Promise.all([loadOptions(), loadRollup()])
+    await loadRollup()
   }
 
   useEffect(() => {
-    loadOptions()
-  }, [donor, grant, state])
-
-  useEffect(() => {
     loadRollup()
-  }, [donor, grant, state, err])
-
-  const donorName = useMemo(() => donors.find(d => d.id === donor)?.name || t('management.filters.all_donors'), [donor, donors, t])
+  }, [])
 
   // Project-level counters for the current filtered slice
   const counters = useMemo(() => {
@@ -232,46 +194,6 @@ export default function ProjectManagement() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap gap-2 items-center">
-        <Select value={donor || '__ALL__'} onValueChange={(v)=>setDonor(v==='__ALL__'?'':v)}>
-          <SelectTrigger className="h-9 w-full md:w-56"><SelectValue placeholder={t('management.filters.donor')} /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="__ALL__">{t('management.filters.all_donors')}</SelectItem>
-            {donors.map(d => (
-              <SelectItem key={d.id} value={d.id}>{d.short_name || d.name}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={grant || '__ALL__'} onValueChange={(v)=>setGrant(v==='__ALL__'?'':v)}>
-          <SelectTrigger className="h-9 w-full md:w-56"><SelectValue placeholder={t('management.filters.grant_call')} /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="__ALL__">{t('management.filters.all_grants')}</SelectItem>
-            {grants.map(g => (
-              <SelectItem key={g.id} value={g.id}>{g.shortname || g.name}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={state || '__ALL__'} onValueChange={(v)=>setState(v==='__ALL__'?'':v)}>
-          <SelectTrigger className="h-9 w-full md:w-56"><SelectValue placeholder={t('management.filters.state')} /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="__ALL__">{t('management.filters.all_states')}</SelectItem>
-            {states.map(s => (
-              <SelectItem key={s} value={s}>{s}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={err || '__ALL__'} onValueChange={(v)=>setErr(v==='__ALL__'?'':v)}>
-          <SelectTrigger className="h-9 w-full md:w-56"><SelectValue placeholder={t('management.filters.err')} /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="__ALL__">{t('management.filters.all_err')}</SelectItem>
-            {rooms.map(r => (
-              <SelectItem key={r.id} value={r.id}>{r.name || r.err_code || r.name_ar}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Button variant="outline" className="h-9 w-full md:w-24 md:ml-auto" onClick={()=>{ setDonor(''); setGrant(''); setState(''); setErr(''); }}>{t('management.filters.reset')}</Button>
-      </div>
-
       {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <Card>
@@ -397,8 +319,18 @@ export default function ProjectManagement() {
             </CardHeader>
             <CardContent>
           <div className="text-xs text-muted-foreground mb-2">
-            {level === 'state' && t('management.table.tips.state')}
-            {level === 'room' && t('management.table.tips.room')}
+            {level === 'state' && (
+              <span>
+                {t('management.table.tips.state')} 
+                <span className="ml-2 font-medium text-foreground">→ Click a row to view ERR rooms</span>
+              </span>
+            )}
+            {level === 'room' && (
+              <span>
+                {t('management.table.tips.room')} 
+                <span className="ml-2 font-medium text-foreground">→ Click a row to view projects</span>
+              </span>
+            )}
             {level === 'project' && t('management.table.tips.project')}
           </div>
           {loading ? (
@@ -482,14 +414,31 @@ export default function ProjectManagement() {
                       {level === 'project' && <TableCell></TableCell>}
                     </TableRow>
                     {displayed.map((r:any, idx:number)=> (
-                  <TableRow key={r.project_id || r.err_id || r.state || idx} className="cursor-pointer" onClick={()=>onRowClick(r)}>
+                  <TableRow 
+                    key={r.project_id || r.err_id || r.state || idx} 
+                    className={cn(
+                      "cursor-pointer transition-colors",
+                      level !== 'project' && "hover:bg-muted/50"
+                    )}
+                    onClick={()=>onRowClick(r)}
+                  >
                     {level === 'state' ? (
                       <>
-                        <TableCell>{r.state || '-'}</TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <span>{r.state || '-'}</span>
+                            <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                          </div>
+                        </TableCell>
                       </>
                     ) : level === 'room' ? (
                       <>
-                        <TableCell>{r.err_id || '-'}</TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <span>{r.err_id || '-'}</span>
+                            <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                          </div>
+                        </TableCell>
                         <TableCell>{r.state || '-'}</TableCell>
                       </>
                     ) : (
