@@ -7,6 +7,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { RefreshCw } from 'lucide-react'
+import { cn } from '@/lib/utils'
 import ProjectDetailModal from './ProjectDetailModal'
 import UploadF4Modal from '@/app/err-portal/f4-f5-reporting/components/UploadF4Modal'
 import UploadF5Modal from '@/app/err-portal/f4-f5-reporting/components/UploadF5Modal'
@@ -18,7 +20,7 @@ type Grant = { id: string; name: string; shortname?: string; donor_id: string }
 type Room = { id: string; name?: string; name_ar?: string; err_code?: string }
 
 export default function ProjectManagement() {
-  const { t } = useTranslation(['projects'])
+  const { t } = useTranslation(['projects', 'common'])
   const [donors, setDonors] = useState<Donor[]>([])
   const [grants, setGrants] = useState<Grant[]>([])
   const [states, setStates] = useState<string[]>([])
@@ -79,6 +81,10 @@ export default function ProjectManagement() {
     setKpis(j.kpis || {})
     setRows(j.rows || [])
     setLoading(false)
+  }
+
+  const handleRefresh = async () => {
+    await Promise.all([loadOptions(), loadRollup()])
   }
 
   useEffect(() => {
@@ -325,18 +331,29 @@ export default function ProjectManagement() {
       {/* Table */}
           <Card>
             <CardHeader>
-              <CardTitle>
-            {t('management.table.title')}
-            {level !== 'state' && (
-              <Button variant="outline" size="sm" className="ml-2" onClick={goBack}>{t('management.table.back')}</Button>
-            )}
-            {level === 'room' && selectedStateName ? (
-              <span className="ml-2 text-sm text-muted-foreground">{t('management.table.state')}: {selectedStateName}</span>
-            ) : null}
-            {level === 'project' && selectedErrId ? (
-              <span className="ml-2 text-sm text-muted-foreground">{t('management.table.state')}: {selectedStateName} · {t('management.table.err')}: {selectedErrId}</span>
-            ) : null}
-              </CardTitle>
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center gap-2">
+                  {t('management.table.title')}
+                  {level !== 'state' && (
+                    <Button variant="outline" size="sm" onClick={goBack}>{t('management.table.back')}</Button>
+                  )}
+                  {level === 'room' && selectedStateName ? (
+                    <span className="ml-2 text-sm text-muted-foreground">{t('management.table.state')}: {selectedStateName}</span>
+                  ) : null}
+                  {level === 'project' && selectedErrId ? (
+                    <span className="ml-2 text-sm text-muted-foreground">{t('management.table.state')}: {selectedStateName} · {t('management.table.err')}: {selectedErrId}</span>
+                  ) : null}
+                </CardTitle>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleRefresh}
+                  disabled={loading}
+                >
+                  <RefreshCw className={cn("h-4 w-4 mr-2", loading && "animate-spin")} />
+                  {t('common:refresh')}
+                </Button>
+              </div>
             </CardHeader>
             <CardContent>
           <div className="text-xs text-muted-foreground mb-2">
