@@ -478,14 +478,16 @@ export default function DistributionDecisionsManager() {
 
   const uploadFileToStorage = async (file: File, decisionId: string): Promise<string> => {
     const fileExt = file.name.split('.').pop()
-    const fileName = `${decisionId}.${fileExt}`
+    // Add timestamp to make filename unique and prevent overwriting
+    const timestamp = Date.now()
+    const fileName = `${decisionId}-${timestamp}.${fileExt}`
     const filePath = `f0-distribution-decisions/${fileName}`
     
     const { error: uploadError } = await supabase.storage
       .from('images')
       .upload(filePath, file, {
-        cacheControl: '3600',
-        upsert: true
+        cacheControl: '3600'
+        // Removed upsert: true to prevent overwriting existing files
       })
     
     if (uploadError) {
