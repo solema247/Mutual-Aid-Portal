@@ -520,6 +520,7 @@ export default function CommittedF1sTab() {
                 <TableHead className="text-right">{t('f2:requested_amount')}</TableHead>
                 <TableHead>{t('f2:committed')}</TableHead>
                 <TableHead>{t('f2:status')}</TableHead>
+                <TableHead>{t('f2:community_approval')}</TableHead>
                 <TableHead>MOU</TableHead>
               </TableRow>
             </TableHeader>
@@ -571,6 +572,48 @@ export default function CommittedF1sTab() {
                     <Badge variant="default">
                       {t(`f2:${f1.funding_status}`)}
                     </Badge>
+                  </TableCell>
+                  {/* Community Approval */}
+                  <TableCell>
+                    {f1.approval_file_key ? (
+                      <Badge variant="default">{t('f2:approval_uploaded')}</Badge>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <input
+                          id={`approval-file-${f1.id}`}
+                          type="file"
+                          className="hidden"
+                          accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                          onChange={async (e) => {
+                            const file = e.target.files?.[0]
+                            if (!file) return
+                            try {
+                              // Build path for approval file
+                              const key = `f2-approvals/${f1.id}/${Date.now()}-${file.name.replace(/\s+/g,'_')}`
+                              const { error: upErr } = await supabase.storage.from('images').upload(key, file, { upsert: true })
+                              if (upErr) { alert(t('f2:upload_failed')); return }
+                              const resp = await fetch('/api/f2/uncommitted', {
+                                method: 'PATCH',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ id: f1.id, approval_file_key: key })
+                              })
+                              if (!resp.ok) { alert(t('f2:upload_failed')); return }
+                              await fetchCommittedF1s()
+                            } catch (err) {
+                              console.error('Upload error', err)
+                              alert(t('f2:upload_failed'))
+                            }
+                          }}
+                        />
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => document.getElementById(`approval-file-${f1.id}`)?.click()}
+                        >
+                          {t('f2:upload')}
+                        </Button>
+                      </div>
+                    )}
                   </TableCell>
                   <TableCell>
                     {f1.mou_id ? (

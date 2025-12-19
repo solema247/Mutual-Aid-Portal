@@ -33,7 +33,8 @@ export async function GET(request: Request) {
         temp_file_key,
         grant_id,
         grant_serial_id,
-        workplan_number
+        workplan_number,
+        approval_file_key
       `)
       .eq('funding_status', 'committed')
       .order('submitted_at', { ascending: false })
@@ -105,7 +106,8 @@ export async function GET(request: Request) {
         temp_file_key: f1.temp_file_key || null,
         grant_id: f1.grant_id || null,
         grant_serial_id: f1.grant_serial_id || null,
-        workplan_number: f1.workplan_number || null
+        workplan_number: f1.workplan_number || null,
+        approval_file_key: f1.approval_file_key || null
       }
     })
 

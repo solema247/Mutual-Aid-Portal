@@ -71,8 +71,7 @@ export default function UncommittedF1sTab() {
 
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
-      // Only select rows that have an approval file
-      setSelectedF1s(f1s.filter(f1 => !!f1.approval_file_key).map(f1 => f1.id))
+      setSelectedF1s(f1s.map(f1 => f1.id))
     } else {
       setSelectedF1s([])
     }
@@ -150,13 +149,6 @@ export default function UncommittedF1sTab() {
       return
     }
 
-    // Client-side guard: prevent commit if any selected item lacks approval
-    const missing = selectedF1s.filter(id => !f1s.find(f => f.id === id)?.approval_file_key)
-    if (missing.length > 0) {
-      alert(t('f2:cannot_commit_without_approval'))
-      return
-    }
-
     setIsCommitting(true)
     try {
       const response = await fetch('/api/f2/uncommitted/commit', {
@@ -166,16 +158,7 @@ export default function UncommittedF1sTab() {
       })
 
       if (!response.ok) {
-        try {
-          const err = await response.json()
-          if (err?.missing_project_ids?.length) {
-            alert(`${t('f2:cannot_commit_without_approval')}: ${err.missing_project_ids.length} item(s) missing.`)
-          } else {
-            alert('Failed to commit F1s')
-          }
-        } catch {
-          alert('Failed to commit F1s')
-        }
+        alert('Failed to commit F1s')
         return
       }
 
@@ -245,7 +228,7 @@ export default function UncommittedF1sTab() {
         <div className="flex gap-2">
           <Button
             onClick={handleCommitSelected}
-          disabled={selectedF1s.length === 0 || isCommitting || selectedF1s.some(id => !f1s.find(f => f.id === id)?.approval_file_key)}
+            disabled={selectedF1s.length === 0 || isCommitting}
             className="bg-green-600 hover:bg-green-700"
           >
             {isCommitting ? t('f2:committing') : t('f2:commit_selected', { count: selectedF1s.length })}
@@ -280,7 +263,6 @@ export default function UncommittedF1sTab() {
                   <TableCell className="px-4">
                     <Checkbox
                       checked={selectedF1s.includes(f1.id)}
-                      disabled={!f1.approval_file_key}
                       onCheckedChange={(checked) => handleSelectF1(f1.id, checked as boolean)}
                     />
                   </TableCell>

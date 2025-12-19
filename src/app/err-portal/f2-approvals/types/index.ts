@@ -66,6 +66,7 @@ export interface CommittedF1 {
   grant_id?: string | null
   grant_serial_id?: string | null
   workplan_number?: number | null
+  approval_file_key?: string | null
 }
 
 export interface GrantCallOption {
