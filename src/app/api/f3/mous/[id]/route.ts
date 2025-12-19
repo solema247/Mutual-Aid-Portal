@@ -31,6 +31,7 @@ export async function GET(
         finance_officer_phone,
         project_objectives,
         intended_beneficiaries,
+        estimated_beneficiaries,
         planned_activities,
         locality,
         state,

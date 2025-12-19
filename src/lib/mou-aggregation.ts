@@ -5,6 +5,7 @@
 interface Project {
   project_objectives?: string | null
   intended_beneficiaries?: string | null
+  estimated_beneficiaries?: number | null
   planned_activities?: string | null
   planned_activities_resolved?: string | null
   locality?: string | null
@@ -315,5 +316,146 @@ export function getBankingDetails(projects: Project[]): string | null {
   })
   
   return formattedAccounts.join('\n')
+}
+
+/**
+ * Gets location label for a project (ERR name, locality, or state)
+ */
+function getProjectLocation(project: Project): string {
+  if (project.emergency_rooms?.name_ar) {
+    return project.emergency_rooms.name_ar
+  } else if (project.emergency_rooms?.name) {
+    return project.emergency_rooms.name
+  } else if (project.err_id) {
+    return project.err_id
+  } else if (project.locality) {
+    return project.locality
+  } else {
+    return project.state || 'Unknown'
+  }
+}
+
+/**
+ * Formats expenses into a budget table structure
+ * Returns HTML table string with all project expenses grouped by ERR/project
+ */
+export function getBudgetTable(projects: Project[]): string | null {
+  if (!projects || projects.length === 0) return null
+  
+  // Group projects by ERR location
+  const projectsByLocation = new Map<string, Project[]>()
+  
+  projects.forEach(project => {
+    const location = getProjectLocation(project)
+    const existing = projectsByLocation.get(location) || []
+    existing.push(project)
+    projectsByLocation.set(location, existing)
+  })
+  
+  if (projectsByLocation.size === 0) return null
+  
+  // Build table rows
+  const rows: string[] = []
+  let sectionNumber = 1
+  
+  projectsByLocation.forEach((locationProjects, location) => {
+    locationProjects.forEach((project, projectIndex) => {
+      // Parse expenses
+      let expenses: Array<{ activity: string; total_cost: number }> = []
+      try {
+        const expData = project.expenses
+        if (expData) {
+          const expArray = typeof expData === 'string' ? JSON.parse(expData || '[]') : (Array.isArray(expData) ? expData : [])
+          expenses = (Array.isArray(expArray) ? expArray : []).map((exp: any) => ({
+            activity: exp?.activity || exp?.expense || '',
+            total_cost: exp?.total_cost || exp?.total_cost_usd || 0
+          })).filter((exp: any) => exp.activity && exp.total_cost > 0)
+        }
+      } catch {
+        // If parsing fails, skip
+      }
+      
+      if (expenses.length === 0) return
+      
+      // Get beneficiary info
+      const beneficiaryInfo = project.intended_beneficiaries || ''
+      const estimatedCount = project.estimated_beneficiaries
+      let targetAudience = location
+      if (beneficiaryInfo) {
+        targetAudience += ` - ${beneficiaryInfo}`
+      }
+      if (estimatedCount) {
+        targetAudience += ` (${estimatedCount} ${estimatedCount === 1 ? 'beneficiary' : 'beneficiaries'})`
+      }
+      
+      // Add each expense as a row
+      expenses.forEach((expense, expenseIndex) => {
+        const isFirstInSection = projectIndex === 0 && expenseIndex === 0
+        const rowNumber = isFirstInSection ? sectionNumber : ''
+        
+        rows.push(`
+          <tr>
+            <td style="border: 1px solid #ddd; padding: 6px; text-align: center; font-size: 12px;">${rowNumber}</td>
+            <td style="border: 1px solid #ddd; padding: 6px; font-size: 12px;">${escapeHtml(expense.activity)}</td>
+            <td style="border: 1px solid #ddd; padding: 6px; font-size: 12px;">${escapeHtml(targetAudience)}</td>
+            <td style="border: 1px solid #ddd; padding: 6px; font-size: 12px;">${escapeHtml(expense.activity)}</td>
+            <td style="border: 1px solid #ddd; padding: 6px; text-align: right; font-size: 12px;">${expense.total_cost.toLocaleString()}</td>
+          </tr>
+        `)
+      })
+      
+      // Increment section number after first project in each location
+      if (projectIndex === 0) {
+        sectionNumber++
+      }
+    })
+  })
+  
+  if (rows.length === 0) return null
+  
+  // Calculate total
+  const total = projects.reduce((sum, project) => {
+    return sum + calculateTotalAmount(project.expenses)
+  }, 0)
+  
+  // Get state name (usually all projects are in the same state)
+  const state = projects[0]?.state || ''
+  
+  // Build complete table
+  const tableHtml = `
+    <table style="width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 12px;">
+      <thead>
+        <tr style="background-color: #f5f5f5;">
+          <th style="border: 1px solid #ddd; padding: 6px; text-align: center; font-size: 12px;">No</th>
+          <th style="border: 1px solid #ddd; padding: 6px; font-size: 12px;">Sector activities/spending items<br/>(أنشطة القطاع/بنود الإنفاق)</th>
+          <th style="border: 1px solid #ddd; padding: 6px; font-size: 12px;">Target audience: Men/Women, Children/Individuals/Families<br/>(الفئة المستهدفة: الرجال/النساء، الأطفال/الأفراد/العائلات)</th>
+          <th style="border: 1px solid #ddd; padding: 6px; font-size: 12px;">Brief description of the activity<br/>(وصف موجز للنشاط)</th>
+          <th style="border: 1px solid #ddd; padding: 6px; text-align: right; font-size: 12px;">Costs USD</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rows.join('')}
+        <tr style="background-color: #f9f9f9; font-weight: bold;">
+          <td colspan="4" style="border: 1px solid #ddd; padding: 6px; font-size: 12px;">${state} State</td>
+          <td style="border: 1px solid #ddd; padding: 6px; text-align: right; font-size: 12px;">$${total.toLocaleString()}</td>
+        </tr>
+      </tbody>
+    </table>
+  `
+  
+  return tableHtml
+}
+
+/**
+ * Escapes HTML special characters
+ */
+function escapeHtml(text: string): string {
+  if (!text) return ''
+  return String(text)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;')
 }
 

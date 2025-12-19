@@ -12,7 +12,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Eye, Upload, Receipt, FileSignature, FileCheck, Link2 } from 'lucide-react'
 import dynamic from 'next/dynamic'
-import { aggregateObjectives, aggregateBeneficiaries, aggregatePlannedActivities, aggregatePlannedActivitiesDetailed, aggregateLocations, getBankingDetails } from '@/lib/mou-aggregation'
+import { aggregateObjectives, aggregateBeneficiaries, aggregatePlannedActivities, aggregatePlannedActivitiesDetailed, aggregateLocations, getBankingDetails, getBudgetTable } from '@/lib/mou-aggregation'
 import { supabase } from '@/lib/supabaseClient'
 import PoolByDonor from '@/app/err-portal/f2-approvals/components/PoolByDonor'
 
@@ -161,7 +161,8 @@ export default function F3MOUsPage() {
         activities: null,
         activitiesDetailed: null,
         locations: { localities: '', state: null },
-        banking: null
+        banking: null,
+        budgetTable: null
       }
     }
 
@@ -171,7 +172,8 @@ export default function F3MOUsPage() {
       activities: aggregatePlannedActivities(projects),
       activitiesDetailed: aggregatePlannedActivitiesDetailed(projects),
       locations: aggregateLocations(projects),
-      banking: getBankingDetails(projects)
+      banking: getBankingDetails(projects),
+      budgetTable: getBudgetTable(projects)
     }
   }, [detail])
 
@@ -610,24 +612,28 @@ export default function F3MOUsPage() {
                     <TableCell className="text-right">{Number(m.total_amount || 0).toLocaleString()}</TableCell>
                     <TableCell>{m.end_date ? new Date(m.end_date).toLocaleDateString() : '-'}</TableCell>
                     <TableCell>{new Date(m.created_at).toLocaleDateString()}</TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1">
+                    <TableCell className="align-top">
+                      <div className="flex items-start gap-3">
                         {mouAssignmentStatus[m.id]?.hasUnassigned && (
+                          <div className="flex flex-col items-center gap-0.5 min-w-[50px]">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8"
+                              onClick={() => openAssignModal(m.id)}
+                              title="Assign to Grant"
+                            >
+                              <Link2 className="h-4 w-4 text-blue-600" />
+                            </Button>
+                            <span className="text-[10px] text-muted-foreground text-center leading-tight">Assign</span>
+                          </div>
+                        )}
+                        <div className="flex flex-col items-center gap-0.5 min-w-[50px]">
                           <Button
                             variant="ghost"
                             size="icon"
                             className="h-8 w-8"
-                            onClick={() => openAssignModal(m.id)}
-                            title="Assign to Grant"
-                          >
-                            <Link2 className="h-4 w-4 text-blue-600" />
-                          </Button>
-                        )}
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8"
-                          onClick={async () => {
+                            onClick={async () => {
                           setActiveMou(m)
                           setEditMode(false)
                           setEditingMou({})
@@ -698,6 +704,8 @@ export default function F3MOUsPage() {
                       >
                         <Eye className="h-4 w-4" />
                       </Button>
+                      <span className="text-[10px] text-muted-foreground text-center leading-tight">{t('f3:preview')}</span>
+                    </div>
                         <input
                           type="file"
                           id={`payment-upload-${m.id}`}
@@ -732,11 +740,12 @@ export default function F3MOUsPage() {
                             e.target.value = ''
                           }}
                         />
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8"
-                          onClick={m.payment_confirmation_file ? async () => {
+                        <div className="flex flex-col items-center gap-0.5 min-w-[50px]">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={m.payment_confirmation_file ? async () => {
                             try {
                               // First get the signed URL
                               const response = await fetch(`/api/storage/signed-url?path=${encodeURIComponent(m.payment_confirmation_file || '')}`)
@@ -771,6 +780,8 @@ export default function F3MOUsPage() {
                             <Upload className="h-4 w-4 text-amber-600" />
                           )}
                         </Button>
+                        <span className="text-[10px] text-muted-foreground text-center leading-tight whitespace-nowrap">{m.payment_confirmation_file ? t('f3:view_payment') : t('f3:add_payment')}</span>
+                      </div>
                         <input
                           type="file"
                           id={`signed-mou-upload-${m.id}`}
@@ -805,11 +816,12 @@ export default function F3MOUsPage() {
                             e.target.value = ''
                           }}
                         />
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8"
-                          onClick={m.signed_mou_file_key ? async () => {
+                        <div className="flex flex-col items-center gap-0.5 min-w-[50px]">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={m.signed_mou_file_key ? async () => {
                             try {
                               // First get the signed URL
                               const response = await fetch(`/api/storage/signed-url?path=${encodeURIComponent(m.signed_mou_file_key || '')}`)
@@ -844,6 +856,8 @@ export default function F3MOUsPage() {
                             <FileSignature className="h-4 w-4 text-amber-600" />
                           )}
                         </Button>
+                        <span className="text-[10px] text-muted-foreground text-center leading-tight whitespace-nowrap">{m.signed_mou_file_key ? 'View MOU' : 'Upload MOU'}</span>
+                      </div>
                       </div>
                     </TableCell>
                       </TableRow>
@@ -1055,15 +1069,7 @@ export default function F3MOUsPage() {
               </div>
 
               <div className="rounded-lg border p-4" data-mou-section="true">
-                <div className="font-semibold mb-2">5. {t('f3:budget')}</div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="rounded-md border p-3 text-sm">{t('f3:budget_en_desc')}</div>
-                  <div className="rounded-md border p-3 text-sm" dir="rtl">{t('f3:budget_ar_desc')}</div>
-                </div>
-              </div>
-
-              <div className="rounded-lg border p-4" data-mou-section="true">
-                <div className="font-semibold mb-2">6. {t('f3:approved_accounts')}</div>
+                <div className="font-semibold mb-2">5. {t('f3:approved_accounts')}</div>
                 {editMode ? (
                   <div>
                     <Label>Banking Details</Label>
@@ -1080,6 +1086,17 @@ export default function F3MOUsPage() {
                     <div className="rounded-md border p-3 text-sm whitespace-pre-wrap">{(activeMou.banking_details_override || aggregatedData.banking) || t('f3:approved_accounts_en_desc')}</div>
                     <div className="rounded-md border p-3 text-sm whitespace-pre-wrap" dir="rtl">{(activeMou.banking_details_override || aggregatedData.banking) || t('f3:approved_accounts_ar_desc')}</div>
                   </div>
+                )}
+              </div>
+
+              <div className="rounded-lg border p-4" data-mou-section="true">
+                <div className="font-semibold mb-2">6. {t('f3:budget')}</div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                  <div className="rounded-md border p-3 text-sm">{t('f3:budget_en_desc')}</div>
+                  <div className="rounded-md border p-3 text-sm" dir="rtl">{t('f3:budget_ar_desc')}</div>
+                </div>
+                {aggregatedData.budgetTable && (
+                  <div className="mt-4 overflow-x-auto" dangerouslySetInnerHTML={{ __html: aggregatedData.budgetTable }} />
                 )}
               </div>
 

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
-import { aggregateObjectives, aggregateBeneficiaries, aggregatePlannedActivities, aggregatePlannedActivitiesDetailed, aggregateLocations, getBankingDetails } from '@/lib/mou-aggregation'
+import { aggregateObjectives, aggregateBeneficiaries, aggregatePlannedActivities, aggregatePlannedActivitiesDetailed, aggregateLocations, getBankingDetails, getBudgetTable } from '@/lib/mou-aggregation'
 
 export async function POST(
   _request: Request,
@@ -15,7 +15,7 @@ export async function POST(
     // Load all projects for aggregation
     const { data: projects } = await supabase
       .from('err_projects')
-      .select('project_objectives, intended_beneficiaries, planned_activities, planned_activities_resolved, locality, state, banking_details, expenses, err_id, emergency_room_id, emergency_rooms (name, name_ar, err_code)')
+      .select('project_objectives, intended_beneficiaries, estimated_beneficiaries, planned_activities, planned_activities_resolved, locality, state, banking_details, expenses, err_id, emergency_room_id, emergency_rooms (name, name_ar, err_code)')
       .eq('mou_id', id)
     
     // Aggregate data from all projects
@@ -25,7 +25,8 @@ export async function POST(
       activities: aggregatePlannedActivities(projects || []),
       activitiesDetailed: aggregatePlannedActivitiesDetailed(projects || []),
       locations: aggregateLocations(projects || []),
-      banking: getBankingDetails(projects || [])
+      banking: getBankingDetails(projects || []),
+      budgetTable: getBudgetTable(projects || [])
     }
 
     const total = Number(mou.total_amount || 0)
@@ -74,13 +75,14 @@ export async function POST(
     <div class=row><div class=col><div class=box>The ${mou.partner_name} will provide a grant of $${total.toLocaleString()} upon signing this MOU. Disbursement and proof-of-payment requirements apply per policy.</div></div>
     <div class=col><div class="box rtl">سيقوم ${mou.partner_name} بتقديم منحة قدرها $${total.toLocaleString()} عند توقيع مذكرة التفاهم هذه. تنطبق متطلبات الصرف وإثبات الدفع وفق السياسات المعمول بها.</div></div></div>
   </div>
-  <div class="section"><h2>5. Budget</h2>
-    <div class=row><div class=col><div class=box>A detailed budget is maintained in the F1(s) linked to this MOU. Procurement procedures apply; changes or obstacles must be reported at least 24 hours in advance.</div></div>
-    <div class=col><div class="box rtl">يتم الاحتفاظ بميزانية تفصيلية في نماذج F1 المرتبطة بهذه المذكرة. تُطبق إجراءات الشراء، ويجب الإبلاغ عن أي تغييرات أو عوائق قبل 24 ساعة على الأقل.</div></div></div>
-  </div>
-    <div class="section"><h2>6. Approved Accounts</h2>
+  <div class="section"><h2>5. Approved Accounts</h2>
     <div class=row><div class=col><div class=box>${mou.banking_details_override ? String(mou.banking_details_override).replace(/\n/g,'<br/>') : (aggregated.banking ? String(aggregated.banking).replace(/\n/g,'<br/>') : 'Account details as shared and approved by ERR will be used for disbursement.')}</div></div>
     <div class=col><div class="box rtl">${mou.banking_details_override ? String(mou.banking_details_override).replace(/\n/g,'<br/>') : (aggregated.banking ? String(aggregated.banking).replace(/\n/g,'<br/>') : 'تُستخدم تفاصيل الحساب المعتمدة من غرفة الطوارئ في عمليات الصرف.')}</div></div></div>
+  </div>
+  <div class="section"><h2>6. Budget</h2>
+    <div class=row><div class=col><div class=box>A detailed budget is maintained in the F1(s) linked to this MOU. Procurement procedures apply; changes or obstacles must be reported at least 24 hours in advance.</div></div>
+    <div class=col><div class="box rtl">يتم الاحتفاظ بميزانية تفصيلية في نماذج F1 المرتبطة بهذه المذكرة. تُطبق إجراءات الشراء، ويجب الإبلاغ عن أي تغييرات أو عوائق قبل 24 ساعة على الأقل.</div></div></div>
+    ${aggregated.budgetTable ? `<div style="margin-top: 12px;">${aggregated.budgetTable}</div>` : ''}
   </div>
   <div class="section"><h2>7. Duration</h2>
     <div>This MOU is effective ${mou.start_date ? `from ${mou.start_date}` : 'upon signature by authorized officials of both parties'}. ${endDate ? `It will terminate on ${endDate}.` : ''} Either party may terminate with written notification.</div>

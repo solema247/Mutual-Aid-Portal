@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useMemo } from 'react'
 import { useParams } from 'next/navigation'
-import { aggregateObjectives, aggregateBeneficiaries, aggregatePlannedActivities, aggregatePlannedActivitiesDetailed, aggregateLocations, getBankingDetails } from '@/lib/mou-aggregation'
+import { aggregateObjectives, aggregateBeneficiaries, aggregatePlannedActivities, aggregatePlannedActivitiesDetailed, aggregateLocations, getBankingDetails, getBudgetTable } from '@/lib/mou-aggregation'
 
 export default function PrintMOUPage() {
   const params = useParams() as { id: string }
@@ -28,7 +28,8 @@ export default function PrintMOUPage() {
     activities: aggregatePlannedActivities(projectList),
     activitiesDetailed: aggregatePlannedActivitiesDetailed(projectList),
     locations: aggregateLocations(projectList),
-    banking: getBankingDetails(projectList)
+    banking: getBankingDetails(projectList),
+    budgetTable: getBudgetTable(projectList)
   }), [projectList])
 
   return (
@@ -98,9 +99,21 @@ export default function PrintMOUPage() {
 
         <TwoCol title="4. Funding" left={`The ${mou.partner_name} will provide a grant of $${Number(mou.total_amount || 0).toLocaleString()} upon signing this MOU. Disbursement and proof-of-payment requirements apply per policy.`} right={`سيقوم ${mou.partner_name} بتقديم منحة قدرها $${Number(mou.total_amount || 0).toLocaleString()} عند توقيع مذكرة التفاهم هذه. تنطبق متطلبات الصرف وإثبات الدفع وفق السياسات المعمول بها.`} />
 
-        <TwoCol title="5. Budget" left="A detailed budget is maintained in the F1(s) linked to this MOU. Procurement procedures apply; changes or obstacles must be reported at least 24 hours in advance." right="يتم الاحتفاظ بميزانية تفصيلية في نماذج F1 المرتبطة بهذه المذكرة. تُطبق إجراءات الشراء، ويجب الإبلاغ عن أي تغييرات أو عوائق قبل 24 ساعة على الأقل." />
+        <TwoCol title="5. Approved Accounts" left={aggregated.banking || 'Account details as shared and approved by ERR will be used for disbursement.'} right={aggregated.banking || 'تُستخدم تفاصيل الحساب المعتمدة من غرفة الطوارئ في عمليات الصرف.'} preWrap />
 
-        <TwoCol title="6. Approved Accounts" left={aggregated.banking || 'Account details as shared and approved by ERR will be used for disbursement.'} right={aggregated.banking || 'تُستخدم تفاصيل الحساب المعتمدة من غرفة الطوارئ في عمليات الصرف.'} preWrap />
+        <Section title="6. Budget">
+          <div className="grid grid-cols-2 gap-4 mb-4">
+            <Box>
+              <div className="text-sm">A detailed budget is maintained in the F1(s) linked to this MOU. Procurement procedures apply; changes or obstacles must be reported at least 24 hours in advance.</div>
+            </Box>
+            <Box rtl>
+              <div className="text-sm">يتم الاحتفاظ بميزانية تفصيلية في نماذج F1 المرتبطة بهذه المذكرة. تُطبق إجراءات الشراء، ويجب الإبلاغ عن أي تغييرات أو عوائق قبل 24 ساعة على الأقل.</div>
+            </Box>
+          </div>
+          {aggregated.budgetTable && (
+            <div className="mt-4 overflow-x-auto" dangerouslySetInnerHTML={{ __html: aggregated.budgetTable }} />
+          )}
+        </Section>
       </div>
     </div>
   )
