@@ -82,6 +82,16 @@ export async function GET(
       partner = partnerRow
     }
 
+    // Parse signatures JSON if it exists
+    if (mou && (mou as any).signatures && typeof (mou as any).signatures === 'string') {
+      try {
+        (mou as any).signatures = JSON.parse((mou as any).signatures)
+      } catch (e) {
+        console.error('Failed to parse signatures JSON:', e)
+        (mou as any).signatures = null
+      }
+    }
+
     return NextResponse.json({ mou, projects: resolvedProjects, partner })
   } catch (error) {
     console.error('Error loading MOU detail:', error)
@@ -107,13 +117,34 @@ export async function PATCH(
       'end_date',
       'banking_details_override',
       'partner_contact_override',
-      'err_contact_override'
+      'err_contact_override',
+      'partner_signature',
+      'err_signature',
+      'signature_date',
+      'signatures'
     ]
 
     const updates: any = {}
     for (const field of allowedFields) {
       if (field in body) {
-        updates[field] = body[field] === '' ? null : body[field]
+        if (field === 'signatures') {
+          // Handle signatures as JSON array
+          if (Array.isArray(body[field]) && body[field].length > 0) {
+            try {
+              updates[field] = JSON.stringify(body[field])
+            } catch (e) {
+              console.error('Error stringifying signatures:', e)
+              return NextResponse.json(
+                { error: 'Failed to serialize signatures data' },
+                { status: 400 }
+              )
+            }
+          } else {
+            updates[field] = null
+          }
+        } else {
+          updates[field] = body[field] === '' ? null : body[field]
+        }
       }
     }
 
@@ -125,7 +156,23 @@ export async function PATCH(
       .select('*')
       .single()
 
-    if (updateErr) throw updateErr
+    if (updateErr) {
+      console.error('Error updating MOU:', updateErr)
+      return NextResponse.json(
+        { error: 'Failed to update MOU', details: updateErr.message },
+        { status: 500 }
+      )
+    }
+
+    // Parse signatures JSON if it exists
+    if (updated && (updated as any).signatures && typeof (updated as any).signatures === 'string') {
+      try {
+        (updated as any).signatures = JSON.parse((updated as any).signatures)
+      } catch (e) {
+        console.error('Failed to parse signatures JSON in response:', e)
+        (updated as any).signatures = null
+      }
+    }
 
     return NextResponse.json(updated)
   } catch (error) {

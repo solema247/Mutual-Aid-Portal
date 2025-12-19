@@ -31,6 +31,19 @@ export async function POST(
 
     const total = Number(mou.total_amount || 0)
     const endDate = mou.end_date as string | null
+    
+    // Parse signatures JSON if it exists
+    let signatures: any[] = []
+    if ((mou as any).signatures) {
+      try {
+        signatures = typeof (mou as any).signatures === 'string' 
+          ? JSON.parse((mou as any).signatures) 
+          : (mou as any).signatures
+      } catch (e) {
+        console.error('Failed to parse signatures JSON:', e)
+        signatures = []
+      }
+    }
 
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8" />
   <style>body{font-family:Arial,Helvetica,sans-serif;color:#111;line-height:1.5}h2{font-size:16px;margin:16px 0 8px}.section{border:1px solid #e5e7eb;border-radius:8px;padding:12px;margin:12px 0}.row{display:table;width:100%;table-layout:fixed}.col{display:table-cell;vertical-align:top;width:50%;padding:8px}.box{border:1px solid #e5e7eb;border-radius:6px;padding:8px}ul{margin:4px 0;padding-left:18px}.rtl{direction:rtl}.muted{color:#6b7280;font-size:12px}.meta{margin-bottom:8px}</style>
@@ -91,6 +104,61 @@ export async function POST(
     <div class=row>
       <div class=col><div class=box>${mou.partner_contact_override ? String(mou.partner_contact_override).replace(/\n/g,'<br/>') : `Partner: ${mou.partner_name}`}</div></div>
       <div class=col><div class=box>${mou.err_contact_override ? String(mou.err_contact_override).replace(/\n/g,'<br/>') : `ERR: ${mou.err_name}`}</div></div>
+    </div>
+    <div style="margin-top:24px;padding-top:16px;border-top:1px solid #e5e7eb">
+      ${signatures.length > 0 ? signatures.map((sig, idx) => `
+        <div class=row style="margin-top:${idx > 0 ? '16px' : '0'};margin-bottom:16px">
+          <div class=col>
+            <div style="margin-bottom:8px;font-weight:600">${sig.name || `Signature ${idx + 1}`}${sig.role ? ` (${sig.role})` : ''}</div>
+            <div style="border-bottom:2px solid #9ca3af;min-height:50px;padding-bottom:4px">&nbsp;</div>
+          </div>
+          <div class=col>
+            <div class="box rtl" style="margin-bottom:8px;font-weight:600">${sig.name || `التوقيع ${idx + 1}`}${sig.role ? ` (${sig.role})` : ''}</div>
+            <div class="box rtl" style="border-bottom:2px solid #9ca3af;min-height:50px;padding-bottom:4px">&nbsp;</div>
+          </div>
+        </div>
+        <div class=row style="margin-top:8px;margin-bottom:16px">
+          <div class=col>
+            <div style="margin-bottom:8px;font-weight:600">Date</div>
+            <div style="border-bottom:2px solid #9ca3af;min-height:50px;padding-bottom:4px">${sig.date ? new Date(sig.date).toLocaleDateString() : '&nbsp;'}</div>
+          </div>
+          <div class=col>
+            <div class="box rtl" style="margin-bottom:8px;font-weight:600">التاريخ</div>
+            <div class="box rtl" style="border-bottom:2px solid #9ca3af;min-height:50px;padding-bottom:4px">${sig.date ? new Date(sig.date).toLocaleDateString() : '&nbsp;'}</div>
+          </div>
+        </div>
+      `).join('') : `
+        <div class=row style="margin-top:16px">
+          <div class=col>
+            <div style="margin-bottom:8px;font-weight:600">Partner Signature</div>
+            <div style="border-bottom:2px solid #9ca3af;min-height:50px;padding-bottom:4px">${mou.partner_signature || '&nbsp;'}</div>
+          </div>
+          <div class=col>
+            <div class="box rtl" style="margin-bottom:8px;font-weight:600">توقيع الشريك</div>
+            <div class="box rtl" style="border-bottom:2px solid #9ca3af;min-height:50px;padding-bottom:4px">${mou.partner_signature || '&nbsp;'}</div>
+          </div>
+        </div>
+        <div class=row style="margin-top:16px">
+          <div class=col>
+            <div style="margin-bottom:8px;font-weight:600">ERR Signature</div>
+            <div style="border-bottom:2px solid #9ca3af;min-height:50px;padding-bottom:4px">${mou.err_signature || '&nbsp;'}</div>
+          </div>
+          <div class=col>
+            <div class="box rtl" style="margin-bottom:8px;font-weight:600">توقيع غرفة الطوارئ</div>
+            <div class="box rtl" style="border-bottom:2px solid #9ca3af;min-height:50px;padding-bottom:4px">${mou.err_signature || '&nbsp;'}</div>
+          </div>
+        </div>
+        <div class=row style="margin-top:16px">
+          <div class=col>
+            <div style="margin-bottom:8px;font-weight:600">Date of Signature</div>
+            <div style="border-bottom:2px solid #9ca3af;min-height:50px;padding-bottom:4px">${mou.signature_date ? new Date(mou.signature_date).toLocaleDateString() : '&nbsp;'}</div>
+          </div>
+          <div class=col>
+            <div class="box rtl" style="margin-bottom:8px;font-weight:600">تاريخ التوقيع</div>
+            <div class="box rtl" style="border-bottom:2px solid #9ca3af;min-height:50px;padding-bottom:4px">${mou.signature_date ? new Date(mou.signature_date).toLocaleDateString() : '&nbsp;'}</div>
+          </div>
+        </div>
+      `}
     </div>
   </div>
   </body></html>`

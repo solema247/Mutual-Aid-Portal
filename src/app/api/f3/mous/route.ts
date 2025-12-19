@@ -25,7 +25,21 @@ export async function GET(request: Request) {
         m.partner_name?.toLowerCase().includes(s) ||
         m.err_name?.toLowerCase().includes(s)
       )
-      return NextResponse.json(filtered)
+      
+      // Parse signatures JSON for each MOU
+      const parsed = filtered.map((mou: any) => {
+        if (mou.signatures && typeof mou.signatures === 'string') {
+          try {
+            mou.signatures = JSON.parse(mou.signatures)
+          } catch (e) {
+            console.error('Failed to parse signatures JSON:', e)
+            mou.signatures = null
+          }
+        }
+        return mou
+      })
+      
+      return NextResponse.json(parsed)
     }
 
     if (state) {
@@ -34,7 +48,21 @@ export async function GET(request: Request) {
 
     const { data, error } = await query
     if (error) throw error
-    return NextResponse.json(data || [])
+    
+    // Parse signatures JSON for each MOU
+    const parsed = (data || []).map((mou: any) => {
+      if (mou.signatures && typeof mou.signatures === 'string') {
+        try {
+          mou.signatures = JSON.parse(mou.signatures)
+        } catch (e) {
+          console.error('Failed to parse signatures JSON:', e)
+          mou.signatures = null
+        }
+      }
+      return mou
+    })
+    
+    return NextResponse.json(parsed)
   } catch (error) {
     console.error('Error listing MOUs:', error)
     return NextResponse.json({ error: 'Failed to list MOUs' }, { status: 500 })
@@ -259,6 +287,38 @@ export async function POST(request: Request) {
     <div class="row">
       <div class="col"><div class="box">${inserted.partner_contact_override ? String(inserted.partner_contact_override).replace(/\n/g,'<br/>') : `Partner: ${inserted.partner_name}`}</div></div>
       <div class="col"><div class="box">${inserted.err_contact_override ? String(inserted.err_contact_override).replace(/\n/g,'<br/>') : `ERR: ${inserted.err_name}`}</div></div>
+    </div>
+    <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid #e5e7eb;">
+      <div class="row" style="margin-top: 16px;">
+        <div class="col">
+          <div style="margin-bottom: 8px; font-weight: 600;">Partner Signature</div>
+          <div style="border-bottom: 2px solid #9ca3af; min-height: 50px; padding-bottom: 4px;">${inserted.partner_signature || '&nbsp;'}</div>
+        </div>
+        <div class="col">
+          <div class="box rtl" style="margin-bottom: 8px; font-weight: 600;">توقيع الشريك</div>
+          <div class="box rtl" style="border-bottom: 2px solid #9ca3af; min-height: 50px; padding-bottom: 4px;">${inserted.partner_signature || '&nbsp;'}</div>
+        </div>
+      </div>
+      <div class="row" style="margin-top: 16px;">
+        <div class="col">
+          <div style="margin-bottom: 8px; font-weight: 600;">ERR Signature</div>
+          <div style="border-bottom: 2px solid #9ca3af; min-height: 50px; padding-bottom: 4px;">${inserted.err_signature || '&nbsp;'}</div>
+        </div>
+        <div class="col">
+          <div class="box rtl" style="margin-bottom: 8px; font-weight: 600;">توقيع غرفة الطوارئ</div>
+          <div class="box rtl" style="border-bottom: 2px solid #9ca3af; min-height: 50px; padding-bottom: 4px;">${inserted.err_signature || '&nbsp;'}</div>
+        </div>
+      </div>
+      <div class="row" style="margin-top: 16px;">
+        <div class="col">
+          <div style="margin-bottom: 8px; font-weight: 600;">Date of Signature</div>
+          <div style="border-bottom: 2px solid #9ca3af; min-height: 50px; padding-bottom: 4px;">${inserted.signature_date ? new Date(inserted.signature_date).toLocaleDateString() : '&nbsp;'}</div>
+        </div>
+        <div class="col">
+          <div class="box rtl" style="margin-bottom: 8px; font-weight: 600;">تاريخ التوقيع</div>
+          <div class="box rtl" style="border-bottom: 2px solid #9ca3af; min-height: 50px; padding-bottom: 4px;">${inserted.signature_date ? new Date(inserted.signature_date).toLocaleDateString() : '&nbsp;'}</div>
+        </div>
+      </div>
     </div>
   </div>
 

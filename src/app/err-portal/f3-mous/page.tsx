@@ -10,11 +10,18 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Eye, Upload, Receipt, FileSignature, FileCheck, Link2 } from 'lucide-react'
+import { Eye, Upload, Receipt, FileSignature, FileCheck, Link2, X, Plus } from 'lucide-react'
 import dynamic from 'next/dynamic'
 import { aggregateObjectives, aggregateBeneficiaries, aggregatePlannedActivities, aggregatePlannedActivitiesDetailed, aggregateLocations, getBankingDetails, getBudgetTable } from '@/lib/mou-aggregation'
 import { supabase } from '@/lib/supabaseClient'
 import PoolByDonor from '@/app/err-portal/f2-approvals/components/PoolByDonor'
+
+interface Signature {
+  id: string
+  name: string
+  role?: string
+  date: string
+}
 
 interface MOU {
   id: string
@@ -31,6 +38,10 @@ interface MOU {
   banking_details_override: string | null
   partner_contact_override: string | null
   err_contact_override: string | null
+  partner_signature: string | null
+  err_signature: string | null
+  signature_date: string | null
+  signatures: Signature[] | null
   created_at: string
 }
 
@@ -1172,6 +1183,86 @@ export default function F3MOUsPage() {
                       />
                       <p className="text-xs text-muted-foreground mt-1">Leave empty to use data from projects</p>
                     </div>
+                    
+                    {/* Signatures Section */}
+                    <div className="mt-6 pt-4 border-t">
+                      <div className="flex items-center justify-between mb-4">
+                        <Label className="text-base font-semibold">Signatures</Label>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            const currentSignatures = (editingMou.signatures as Signature[]) || []
+                            const newSignature: Signature = {
+                              id: `temp-${Date.now()}`,
+                              name: '',
+                              role: '',
+                              date: new Date().toISOString().split('T')[0]
+                            }
+                            setEditingMou({
+                              ...editingMou,
+                              signatures: [...currentSignatures, newSignature]
+                            })
+                          }}
+                        >
+                          <Plus className="h-4 w-4 mr-1" />
+                          Add Signature
+                        </Button>
+                      </div>
+                      
+                      <div className="space-y-4">
+                        {((editingMou.signatures as Signature[]) || []).map((sig, index) => (
+                          <div key={sig.id} className="border rounded-lg p-4 space-y-3">
+                            <div className="flex items-start justify-between">
+                              <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-3">
+                                <div>
+                                  <Label className="text-xs">Name / Role</Label>
+                                  <Input
+                                    value={sig.name}
+                                    onChange={(e) => {
+                                      const updated = [...((editingMou.signatures as Signature[]) || [])]
+                                      updated[index] = { ...updated[index], name: e.target.value }
+                                      setEditingMou({ ...editingMou, signatures: updated })
+                                    }}
+                                    placeholder="e.g., John Doe, Partner Representative"
+                                    className="mt-1"
+                                  />
+                                </div>
+                                <div>
+                                  <Label className="text-xs">Date</Label>
+                                  <Input
+                                    type="date"
+                                    value={sig.date}
+                                    onChange={(e) => {
+                                      const updated = [...((editingMou.signatures as Signature[]) || [])]
+                                      updated[index] = { ...updated[index], date: e.target.value }
+                                      setEditingMou({ ...editingMou, signatures: updated })
+                                    }}
+                                    className="mt-1"
+                                  />
+                                </div>
+                              </div>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                  const updated = ((editingMou.signatures as Signature[]) || []).filter((_, i) => i !== index)
+                                  setEditingMou({ ...editingMou, signatures: updated.length > 0 ? updated : null })
+                                }}
+                                className="ml-2 text-destructive hover:text-destructive"
+                              >
+                                <X className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                        {(!editingMou.signatures || (editingMou.signatures as Signature[]).length === 0) && (
+                          <p className="text-sm text-muted-foreground text-center py-4">No signatures added yet. Click "Add Signature" to add one.</p>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 ) : (
                   <>
@@ -1197,6 +1288,86 @@ export default function F3MOUsPage() {
                         <div className="whitespace-pre-wrap">{activeMou.err_contact_override || `${activeMou.err_name}${((detail?.projects && detail.projects[0]?.program_officer_name) || detail?.project?.program_officer_name) ? `\n${t('f3:representative', { lng: 'ar' })}: ${(detail?.projects && detail.projects[0]?.program_officer_name) || detail?.project?.program_officer_name}` : ''}${((detail?.projects && detail.projects[0]?.program_officer_phone) || detail?.project?.program_officer_phone) ? `\n${t('f3:phone', { lng: 'ar' })}: ${(detail?.projects && detail.projects[0]?.program_officer_phone) || detail?.project?.program_officer_phone}` : ''}`}</div>
                       </div>
                     </div>
+                    {/* Signatures */}
+                    {activeMou.signatures && (activeMou.signatures as Signature[]).length > 0 ? (
+                      <div className="mt-6 pt-4 border-t">
+                        <div className="font-semibold mb-4">Signatures</div>
+                        {(activeMou.signatures as Signature[]).map((sig, index) => (
+                          <div key={sig.id || index} className="mb-6">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-2">
+                              <div className="space-y-2">
+                                <div className="font-medium text-sm">{sig.name || `Signature ${index + 1}`}{sig.role ? ` (${sig.role})` : ''}</div>
+                                <div className="border-b-2 border-gray-400 min-h-[40px] pb-2">
+                                  <span className="text-muted-foreground text-sm">Signature line</span>
+                                </div>
+                              </div>
+                              <div className="space-y-2" dir="rtl">
+                                <div className="font-medium text-sm">{sig.name || `التوقيع ${index + 1}`}{sig.role ? ` (${sig.role})` : ''}</div>
+                                <div className="border-b-2 border-gray-400 min-h-[40px] pb-2">
+                                  <span className="text-muted-foreground text-sm">خط التوقيع</span>
+                                </div>
+                              </div>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <div>
+                                <div className="text-xs text-muted-foreground mb-1">Date</div>
+                                <div className="text-xs">{sig.date ? new Date(sig.date).toLocaleDateString() : 'Not set'}</div>
+                              </div>
+                              <div dir="rtl">
+                                <div className="text-xs text-muted-foreground mb-1">التاريخ</div>
+                                <div className="text-xs">{sig.date ? new Date(sig.date).toLocaleDateString() : 'غير محدد'}</div>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      // Fallback to old signature fields for backward compatibility
+                      <div className="mt-6 pt-4 border-t">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                          <div>
+                            <div className="font-medium mb-2">Partner Signature</div>
+                            <div className="border-b-2 border-gray-400 min-h-[40px] pb-1">
+                              {activeMou.partner_signature || <span className="text-muted-foreground text-sm">Signature</span>}
+                            </div>
+                          </div>
+                          <div dir="rtl">
+                            <div className="font-medium mb-2">توقيع الشريك</div>
+                            <div className="border-b-2 border-gray-400 min-h-[40px] pb-1">
+                              {activeMou.partner_signature || <span className="text-muted-foreground text-sm">التوقيع</span>}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                          <div>
+                            <div className="font-medium mb-2">ERR Signature</div>
+                            <div className="border-b-2 border-gray-400 min-h-[40px] pb-1">
+                              {activeMou.err_signature || <span className="text-muted-foreground text-sm">Signature</span>}
+                            </div>
+                          </div>
+                          <div dir="rtl">
+                            <div className="font-medium mb-2">توقيع غرفة الطوارئ</div>
+                            <div className="border-b-2 border-gray-400 min-h-[40px] pb-1">
+                              {activeMou.err_signature || <span className="text-muted-foreground text-sm">التوقيع</span>}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <div className="font-medium mb-2">Date of Signature</div>
+                            <div className="border-b-2 border-gray-400 min-h-[40px] pb-1">
+                              {activeMou.signature_date ? new Date(activeMou.signature_date).toLocaleDateString() : <span className="text-muted-foreground text-sm">Date</span>}
+                            </div>
+                          </div>
+                          <div dir="rtl">
+                            <div className="font-medium mb-2">تاريخ التوقيع</div>
+                            <div className="border-b-2 border-gray-400 min-h-[40px] pb-1">
+                              {activeMou.signature_date ? new Date(activeMou.signature_date).toLocaleDateString() : <span className="text-muted-foreground text-sm">التاريخ</span>}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </>
                 )}
               </div>
@@ -1260,7 +1431,8 @@ export default function F3MOUsPage() {
                           partner_contact_override: activeMou?.partner_contact_override !== null && activeMou?.partner_contact_override !== undefined ? activeMou.partner_contact_override : currentPartnerContact,
                           err_contact_override: activeMou?.err_contact_override !== null && activeMou?.err_contact_override !== undefined ? activeMou.err_contact_override : currentErrContact,
                           start_date: activeMou?.start_date || null,
-                          end_date: activeMou?.end_date || null
+                          end_date: activeMou?.end_date || null,
+                          signatures: activeMou?.signatures || null
                         })
                       }}
                     >
@@ -1282,17 +1454,94 @@ export default function F3MOUsPage() {
                         logging: false,
                         backgroundColor: '#ffffff',
                         onclone: (doc) => {
-                          const node = doc.getElementById(previewId)
-                          if (node) {
-                            // Force CSS variables to RGB fallbacks to avoid oklch
-                            const vars = [
-                              '--background','--foreground','--muted','--muted-foreground',
-                              '--card','--card-foreground','--border','--input','--ring'
-                            ]
-                            vars.forEach(v => (node as HTMLElement).style.setProperty(v, '#111'))
-                            ;(node as HTMLElement).style.color = '#111'
-                          }
-                          doc.querySelectorAll('.text-muted-foreground').forEach((n:any)=>{ n.style.color = '#6b7280' })
+                          // Set CSS variables directly on root element (highest priority)
+                          const root = doc.documentElement as HTMLElement
+                          root.style.setProperty('--background', '#ffffff')
+                          root.style.setProperty('--foreground', '#111111')
+                          root.style.setProperty('--card', '#ffffff')
+                          root.style.setProperty('--card-foreground', '#111111')
+                          root.style.setProperty('--popover', '#ffffff')
+                          root.style.setProperty('--popover-foreground', '#111111')
+                          root.style.setProperty('--primary', '#111111')
+                          root.style.setProperty('--primary-foreground', '#ffffff')
+                          root.style.setProperty('--secondary', '#f3f4f6')
+                          root.style.setProperty('--secondary-foreground', '#111111')
+                          root.style.setProperty('--muted', '#f9fafb')
+                          root.style.setProperty('--muted-foreground', '#6b7280')
+                          root.style.setProperty('--accent', '#f3f4f6')
+                          root.style.setProperty('--accent-foreground', '#111111')
+                          root.style.setProperty('--destructive', '#ef4444')
+                          root.style.setProperty('--border', '#e5e7eb')
+                          root.style.setProperty('--input', '#e5e7eb')
+                          root.style.setProperty('--ring', '#6b7280')
+                          root.style.setProperty('--chart-1', '#3b82f6')
+                          root.style.setProperty('--chart-2', '#10b981')
+                          root.style.setProperty('--chart-3', '#f59e0b')
+                          root.style.setProperty('--chart-4', '#ef4444')
+                          root.style.setProperty('--chart-5', '#8b5cf6')
+                          root.style.setProperty('--sidebar', '#ffffff')
+                          root.style.setProperty('--sidebar-foreground', '#111111')
+                          root.style.setProperty('--sidebar-primary', '#111111')
+                          root.style.setProperty('--sidebar-primary-foreground', '#ffffff')
+                          root.style.setProperty('--sidebar-accent', '#f3f4f6')
+                          root.style.setProperty('--sidebar-accent-foreground', '#111111')
+                          root.style.setProperty('--sidebar-border', '#e5e7eb')
+                          root.style.setProperty('--sidebar-ring', '#6b7280')
+                          
+                          // Inject a style tag to override all CSS variables with RGB values
+                          const style = doc.createElement('style')
+                          style.textContent = `
+                            :root {
+                              --background: #ffffff !important;
+                              --foreground: #111111 !important;
+                              --card: #ffffff !important;
+                              --card-foreground: #111111 !important;
+                              --popover: #ffffff !important;
+                              --popover-foreground: #111111 !important;
+                              --primary: #111111 !important;
+                              --primary-foreground: #ffffff !important;
+                              --secondary: #f3f4f6 !important;
+                              --secondary-foreground: #111111 !important;
+                              --muted: #f9fafb !important;
+                              --muted-foreground: #6b7280 !important;
+                              --accent: #f3f4f6 !important;
+                              --accent-foreground: #111111 !important;
+                              --destructive: #ef4444 !important;
+                              --border: #e5e7eb !important;
+                              --input: #e5e7eb !important;
+                              --ring: #6b7280 !important;
+                              --chart-1: #3b82f6 !important;
+                              --chart-2: #10b981 !important;
+                              --chart-3: #f59e0b !important;
+                              --chart-4: #ef4444 !important;
+                              --chart-5: #8b5cf6 !important;
+                              --sidebar: #ffffff !important;
+                              --sidebar-foreground: #111111 !important;
+                              --sidebar-primary: #111111 !important;
+                              --sidebar-primary-foreground: #ffffff !important;
+                              --sidebar-accent: #f3f4f6 !important;
+                              --sidebar-accent-foreground: #111111 !important;
+                              --sidebar-border: #e5e7eb !important;
+                              --sidebar-ring: #6b7280 !important;
+                            }
+                            * {
+                              color: #111111 !important;
+                              border-color: #e5e7eb !important;
+                            }
+                            body, html {
+                              background-color: #ffffff !important;
+                            }
+                            .text-muted-foreground {
+                              color: #6b7280 !important;
+                            }
+                            [class*="bg-"] {
+                              background-color: #ffffff !important;
+                            }
+                            [class*="border"] {
+                              border-color: #e5e7eb !important;
+                            }
+                          `
+                          doc.head.appendChild(style)
                         }
                       })
                       const imgData = canvas.toDataURL('image/png')
@@ -1313,23 +1562,45 @@ export default function F3MOUsPage() {
                           logging: false,
                           backgroundColor: '#ffffff',
                           onclone: (doc) => {
-                            // Force RGB fallbacks to avoid unsupported oklch colors
-                            const root = doc.documentElement as HTMLElement
-                            const vars = [
-                              '--background','--foreground','--muted','--muted-foreground',
-                              '--card','--card-foreground','--border','--input','--ring',
-                              '--primary','--primary-foreground','--secondary','--secondary-foreground',
-                              '--accent','--accent-foreground','--popover','--popover-foreground'
-                            ]
-                            vars.forEach(v => root.style.setProperty(v, '#111'))
-                            root.style.setProperty('--background', '#ffffff')
-                            root.style.setProperty('--card', '#ffffff')
-                            // Common utility classes
-                            doc.querySelectorAll('[class*="text-"]').forEach((n:any)=>{ n.style.color = '#111' })
-                            doc.querySelectorAll('.text-muted-foreground').forEach((n:any)=>{ n.style.color = '#6b7280' })
-                            doc.querySelectorAll('[class*="bg-"]').forEach((n:any)=>{ n.style.backgroundColor = '#ffffff' })
-                            // Borders
-                            doc.querySelectorAll('[class*="border"]').forEach((n:any)=>{ n.style.borderColor = '#e5e7eb' })
+                            // Inject a style tag to override all CSS variables with RGB values
+                            const style = doc.createElement('style')
+                            style.textContent = `
+                              :root {
+                                --background: #ffffff !important;
+                                --foreground: #111111 !important;
+                                --card: #ffffff !important;
+                                --card-foreground: #111111 !important;
+                                --popover: #ffffff !important;
+                                --popover-foreground: #111111 !important;
+                                --primary: #111111 !important;
+                                --primary-foreground: #ffffff !important;
+                                --secondary: #f3f4f6 !important;
+                                --secondary-foreground: #111111 !important;
+                                --muted: #f9fafb !important;
+                                --muted-foreground: #6b7280 !important;
+                                --accent: #f3f4f6 !important;
+                                --accent-foreground: #111111 !important;
+                                --destructive: #ef4444 !important;
+                                --border: #e5e7eb !important;
+                                --input: #e5e7eb !important;
+                                --ring: #6b7280 !important;
+                              }
+                              * {
+                                color: #111111 !important;
+                                background-color: transparent !important;
+                                border-color: #e5e7eb !important;
+                              }
+                              .text-muted-foreground {
+                                color: #6b7280 !important;
+                              }
+                              [class*="bg-"] {
+                                background-color: #ffffff !important;
+                              }
+                              [class*="border"] {
+                                border-color: #e5e7eb !important;
+                              }
+                            `
+                            doc.head.appendChild(style)
                           }
                         })
                         const secImg = secCanvas.toDataURL('image/png')
@@ -1355,20 +1626,45 @@ export default function F3MOUsPage() {
                                 logging: false,
                                 backgroundColor: '#ffffff',
                                 onclone: (doc) => {
-                                  const root = doc.documentElement as HTMLElement
-                                  const vars = [
-                                    '--background','--foreground','--muted','--muted-foreground',
-                                    '--card','--card-foreground','--border','--input','--ring',
-                                    '--primary','--primary-foreground','--secondary','--secondary-foreground',
-                                    '--accent','--accent-foreground','--popover','--popover-foreground'
-                                  ]
-                                  vars.forEach(v => root.style.setProperty(v, '#111'))
-                                  root.style.setProperty('--background', '#ffffff')
-                                  root.style.setProperty('--card', '#ffffff')
-                                  doc.querySelectorAll('[class*="text-"]').forEach((n:any)=>{ n.style.color = '#111' })
-                                  doc.querySelectorAll('.text-muted-foreground').forEach((n:any)=>{ n.style.color = '#6b7280' })
-                                  doc.querySelectorAll('[class*="bg-"]').forEach((n:any)=>{ n.style.backgroundColor = '#ffffff' })
-                                  doc.querySelectorAll('[class*="border"]').forEach((n:any)=>{ n.style.borderColor = '#e5e7eb' })
+                                  // Inject a style tag to override all CSS variables with RGB values
+                                  const style = doc.createElement('style')
+                                  style.textContent = `
+                                    :root {
+                                      --background: #ffffff !important;
+                                      --foreground: #111111 !important;
+                                      --card: #ffffff !important;
+                                      --card-foreground: #111111 !important;
+                                      --popover: #ffffff !important;
+                                      --popover-foreground: #111111 !important;
+                                      --primary: #111111 !important;
+                                      --primary-foreground: #ffffff !important;
+                                      --secondary: #f3f4f6 !important;
+                                      --secondary-foreground: #111111 !important;
+                                      --muted: #f9fafb !important;
+                                      --muted-foreground: #6b7280 !important;
+                                      --accent: #f3f4f6 !important;
+                                      --accent-foreground: #111111 !important;
+                                      --destructive: #ef4444 !important;
+                                      --border: #e5e7eb !important;
+                                      --input: #e5e7eb !important;
+                                      --ring: #6b7280 !important;
+                                    }
+                                    * {
+                                      color: #111111 !important;
+                                      background-color: transparent !important;
+                                      border-color: #e5e7eb !important;
+                                    }
+                                    .text-muted-foreground {
+                                      color: #6b7280 !important;
+                                    }
+                                    [class*="bg-"] {
+                                      background-color: #ffffff !important;
+                                    }
+                                    [class*="border"] {
+                                      border-color: #e5e7eb !important;
+                                    }
+                                  `
+                                  doc.head.appendChild(style)
                                 }
                               })
                               const subImg = subCanvas.toDataURL('image/png')
@@ -1386,9 +1682,47 @@ export default function F3MOUsPage() {
                             }
                             continue
                           }
+                          
+                          // If no subsections, split the section canvas into chunks
+                          const maxChunkHeight = pageHeight - margin * 2
+                          const totalChunks = Math.ceil(drawH / maxChunkHeight)
+                          
+                          for (let chunk = 0; chunk < totalChunks; chunk++) {
+                            const chunkStartY = (chunk * maxChunkHeight) / ratio
+                            const chunkHeight = Math.min(maxChunkHeight / ratio, secH - chunkStartY)
+                            
+                            // Create a temporary canvas for this chunk
+                            const chunkCanvas = document.createElement('canvas')
+                            chunkCanvas.width = secW
+                            chunkCanvas.height = chunkHeight
+                            const chunkCtx = chunkCanvas.getContext('2d')
+                            if (chunkCtx && secCanvas) {
+                              // Draw the portion of the section canvas we need
+                              // secCanvas is a canvas element from html2canvas
+                              // Copy from secCanvas starting at chunkStartY, taking chunkHeight pixels
+                              chunkCtx.drawImage(secCanvas as HTMLCanvasElement, 0, chunkStartY, secW, chunkHeight, 0, 0, secW, chunkHeight)
+                              const chunkImg = chunkCanvas.toDataURL('image/png')
+                              const chunkDrawH = chunkHeight * ratio
+                              
+                              if (currentY + chunkDrawH > pageHeight - margin) {
+                                pdf.addPage()
+                                currentY = margin
+                              }
+                              
+                              pdf.addImage(chunkImg, 'PNG', margin, currentY, drawW, chunkDrawH)
+                              currentY += chunkDrawH
+                              
+                              // Add small gap between chunks (except last)
+                              if (chunk < totalChunks - 1) {
+                                currentY += 4
+                              }
+                            }
+                          }
+                          currentY += 12 // gap after section
+                        } else {
+                          pdf.addImage(secImg, 'PNG', margin, currentY, drawW, drawH)
+                          currentY += drawH + 12 // gap between sections
                         }
-                        pdf.addImage(secImg, 'PNG', margin, currentY, drawW, drawH)
-                        currentY += drawH + 12 // gap between sections
                       }
                       const blob = pdf.output('bloburl')
                       window.open(blob, '_blank')
