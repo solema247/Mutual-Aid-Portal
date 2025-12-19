@@ -15,7 +15,7 @@ export async function POST(
     // Load all projects for aggregation
     const { data: projects } = await supabase
       .from('err_projects')
-      .select('project_objectives, intended_beneficiaries, planned_activities, planned_activities_resolved, locality, state, banking_details')
+      .select('project_objectives, intended_beneficiaries, planned_activities, planned_activities_resolved, locality, state, banking_details, expenses, err_id, emergency_room_id, emergency_rooms (name, name_ar, err_code)')
       .eq('mou_id', id)
     
     // Aggregate data from all projects

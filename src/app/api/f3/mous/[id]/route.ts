@@ -34,6 +34,10 @@ export async function GET(
         planned_activities,
         locality,
         state,
+        expenses,
+        err_id,
+        emergency_room_id,
+        emergency_rooms (name, name_ar, err_code),
         "Sector (Primary)",
         "Sector (Secondary)"
       `)

@@ -9,6 +9,11 @@ interface Project {
   planned_activities_resolved?: string | null
   locality?: string | null
   state?: string | null
+  banking_details?: string | null
+  expenses?: any
+  err_id?: string | null
+  emergency_room_id?: string | null
+  emergency_rooms?: { name?: string | null; name_ar?: string | null; err_code?: string | null } | null
 }
 
 /**
@@ -225,17 +230,90 @@ export function aggregateLocations(projects: Project[]): { localities: string; s
 }
 
 /**
- * Gets banking details from the first project that has them
+ * Calculates total amount from expenses
+ */
+function calculateTotalAmount(expenses: any): number {
+  if (!expenses) return 0
+  try {
+    const expArray = typeof expenses === 'string' ? JSON.parse(expenses || '[]') : (Array.isArray(expenses) ? expenses : [])
+    return expArray.reduce((sum: number, exp: any) => sum + (exp?.total_cost || 0), 0)
+  } catch {
+    return 0
+  }
+}
+
+/**
+ * Gets banking details from all projects and formats them in a table structure
+ * Returns formatted string with all account details from all projects
  */
 export function getBankingDetails(projects: Project[]): string | null {
   if (!projects || projects.length === 0) return null
   
-  for (const project of projects) {
-    // Access banking_details if it exists in the project type
-    const banking = (project as any).banking_details
-    if (banking) return banking
-  }
+  // Collect all projects with banking details
+  const accounts: Array<{
+    location: string
+    banking_details: string
+    amount: number
+  }> = []
   
-  return null
+  projects.forEach(project => {
+    const banking = (project as any).banking_details
+    if (!banking) return
+    
+    // Get location (ERR name or locality)
+    let location = ''
+    if (project.emergency_rooms?.name_ar) {
+      location = project.emergency_rooms.name_ar
+    } else if (project.emergency_rooms?.name) {
+      location = project.emergency_rooms.name
+    } else if (project.err_id) {
+      location = project.err_id
+    } else if (project.locality) {
+      location = project.locality
+    } else {
+      location = project.state || 'Unknown'
+    }
+    
+    // Calculate amount from expenses
+    const amount = calculateTotalAmount(project.expenses)
+    
+    accounts.push({
+      location,
+      banking_details: banking,
+      amount
+    })
+  })
+  
+  if (accounts.length === 0) return null
+  
+  // Format as table structure similar to the image
+  // Each account is separated with a header showing the location
+  const formattedAccounts = accounts.map((account, index) => {
+    const lines: string[] = []
+    
+    // Add location header (just the location name)
+    lines.push(account.location)
+    lines.push('') // Empty line
+    
+    // Add banking details (preserve original formatting)
+    // The banking_details field should contain the account information
+    lines.push(account.banking_details)
+    
+    // Add amount if available
+    if (account.amount > 0) {
+      lines.push(`Amount USD: ${account.amount.toLocaleString()} $`)
+    }
+    
+    // Add separator line between accounts (except for last one)
+    if (index < accounts.length - 1) {
+      lines.push('')
+      lines.push('─'.repeat(50))
+      lines.push('')
+    }
+    
+    return lines.join('\n')
+  })
+  
+  return formattedAccounts.join('\n')
 }
 
