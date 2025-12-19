@@ -34,6 +34,8 @@ interface MOU {
   end_date: string | null
   file_key: string | null
   payment_confirmation_file: string | null
+  exchange_rate: number | null
+  transfer_date: string | null
   signed_mou_file_key: string | null
   banking_details_override: string | null
   partner_contact_override: string | null
@@ -110,6 +112,12 @@ export default function F3MOUsPage() {
   // Assignment state
   const [assignModalOpen, setAssignModalOpen] = useState(false)
   const [assigningMouId, setAssigningMouId] = useState<string | null>(null)
+  const [paymentModalOpen, setPaymentModalOpen] = useState(false)
+  const [selectedMouForPayment, setSelectedMouForPayment] = useState<MOU | null>(null)
+  const [paymentExchangeRate, setPaymentExchangeRate] = useState<string>('')
+  const [paymentTransferDate, setPaymentTransferDate] = useState<string>('')
+  const [paymentFile, setPaymentFile] = useState<File | null>(null)
+  const [uploadingPayment, setUploadingPayment] = useState(false)
   const [isAssigning, setIsAssigning] = useState(false)
   const [mouAssignmentStatus, setMouAssignmentStatus] = useState<Record<string, { hasUnassigned: boolean; projectCount: number }>>({})
   
@@ -717,40 +725,6 @@ export default function F3MOUsPage() {
                       </Button>
                       <span className="text-[10px] text-muted-foreground text-center leading-tight">{t('f3:preview')}</span>
                     </div>
-                        <input
-                          type="file"
-                          id={`payment-upload-${m.id}`}
-                          className="hidden"
-                          accept=".pdf,.jpg,.jpeg,.png"
-                          onChange={async (e) => {
-                            const file = e.target.files?.[0]
-                            if (!file) return
-
-                            try {
-                              const formData = new FormData()
-                              formData.append('file', file)
-
-                              const response = await fetch(`/api/f3/mous/${m.id}/payment-confirmation`, {
-                                method: 'POST',
-                                body: formData
-                              })
-
-                              if (!response.ok) {
-                                throw new Error('Failed to upload payment confirmation')
-                              }
-
-                              // Refresh the MOUs list
-                              await fetchMous()
-                              alert('Payment confirmation uploaded successfully')
-                            } catch (error) {
-                              console.error('Error uploading payment confirmation:', error)
-                              alert('Failed to upload payment confirmation')
-                            }
-
-                            // Clear the input
-                            e.target.value = ''
-                          }}
-                        />
                         <div className="flex flex-col items-center gap-0.5 min-w-[50px]">
                           <Button
                             variant="ghost"
@@ -781,7 +755,11 @@ export default function F3MOUsPage() {
                               alert('Failed to open payment confirmation')
                             }
                           } : () => {
-                            document.getElementById(`payment-upload-${m.id}`)?.click()
+                            setSelectedMouForPayment(m)
+                            setPaymentExchangeRate(m.exchange_rate?.toString() || '')
+                            setPaymentTransferDate(m.transfer_date || '')
+                            setPaymentFile(null)
+                            setPaymentModalOpen(true)
                           }}
                           title={m.payment_confirmation_file ? t('f3:view_payment') : t('f3:add_payment')}
                         >
@@ -2025,6 +2003,116 @@ export default function F3MOUsPage() {
                 className="bg-green-600 hover:bg-green-700 text-white"
               >
                 {isAssigning ? 'Assigning...' : 'Assign to Grant'}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Payment Confirmation Modal */}
+      <Dialog open={paymentModalOpen} onOpenChange={setPaymentModalOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Add Payment Confirmation</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 mt-4">
+            <div>
+              <Label htmlFor="exchange-rate">Exchange Rate</Label>
+              <Input
+                id="exchange-rate"
+                type="number"
+                step="0.0001"
+                value={paymentExchangeRate}
+                onChange={(e) => setPaymentExchangeRate(e.target.value)}
+                placeholder="Enter exchange rate (e.g., 600.5)"
+                className="mt-1"
+              />
+              <p className="text-xs text-muted-foreground mt-1">Exchange rate used for the payment</p>
+            </div>
+            
+            <div>
+              <Label htmlFor="transfer-date">Date of Transfer</Label>
+              <Input
+                id="transfer-date"
+                type="date"
+                value={paymentTransferDate}
+                onChange={(e) => setPaymentTransferDate(e.target.value)}
+                className="mt-1"
+              />
+              <p className="text-xs text-muted-foreground mt-1">Date when funds were transferred</p>
+            </div>
+            
+            <div>
+              <Label htmlFor="payment-file">Payment Confirmation File</Label>
+              <Input
+                id="payment-file"
+                type="file"
+                accept=".pdf,.jpg,.jpeg,.png"
+                onChange={(e) => setPaymentFile(e.target.files?.[0] || null)}
+                className="mt-1"
+              />
+              <p className="text-xs text-muted-foreground mt-1">Upload payment confirmation document</p>
+            </div>
+            
+            <div className="flex justify-end gap-2 pt-4">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setPaymentModalOpen(false)
+                  setSelectedMouForPayment(null)
+                  setPaymentExchangeRate('')
+                  setPaymentTransferDate('')
+                  setPaymentFile(null)
+                }}
+                disabled={uploadingPayment}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={async () => {
+                  if (!selectedMouForPayment || !paymentFile) {
+                    alert('Please select a file to upload')
+                    return
+                  }
+                  
+                  try {
+                    setUploadingPayment(true)
+                    const formData = new FormData()
+                    formData.append('file', paymentFile)
+                    if (paymentExchangeRate) {
+                      formData.append('exchange_rate', paymentExchangeRate)
+                    }
+                    if (paymentTransferDate) {
+                      formData.append('transfer_date', paymentTransferDate)
+                    }
+                    
+                    const response = await fetch(`/api/f3/mous/${selectedMouForPayment.id}/payment-confirmation`, {
+                      method: 'POST',
+                      body: formData
+                    })
+                    
+                    if (!response.ok) {
+                      throw new Error('Failed to upload payment confirmation')
+                    }
+                    
+                    // Refresh the MOUs list
+                    await fetchMous()
+                    setPaymentModalOpen(false)
+                    setSelectedMouForPayment(null)
+                    setPaymentExchangeRate('')
+                    setPaymentTransferDate('')
+                    setPaymentFile(null)
+                    alert('Payment confirmation uploaded successfully')
+                  } catch (error) {
+                    console.error('Error uploading payment confirmation:', error)
+                    alert('Failed to upload payment confirmation')
+                  } finally {
+                    setUploadingPayment(false)
+                  }
+                }}
+                disabled={uploadingPayment || !paymentFile}
+              >
+                {uploadingPayment ? 'Uploading...' : 'Upload Payment Confirmation'}
               </Button>
             </div>
           </div>
