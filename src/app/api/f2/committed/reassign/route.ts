@@ -85,8 +85,8 @@ export async function POST(request: Request) {
           if (oldGrant.activities && oldGrant.activities.includes(f1.grant_id)) {
             const updatedActivities = oldGrant.activities
               .split(',')
-              .map(s => s.trim())
-              .filter(s => s !== f1.grant_id)
+              .map((s: string) => s.trim())
+              .filter((s: string) => s !== f1.grant_id)
               .join(',')
             
             await supabase

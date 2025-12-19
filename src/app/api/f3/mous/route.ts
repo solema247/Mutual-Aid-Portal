@@ -166,15 +166,23 @@ export async function POST(request: Request) {
         .select('project_objectives, intended_beneficiaries, estimated_beneficiaries, planned_activities, planned_activities_resolved, locality, state, banking_details, expenses, err_id, emergency_room_id, emergency_rooms (name, name_ar, err_code)')
         .eq('mou_id', inserted.id)
       
+      // Transform projects to match Project type (convert emergency_rooms array to object)
+      const transformedProjects = (projects || []).map((p: any) => ({
+        ...p,
+        emergency_rooms: Array.isArray(p.emergency_rooms) && p.emergency_rooms.length > 0
+          ? p.emergency_rooms[0]
+          : p.emergency_rooms || null
+      }))
+      
       // Aggregate data from all projects
       const aggregated = {
-        objectives: aggregateObjectives(projects || []),
-        beneficiaries: aggregateBeneficiaries(projects || []),
-        activities: aggregatePlannedActivities(projects || []),
-        activitiesDetailed: aggregatePlannedActivitiesDetailed(projects || []),
-        locations: aggregateLocations(projects || []),
-        banking: getBankingDetails(projects || []),
-        budgetTable: getBudgetTable(projects || [])
+        objectives: aggregateObjectives(transformedProjects),
+        beneficiaries: aggregateBeneficiaries(transformedProjects),
+        activities: aggregatePlannedActivities(transformedProjects),
+        activitiesDetailed: aggregatePlannedActivitiesDetailed(transformedProjects),
+        locations: aggregateLocations(transformedProjects),
+        banking: getBankingDetails(transformedProjects),
+        budgetTable: getBudgetTable(transformedProjects)
       }
 
       const html = `<!DOCTYPE html>

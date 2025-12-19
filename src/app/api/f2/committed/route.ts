@@ -109,7 +109,7 @@ export async function GET(request: Request) {
         workplan_number: f1.workplan_number || null,
         approval_file_key: f1.approval_file_key || null
       }
-    })
+    }).filter((f1): f1 is NonNullable<typeof f1> => f1 !== null)
 
     // Apply client-side filters that can't be done in SQL
     if (search) {

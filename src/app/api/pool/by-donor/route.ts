@@ -37,7 +37,14 @@ export async function GET() {
     const supabase = getSupabaseRouteClient()
     
     // Fetch all grants from grants_grid_view with activities
-    const grants = await fetchAllRows(
+    const grants = await fetchAllRows<{
+      grant_id: string | null;
+      donor_name: string | null;
+      project_name: string | null;
+      donor_id: string | null;
+      sum_activity_amount: number | null;
+      activities: string | null;
+    }>(
       supabase,
       'grants_grid_view',
       'grant_id, donor_name, project_name, donor_id, sum_activity_amount, activities',
@@ -85,7 +92,12 @@ export async function GET() {
     }
 
     // Fetch historical data from activities_raw_import
-    const historicalData = await fetchAllRows(
+    const historicalData = await fetchAllRows<{
+      'Project Donor'?: string | null;
+      project_donor?: string | null;
+      USD?: number | null;
+      usd?: number | null;
+    }>(
       supabase,
       'activities_raw_import',
       '"Project Donor",USD'
@@ -115,7 +127,11 @@ export async function GET() {
     }
 
     // Fetch all projects to calculate assigned
-    const projects = await fetchAllRows(
+    const projects = await fetchAllRows<{
+      expenses: any;
+      funding_status: string | null;
+      grant_id: string | null;
+    }>(
       supabase,
       'err_projects',
       'expenses, funding_status, grant_id'

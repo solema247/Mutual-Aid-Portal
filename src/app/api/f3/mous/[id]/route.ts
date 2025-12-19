@@ -86,15 +86,19 @@ export async function GET(
     if (mou && (mou as any).signatures && typeof (mou as any).signatures === 'string') {
       try {
         (mou as any).signatures = JSON.parse((mou as any).signatures)
-      } catch (e) {
-        console.error('Failed to parse signatures JSON:', e)
+      } catch (e: unknown) {
+        if (typeof console !== 'undefined' && console.error) {
+          console.error('Failed to parse signatures JSON:', e)
+        }
         (mou as any).signatures = null
       }
     }
 
     return NextResponse.json({ mou, projects: resolvedProjects, partner })
   } catch (error) {
-    console.error('Error loading MOU detail:', error)
+    if (typeof console !== 'undefined' && console.error) {
+      console.error('Error loading MOU detail:', error)
+    }
     return NextResponse.json({ error: 'Failed to load MOU detail' }, { status: 500 })
   }
 }
@@ -132,8 +136,10 @@ export async function PATCH(
           if (Array.isArray(body[field]) && body[field].length > 0) {
             try {
               updates[field] = JSON.stringify(body[field])
-            } catch (e) {
-              console.error('Error stringifying signatures:', e)
+            } catch (e: unknown) {
+              if (typeof console !== 'undefined' && console.error) {
+                console.error('Error stringifying signatures:', e)
+              }
               return NextResponse.json(
                 { error: 'Failed to serialize signatures data' },
                 { status: 400 }
@@ -157,7 +163,9 @@ export async function PATCH(
       .single()
 
     if (updateErr) {
-      console.error('Error updating MOU:', updateErr)
+      if (typeof console !== 'undefined' && console.error) {
+        console.error('Error updating MOU:', updateErr)
+      }
       return NextResponse.json(
         { error: 'Failed to update MOU', details: updateErr.message },
         { status: 500 }
@@ -168,15 +176,19 @@ export async function PATCH(
     if (updated && (updated as any).signatures && typeof (updated as any).signatures === 'string') {
       try {
         (updated as any).signatures = JSON.parse((updated as any).signatures)
-      } catch (e) {
-        console.error('Failed to parse signatures JSON in response:', e)
+      } catch (e: unknown) {
+        if (typeof console !== 'undefined' && console.error) {
+          console.error('Failed to parse signatures JSON in response:', e)
+        }
         (updated as any).signatures = null
       }
     }
 
     return NextResponse.json(updated)
   } catch (error) {
-    console.error('Error updating MOU:', error)
+    if (typeof console !== 'undefined' && console.error) {
+      console.error('Error updating MOU:', error)
+    }
     return NextResponse.json({ error: 'Failed to update MOU' }, { status: 500 })
   }
 }

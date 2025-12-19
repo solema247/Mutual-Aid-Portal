@@ -327,11 +327,8 @@ export default function CommittedF1sTab() {
   const fetchCommittedF1s = async () => {
     try {
       const params = new URLSearchParams()
-      if (filters.grantCall && filters.grantCall !== 'all') params.append('grant_call', filters.grantCall)
-      if (filters.cycle && filters.cycle !== 'all') params.append('cycle', filters.cycle)
       if (filters.state && filters.state !== 'all') params.append('state', filters.state)
       if (filters.search) params.append('search', filters.search)
-      if (filters.donor && filters.donor !== 'all') params.append('donor', filters.donor)
 
       const response = await fetch(`/api/f2/committed?${params.toString()}`)
       if (!response.ok) throw new Error('Failed to fetch committed F1s')

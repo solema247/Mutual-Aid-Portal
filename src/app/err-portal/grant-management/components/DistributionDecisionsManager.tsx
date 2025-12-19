@@ -151,7 +151,7 @@ export default function DistributionDecisionsManager() {
         const res = await fetch('/api/states')
         if (!res.ok) throw new Error('Failed to load states')
         const data = await res.json()
-        const uniques = Array.from(new Set((data || []).map((s: any) => s.state_name).filter(Boolean)))
+        const uniques = Array.from(new Set((data || []).map((s: any) => s.state_name).filter(Boolean))) as string[]
         uniques.sort()
         setStateOptions(uniques)
       } catch (e) {
@@ -373,19 +373,20 @@ export default function DistributionDecisionsManager() {
     if (ext === 'csv') {
       return new Promise((resolve, reject) => {
         Papa.parse(file, {
-          complete: (results) => {
+          complete: (results: any) => {
             try {
+              const data = results.data as any[][]
               // B2 = row index 1, column index 1 (0-based: row 2, col B)
               let totalAmount: number | null = null
-              if (results.data[1]?.[1]) {
-                totalAmount = parseCurrency(results.data[1][1])
+              if (data[1]?.[1]) {
+                totalAmount = parseCurrency(data[1][1])
               }
               
               // C3:P3 = row index 2, columns C-P (indices 2-15, 0-based)
-              const stateNames = (results.data[2]?.slice(2, 16) || []).map((s: any) => String(s || '').trim())
+              const stateNames = (data[2]?.slice(2, 16) || []).map((s: any) => String(s || '').trim())
               
               // C36:P36 = row index 35, columns C-P (indices 2-15, 0-based)
-              const amounts = (results.data[35]?.slice(2, 16) || []).map((a: any) => {
+              const amounts = (data[35]?.slice(2, 16) || []).map((a: any) => {
                 return parseCurrency(a)
               })
               
@@ -395,7 +396,7 @@ export default function DistributionDecisionsManager() {
                   const amount = amounts[idx] || 0
                   return { state: systemState, amount }
                 })
-                .filter(a => a.state && a.amount > 0)
+                .filter((a): a is { state: string; amount: number } => Boolean(a.state) && a.amount > 0)
               
               resolve({ totalAmount, allocations })
             } catch (error) {
@@ -433,7 +434,7 @@ export default function DistributionDecisionsManager() {
           const amount = amounts[idx] || 0
           return { state: systemState, amount }
         })
-        .filter(a => a.state && a.amount > 0)
+        .filter((a): a is { state: string; amount: number } => Boolean(a.state) && a.amount > 0)
       
       return { totalAmount, allocations }
     } else {
