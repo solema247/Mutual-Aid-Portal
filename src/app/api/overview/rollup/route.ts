@@ -22,6 +22,40 @@ function sumPlanFromExpenses(expenses: any): number {
   }
 }
 
+// Helper function to normalize state names consistently
+function normalizeStateName(state: any): string {
+  if (!state) return 'Unknown'
+  const normalized = String(state).trim()
+  return normalized === '' ? 'Unknown' : normalized
+}
+
+// Helper function to fetch all rows using pagination
+const fetchAllRows = async (supabase: any, table: string, select: string) => {
+  let allData: any[] = []
+  let from = 0
+  const pageSize = 1000
+  let hasMore = true
+
+  while (hasMore) {
+    const { data: page, error } = await supabase
+      .from(table)
+      .select(select)
+      .range(from, from + pageSize - 1)
+    
+    if (error) throw error
+    
+    if (page && page.length > 0) {
+      allData = [...allData, ...page]
+      from += pageSize
+      hasMore = page.length === pageSize
+    } else {
+      hasMore = false
+    }
+  }
+  
+  return allData
+}
+
 export async function GET(request: Request) {
   try {
     const supabase = getSupabaseRouteClient()
@@ -45,8 +79,12 @@ export async function GET(request: Request) {
     if (donor) {
       const { data: gc } = await supabase.from('grant_calls').select('id').eq('donor_id', donor)
       grantIds = (gc || []).map((g:any)=> g.id)
-      if (grantIds.length === 0) return NextResponse.json({ kpis: {}, rows: [] })
-      pq = pq.in('grant_call_id', grantIds)
+      if (grantIds.length === 0) {
+        // If no grants found for donor, still check historical data
+        // Continue to historical data processing below
+      } else {
+        pq = pq.in('grant_call_id', grantIds)
+      }
     }
     const { data: projects } = await pq
     
@@ -115,7 +153,7 @@ export async function GET(request: Request) {
       f5ByProject.set(pid, { count, last })
     }
 
-    // Build project-level rows
+    // Build project-level rows from err_projects
     const projRows = (projects || []).map((p:any) => {
       // Use expenses for mutual_aid_portal projects, otherwise use planned_activities
       const plan = p.source === 'mutual_aid_portal' 
@@ -139,28 +177,129 @@ export async function GET(request: Request) {
         f4_count: agg.count,
         last_report_date: agg.last,
         f5_count: f5Agg.count,
-        last_f5_date: f5Agg.last
+        last_f5_date: f5Agg.last,
+        is_historical: false
       }
     })
 
+    // ===== Fetch and process historical data from activities_raw_import =====
+    // Get all donors for mapping Project Donor names to donor_ids
+    const { data: allDonors } = await supabase.from('donors').select('id, name, short_name')
+    const donorMapByName = new Map<string, string>()
+    const donorMapByShortName = new Map<string, string>()
+    for (const d of (allDonors || [])) {
+      if (d.name) donorMapByName.set(d.name.trim().toLowerCase(), d.id)
+      if (d.short_name) donorMapByShortName.set(d.short_name.trim().toLowerCase(), d.id)
+    }
+
+    // Fetch all historical data
+    const historicalData = await fetchAllRows(
+      supabase,
+      'activities_raw_import',
+      'id,"ERR CODE","ERR Name","State","Project Donor","USD","MOU Signed","F4","F5","Date Report Completed","Serial Number"'
+    )
+
+    // Filter historical data based on query params
+    let filteredHistorical = historicalData || []
+    
+    // Filter by state (normalize state names)
+    if (state) {
+      const normalizedState = normalizeStateName(state)
+      filteredHistorical = filteredHistorical.filter((row: any) => {
+        const rowState = normalizeStateName(row['State'] || row['state'] || row.State)
+        return rowState === normalizedState
+      })
+    }
+
+    // Filter by donor (match Project Donor to donor_id)
+    if (donor) {
+      filteredHistorical = filteredHistorical.filter((row: any) => {
+        const projectDonor = row['Project Donor'] || row['project_donor'] || row['Project Donor']
+        if (!projectDonor) return false
+        const donorName = String(projectDonor).trim().toLowerCase()
+        const matchedDonorId = donorMapByName.get(donorName) || donorMapByShortName.get(donorName)
+        return matchedDonorId === donor
+      })
+    }
+
+    // Filter by ERR code (note: ERR codes won't match, but we can filter by ERR CODE field)
+    if (err) {
+      // Get the ERR code from the err_projects table to match against
+      const { data: errRoom } = await supabase
+        .from('emergency_rooms')
+        .select('err_code, name, name_ar')
+        .eq('id', err)
+        .single()
+      
+      if (errRoom) {
+        const errCode = errRoom.err_code || errRoom.name || errRoom.name_ar
+        if (errCode) {
+          filteredHistorical = filteredHistorical.filter((row: any) => {
+            const rowErrCode = row['ERR CODE'] || row['err_code'] || row['ERR CODE']
+            return rowErrCode && String(rowErrCode).trim() === String(errCode).trim()
+          })
+        }
+      } else {
+        // If ERR not found, exclude all historical data for this filter
+        filteredHistorical = []
+      }
+    }
+
+    // Note: We can't filter by grant_call_id for historical data since it doesn't exist
+    // If grant filter is provided, we'll only show err_projects data (already filtered above)
+    // Historical data will be shown when no grant filter is applied, or when grant filter matches donor
+
+    // Convert historical data to project row format
+    const historicalRows = filteredHistorical.map((row: any) => {
+      const usd = Number(row['USD'] || row['usd'] || row.USD || 0)
+      const hasMou = row['MOU Signed'] && String(row['MOU Signed']).trim().toLowerCase() !== 'no' && String(row['MOU Signed']).trim() !== ''
+      const f4Value = row['F4'] || row['f4'] || row.F4
+      const f5Value = row['F5'] || row['f5'] || row.F5
+      const hasF4 = f4Value && String(f4Value).trim() !== '' && String(f4Value).trim().toLowerCase() !== 'no'
+      const hasF5 = f5Value && String(f5Value).trim() !== '' && String(f5Value).trim().toLowerCase() !== 'no'
+      const reportDate = row['Date Report Completed'] || row['date_report_completed'] || row['Date Report Completed']
+      
+      return {
+        project_id: `historical_${row.id}`, // Use a prefix to distinguish historical projects
+        state: normalizeStateName(row['State'] || row['state'] || row.State),
+        err_id: row['ERR CODE'] || row['ERR Name'] || row['err_code'] || row['err_name'] || null,
+        grant_call_id: null, // Historical data doesn't have grant_call_id
+        has_mou: hasMou,
+        mou_code: hasMou ? (row['MOU Signed'] || 'Yes') : null,
+        plan: usd,
+        actual: 0, // Historical data doesn't have actual expenses from err_summary
+        variance: usd, // Since actual is 0, variance equals plan
+        burn: 0, // No actual expenses, so burn is 0
+        f4_count: hasF4 ? 1 : 0,
+        last_report_date: reportDate || null,
+        f5_count: hasF5 ? 1 : 0,
+        last_f5_date: reportDate || null, // Use same date if available
+        is_historical: true
+      }
+    })
+
+    // Combine err_projects and historical data
+    // If grant filter is applied, only show err_projects (historical data doesn't have grant_call_id)
+    const allRows = grant ? projRows : [...projRows, ...historicalRows]
+
     // Roll up for KPIs in current slice
     const kpis = {
-      projects: projRows.length,
-      plan: projRows.reduce((s,r)=> s + r.plan, 0),
-      actual: projRows.reduce((s,r)=> s + r.actual, 0),
+      projects: allRows.length,
+      plan: allRows.reduce((s,r)=> s + r.plan, 0),
+      actual: allRows.reduce((s,r)=> s + r.actual, 0),
       variance: 0,
       burn: 0,
-      f4_count: projRows.reduce((s,r)=> s + r.f4_count, 0),
-      last_report_date: projRows.map(r=> r.last_report_date).filter(Boolean).sort().slice(-1)[0] || null,
-      f5_count: projRows.reduce((s,r)=> s + r.f5_count, 0),
-      last_f5_date: projRows.map(r=> r.last_f5_date).filter(Boolean).sort().slice(-1)[0] || null,
+      f4_count: allRows.reduce((s,r)=> s + r.f4_count, 0),
+      last_report_date: allRows.map(r=> r.last_report_date).filter(Boolean).sort().slice(-1)[0] || null,
+      f5_count: allRows.reduce((s,r)=> s + r.f5_count, 0),
+      last_f5_date: allRows.map(r=> r.last_f5_date).filter(Boolean).sort().slice(-1)[0] || null,
       f5_total_individuals: totalIndividuals,
       f5_total_families: totalFamilies
     }
     kpis.variance = kpis.plan - kpis.actual
     kpis.burn = kpis.plan > 0 ? kpis.actual / kpis.plan : 0
 
-    return NextResponse.json({ kpis, rows: projRows })
+    return NextResponse.json({ kpis, rows: allRows })
   } catch (e) {
     console.error('overview/rollup error', e)
     return NextResponse.json({ error: 'Failed to load rollup' }, { status: 500 })

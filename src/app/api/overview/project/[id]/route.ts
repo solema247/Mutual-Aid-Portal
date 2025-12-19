@@ -10,58 +10,168 @@ export async function GET(
     const id = params.id
     if (!id) return NextResponse.json({ error: 'Invalid id' }, { status: 400 })
 
-    // Load F1 project (err_projects)
-    const { data: project, error: projErr } = await supabase
-      .from('err_projects')
-      .select(`
-        id,
-        date,
-        state,
-        locality,
-        status,
-        project_objectives,
-        intended_beneficiaries,
-        estimated_beneficiaries,
-        estimated_timeframe,
-        additional_support,
-        expenses,
-        planned_activities,
-        grant_call_id,
-        emergency_room_id,
-        emergency_rooms ( id, name, name_ar, err_code )
-      `)
-      .eq('id', id)
-      .single()
-    if (projErr) throw projErr
+    // Check if this is a historical project
+    const isHistorical = id.startsWith('historical_')
+    const actualId = isHistorical ? id.replace('historical_', '') : id
 
-    // Load F4 summaries for this project
-    const { data: summaries, error: sumErr } = await supabase
-      .from('err_summary')
-      .select('id, report_date, total_grant, total_expenses, remainder, lessons, training, excess_expenses, surplus_use, created_at')
-      .eq('project_id', id)
-      .order('created_at', { ascending: false })
-    if (sumErr) throw sumErr
-
-    const summaryIds = (summaries || []).map((s: any) => s.id)
-    let expensesBySummary: Record<number, any[]> = {}
-    if (summaryIds.length) {
-      const { data: expenses } = await supabase
-        .from('err_expense')
-        .select('expense_id, summary_id, expense_activity, expense_description, expense_amount, payment_date, payment_method, receipt_no, seller')
-        .in('summary_id', summaryIds as any)
-      for (const e of (expenses || [])) {
-        const sid = (e as any).summary_id
-        expensesBySummary[sid] = expensesBySummary[sid] || []
-        expensesBySummary[sid].push(e)
+    if (isHistorical) {
+      // Load historical project from activities_raw_import
+      const { data: historicalProject, error: histErr } = await supabase
+        .from('activities_raw_import')
+        .select('*')
+        .eq('id', actualId)
+        .single()
+      
+      if (histErr) throw histErr
+      if (!historicalProject) {
+        return NextResponse.json({ error: 'Historical project not found' }, { status: 404 })
       }
+
+      // Map historical project to match the expected structure
+      const project = {
+        id: id,
+        is_historical: true,
+        state: historicalProject['State'] || historicalProject['state'] || null,
+        locality: null,
+        status: historicalProject['Project Status'] || historicalProject['project_status'] || null,
+        project_objectives: historicalProject['Description of ERRs activity'] || historicalProject['description_of_errs_activity'] || null,
+        intended_beneficiaries: historicalProject['Target (Ind.)'] || historicalProject['target_ind'] ? 
+          `Individuals: ${historicalProject['Target (Ind.)'] || historicalProject['target_ind']}\nFamilies: ${historicalProject['Target (Fam.)'] || historicalProject['target_fam'] || 'N/A'}` : null,
+        estimated_beneficiaries: historicalProject['Target (Ind.)'] || historicalProject['target_ind'] || null,
+        estimated_timeframe: historicalProject['Activity Duration'] || historicalProject['activity_duration'] || null,
+        additional_support: null,
+        expenses: null,
+        planned_activities: null,
+        grant_call_id: null,
+        emergency_room_id: null,
+        emergency_rooms: {
+          id: null,
+          name: historicalProject['ERR Name'] || historicalProject['err_name'] || null,
+          name_ar: null,
+          err_code: historicalProject['ERR CODE'] || historicalProject['err_code'] || null
+        },
+        // Additional historical fields
+        serial_number: historicalProject['Serial Number'] || historicalProject['serial_number'] || null,
+        project_donor: historicalProject['Project Donor'] || historicalProject['project_donor'] || null,
+        partner: historicalProject['Partner'] || historicalProject['partner'] || null,
+        responsible: historicalProject['Responsible'] || historicalProject['responsible'] || null,
+        sector_primary: historicalProject['Sector (Primary)'] || historicalProject['sector_primary'] || null,
+        sector_secondary: historicalProject['Sector (Secondardy'] || historicalProject['sector_secondary'] || null,
+        f1_date_submitted: historicalProject['F1 Date of Submitted'] || historicalProject['f1_date_of_submitted'] || null,
+        f1_status: historicalProject['F1'] || historicalProject['f1'] || null,
+        overdue: historicalProject['Overdue'] || historicalProject['overdue'] || null,
+        mou_signed: historicalProject['MOU Signed'] || historicalProject['mou_signed'] || null,
+        date_transfer: historicalProject['Date Transfer'] || historicalProject['date_transfer'] || null,
+        usd: historicalProject['USD'] || historicalProject['usd'] || null,
+        sdg: historicalProject['SDG'] || historicalProject['sdg'] || null,
+        rate: historicalProject['Rate'] || historicalProject['rate'] || null,
+        start_date_activity: historicalProject['Start Date (Activity)'] || historicalProject['start_date_activity'] || null,
+        end_date_activity: historicalProject['End Date (Activity)'] || historicalProject['end_date_activity'] || null,
+        f4_status: historicalProject['F4'] || historicalProject['f4'] || null,
+        f5_status: historicalProject['F5'] || historicalProject['f5'] || null,
+        date_report_completed: historicalProject['Date Report Completed'] || historicalProject['date_report_completed'] || null,
+        reporting_duration: historicalProject['Reporting Duration (End Date to Report)'] || historicalProject['reporting_duration'] || null,
+        tracker: historicalProject['Tracker'] || historicalProject['tracker'] || null,
+        volunteers: historicalProject['Volunteers'] || historicalProject['volunteers'] || null,
+        family: historicalProject['Family'] || historicalProject['family'] || null,
+        individuals: historicalProject['Individuals'] || historicalProject['individuals'] || null,
+        male_over_18: historicalProject['Male >18'] || historicalProject['male_over_18'] || null,
+        female_over_18: historicalProject['Female >18'] || historicalProject['female_over_18'] || null,
+        male_under_18: historicalProject['Male <18'] || historicalProject['male_under_18'] || null,
+        female_under_18: historicalProject['Female <18'] || historicalProject['female_under_18'] || null,
+        people_with_special_needs: historicalProject['People with special needs'] || historicalProject['people_with_special_needs'] || null,
+        lessons_learned: historicalProject['Lessons learned'] || historicalProject['lessons_learned'] || null,
+        challenges: historicalProject['Challenges'] || historicalProject['challenges'] || null,
+        recommendations: historicalProject['Recommendations'] || historicalProject['recommendations'] || null,
+        comments: historicalProject['Comments'] || historicalProject['comments'] || null,
+        grant_segment: historicalProject['Grant Segment'] || historicalProject['grant_segment'] || null
+      }
+
+      // Historical projects don't have F4 summaries in err_summary, return empty array
+      return NextResponse.json({ project, summaries: [], is_historical: true })
+    } else {
+      // Load F1 project (err_projects)
+      const { data: project, error: projErr } = await supabase
+        .from('err_projects')
+        .select(`
+          id,
+          date,
+          state,
+          locality,
+          status,
+          project_objectives,
+          intended_beneficiaries,
+          estimated_beneficiaries,
+          estimated_timeframe,
+          additional_support,
+          expenses,
+          planned_activities,
+          grant_call_id,
+          emergency_room_id,
+          file_key,
+          approval_file_key,
+          mou_id,
+          emergency_rooms ( id, name, name_ar, err_code )
+        `)
+        .eq('id', id)
+        .single()
+      if (projErr) throw projErr
+
+      // Load MOU file keys if mou_id exists
+      let mouFileKeys: { payment_confirmation_file: string | null; signed_mou_file_key: string | null } | null = null
+      if (project.mou_id) {
+        const { data: mou, error: mouErr } = await supabase
+          .from('mous')
+          .select('payment_confirmation_file, signed_mou_file_key')
+          .eq('id', project.mou_id)
+          .single()
+        if (!mouErr && mou) {
+          mouFileKeys = {
+            payment_confirmation_file: mou.payment_confirmation_file || null,
+            signed_mou_file_key: mou.signed_mou_file_key || null
+          }
+        }
+      }
+
+      // Load F4 summaries for this project
+      const { data: summaries, error: sumErr } = await supabase
+        .from('err_summary')
+        .select('id, report_date, total_grant, total_expenses, remainder, lessons, training, excess_expenses, surplus_use, created_at')
+        .eq('project_id', id)
+        .order('created_at', { ascending: false })
+      if (sumErr) throw sumErr
+
+      const summaryIds = (summaries || []).map((s: any) => s.id)
+      let expensesBySummary: Record<number, any[]> = {}
+      if (summaryIds.length) {
+        const { data: expenses } = await supabase
+          .from('err_expense')
+          .select('expense_id, summary_id, expense_activity, expense_description, expense_amount, payment_date, payment_method, receipt_no, seller')
+          .in('summary_id', summaryIds as any)
+        for (const e of (expenses || [])) {
+          const sid = (e as any).summary_id
+          expensesBySummary[sid] = expensesBySummary[sid] || []
+          expensesBySummary[sid].push(e)
+        }
+      }
+
+      const summariesWithExpenses = (summaries || []).map((s: any) => ({
+        ...s,
+        expenses: expensesBySummary[s.id] || []
+      }))
+
+      return NextResponse.json({ 
+        project, 
+        summaries: summariesWithExpenses, 
+        is_historical: false,
+        file_keys: {
+          f1_file: project.file_key || null,
+          f2_approval: project.approval_file_key || null,
+          payment_confirmation: mouFileKeys?.payment_confirmation_file || null,
+          signed_mou: mouFileKeys?.signed_mou_file_key || null
+        }
+      })
     }
-
-    const summariesWithExpenses = (summaries || []).map((s: any) => ({
-      ...s,
-      expenses: expensesBySummary[s.id] || []
-    }))
-
-    return NextResponse.json({ project, summaries: summariesWithExpenses })
   } catch (e) {
     console.error('overview/project detail error', e)
     return NextResponse.json({ error: 'Failed to load project detail' }, { status: 500 })

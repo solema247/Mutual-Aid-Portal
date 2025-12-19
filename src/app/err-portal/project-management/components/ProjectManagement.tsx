@@ -130,8 +130,10 @@ export default function ProjectManagement() {
       curr.last_f5_date = !lastF5 ? candF5 : (!candF5 ? lastF5 : (new Date(lastF5) > new Date(candF5) ? lastF5 : candF5))
       byState.set(key, curr)
     }
-    // compute burn
-    return Array.from(byState.values()).map(v => ({ ...v, burn: v.plan > 0 ? v.actual / v.plan : 0 }))
+    // compute burn and sort alphabetically by state
+    return Array.from(byState.values())
+      .map(v => ({ ...v, burn: v.plan > 0 ? v.actual / v.plan : 0 }))
+      .sort((a, b) => (a.state || '').localeCompare(b.state || ''))
   }, [rows])
 
   const roomRows = useMemo(() => {
@@ -166,6 +168,44 @@ export default function ProjectManagement() {
   }, [rows, selectedStateName, selectedErrId])
 
   const displayed = level === 'state' ? stateRows : (level === 'room' ? roomRows : projectRows)
+
+  // Calculate totals for the displayed rows
+  const totals = useMemo(() => {
+    if (!displayed || displayed.length === 0) {
+      return {
+        plan: 0,
+        actual: 0,
+        variance: 0,
+        burn: 0,
+        f4_count: 0,
+        f5_count: 0,
+        total_projects: 0,
+        projects_with_f4: 0,
+        projects_with_f5: 0
+      }
+    }
+    const totalPlan = displayed.reduce((sum, r) => sum + (Number(r.plan || 0)), 0)
+    const totalActual = displayed.reduce((sum, r) => sum + (Number(r.actual || 0)), 0)
+    const totalVariance = totalPlan - totalActual
+    const totalBurn = totalPlan > 0 ? totalActual / totalPlan : 0
+    const totalF4 = displayed.reduce((sum, r) => sum + (Number(r.f4_count || 0)), 0)
+    const totalF5 = displayed.reduce((sum, r) => sum + (Number(r.f5_count || 0)), 0)
+    const totalProjects = displayed.reduce((sum, r) => sum + (Number(r.total_projects || 1)), 0)
+    const projectsWithF4 = displayed.reduce((sum, r) => sum + (Number(r.projects_with_f4 || (Number(r.f4_count || 0) > 0 ? 1 : 0))), 0)
+    const projectsWithF5 = displayed.reduce((sum, r) => sum + (Number(r.projects_with_f5 || (Number(r.f5_count || 0) > 0 ? 1 : 0))), 0)
+    
+    return {
+      plan: totalPlan,
+      actual: totalActual,
+      variance: totalVariance,
+      burn: totalBurn,
+      f4_count: totalF4,
+      f5_count: totalF5,
+      total_projects: totalProjects,
+      projects_with_f4: projectsWithF4,
+      projects_with_f5: projectsWithF5
+    }
+  }, [displayed])
 
   const onRowClick = (r: any) => {
     if (level === 'state') {
@@ -399,7 +439,49 @@ export default function ProjectManagement() {
                   <TableBody>
                 {(displayed||[]).length===0 ? (
                   <TableRow><TableCell colSpan={level==='project'?14:(level==='room'?12:11)} className="text-center text-muted-foreground">{t('management.table.no_data')}</TableCell></TableRow>
-                ) : displayed.map((r:any, idx:number)=> (
+                ) : (
+                  <>
+                    {/* Total Row */}
+                    <TableRow className="bg-muted/50 font-semibold">
+                      {level === 'state' ? (
+                        <>
+                          <TableCell className="font-semibold">Total</TableCell>
+                        </>
+                      ) : level === 'room' ? (
+                        <>
+                          <TableCell className="font-semibold">Total</TableCell>
+                          <TableCell></TableCell>
+                        </>
+                      ) : (
+                        <>
+                          <TableCell className="font-semibold">Total</TableCell>
+                          <TableCell></TableCell>
+                          <TableCell></TableCell>
+                        </>
+                      )}
+                      <TableCell className="text-right font-semibold">{Number(totals.plan || 0).toLocaleString()}</TableCell>
+                      <TableCell className="text-right font-semibold">{Number(totals.actual || 0).toLocaleString()}</TableCell>
+                      <TableCell className="text-right font-semibold">{Number(totals.variance || 0).toLocaleString()}</TableCell>
+                      <TableCell className="text-right font-semibold">{totals.burn ? (totals.burn * 100).toFixed(0) + '%' : '0%'}</TableCell>
+                      <TableCell className="font-semibold">{totals.f4_count || 0}</TableCell>
+                      <TableCell className="text-right font-semibold">
+                        {level === 'project' 
+                          ? (totals.f4_count > 0 ? '100%' : '0%')
+                          : `${totals.total_projects > 0 ? Math.round((totals.projects_with_f4 / totals.total_projects) * 100) : 0}%`
+                        }
+                      </TableCell>
+                      <TableCell className="font-semibold">{totals.f5_count || 0}</TableCell>
+                      <TableCell className="text-right font-semibold">
+                        {level === 'project' 
+                          ? (totals.f5_count > 0 ? '100%' : '0%')
+                          : `${totals.total_projects > 0 ? Math.round((totals.projects_with_f5 / totals.total_projects) * 100) : 0}%`
+                        }
+                      </TableCell>
+                      <TableCell></TableCell>
+                      <TableCell></TableCell>
+                      {level === 'project' && <TableCell></TableCell>}
+                    </TableRow>
+                    {displayed.map((r:any, idx:number)=> (
                   <TableRow key={r.project_id || r.err_id || r.state || idx} className="cursor-pointer" onClick={()=>onRowClick(r)}>
                     {level === 'state' ? (
                       <>
@@ -518,6 +600,8 @@ export default function ProjectManagement() {
                     )}
                       </TableRow>
                     ))}
+                  </>
+                )}
                   </TableBody>
                 </Table>
               )}
