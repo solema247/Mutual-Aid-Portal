@@ -367,8 +367,13 @@ export function getBudgetTable(projects: Project[]): string | null {
             const category = item?.category
             const cost = item?.planned_activity_cost || 0
             
-            if (category && typeof category === 'string' && cost > 0) {
-              const categoryName = category.trim()
+            // Process if cost > 0, even if category is null
+            if (cost > 0) {
+              // Use "Uncategorized" for null/empty categories
+              const categoryName = (category && typeof category === 'string' && category.trim()) 
+                ? category.trim() 
+                : 'Uncategorized'
+              
               allCategories.add(categoryName)
               
               // Sum costs for the same category in this project
