@@ -184,7 +184,7 @@ export default function DirectUpload() {
 
   // No allocation selection in upload-first flow
 
-  const handleInputChange = (field: keyof F1FormData, value: string | string[] | number) => {
+  const handleInputChange = (field: keyof F1FormData, value: string | string[] | number | undefined) => {
     setFormData(prev => ({ ...prev, [field]: value }))
   }
 
