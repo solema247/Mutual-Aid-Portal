@@ -23,10 +23,14 @@ const visionClient = new vision.ImageAnnotatorClient({
   })()
 })
 
-// Initialize OpenAI client
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
-})
+// Initialize OpenAI client lazily (only when needed)
+function getOpenAIClient(): OpenAI {
+  const apiKey = process.env.OPENAI_API_KEY
+  if (!apiKey) {
+    throw new Error('OPENAI_API_KEY environment variable is required')
+  }
+  return new OpenAI({ apiKey })
+}
 
 // Add types for the expense object
 interface Expense {
@@ -306,11 +310,7 @@ export async function POST(req: Request) {
 
     // Process with OpenAI
     const aiStart = Date.now()
-    if (isF4) {
-      const textPreview = text.length > 2000 ? text.substring(0, 2000) + '...' : text
-      console.log('[F4 OCR] Extracted text length:', text.length)
-      console.log('[F4 OCR] Text preview:', textPreview)
-    }
+    const openai = getOpenAIClient()
     const completion = await openai.chat.completions.create({
       model: "gpt-3.5-turbo",
       max_tokens: 3000,
@@ -840,6 +840,7 @@ Return all fields in this format:
       // Attempt a one-shot repair for F5 JSON
       if (isF5) {
         try {
+          const openai = getOpenAIClient()
           const repair = await openai.chat.completions.create({
             model: 'gpt-3.5-turbo',
             max_tokens: 3000,

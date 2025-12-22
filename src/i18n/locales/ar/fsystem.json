@@ -39,6 +39,8 @@
     "select_grant_serial": "اختر الرقم التسلسلي للمنحة",
     "grant_serial_placeholder": "4 أرقام",
     "create_new_serial": "إنشاء رقم تسلسلي جديد",
+    "grant_segment": "قطاع المنحة",
+    "select_grant_segment": "اختر قطاع المنحة",
     "generated_id": "معرف النموذج المنشأ",
     "generating": "جاري الإنشاء...",
     "complete_fields": "أكمل الحقول المطلوبة لإنشاء المعرف",

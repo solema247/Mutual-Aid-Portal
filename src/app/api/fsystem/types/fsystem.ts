@@ -30,6 +30,7 @@ export interface F1FormData {
   grant_serial_id: string;
   currency: 'USD' | 'SDG';
   exchange_rate?: number;
+  grant_segment?: 'Flexible' | 'Sustainability' | 'WRR' | 'Capacity Building';
   // Keep old fields for backward compatibility
   grant_call_id?: string;
   grant_call_state_allocation_id?: string;

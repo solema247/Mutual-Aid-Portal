@@ -42,7 +42,8 @@ export default function DirectUpload() {
     cycle_state_allocation_id: '',
     grant_serial_id: '',
     currency: 'USD',
-    exchange_rate: 2700
+    exchange_rate: 2700,
+    grant_segment: undefined
   })
   
   const [isLoading, setIsLoading] = useState(false)
@@ -189,7 +190,7 @@ export default function DirectUpload() {
 
   // No allocation selection in upload-first flow
 
-  const handleInputChange = (field: keyof F1FormData, value: string | string[] | number) => {
+  const handleInputChange = (field: keyof F1FormData, value: string | string[] | number | undefined) => {
     setFormData(prev => ({ ...prev, [field]: value }))
   }
 
@@ -475,6 +476,7 @@ export default function DirectUpload() {
           temp_file_key: tempKey, // Store temp file path
           original_text: originalText,
           language: sourceLanguage,
+          grant_segment: formData.grant_segment ? String(formData.grant_segment) : null,
           // Remove these fields - will be set in F2:
           // donor_id: null,
           // grant_call_id: null,
@@ -483,7 +485,14 @@ export default function DirectUpload() {
           // grant_serial: null,
           // workplan_number: null
         }])
-      if (insertError) throw insertError
+      if (insertError) {
+        console.error('Database insert error:', insertError)
+        console.error('Insert data:', {
+          grant_segment: formData.grant_segment,
+          grant_segment_type: typeof formData.grant_segment
+        })
+        throw insertError
+      }
 
       alert('F1 workplan uploaded successfully!')
       // Reset form
@@ -500,7 +509,8 @@ export default function DirectUpload() {
         cycle_state_allocation_id: '',
         grant_serial_id: '',
         currency: 'USD',
-        exchange_rate: 2700
+        exchange_rate: 2700,
+        grant_segment: undefined
       })
       setSelectedFile(null)
       ;(window as any).__f1_temp_key__ = null
@@ -803,6 +813,26 @@ export default function DirectUpload() {
             {/* No date/serial selection in upload-first step */}
               </div>
 
+          {/* Grant Segment */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <Label className="mb-2">{t('fsystem:f1.grant_segment')}</Label>
+              <Select
+                value={formData.grant_segment || ''}
+                onValueChange={(value) => handleInputChange('grant_segment', value ? (value as 'Flexible' | 'Sustainability' | 'WRR' | 'Capacity Building') : undefined)}
+              >
+                <SelectTrigger className="h-[38px] w-full">
+                  <SelectValue placeholder={t('fsystem:f1.select_grant_segment')} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Flexible">Flexible</SelectItem>
+                  <SelectItem value="Sustainability">Sustainability</SelectItem>
+                  <SelectItem value="WRR">WRR</SelectItem>
+                  <SelectItem value="Capacity Building">Capacity Building</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
             </div>
       ) : (
         <ExtractedDataReview

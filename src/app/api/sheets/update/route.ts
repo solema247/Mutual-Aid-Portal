@@ -12,13 +12,18 @@ const auth = new google.auth.GoogleAuth({
 
 const sheets = google.sheets({ version: 'v4', auth })
 
-// Initialize OpenAI
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
-})
+// Initialize OpenAI client lazily (only when needed)
+function getOpenAIClient(): OpenAI {
+  const apiKey = process.env.OPENAI_API_KEY
+  if (!apiKey) {
+    throw new Error('OPENAI_API_KEY environment variable is required')
+  }
+  return new OpenAI({ apiKey })
+}
 
 async function translateToEnglish(text: string): Promise<string> {
   try {
+    const openai = getOpenAIClient()
     const completion = await openai.chat.completions.create({
       model: "gpt-3.5-turbo",
       messages: [
