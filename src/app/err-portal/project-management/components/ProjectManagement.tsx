@@ -194,99 +194,94 @@ export default function ProjectManagement() {
 
   return (
     <div className="space-y-6">
-      {/* KPIs */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <Card>
-          <CardHeader><CardTitle>{t('management.kpis.plan')}</CardTitle></CardHeader>
-          <CardContent>
-            ${Number(kpis.plan||0).toLocaleString()}
-            <div className="text-xs text-muted-foreground mt-1">{t('management.kpis.plan_desc')}</div>
-          </CardContent>
+      {/* All Cards in 2 rows of 6 */}
+      <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+        {/* KPIs */}
+        <Card className="p-1.5 mx-1">
+          <div className="flex items-center justify-between gap-2 mb-0.5">
+            <CardTitle className="text-sm leading-tight font-semibold">{t('management.kpis.plan')}</CardTitle>
+            <span className="text-sm font-semibold">${Number(kpis.plan||0).toLocaleString()}</span>
+          </div>
+          <div className="text-xs text-muted-foreground leading-tight">{t('management.kpis.plan_desc')}</div>
         </Card>
-        <Card>
-          <CardHeader><CardTitle>{t('management.kpis.actuals')}</CardTitle></CardHeader>
-          <CardContent>
-            ${Number(kpis.actual||0).toLocaleString()}
-            <div className="text-xs text-muted-foreground mt-1">{t('management.kpis.actuals_desc')}</div>
-          </CardContent>
+        <Card className="p-1.5 mx-1">
+          <div className="flex items-center justify-between gap-2 mb-0.5">
+            <CardTitle className="text-sm leading-tight font-semibold">{t('management.kpis.actuals')}</CardTitle>
+            <span className="text-sm font-semibold">${Number(kpis.actual||0).toLocaleString()}</span>
+          </div>
+          <div className="text-xs text-muted-foreground leading-tight">{t('management.kpis.actuals_desc')}</div>
         </Card>
-        <Card>
-          <CardHeader><CardTitle>{t('management.kpis.variance')}</CardTitle></CardHeader>
-          <CardContent>
-            ${Number(kpis.variance||0).toLocaleString()}
-            <div className="text-xs text-muted-foreground mt-1">{t('management.kpis.variance_desc')}</div>
-          </CardContent>
+        <Card className="p-1.5 mx-1">
+          <div className="flex items-center justify-between gap-2 mb-0.5">
+            <CardTitle className="text-sm leading-tight font-semibold">{t('management.kpis.variance')}</CardTitle>
+            <span className="text-sm font-semibold">${Number(kpis.variance||0).toLocaleString()}</span>
+          </div>
+          <div className="text-xs text-muted-foreground leading-tight">{t('management.kpis.variance_desc')}</div>
         </Card>
-        <Card>
-          <CardHeader><CardTitle>{t('management.kpis.burn')}</CardTitle></CardHeader>
-          <CardContent>
-            {kpis.burn ? (kpis.burn*100).toFixed(0)+'%' : '0%'}
-            <div className="text-xs text-muted-foreground mt-1">{t('management.kpis.burn_desc')}</div>
-          </CardContent>
+        <Card className="p-1.5 mx-1">
+          <div className="flex items-center justify-between gap-2 mb-0.5">
+            <CardTitle className="text-sm leading-tight font-semibold">{t('management.kpis.burn')}</CardTitle>
+            <span className="text-sm font-semibold">{kpis.burn ? (kpis.burn*100).toFixed(0)+'%' : '0%'}</span>
+          </div>
+          <div className="text-xs text-muted-foreground leading-tight">{t('management.kpis.burn_desc')}</div>
         </Card>
-      </div>
-
-      {/* Project Counters */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <Card>
-          <CardHeader><CardTitle>{t('management.counters.projects')}</CardTitle></CardHeader>
-          <CardContent>
-            {Number(counters.total||0).toLocaleString()}
-            <div className="text-xs text-muted-foreground mt-1">{t('management.counters.projects_desc')}</div>
-          </CardContent>
+        {/* Project Counters */}
+        <Card className="p-1.5 mx-1">
+          <div className="flex items-center justify-between gap-2 mb-0.5">
+            <CardTitle className="text-sm leading-tight font-semibold">{t('management.counters.projects')}</CardTitle>
+            <span className="text-sm font-semibold">{Number(counters.total||0).toLocaleString()}</span>
+          </div>
+          <div className="text-xs text-muted-foreground leading-tight">{t('management.counters.projects_desc')}</div>
         </Card>
-        <Card>
-          <CardHeader><CardTitle>{t('management.counters.with_mous')}</CardTitle></CardHeader>
-          <CardContent>
-            {Number(counters.withMou||0).toLocaleString()}
-            <div className="text-xs text-muted-foreground mt-1">{t('management.counters.with_mous_desc')}</div>
-          </CardContent>
+        <Card className="p-1.5 mx-1">
+          <div className="flex items-center justify-between gap-2 mb-0.5">
+            <CardTitle className="text-sm leading-tight font-semibold">{t('management.counters.with_mous')}</CardTitle>
+            <span className="text-sm font-semibold">{Number(counters.withMou||0).toLocaleString()}</span>
+          </div>
+          <div className="text-xs text-muted-foreground leading-tight">{t('management.counters.with_mous_desc')}</div>
         </Card>
-        <Card>
-          <CardHeader><CardTitle>{t('management.counters.with_f4s')}</CardTitle></CardHeader>
-          <CardContent>
-            {Number(counters.withF4||0).toLocaleString()}
-            <div className="text-xs text-muted-foreground mt-1">{t('management.counters.with_f4s_desc')}</div>
-          </CardContent>
+        <Card className="p-1.5 mx-1">
+          <div className="flex items-center justify-between gap-2 mb-0.5">
+            <CardTitle className="text-sm leading-tight font-semibold">{t('management.counters.with_f4s')}</CardTitle>
+            <span className="text-sm font-semibold">{Number(counters.withF4||0).toLocaleString()}</span>
+          </div>
+          <div className="text-xs text-muted-foreground leading-tight">{t('management.counters.with_f4s_desc')}</div>
         </Card>
-        <Card>
-          <CardHeader><CardTitle>{t('management.counters.f4_complete')}</CardTitle></CardHeader>
-          <CardContent>
-            {(counters.pctF4*100).toFixed(0)}%
-            <div className="text-xs text-muted-foreground mt-1">{t('management.counters.f4_complete_desc')}</div>
-          </CardContent>
+        <Card className="p-1.5 mx-1">
+          <div className="flex items-center justify-between gap-2 mb-0.5">
+            <CardTitle className="text-sm leading-tight font-semibold">{t('management.counters.f4_complete')}</CardTitle>
+            <span className="text-sm font-semibold">{(counters.pctF4*100).toFixed(0)}%</span>
+          </div>
+          <div className="text-xs text-muted-foreground leading-tight">{t('management.counters.f4_complete_desc')}</div>
         </Card>
-      </div>
-
-      {/* F5 Program Reporting Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <Card>
-          <CardHeader><CardTitle>{t('management.counters.with_f5s')}</CardTitle></CardHeader>
-          <CardContent>
-            {Number(counters.withF5||0).toLocaleString()}
-            <div className="text-xs text-muted-foreground mt-1">{t('management.counters.with_f5s_desc')}</div>
-          </CardContent>
+        {/* F5 Program Reporting Cards */}
+        <Card className="p-1.5 mx-1">
+          <div className="flex items-center justify-between gap-2 mb-0.5">
+            <CardTitle className="text-sm leading-tight font-semibold">{t('management.counters.with_f5s')}</CardTitle>
+            <span className="text-sm font-semibold">{Number(counters.withF5||0).toLocaleString()}</span>
+          </div>
+          <div className="text-xs text-muted-foreground leading-tight">{t('management.counters.with_f5s_desc')}</div>
         </Card>
-        <Card>
-          <CardHeader><CardTitle>{t('management.counters.f5_complete')}</CardTitle></CardHeader>
-          <CardContent>
-            {(counters.pctF5*100).toFixed(0)}%
-            <div className="text-xs text-muted-foreground mt-1">{t('management.counters.f5_complete_desc')}</div>
-          </CardContent>
+        <Card className="p-1.5 mx-1">
+          <div className="flex items-center justify-between gap-2 mb-0.5">
+            <CardTitle className="text-sm leading-tight font-semibold">{t('management.counters.f5_complete')}</CardTitle>
+            <span className="text-sm font-semibold">{(counters.pctF5*100).toFixed(0)}%</span>
+          </div>
+          <div className="text-xs text-muted-foreground leading-tight">{t('management.counters.f5_complete_desc')}</div>
         </Card>
-        <Card>
-          <CardHeader><CardTitle>{t('management.counters.total_individuals')}</CardTitle></CardHeader>
-          <CardContent>
-            {Number(kpis.f5_total_individuals||0).toLocaleString()}
-            <div className="text-xs text-muted-foreground mt-1">{t('management.counters.total_individuals_desc')}</div>
-          </CardContent>
+        <Card className="p-1.5 mx-1">
+          <div className="flex items-center justify-between gap-2 mb-0.5">
+            <CardTitle className="text-sm leading-tight font-semibold">{t('management.counters.total_individuals')}</CardTitle>
+            <span className="text-sm font-semibold">{Number(kpis.f5_total_individuals||0).toLocaleString()}</span>
+          </div>
+          <div className="text-xs text-muted-foreground leading-tight">{t('management.counters.total_individuals_desc')}</div>
         </Card>
-        <Card>
-          <CardHeader><CardTitle>{t('management.counters.total_families')}</CardTitle></CardHeader>
-          <CardContent>
-            {Number(kpis.f5_total_families||0).toLocaleString()}
-            <div className="text-xs text-muted-foreground mt-1">{t('management.counters.total_families_desc')}</div>
-          </CardContent>
+        <Card className="p-1.5 mx-1">
+          <div className="flex items-center justify-between gap-2 mb-0.5">
+            <CardTitle className="text-sm leading-tight font-semibold">{t('management.counters.total_families')}</CardTitle>
+            <span className="text-sm font-semibold">{Number(kpis.f5_total_families||0).toLocaleString()}</span>
+          </div>
+          <div className="text-xs text-muted-foreground leading-tight">{t('management.counters.total_families_desc')}</div>
         </Card>
       </div>
 
