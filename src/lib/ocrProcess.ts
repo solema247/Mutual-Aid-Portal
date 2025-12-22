@@ -17,10 +17,14 @@ const visionClient = new vision.ImageAnnotatorClient({
   })()
 })
 
-// Initialize OpenAI client
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
-})
+// Initialize OpenAI client lazily (only when needed)
+function getOpenAIClient(): OpenAI {
+  const apiKey = process.env.OPENAI_API_KEY
+  if (!apiKey) {
+    throw new Error('OPENAI_API_KEY environment variable is required')
+  }
+  return new OpenAI({ apiKey })
+}
 
 function detectLanguage(text: string): 'ar' | 'en' {
   const arabicPattern = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/g
@@ -133,6 +137,7 @@ export async function processFForm(file: File, metadata: ProcessMetadata): Promi
   const isF4 = formType === 'F4'
   const isF5 = formType === 'F5'
 
+  const openai = getOpenAIClient()
   const completion = await withTimeout(
     openai.chat.completions.create({
       model: 'gpt-3.5-turbo',

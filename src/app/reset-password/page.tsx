@@ -43,12 +43,12 @@ export default function ResetPasswordPage() {
 
             if (accessToken && refreshToken && type === 'recovery') {
               // Set session from recovery token
-              const { data: { session: newSession }, error: setError } = await supabase.auth.setSession({
+              const { data: { session: newSession }, error: sessionError } = await supabase.auth.setSession({
                 access_token: accessToken,
                 refresh_token: refreshToken,
               })
 
-              if (setError || !newSession) {
+              if (sessionError || !newSession) {
                 setError(t('login:invalid_reset_link'))
                 setIsChecking(false)
                 return

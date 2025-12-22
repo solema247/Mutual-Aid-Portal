@@ -211,6 +211,11 @@ async function testLogin(email: string, password: string): Promise<boolean> {
     return false
   }
 
+  if (!supabaseUrl) {
+    console.log(`  ⚠ Skipping login test - Supabase URL not available`)
+    return false
+  }
+
   // Create a regular client for testing (not admin)
   const supabaseTest = createClient(supabaseUrl, anonKey)
 
