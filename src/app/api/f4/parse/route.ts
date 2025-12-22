@@ -40,7 +40,13 @@ export async function POST(request: Request) {
     const file = new File([blob], filename, mime ? { type: mime } : undefined)
 
     // Directly call shared OCR/AI processor (no internal HTTP hop)
+    console.log('[F4 Parse] Starting OCR/AI processing...')
     const ocrJson = await processFForm(file, { ocr_max_pages: 3, form_type: 'F4' })
+    console.log('[F4 Parse] OCR/AI processing complete')
+    console.log('[F4 Parse] AI output expenses count:', Array.isArray(ocrJson.expenses) ? ocrJson.expenses.length : 0)
+    if (Array.isArray(ocrJson.expenses)) {
+      console.log('[F4 Parse] AI output expenses:', JSON.stringify(ocrJson.expenses, null, 2))
+    }
 
     // Map to F4 drafts
     const raw = (ocrJson.raw_ocr || '') as string
@@ -122,19 +128,56 @@ export async function POST(request: Request) {
       }
     }
 
-    let expensesDraft = (ocrJson.expenses || []).map((e: any) => ({
-      expense_activity: e.activity || null,
-      expense_description: null,
-      // Keep raw amounts only; do not convert
-      expense_amount_sdg: e.currency === 'SDG' ? (e.amount_value ?? e.total_cost_sdg ?? null) : null,
-      expense_amount: e.currency === 'USD' ? (e.amount_value ?? e.total_cost_usd ?? null) : (e.total_cost_usd ?? null),
-      payment_date: null,
-      payment_method: null,
-      receipt_no: null,
-      seller: null,
-      language: ocrJson.language || null,
-      is_draft: true
-    }))
+    // Map expenses: prioritize AI output amounts, assume SDG if currency is null for Arabic forms
+    const isArabic = ocrJson.language === 'ar'
+    let expensesDraft = (ocrJson.expenses || []).map((e: any, idx: number) => {
+      // If AI provided amount_value, use it - assume SDG if currency is null and form is Arabic
+      let expense_amount_sdg = null
+      let expense_amount = null
+      let source = 'none'
+      
+      if (e.amount_value != null) {
+        if (e.currency === 'SDG') {
+          expense_amount_sdg = e.amount_value
+          source = 'AI-SDG'
+        } else if (e.currency === 'USD') {
+          expense_amount = e.amount_value
+          source = 'AI-USD'
+        } else if (e.currency == null && isArabic) {
+          // Default to SDG for Arabic forms when currency is not specified
+          expense_amount_sdg = e.amount_value
+          source = 'AI-SDG-default'
+        } else {
+          // Fallback: use amount_value as-is
+          expense_amount_sdg = e.amount_value
+          source = 'AI-default'
+        }
+      } else {
+        // Legacy fallback for old format
+        expense_amount_sdg = e.currency === 'SDG' ? (e.total_cost_sdg ?? null) : null
+        expense_amount = e.currency === 'USD' ? (e.amount_value ?? e.total_cost_usd ?? null) : (e.total_cost_usd ?? null)
+        source = 'legacy'
+      }
+      
+      if (expense_amount_sdg || expense_amount) {
+        console.log(`[F4 Parse] Expense ${idx + 1} "${e.activity}": amount=${expense_amount_sdg || expense_amount}, source=${source}, currency=${e.currency || 'null'}`)
+      }
+      
+      return {
+        expense_activity: e.activity || null,
+        expense_description: null,
+        expense_amount_sdg,
+        expense_amount,
+        payment_date: null,
+        payment_method: null,
+        receipt_no: null,
+        seller: null,
+        language: ocrJson.language || null,
+        is_draft: true
+      }
+    })
+    console.log('[F4 Parse] Initial expensesDraft count:', expensesDraft.length)
+    console.log('[F4 Parse] Initial expensesDraft:', JSON.stringify(expensesDraft, null, 2))
 
     // Normalize multi-line activities: merge very short follow-up lines into previous label
     try {
@@ -177,63 +220,123 @@ export async function POST(request: Request) {
     } catch {}
 
     // Fallback 2: extract a contiguous block of amounts (RTL tables often list amounts separately) and pair by order
+    // ONLY use this if AI didn't provide amounts - prioritize AI output
     try {
-      const bankNoise = /(بنكك|رقم العملية|التاريخ\s*و\s*الزمن|SDG|طباعة|تحميل|إضافة)/
-      const lines = raw.split(/\n+/).map(l => l.trim()).filter(Boolean)
-      const numericCandidates: number[] = []
-      for (const line of lines) {
-        if (bankNoise.test(line)) continue
-        const matches = toAsciiDigits(line).match(/\b\d{1,3}(?:[,،\s]\d{3})*(?:\.\d+)?\b/g)
-        if (!matches) continue
-        for (const m of matches) {
-          const v = toNumLoose(m)
-          if (v != null && Number.isFinite(v) && v >= 1000) {
-            numericCandidates.push(v)
+      const missingCount = expensesDraft.filter((r: any) => r.expense_activity && (r.expense_amount == null && r.expense_amount_sdg == null)).length
+      if (missingCount === 0) {
+        console.log('[F4 Parse] All expenses have amounts from AI, skipping OCR fallback')
+      } else {
+        console.log('[F4 Parse] Missing amounts for', missingCount, 'expenses, using OCR fallback')
+        
+        // Exclude totals and summary sections - look for amounts in the expense table area only
+        const totalPatterns = /(إجمالي|المجموع|Total|A\.|B\.|C\.|D\.|اجمالي|المتبقي|المستلم|من المنحة|من مصادر أخرى)/
+        const bankNoise = /(بنكك|رقم العملية|التاريخ\s*و\s*الزمن|SDG|طباعة|تحميل|إضافة|رقم الحساب)/
+        
+        // Find the expense amounts section - typically after "قيمة المصروفات" or "المصروفات"
+        const expenseAmountSection = /(?:قيمة\s*المصروفات|المصروفات|Expenditure|Amount)[\s\S]*?(?=\n\s*(?:---|A\.|إجمالي|Total|$))/i
+        const sectionMatch = raw.match(expenseAmountSection)
+        const searchText = sectionMatch ? sectionMatch[0] : raw
+        
+        const lines = searchText.split(/\n+/).map(l => l.trim()).filter(Boolean)
+        const numericCandidates: number[] = []
+        
+        for (const line of lines) {
+          // Skip lines with totals, summaries, or bank noise
+          if (totalPatterns.test(line) || bankNoise.test(line)) continue
+          
+          // Skip lines that are clearly part of summary section (A, B, C, D)
+          if (/^[ABCD]\./.test(line.trim())) continue
+          
+          const matches = toAsciiDigits(line).match(/\b\d{1,3}(?:[,،\s]\d{3})+(?:\.\d+)?\b/g)
+          if (!matches) continue
+          
+          for (const m of matches) {
+            const v = toNumLoose(m)
+            // More restrictive: only accept amounts that look like individual expenses
+            // Exclude very large numbers that are likely totals (e.g., > 10,000,000 for SDG)
+            if (v != null && Number.isFinite(v) && v >= 1000 && v < 10000000) {
+              numericCandidates.push(v)
+            }
+          }
+        }
+        
+        console.log('[F4 Parse] OCR fallback found', numericCandidates.length, 'candidate amounts:', numericCandidates)
+        
+        // Assign in order to rows still missing amounts
+        let cursor = 0
+        // If we have more candidates than missing, take the last N that match the count
+        if (numericCandidates.length > missingCount && missingCount > 0) {
+          numericCandidates.splice(0, numericCandidates.length - missingCount)
+        }
+        
+        for (let i = 0; i < expensesDraft.length && cursor < numericCandidates.length; i++) {
+          const row = expensesDraft[i]
+          const hasAmount = (row.expense_amount != null) || (row.expense_amount_sdg != null)
+          if (row.expense_activity && !hasAmount) {
+            row.expense_amount_sdg = numericCandidates[cursor++]
+            console.log('[F4 Parse] Assigned OCR fallback amount', row.expense_amount_sdg, 'to', row.expense_activity)
           }
         }
       }
-      // Assign in order to rows still missing amounts
-      let cursor = 0
-      // Trim to the tail of the amounts list to match count if needed
-      const missingCount = expensesDraft.filter((r: any) => r.expense_activity && (r.expense_amount == null && r.expense_amount_sdg == null)).length
-      if (numericCandidates.length > missingCount && missingCount > 0) {
-        numericCandidates.splice(0, numericCandidates.length - missingCount)
-      }
-      for (let i = 0; i < expensesDraft.length && cursor < numericCandidates.length; i++) {
-        const row = expensesDraft[i]
-        const hasAmount = (row.expense_amount != null) || (row.expense_amount_sdg != null)
-        if (row.expense_activity && !hasAmount) {
-          row.expense_amount_sdg = numericCandidates[cursor++]
-        }
-      }
-    } catch {}
+    } catch (e) {
+      console.error('[F4 Parse] Fallback 2 error:', e)
+    }
 
-    // Validate sum vs total_expenses_text if present; if far off, try dropping any values <1000 that slipped through
+    // Validate sum vs total_expenses_text if present; if far off, try dropping any values that look like totals
     try {
       const A = num(totalExpensesStr)
       if (A != null) {
         let sum = expensesDraft.reduce((s: number, r: any) => s + (Number(r.expense_amount_sdg ?? r.expense_amount) || 0), 0)
         const diff = Math.abs(sum - A)
+        console.log('[F4 Parse] Validation - Total from text (A):', A, 'Sum of expenses:', sum, 'Difference:', diff, 'Percentage:', A > 0 ? ((diff / A) * 100).toFixed(2) + '%' : 'N/A')
+        
         if (A > 0 && diff / A > 0.15) {
-          // Recompute ignoring small values
-          sum = expensesDraft.reduce((s: number, r: any) => {
+          // Check if any expense amount equals the total (likely a total that was incorrectly assigned)
+          const suspiciousIndices: number[] = []
+          expensesDraft.forEach((r: any, idx: number) => {
             const v = Number(r.expense_amount_sdg ?? r.expense_amount) || 0
-            return s + (v >= 1000 ? v : 0)
-          }, 0)
-          // If improved, zero-out small values
-          if (Math.abs(sum - A) < diff) {
-            expensesDraft = expensesDraft.map((r: any) => {
-              const v = Number(r.expense_amount_sdg ?? r.expense_amount) || 0
-              if (v > 0 && v < 1000) {
-                r.expense_amount_sdg = null
-                r.expense_amount = null
-              }
-              return r
+            // If an expense amount equals or is very close to the total, it's likely a total
+            if (v > 0 && Math.abs(v - A) < A * 0.01) {
+              suspiciousIndices.push(idx)
+              console.log('[F4 Parse] Suspicious amount found - equals total:', v, 'for activity:', r.expense_activity)
+            }
+          })
+          
+          // Remove suspicious totals
+          if (suspiciousIndices.length > 0) {
+            suspiciousIndices.forEach(idx => {
+              expensesDraft[idx].expense_amount_sdg = null
+              expensesDraft[idx].expense_amount = null
+              console.log('[F4 Parse] Removed suspicious total amount from:', expensesDraft[idx].expense_activity)
             })
+            // Recompute sum
+            sum = expensesDraft.reduce((s: number, r: any) => s + (Number(r.expense_amount_sdg ?? r.expense_amount) || 0), 0)
+            console.log('[F4 Parse] After removing totals - New sum:', sum)
+          }
+          
+          // Also try dropping small values that slipped through
+          if (Math.abs(sum - A) / A > 0.15) {
+            sum = expensesDraft.reduce((s: number, r: any) => {
+              const v = Number(r.expense_amount_sdg ?? r.expense_amount) || 0
+              return s + (v >= 1000 ? v : 0)
+            }, 0)
+            // If improved, zero-out small values
+            if (Math.abs(sum - A) < diff) {
+              expensesDraft = expensesDraft.map((r: any) => {
+                const v = Number(r.expense_amount_sdg ?? r.expense_amount) || 0
+                if (v > 0 && v < 1000) {
+                  r.expense_amount_sdg = null
+                  r.expense_amount = null
+                }
+                return r
+              })
+            }
           }
         }
       }
-    } catch {}
+    } catch (e) {
+      console.error('[F4 Parse] Validation error:', e)
+    }
 
     // Include a compact AI output echo for debugging (whitelisted keys)
     const aiOutput = {
@@ -247,6 +350,10 @@ export async function POST(request: Request) {
       language: ocrJson.language ?? null,
       expenses: Array.isArray(ocrJson.expenses) ? ocrJson.expenses.slice(0, 50) : []
     }
+
+    console.log('[F4 Parse] Final expensesDraft count:', expensesDraft.length)
+    console.log('[F4 Parse] Final expensesDraft:', JSON.stringify(expensesDraft, null, 2))
+    console.log('[F4 Parse] Summary draft total_expenses:', summaryDraft.total_expenses)
 
     return NextResponse.json({ summaryDraft, expensesDraft, aiOutput })
   } catch (e) {

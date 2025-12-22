@@ -306,6 +306,11 @@ export async function POST(req: Request) {
 
     // Process with OpenAI
     const aiStart = Date.now()
+    if (isF4) {
+      const textPreview = text.length > 2000 ? text.substring(0, 2000) + '...' : text
+      console.log('[F4 OCR] Extracted text length:', text.length)
+      console.log('[F4 OCR] Text preview:', textPreview)
+    }
     const completion = await openai.chat.completions.create({
       model: "gpt-3.5-turbo",
       max_tokens: 3000,
@@ -315,6 +320,48 @@ export async function POST(req: Request) {
           role: "system",
           content: isF4 ? `Extract ONLY F4 Financial Report data from the text (Arabic or English). Do not infer or convert amounts. Keep raw amounts and detected currency.
 
+CRITICAL EXPENSE TABLE EXTRACTION RULES:
+
+1. TABLE STRUCTURE (RTL - Right to Left):
+   - Arabic tables read right-to-left: activity names are on the RIGHT, amounts are on the LEFT
+   - Table headings may vary but look for columns like: "النشاط" (Activity), "قيمة المصروفات" (Expenditure Value), "المبلغ" (Amount)
+   - Match each expense row by reading horizontally across the table structure
+
+2. EXPENSE AMOUNT IDENTIFICATION (CRITICAL):
+   - ONLY extract amounts from the expense amount column (typically labeled "قيمة المصروفات", "المبلغ", "Amount", or similar)
+   - If amounts are listed separately at the bottom of the table (common in OCR), use those amounts IN ORDER
+   - DO NOT use amounts mentioned in descriptions, even if they look like expense amounts
+   - CRITICAL: If a description mentions "على مبلغ X" or "مبلغ X" - that X is NOT the expense amount. The expense amount is in the amount column only.
+   - Example: "تم خصم عمولة على مبلغ 5,000,000 بنسبة 8%" - IGNORE the 5,000,000. The actual expense is the commission amount (400,000) in the amount column.
+   - Each expense row has ONE amount - find it in the rightmost amount column or in the ordered list at bottom
+   - Ignore amounts in payment date fields, receipt numbers, or description text
+
+3. ACTIVITY NAME EXTRACTION:
+   - Extract ONLY the activity name from the activity column (typically "النشاط" or "Activity")
+   - DO NOT merge activity names with descriptions
+   - Keep activity names concise - separate from description columns
+   - If two activity names appear on the same row (e.g., "اعاشة التيم العامل" and "نثرية المأمورية"), they represent ONE expense entry - use the primary activity name or combine them appropriately
+   - Example: "صيانة مضخات مياة" NOT "صيانة مضخات مياة | مواد صيانة مضخات"
+
+4. ROW-BY-ROW ALIGNMENT (CRITICAL):
+   - Process expenses row by row in the order they appear
+   - Match each activity name with its corresponding amount in the SAME row
+   - If OCR lists amounts separately at the bottom, align them to activities in the EXACT order they appear (first activity = first amount, second activity = second amount, etc.)
+   - Do not skip rows - include ALL expense rows with amounts
+   - Do not reorder or swap amounts between activities
+
+5. BANK COMMISSIONS & SPECIAL EXPENSES:
+   - "خصم عمولة بنكك" (bank commission) is a separate expense row with its own amount
+   - Extract it as a distinct expense entry
+   - The commission amount is in the expense amount column, NOT the base amount mentioned in description
+   - The description may mention a larger amount (e.g., "على مبلغ 5,000,000") - this is the BASE amount, NOT the expense. The expense is the commission (e.g., 400,000).
+
+6. AMOUNT FILTERING:
+   - Ignore small numbers (e.g., 25, 31, 10) that are clearly units, dates, or page numbers
+   - Prefer numbers with thousands separators (e.g., 4,160,000) for SDG amounts
+   - Amounts should be substantial (typically 100,000+ for SDG, 100+ for USD)
+   - If you see a list of amounts at the bottom (e.g., "4,160,000\n400,000\n260,000\n400,000\n405,000"), these are the expense amounts in order - use them exactly as listed
+
 BASIC INFORMATION:
 - date: Report date in YYYY-MM-DD if present (convert formats); else null
 - state: State name as seen (original language) or null
@@ -323,9 +370,12 @@ BASIC INFORMATION:
 EXPENSES TABLE (actual expenses):
 - For each listed expense row with an amount, return an object:
   { activity: string, amount_value: number, currency: "USD" | "SDG" | null }
-- Detect currency from context/symbols/labels (e.g., SDG, جنيه, $, USD). If unclear, null.
+- activity: Clean activity name only (from activity column, not merged with description). If two activities share a row, use the primary one or combine appropriately.
+- amount_value: The actual expense amount from the expense amount column (numeric, no commas). Use amounts in the order they appear - do not swap or reorder.
+- currency: Detect from context/symbols/labels (e.g., SDG, جنيه, $, USD). If the form is in Arabic and currency is unclear, default to "SDG". If form is in English and currency is unclear, default to "USD". Only use null if truly ambiguous.
 - Do NOT convert any amounts. Keep the number as it appears (strip commas and symbols).
-- Ignore receipt pages, bank slips, or pages without an expense row with amount.
+- Include ALL expense rows - do not skip any
+- Ignore receipt pages, bank slips, or pages without an expense row with amount
 
 TOTALS SECTION (verbatim extraction without math):
 - total_expenses_text: numeric string if A ( إجمالي النفقات ) is present, else null
@@ -545,6 +595,19 @@ Return all fields in this format:
 
     try {
       const structuredData = JSON.parse(sanitizedContent)
+      
+      // Log AI response for F4 debugging
+      if (isF4) {
+        const contentPreview = completion.choices[0]?.message?.content?.substring(0, 1000) || ''
+        console.log('[F4 AI] Response length:', completion.choices[0]?.message?.content?.length || 0)
+        console.log('[F4 AI] Response preview:', contentPreview)
+        if (Array.isArray(structuredData.expenses)) {
+          console.log('[F4 AI] Parsed expenses count:', structuredData.expenses.length)
+          console.log('[F4 AI] Expenses:', JSON.stringify(structuredData.expenses, null, 2))
+          console.log('[F4 AI] Total expenses text:', structuredData.total_expenses_text)
+        }
+      }
+      
       // Add language detection if missing
       if (!structuredData.language) {
         const detectedLanguage = detectLanguage(text)
