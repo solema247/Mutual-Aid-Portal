@@ -13,6 +13,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { supabase } from '@/lib/supabaseClient'
 import Image from 'next/image'
+import Link from 'next/link'
 import LanguageSwitch from '@/components/LanguageSwitch'
 import '@/i18n/config'
 
@@ -70,10 +71,17 @@ export default function LoginPage() {
       const type = hashParams.get('type')
       const accessToken = hashParams.get('access_token')
       
-      // Handle recovery or magic link types - both use hash fragments with tokens
-      if (accessToken && (type === 'recovery' || type === 'magiclink' || !type)) {
-        const flowType = type === 'recovery' ? 'recovery' : 'magic link'
-        console.log(`${flowType} flow detected, manually setting session...`)
+      // Handle recovery type - redirect to reset-password page
+      if (accessToken && type === 'recovery') {
+        console.log('Recovery flow detected, redirecting to reset-password...')
+        // Redirect to reset password page with hash
+        window.location.href = `/reset-password${hash}`
+        return
+      }
+      
+      // Handle magic link types
+      if (accessToken && (type === 'magiclink' || !type)) {
+        console.log('Magic link flow detected, manually setting session...')
         
         // Extract all tokens from hash
         const refreshToken = hashParams.get('refresh_token')
@@ -108,6 +116,15 @@ export default function LoginPage() {
     }
     
     handleMagicLinkAuth()
+  }, [])
+  
+  // Check for password reset success message
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('password_reset') === 'success') {
+      // Show success message (you can add a toast notification here)
+      console.log('Password reset successful')
+    }
   }, [])
 
   const handleErrLogin = async (e: React.FormEvent) => {
@@ -286,7 +303,15 @@ export default function LoginPage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="errPassword">{t('login:password')}</Label>
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="errPassword">{t('login:password')}</Label>
+                    <Link 
+                      href="/forgot-password" 
+                      className="text-sm text-muted-foreground hover:underline"
+                    >
+                      {t('login:forgot_password')}
+                    </Link>
+                  </div>
                   <Input
                     id="errPassword"
                     type="password"
@@ -327,7 +352,15 @@ export default function LoginPage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="password">{t('login:password')}</Label>
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="password">{t('login:password')}</Label>
+                    <Link 
+                      href="/forgot-password" 
+                      className="text-sm text-muted-foreground hover:underline"
+                    >
+                      {t('login:forgot_password')}
+                    </Link>
+                  </div>
                   <Input
                     id="password"
                     type="password"

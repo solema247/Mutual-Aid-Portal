@@ -46,8 +46,13 @@ export default function ChangePasswordPage() {
 
       if (updateError) throw updateError
 
-      // Redirect to partner portal
-      window.location.href = '/partner-portal'
+      // Determine redirect based on user type
+      const userType = document.cookie.split(';').find(c => c.trim().startsWith('userType='))?.split('=')[1]
+      if (userType === 'err') {
+        window.location.href = '/err-portal'
+      } else {
+        window.location.href = '/partner-portal'
+      }
     } catch (err) {
       console.error('Password change error:', err)
       setError(err instanceof Error ? err.message : 'Failed to update password')
