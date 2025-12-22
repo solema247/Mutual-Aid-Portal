@@ -179,6 +179,25 @@ export async function POST(request: Request) {
     console.log('[F4 Parse] Initial expensesDraft count:', expensesDraft.length)
     console.log('[F4 Parse] Initial expensesDraft:', JSON.stringify(expensesDraft, null, 2))
 
+    // CRITICAL: Check for totals assigned as expense amounts (before any other processing)
+    // This must run early to catch cases where AI assigns the total to an expense
+    try {
+      const A = num(totalExpensesStr)
+      if (A != null && A > 0) {
+        expensesDraft.forEach((r: any, idx: number) => {
+          const v = Number(r.expense_amount_sdg ?? r.expense_amount) || 0
+          // If an expense amount equals or is very close to the total, it's definitely a total misassigned
+          if (v > 0 && Math.abs(v - A) < A * 0.01) {
+            console.log('[F4 Parse] CRITICAL: Found total assigned as expense amount:', v, 'for activity:', r.expense_activity, '- Removing it')
+            r.expense_amount_sdg = null
+            r.expense_amount = null
+          }
+        })
+      }
+    } catch (e) {
+      console.error('[F4 Parse] Early total check error:', e)
+    }
+
     // Normalize multi-line activities: merge very short follow-up lines into previous label
     try {
       const merged: any[] = []
@@ -285,52 +304,74 @@ export async function POST(request: Request) {
     // Validate sum vs total_expenses_text if present; if far off, try dropping any values that look like totals
     try {
       const A = num(totalExpensesStr)
-      if (A != null) {
+      if (A != null && A > 0) {
+        // ALWAYS check for totals assigned as expenses, even if sum matches
+        // This catches cases where the total was assigned but sum still works out
+        expensesDraft.forEach((r: any, idx: number) => {
+          const v = Number(r.expense_amount_sdg ?? r.expense_amount) || 0
+          // If an expense amount equals or is very close to the total, it's definitely a total misassigned
+          if (v > 0 && Math.abs(v - A) < A * 0.01) {
+            console.log('[F4 Parse] Validation: Found total assigned as expense amount:', v, 'for activity:', r.expense_activity, '- Removing it')
+            r.expense_amount_sdg = null
+            r.expense_amount = null
+          }
+        })
+        
         let sum = expensesDraft.reduce((s: number, r: any) => s + (Number(r.expense_amount_sdg ?? r.expense_amount) || 0), 0)
         const diff = Math.abs(sum - A)
         console.log('[F4 Parse] Validation - Total from text (A):', A, 'Sum of expenses:', sum, 'Difference:', diff, 'Percentage:', A > 0 ? ((diff / A) * 100).toFixed(2) + '%' : 'N/A')
         
-        if (A > 0 && diff / A > 0.15) {
-          // Check if any expense amount equals the total (likely a total that was incorrectly assigned)
-          const suspiciousIndices: number[] = []
-          expensesDraft.forEach((r: any, idx: number) => {
-            const v = Number(r.expense_amount_sdg ?? r.expense_amount) || 0
-            // If an expense amount equals or is very close to the total, it's likely a total
-            if (v > 0 && Math.abs(v - A) < A * 0.01) {
-              suspiciousIndices.push(idx)
-              console.log('[F4 Parse] Suspicious amount found - equals total:', v, 'for activity:', r.expense_activity)
-            }
-          })
+        // Also check for suspiciously large amounts that might be totals
+        // Only flag if amount is BOTH: much larger than other expenses AND close to the total
+        // This prevents false positives where a legitimate large expense is flagged
+        if (expensesDraft.length > 1) {
+          const amounts = expensesDraft
+            .map((r: any) => Number(r.expense_amount_sdg ?? r.expense_amount) || 0)
+            .filter(v => v > 0)
+            .sort((a, b) => b - a) // Sort descending
           
-          // Remove suspicious totals
-          if (suspiciousIndices.length > 0) {
-            suspiciousIndices.forEach(idx => {
-              expensesDraft[idx].expense_amount_sdg = null
-              expensesDraft[idx].expense_amount = null
-              console.log('[F4 Parse] Removed suspicious total amount from:', expensesDraft[idx].expense_activity)
-            })
-            // Recompute sum
-            sum = expensesDraft.reduce((s: number, r: any) => s + (Number(r.expense_amount_sdg ?? r.expense_amount) || 0), 0)
-            console.log('[F4 Parse] After removing totals - New sum:', sum)
-          }
-          
-          // Also try dropping small values that slipped through
-          if (Math.abs(sum - A) / A > 0.15) {
-            sum = expensesDraft.reduce((s: number, r: any) => {
-              const v = Number(r.expense_amount_sdg ?? r.expense_amount) || 0
-              return s + (v >= 1000 ? v : 0)
-            }, 0)
-            // If improved, zero-out small values
-            if (Math.abs(sum - A) < diff) {
-              expensesDraft = expensesDraft.map((r: any) => {
+          if (amounts.length > 1) {
+            const largest = amounts[0]
+            const secondLargest = amounts[1]
+            // Only flag if:
+            // 1. Largest is more than 5x the second largest (more conservative than 3x)
+            // 2. AND it's within 10% of the total (suggesting it might be the total misassigned)
+            // This prevents legitimate large expenses from being removed
+            const isMuchLarger = largest > secondLargest * 5
+            const isCloseToTotal = A != null && Math.abs(largest - A) < A * 0.1
+            
+            if (isMuchLarger && isCloseToTotal && largest > 1000000) {
+              expensesDraft.forEach((r: any) => {
                 const v = Number(r.expense_amount_sdg ?? r.expense_amount) || 0
-                if (v > 0 && v < 1000) {
+                if (v === largest) {
+                  console.log('[F4 Parse] Validation: Found suspiciously large amount (likely total):', v, 'for activity:', r.expense_activity, '- Removing it')
                   r.expense_amount_sdg = null
                   r.expense_amount = null
                 }
-                return r
               })
+              // Recompute sum after removal
+              sum = expensesDraft.reduce((s: number, r: any) => s + (Number(r.expense_amount_sdg ?? r.expense_amount) || 0), 0)
             }
+          }
+        }
+        
+        // If still far off after removing totals, try dropping small values
+        if (A > 0 && Math.abs(sum - A) / A > 0.15) {
+          sum = expensesDraft.reduce((s: number, r: any) => {
+            const v = Number(r.expense_amount_sdg ?? r.expense_amount) || 0
+            return s + (v >= 1000 ? v : 0)
+          }, 0)
+          // If improved, zero-out small values
+          const newDiff = Math.abs(sum - A)
+          if (newDiff < diff) {
+            expensesDraft = expensesDraft.map((r: any) => {
+              const v = Number(r.expense_amount_sdg ?? r.expense_amount) || 0
+              if (v > 0 && v < 1000) {
+                r.expense_amount_sdg = null
+                r.expense_amount = null
+              }
+              return r
+            })
           }
         }
       }

@@ -9,8 +9,8 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { supabase } from '@/lib/supabaseClient'
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '@/components/ui/table'
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { CollapsibleRow } from '@/components/ui/collapsible'
 
 interface UploadF4ModalProps {
   open: boolean
@@ -37,7 +37,6 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
   const [tempKey, setTempKey] = useState<string>('')
   const [fxRate, setFxRate] = useState<number | null>(null)
   const [fileUrl, setFileUrl] = useState<string>('')
-  const [activeTab, setActiveTab] = useState('form')
   const [rawOcr, setRawOcr] = useState<string>('')
   const [aiOutput, setAiOutput] = useState<any | null>(null)
   const [minimized, setMinimized] = useState(false)
@@ -80,7 +79,6 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
         setTempKey('')
         setFileUrl('')
         setRawOcr('')
-        setActiveTab('form')
         setAiOutput(null)
         return
       }
@@ -100,7 +98,6 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
           if (p.reportDate) setReportDate(p.reportDate)
           if (p.selectedState) setSelectedState(p.selectedState)
           if (p.selectedRoomId) setSelectedRoomId(p.selectedRoomId)
-          if (p.activeTab) setActiveTab(p.activeTab)
           if (p.tempKey) {
             setTempKey(p.tempKey)
             ;(async () => {
@@ -385,11 +382,10 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
     setSummaryDraft(null)
     setExpensesDraft([])
     setStep('select')
-    setTempKey('')
-    setFileUrl('')
-    setRawOcr('')
-    setActiveTab('form')
-    setAiOutput(null)
+        setTempKey('')
+        setFileUrl('')
+        setRawOcr('')
+        setAiOutput(null)
     setFxRate(null)
   }
 
@@ -414,7 +410,6 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
           setTempKey('')
           setFileUrl('')
           setRawOcr('')
-          setActiveTab('form')
           setAiOutput(null)
         }
       }
@@ -424,7 +419,7 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
         onInteractOutside={(e:any)=>{ 
           e.preventDefault(); 
           try { 
-            const snapshot = JSON.stringify({ type: 'f4', step, summaryDraft, expensesDraft, projectId, reportDate, selectedState, selectedRoomId, activeTab, tempKey, fileUrl })
+            const snapshot = JSON.stringify({ type: 'f4', step, summaryDraft, expensesDraft, projectId, reportDate, selectedState, selectedRoomId, tempKey, fileUrl })
             window.localStorage.setItem('err_minimized_modal','f4'); 
             window.localStorage.setItem('err_minimized_payload', snapshot);
             window.dispatchEvent(new CustomEvent('err_minimized_modal_change', { detail: 'f4' } as any)) 
@@ -488,14 +483,9 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
             </div>
           </div>
         ) : (
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <TabsList className="grid w-full grid-cols-3">
-              <TabsTrigger value="form">{t('f4.preview.tabs.edit_form')}</TabsTrigger>
-              <TabsTrigger value="file">{t('f4.preview.tabs.view_file')}</TabsTrigger>
-              <TabsTrigger value="ocr">OCR Text</TabsTrigger>
-            </TabsList>
-            
-            <TabsContent value="form" className="space-y-6 select-text mt-6">
+          <div className="space-y-6 select-text">
+            {/* Form Content */}
+            <div className="space-y-6">
             {/* Summary Header */}
             <div className="space-y-3">
               <div className="grid grid-cols-2 gap-4">
@@ -709,9 +699,10 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
               <Button variant="outline" onClick={()=>setStep('select')}>{t('f4.preview.buttons.back')}</Button>
               <Button onClick={handleSave} disabled={isLoading || isRestoring}>{isLoading ? t('f4.preview.buttons.saving') : t('f4.preview.buttons.save')}</Button>
             </div>
-            </TabsContent>
-            
-            <TabsContent value="file" className="mt-6">
+            </div>
+
+            {/* View File - Collapsible Section */}
+            <CollapsibleRow title={t('f4.preview.tabs.view_file')} defaultOpen={false}>
               <Card>
                 <CardHeader>
                   <CardTitle>Uploaded File</CardTitle>
@@ -740,36 +731,39 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
                   )}
                 </CardContent>
               </Card>
-            </TabsContent>
+            </CollapsibleRow>
 
-            <TabsContent value="ocr" className="mt-6 space-y-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle>AI Output (Parsed JSON)</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="bg-muted/30 p-4 rounded font-mono text-sm whitespace-pre whitespace-pre-wrap max-h-[400px] overflow-y-auto">
-                    {aiOutput ? (
-                      <pre>{JSON.stringify(aiOutput, null, 2)}</pre>
-                    ) : (
-                      'No AI output available'
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
+            {/* OCR Text - Collapsible Section */}
+            <CollapsibleRow title="OCR Text" defaultOpen={false}>
+              <div className="space-y-4">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>AI Output (Parsed JSON)</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="bg-muted/30 p-4 rounded font-mono text-sm whitespace-pre whitespace-pre-wrap max-h-[400px] overflow-y-auto">
+                      {aiOutput ? (
+                        <pre>{JSON.stringify(aiOutput, null, 2)}</pre>
+                      ) : (
+                        'No AI output available'
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
 
-              <Card>
-                <CardHeader>
-                  <CardTitle>Full OCR Text</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="bg-muted/30 p-4 rounded font-mono text-sm whitespace-pre-wrap max-h-[400px] overflow-y-auto" dir="rtl">
-                    {rawOcr || 'No OCR text available'}
-                  </div>
-                </CardContent>
-              </Card>
-            </TabsContent>
-          </Tabs>
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Full OCR Text</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="bg-muted/30 p-4 rounded font-mono text-sm whitespace-pre-wrap max-h-[400px] overflow-y-auto" dir="rtl">
+                      {rawOcr || 'No OCR text available'}
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            </CollapsibleRow>
+          </div>
         )}
       </DialogContent>
     </Dialog>
