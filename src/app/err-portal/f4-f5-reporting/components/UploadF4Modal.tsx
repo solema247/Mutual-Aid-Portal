@@ -21,6 +21,40 @@ interface UploadF4ModalProps {
 
 export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProjectId }: UploadF4ModalProps) {
   const { t } = useTranslation(['f4f5'])
+  
+  // Style object to ensure text is selectable in inputs with visible selection
+  const selectableInputStyle: React.CSSProperties = {
+    userSelect: 'text',
+    WebkitUserSelect: 'text',
+    MozUserSelect: 'text',
+    msUserSelect: 'text',
+    cursor: 'text',
+    // Add explicit selection styling for better visibility
+    // Using CSS custom properties that will be applied via className
+  }
+
+  // Logging helper for selection debugging
+  const logSelectionEvent = (eventName: string, target: HTMLInputElement, event?: any) => {
+    const computedStyle = window.getComputedStyle(target)
+    const userSelect = computedStyle.userSelect || computedStyle.webkitUserSelect || computedStyle.mozUserSelect || computedStyle.msUserSelect
+    const selection = window.getSelection()
+    const selectionStart = target.selectionStart ?? -1
+    const selectionEnd = target.selectionEnd ?? -1
+    const hasInputSelection = selectionStart !== -1 && selectionStart !== selectionEnd
+    const selectedText = hasInputSelection ? target.value.substring(selectionStart, selectionEnd) : ''
+    
+    console.log(`[Selection Debug] ${eventName}`)
+    console.log(`  - Value length: ${target.value.length}`)
+    console.log(`  - userSelect CSS: ${userSelect}`)
+    console.log(`  - Inline style: ${target.style.userSelect || target.style.webkitUserSelect || 'none'}`)
+    console.log(`  - selectionStart: ${selectionStart}`)
+    console.log(`  - selectionEnd: ${selectionEnd}`)
+    console.log(`  - hasInputSelection: ${hasInputSelection}`)
+    console.log(`  - selectedText: "${selectedText}"`)
+    console.log(`  - windowSelection: "${selection?.toString() || ''}"`)
+    console.log(`  - isFocused: ${document.activeElement === target}`)
+    console.log(`  - eventType: ${event?.type || 'N/A'}`)
+  }
   const [states, setStates] = useState<string[]>([])
   const [selectedState, setSelectedState] = useState('')
   const [rooms, setRooms] = useState<Array<{ id: string; label: string }>>([])
@@ -493,10 +527,10 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
                   <Label>{t('f4.preview.labels.err_room')}</Label>
                   <div className="h-10 flex items-center px-3 rounded border bg-muted/50">{projectMeta?.roomLabel || '-'}</div>
                 </div>
-                <div>
-                  <Label>{t('f4.preview.labels.report_date')}</Label>
-                  <Input type="date" value={summaryDraft?.report_date ?? reportDate} onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), report_date: e.target.value }))} />
-                </div>
+              <div>
+                <Label>{t('f4.preview.labels.report_date')}</Label>
+                <Input className="select-text" type="date" value={summaryDraft?.report_date ?? reportDate} onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), report_date: e.target.value }))} />
+              </div>
               </div>
               <div>
                 <Label>{t('f4.preview.labels.project_activities')}</Label>
@@ -504,13 +538,90 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
               </div>
               <div>
                 <Label>{t('f4.preview.labels.beneficiaries')}</Label>
-                <Input value={summaryDraft?.beneficiaries ?? projectMeta?.beneficiaries ?? ''} onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), beneficiaries: e.target.value }))} />
+                <Input 
+                  className="select-text selection:bg-blue-200 selection:text-blue-900 dark:selection:bg-blue-800 dark:selection:text-blue-100" 
+                  style={selectableInputStyle}
+                  value={summaryDraft?.beneficiaries ?? projectMeta?.beneficiaries ?? ''} 
+                  onMouseDown={(e) => {
+                    const input = e.target as HTMLInputElement
+                    logSelectionEvent('Beneficiaries onMouseDown', input, e)
+                    // Store the mouse down position for drag selection
+                    const startPos = input.selectionStart ?? 0
+                    ;(input as any).__dragStartPos = startPos
+                    ;(input as any).__isDragging = true
+                  }}
+                  onMouseMove={(e) => {
+                    const input = e.target as HTMLInputElement
+                    if ((input as any).__isDragging && e.buttons === 1) {
+                      // User is dragging to select - let browser handle it naturally
+                      // Just log to see what's happening
+                      if (input === document.activeElement) {
+                        // Selection should be happening
+                      }
+                    }
+                  }}
+                  onMouseUp={(e) => {
+                    const input = e.target as HTMLInputElement
+                    logSelectionEvent('Beneficiaries onMouseUp', input, e)
+                    ;(input as any).__isDragging = false
+                    delete (input as any).__dragStartPos
+                    // After mouse up, check if selection was created and preserve it
+                    requestAnimationFrame(() => {
+                      if (input.selectionStart !== null && input.selectionEnd !== null && input.selectionStart !== input.selectionEnd) {
+                        const start = input.selectionStart
+                        const end = input.selectionEnd
+                        logSelectionEvent('Beneficiaries onMouseUp - Selection detected', input)
+                        // Double-check after a brief delay to ensure selection persists
+                        setTimeout(() => {
+                          if (input.selectionStart !== start || input.selectionEnd !== end) {
+                            input.setSelectionRange(start, end)
+                            logSelectionEvent('Beneficiaries onMouseUp - Selection restored', input)
+                          }
+                        }, 10)
+                      } else {
+                        logSelectionEvent('Beneficiaries onMouseUp - No selection', input)
+                      }
+                    })
+                  }}
+                  onSelect={(e) => {
+                    const input = e.target as HTMLInputElement
+                    logSelectionEvent('Beneficiaries onSelect', input, e)
+                  }}
+                  onClick={(e) => {
+                    logSelectionEvent('Beneficiaries onClick', e.target as HTMLInputElement, e)
+                  }}
+                  onFocus={(e) => {
+                    const input = e.target as HTMLInputElement
+                    logSelectionEvent('Beneficiaries onFocus', input, e)
+                  }}
+                  onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), beneficiaries: e.target.value }))} 
+                />
               </div>
               {/* FX Rate (moved here) */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label>{t('f4.preview.labels.fx_rate')}</Label>
-                  <Input type="number" value={fxRate ?? ''} onChange={(e)=>{
+                  <Input 
+                    className="select-text selection:bg-blue-200 selection:text-blue-900 dark:selection:bg-blue-800 dark:selection:text-blue-100" 
+                    style={selectableInputStyle}
+                    type="number" 
+                    value={fxRate ?? ''} 
+                    onMouseDown={(e) => {
+                      logSelectionEvent('FX Rate onMouseDown', e.target as HTMLInputElement, e)
+                    }}
+                    onMouseUp={(e) => {
+                      logSelectionEvent('FX Rate onMouseUp', e.target as HTMLInputElement, e)
+                    }}
+                    onSelect={(e) => {
+                      logSelectionEvent('FX Rate onSelect', e.target as HTMLInputElement, e)
+                    }}
+                    onClick={(e) => {
+                      logSelectionEvent('FX Rate onClick', e.target as HTMLInputElement, e)
+                    }}
+                    onFocus={(e) => {
+                      logSelectionEvent('FX Rate onFocus', e.target as HTMLInputElement, e)
+                    }}
+                    onChange={(e)=>{
                     const v = parseFloat(e.target.value)
                     setFxRate(isNaN(v) ? null : v)
                     // When exchange rate is set, calculate USD from SDG for all expenses
@@ -572,46 +683,138 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
                     <TableBody>
                       {expensesDraft.map((ex, idx) => (
                         <TableRow key={idx} className="text-sm">
-                          <TableCell className="py-1 px-2">
-                            <Input className="h-8" placeholder={t('f4.preview.expenses.cols.activity') as string} value={ex.expense_activity || ''} onChange={(e)=>{
-                              const arr=[...expensesDraft]; arr[idx]={...arr[idx], expense_activity: e.target.value}; setExpensesDraft(arr)
-                            }} />
+                          <TableCell className="py-1 px-2" style={{ userSelect: 'text' }}>
+                            <Input 
+                              className="h-8 select-text selection:bg-blue-200 selection:text-blue-900 dark:selection:bg-blue-800 dark:selection:text-blue-100" 
+                              style={selectableInputStyle}
+                              placeholder={t('f4.preview.expenses.cols.activity') as string} 
+                              value={ex.expense_activity || ''} 
+                              onMouseDown={(e) => {
+                                logSelectionEvent(`Expense ${idx} Activity onMouseDown`, e.target as HTMLInputElement, e)
+                              }}
+                              onMouseUp={(e) => {
+                                logSelectionEvent(`Expense ${idx} Activity onMouseUp`, e.target as HTMLInputElement, e)
+                              }}
+                              onSelect={(e) => {
+                                logSelectionEvent(`Expense ${idx} Activity onSelect`, e.target as HTMLInputElement, e)
+                              }}
+                              onClick={(e) => {
+                                logSelectionEvent(`Expense ${idx} Activity onClick`, e.target as HTMLInputElement, e)
+                              }}
+                              onMouseDown={(e) => {
+                                logSelectionEvent(`Expense ${idx} Activity onMouseDown`, e.target as HTMLInputElement, e)
+                              }}
+                              onFocus={(e) => {
+                                logSelectionEvent(`Expense ${idx} Activity onFocus`, e.target as HTMLInputElement, e)
+                                // REMOVED: Don't interfere with browser's default selection behavior
+                                // User can click once to select all, click again to place cursor, or drag to select
+                              }}
+                              onMouseUp={(e) => {
+                                logSelectionEvent(`Expense ${idx} Activity onMouseUp`, e.target as HTMLInputElement, e)
+                              }}
+                              onChange={(e)=>{
+                                const arr=[...expensesDraft]; arr[idx]={...arr[idx], expense_activity: e.target.value}; setExpensesDraft(arr)
+                              }} 
+                            />
                           </TableCell>
-                          <TableCell className="py-1 px-2">
-                            <Input className="h-8" placeholder={t('f4.preview.expenses.cols.description') as string} value={ex.expense_description || ''} onChange={(e)=>{
-                              const arr=[...expensesDraft]; arr[idx]={...arr[idx], expense_description: e.target.value}; setExpensesDraft(arr)
-                            }} />
+                          <TableCell className="py-1 px-2" style={{ userSelect: 'text' }}>
+                            <Input 
+                              className="h-8 select-text selection:bg-blue-200 selection:text-blue-900 dark:selection:bg-blue-800 dark:selection:text-blue-100" 
+                              style={selectableInputStyle}
+                              placeholder={t('f4.preview.expenses.cols.description') as string} 
+                              value={ex.expense_description || ''} 
+                              onMouseDown={(e) => {
+                                logSelectionEvent(`Expense ${idx} Description onMouseDown`, e.target as HTMLInputElement, e)
+                              }}
+                              onSelect={(e) => {
+                                logSelectionEvent(`Expense ${idx} Description onSelect`, e.target as HTMLInputElement, e)
+                              }}
+                              onFocus={(e) => {
+                                logSelectionEvent(`Expense ${idx} Description onFocus`, e.target as HTMLInputElement, e)
+                              }}
+                              onChange={(e)=>{
+                                const arr=[...expensesDraft]; arr[idx]={...arr[idx], expense_description: e.target.value}; setExpensesDraft(arr)
+                              }} 
+                            />
                           </TableCell>
-                          <TableCell className="py-1 px-2 text-right">
-                            <Input className="h-8" type="number" placeholder="SDG" value={ex.expense_amount_sdg ?? ''} onChange={(e)=>{
-                              const enteredValue = parseFloat(e.target.value) || 0
-                              const arr = [...expensesDraft]
-                              arr[idx] = {
-                                ...arr[idx],
-                                expense_amount_sdg: enteredValue || null,
-                                // Auto-calculate USD if exchange rate is set
-                                expense_amount: (fxRate && fxRate > 0 && enteredValue > 0) ? +(enteredValue / fxRate).toFixed(2) : arr[idx].expense_amount
-                              }
-                              setExpensesDraft(arr)
-                            }} />
+                          <TableCell className="py-1 px-2 text-right" style={{ userSelect: 'text' }}>
+                            <Input 
+                              className="h-8 select-text selection:bg-blue-200 selection:text-blue-900 dark:selection:bg-blue-800 dark:selection:text-blue-100" 
+                              style={selectableInputStyle}
+                              type="number" 
+                              placeholder="SDG" 
+                              value={ex.expense_amount_sdg ?? ''} 
+                              onMouseDown={(e) => {
+                                logSelectionEvent(`Expense ${idx} SDG Amount onMouseDown`, e.target as HTMLInputElement, e)
+                              }}
+                              onSelect={(e) => {
+                                logSelectionEvent(`Expense ${idx} SDG Amount onSelect`, e.target as HTMLInputElement, e)
+                              }}
+                              onFocus={(e) => {
+                                logSelectionEvent(`Expense ${idx} SDG Amount onFocus`, e.target as HTMLInputElement, e)
+                              }}
+                              onChange={(e)=>{
+                                const enteredValue = parseFloat(e.target.value) || 0
+                                const arr = [...expensesDraft]
+                                arr[idx] = {
+                                  ...arr[idx],
+                                  expense_amount_sdg: enteredValue || null,
+                                  // Auto-calculate USD if exchange rate is set
+                                  expense_amount: (fxRate && fxRate > 0 && enteredValue > 0) ? +(enteredValue / fxRate).toFixed(2) : arr[idx].expense_amount
+                                }
+                                setExpensesDraft(arr)
+                              }} 
+                            />
                           </TableCell>
-                          <TableCell className="py-1 px-2 text-right">
-                            <Input className="h-8" type="number" placeholder="USD" value={ex.expense_amount ?? ''} onChange={(e)=>{
-                              const enteredValue = parseFloat(e.target.value) || 0
-                              const arr = [...expensesDraft]
-                              arr[idx] = {
-                                ...arr[idx],
-                                expense_amount: enteredValue || null,
-                                // Auto-calculate SDG if exchange rate is set
-                                expense_amount_sdg: (fxRate && fxRate > 0 && enteredValue > 0) ? +(enteredValue * fxRate).toFixed(2) : arr[idx].expense_amount_sdg
-                              }
-                              setExpensesDraft(arr)
-                            }} />
+                          <TableCell className="py-1 px-2 text-right" style={{ userSelect: 'text' }}>
+                            <Input 
+                              className="h-8 select-text selection:bg-blue-200 selection:text-blue-900 dark:selection:bg-blue-800 dark:selection:text-blue-100" 
+                              style={selectableInputStyle}
+                              type="number" 
+                              placeholder="USD" 
+                              value={ex.expense_amount ?? ''} 
+                              onMouseDown={(e) => {
+                                logSelectionEvent(`Expense ${idx} USD Amount onMouseDown`, e.target as HTMLInputElement, e)
+                              }}
+                              onSelect={(e) => {
+                                logSelectionEvent(`Expense ${idx} USD Amount onSelect`, e.target as HTMLInputElement, e)
+                              }}
+                              onFocus={(e) => {
+                                logSelectionEvent(`Expense ${idx} USD Amount onFocus`, e.target as HTMLInputElement, e)
+                              }}
+                              onChange={(e)=>{
+                                const enteredValue = parseFloat(e.target.value) || 0
+                                const arr = [...expensesDraft]
+                                arr[idx] = {
+                                  ...arr[idx],
+                                  expense_amount: enteredValue || null,
+                                  // Auto-calculate SDG if exchange rate is set
+                                  expense_amount_sdg: (fxRate && fxRate > 0 && enteredValue > 0) ? +(enteredValue * fxRate).toFixed(2) : arr[idx].expense_amount_sdg
+                                }
+                                setExpensesDraft(arr)
+                              }} 
+                            />
                           </TableCell>
-                          <TableCell className="py-1 px-2">
-                            <Input className="h-8" type="date" placeholder={t('f4.preview.expenses.cols.payment_date') as string} value={ex.payment_date || ''} onChange={(e)=>{
-                              const arr=[...expensesDraft]; arr[idx]={...arr[idx], payment_date: e.target.value}; setExpensesDraft(arr)
-                            }} />
+                          <TableCell className="py-1 px-2" style={{ userSelect: 'text' }}>
+                            <Input 
+                              className="h-8 select-text selection:bg-blue-200 selection:text-blue-900 dark:selection:bg-blue-800 dark:selection:text-blue-100" 
+                              style={selectableInputStyle}
+                              type="date" 
+                              placeholder={t('f4.preview.expenses.cols.payment_date') as string} 
+                              value={ex.payment_date || ''} 
+                              onMouseDown={(e) => {
+                                logSelectionEvent(`Expense ${idx} Payment Date onMouseDown`, e.target as HTMLInputElement, e)
+                              }}
+                              onSelect={(e) => {
+                                logSelectionEvent(`Expense ${idx} Payment Date onSelect`, e.target as HTMLInputElement, e)
+                              }}
+                              onFocus={(e) => {
+                                logSelectionEvent(`Expense ${idx} Payment Date onFocus`, e.target as HTMLInputElement, e)
+                              }}
+                              onChange={(e)=>{
+                                const arr=[...expensesDraft]; arr[idx]={...arr[idx], payment_date: e.target.value}; setExpensesDraft(arr)
+                              }} 
+                            />
                           </TableCell>
                           <TableCell className="py-1 px-2">
                             <Select value={ex.payment_method || 'Bank Transfer'} onValueChange={(v)=>{
@@ -626,15 +829,45 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
                               </SelectContent>
                             </Select>
                           </TableCell>
-                          <TableCell className="py-1 px-2">
-                            <Input className="h-8" placeholder={t('f4.preview.expenses.cols.receipt_no') as string} value={ex.receipt_no || ''} onChange={(e)=>{
-                              const arr=[...expensesDraft]; arr[idx]={...arr[idx], receipt_no: e.target.value}; setExpensesDraft(arr)
-                            }} />
+                          <TableCell className="py-1 px-2" style={{ userSelect: 'text' }}>
+                            <Input 
+                              className="h-8 select-text selection:bg-blue-200 selection:text-blue-900 dark:selection:bg-blue-800 dark:selection:text-blue-100" 
+                              style={selectableInputStyle}
+                              placeholder={t('f4.preview.expenses.cols.receipt_no') as string} 
+                              value={ex.receipt_no || ''} 
+                              onMouseDown={(e) => {
+                                logSelectionEvent(`Expense ${idx} Receipt No onMouseDown`, e.target as HTMLInputElement, e)
+                              }}
+                              onSelect={(e) => {
+                                logSelectionEvent(`Expense ${idx} Receipt No onSelect`, e.target as HTMLInputElement, e)
+                              }}
+                              onFocus={(e) => {
+                                logSelectionEvent(`Expense ${idx} Receipt No onFocus`, e.target as HTMLInputElement, e)
+                              }}
+                              onChange={(e)=>{
+                                const arr=[...expensesDraft]; arr[idx]={...arr[idx], receipt_no: e.target.value}; setExpensesDraft(arr)
+                              }} 
+                            />
                           </TableCell>
-                          <TableCell className="py-1 px-2">
-                            <Input className="h-8" placeholder={t('f4.preview.expenses.cols.seller') as string} value={ex.seller || ''} onChange={(e)=>{
-                              const arr=[...expensesDraft]; arr[idx]={...arr[idx], seller: e.target.value}; setExpensesDraft(arr)
-                            }} />
+                          <TableCell className="py-1 px-2" style={{ userSelect: 'text' }}>
+                            <Input 
+                              className="h-8 select-text selection:bg-blue-200 selection:text-blue-900 dark:selection:bg-blue-800 dark:selection:text-blue-100" 
+                              style={selectableInputStyle}
+                              placeholder={t('f4.preview.expenses.cols.seller') as string} 
+                              value={ex.seller || ''} 
+                              onMouseDown={(e) => {
+                                logSelectionEvent(`Expense ${idx} Seller onMouseDown`, e.target as HTMLInputElement, e)
+                              }}
+                              onSelect={(e) => {
+                                logSelectionEvent(`Expense ${idx} Seller onSelect`, e.target as HTMLInputElement, e)
+                              }}
+                              onFocus={(e) => {
+                                logSelectionEvent(`Expense ${idx} Seller onFocus`, e.target as HTMLInputElement, e)
+                              }}
+                              onChange={(e)=>{
+                                const arr=[...expensesDraft]; arr[idx]={...arr[idx], seller: e.target.value}; setExpensesDraft(arr)
+                              }} 
+                            />
                           </TableCell>
                           <TableCell className="py-1 px-2 text-right">
                             <Button
@@ -671,27 +904,98 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
               </div>
               <div>
                 <Label>{t('f4.preview.financials.remainder')} (USD)</Label>
-                <Input type="number" value={(projectMeta?.total_grant_from_project || 0) - expensesDraft.reduce((s, ex) => s + (Number(ex.expense_amount) || 0), 0)} readOnly />
+                <Input className="select-text" type="number" value={(projectMeta?.total_grant_from_project || 0) - expensesDraft.reduce((s, ex) => s + (Number(ex.expense_amount) || 0), 0)} readOnly />
               </div>
               <div>
                 <Label>{t('f4.preview.financials.total_other_sources')}</Label>
-                <Input type="number" value={summaryDraft?.total_other_sources ?? ''} onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), total_other_sources: parseFloat(e.target.value)||0 }))} />
+                <Input 
+                  className="select-text selection:bg-blue-200 selection:text-blue-900 dark:selection:bg-blue-800 dark:selection:text-blue-100" 
+                  style={selectableInputStyle}
+                  type="number" 
+                  value={summaryDraft?.total_other_sources ?? ''} 
+                  onFocus={(e) => {
+                    logSelectionEvent('Total Other Sources onFocus', e.target as HTMLInputElement, e)
+                  }}
+                  onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), total_other_sources: parseFloat(e.target.value)||0 }))} 
+                />
               </div>
               <div className="col-span-2">
                 <Label>{t('f4.preview.financials.excess_expenses')}</Label>
-                <Input value={summaryDraft?.excess_expenses ?? ''} onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), excess_expenses: e.target.value }))} />
+                <Input 
+                  className="select-text selection:bg-blue-200 selection:text-blue-900 dark:selection:bg-blue-800 dark:selection:text-blue-100" 
+                  style={selectableInputStyle}
+                  value={summaryDraft?.excess_expenses ?? ''} 
+                  onMouseDown={(e) => {
+                    logSelectionEvent('Excess Expenses onMouseDown', e.target as HTMLInputElement, e)
+                  }}
+                  onMouseUp={(e) => {
+                    logSelectionEvent('Excess Expenses onMouseUp', e.target as HTMLInputElement, e)
+                  }}
+                  onSelect={(e) => {
+                    logSelectionEvent('Excess Expenses onSelect', e.target as HTMLInputElement, e)
+                  }}
+                  onClick={(e) => {
+                    logSelectionEvent('Excess Expenses onClick', e.target as HTMLInputElement, e)
+                  }}
+                  onFocus={(e) => {
+                    logSelectionEvent('Excess Expenses onFocus', e.target as HTMLInputElement, e)
+                  }}
+                  onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), excess_expenses: e.target.value }))} 
+                />
               </div>
               <div className="col-span-2">
                 <Label>{t('f4.preview.financials.surplus_use')}</Label>
-                <Input value={summaryDraft?.surplus_use ?? ''} onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), surplus_use: e.target.value }))} />
+                <Input 
+                  className="select-text selection:bg-blue-200 selection:text-blue-900 dark:selection:bg-blue-800 dark:selection:text-blue-100" 
+                  style={selectableInputStyle}
+                  value={summaryDraft?.surplus_use ?? ''} 
+                  onMouseDown={(e) => {
+                    logSelectionEvent('Surplus Use onMouseDown', e.target as HTMLInputElement, e)
+                  }}
+                  onSelect={(e) => {
+                    logSelectionEvent('Surplus Use onSelect', e.target as HTMLInputElement, e)
+                  }}
+                  onFocus={(e) => {
+                    logSelectionEvent('Surplus Use onFocus', e.target as HTMLInputElement, e)
+                  }}
+                  onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), surplus_use: e.target.value }))} 
+                />
               </div>
               <div className="col-span-2">
                 <Label>{t('f4.preview.financials.lessons_learned')}</Label>
-                <Input value={summaryDraft?.lessons ?? ''} onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), lessons: e.target.value }))} />
+                <Input 
+                  className="select-text selection:bg-blue-200 selection:text-blue-900 dark:selection:bg-blue-800 dark:selection:text-blue-100" 
+                  style={selectableInputStyle}
+                  value={summaryDraft?.lessons ?? ''} 
+                  onMouseDown={(e) => {
+                    logSelectionEvent('Lessons Learned onMouseDown', e.target as HTMLInputElement, e)
+                  }}
+                  onSelect={(e) => {
+                    logSelectionEvent('Lessons Learned onSelect', e.target as HTMLInputElement, e)
+                  }}
+                  onFocus={(e) => {
+                    logSelectionEvent('Lessons Learned onFocus', e.target as HTMLInputElement, e)
+                  }}
+                  onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), lessons: e.target.value }))} 
+                />
               </div>
               <div className="col-span-2">
                 <Label>{t('f4.preview.financials.training_needs')}</Label>
-                <Input value={summaryDraft?.training ?? ''} onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), training: e.target.value }))} />
+                <Input 
+                  className="select-text selection:bg-blue-200 selection:text-blue-900 dark:selection:bg-blue-800 dark:selection:text-blue-100" 
+                  style={selectableInputStyle}
+                  value={summaryDraft?.training ?? ''} 
+                  onMouseDown={(e) => {
+                    logSelectionEvent('Training Needs onMouseDown', e.target as HTMLInputElement, e)
+                  }}
+                  onSelect={(e) => {
+                    logSelectionEvent('Training Needs onSelect', e.target as HTMLInputElement, e)
+                  }}
+                  onFocus={(e) => {
+                    logSelectionEvent('Training Needs onFocus', e.target as HTMLInputElement, e)
+                  }}
+                  onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), training: e.target.value }))} 
+                />
               </div>
             </div>
 
