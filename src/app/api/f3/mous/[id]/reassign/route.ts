@@ -1,33 +1,40 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 
-export async function POST(request: Request) {
+export async function POST(
+  request: Request,
+  { params }: { params: { id: string } }
+) {
   try {
     const supabase = getSupabaseRouteClient()
-    const { f1_ids, grant_id, donor_name, mmyy } = await request.json()
-    
-    if (!f1_ids || !Array.isArray(f1_ids) || f1_ids.length === 0) {
-      return NextResponse.json({ error: 'F1 IDs array is required' }, { status: 400 })
-    }
+    const mouId = params.id
+    const { grant_id, donor_name, mmyy } = await request.json()
     
     if (!grant_id || !donor_name || !mmyy) {
-      return NextResponse.json({ error: 'Missing required fields: grant_id, donor_name, and mmyy are required' }, { status: 400 })
+      return NextResponse.json({ error: 'Missing required reassignment fields' }, { status: 400 })
     }
     
     if (mmyy.length !== 4) {
       return NextResponse.json({ error: 'MMYY must be 4 digits' }, { status: 400 })
     }
     
-    // Fetch F1s
+    // Fetch all projects linked to this MOU that are assigned (have grant_id starting with LCC-)
     const { data: f1s, error: fetchError } = await supabase
       .from('err_projects')
       .select('id, state, file_key, grant_id, donor_id')
-      .in('id', f1_ids)
+      .eq('mou_id', mouId)
       .eq('funding_status', 'committed')
+      .not('grant_id', 'is', null)
     
     if (fetchError) throw fetchError
     if (!f1s || f1s.length === 0) {
-      return NextResponse.json({ error: 'F1s not found or not committed' }, { status: 400 })
+      return NextResponse.json({ error: 'No assigned projects found for this MOU' }, { status: 400 })
+    }
+    
+    // Filter to only projects that are already assigned (have grant_id starting with LCC-)
+    const assignedF1s = f1s.filter((f1: any) => f1.grant_id && f1.grant_id.startsWith('LCC-'))
+    if (assignedF1s.length === 0) {
+      return NextResponse.json({ error: 'No assigned projects found for this MOU' }, { status: 400 })
     }
     
     // Get grant from grants_grid_view
@@ -42,7 +49,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Grant not found in grants_grid_view. Please ensure the grant exists.' }, { status: 404 })
     }
     
-    // Get donor short name
+    // Get donor short name from donors table
     let donorShortName = ''
     if (grant.donor_id) {
       const { data: donor, error: donorError } = await supabase
@@ -74,7 +81,7 @@ export async function POST(request: Request) {
     }
     
     // Remove old serials from old grants' activities if they exist
-    for (const f1 of f1s) {
+    for (const f1 of assignedF1s) {
       if (f1.grant_id && f1.grant_id.startsWith('LCC-')) {
         // Find which grant this serial belongs to
         const { data: oldGrants } = await supabase
@@ -107,7 +114,7 @@ export async function POST(request: Request) {
     let reassignedCount = 0
     const errors: string[] = []
     
-    for (const f1 of f1s) {
+    for (const f1 of assignedF1s) {
       try {
         // Get state short name
         const { data: stateData } = await supabase
@@ -158,12 +165,7 @@ export async function POST(request: Request) {
             workplan_number: workplanNumber,
             file_key: finalFileKey,
             temp_file_key: null,
-            status: 'active',
-            // Clear old system fields
-            grant_call_id: null,
-            grant_serial_id: null,
-            funding_cycle_id: null,
-            cycle_state_allocation_id: null
+            status: 'active'
           })
           .eq('id', f1.id)
         
@@ -201,7 +203,7 @@ export async function POST(request: Request) {
     
     if (reassignedCount === 0) {
       return NextResponse.json({ 
-        error: 'Failed to reassign any F1s', 
+        error: 'Failed to reassign any projects', 
         details: errors 
       }, { status: 500 })
     }
@@ -212,7 +214,8 @@ export async function POST(request: Request) {
       errors: errors.length > 0 ? errors : undefined
     })
   } catch (error) {
-    console.error('Error reassigning F1s:', error)
-    return NextResponse.json({ error: 'Failed to reassign F1s' }, { status: 500 })
+    console.error('Error reassigning MOU to grant:', error)
+    return NextResponse.json({ error: 'Failed to reassign MOU to grant' }, { status: 500 })
   }
 }
+

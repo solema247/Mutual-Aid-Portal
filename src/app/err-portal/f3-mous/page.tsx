@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Eye, Upload, Receipt, FileSignature, FileCheck, Link2, X, Plus } from 'lucide-react'
+import { Eye, Upload, Receipt, FileSignature, FileCheck, Link2, X, Plus, RefreshCw } from 'lucide-react'
 import dynamic from 'next/dynamic'
 import { aggregateObjectives, aggregateBeneficiaries, aggregatePlannedActivities, aggregatePlannedActivitiesDetailed, aggregateLocations, getBankingDetails, getBudgetTable } from '@/lib/mou-aggregation'
 import { supabase } from '@/lib/supabaseClient'
@@ -96,6 +96,7 @@ interface MOUDetail {
 export default function F3MOUsPage() {
   const { t, i18n } = useTranslation(['f3', 'common'])
   const [mous, setMous] = useState<MOU[]>([])
+  const [mouGrantIds, setMouGrantIds] = useState<Record<string, string>>({})
   const [selectedState, setSelectedState] = useState<string>('all')
   const [availableStates, setAvailableStates] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
@@ -112,6 +113,8 @@ export default function F3MOUsPage() {
   // Assignment state
   const [assignModalOpen, setAssignModalOpen] = useState(false)
   const [assigningMouId, setAssigningMouId] = useState<string | null>(null)
+  const [reassignModalOpen, setReassignModalOpen] = useState(false)
+  const [reassigningMouId, setReassigningMouId] = useState<string | null>(null)
   const [paymentModalOpen, setPaymentModalOpen] = useState(false)
   const [selectedMouForPayment, setSelectedMouForPayment] = useState<MOU | null>(null)
   const [paymentExchangeRate, setPaymentExchangeRate] = useState<string>('')
@@ -119,7 +122,8 @@ export default function F3MOUsPage() {
   const [paymentFile, setPaymentFile] = useState<File | null>(null)
   const [uploadingPayment, setUploadingPayment] = useState(false)
   const [isAssigning, setIsAssigning] = useState(false)
-  const [mouAssignmentStatus, setMouAssignmentStatus] = useState<Record<string, { hasUnassigned: boolean; projectCount: number }>>({})
+  const [isReassigning, setIsReassigning] = useState(false)
+  const [mouAssignmentStatus, setMouAssignmentStatus] = useState<Record<string, { hasUnassigned: boolean; hasAssigned: boolean; projectCount: number }>>({})
   
   // Assignment form state
   const [tempGrantId, setTempGrantId] = useState<string>('')
@@ -213,6 +217,59 @@ export default function F3MOUsPage() {
       
       // Check assignment status for each MOU
       await checkMouAssignmentStatus(data.map((m: MOU) => m.id))
+      
+      // Fetch grant_ids for all MOUs at once
+      try {
+        const mouIds = data.map((m: MOU) => m.id)
+        if (mouIds.length > 0) {
+          // Get all projects with grant_grid_id for these MOUs
+          const { data: projects } = await supabase
+            .from('err_projects')
+            .select('mou_id, grant_grid_id')
+            .in('mou_id', mouIds)
+            .not('grant_grid_id', 'is', null)
+          
+          if (projects && projects.length > 0) {
+            // Get unique grant_grid_ids
+            const uniqueGrantGridIds = Array.from(new Set(projects.map((p: any) => p.grant_grid_id).filter(Boolean)))
+            
+            // Fetch grant_ids from grants_grid_view
+            const { data: grants } = await supabase
+              .from('grants_grid_view')
+              .select('id, grant_id')
+              .in('id', uniqueGrantGridIds)
+            
+            // Create a map of grant_grid_id -> grant_id
+            const grantIdByGridId: Record<string, string> = {}
+            if (grants) {
+              grants.forEach((g: any) => {
+                if (g.id && g.grant_id) {
+                  grantIdByGridId[g.id] = g.grant_id
+                }
+              })
+            }
+            
+            // Create map of mou_id -> grant_id (use first project's grant for each MOU)
+            const grantIdMap: Record<string, string> = {}
+            const mouToGrantGridId: Record<string, string> = {}
+            projects.forEach((p: any) => {
+              if (p.mou_id && p.grant_grid_id && !mouToGrantGridId[p.mou_id]) {
+                mouToGrantGridId[p.mou_id] = p.grant_grid_id
+              }
+            })
+            
+            Object.entries(mouToGrantGridId).forEach(([mouId, gridId]) => {
+              if (grantIdByGridId[gridId]) {
+                grantIdMap[mouId] = grantIdByGridId[gridId]
+              }
+            })
+            
+            setMouGrantIds(grantIdMap)
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching grant_ids for MOUs:', error)
+      }
     } catch (e) {
       console.error('Failed to load MOUs', e)
     } finally {
@@ -222,7 +279,7 @@ export default function F3MOUsPage() {
   
   const checkMouAssignmentStatus = async (mouIds: string[]) => {
     try {
-      const statusMap: Record<string, { hasUnassigned: boolean; projectCount: number }> = {}
+      const statusMap: Record<string, { hasUnassigned: boolean; hasAssigned: boolean; projectCount: number }> = {}
       
       for (const mouId of mouIds) {
         const { data: projects, error } = await supabase
@@ -238,8 +295,9 @@ export default function F3MOUsPage() {
         const projectCount = projects?.length || 0
         // A project is assigned if it has a grant_id that looks like a serial (starts with LCC-)
         const hasUnassigned = projectCount > 0 && projects?.some((p: any) => !p.grant_id || !p.grant_id.startsWith('LCC-')) || false
+        const hasAssigned = projectCount > 0 && projects?.some((p: any) => p.grant_id && p.grant_id.startsWith('LCC-')) || false
         
-        statusMap[mouId] = { hasUnassigned, projectCount }
+        statusMap[mouId] = { hasUnassigned, hasAssigned, projectCount }
       }
       
       setMouAssignmentStatus(statusMap)
@@ -345,6 +403,152 @@ export default function F3MOUsPage() {
       alert('Failed to assign MOU')
     } finally {
       setIsAssigning(false)
+    }
+  }
+  
+  const handleReassignMou = async () => {
+    if (!reassigningMouId || !tempGrantId || !tempDonorName || !tempMMYY) {
+      alert('Please fill all reassignment fields')
+      return
+    }
+    
+    if (tempMMYY.length !== 4) {
+      alert('MMYY must be 4 digits')
+      return
+    }
+    
+    setIsReassigning(true)
+    try {
+      const response = await fetch(`/api/f3/mous/${reassigningMouId}/reassign`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          grant_id: tempGrantId,
+          donor_name: tempDonorName,
+          mmyy: tempMMYY
+        })
+      })
+      
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ error: 'Failed to reassign MOU' }))
+        alert(error.error || 'Failed to reassign MOU')
+        return
+      }
+      
+      const result = await response.json()
+      alert(`Successfully reassigned ${result.reassigned_count} work plan(s) to grant`)
+      
+      // Clear form
+      setTempGrantId('')
+      setTempDonorName('')
+      setTempMMYY('')
+      setReassignModalOpen(false)
+      setReassigningMouId(null)
+      
+      // Refresh MOUs and assignment status
+      await fetchMous()
+    } catch (error) {
+      console.error('Error reassigning MOU:', error)
+      alert('Failed to reassign MOU')
+    } finally {
+      setIsReassigning(false)
+    }
+  }
+  
+  const openReassignModal = async (mouId: string) => {
+    setReassigningMouId(mouId)
+    setReassignModalOpen(true)
+    
+    // Clear form fields (but NOT mouProjects - we'll set it below)
+    setTempGrantId('')
+    setTempDonorName('')
+    setTempMMYY('')
+    setSelectedGrantMaxSequence(0)
+    // Don't clear mouProjects here - we'll set it from the fetched data
+    
+    // Fetch projects in this MOU
+    try {
+      const { data: projects, error } = await supabase
+        .from('err_projects')
+        .select('id, err_id, state, locality, expenses, grant_grid_id, grant_id')
+        .eq('mou_id', mouId)
+        .eq('funding_status', 'committed')
+        .not('grant_id', 'is', null)
+      
+      if (error) throw error
+      
+      // Filter to only assigned projects
+      const assignedProjects = (projects || []).filter((p: any) => p.grant_id && p.grant_id.startsWith('LCC-'))
+      
+      if (assignedProjects.length === 0) {
+        setMouProjects([])
+        return
+      }
+      
+      const mappedProjects = assignedProjects.map((p: any) => ({ id: p.id, err_id: p.err_id, state: p.state, locality: p.locality }))
+      setMouProjects(mappedProjects)
+      
+      // Calculate total amount
+      const sumExpenses = (exp: any): number => {
+        if (!exp) return 0
+        try {
+          const parsed = typeof exp === 'string' ? JSON.parse(exp) : exp
+          if (Array.isArray(parsed)) {
+            return parsed.reduce((sum: number, item: any) => sum + (Number(item.total_cost) || 0), 0)
+          }
+          return 0
+        } catch {
+          return 0
+        }
+      }
+      const total = assignedProjects.reduce((sum: number, p: any) => sum + sumExpenses(p.expenses), 0)
+      setMouTotalAmount(total)
+      
+      // Fetch state shorts
+      const uniqueStates = Array.from(new Set(assignedProjects.map((p: any) => p.state).filter(Boolean)))
+      const shorts: Record<string, string> = {}
+      for (const state of uniqueStates) {
+        const { data: stateData } = await supabase
+          .from('states')
+          .select('state_short')
+          .eq('state_name', state)
+          .limit(1)
+        if (stateData?.[0]?.state_short) {
+          shorts[state] = stateData[0].state_short
+        }
+      }
+      setStateShorts(shorts)
+      
+      // Fetch donor short names for grants_grid_view grants
+      const uniqueGrantGridIds = Array.from(new Set(assignedProjects.map((p: any) => p.grant_grid_id).filter(Boolean)))
+      if (uniqueGrantGridIds.length > 0) {
+        const { data: grants, error: grantsError } = await supabase
+          .from('grants_grid_view')
+          .select('id, donor_id')
+          .in('id', uniqueGrantGridIds)
+        
+        if (!grantsError && grants) {
+          const donorIds = Array.from(new Set(grants.map((g: any) => g.donor_id).filter(Boolean)))
+          if (donorIds.length > 0) {
+            const { data: donors, error: donorsError } = await supabase
+              .from('donors')
+              .select('id, short_name')
+              .in('id', donorIds)
+            
+            if (!donorsError && donors) {
+              const shortNamesMap: Record<string, string> = {}
+              donors.forEach((donor: any) => {
+                if (donor.id && donor.short_name) {
+                  shortNamesMap[donor.id] = donor.short_name
+                }
+              })
+              setDonorShortNames(shortNamesMap)
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching MOU projects for reassign:', error)
     }
   }
   
@@ -560,16 +764,16 @@ export default function F3MOUsPage() {
   
   // Calculate grant remaining when grant changes
   useEffect(() => {
-    if (tempGrantId && tempDonorName && assignModalOpen) {
+    if (tempGrantId && tempDonorName && (assignModalOpen || reassignModalOpen)) {
       calculateGrantRemaining(tempGrantId, tempDonorName)
     } else {
       setGrantRemaining(null)
     }
-  }, [tempGrantId, tempDonorName, assignModalOpen])
+  }, [tempGrantId, tempDonorName, assignModalOpen, reassignModalOpen])
   
   // Calculate state allocation remaining when modal opens
   useEffect(() => {
-    if (assignModalOpen && mouProjects.length > 0) {
+    if ((assignModalOpen || reassignModalOpen) && mouProjects.length > 0) {
       const stateName = mouProjects[0]?.state
       if (stateName) {
         calculateStateAllocationRemaining(stateName)
@@ -577,7 +781,7 @@ export default function F3MOUsPage() {
     } else {
       setStateAllocationRemaining(null)
     }
-  }, [assignModalOpen, mouProjects])
+  }, [assignModalOpen, reassignModalOpen, mouProjects])
 
   return (
     <div className="max-w-7xl mx-auto p-6 space-y-6">
@@ -608,6 +812,7 @@ export default function F3MOUsPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>{t('f3:headers.mou_code')}</TableHead>
+                    <TableHead>Grant ID</TableHead>
                     <TableHead>{t('f3:headers.partner')}</TableHead>
                     <TableHead>{t('f3:headers.err_state')}</TableHead>
                     <TableHead className="text-right">{t('f3:headers.total')}</TableHead>
@@ -626,6 +831,7 @@ export default function F3MOUsPage() {
                     return paginatedMous.map(m => (
                       <TableRow key={m.id}>
                     <TableCell className="font-medium">{m.mou_code}</TableCell>
+                    <TableCell>{mouGrantIds[m.id] || '-'}</TableCell>
                     <TableCell>{m.partner_name}</TableCell>
                     <TableCell>{m.err_name}{m.state ? ` — ${m.state}` : ''}</TableCell>
                     <TableCell className="text-right">{Number(m.total_amount || 0).toLocaleString()}</TableCell>
@@ -645,6 +851,20 @@ export default function F3MOUsPage() {
                               <Link2 className="h-4 w-4 text-blue-600" />
                             </Button>
                             <span className="text-[10px] text-muted-foreground text-center leading-tight">Assign</span>
+                          </div>
+                        )}
+                        {mouAssignmentStatus[m.id]?.hasAssigned && (
+                          <div className="flex flex-col items-center gap-0.5 min-w-[50px]">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8"
+                              onClick={() => openReassignModal(m.id)}
+                              title="Reassign to Grant"
+                            >
+                              <RefreshCw className="h-4 w-4 text-orange-600" />
+                            </Button>
+                            <span className="text-[10px] text-muted-foreground text-center leading-tight">Reassign</span>
                           </div>
                         )}
                         <div className="flex flex-col items-center gap-0.5 min-w-[50px]">
@@ -1753,6 +1973,26 @@ export default function F3MOUsPage() {
                     setTempGrantId(value)
                     setTempDonorName(selectedGrant?.donor_name || '')
                     
+                    // Fetch donor short name if not already loaded
+                    if (selectedGrant?.donor_id && !donorShortNames[selectedGrant.donor_id]) {
+                      try {
+                        const { data: donor, error: donorError } = await supabase
+                          .from('donors')
+                          .select('id, short_name')
+                          .eq('id', selectedGrant.donor_id)
+                          .single()
+                        
+                        if (!donorError && donor) {
+                          setDonorShortNames(prev => ({
+                            ...prev,
+                            [donor.id]: donor.short_name || ''
+                          }))
+                        }
+                      } catch (error) {
+                        console.error('Error fetching donor short name:', error)
+                      }
+                    }
+                    
                     // Fetch max_workplan_sequence from grants_grid_view
                     if (value && selectedGrant?.donor_name) {
                       try {
@@ -2003,6 +2243,302 @@ export default function F3MOUsPage() {
                 className="bg-green-600 hover:bg-green-700 text-white"
               >
                 {isAssigning ? 'Assigning...' : 'Assign to Grant'}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Reassignment Modal */}
+      <Dialog open={reassignModalOpen} onOpenChange={setReassignModalOpen}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Reassign MOU to Grant</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 mt-4">
+            <div>
+              <p className="text-sm text-muted-foreground mb-4">
+                Reassigning all assigned work plans in MOU {mous.find(m => m.id === reassigningMouId)?.mou_code || ''} to a new grant
+              </p>
+              {mouAssignmentStatus[reassigningMouId || ''] && (
+                <div className="mb-4 p-3 bg-orange-50 border border-orange-200 rounded-md">
+                  <p className="text-sm font-medium text-orange-800">
+                    This MOU contains {mouAssignmentStatus[reassigningMouId || ''].projectCount} work plan(s) that will be reassigned together.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Row 1: Grant and Donor */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>Grant *</Label>
+                <Select 
+                  value={tempGrantId} 
+                  onValueChange={async (value) => {
+                    const selectedGrant = grantsFromGridView.find((g: any) => g.grant_id === value)
+                    setTempGrantId(value)
+                    setTempDonorName(selectedGrant?.donor_name || '')
+                    
+                    // Fetch donor short name if not already loaded
+                    if (selectedGrant?.donor_id) {
+                      if (!donorShortNames[selectedGrant.donor_id]) {
+                        try {
+                          const { data: donor, error: donorError } = await supabase
+                            .from('donors')
+                            .select('id, short_name')
+                            .eq('id', selectedGrant.donor_id)
+                            .single()
+                          
+                          if (!donorError && donor) {
+                            setDonorShortNames(prev => ({
+                              ...prev,
+                              [donor.id]: donor.short_name || ''
+                            }))
+                          }
+                        } catch (error) {
+                          console.error('Error fetching donor short name:', error)
+                        }
+                      }
+                    }
+                    
+                    // Fetch max_workplan_sequence from grants_grid_view
+                    if (value && selectedGrant?.donor_name) {
+                      try {
+                        const { data: grantData, error } = await supabase
+                          .from('grants_grid_view')
+                          .select('max_workplan_sequence')
+                          .eq('grant_id', value)
+                          .eq('donor_name', selectedGrant.donor_name)
+                          .single()
+                        
+                        if (!error && grantData) {
+                          setSelectedGrantMaxSequence(grantData.max_workplan_sequence || 0)
+                        } else {
+                          setSelectedGrantMaxSequence(0)
+                        }
+                      } catch (error) {
+                        console.error('Error fetching max workplan sequence:', error)
+                        setSelectedGrantMaxSequence(0)
+                      }
+                    } else {
+                      setSelectedGrantMaxSequence(0)
+                    }
+                  }}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Select Grant" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {grantsFromGridView.map((grant: any) => (
+                      <SelectItem key={`${grant.grant_id}|${grant.donor_name}`} value={grant.grant_id}>
+                        {grant.grant_id} - {grant.project_name || grant.grant_id} ({grant.donor_name})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label>Donor</Label>
+                <Input
+                  value={tempDonorName}
+                  disabled
+                  className="bg-muted w-full"
+                />
+              </div>
+            </div>
+
+            {/* Row 2: MMYY */}
+            <div className="grid grid-cols-1 gap-4">
+              <div>
+                <Label>MMYY *</Label>
+                <Input
+                  value={tempMMYY}
+                  onChange={(e) => {
+                    const newMMYY = e.target.value.replace(/[^0-9]/g, '').slice(0, 4)
+                    setTempMMYY(newMMYY)
+                  }}
+                  placeholder="1224"
+                  maxLength={4}
+                  className="w-full"
+                />
+              </div>
+            </div>
+
+            {/* Remaining Amounts Display */}
+            {(grantRemaining || stateAllocationRemaining) && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Grant Remaining */}
+                {grantRemaining && (
+                  <div className="p-4 border rounded-lg">
+                    <div className="flex items-center justify-between mb-2">
+                      <Label className="text-sm font-semibold">Grant Remaining</Label>
+                      {grantRemaining.loading && (
+                        <span className="text-xs text-muted-foreground">Calculating...</span>
+                      )}
+                    </div>
+                    {!grantRemaining.loading && (
+                      <>
+                        <div className="space-y-1 text-sm">
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Total:</span>
+                            <span className="font-medium">${grantRemaining.total.toLocaleString()}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Committed:</span>
+                            <span>${grantRemaining.committed.toLocaleString()}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Allocated:</span>
+                            <span>${grantRemaining.allocated.toLocaleString()}</span>
+                          </div>
+                          <div className="pt-2 border-t flex justify-between items-center">
+                            <span className="font-semibold">Remaining:</span>
+                            <span className={`font-bold text-lg ${
+                              grantRemaining.remaining < 0 ? 'text-red-600' :
+                              grantRemaining.remaining < mouTotalAmount ? 'text-yellow-600' :
+                              'text-green-600'
+                            }`}>
+                              ${grantRemaining.remaining.toLocaleString()}
+                            </span>
+                          </div>
+                          {mouTotalAmount > 0 && (
+                            <div className="pt-1 text-xs">
+                              <div className="flex justify-between text-muted-foreground">
+                                <span>After reassignment:</span>
+                                <span className={`font-medium ${
+                                  (grantRemaining.remaining - mouTotalAmount) < 0 ? 'text-red-600' :
+                                  (grantRemaining.remaining - mouTotalAmount) < mouTotalAmount ? 'text-yellow-600' :
+                                  'text-green-600'
+                                }`}>
+                                  ${(grantRemaining.remaining - mouTotalAmount).toLocaleString()}
+                                </span>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+
+                {/* State Allocation Remaining */}
+                {stateAllocationRemaining && mouProjects.length > 0 && (
+                  <div className="p-4 border rounded-lg">
+                    <div className="flex items-center justify-between mb-2">
+                      <Label className="text-sm font-semibold">
+                        State Allocation Remaining ({mouProjects[0]?.state})
+                      </Label>
+                      {stateAllocationRemaining.loading && (
+                        <span className="text-xs text-muted-foreground">Calculating...</span>
+                      )}
+                    </div>
+                    {!stateAllocationRemaining.loading && (
+                      <>
+                        <div className="space-y-1 text-sm">
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Total:</span>
+                            <span className="font-medium">${stateAllocationRemaining.total.toLocaleString()}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Committed:</span>
+                            <span>${stateAllocationRemaining.committed.toLocaleString()}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Allocated:</span>
+                            <span>${stateAllocationRemaining.allocated.toLocaleString()}</span>
+                          </div>
+                          <div className="pt-2 border-t flex justify-between items-center">
+                            <span className="font-semibold">Remaining:</span>
+                            <span className={`font-bold text-lg ${
+                              stateAllocationRemaining.remaining < 0 ? 'text-red-600' :
+                              stateAllocationRemaining.remaining < mouTotalAmount ? 'text-yellow-600' :
+                              'text-green-600'
+                            }`}>
+                              ${stateAllocationRemaining.remaining.toLocaleString()}
+                            </span>
+                          </div>
+                          {mouTotalAmount > 0 && (
+                            <div className="pt-1 text-xs">
+                              <div className="flex justify-between text-muted-foreground">
+                                <span>After reassignment:</span>
+                                <span className={`font-medium ${
+                                  (stateAllocationRemaining.remaining - mouTotalAmount) < 0 ? 'text-red-600' :
+                                  (stateAllocationRemaining.remaining - mouTotalAmount) < mouTotalAmount ? 'text-yellow-600' :
+                                  'text-green-600'
+                                }`}>
+                                  ${(stateAllocationRemaining.remaining - mouTotalAmount).toLocaleString()}
+                                </span>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* MOU Total Amount Info */}
+            {mouTotalAmount > 0 && (
+              <div className="p-3 bg-orange-50 border border-orange-200 rounded-md">
+                <p className="text-sm">
+                  <span className="font-semibold">MOU Total Amount:</span>{' '}
+                  <span className="font-mono">${mouTotalAmount.toLocaleString()}</span>
+                </p>
+              </div>
+            )}
+
+            {/* Preview generated serials */}
+            {tempGrantId && tempDonorName && tempMMYY && tempMMYY.length === 4 && mouProjects.length > 0 && (
+              <div className="p-3 bg-muted rounded-md">
+                <Label className="text-sm font-semibold mb-2 block">Generated Workplan Serial IDs:</Label>
+                <div className="space-y-1 max-h-32 overflow-y-auto">
+                  {mouProjects.map((project, idx) => {
+                    const selectedGrant = grantsFromGridView.find((g: any) => g.grant_id === tempGrantId && g.donor_name === tempDonorName)
+                    const donorShort = donorShortNames[selectedGrant?.donor_id || ''] || 'XXX'
+                    const stateShort = stateShorts[project.state] || 'XX'
+                    const workplanSeq = String((selectedGrantMaxSequence || 0) + idx + 1).padStart(4, '0')
+                    const generatedSerial = `LCC-${donorShort}-${stateShort}-${tempMMYY}-${workplanSeq}`
+                    const displayLabel = project.err_id || `${project.state} - ${project.locality || 'N/A'}` || 'Project'
+                    
+                    return (
+                      <div key={project.id} className="text-sm font-mono">
+                        {displayLabel}: {generatedSerial}
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
+            <div className="flex justify-end gap-2 pt-4">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setReassignModalOpen(false)
+                  setReassigningMouId(null)
+                  setTempGrantId('')
+                  setTempDonorName('')
+                  setTempMMYY('')
+                  setMouProjects([])
+                  setStateShorts({})
+                  setGrantRemaining(null)
+                  setStateAllocationRemaining(null)
+                  setMouTotalAmount(0)
+                  setSelectedGrantMaxSequence(0)
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleReassignMou}
+                disabled={!tempGrantId || !tempDonorName || !tempMMYY || tempMMYY.length !== 4 || isReassigning}
+                className="bg-orange-600 hover:bg-orange-700 text-white"
+              >
+                {isReassigning ? 'Reassigning...' : 'Reassign to Grant'}
               </Button>
             </div>
           </div>

@@ -43,7 +43,7 @@ export async function POST(
     // Get grant from grants_grid_view
     const { data: grant, error: grantError } = await supabase
       .from('grants_grid_view')
-      .select('grant_id, donor_name, donor_id, max_workplan_sequence, activities')
+      .select('id, grant_id, donor_name, donor_id, max_workplan_sequence, activities')
       .eq('grant_id', grant_id)
       .eq('donor_name', donor_name)
       .single()
@@ -134,6 +134,7 @@ export async function POST(
           .from('err_projects')
           .update({
             grant_id: generatedSerial, // Store the generated serial (LCC-DonorShort-StateShort-MMYY-WorkplanSeq)
+            grant_grid_id: grant.id, // Link to grants_grid_view
             donor_id: grant.donor_id,
             workplan_number: workplanNumber,
             file_key: finalFileKey,
