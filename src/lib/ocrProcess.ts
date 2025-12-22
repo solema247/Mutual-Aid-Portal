@@ -133,12 +133,6 @@ export async function processFForm(file: File, metadata: ProcessMetadata): Promi
   const isF4 = formType === 'F4'
   const isF5 = formType === 'F5'
 
-  // Log OCR text for debugging (truncated if too long)
-  if (isF4) {
-    const textPreview = text.length > 2000 ? text.substring(0, 2000) + '...' : text
-    console.log('[F4 OCR] Extracted text length:', text.length)
-    console.log('[F4 OCR] Text preview:', textPreview)
-  }
 
   const completion = await withTimeout(
     openai.chat.completions.create({
@@ -262,26 +256,13 @@ IMPORTANT:
   const content = completion.choices[0]?.message?.content
   if (!content) throw new Error('No content in OpenAI response')
   
-  // Log AI response for debugging
-  if (isF4) {
-    const contentPreview = content.length > 1000 ? content.substring(0, 1000) + '...' : content
-    console.log('[F4 AI] Response length:', content.length)
-    console.log('[F4 AI] Response preview:', contentPreview)
-  }
   // ai done
 
   let structuredData: any
   try {
     structuredData = JSON.parse(content.replace(/^[`\s]*|[`\s]*$/g, ''))
     
-    // Log parsed expenses for debugging
-    if (isF4 && Array.isArray(structuredData.expenses)) {
-      console.log('[F4 AI] Parsed expenses count:', structuredData.expenses.length)
-      console.log('[F4 AI] Expenses:', JSON.stringify(structuredData.expenses, null, 2))
-      console.log('[F4 AI] Total expenses text:', structuredData.total_expenses_text)
-    }
   } catch (e) {
-    console.error('[F4 AI] JSON parse error:', e)
     // Best-effort fallback
     structuredData = { raw_ocr: text }
     // json parse fallback

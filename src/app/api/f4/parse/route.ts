@@ -40,13 +40,7 @@ export async function POST(request: Request) {
     const file = new File([blob], filename, mime ? { type: mime } : undefined)
 
     // Directly call shared OCR/AI processor (no internal HTTP hop)
-    console.log('[F4 Parse] Starting OCR/AI processing...')
     const ocrJson = await processFForm(file, { ocr_max_pages: 3, form_type: 'F4' })
-    console.log('[F4 Parse] OCR/AI processing complete')
-    console.log('[F4 Parse] AI output expenses count:', Array.isArray(ocrJson.expenses) ? ocrJson.expenses.length : 0)
-    if (Array.isArray(ocrJson.expenses)) {
-      console.log('[F4 Parse] AI output expenses:', JSON.stringify(ocrJson.expenses, null, 2))
-    }
 
     // Map to F4 drafts
     const raw = (ocrJson.raw_ocr || '') as string
@@ -159,9 +153,6 @@ export async function POST(request: Request) {
         source = 'legacy'
       }
       
-      if (expense_amount_sdg || expense_amount) {
-        console.log(`[F4 Parse] Expense ${idx + 1} "${e.activity}": amount=${expense_amount_sdg || expense_amount}, source=${source}, currency=${e.currency || 'null'}`)
-      }
       
       return {
         expense_activity: e.activity || null,
@@ -176,8 +167,6 @@ export async function POST(request: Request) {
         is_draft: true
       }
     })
-    console.log('[F4 Parse] Initial expensesDraft count:', expensesDraft.length)
-    console.log('[F4 Parse] Initial expensesDraft:', JSON.stringify(expensesDraft, null, 2))
 
     // CRITICAL: Check for totals assigned as expense amounts (before any other processing)
     // This must run early to catch cases where AI assigns the total to an expense
@@ -188,14 +177,13 @@ export async function POST(request: Request) {
           const v = Number(r.expense_amount_sdg ?? r.expense_amount) || 0
           // If an expense amount equals or is very close to the total, it's definitely a total misassigned
           if (v > 0 && Math.abs(v - A) < A * 0.01) {
-            console.log('[F4 Parse] CRITICAL: Found total assigned as expense amount:', v, 'for activity:', r.expense_activity, '- Removing it')
             r.expense_amount_sdg = null
             r.expense_amount = null
           }
         })
       }
     } catch (e) {
-      console.error('[F4 Parse] Early total check error:', e)
+      // Error handling
     }
 
     // Normalize multi-line activities: merge very short follow-up lines into previous label
@@ -242,10 +230,7 @@ export async function POST(request: Request) {
     // ONLY use this if AI didn't provide amounts - prioritize AI output
     try {
       const missingCount = expensesDraft.filter((r: any) => r.expense_activity && (r.expense_amount == null && r.expense_amount_sdg == null)).length
-      if (missingCount === 0) {
-        console.log('[F4 Parse] All expenses have amounts from AI, skipping OCR fallback')
-      } else {
-        console.log('[F4 Parse] Missing amounts for', missingCount, 'expenses, using OCR fallback')
+      if (missingCount > 0) {
         
         // Exclude totals and summary sections - look for amounts in the expense table area only
         const totalPatterns = /(إجمالي|المجموع|Total|A\.|B\.|C\.|D\.|اجمالي|المتبقي|المستلم|من المنحة|من مصادر أخرى)/
@@ -279,7 +264,6 @@ export async function POST(request: Request) {
           }
         }
         
-        console.log('[F4 Parse] OCR fallback found', numericCandidates.length, 'candidate amounts:', numericCandidates)
         
         // Assign in order to rows still missing amounts
         let cursor = 0
@@ -293,12 +277,11 @@ export async function POST(request: Request) {
           const hasAmount = (row.expense_amount != null) || (row.expense_amount_sdg != null)
           if (row.expense_activity && !hasAmount) {
             row.expense_amount_sdg = numericCandidates[cursor++]
-            console.log('[F4 Parse] Assigned OCR fallback amount', row.expense_amount_sdg, 'to', row.expense_activity)
           }
         }
       }
     } catch (e) {
-      console.error('[F4 Parse] Fallback 2 error:', e)
+      // Error handling
     }
 
     // Validate sum vs total_expenses_text if present; if far off, try dropping any values that look like totals
@@ -311,7 +294,6 @@ export async function POST(request: Request) {
           const v = Number(r.expense_amount_sdg ?? r.expense_amount) || 0
           // If an expense amount equals or is very close to the total, it's definitely a total misassigned
           if (v > 0 && Math.abs(v - A) < A * 0.01) {
-            console.log('[F4 Parse] Validation: Found total assigned as expense amount:', v, 'for activity:', r.expense_activity, '- Removing it')
             r.expense_amount_sdg = null
             r.expense_amount = null
           }
@@ -319,7 +301,6 @@ export async function POST(request: Request) {
         
         let sum = expensesDraft.reduce((s: number, r: any) => s + (Number(r.expense_amount_sdg ?? r.expense_amount) || 0), 0)
         const diff = Math.abs(sum - A)
-        console.log('[F4 Parse] Validation - Total from text (A):', A, 'Sum of expenses:', sum, 'Difference:', diff, 'Percentage:', A > 0 ? ((diff / A) * 100).toFixed(2) + '%' : 'N/A')
         
         // Also check for suspiciously large amounts that might be totals
         // Only flag if amount is BOTH: much larger than other expenses AND close to the total
@@ -344,7 +325,6 @@ export async function POST(request: Request) {
               expensesDraft.forEach((r: any) => {
                 const v = Number(r.expense_amount_sdg ?? r.expense_amount) || 0
                 if (v === largest) {
-                  console.log('[F4 Parse] Validation: Found suspiciously large amount (likely total):', v, 'for activity:', r.expense_activity, '- Removing it')
                   r.expense_amount_sdg = null
                   r.expense_amount = null
                 }
@@ -376,7 +356,7 @@ export async function POST(request: Request) {
         }
       }
     } catch (e) {
-      console.error('[F4 Parse] Validation error:', e)
+      // Error handling
     }
 
     // Include a compact AI output echo for debugging (whitelisted keys)
@@ -392,9 +372,6 @@ export async function POST(request: Request) {
       expenses: Array.isArray(ocrJson.expenses) ? ocrJson.expenses.slice(0, 50) : []
     }
 
-    console.log('[F4 Parse] Final expensesDraft count:', expensesDraft.length)
-    console.log('[F4 Parse] Final expensesDraft:', JSON.stringify(expensesDraft, null, 2))
-    console.log('[F4 Parse] Summary draft total_expenses:', summaryDraft.total_expenses)
 
     return NextResponse.json({ summaryDraft, expensesDraft, aiOutput })
   } catch (e) {

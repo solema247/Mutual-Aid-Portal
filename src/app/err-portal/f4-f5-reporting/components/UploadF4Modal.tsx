@@ -33,28 +33,6 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
     // Using CSS custom properties that will be applied via className
   }
 
-  // Logging helper for selection debugging
-  const logSelectionEvent = (eventName: string, target: HTMLInputElement, event?: any) => {
-    const computedStyle = window.getComputedStyle(target)
-    const userSelect = computedStyle.userSelect || computedStyle.webkitUserSelect || computedStyle.mozUserSelect || computedStyle.msUserSelect
-    const selection = window.getSelection()
-    const selectionStart = target.selectionStart ?? -1
-    const selectionEnd = target.selectionEnd ?? -1
-    const hasInputSelection = selectionStart !== -1 && selectionStart !== selectionEnd
-    const selectedText = hasInputSelection ? target.value.substring(selectionStart, selectionEnd) : ''
-    
-    console.log(`[Selection Debug] ${eventName}`)
-    console.log(`  - Value length: ${target.value.length}`)
-    console.log(`  - userSelect CSS: ${userSelect}`)
-    console.log(`  - Inline style: ${target.style.userSelect || target.style.webkitUserSelect || 'none'}`)
-    console.log(`  - selectionStart: ${selectionStart}`)
-    console.log(`  - selectionEnd: ${selectionEnd}`)
-    console.log(`  - hasInputSelection: ${hasInputSelection}`)
-    console.log(`  - selectedText: "${selectedText}"`)
-    console.log(`  - windowSelection: "${selection?.toString() || ''}"`)
-    console.log(`  - isFocused: ${document.activeElement === target}`)
-    console.log(`  - eventType: ${event?.type || 'N/A'}`)
-  }
   const [states, setStates] = useState<string[]>([])
   const [selectedState, setSelectedState] = useState('')
   const [rooms, setRooms] = useState<Array<{ id: string; label: string }>>([])
@@ -544,7 +522,6 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
                   value={summaryDraft?.beneficiaries ?? projectMeta?.beneficiaries ?? ''} 
                   onMouseDown={(e) => {
                     const input = e.target as HTMLInputElement
-                    logSelectionEvent('Beneficiaries onMouseDown', input, e)
                     // Store the mouse down position for drag selection
                     const startPos = input.selectionStart ?? 0
                     ;(input as any).__dragStartPos = startPos
@@ -562,7 +539,6 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
                   }}
                   onMouseUp={(e) => {
                     const input = e.target as HTMLInputElement
-                    logSelectionEvent('Beneficiaries onMouseUp', input, e)
                     ;(input as any).__isDragging = false
                     delete (input as any).__dragStartPos
                     // After mouse up, check if selection was created and preserve it
@@ -570,29 +546,26 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
                       if (input.selectionStart !== null && input.selectionEnd !== null && input.selectionStart !== input.selectionEnd) {
                         const start = input.selectionStart
                         const end = input.selectionEnd
-                        logSelectionEvent('Beneficiaries onMouseUp - Selection detected', input)
                         // Double-check after a brief delay to ensure selection persists
                         setTimeout(() => {
                           if (input.selectionStart !== start || input.selectionEnd !== end) {
                             input.setSelectionRange(start, end)
-                            logSelectionEvent('Beneficiaries onMouseUp - Selection restored', input)
                           }
                         }, 10)
                       } else {
-                        logSelectionEvent('Beneficiaries onMouseUp - No selection', input)
                       }
                     })
                   }}
                   onSelect={(e) => {
                     const input = e.target as HTMLInputElement
-                    logSelectionEvent('Beneficiaries onSelect', input, e)
+                    // Removed logging('Beneficiaries onSelect', input, e)
                   }}
                   onClick={(e) => {
-                    logSelectionEvent('Beneficiaries onClick', e.target as HTMLInputElement, e)
+                    // Removed logging('Beneficiaries onClick', e.target as HTMLInputElement, e)
                   }}
                   onFocus={(e) => {
                     const input = e.target as HTMLInputElement
-                    logSelectionEvent('Beneficiaries onFocus', input, e)
+                    // Removed logging('Beneficiaries onFocus', input, e)
                   }}
                   onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), beneficiaries: e.target.value }))} 
                 />
@@ -607,19 +580,19 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
                     type="number" 
                     value={fxRate ?? ''} 
                     onMouseDown={(e) => {
-                      logSelectionEvent('FX Rate onMouseDown', e.target as HTMLInputElement, e)
+                      // Removed logging('FX Rate onMouseDown', e.target as HTMLInputElement, e)
                     }}
                     onMouseUp={(e) => {
-                      logSelectionEvent('FX Rate onMouseUp', e.target as HTMLInputElement, e)
+                      // Removed logging('FX Rate onMouseUp', e.target as HTMLInputElement, e)
                     }}
                     onSelect={(e) => {
-                      logSelectionEvent('FX Rate onSelect', e.target as HTMLInputElement, e)
+                      // Removed logging('FX Rate onSelect', e.target as HTMLInputElement, e)
                     }}
                     onClick={(e) => {
-                      logSelectionEvent('FX Rate onClick', e.target as HTMLInputElement, e)
+                      // Removed logging('FX Rate onClick', e.target as HTMLInputElement, e)
                     }}
                     onFocus={(e) => {
-                      logSelectionEvent('FX Rate onFocus', e.target as HTMLInputElement, e)
+                      // Removed logging('FX Rate onFocus', e.target as HTMLInputElement, e)
                     }}
                     onChange={(e)=>{
                     const v = parseFloat(e.target.value)
@@ -690,27 +663,27 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
                               placeholder={t('f4.preview.expenses.cols.activity') as string} 
                               value={ex.expense_activity || ''} 
                               onMouseDown={(e) => {
-                                logSelectionEvent(`Expense ${idx} Activity onMouseDown`, e.target as HTMLInputElement, e)
+                                // Removed logging(`Expense ${idx} Activity onMouseDown`, e.target as HTMLInputElement, e)
                               }}
                               onMouseUp={(e) => {
-                                logSelectionEvent(`Expense ${idx} Activity onMouseUp`, e.target as HTMLInputElement, e)
+                                // Removed logging(`Expense ${idx} Activity onMouseUp`, e.target as HTMLInputElement, e)
                               }}
                               onSelect={(e) => {
-                                logSelectionEvent(`Expense ${idx} Activity onSelect`, e.target as HTMLInputElement, e)
+                                // Removed logging(`Expense ${idx} Activity onSelect`, e.target as HTMLInputElement, e)
                               }}
                               onClick={(e) => {
-                                logSelectionEvent(`Expense ${idx} Activity onClick`, e.target as HTMLInputElement, e)
+                                // Removed logging(`Expense ${idx} Activity onClick`, e.target as HTMLInputElement, e)
                               }}
                               onMouseDown={(e) => {
-                                logSelectionEvent(`Expense ${idx} Activity onMouseDown`, e.target as HTMLInputElement, e)
+                                // Removed logging(`Expense ${idx} Activity onMouseDown`, e.target as HTMLInputElement, e)
                               }}
                               onFocus={(e) => {
-                                logSelectionEvent(`Expense ${idx} Activity onFocus`, e.target as HTMLInputElement, e)
+                                // Removed logging(`Expense ${idx} Activity onFocus`, e.target as HTMLInputElement, e)
                                 // REMOVED: Don't interfere with browser's default selection behavior
                                 // User can click once to select all, click again to place cursor, or drag to select
                               }}
                               onMouseUp={(e) => {
-                                logSelectionEvent(`Expense ${idx} Activity onMouseUp`, e.target as HTMLInputElement, e)
+                                // Removed logging(`Expense ${idx} Activity onMouseUp`, e.target as HTMLInputElement, e)
                               }}
                               onChange={(e)=>{
                                 const arr=[...expensesDraft]; arr[idx]={...arr[idx], expense_activity: e.target.value}; setExpensesDraft(arr)
@@ -724,13 +697,13 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
                               placeholder={t('f4.preview.expenses.cols.description') as string} 
                               value={ex.expense_description || ''} 
                               onMouseDown={(e) => {
-                                logSelectionEvent(`Expense ${idx} Description onMouseDown`, e.target as HTMLInputElement, e)
+                                // Removed logging(`Expense ${idx} Description onMouseDown`, e.target as HTMLInputElement, e)
                               }}
                               onSelect={(e) => {
-                                logSelectionEvent(`Expense ${idx} Description onSelect`, e.target as HTMLInputElement, e)
+                                // Removed logging(`Expense ${idx} Description onSelect`, e.target as HTMLInputElement, e)
                               }}
                               onFocus={(e) => {
-                                logSelectionEvent(`Expense ${idx} Description onFocus`, e.target as HTMLInputElement, e)
+                                // Removed logging(`Expense ${idx} Description onFocus`, e.target as HTMLInputElement, e)
                               }}
                               onChange={(e)=>{
                                 const arr=[...expensesDraft]; arr[idx]={...arr[idx], expense_description: e.target.value}; setExpensesDraft(arr)
@@ -745,13 +718,13 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
                               placeholder="SDG" 
                               value={ex.expense_amount_sdg ?? ''} 
                               onMouseDown={(e) => {
-                                logSelectionEvent(`Expense ${idx} SDG Amount onMouseDown`, e.target as HTMLInputElement, e)
+                                // Removed logging(`Expense ${idx} SDG Amount onMouseDown`, e.target as HTMLInputElement, e)
                               }}
                               onSelect={(e) => {
-                                logSelectionEvent(`Expense ${idx} SDG Amount onSelect`, e.target as HTMLInputElement, e)
+                                // Removed logging(`Expense ${idx} SDG Amount onSelect`, e.target as HTMLInputElement, e)
                               }}
                               onFocus={(e) => {
-                                logSelectionEvent(`Expense ${idx} SDG Amount onFocus`, e.target as HTMLInputElement, e)
+                                // Removed logging(`Expense ${idx} SDG Amount onFocus`, e.target as HTMLInputElement, e)
                               }}
                               onChange={(e)=>{
                                 const enteredValue = parseFloat(e.target.value) || 0
@@ -774,13 +747,13 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
                               placeholder="USD" 
                               value={ex.expense_amount ?? ''} 
                               onMouseDown={(e) => {
-                                logSelectionEvent(`Expense ${idx} USD Amount onMouseDown`, e.target as HTMLInputElement, e)
+                                // Removed logging(`Expense ${idx} USD Amount onMouseDown`, e.target as HTMLInputElement, e)
                               }}
                               onSelect={(e) => {
-                                logSelectionEvent(`Expense ${idx} USD Amount onSelect`, e.target as HTMLInputElement, e)
+                                // Removed logging(`Expense ${idx} USD Amount onSelect`, e.target as HTMLInputElement, e)
                               }}
                               onFocus={(e) => {
-                                logSelectionEvent(`Expense ${idx} USD Amount onFocus`, e.target as HTMLInputElement, e)
+                                // Removed logging(`Expense ${idx} USD Amount onFocus`, e.target as HTMLInputElement, e)
                               }}
                               onChange={(e)=>{
                                 const enteredValue = parseFloat(e.target.value) || 0
@@ -803,13 +776,13 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
                               placeholder={t('f4.preview.expenses.cols.payment_date') as string} 
                               value={ex.payment_date || ''} 
                               onMouseDown={(e) => {
-                                logSelectionEvent(`Expense ${idx} Payment Date onMouseDown`, e.target as HTMLInputElement, e)
+                                // Removed logging(`Expense ${idx} Payment Date onMouseDown`, e.target as HTMLInputElement, e)
                               }}
                               onSelect={(e) => {
-                                logSelectionEvent(`Expense ${idx} Payment Date onSelect`, e.target as HTMLInputElement, e)
+                                // Removed logging(`Expense ${idx} Payment Date onSelect`, e.target as HTMLInputElement, e)
                               }}
                               onFocus={(e) => {
-                                logSelectionEvent(`Expense ${idx} Payment Date onFocus`, e.target as HTMLInputElement, e)
+                                // Removed logging(`Expense ${idx} Payment Date onFocus`, e.target as HTMLInputElement, e)
                               }}
                               onChange={(e)=>{
                                 const arr=[...expensesDraft]; arr[idx]={...arr[idx], payment_date: e.target.value}; setExpensesDraft(arr)
@@ -836,13 +809,13 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
                               placeholder={t('f4.preview.expenses.cols.receipt_no') as string} 
                               value={ex.receipt_no || ''} 
                               onMouseDown={(e) => {
-                                logSelectionEvent(`Expense ${idx} Receipt No onMouseDown`, e.target as HTMLInputElement, e)
+                                // Removed logging(`Expense ${idx} Receipt No onMouseDown`, e.target as HTMLInputElement, e)
                               }}
                               onSelect={(e) => {
-                                logSelectionEvent(`Expense ${idx} Receipt No onSelect`, e.target as HTMLInputElement, e)
+                                // Removed logging(`Expense ${idx} Receipt No onSelect`, e.target as HTMLInputElement, e)
                               }}
                               onFocus={(e) => {
-                                logSelectionEvent(`Expense ${idx} Receipt No onFocus`, e.target as HTMLInputElement, e)
+                                // Removed logging(`Expense ${idx} Receipt No onFocus`, e.target as HTMLInputElement, e)
                               }}
                               onChange={(e)=>{
                                 const arr=[...expensesDraft]; arr[idx]={...arr[idx], receipt_no: e.target.value}; setExpensesDraft(arr)
@@ -856,13 +829,13 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
                               placeholder={t('f4.preview.expenses.cols.seller') as string} 
                               value={ex.seller || ''} 
                               onMouseDown={(e) => {
-                                logSelectionEvent(`Expense ${idx} Seller onMouseDown`, e.target as HTMLInputElement, e)
+                                // Removed logging(`Expense ${idx} Seller onMouseDown`, e.target as HTMLInputElement, e)
                               }}
                               onSelect={(e) => {
-                                logSelectionEvent(`Expense ${idx} Seller onSelect`, e.target as HTMLInputElement, e)
+                                // Removed logging(`Expense ${idx} Seller onSelect`, e.target as HTMLInputElement, e)
                               }}
                               onFocus={(e) => {
-                                logSelectionEvent(`Expense ${idx} Seller onFocus`, e.target as HTMLInputElement, e)
+                                // Removed logging(`Expense ${idx} Seller onFocus`, e.target as HTMLInputElement, e)
                               }}
                               onChange={(e)=>{
                                 const arr=[...expensesDraft]; arr[idx]={...arr[idx], seller: e.target.value}; setExpensesDraft(arr)
@@ -914,7 +887,7 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
                   type="number" 
                   value={summaryDraft?.total_other_sources ?? ''} 
                   onFocus={(e) => {
-                    logSelectionEvent('Total Other Sources onFocus', e.target as HTMLInputElement, e)
+                    // Removed logging('Total Other Sources onFocus', e.target as HTMLInputElement, e)
                   }}
                   onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), total_other_sources: parseFloat(e.target.value)||0 }))} 
                 />
@@ -926,19 +899,19 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
                   style={selectableInputStyle}
                   value={summaryDraft?.excess_expenses ?? ''} 
                   onMouseDown={(e) => {
-                    logSelectionEvent('Excess Expenses onMouseDown', e.target as HTMLInputElement, e)
+                    // Removed logging('Excess Expenses onMouseDown', e.target as HTMLInputElement, e)
                   }}
                   onMouseUp={(e) => {
-                    logSelectionEvent('Excess Expenses onMouseUp', e.target as HTMLInputElement, e)
+                    // Removed logging('Excess Expenses onMouseUp', e.target as HTMLInputElement, e)
                   }}
                   onSelect={(e) => {
-                    logSelectionEvent('Excess Expenses onSelect', e.target as HTMLInputElement, e)
+                    // Removed logging('Excess Expenses onSelect', e.target as HTMLInputElement, e)
                   }}
                   onClick={(e) => {
-                    logSelectionEvent('Excess Expenses onClick', e.target as HTMLInputElement, e)
+                    // Removed logging('Excess Expenses onClick', e.target as HTMLInputElement, e)
                   }}
                   onFocus={(e) => {
-                    logSelectionEvent('Excess Expenses onFocus', e.target as HTMLInputElement, e)
+                    // Removed logging('Excess Expenses onFocus', e.target as HTMLInputElement, e)
                   }}
                   onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), excess_expenses: e.target.value }))} 
                 />
@@ -950,13 +923,13 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
                   style={selectableInputStyle}
                   value={summaryDraft?.surplus_use ?? ''} 
                   onMouseDown={(e) => {
-                    logSelectionEvent('Surplus Use onMouseDown', e.target as HTMLInputElement, e)
+                    // Removed logging('Surplus Use onMouseDown', e.target as HTMLInputElement, e)
                   }}
                   onSelect={(e) => {
-                    logSelectionEvent('Surplus Use onSelect', e.target as HTMLInputElement, e)
+                    // Removed logging('Surplus Use onSelect', e.target as HTMLInputElement, e)
                   }}
                   onFocus={(e) => {
-                    logSelectionEvent('Surplus Use onFocus', e.target as HTMLInputElement, e)
+                    // Removed logging('Surplus Use onFocus', e.target as HTMLInputElement, e)
                   }}
                   onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), surplus_use: e.target.value }))} 
                 />
@@ -968,13 +941,13 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
                   style={selectableInputStyle}
                   value={summaryDraft?.lessons ?? ''} 
                   onMouseDown={(e) => {
-                    logSelectionEvent('Lessons Learned onMouseDown', e.target as HTMLInputElement, e)
+                    // Removed logging('Lessons Learned onMouseDown', e.target as HTMLInputElement, e)
                   }}
                   onSelect={(e) => {
-                    logSelectionEvent('Lessons Learned onSelect', e.target as HTMLInputElement, e)
+                    // Removed logging('Lessons Learned onSelect', e.target as HTMLInputElement, e)
                   }}
                   onFocus={(e) => {
-                    logSelectionEvent('Lessons Learned onFocus', e.target as HTMLInputElement, e)
+                    // Removed logging('Lessons Learned onFocus', e.target as HTMLInputElement, e)
                   }}
                   onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), lessons: e.target.value }))} 
                 />
@@ -986,13 +959,13 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
                   style={selectableInputStyle}
                   value={summaryDraft?.training ?? ''} 
                   onMouseDown={(e) => {
-                    logSelectionEvent('Training Needs onMouseDown', e.target as HTMLInputElement, e)
+                    // Removed logging('Training Needs onMouseDown', e.target as HTMLInputElement, e)
                   }}
                   onSelect={(e) => {
-                    logSelectionEvent('Training Needs onSelect', e.target as HTMLInputElement, e)
+                    // Removed logging('Training Needs onSelect', e.target as HTMLInputElement, e)
                   }}
                   onFocus={(e) => {
-                    logSelectionEvent('Training Needs onFocus', e.target as HTMLInputElement, e)
+                    // Removed logging('Training Needs onFocus', e.target as HTMLInputElement, e)
                   }}
                   onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), training: e.target.value }))} 
                 />
