@@ -23,7 +23,8 @@ export async function GET() {
         submitted_at,
         approval_file_key,
         temp_file_key,
-        grant_id
+        grant_id,
+        grant_segment
       `)
       .eq('status', 'pending')
       .order('submitted_at', { ascending: false })
@@ -48,7 +49,8 @@ export async function GET() {
       submitted_at: f1.submitted_at,
       approval_file_key: f1.approval_file_key || null,
       temp_file_key: f1.temp_file_key || null,
-      grant_id: f1.grant_id || null
+      grant_id: f1.grant_id || null,
+      grant_segment: f1.grant_segment || null
     }))
 
     return NextResponse.json(formattedF1s)

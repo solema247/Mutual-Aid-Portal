@@ -476,7 +476,7 @@ export default function DirectUpload() {
           temp_file_key: tempKey, // Store temp file path
           original_text: originalText,
           language: sourceLanguage,
-          grant_segment: formData.grant_segment || null,
+          grant_segment: formData.grant_segment ? String(formData.grant_segment) : null,
           // Remove these fields - will be set in F2:
           // donor_id: null,
           // grant_call_id: null,
@@ -485,7 +485,14 @@ export default function DirectUpload() {
           // grant_serial: null,
           // workplan_number: null
         }])
-      if (insertError) throw insertError
+      if (insertError) {
+        console.error('Database insert error:', insertError)
+        console.error('Insert data:', {
+          grant_segment: formData.grant_segment,
+          grant_segment_type: typeof formData.grant_segment
+        })
+        throw insertError
+      }
 
       alert('F1 workplan uploaded successfully!')
       // Reset form
