@@ -15,6 +15,7 @@ interface Project {
   err_id?: string | null
   emergency_room_id?: string | null
   emergency_rooms?: { name?: string | null; name_ar?: string | null; err_code?: string | null } | null
+  grant_id?: string | null
 }
 
 /**
@@ -337,89 +338,122 @@ function getProjectLocation(project: Project): string {
 
 /**
  * Formats expenses into a budget table structure
- * Returns HTML table string with all project expenses grouped by ERR/project
+ * Returns HTML table string with all projects showing: No, Serial Number, ERR Code, ERR Name, category columns, Total
  */
 export function getBudgetTable(projects: Project[]): string | null {
   if (!projects || projects.length === 0) return null
   
-  // Group projects by ERR location
-  const projectsByLocation = new Map<string, Project[]>()
+  // First, collect all unique categories from all projects' planned_activities
+  const allCategories = new Set<string>()
+  const projectData: Array<{
+    project: Project
+    categories: Map<string, number> // category -> total cost
+    total: number
+  }> = []
   
   projects.forEach(project => {
-    const location = getProjectLocation(project)
-    const existing = projectsByLocation.get(location) || []
-    existing.push(project)
-    projectsByLocation.set(location, existing)
-  })
-  
-  if (projectsByLocation.size === 0) return null
-  
-  // Build table rows
-  const rows: string[] = []
-  let sectionNumber = 1
-  
-  projectsByLocation.forEach((locationProjects, location) => {
-    locationProjects.forEach((project, projectIndex) => {
-      // Parse expenses
-      let expenses: Array<{ activity: string; total_cost: number }> = []
+    const categoryMap = new Map<string, number>()
+    let projectTotal = 0
+    
+    // Parse planned_activities to extract categories and costs
+    if (project.planned_activities) {
       try {
-        const expData = project.expenses
-        if (expData) {
-          const expArray = typeof expData === 'string' ? JSON.parse(expData || '[]') : (Array.isArray(expData) ? expData : [])
-          expenses = (Array.isArray(expArray) ? expArray : []).map((exp: any) => ({
-            activity: exp?.activity || exp?.expense || '',
-            total_cost: exp?.total_cost || exp?.total_cost_usd || 0
-          })).filter((exp: any) => exp.activity && exp.total_cost > 0)
+        const raw = typeof project.planned_activities === 'string' 
+          ? JSON.parse(project.planned_activities) 
+          : project.planned_activities
+        
+        if (Array.isArray(raw)) {
+          raw.forEach((item: any) => {
+            const category = item?.category
+            const cost = item?.planned_activity_cost || 0
+            
+            if (category && typeof category === 'string' && cost > 0) {
+              const categoryName = category.trim()
+              allCategories.add(categoryName)
+              
+              // Sum costs for the same category in this project
+              const currentCost = categoryMap.get(categoryName) || 0
+              categoryMap.set(categoryName, currentCost + cost)
+              projectTotal += cost
+            }
+          })
         }
       } catch {
-        // If parsing fails, skip
+        // If parsing fails, skip this project's activities
       }
-      
-      if (expenses.length === 0) return
-      
-      // Get beneficiary info
-      const beneficiaryInfo = project.intended_beneficiaries || ''
-      const estimatedCount = project.estimated_beneficiaries
-      let targetAudience = location
-      if (beneficiaryInfo) {
-        targetAudience += ` - ${beneficiaryInfo}`
-      }
-      if (estimatedCount) {
-        targetAudience += ` (${estimatedCount} ${estimatedCount === 1 ? 'beneficiary' : 'beneficiaries'})`
-      }
-      
-      // Add each expense as a row
-      expenses.forEach((expense, expenseIndex) => {
-        const isFirstInSection = projectIndex === 0 && expenseIndex === 0
-        const rowNumber = isFirstInSection ? sectionNumber : ''
-        
-        rows.push(`
-          <tr>
-            <td style="border: 1px solid #ddd; padding: 6px; text-align: center; font-size: 12px;">${rowNumber}</td>
-            <td style="border: 1px solid #ddd; padding: 6px; font-size: 12px;">${escapeHtml(expense.activity)}</td>
-            <td style="border: 1px solid #ddd; padding: 6px; font-size: 12px;">${escapeHtml(targetAudience)}</td>
-            <td style="border: 1px solid #ddd; padding: 6px; font-size: 12px;">${escapeHtml(expense.activity)}</td>
-            <td style="border: 1px solid #ddd; padding: 6px; text-align: right; font-size: 12px;">${expense.total_cost.toLocaleString()}</td>
-          </tr>
-        `)
-      })
-      
-      // Increment section number after first project in each location
-      if (projectIndex === 0) {
-        sectionNumber++
-      }
+    }
+    
+    projectData.push({
+      project,
+      categories: categoryMap,
+      total: projectTotal
     })
   })
   
-  if (rows.length === 0) return null
+  if (projectData.length === 0) return null
   
-  // Calculate total
-  const total = projects.reduce((sum, project) => {
-    return sum + calculateTotalAmount(project.expenses)
-  }, 0)
+  // Sort categories alphabetically for consistent column order
+  const sortedCategories = Array.from(allCategories).sort()
   
-  // Get state name (usually all projects are in the same state)
-  const state = projects[0]?.state || ''
+  // Build table rows - one row per project
+  const rows: string[] = []
+  let rowNumber = 1
+  
+  projectData.forEach(({ project, categories, total }) => {
+    const serialNumber = project.grant_id || '-'
+    const errCode = project.err_id || '-'
+    const errName = project.emergency_rooms?.name || project.emergency_rooms?.name_ar || '-'
+    
+    // Build category cells
+    const categoryCells = sortedCategories.map(category => {
+      const cost = categories.get(category) || 0
+      return `<td style="border: 1px solid #ddd; padding: 6px; text-align: right; font-size: 12px;">${cost > 0 ? cost.toLocaleString() : '-'}</td>`
+    }).join('')
+    
+    rows.push(`
+      <tr>
+        <td style="border: 1px solid #ddd; padding: 6px; text-align: center; font-size: 12px;">${rowNumber}</td>
+        <td style="border: 1px solid #ddd; padding: 6px; font-size: 12px;">${escapeHtml(serialNumber)}</td>
+        <td style="border: 1px solid #ddd; padding: 6px; font-size: 12px;">${escapeHtml(errCode)}</td>
+        <td style="border: 1px solid #ddd; padding: 6px; font-size: 12px;">${escapeHtml(errName)}</td>
+        ${categoryCells}
+        <td style="border: 1px solid #ddd; padding: 6px; text-align: right; font-size: 12px; font-weight: bold;">${total > 0 ? total.toLocaleString() : '-'}</td>
+      </tr>
+    `)
+    
+    rowNumber++
+  })
+  
+  // Calculate totals for each category and grand total
+  const categoryTotals = new Map<string, number>()
+  let grandTotal = 0
+  
+  projectData.forEach(({ categories, total }) => {
+    categories.forEach((cost, category) => {
+      const currentTotal = categoryTotals.get(category) || 0
+      categoryTotals.set(category, currentTotal + cost)
+    })
+    grandTotal += total
+  })
+  
+  // Build total row
+  const totalCategoryCells = sortedCategories.map(category => {
+    const total = categoryTotals.get(category) || 0
+    return `<td style="border: 1px solid #ddd; padding: 6px; text-align: right; font-size: 12px; font-weight: bold;">${total > 0 ? total.toLocaleString() : '-'}</td>`
+  }).join('')
+  
+  rows.push(`
+    <tr style="background-color: #f9f9f9; font-weight: bold;">
+      <td colspan="4" style="border: 1px solid #ddd; padding: 6px; font-size: 12px;">Total</td>
+      ${totalCategoryCells}
+      <td style="border: 1px solid #ddd; padding: 6px; text-align: right; font-size: 12px;">${grandTotal.toLocaleString()}</td>
+    </tr>
+  `)
+  
+  // Build category header cells
+  const categoryHeaders = sortedCategories.map(category => {
+    return `<th style="border: 1px solid #ddd; padding: 6px; text-align: right; font-size: 12px;">${escapeHtml(category)}</th>`
+  }).join('')
   
   // Build complete table
   const tableHtml = `
@@ -427,18 +461,15 @@ export function getBudgetTable(projects: Project[]): string | null {
       <thead>
         <tr style="background-color: #f5f5f5;">
           <th style="border: 1px solid #ddd; padding: 6px; text-align: center; font-size: 12px;">No</th>
-          <th style="border: 1px solid #ddd; padding: 6px; font-size: 12px;">Sector activities/spending items<br/>(أنشطة القطاع/بنود الإنفاق)</th>
-          <th style="border: 1px solid #ddd; padding: 6px; font-size: 12px;">Target audience: Men/Women, Children/Individuals/Families<br/>(الفئة المستهدفة: الرجال/النساء، الأطفال/الأفراد/العائلات)</th>
-          <th style="border: 1px solid #ddd; padding: 6px; font-size: 12px;">Brief description of the activity<br/>(وصف موجز للنشاط)</th>
-          <th style="border: 1px solid #ddd; padding: 6px; text-align: right; font-size: 12px;">Costs USD</th>
+          <th style="border: 1px solid #ddd; padding: 6px; font-size: 12px;">Serial Number</th>
+          <th style="border: 1px solid #ddd; padding: 6px; font-size: 12px;">ERR Code</th>
+          <th style="border: 1px solid #ddd; padding: 6px; font-size: 12px;">ERR Name</th>
+          ${categoryHeaders}
+          <th style="border: 1px solid #ddd; padding: 6px; text-align: right; font-size: 12px;">Total</th>
         </tr>
       </thead>
       <tbody>
         ${rows.join('')}
-        <tr style="background-color: #f9f9f9; font-weight: bold;">
-          <td colspan="4" style="border: 1px solid #ddd; padding: 6px; font-size: 12px;">${state} State</td>
-          <td style="border: 1px solid #ddd; padding: 6px; text-align: right; font-size: 12px;">$${total.toLocaleString()}</td>
-        </tr>
       </tbody>
     </table>
   `

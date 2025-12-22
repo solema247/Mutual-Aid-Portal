@@ -38,6 +38,7 @@ export async function GET(
         expenses,
         err_id,
         emergency_room_id,
+        grant_id,
         emergency_rooms (name, name_ar, err_code),
         "Sector (Primary)",
         "Sector (Secondary)"
