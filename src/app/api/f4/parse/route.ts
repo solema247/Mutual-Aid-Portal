@@ -308,8 +308,8 @@ export async function POST(request: Request) {
         if (expensesDraft.length > 1) {
           const amounts = expensesDraft
             .map((r: any) => Number(r.expense_amount_sdg ?? r.expense_amount) || 0)
-            .filter(v => v > 0)
-            .sort((a, b) => b - a) // Sort descending
+            .filter((v: number) => v > 0)
+            .sort((a: number, b: number) => b - a) // Sort descending
           
           if (amounts.length > 1) {
             const largest = amounts[0]

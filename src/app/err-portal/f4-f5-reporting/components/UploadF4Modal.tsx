@@ -674,16 +674,10 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
                               onClick={(e) => {
                                 // Removed logging(`Expense ${idx} Activity onClick`, e.target as HTMLInputElement, e)
                               }}
-                              onMouseDown={(e) => {
-                                // Removed logging(`Expense ${idx} Activity onMouseDown`, e.target as HTMLInputElement, e)
-                              }}
                               onFocus={(e) => {
                                 // Removed logging(`Expense ${idx} Activity onFocus`, e.target as HTMLInputElement, e)
                                 // REMOVED: Don't interfere with browser's default selection behavior
                                 // User can click once to select all, click again to place cursor, or drag to select
-                              }}
-                              onMouseUp={(e) => {
-                                // Removed logging(`Expense ${idx} Activity onMouseUp`, e.target as HTMLInputElement, e)
                               }}
                               onChange={(e)=>{
                                 const arr=[...expensesDraft]; arr[idx]={...arr[idx], expense_activity: e.target.value}; setExpensesDraft(arr)
