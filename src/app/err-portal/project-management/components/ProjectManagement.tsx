@@ -6,8 +6,11 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Label } from '@/components/ui/label'
 import { RefreshCw, ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { supabase } from '@/lib/supabaseClient'
 import ProjectDetailModal from './ProjectDetailModal'
 import UploadF4Modal from '@/app/err-portal/f4-f5-reporting/components/UploadF4Modal'
 import UploadF5Modal from '@/app/err-portal/f4-f5-reporting/components/UploadF5Modal'
@@ -20,6 +23,11 @@ export default function ProjectManagement() {
   const [loading, setLoading] = useState(false)
   const [kpis, setKpis] = useState<any>({})
   const [rows, setRows] = useState<any[]>([])
+  const [allRows, setAllRows] = useState<any[]>([]) // Store all rows before filtering
+
+  // Grant filter state
+  const [selectedGrantId, setSelectedGrantId] = useState<string>('all')
+  const [grants, setGrants] = useState<Array<{ id: string; grant_id: string; donor_name: string; project_name: string | null }>>([])
 
   // Drill-down state
   const [level, setLevel] = useState<'state'|'room'|'project'>('state')
@@ -47,9 +55,43 @@ export default function ProjectManagement() {
     const res = await fetch(`/api/overview/rollup`)
     const j = await res.json()
     setKpis(j.kpis || {})
+    setAllRows(j.rows || [])
     setRows(j.rows || [])
     setLoading(false)
   }
+
+  const fetchGrants = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('grants_grid_view')
+        .select('id, grant_id, donor_name, project_name')
+        .order('grant_id', { ascending: true })
+      
+      if (error) throw error
+      
+      // Get unique grants (group by grant_id and donor_name)
+      const uniqueGrants = new Map<string, { id: string; grant_id: string; donor_name: string; project_name: string | null }>()
+      ;(data || []).forEach((grant: any) => {
+        const key = `${grant.grant_id}|${grant.donor_name}`
+        if (!uniqueGrants.has(key)) {
+          uniqueGrants.set(key, {
+            id: grant.id,
+            grant_id: grant.grant_id,
+            donor_name: grant.donor_name,
+            project_name: grant.project_name || null
+          })
+        }
+      })
+      
+      setGrants(Array.from(uniqueGrants.values()))
+    } catch (error) {
+      console.error('Error fetching grants:', error)
+    }
+  }
+
+  useEffect(() => {
+    fetchGrants()
+  }, [])
 
   const handleRefresh = async () => {
     await loadRollup()
@@ -58,6 +100,34 @@ export default function ProjectManagement() {
   useEffect(() => {
     loadRollup()
   }, [])
+
+  // Filter rows by grant
+  useEffect(() => {
+    if (selectedGrantId === 'all') {
+      setRows(allRows)
+    } else if (selectedGrantId === 'unassigned') {
+      // Show only current projects with null grant_grid_id
+      setRows(allRows.filter((r: any) => !r.is_historical && !r.grant_grid_id))
+    } else {
+      // Filter by selected grant
+      const selectedGrant = grants.find(g => g.id === selectedGrantId)
+      if (selectedGrant) {
+        setRows(allRows.filter((r: any) => {
+          if (r.is_historical) {
+            // Historical projects: filter by project_donor matching grant_id (text comparison)
+            const projectDonor = r.project_donor ? String(r.project_donor).trim() : null
+            const grantId = selectedGrant.grant_id ? String(selectedGrant.grant_id).trim() : null
+            return projectDonor === grantId
+          } else {
+            // Current projects: filter by grant_grid_id matching grant's id
+            return r.grant_grid_id === selectedGrant.id
+          }
+        }))
+      } else {
+        setRows(allRows)
+      }
+    }
+  }, [selectedGrantId, allRows, grants])
 
   // Project-level counters for the current filtered slice
   const counters = useMemo(() => {
@@ -313,6 +383,26 @@ export default function ProjectManagement() {
               </div>
             </CardHeader>
             <CardContent>
+          {/* Grant Filter */}
+          <div className="mb-4 flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <Label htmlFor="grant-filter" className="text-sm font-medium">Filter by Grant:</Label>
+              <Select value={selectedGrantId} onValueChange={setSelectedGrantId}>
+                <SelectTrigger id="grant-filter" className="w-[300px]">
+                  <SelectValue placeholder="All Grants" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Grants</SelectItem>
+                  <SelectItem value="unassigned">Unassigned</SelectItem>
+                  {grants.map((grant) => (
+                    <SelectItem key={grant.id} value={grant.id}>
+                      {grant.grant_id} - {grant.project_name || grant.grant_id} ({grant.donor_name})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
           <div className="text-xs text-muted-foreground mb-2">
             {level === 'state' && (
               <span>
