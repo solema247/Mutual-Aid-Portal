@@ -1,7 +1,15 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { useParams } from 'next/navigation'
+import { aggregateObjectives, aggregateBeneficiaries, aggregatePlannedActivities, aggregatePlannedActivitiesDetailed, aggregateLocations, getBankingDetails, getBudgetTable } from '@/lib/mou-aggregation'
+
+interface Signature {
+  id: string
+  name: string
+  role?: string
+  date: string
+}
 
 export default function PrintMOUPage() {
   const params = useParams() as { id: string }
@@ -17,7 +25,32 @@ export default function PrintMOUPage() {
   }, [params.id])
 
   if (!data) return <div className="p-6">Loading…</div>
-  const { mou, project, partner } = data
+  const { mou, projects, project, partner } = data
+  
+  // Parse signatures JSON if it exists
+  let signatures: Signature[] = []
+  if ((mou as any).signatures) {
+    try {
+      signatures = typeof (mou as any).signatures === 'string' 
+        ? JSON.parse((mou as any).signatures) 
+        : (mou as any).signatures
+    } catch (e) {
+      console.error('Failed to parse signatures JSON:', e)
+      signatures = []
+    }
+  }
+  
+  // Use projects array if available, otherwise fall back to single project
+  const projectList = projects || (project ? [project] : [])
+  const aggregated = useMemo(() => ({
+    objectives: aggregateObjectives(projectList),
+    beneficiaries: aggregateBeneficiaries(projectList),
+    activities: aggregatePlannedActivities(projectList),
+    activitiesDetailed: aggregatePlannedActivitiesDetailed(projectList),
+    locations: aggregateLocations(projectList),
+    banking: getBankingDetails(projectList),
+    budgetTable: getBudgetTable(projectList)
+  }), [projectList])
 
   return (
     <div className="p-6 print:p-0">
@@ -43,22 +76,27 @@ export default function PrintMOUPage() {
           <div className="grid grid-cols-2 gap-4 mt-2">
             <Box>
               <div className="font-medium mb-1">{mou.err_name} shall</div>
-              {project?.project_objectives && (
+              {aggregated.objectives && (
                 <div className="mb-1">
                   <div className="font-semibold">Objectives</div>
-                  <div className="whitespace-pre-wrap">{project.project_objectives}</div>
+                  <div className="whitespace-pre-wrap">{aggregated.objectives}</div>
                 </div>
               )}
-              {project?.intended_beneficiaries && (
+              {aggregated.beneficiaries && (
                 <div className="mb-1">
                   <div className="font-semibold">Target Beneficiaries</div>
-                  <div className="whitespace-pre-wrap">{project.intended_beneficiaries}</div>
+                  <div className="whitespace-pre-wrap">{aggregated.beneficiaries}</div>
                 </div>
               )}
-              {project?.planned_activities && (
+              {(aggregated.activitiesDetailed || aggregated.activities) && (
                 <div className="mb-1">
                   <div className="font-semibold">Planned Activities</div>
-                  <div className="whitespace-pre-wrap">{project.planned_activities}</div>
+                  <div className="whitespace-pre-wrap">{aggregated.activitiesDetailed || aggregated.activities}</div>
+                </div>
+              )}
+              {(aggregated.locations.localities || aggregated.locations.state) && (
+                <div className="mb-1 text-xs text-muted-foreground">
+                  Location: {aggregated.locations.localities || '-'} / {aggregated.locations.state || '-'}
                 </div>
               )}
             </Box>
@@ -81,9 +119,76 @@ export default function PrintMOUPage() {
 
         <TwoCol title="4. Funding" left={`The ${mou.partner_name} will provide a grant of $${Number(mou.total_amount || 0).toLocaleString()} upon signing this MOU. Disbursement and proof-of-payment requirements apply per policy.`} right={`سيقوم ${mou.partner_name} بتقديم منحة قدرها $${Number(mou.total_amount || 0).toLocaleString()} عند توقيع مذكرة التفاهم هذه. تنطبق متطلبات الصرف وإثبات الدفع وفق السياسات المعمول بها.`} />
 
-        <TwoCol title="5. Budget" left="A detailed budget is maintained in the F1(s) linked to this MOU. Procurement procedures apply; changes or obstacles must be reported at least 24 hours in advance." right="يتم الاحتفاظ بميزانية تفصيلية في نماذج F1 المرتبطة بهذه المذكرة. تُطبق إجراءات الشراء، ويجب الإبلاغ عن أي تغييرات أو عوائق قبل 24 ساعة على الأقل." />
+        <TwoCol title="5. Approved Accounts" left={aggregated.banking || 'Account details as shared and approved by ERR will be used for disbursement.'} right={aggregated.banking || 'تُستخدم تفاصيل الحساب المعتمدة من غرفة الطوارئ في عمليات الصرف.'} preWrap />
 
-        <TwoCol title="6. Approved Accounts" left={project?.banking_details || 'Account details as shared and approved by ERR will be used for disbursement.'} right={project?.banking_details || 'تُستخدم تفاصيل الحساب المعتمدة من غرفة الطوارئ في عمليات الصرف.'} preWrap />
+        <Section title="6. Budget">
+          <div className="grid grid-cols-2 gap-4 mb-4">
+            <Box>
+              <div className="text-sm">A detailed budget is maintained in the F1(s) linked to this MOU. Procurement procedures apply; changes or obstacles must be reported at least 24 hours in advance.</div>
+            </Box>
+            <Box rtl>
+              <div className="text-sm">يتم الاحتفاظ بميزانية تفصيلية في نماذج F1 المرتبطة بهذه المذكرة. تُطبق إجراءات الشراء، ويجب الإبلاغ عن أي تغييرات أو عوائق قبل 24 ساعة على الأقل.</div>
+            </Box>
+          </div>
+          {aggregated.budgetTable && (
+            <div className="mt-4 overflow-x-auto" dangerouslySetInnerHTML={{ __html: aggregated.budgetTable }} />
+          )}
+        </Section>
+
+        <Section title="7. Duration">
+          <div className="text-sm">
+            This MOU is effective {mou.start_date ? `from ${mou.start_date}` : 'upon signature by authorized officials of both parties'}. {mou.end_date ? `It will terminate on ${mou.end_date}.` : ''} Either party may terminate with written notification.
+          </div>
+        </Section>
+
+        <Section title="8. Contact Information">
+          <div className="grid grid-cols-2 gap-4 mb-4">
+            <Box>
+              <div className="font-medium mb-1">Partner</div>
+              <div className="text-sm">{mou.partner_contact_override || `Partner: ${mou.partner_name}`}</div>
+            </Box>
+            <Box>
+              <div className="font-medium mb-1">ERR</div>
+              <div className="text-sm">{mou.err_contact_override || `ERR: ${mou.err_name}`}</div>
+            </Box>
+          </div>
+          {signatures.length > 0 ? (
+            <div className="grid grid-cols-2 gap-4 mt-6 pt-4 border-t">
+              {signatures.map((sig, idx) => (
+                <div key={sig.id || idx} className="space-y-2">
+                  <div className="font-medium text-sm">{sig.name || `Signature ${idx + 1}`}{sig.role ? ` (${sig.role})` : ''}</div>
+                  <div className="border-b-2 border-gray-400 min-h-[40px] pb-2">
+                    <span className="text-muted-foreground text-sm">Signature line</span>
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    Date: {sig.date ? new Date(sig.date).toLocaleDateString() : 'Not set'}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-4 mt-6 pt-4 border-t">
+              <div>
+                <div className="font-medium mb-2 text-sm">Partner Signature</div>
+                <div className="border-b-2 border-gray-400 min-h-[50px] pb-1">
+                  {mou.partner_signature || <span className="text-muted-foreground text-sm">Signature</span>}
+                </div>
+              </div>
+              <div>
+                <div className="font-medium mb-2 text-sm">ERR Signature</div>
+                <div className="border-b-2 border-gray-400 min-h-[50px] pb-1">
+                  {mou.err_signature || <span className="text-muted-foreground text-sm">Signature</span>}
+                </div>
+              </div>
+              <div>
+                <div className="font-medium mb-2 text-sm">Date of Signature</div>
+                <div className="border-b-2 border-gray-400 min-h-[50px] pb-1">
+                  {mou.signature_date ? new Date(mou.signature_date).toLocaleDateString() : <span className="text-muted-foreground text-sm">Date</span>}
+                </div>
+              </div>
+            </div>
+          )}
+        </Section>
       </div>
     </div>
   )

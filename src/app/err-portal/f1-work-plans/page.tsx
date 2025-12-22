@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { useState } from 'react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { ChevronDown, ChevronUp, BarChart } from 'lucide-react'
 import ERRAppSubmissions from './components/ERRAppSubmissions'
 import DirectUpload from './components/DirectUpload'
 import PoolDashboard from './components/PoolDashboard'
@@ -11,6 +12,7 @@ import PoolDashboard from './components/PoolDashboard'
 export default function F1WorkPlansPage() {
   const { t } = useTranslation(['f1_plans', 'common'])
   const [currentTab, setCurrentTab] = useState<'err_app' | 'direct_upload'>('err_app')
+  const [isByStateCollapsed, setIsByStateCollapsed] = useState(true)
 
   return (
     <div className="space-y-6">
@@ -18,17 +20,18 @@ export default function F1WorkPlansPage() {
         <h2 className="text-2xl font-semibold">{t('f1_plans:title')}</h2>
       </div>
 
-      {/* Pool Dashboard */}
-      <Card>
+      {/* Pool Dashboard - Summary Cards */}
+      <Card className="border-0">
         <CardHeader>
           <CardTitle>{t('f1_plans:pool_overview')}</CardTitle>
         </CardHeader>
         <CardContent>
-          <PoolDashboard showByDonor={false} />
+          <PoolDashboard showByDonor={false} showSummaryCards={true} showByState={false} />
         </CardContent>
       </Card>
 
-      <Card>
+      {/* Manage and review F1 work plans */}
+      <Card className="border-0">
         <CardHeader>
           <CardTitle>{t('f1_plans:description')}</CardTitle>
         </CardHeader>
@@ -56,6 +59,31 @@ export default function F1WorkPlansPage() {
             </TabsContent>
           </Tabs>
         </CardContent>
+      </Card>
+
+      {/* Pool Dashboard - By State Table */}
+      <Card className="border-0">
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle 
+              className="flex items-center gap-2 cursor-pointer"
+              onClick={() => setIsByStateCollapsed(!isByStateCollapsed)}
+            >
+              <BarChart className="h-5 w-5" />
+              {t('f1_plans:pool_overview')}
+              {isByStateCollapsed ? (
+                <ChevronDown className="h-4 w-4" />
+              ) : (
+                <ChevronUp className="h-4 w-4" />
+              )}
+            </CardTitle>
+          </div>
+        </CardHeader>
+        {!isByStateCollapsed && (
+          <CardContent>
+            <PoolDashboard showByDonor={false} showSummaryCards={false} showByState={true} />
+          </CardContent>
+        )}
       </Card>
     </div>
   )

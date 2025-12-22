@@ -11,6 +11,8 @@ export async function POST(
     const { id: mouId } = params
     const formData = await request.formData()
     const file = formData.get('file') as File
+    const exchangeRate = formData.get('exchange_rate') as string | null
+    const transferDate = formData.get('transfer_date') as string | null
     
     if (!file) {
       return NextResponse.json(
@@ -39,10 +41,19 @@ export async function POST(
       )
     }
 
-    // Update MOU record with file path
+    // Prepare update object
+    const updateData: any = { payment_confirmation_file: filePath }
+    if (exchangeRate) {
+      updateData.exchange_rate = parseFloat(exchangeRate)
+    }
+    if (transferDate) {
+      updateData.transfer_date = transferDate
+    }
+
+    // Update MOU record with file path, exchange rate, and transfer date
     const { error: updateError } = await supabase
       .from('mous')
-      .update({ payment_confirmation_file: filePath })
+      .update(updateData)
       .eq('id', mouId)
 
     if (updateError) {

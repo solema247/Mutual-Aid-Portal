@@ -4,29 +4,30 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Label } from '@/components/ui/label'
+import { RefreshCw, ChevronRight } from 'lucide-react'
+import { cn } from '@/lib/utils'
+import { supabase } from '@/lib/supabaseClient'
 import ProjectDetailModal from './ProjectDetailModal'
-
-type Donor = { id: string; name: string; short_name?: string }
-type Grant = { id: string; name: string; shortname?: string; donor_id: string }
-type Room = { id: string; name?: string; name_ar?: string; err_code?: string }
+import UploadF4Modal from '@/app/err-portal/f4-f5-reporting/components/UploadF4Modal'
+import UploadF5Modal from '@/app/err-portal/f4-f5-reporting/components/UploadF5Modal'
+import ViewF4Modal from '@/app/err-portal/f4-f5-reporting/components/ViewF4Modal'
+import ViewF5Modal from '@/app/err-portal/f4-f5-reporting/components/ViewF5Modal'
 
 export default function ProjectManagement() {
-  const { t } = useTranslation(['projects'])
-  const [donors, setDonors] = useState<Donor[]>([])
-  const [grants, setGrants] = useState<Grant[]>([])
-  const [states, setStates] = useState<string[]>([])
-  const [rooms, setRooms] = useState<Room[]>([])
-
-  const [donor, setDonor] = useState('')
-  const [grant, setGrant] = useState('')
-  const [state, setState] = useState('')
-  const [err, setErr] = useState('')
+  const { t } = useTranslation(['projects', 'common'])
 
   const [loading, setLoading] = useState(false)
   const [kpis, setKpis] = useState<any>({})
   const [rows, setRows] = useState<any[]>([])
+  const [allRows, setAllRows] = useState<any[]>([]) // Store all rows before filtering
+
+  // Grant filter state
+  const [selectedGrantId, setSelectedGrantId] = useState<string>('all')
+  const [grants, setGrants] = useState<Array<{ id: string; grant_id: string; donor_name: string; project_name: string | null }>>([])
 
   // Drill-down state
   const [level, setLevel] = useState<'state'|'room'|'project'>('state')
@@ -34,43 +35,99 @@ export default function ProjectManagement() {
   const [selectedErrId, setSelectedErrId] = useState<string>('')
   const [detailOpen, setDetailOpen] = useState(false)
   const [detailProjectId, setDetailProjectId] = useState<string | null>(null)
-
-  const loadOptions = async () => {
-    const qs = new URLSearchParams()
-    if (donor) qs.set('donor', donor)
-    if (grant) qs.set('grant', grant)
-    if (state) qs.set('state', state)
-    const res = await fetch(`/api/overview/options?${qs.toString()}`)
-    const j = await res.json()
-    setDonors(j.donors || [])
-    setGrants(j.grants || [])
-    setStates(j.states || [])
-    setRooms(j.rooms || [])
-  }
+  
+  // F4/F5 modals state
+  const [uploadF4Open, setUploadF4Open] = useState(false)
+  const [uploadF5Open, setUploadF5Open] = useState(false)
+  const [viewF4Open, setViewF4Open] = useState(false)
+  const [viewF5Open, setViewF5Open] = useState(false)
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
+  const [selectedF4Id, setSelectedF4Id] = useState<number | null>(null)
+  const [selectedF5Id, setSelectedF5Id] = useState<string | null>(null)
+  const [f4ListOpen, setF4ListOpen] = useState(false)
+  const [f5ListOpen, setF5ListOpen] = useState(false)
+  const [f4Reports, setF4Reports] = useState<any[]>([])
+  const [f5Reports, setF5Reports] = useState<any[]>([])
+  const [loadingReports, setLoadingReports] = useState(false)
 
   const loadRollup = async () => {
     setLoading(true)
-    const qs = new URLSearchParams()
-    if (donor) qs.set('donor', donor)
-    if (grant) qs.set('grant', grant)
-    if (state) qs.set('state', state)
-    if (err) qs.set('err', err)
-    const res = await fetch(`/api/overview/rollup?${qs.toString()}`)
+    const res = await fetch(`/api/overview/rollup`)
     const j = await res.json()
     setKpis(j.kpis || {})
+    setAllRows(j.rows || [])
     setRows(j.rows || [])
     setLoading(false)
   }
 
+  const fetchGrants = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('grants_grid_view')
+        .select('id, grant_id, donor_name, project_name')
+        .order('grant_id', { ascending: true })
+      
+      if (error) throw error
+      
+      // Get unique grants (group by grant_id and donor_name)
+      const uniqueGrants = new Map<string, { id: string; grant_id: string; donor_name: string; project_name: string | null }>()
+      ;(data || []).forEach((grant: any) => {
+        const key = `${grant.grant_id}|${grant.donor_name}`
+        if (!uniqueGrants.has(key)) {
+          uniqueGrants.set(key, {
+            id: grant.id,
+            grant_id: grant.grant_id,
+            donor_name: grant.donor_name,
+            project_name: grant.project_name || null
+          })
+        }
+      })
+      
+      setGrants(Array.from(uniqueGrants.values()))
+    } catch (error) {
+      console.error('Error fetching grants:', error)
+    }
+  }
+
   useEffect(() => {
-    loadOptions()
-  }, [donor, grant, state])
+    fetchGrants()
+  }, [])
+
+  const handleRefresh = async () => {
+    await loadRollup()
+  }
 
   useEffect(() => {
     loadRollup()
-  }, [donor, grant, state, err])
+  }, [])
 
-  const donorName = useMemo(() => donors.find(d => d.id === donor)?.name || t('management.filters.all_donors'), [donor, donors, t])
+  // Filter rows by grant
+  useEffect(() => {
+    if (selectedGrantId === 'all') {
+      setRows(allRows)
+    } else if (selectedGrantId === 'unassigned') {
+      // Show only current projects with null grant_grid_id
+      setRows(allRows.filter((r: any) => !r.is_historical && !r.grant_grid_id))
+    } else {
+      // Filter by selected grant
+      const selectedGrant = grants.find(g => g.id === selectedGrantId)
+      if (selectedGrant) {
+        setRows(allRows.filter((r: any) => {
+          if (r.is_historical) {
+            // Historical projects: filter by project_donor matching grant_id (text comparison)
+            const projectDonor = r.project_donor ? String(r.project_donor).trim() : null
+            const grantId = selectedGrant.grant_id ? String(selectedGrant.grant_id).trim() : null
+            return projectDonor === grantId
+          } else {
+            // Current projects: filter by grant_grid_id matching grant's id
+            return r.grant_grid_id === selectedGrant.id
+          }
+        }))
+      } else {
+        setRows(allRows)
+      }
+    }
+  }, [selectedGrantId, allRows, grants])
 
   // Project-level counters for the current filtered slice
   const counters = useMemo(() => {
@@ -105,8 +162,10 @@ export default function ProjectManagement() {
       curr.last_f5_date = !lastF5 ? candF5 : (!candF5 ? lastF5 : (new Date(lastF5) > new Date(candF5) ? lastF5 : candF5))
       byState.set(key, curr)
     }
-    // compute burn
-    return Array.from(byState.values()).map(v => ({ ...v, burn: v.plan > 0 ? v.actual / v.plan : 0 }))
+    // compute burn and sort alphabetically by state
+    return Array.from(byState.values())
+      .map(v => ({ ...v, burn: v.plan > 0 ? v.actual / v.plan : 0 }))
+      .sort((a, b) => (a.state || '').localeCompare(b.state || ''))
   }, [rows])
 
   const roomRows = useMemo(() => {
@@ -142,6 +201,44 @@ export default function ProjectManagement() {
 
   const displayed = level === 'state' ? stateRows : (level === 'room' ? roomRows : projectRows)
 
+  // Calculate totals for the displayed rows
+  const totals = useMemo(() => {
+    if (!displayed || displayed.length === 0) {
+      return {
+        plan: 0,
+        actual: 0,
+        variance: 0,
+        burn: 0,
+        f4_count: 0,
+        f5_count: 0,
+        total_projects: 0,
+        projects_with_f4: 0,
+        projects_with_f5: 0
+      }
+    }
+    const totalPlan = displayed.reduce((sum, r) => sum + (Number(r.plan || 0)), 0)
+    const totalActual = displayed.reduce((sum, r) => sum + (Number(r.actual || 0)), 0)
+    const totalVariance = totalPlan - totalActual
+    const totalBurn = totalPlan > 0 ? totalActual / totalPlan : 0
+    const totalF4 = displayed.reduce((sum, r) => sum + (Number(r.f4_count || 0)), 0)
+    const totalF5 = displayed.reduce((sum, r) => sum + (Number(r.f5_count || 0)), 0)
+    const totalProjects = displayed.reduce((sum, r) => sum + (Number(r.total_projects || 1)), 0)
+    const projectsWithF4 = displayed.reduce((sum, r) => sum + (Number(r.projects_with_f4 || (Number(r.f4_count || 0) > 0 ? 1 : 0))), 0)
+    const projectsWithF5 = displayed.reduce((sum, r) => sum + (Number(r.projects_with_f5 || (Number(r.f5_count || 0) > 0 ? 1 : 0))), 0)
+    
+    return {
+      plan: totalPlan,
+      actual: totalActual,
+      variance: totalVariance,
+      burn: totalBurn,
+      f4_count: totalF4,
+      f5_count: totalF5,
+      total_projects: totalProjects,
+      projects_with_f4: projectsWithF4,
+      projects_with_f5: projectsWithF5
+    }
+  }, [displayed])
+
   const onRowClick = (r: any) => {
     if (level === 'state') {
       setSelectedStateName(r.state)
@@ -167,162 +264,158 @@ export default function ProjectManagement() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap gap-2 items-center">
-        <Select value={donor || '__ALL__'} onValueChange={(v)=>setDonor(v==='__ALL__'?'':v)}>
-          <SelectTrigger className="h-9 w-full md:w-56"><SelectValue placeholder={t('management.filters.donor')} /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="__ALL__">{t('management.filters.all_donors')}</SelectItem>
-            {donors.map(d => (
-              <SelectItem key={d.id} value={d.id}>{d.short_name || d.name}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={grant || '__ALL__'} onValueChange={(v)=>setGrant(v==='__ALL__'?'':v)}>
-          <SelectTrigger className="h-9 w-full md:w-56"><SelectValue placeholder={t('management.filters.grant_call')} /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="__ALL__">{t('management.filters.all_grants')}</SelectItem>
-            {grants.map(g => (
-              <SelectItem key={g.id} value={g.id}>{g.shortname || g.name}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={state || '__ALL__'} onValueChange={(v)=>setState(v==='__ALL__'?'':v)}>
-          <SelectTrigger className="h-9 w-full md:w-56"><SelectValue placeholder={t('management.filters.state')} /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="__ALL__">{t('management.filters.all_states')}</SelectItem>
-            {states.map(s => (
-              <SelectItem key={s} value={s}>{s}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={err || '__ALL__'} onValueChange={(v)=>setErr(v==='__ALL__'?'':v)}>
-          <SelectTrigger className="h-9 w-full md:w-56"><SelectValue placeholder={t('management.filters.err')} /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="__ALL__">{t('management.filters.all_err')}</SelectItem>
-            {rooms.map(r => (
-              <SelectItem key={r.id} value={r.id}>{r.name || r.err_code || r.name_ar}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Button variant="outline" className="h-9 w-full md:w-24 md:ml-auto" onClick={()=>{ setDonor(''); setGrant(''); setState(''); setErr(''); }}>{t('management.filters.reset')}</Button>
-      </div>
-
-      {/* KPIs */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <Card>
-          <CardHeader><CardTitle>{t('management.kpis.plan')}</CardTitle></CardHeader>
-          <CardContent>
-            ${Number(kpis.plan||0).toLocaleString()}
-            <div className="text-xs text-muted-foreground mt-1">{t('management.kpis.plan_desc')}</div>
-          </CardContent>
+      {/* All Cards in 2 rows of 6 */}
+      <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+        {/* KPIs */}
+        <Card className="p-1.5 mx-1">
+          <div className="flex items-center justify-between gap-2 mb-0.5">
+            <CardTitle className="text-sm leading-tight font-semibold">{t('management.kpis.plan')}</CardTitle>
+            <span className="text-sm font-semibold">${Number(kpis.plan||0).toLocaleString()}</span>
+          </div>
+          <div className="text-xs text-muted-foreground leading-tight">{t('management.kpis.plan_desc')}</div>
         </Card>
-        <Card>
-          <CardHeader><CardTitle>{t('management.kpis.actuals')}</CardTitle></CardHeader>
-          <CardContent>
-            ${Number(kpis.actual||0).toLocaleString()}
-            <div className="text-xs text-muted-foreground mt-1">{t('management.kpis.actuals_desc')}</div>
-          </CardContent>
+        <Card className="p-1.5 mx-1">
+          <div className="flex items-center justify-between gap-2 mb-0.5">
+            <CardTitle className="text-sm leading-tight font-semibold">{t('management.kpis.actuals')}</CardTitle>
+            <span className="text-sm font-semibold">${Number(kpis.actual||0).toLocaleString()}</span>
+          </div>
+          <div className="text-xs text-muted-foreground leading-tight">{t('management.kpis.actuals_desc')}</div>
         </Card>
-        <Card>
-          <CardHeader><CardTitle>{t('management.kpis.variance')}</CardTitle></CardHeader>
-          <CardContent>
-            ${Number(kpis.variance||0).toLocaleString()}
-            <div className="text-xs text-muted-foreground mt-1">{t('management.kpis.variance_desc')}</div>
-          </CardContent>
+        <Card className="p-1.5 mx-1">
+          <div className="flex items-center justify-between gap-2 mb-0.5">
+            <CardTitle className="text-sm leading-tight font-semibold">{t('management.kpis.variance')}</CardTitle>
+            <span className="text-sm font-semibold">${Number(kpis.variance||0).toLocaleString()}</span>
+          </div>
+          <div className="text-xs text-muted-foreground leading-tight">{t('management.kpis.variance_desc')}</div>
         </Card>
-        <Card>
-          <CardHeader><CardTitle>{t('management.kpis.burn')}</CardTitle></CardHeader>
-          <CardContent>
-            {kpis.burn ? (kpis.burn*100).toFixed(0)+'%' : '0%'}
-            <div className="text-xs text-muted-foreground mt-1">{t('management.kpis.burn_desc')}</div>
-          </CardContent>
+        <Card className="p-1.5 mx-1">
+          <div className="flex items-center justify-between gap-2 mb-0.5">
+            <CardTitle className="text-sm leading-tight font-semibold">{t('management.kpis.burn')}</CardTitle>
+            <span className="text-sm font-semibold">{kpis.burn ? (kpis.burn*100).toFixed(0)+'%' : '0%'}</span>
+          </div>
+          <div className="text-xs text-muted-foreground leading-tight">{t('management.kpis.burn_desc')}</div>
         </Card>
-      </div>
-
-      {/* Project Counters */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <Card>
-          <CardHeader><CardTitle>{t('management.counters.projects')}</CardTitle></CardHeader>
-          <CardContent>
-            {Number(counters.total||0).toLocaleString()}
-            <div className="text-xs text-muted-foreground mt-1">{t('management.counters.projects_desc')}</div>
-          </CardContent>
+        {/* Project Counters */}
+        <Card className="p-1.5 mx-1">
+          <div className="flex items-center justify-between gap-2 mb-0.5">
+            <CardTitle className="text-sm leading-tight font-semibold">{t('management.counters.projects')}</CardTitle>
+            <span className="text-sm font-semibold">{Number(counters.total||0).toLocaleString()}</span>
+          </div>
+          <div className="text-xs text-muted-foreground leading-tight">{t('management.counters.projects_desc')}</div>
         </Card>
-        <Card>
-          <CardHeader><CardTitle>{t('management.counters.with_mous')}</CardTitle></CardHeader>
-          <CardContent>
-            {Number(counters.withMou||0).toLocaleString()}
-            <div className="text-xs text-muted-foreground mt-1">{t('management.counters.with_mous_desc')}</div>
-          </CardContent>
+        <Card className="p-1.5 mx-1">
+          <div className="flex items-center justify-between gap-2 mb-0.5">
+            <CardTitle className="text-sm leading-tight font-semibold">{t('management.counters.with_mous')}</CardTitle>
+            <span className="text-sm font-semibold">{Number(counters.withMou||0).toLocaleString()}</span>
+          </div>
+          <div className="text-xs text-muted-foreground leading-tight">{t('management.counters.with_mous_desc')}</div>
         </Card>
-        <Card>
-          <CardHeader><CardTitle>{t('management.counters.with_f4s')}</CardTitle></CardHeader>
-          <CardContent>
-            {Number(counters.withF4||0).toLocaleString()}
-            <div className="text-xs text-muted-foreground mt-1">{t('management.counters.with_f4s_desc')}</div>
-          </CardContent>
+        <Card className="p-1.5 mx-1">
+          <div className="flex items-center justify-between gap-2 mb-0.5">
+            <CardTitle className="text-sm leading-tight font-semibold">{t('management.counters.with_f4s')}</CardTitle>
+            <span className="text-sm font-semibold">{Number(counters.withF4||0).toLocaleString()}</span>
+          </div>
+          <div className="text-xs text-muted-foreground leading-tight">{t('management.counters.with_f4s_desc')}</div>
         </Card>
-        <Card>
-          <CardHeader><CardTitle>{t('management.counters.f4_complete')}</CardTitle></CardHeader>
-          <CardContent>
-            {(counters.pctF4*100).toFixed(0)}%
-            <div className="text-xs text-muted-foreground mt-1">{t('management.counters.f4_complete_desc')}</div>
-          </CardContent>
+        <Card className="p-1.5 mx-1">
+          <div className="flex items-center justify-between gap-2 mb-0.5">
+            <CardTitle className="text-sm leading-tight font-semibold">{t('management.counters.f4_complete')}</CardTitle>
+            <span className="text-sm font-semibold">{(counters.pctF4*100).toFixed(0)}%</span>
+          </div>
+          <div className="text-xs text-muted-foreground leading-tight">{t('management.counters.f4_complete_desc')}</div>
         </Card>
-      </div>
-
-      {/* F5 Program Reporting Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <Card>
-          <CardHeader><CardTitle>{t('management.counters.with_f5s')}</CardTitle></CardHeader>
-          <CardContent>
-            {Number(counters.withF5||0).toLocaleString()}
-            <div className="text-xs text-muted-foreground mt-1">{t('management.counters.with_f5s_desc')}</div>
-          </CardContent>
+        {/* F5 Program Reporting Cards */}
+        <Card className="p-1.5 mx-1">
+          <div className="flex items-center justify-between gap-2 mb-0.5">
+            <CardTitle className="text-sm leading-tight font-semibold">{t('management.counters.with_f5s')}</CardTitle>
+            <span className="text-sm font-semibold">{Number(counters.withF5||0).toLocaleString()}</span>
+          </div>
+          <div className="text-xs text-muted-foreground leading-tight">{t('management.counters.with_f5s_desc')}</div>
         </Card>
-        <Card>
-          <CardHeader><CardTitle>{t('management.counters.f5_complete')}</CardTitle></CardHeader>
-          <CardContent>
-            {(counters.pctF5*100).toFixed(0)}%
-            <div className="text-xs text-muted-foreground mt-1">{t('management.counters.f5_complete_desc')}</div>
-          </CardContent>
+        <Card className="p-1.5 mx-1">
+          <div className="flex items-center justify-between gap-2 mb-0.5">
+            <CardTitle className="text-sm leading-tight font-semibold">{t('management.counters.f5_complete')}</CardTitle>
+            <span className="text-sm font-semibold">{(counters.pctF5*100).toFixed(0)}%</span>
+          </div>
+          <div className="text-xs text-muted-foreground leading-tight">{t('management.counters.f5_complete_desc')}</div>
         </Card>
-        <Card>
-          <CardHeader><CardTitle>{t('management.counters.total_individuals')}</CardTitle></CardHeader>
-          <CardContent>
-            {Number(kpis.f5_total_individuals||0).toLocaleString()}
-            <div className="text-xs text-muted-foreground mt-1">{t('management.counters.total_individuals_desc')}</div>
-          </CardContent>
+        <Card className="p-1.5 mx-1">
+          <div className="flex items-center justify-between gap-2 mb-0.5">
+            <CardTitle className="text-sm leading-tight font-semibold">{t('management.counters.total_individuals')}</CardTitle>
+            <span className="text-sm font-semibold">{Number(kpis.f5_total_individuals||0).toLocaleString()}</span>
+          </div>
+          <div className="text-xs text-muted-foreground leading-tight">{t('management.counters.total_individuals_desc')}</div>
         </Card>
-        <Card>
-          <CardHeader><CardTitle>{t('management.counters.total_families')}</CardTitle></CardHeader>
-          <CardContent>
-            {Number(kpis.f5_total_families||0).toLocaleString()}
-            <div className="text-xs text-muted-foreground mt-1">{t('management.counters.total_families_desc')}</div>
-          </CardContent>
+        <Card className="p-1.5 mx-1">
+          <div className="flex items-center justify-between gap-2 mb-0.5">
+            <CardTitle className="text-sm leading-tight font-semibold">{t('management.counters.total_families')}</CardTitle>
+            <span className="text-sm font-semibold">{Number(kpis.f5_total_families||0).toLocaleString()}</span>
+          </div>
+          <div className="text-xs text-muted-foreground leading-tight">{t('management.counters.total_families_desc')}</div>
         </Card>
       </div>
 
       {/* Table */}
           <Card>
             <CardHeader>
-              <CardTitle>
-            {t('management.table.title')}
-            {level !== 'state' && (
-              <Button variant="outline" size="sm" className="ml-2" onClick={goBack}>{t('management.table.back')}</Button>
-            )}
-            {level === 'room' && selectedStateName ? (
-              <span className="ml-2 text-sm text-muted-foreground">{t('management.table.state')}: {selectedStateName}</span>
-            ) : null}
-            {level === 'project' && selectedErrId ? (
-              <span className="ml-2 text-sm text-muted-foreground">{t('management.table.state')}: {selectedStateName} · {t('management.table.err')}: {selectedErrId}</span>
-            ) : null}
-              </CardTitle>
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center gap-2">
+                  {t('management.table.title')}
+                  {level !== 'state' && (
+                    <Button variant="outline" size="sm" onClick={goBack}>{t('management.table.back')}</Button>
+                  )}
+                  {level === 'room' && selectedStateName ? (
+                    <span className="ml-2 text-sm text-muted-foreground">{t('management.table.state')}: {selectedStateName}</span>
+                  ) : null}
+                  {level === 'project' && selectedErrId ? (
+                    <span className="ml-2 text-sm text-muted-foreground">{t('management.table.state')}: {selectedStateName} · {t('management.table.err')}: {selectedErrId}</span>
+                  ) : null}
+                </CardTitle>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleRefresh}
+                  disabled={loading}
+                >
+                  <RefreshCw className={cn("h-4 w-4 mr-2", loading && "animate-spin")} />
+                  {t('common:refresh')}
+                </Button>
+              </div>
             </CardHeader>
             <CardContent>
+          {/* Grant Filter */}
+          <div className="mb-4 flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <Label htmlFor="grant-filter" className="text-sm font-medium">Filter by Grant:</Label>
+              <Select value={selectedGrantId} onValueChange={setSelectedGrantId}>
+                <SelectTrigger id="grant-filter" className="w-[300px]">
+                  <SelectValue placeholder="All Grants" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Grants</SelectItem>
+                  <SelectItem value="unassigned">Unassigned</SelectItem>
+                  {grants.map((grant) => (
+                    <SelectItem key={grant.id} value={grant.id}>
+                      {grant.grant_id} - {grant.project_name || grant.grant_id} ({grant.donor_name})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
           <div className="text-xs text-muted-foreground mb-2">
-            {level === 'state' && t('management.table.tips.state')}
-            {level === 'room' && t('management.table.tips.room')}
+            {level === 'state' && (
+              <span>
+                {t('management.table.tips.state')} 
+                <span className="ml-2 font-medium text-foreground">→ Click a row to view ERR rooms</span>
+              </span>
+            )}
+            {level === 'room' && (
+              <span>
+                {t('management.table.tips.room')} 
+                <span className="ml-2 font-medium text-foreground">→ Click a row to view projects</span>
+              </span>
+            )}
             {level === 'project' && t('management.table.tips.project')}
           </div>
           {loading ? (
@@ -363,15 +456,74 @@ export default function ProjectManagement() {
                   <TableBody>
                 {(displayed||[]).length===0 ? (
                   <TableRow><TableCell colSpan={level==='project'?14:(level==='room'?12:11)} className="text-center text-muted-foreground">{t('management.table.no_data')}</TableCell></TableRow>
-                ) : displayed.map((r:any, idx:number)=> (
-                  <TableRow key={r.project_id || r.err_id || r.state || idx} className="cursor-pointer" onClick={()=>onRowClick(r)}>
+                ) : (
+                  <>
+                    {/* Total Row */}
+                    <TableRow className="bg-muted/50 font-semibold">
+                      {level === 'state' ? (
+                        <>
+                          <TableCell className="font-semibold">Total</TableCell>
+                        </>
+                      ) : level === 'room' ? (
+                        <>
+                          <TableCell className="font-semibold">Total</TableCell>
+                          <TableCell></TableCell>
+                        </>
+                      ) : (
+                        <>
+                          <TableCell className="font-semibold">Total</TableCell>
+                          <TableCell></TableCell>
+                          <TableCell></TableCell>
+                        </>
+                      )}
+                      <TableCell className="text-right font-semibold">{Number(totals.plan || 0).toLocaleString()}</TableCell>
+                      <TableCell className="text-right font-semibold">{Number(totals.actual || 0).toLocaleString()}</TableCell>
+                      <TableCell className="text-right font-semibold">{Number(totals.variance || 0).toLocaleString()}</TableCell>
+                      <TableCell className="text-right font-semibold">{totals.burn ? (totals.burn * 100).toFixed(0) + '%' : '0%'}</TableCell>
+                      <TableCell className="font-semibold">{totals.f4_count || 0}</TableCell>
+                      <TableCell className="text-right font-semibold">
+                        {level === 'project' 
+                          ? (totals.f4_count > 0 ? '100%' : '0%')
+                          : `${totals.total_projects > 0 ? Math.round((totals.projects_with_f4 / totals.total_projects) * 100) : 0}%`
+                        }
+                      </TableCell>
+                      <TableCell className="font-semibold">{totals.f5_count || 0}</TableCell>
+                      <TableCell className="text-right font-semibold">
+                        {level === 'project' 
+                          ? (totals.f5_count > 0 ? '100%' : '0%')
+                          : `${totals.total_projects > 0 ? Math.round((totals.projects_with_f5 / totals.total_projects) * 100) : 0}%`
+                        }
+                      </TableCell>
+                      <TableCell></TableCell>
+                      <TableCell></TableCell>
+                      {level === 'project' && <TableCell></TableCell>}
+                    </TableRow>
+                    {displayed.map((r:any, idx:number)=> (
+                  <TableRow 
+                    key={r.project_id || r.err_id || r.state || idx} 
+                    className={cn(
+                      "cursor-pointer transition-colors",
+                      level !== 'project' && "hover:bg-muted/50"
+                    )}
+                    onClick={()=>onRowClick(r)}
+                  >
                     {level === 'state' ? (
                       <>
-                        <TableCell>{r.state || '-'}</TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <span>{r.state || '-'}</span>
+                            <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                          </div>
+                        </TableCell>
                       </>
                     ) : level === 'room' ? (
                       <>
-                        <TableCell>{r.err_id || '-'}</TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <span>{r.err_id || '-'}</span>
+                            <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                          </div>
+                        </TableCell>
                         <TableCell>{r.state || '-'}</TableCell>
                       </>
                     ) : (
@@ -403,15 +555,87 @@ export default function ProjectManagement() {
                     <TableCell>{r.last_f5_date ? new Date(r.last_f5_date).toLocaleDateString() : '-'}</TableCell>
                     {level === 'project' && (
                         <TableCell>
-                          <Button
-                            variant="outline"
-                          size="sm"
-                          onClick={(e)=>{ e.stopPropagation(); setDetailProjectId(r.project_id || null); setDetailOpen(true) }}
-                        >{t('management.table.view')}</Button>
+                          <div className="flex gap-1 flex-wrap">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={(e)=>{ e.stopPropagation(); setDetailProjectId(r.project_id || null); setDetailOpen(true) }}
+                            >{t('management.table.view')}</Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="bg-green-50 hover:bg-green-100"
+                              onClick={async (e)=>{ 
+                                e.stopPropagation(); 
+                                const projectId = r.project_id || null;
+                                setSelectedProjectId(projectId);
+                                // Load existing F4 reports for this project
+                                if (projectId) {
+                                  setLoadingReports(true);
+                                  try {
+                                    const res = await fetch('/api/f4/list');
+                                    const data = await res.json();
+                                    const projectF4s = (data || []).filter((f4: any) => f4.project_id === projectId);
+                                    setF4Reports(projectF4s);
+                                    if (projectF4s.length > 0) {
+                                      // If reports exist, show list (edit only)
+                                      setF4ListOpen(true);
+                                    } else {
+                                      // If no reports, allow upload
+                                      setUploadF4Open(true);
+                                    }
+                                  } catch (err) {
+                                    console.error(err);
+                                    setUploadF4Open(true);
+                                  } finally {
+                                    setLoadingReports(false);
+                                  }
+                                } else {
+                                  setUploadF4Open(true);
+                                }
+                              }}
+                            >F4 {r.f4_count > 0 ? `(${r.f4_count})` : ''}</Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="bg-blue-50 hover:bg-blue-100"
+                              onClick={async (e)=>{ 
+                                e.stopPropagation(); 
+                                const projectId = r.project_id || null;
+                                setSelectedProjectId(projectId);
+                                // Load existing F5 reports for this project
+                                if (projectId) {
+                                  setLoadingReports(true);
+                                  try {
+                                    const res = await fetch('/api/f5/list');
+                                    const data = await res.json();
+                                    const projectF5s = (data || []).filter((f5: any) => f5.project_id === projectId);
+                                    setF5Reports(projectF5s);
+                                    if (projectF5s.length > 0) {
+                                      // If reports exist, show list (edit only)
+                                      setF5ListOpen(true);
+                                    } else {
+                                      // If no reports, allow upload
+                                      setUploadF5Open(true);
+                                    }
+                                  } catch (err) {
+                                    console.error(err);
+                                    setUploadF5Open(true);
+                                  } finally {
+                                    setLoadingReports(false);
+                                  }
+                                } else {
+                                  setUploadF5Open(true);
+                                }
+                              }}
+                            >F5 {r.f5_count > 0 ? `(${r.f5_count})` : ''}</Button>
+                          </div>
                         </TableCell>
                     )}
                       </TableRow>
                     ))}
+                  </>
+                )}
                   </TableBody>
                 </Table>
               )}
@@ -424,6 +648,110 @@ export default function ProjectManagement() {
         open={detailOpen}
         onOpenChange={(v)=> setDetailOpen(v)}
       />
+
+      {/* F4/F5 Modals */}
+      <UploadF4Modal 
+        open={uploadF4Open} 
+        onOpenChange={(v)=>{ 
+          setUploadF4Open(v); 
+          if (!v) setSelectedProjectId(null);
+        }} 
+        onSaved={loadRollup}
+        initialProjectId={selectedProjectId}
+      />
+      <UploadF5Modal 
+        open={uploadF5Open} 
+        onOpenChange={(v)=>{ 
+          setUploadF5Open(v); 
+          if (!v) setSelectedProjectId(null);
+        }} 
+        onSaved={loadRollup}
+        initialProjectId={selectedProjectId}
+      />
+      <ViewF4Modal 
+        summaryId={selectedF4Id} 
+        open={viewF4Open} 
+        onOpenChange={(v)=>{ 
+          setViewF4Open(v); 
+          if (!v) setSelectedF4Id(null);
+        }} 
+        onSaved={loadRollup}
+      />
+      <ViewF5Modal 
+        reportId={selectedF5Id} 
+        open={viewF5Open} 
+        onOpenChange={(v)=>{ 
+          setViewF5Open(v); 
+          if (!v) setSelectedF5Id(null);
+        }} 
+        onSaved={loadRollup}
+      />
+
+      {/* F4 Reports List Modal */}
+      <Dialog open={f4ListOpen} onOpenChange={setF4ListOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>F4 Reports</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2 max-h-[400px] overflow-y-auto">
+            {f4Reports.length === 0 ? (
+              <p className="text-muted-foreground text-center py-4">No F4 reports found</p>
+            ) : (
+              f4Reports.map((f4: any) => (
+                <div key={f4.id} className="flex items-center justify-between p-3 border rounded">
+                  <div>
+                    <div className="font-medium">Report Date: {f4.report_date ? new Date(f4.report_date).toLocaleDateString() : '-'}</div>
+                    <div className="text-sm text-muted-foreground">
+                      Total Expenses: {Number(f4.total_expenses || 0).toLocaleString()} USD
+                    </div>
+                  </div>
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      setF4ListOpen(false);
+                      setSelectedF4Id(f4.id);
+                      setViewF4Open(true);
+                    }}
+                  >View/Edit</Button>
+                </div>
+              ))
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* F5 Reports List Modal */}
+      <Dialog open={f5ListOpen} onOpenChange={setF5ListOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>F5 Reports</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2 max-h-[400px] overflow-y-auto">
+            {f5Reports.length === 0 ? (
+              <p className="text-muted-foreground text-center py-4">No F5 reports found</p>
+            ) : (
+              f5Reports.map((f5: any) => (
+                <div key={f5.id} className="flex items-center justify-between p-3 border rounded">
+                  <div>
+                    <div className="font-medium">Report Date: {f5.report_date ? new Date(f5.report_date).toLocaleDateString() : '-'}</div>
+                    <div className="text-sm text-muted-foreground">
+                      Activities: {f5.activities_count || 0}
+                    </div>
+                  </div>
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      setF5ListOpen(false);
+                      setSelectedF5Id(f5.id);
+                      setViewF5Open(true);
+                    }}
+                  >View/Edit</Button>
+                </div>
+              ))
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 } 

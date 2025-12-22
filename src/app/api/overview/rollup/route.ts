@@ -22,36 +22,50 @@ function sumPlanFromExpenses(expenses: any): number {
   }
 }
 
+// Helper function to normalize state names consistently
+function normalizeStateName(state: any): string {
+  if (!state) return 'Unknown'
+  const normalized = String(state).trim()
+  return normalized === '' ? 'Unknown' : normalized
+}
+
+// Helper function to fetch all rows using pagination
+const fetchAllRows = async (supabase: any, table: string, select: string) => {
+  let allData: any[] = []
+  let from = 0
+  const pageSize = 1000
+  let hasMore = true
+
+  while (hasMore) {
+    const { data: page, error } = await supabase
+      .from(table)
+      .select(select)
+      .range(from, from + pageSize - 1)
+    
+    if (error) throw error
+    
+    if (page && page.length > 0) {
+      allData = [...allData, ...page]
+      from += pageSize
+      hasMore = page.length === pageSize
+    } else {
+      hasMore = false
+    }
+  }
+  
+  return allData
+}
+
 export async function GET(request: Request) {
   try {
     const supabase = getSupabaseRouteClient()
-    const { searchParams } = new URL(request.url)
-    const donor = searchParams.get('donor')
-    const grant = searchParams.get('grant')
-    const state = searchParams.get('state')
-    const err = searchParams.get('err')
 
     // Build project filter (include more statuses to catch F5 projects)
-    let pq = supabase
+    const { data: projects } = await supabase
       .from('err_projects')
-      .select('id, state, grant_call_id, emergency_rooms (id, name, name_ar, err_code), planned_activities, expenses, source, status, funding_status, mou_id')
+      .select('id, state, grant_call_id, grant_grid_id, emergency_rooms (id, name, name_ar, err_code), planned_activities, expenses, source, status, funding_status, mou_id')
       .in('status', ['approved', 'active', 'pending'])
       .in('funding_status', ['committed', 'allocated'])
-    if (grant) pq = pq.eq('grant_call_id', grant)
-    if (state) pq = pq.eq('state', state)
-    if (err) pq = pq.eq('emergency_room_id', err)
-    // If donor is provided, limit via grant calls
-    let grantIds: string[] | null = null
-    if (donor) {
-      const { data: gc } = await supabase.from('grant_calls').select('id').eq('donor_id', donor)
-      grantIds = (gc || []).map((g:any)=> g.id)
-      if (grantIds.length === 0) return NextResponse.json({ kpis: {}, rows: [] })
-      pq = pq.in('grant_call_id', grantIds)
-    }
-    const { data: projects } = await pq
-    
-    console.log('Found projects:', projects?.length || 0)
-    console.log('Project IDs:', projects?.map((p:any) => p.id) || [])
 
     // Resolve MOU codes for projects that have mou_id
     const mouIds = Array.from(new Set(((projects || []).map((p:any)=> p.mou_id).filter(Boolean)))) as string[]
@@ -75,9 +89,6 @@ export async function GET(request: Request) {
     let f5q = supabase.from('err_program_report').select('id, project_id, report_date')
     if (projectIds.length) f5q = f5q.in('project_id', projectIds)
     const { data: f5Reports } = await f5q
-    
-    console.log('Found F5 reports:', f5Reports?.length || 0)
-    console.log('F5 report project IDs:', f5Reports?.map((f:any) => f.project_id) || [])
     
     // Get F5 reach data for individual and family totals
     const f5ReportIds = (f5Reports || []).map((f:any) => f.id)
@@ -115,7 +126,7 @@ export async function GET(request: Request) {
       f5ByProject.set(pid, { count, last })
     }
 
-    // Build project-level rows
+    // Build project-level rows from err_projects
     const projRows = (projects || []).map((p:any) => {
       // Use expenses for mutual_aid_portal projects, otherwise use planned_activities
       const plan = p.source === 'mutual_aid_portal' 
@@ -130,6 +141,7 @@ export async function GET(request: Request) {
         state: p.state,
         err_id: p.emergency_rooms?.err_code || p.emergency_rooms?.name || null,
         grant_call_id: p.grant_call_id,
+        grant_grid_id: p.grant_grid_id,
         has_mou: !!p.mou_id,
         mou_code: p.mou_id ? (mouCodeById[p.mou_id] || null) : null,
         plan,
@@ -139,28 +151,83 @@ export async function GET(request: Request) {
         f4_count: agg.count,
         last_report_date: agg.last,
         f5_count: f5Agg.count,
-        last_f5_date: f5Agg.last
+        last_f5_date: f5Agg.last,
+        is_historical: false
       }
     })
 
+    // ===== Fetch and process historical data from activities_raw_import =====
+    // Fetch all historical data
+    const historicalData = await fetchAllRows(
+      supabase,
+      'activities_raw_import',
+      'id,"ERR CODE","ERR Name","State","Project Donor","USD","MOU Signed","F4","F5","Date Report Completed","Serial Number","Target (Ind.)","Target (Fam.)"'
+    )
+
+    // Convert historical data to project row format
+    const historicalRows = (historicalData || []).map((row: any) => {
+      const usd = Number(row['USD'] || row['usd'] || row.USD || 0)
+      const hasMou = row['MOU Signed'] && String(row['MOU Signed']).trim().toLowerCase() !== 'no' && String(row['MOU Signed']).trim() !== ''
+      const f4Value = row['F4'] || row['f4'] || row.F4
+      const f5Value = row['F5'] || row['f5'] || row.F5
+      const hasF4 = f4Value && String(f4Value).trim() !== '' && String(f4Value).trim().toLowerCase() !== 'no'
+      const hasF5 = f5Value && String(f5Value).trim() !== '' && String(f5Value).trim().toLowerCase() !== 'no'
+      const reportDate = row['Date Report Completed'] || row['date_report_completed'] || row['Date Report Completed']
+      const projectDonor = row['Project Donor'] || row['project_donor'] || row['Project Donor'] || null
+      
+      return {
+        project_id: `historical_${row.id}`, // Use a prefix to distinguish historical projects
+        state: normalizeStateName(row['State'] || row['state'] || row.State),
+        err_id: row['ERR CODE'] || row['ERR Name'] || row['err_code'] || row['err_name'] || null,
+        grant_call_id: null, // Historical data doesn't have grant_call_id
+        grant_grid_id: null, // Historical data doesn't have grant_grid_id
+        project_donor: projectDonor, // For historical projects, use "Project Donor" field
+        has_mou: hasMou,
+        mou_code: hasMou ? (row['MOU Signed'] || 'Yes') : null,
+        plan: usd,
+        actual: 0, // Historical data doesn't have actual expenses from err_summary
+        variance: usd, // Since actual is 0, variance equals plan
+        burn: 0, // No actual expenses, so burn is 0
+        f4_count: hasF4 ? 1 : 0,
+        last_report_date: reportDate || null,
+        f5_count: hasF5 ? 1 : 0,
+        last_f5_date: reportDate || null, // Use same date if available
+        is_historical: true
+      }
+    })
+
+    // Combine err_projects and historical data
+    const allRows = [...projRows, ...historicalRows]
+
+    // Calculate target individuals and families from historical data
+    const historicalTargetIndividuals = (historicalData || []).reduce((sum, row: any) => {
+      const targetInd = row['Target (Ind.)'] || row['target_ind'] || row['Target (Ind.)']
+      return sum + (Number(targetInd) || 0)
+    }, 0)
+    
+    const historicalTargetFamilies = (historicalData || []).reduce((sum, row: any) => {
+      const targetFam = row['Target (Fam.)'] || row['target_fam'] || row['Target (Fam.)']
+      return sum + (Number(targetFam) || 0)
+    }, 0)
+
     // Roll up for KPIs in current slice
     const kpis = {
-      projects: projRows.length,
-      plan: projRows.reduce((s,r)=> s + r.plan, 0),
-      actual: projRows.reduce((s,r)=> s + r.actual, 0),
+      projects: allRows.length,
+      plan: allRows.reduce((s,r)=> s + r.plan, 0),
+      actual: allRows.reduce((s,r)=> s + r.actual, 0),
       variance: 0,
       burn: 0,
-      f4_count: projRows.reduce((s,r)=> s + r.f4_count, 0),
-      last_report_date: projRows.map(r=> r.last_report_date).filter(Boolean).sort().slice(-1)[0] || null,
-      f5_count: projRows.reduce((s,r)=> s + r.f5_count, 0),
-      last_f5_date: projRows.map(r=> r.last_f5_date).filter(Boolean).sort().slice(-1)[0] || null,
-      f5_total_individuals: totalIndividuals,
-      f5_total_families: totalFamilies
+      f4_count: allRows.reduce((s,r)=> s + r.f4_count, 0),
+      last_report_date: allRows.map(r=> r.last_report_date).filter(Boolean).sort().slice(-1)[0] || null,
+      f5_count: allRows.reduce((s,r)=> s + r.f5_count, 0),
+      last_f5_date: allRows.map(r=> r.last_f5_date).filter(Boolean).sort().slice(-1)[0] || null,
+      f5_total_individuals: totalIndividuals + historicalTargetIndividuals,
+      f5_total_families: totalFamilies + historicalTargetFamilies
     }
     kpis.variance = kpis.plan - kpis.actual
     kpis.burn = kpis.plan > 0 ? kpis.actual / kpis.plan : 0
 
-    return NextResponse.json({ kpis, rows: projRows })
+    return NextResponse.json({ kpis, rows: allRows })
   } catch (e) {
     console.error('overview/rollup error', e)
     return NextResponse.json({ error: 'Failed to load rollup' }, { status: 500 })

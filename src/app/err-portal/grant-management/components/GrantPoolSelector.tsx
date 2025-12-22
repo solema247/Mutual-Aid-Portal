@@ -97,6 +97,12 @@ export default function GrantPoolSelector({ cycleId, onGrantsChanged }: GrantPoo
   const handleAddGrant = async () => {
     if (!selectedGrant || !amountIncluded) return
 
+    // Check if cycle already has a grant call (enforce single grant call per cycle)
+    if (includedGrants.length > 0) {
+      alert('This cycle already has a grant call. Please remove it before adding a new one.')
+      return
+    }
+
     // Get the selected grant
     const selectedGrantCall = availableGrants.find(g => g.id === selectedGrant)
     if (!selectedGrantCall) return
@@ -122,7 +128,10 @@ export default function GrantPoolSelector({ cycleId, onGrantsChanged }: GrantPoo
         }),
       })
 
-      if (!response.ok) throw new Error('Failed to add grant to cycle')
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.error || 'Failed to add grant to cycle')
+      }
 
       setIsAddOpen(false)
       setSelectedGrant('')
@@ -131,7 +140,7 @@ export default function GrantPoolSelector({ cycleId, onGrantsChanged }: GrantPoo
       onGrantsChanged?.() // Notify parent that grants changed
     } catch (error) {
       console.error('Error adding grant:', error)
-      alert('Failed to add grant to cycle')
+      alert(error instanceof Error ? error.message : 'Failed to add grant to cycle')
     }
   }
 
@@ -179,12 +188,21 @@ export default function GrantPoolSelector({ cycleId, onGrantsChanged }: GrantPoo
         <h3 className="text-lg font-semibold flex items-center gap-2">
           <Building2 className="h-5 w-5" />
           {t('err:cycles.pool.title')}
+          {includedGrants.length > 0 && (
+            <span className="text-sm text-muted-foreground font-normal">
+              (One grant call per cycle)
+            </span>
+          )}
         </h3>
           <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
             <DialogTrigger asChild>
-              <Button size="sm" className="bg-[#007229] hover:bg-[#007229]/90 text-white">
+              <Button 
+                size="sm" 
+                className="bg-[#007229] hover:bg-[#007229]/90 text-white"
+                disabled={includedGrants.length > 0}
+              >
                 <Plus className="h-4 w-4 mr-2" />
-                {t('err:cycles.pool.add_grant')}
+                {includedGrants.length > 0 ? 'Grant Already Added' : t('err:cycles.pool.add_grant')}
               </Button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-[500px]">

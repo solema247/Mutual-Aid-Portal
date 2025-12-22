@@ -234,7 +234,7 @@ function F4F5ReportingPageContent() {
           </Card>
 
           <UploadF4Modal open={uploadOpen} onOpenChange={setUploadOpen} onSaved={load} />
-          <ViewF4Modal summaryId={viewId} open={viewOpen} onOpenChange={(v)=>{ setViewOpen(v); if (!v) setViewId(null) }} />
+          <ViewF4Modal summaryId={viewId} open={viewOpen} onOpenChange={(v)=>{ setViewOpen(v); if (!v) setViewId(null) }} onSaved={load} />
         </TabsContent>
 
         <TabsContent value="f5" className="mt-4 space-y-4">

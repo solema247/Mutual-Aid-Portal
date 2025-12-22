@@ -40,8 +40,9 @@ export async function GET(
           }
         }, 0)
 
+      // Pending = all projects assigned to this state allocation that are not yet committed
       const totalPending = projects
-        .filter((p: any) => p.status === 'pending' && p.funding_status === 'allocated')
+        .filter((p: any) => p.funding_status !== 'committed')
         .reduce((sum: number, p: any) => {
           try {
             const expenses = typeof p.expenses === 'string' ? JSON.parse(p.expenses) : p.expenses

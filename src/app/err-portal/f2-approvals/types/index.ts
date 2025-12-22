@@ -61,6 +61,12 @@ export interface CommittedF1 {
   funding_cycle_id: string | null
   funding_cycle_name: string | null
   mou_id?: string | null
+  file_key?: string | null
+  temp_file_key?: string | null
+  grant_id?: string | null
+  grant_serial_id?: string | null
+  workplan_number?: number | null
+  approval_file_key?: string | null
 }
 
 export interface GrantCallOption {
@@ -75,6 +81,7 @@ export interface FilterOptions {
   donors: Array<{ id: string; name: string }>
   cycles: Array<{ id: string; name: string; year: number }>
   states: Array<{ name: string }>
+  grants: Array<{ grant_id: string; donor_name: string; project_name: string }>
 }
 
 export interface StateAllocation {

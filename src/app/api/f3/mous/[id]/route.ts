@@ -31,9 +31,15 @@ export async function GET(
         finance_officer_phone,
         project_objectives,
         intended_beneficiaries,
+        estimated_beneficiaries,
         planned_activities,
         locality,
         state,
+        expenses,
+        err_id,
+        emergency_room_id,
+        grant_id,
+        emergency_rooms (name, name_ar, err_code),
         "Sector (Primary)",
         "Sector (Secondary)"
       `)
@@ -77,11 +83,113 @@ export async function GET(
       partner = partnerRow
     }
 
+    // Parse signatures JSON if it exists
+    if (mou && (mou as any).signatures && typeof (mou as any).signatures === 'string') {
+      try {
+        (mou as any).signatures = JSON.parse((mou as any).signatures)
+      } catch (e: unknown) {
+        if (typeof console !== 'undefined' && console.error) {
+          console.error('Failed to parse signatures JSON:', e)
+        }
+        (mou as any).signatures = null
+      }
+    }
+
     return NextResponse.json({ mou, projects: resolvedProjects, partner })
   } catch (error) {
-    console.error('Error loading MOU detail:', error)
+    if (typeof console !== 'undefined' && console.error) {
+      console.error('Error loading MOU detail:', error)
+    }
     return NextResponse.json({ error: 'Failed to load MOU detail' }, { status: 500 })
   }
 }
 
+// PATCH /api/f3/mous/[id] - update MOU editable fields
+export async function PATCH(
+  request: Request,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const supabase = getSupabaseRouteClient()
+    const id = params.id
+    const body = await request.json()
 
+    // Only allow updating specific editable fields
+    const allowedFields = [
+      'partner_name',
+      'err_name',
+      'start_date',
+      'end_date',
+      'banking_details_override',
+      'partner_contact_override',
+      'err_contact_override',
+      'partner_signature',
+      'err_signature',
+      'signature_date',
+      'signatures'
+    ]
+
+    const updates: any = {}
+    for (const field of allowedFields) {
+      if (field in body) {
+        if (field === 'signatures') {
+          // Handle signatures as JSON array
+          if (Array.isArray(body[field]) && body[field].length > 0) {
+            try {
+              updates[field] = JSON.stringify(body[field])
+            } catch (e: unknown) {
+              if (typeof console !== 'undefined' && console.error) {
+                console.error('Error stringifying signatures:', e)
+              }
+              return NextResponse.json(
+                { error: 'Failed to serialize signatures data' },
+                { status: 400 }
+              )
+            }
+          } else {
+            updates[field] = null
+          }
+        } else {
+          updates[field] = body[field] === '' ? null : body[field]
+        }
+      }
+    }
+
+    // Update the MOU
+    const { data: updated, error: updateErr } = await supabase
+      .from('mous')
+      .update(updates)
+      .eq('id', id)
+      .select('*')
+      .single()
+
+    if (updateErr) {
+      if (typeof console !== 'undefined' && console.error) {
+        console.error('Error updating MOU:', updateErr)
+      }
+      return NextResponse.json(
+        { error: 'Failed to update MOU', details: updateErr.message },
+        { status: 500 }
+      )
+    }
+
+    // Parse signatures JSON if it exists
+    if (updated && (updated as any).signatures && typeof (updated as any).signatures === 'string') {
+      try {
+        (updated as any).signatures = JSON.parse((updated as any).signatures)
+      } catch (e: unknown) {
+        if (typeof console !== 'undefined' && console.error) {
+          console.error('Failed to parse signatures JSON in response:', e)
+        }
+        (updated as any).signatures = null
+      }
+    }
+
+    return NextResponse.json(updated)
+  } catch (error) {
+    if (typeof console !== 'undefined' && console.error) {
+      console.error('Error updating MOU:', error)
+    }
+    return NextResponse.json({ error: 'Failed to update MOU' }, { status: 500 })
+  }
+}

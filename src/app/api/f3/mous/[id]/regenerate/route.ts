@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
+import { aggregateObjectives, aggregateBeneficiaries, aggregatePlannedActivities, aggregatePlannedActivitiesDetailed, aggregateLocations, getBankingDetails, getBudgetTable } from '@/lib/mou-aggregation'
 
 export async function POST(
   _request: Request,
@@ -11,15 +12,46 @@ export async function POST(
     const { data: mou, error: mouErr } = await supabase.from('mous').select('*').eq('id', id).single()
     if (mouErr || !mou) throw mouErr || new Error('MOU not found')
 
-    const { data: proj } = await supabase
+    // Load all projects for aggregation
+    const { data: projects } = await supabase
       .from('err_projects')
-      .select('project_objectives, intended_beneficiaries, planned_activities, locality, state, banking_details')
+      .select('project_objectives, intended_beneficiaries, estimated_beneficiaries, planned_activities, planned_activities_resolved, locality, state, banking_details, expenses, err_id, emergency_room_id, grant_id, emergency_rooms (name, name_ar, err_code)')
       .eq('mou_id', id)
-      .limit(1)
-      .maybeSingle()
+    
+    // Transform projects to match Project type (convert emergency_rooms array to object)
+    const transformedProjects = (projects || []).map((p: any) => ({
+      ...p,
+      emergency_rooms: Array.isArray(p.emergency_rooms) && p.emergency_rooms.length > 0
+        ? p.emergency_rooms[0]
+        : p.emergency_rooms || null
+    }))
+    
+    // Aggregate data from all projects
+    const aggregated = {
+      objectives: aggregateObjectives(transformedProjects),
+      beneficiaries: aggregateBeneficiaries(transformedProjects),
+      activities: aggregatePlannedActivities(transformedProjects),
+      activitiesDetailed: aggregatePlannedActivitiesDetailed(transformedProjects),
+      locations: aggregateLocations(transformedProjects),
+      banking: getBankingDetails(transformedProjects),
+      budgetTable: getBudgetTable(transformedProjects)
+    }
 
     const total = Number(mou.total_amount || 0)
     const endDate = mou.end_date as string | null
+    
+    // Parse signatures JSON if it exists
+    let signatures: any[] = []
+    if ((mou as any).signatures) {
+      try {
+        signatures = typeof (mou as any).signatures === 'string' 
+          ? JSON.parse((mou as any).signatures) 
+          : (mou as any).signatures
+      } catch (e) {
+        console.error('Failed to parse signatures JSON:', e)
+        signatures = []
+      }
+    }
 
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8" />
   <style>body{font-family:Arial,Helvetica,sans-serif;color:#111;line-height:1.5}h2{font-size:16px;margin:16px 0 8px}.section{border:1px solid #e5e7eb;border-radius:8px;padding:12px;margin:12px 0}.row{display:table;width:100%;table-layout:fixed}.col{display:table-cell;vertical-align:top;width:50%;padding:8px}.box{border:1px solid #e5e7eb;border-radius:6px;padding:8px}ul{margin:4px 0;padding-left:18px}.rtl{direction:rtl}.muted{color:#6b7280;font-size:12px}.meta{margin-bottom:8px}</style>
@@ -36,10 +68,10 @@ export async function POST(
     <div class="muted">This will be accomplished by undertaking the following activities:</div>
     <div class="row">
       <div class="col"><div class="box"><div style="font-weight:600;margin-bottom:6px;">${mou.err_name} shall</div>
-      ${proj?.project_objectives ? `<div><strong>Objectives</strong><div>${String(proj.project_objectives).replace(/\n/g,'<br/>')}</div></div>` : ''}
-      ${proj?.intended_beneficiaries ? `<div style="margin-top:6px;"><strong>Target Beneficiaries</strong><div>${String(proj.intended_beneficiaries).replace(/\n/g,'<br/>')}</div></div>` : ''}
-      ${proj?.planned_activities ? `<div style="margin-top:6px;"><strong>Planned Activities</strong><div>${String(proj.planned_activities).replace(/\n/g,'<br/>')}</div></div>` : ''}
-      ${(proj?.locality || proj?.state) ? `<div class=muted style=margin-top:6px;>Location: ${proj?.locality || ''} / ${proj?.state || ''}</div>` : ''}
+      ${aggregated.objectives ? `<div><strong>Objectives</strong><div>${String(aggregated.objectives).replace(/\n/g,'<br/>')}</div></div>` : ''}
+      ${aggregated.beneficiaries ? `<div style="margin-top:6px;"><strong>Target Beneficiaries</strong><div>${String(aggregated.beneficiaries).replace(/\n/g,'<br/>')}</div></div>` : ''}
+      ${(aggregated.activitiesDetailed || aggregated.activities) ? `<div style="margin-top:6px;"><strong>Planned Activities</strong><div>${String(aggregated.activitiesDetailed || aggregated.activities).replace(/\n/g,'<br/>')}</div></div>` : ''}
+      ${(aggregated.locations.localities || aggregated.locations.state) ? `<div class=muted style=margin-top:6px;>Location: ${aggregated.locations.localities || ''} / ${aggregated.locations.state || ''}</div>` : ''}
       </div></div>
       <div class="col"><div class="box"><div style="font-weight:600;margin-bottom:6px;">${mou.partner_name} shall</div>
         <ul>
@@ -64,18 +96,79 @@ export async function POST(
     <div class=row><div class=col><div class=box>The ${mou.partner_name} will provide a grant of $${total.toLocaleString()} upon signing this MOU. Disbursement and proof-of-payment requirements apply per policy.</div></div>
     <div class=col><div class="box rtl">سيقوم ${mou.partner_name} بتقديم منحة قدرها $${total.toLocaleString()} عند توقيع مذكرة التفاهم هذه. تنطبق متطلبات الصرف وإثبات الدفع وفق السياسات المعمول بها.</div></div></div>
   </div>
-  <div class="section"><h2>5. Budget</h2>
+  <div class="section"><h2>5. Approved Accounts</h2>
+    <div class=row><div class=col><div class=box>${mou.banking_details_override ? String(mou.banking_details_override).replace(/\n/g,'<br/>') : (aggregated.banking ? String(aggregated.banking).replace(/\n/g,'<br/>') : 'Account details as shared and approved by ERR will be used for disbursement.')}</div></div>
+    <div class=col><div class="box rtl">${mou.banking_details_override ? String(mou.banking_details_override).replace(/\n/g,'<br/>') : (aggregated.banking ? String(aggregated.banking).replace(/\n/g,'<br/>') : 'تُستخدم تفاصيل الحساب المعتمدة من غرفة الطوارئ في عمليات الصرف.')}</div></div></div>
+  </div>
+  <div class="section"><h2>6. Budget</h2>
     <div class=row><div class=col><div class=box>A detailed budget is maintained in the F1(s) linked to this MOU. Procurement procedures apply; changes or obstacles must be reported at least 24 hours in advance.</div></div>
     <div class=col><div class="box rtl">يتم الاحتفاظ بميزانية تفصيلية في نماذج F1 المرتبطة بهذه المذكرة. تُطبق إجراءات الشراء، ويجب الإبلاغ عن أي تغييرات أو عوائق قبل 24 ساعة على الأقل.</div></div></div>
-  </div>
-  <div class="section"><h2>6. Approved Accounts</h2>
-    <div class=row><div class=col><div class=box>${proj?.banking_details ? String(proj.banking_details).replace(/\n/g,'<br/>') : 'Account details as shared and approved by ERR will be used for disbursement.'}</div></div>
-    <div class=col><div class="box rtl">${proj?.banking_details ? String(proj.banking_details).replace(/\n/g,'<br/>') : 'تُستخدم تفاصيل الحساب المعتمدة من غرفة الطوارئ في عمليات الصرف.'}</div></div></div>
+    ${aggregated.budgetTable ? `<div style="margin-top: 12px;">${aggregated.budgetTable}</div>` : ''}
   </div>
   <div class="section"><h2>7. Duration</h2>
-    <div>This MOU is effective upon signature by authorized officials of both parties. ${endDate ? `It will terminate on ${endDate}.` : ''} Either party may terminate with written notification.</div>
+    <div>This MOU is effective ${mou.start_date ? `from ${mou.start_date}` : 'upon signature by authorized officials of both parties'}. ${endDate ? `It will terminate on ${endDate}.` : ''} Either party may terminate with written notification.</div>
   </div>
-  <div class="section"><h2>8. Contact Information</h2><div>Partner: ${mou.partner_name}<br/>ERR: ${mou.err_name}</div></div>
+  <div class="section"><h2>8. Contact Information</h2>
+    <div class=row>
+      <div class=col><div class=box>${mou.partner_contact_override ? String(mou.partner_contact_override).replace(/\n/g,'<br/>') : `Partner: ${mou.partner_name}`}</div></div>
+      <div class=col><div class=box>${mou.err_contact_override ? String(mou.err_contact_override).replace(/\n/g,'<br/>') : `ERR: ${mou.err_name}`}</div></div>
+    </div>
+    <div style="margin-top:24px;padding-top:16px;border-top:1px solid #e5e7eb">
+      ${signatures.length > 0 ? signatures.map((sig, idx) => `
+        <div class=row style="margin-top:${idx > 0 ? '16px' : '0'};margin-bottom:16px">
+          <div class=col>
+            <div style="margin-bottom:8px;font-weight:600">${sig.name || `Signature ${idx + 1}`}${sig.role ? ` (${sig.role})` : ''}</div>
+            <div style="border-bottom:2px solid #9ca3af;min-height:50px;padding-bottom:4px">&nbsp;</div>
+          </div>
+          <div class=col>
+            <div class="box rtl" style="margin-bottom:8px;font-weight:600">${sig.name || `التوقيع ${idx + 1}`}${sig.role ? ` (${sig.role})` : ''}</div>
+            <div class="box rtl" style="border-bottom:2px solid #9ca3af;min-height:50px;padding-bottom:4px">&nbsp;</div>
+          </div>
+        </div>
+        <div class=row style="margin-top:8px;margin-bottom:16px">
+          <div class=col>
+            <div style="margin-bottom:8px;font-weight:600">Date</div>
+            <div style="border-bottom:2px solid #9ca3af;min-height:50px;padding-bottom:4px">${sig.date ? new Date(sig.date).toLocaleDateString() : '&nbsp;'}</div>
+          </div>
+          <div class=col>
+            <div class="box rtl" style="margin-bottom:8px;font-weight:600">التاريخ</div>
+            <div class="box rtl" style="border-bottom:2px solid #9ca3af;min-height:50px;padding-bottom:4px">${sig.date ? new Date(sig.date).toLocaleDateString() : '&nbsp;'}</div>
+          </div>
+        </div>
+      `).join('') : `
+        <div class=row style="margin-top:16px">
+          <div class=col>
+            <div style="margin-bottom:8px;font-weight:600">Partner Signature</div>
+            <div style="border-bottom:2px solid #9ca3af;min-height:50px;padding-bottom:4px">${mou.partner_signature || '&nbsp;'}</div>
+          </div>
+          <div class=col>
+            <div class="box rtl" style="margin-bottom:8px;font-weight:600">توقيع الشريك</div>
+            <div class="box rtl" style="border-bottom:2px solid #9ca3af;min-height:50px;padding-bottom:4px">${mou.partner_signature || '&nbsp;'}</div>
+          </div>
+        </div>
+        <div class=row style="margin-top:16px">
+          <div class=col>
+            <div style="margin-bottom:8px;font-weight:600">ERR Signature</div>
+            <div style="border-bottom:2px solid #9ca3af;min-height:50px;padding-bottom:4px">${mou.err_signature || '&nbsp;'}</div>
+          </div>
+          <div class=col>
+            <div class="box rtl" style="margin-bottom:8px;font-weight:600">توقيع غرفة الطوارئ</div>
+            <div class="box rtl" style="border-bottom:2px solid #9ca3af;min-height:50px;padding-bottom:4px">${mou.err_signature || '&nbsp;'}</div>
+          </div>
+        </div>
+        <div class=row style="margin-top:16px">
+          <div class=col>
+            <div style="margin-bottom:8px;font-weight:600">Date of Signature</div>
+            <div style="border-bottom:2px solid #9ca3af;min-height:50px;padding-bottom:4px">${mou.signature_date ? new Date(mou.signature_date).toLocaleDateString() : '&nbsp;'}</div>
+          </div>
+          <div class=col>
+            <div class="box rtl" style="margin-bottom:8px;font-weight:600">تاريخ التوقيع</div>
+            <div class="box rtl" style="border-bottom:2px solid #9ca3af;min-height:50px;padding-bottom:4px">${mou.signature_date ? new Date(mou.signature_date).toLocaleDateString() : '&nbsp;'}</div>
+          </div>
+        </div>
+      `}
+    </div>
+  </div>
   </body></html>`
 
     const filePath = `f3-mous/${mou.id}/${mou.mou_code}.doc`

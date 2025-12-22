@@ -61,13 +61,12 @@ export async function GET(
       }
     }, 0)
 
-    // Get total pending (from pending workplans)
+    // Get total pending (all projects assigned to this cycle that are not yet committed)
     const { data: pendingProjects, error: pendingError } = await supabase
       .from('err_projects')
       .select('expenses')
       .eq('funding_cycle_id', params.id)
-      .eq('status', 'pending')
-      .eq('funding_status', 'allocated')
+      .neq('funding_status', 'committed')
 
     if (pendingError) throw pendingError
 

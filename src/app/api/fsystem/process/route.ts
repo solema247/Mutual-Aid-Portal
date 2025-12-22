@@ -493,9 +493,55 @@ Return all fields in this format:
     // ai duration
 
     // Sanitize the JSON string (basic cleanup only)
-    const sanitizedContent = content
+    let sanitizedContent = content
       .replace(/[\u0000-\u001F\u007F-\u009F]/g, '') // Remove control characters
       .replace(/^```[a-zA-Z]*\n|```$/g, '') // Strip markdown fences if present
+
+    // Fix unescaped backslashes in JSON string values
+    // Valid JSON escape sequences are: \", \\, \/, \b, \f, \n, \r, \t, \uXXXX
+    // Any other backslash must be escaped as \\
+    // Process character by character to properly handle string boundaries
+    let inString = false
+    let result = ''
+    for (let i = 0; i < sanitizedContent.length; i++) {
+      const char = sanitizedContent[i]
+      
+      // Check if we're entering/exiting a string (unescaped quote)
+      // Count consecutive backslashes before the quote to determine if it's escaped
+      if (char === '"') {
+        let backslashCount = 0
+        let j = i - 1
+        while (j >= 0 && sanitizedContent[j] === '\\') {
+          backslashCount++
+          j--
+        }
+        // If even number of backslashes (or zero), the quote is not escaped
+        if (backslashCount % 2 === 0) {
+          inString = !inString
+        }
+        result += char
+        continue
+      }
+      
+      // If we're inside a string and see a backslash
+      if (inString && char === '\\') {
+        const nextChar = i + 1 < sanitizedContent.length ? sanitizedContent[i + 1] : ''
+        // Check if it's a valid escape sequence
+        const validEscapes = ['"', '\\', '/', 'b', 'f', 'n', 'r', 't']
+        const isUnicodeEscape = nextChar === 'u' && i + 5 < sanitizedContent.length && /^u[0-9a-fA-F]{4}/.test(sanitizedContent.substring(i + 1, i + 6))
+        
+        if (validEscapes.includes(nextChar) || isUnicodeEscape) {
+          // Valid escape sequence, keep as is
+          result += char
+        } else {
+          // Invalid escape, escape the backslash itself (double it)
+          result += '\\\\'
+        }
+      } else {
+        result += char
+      }
+    }
+    sanitizedContent = result
 
     try {
       const structuredData = JSON.parse(sanitizedContent)

@@ -105,8 +105,13 @@ export async function POST(request: Request) {
 
     if (cycleError) throw cycleError
 
-    // Add grant inclusions if provided
+    // Add grant inclusions if provided (enforce single grant call per cycle)
     if (grant_inclusions && grant_inclusions.length > 0) {
+      // Validate that only one grant inclusion is being added
+      if (grant_inclusions.length > 1) {
+        return NextResponse.json({ error: 'Only one grant call per cycle is allowed' }, { status: 400 })
+      }
+
       const inclusions = grant_inclusions.map((inclusion: any) => ({
         cycle_id: newCycle.id,
         grant_call_id: inclusion.grant_call_id,

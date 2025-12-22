@@ -8,6 +8,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { supabase } from '@/lib/supabaseClient'
 import PoolDashboard from '../f1-work-plans/components/PoolDashboard'
+import PoolByState from './components/PoolByState'
+import PoolByDonor from './components/PoolByDonor'
 import UncommittedF1sTab from './components/UncommittedF1sTab'
 import CommittedF1sTab from './components/CommittedF1sTab'
 
@@ -30,24 +32,17 @@ export default function F2ApprovalsPage() {
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+        const res = await fetch('/api/users/me')
         
-        if (sessionError || !session) {
-          router.push('/login')
-          return
+        if (!res.ok) {
+          if (res.status === 401) {
+            router.push('/login')
+            return
+          }
+          throw new Error('Failed to fetch user data')
         }
 
-        const { data: userData, error: userError } = await supabase
-          .from('users')
-          .select('*')
-          .eq('auth_user_id', session.user.id)
-          .single()
-
-        if (userError || !userData) {
-          console.error('Error fetching user data:', userError)
-          router.push('/login')
-          return
-        }
+        const userData = await res.json()
 
         if (userData.status !== 'active') {
           console.error('User account is not active')
@@ -81,16 +76,10 @@ export default function F2ApprovalsPage() {
         </Button>
       </div>
 
-      {/* Allocation overview dashboard (by State and by Donor/Grant) */}
-      <Card>
-        <CardHeader>
-          <CardTitle>{t('f2:allocation_overview')}</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <PoolDashboard showProposals={false} />
-        </CardContent>
-      </Card>
+      {/* Summary Cards */}
+      <PoolDashboard showProposals={false} showByDonor={false} showSummaryCards={true} showByState={false} />
 
+      {/* F2 Approvals - Final Review and Commitment */}
       <Card>
         <CardHeader>
           <CardTitle>{t('f2:page_header')}</CardTitle>
@@ -116,6 +105,12 @@ export default function F2ApprovalsPage() {
           </Tabs>
         </CardContent>
       </Card>
+
+      {/* Allocation Overview - By State */}
+      <PoolByState />
+
+      {/* Allocation Overview - By Donor/Grant */}
+      <PoolByDonor />
     </div>
   )
 }

@@ -62,7 +62,7 @@ export async function GET() {
 export async function PATCH(request: Request) {
   try {
     const supabase = getSupabaseRouteClient()
-    const { id, expenses, grant_call_id, approval_file_key, donor_id, funding_cycle_id, grant_serial_id, workplan_number, cycle_state_allocation_id } = await request.json()
+    const { id, expenses, grant_call_id, approval_file_key, donor_id, funding_cycle_id, grant_serial_id, workplan_number, cycle_state_allocation_id, grant_id, file_key } = await request.json()
     
     if (!id) {
       return NextResponse.json({ error: 'F1 ID is required' }, { status: 400 })
@@ -77,6 +77,8 @@ export async function PATCH(request: Request) {
     if (grant_serial_id !== undefined) updateData.grant_serial_id = grant_serial_id
     if (workplan_number !== undefined) updateData.workplan_number = workplan_number
     if (cycle_state_allocation_id !== undefined) updateData.cycle_state_allocation_id = cycle_state_allocation_id
+    if (grant_id !== undefined) updateData.grant_id = grant_id
+    if (file_key !== undefined) updateData.file_key = file_key
 
     const { error } = await supabase
       .from('err_projects')

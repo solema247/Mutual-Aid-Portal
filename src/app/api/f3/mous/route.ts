@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
+import { aggregateObjectives, aggregateBeneficiaries, aggregatePlannedActivities, aggregatePlannedActivitiesDetailed, aggregateLocations, getBankingDetails, getBudgetTable } from '@/lib/mou-aggregation'
 
 // GET /api/f3/mous - list MOUs (simple)
 export async function GET(request: Request) {
@@ -24,7 +25,21 @@ export async function GET(request: Request) {
         m.partner_name?.toLowerCase().includes(s) ||
         m.err_name?.toLowerCase().includes(s)
       )
-      return NextResponse.json(filtered)
+      
+      // Parse signatures JSON for each MOU
+      const parsed = filtered.map((mou: any) => {
+        if (mou.signatures && typeof mou.signatures === 'string') {
+          try {
+            mou.signatures = JSON.parse(mou.signatures)
+          } catch (e) {
+            console.error('Failed to parse signatures JSON:', e)
+            mou.signatures = null
+          }
+        }
+        return mou
+      })
+      
+      return NextResponse.json(parsed)
     }
 
     if (state) {
@@ -33,7 +48,21 @@ export async function GET(request: Request) {
 
     const { data, error } = await query
     if (error) throw error
-    return NextResponse.json(data || [])
+    
+    // Parse signatures JSON for each MOU
+    const parsed = (data || []).map((mou: any) => {
+      if (mou.signatures && typeof mou.signatures === 'string') {
+        try {
+          mou.signatures = JSON.parse(mou.signatures)
+        } catch (e) {
+          console.error('Failed to parse signatures JSON:', e)
+          mou.signatures = null
+        }
+      }
+      return mou
+    })
+    
+    return NextResponse.json(parsed)
   } catch (error) {
     console.error('Error listing MOUs:', error)
     return NextResponse.json({ error: 'Failed to list MOUs' }, { status: 500 })
@@ -121,23 +150,40 @@ export async function POST(request: Request) {
 
     if (insErr) throw insErr
 
-    // Link projects to the MOU and activate them
+    // Link projects to the MOU (status remains 'approved' until grant assignment)
     const { error: linkErr } = await supabase
       .from('err_projects')
-      .update({ mou_id: inserted.id, status: 'active' })
+      .update({ mou_id: inserted.id })
       .in('id', project_ids)
 
     if (linkErr) throw linkErr
 
     // Generate a styled Word-compatible HTML document (.doc) and upload
     try {
-      // Load one linked project for details
-      const { data: proj } = await supabase
+      // Load all linked projects for aggregation
+      const { data: projects } = await supabase
         .from('err_projects')
-        .select('project_objectives, intended_beneficiaries, planned_activities, locality, state, banking_details')
+        .select('project_objectives, intended_beneficiaries, estimated_beneficiaries, planned_activities, planned_activities_resolved, locality, state, banking_details, expenses, err_id, emergency_room_id, grant_id, emergency_rooms (name, name_ar, err_code)')
         .eq('mou_id', inserted.id)
-        .limit(1)
-        .maybeSingle()
+      
+      // Transform projects to match Project type (convert emergency_rooms array to object)
+      const transformedProjects = (projects || []).map((p: any) => ({
+        ...p,
+        emergency_rooms: Array.isArray(p.emergency_rooms) && p.emergency_rooms.length > 0
+          ? p.emergency_rooms[0]
+          : p.emergency_rooms || null
+      }))
+      
+      // Aggregate data from all projects
+      const aggregated = {
+        objectives: aggregateObjectives(transformedProjects),
+        beneficiaries: aggregateBeneficiaries(transformedProjects),
+        activities: aggregatePlannedActivities(transformedProjects),
+        activitiesDetailed: aggregatePlannedActivitiesDetailed(transformedProjects),
+        locations: aggregateLocations(transformedProjects),
+        banking: getBankingDetails(transformedProjects),
+        budgetTable: getBudgetTable(transformedProjects)
+      }
 
       const html = `<!DOCTYPE html>
 <html>
@@ -176,10 +222,11 @@ export async function POST(request: Request) {
       <div class="col">
         <div class="box">
           <div style="font-weight:600; margin-bottom:6px;">${inserted.err_name} shall</div>
-          ${proj?.project_objectives ? `<div><strong>Objectives</strong><div>${String(proj.project_objectives).replace(/\n/g,'<br/>')}</div></div>` : ''}
-          ${proj?.intended_beneficiaries ? `<div style="margin-top:6px;"><strong>Target Beneficiaries</strong><div>${String(proj.intended_beneficiaries).replace(/\n/g,'<br/>')}</div></div>` : ''}
-          ${proj?.planned_activities ? `<div style="margin-top:6px;"><strong>Planned Activities</strong><div>${String(proj.planned_activities).replace(/\n/g,'<br/>')}</div></div>` : ''}
-          ${(proj?.locality || proj?.state) ? `<div class="muted" style="margin-top:6px;">Location: ${proj?.locality || ''} / ${proj?.state || ''}</div>` : ''}
+          ${aggregated.objectives ? `<div><strong>Objectives</strong><div>${String(aggregated.objectives).replace(/\n/g,'<br/>')}</div></div>` : ''}
+          ${aggregated.beneficiaries ? `<div style="margin-top:6px;"><strong>Target Beneficiaries</strong><div>${String(aggregated.beneficiaries).replace(/\n/g,'<br/>')}</div></div>` : ''}
+          ${(aggregated.activitiesDetailed || aggregated.activities) ? `<div style="margin-top:6px;"><strong>Planned Activities</strong><div>${String(aggregated.activitiesDetailed || aggregated.activities).replace(/\n/g,'<br/>')}</div></div>` : ''}
+          ${(aggregated.locations.localities || aggregated.locations.state) ? `<div class="muted" style="margin-top:6px;">Location: ${aggregated.locations.localities || ''} / ${aggregated.locations.state || ''}</div>` : ''}
+          ${inserted.start_date ? `<div class="muted" style="margin-top:6px;">Start Date: ${inserted.start_date}</div>` : ''}
         </div>
       </div>
       <div class="col">
@@ -222,29 +269,65 @@ export async function POST(request: Request) {
   </div>
 
   <div class="section">
-    <h2>5. Budget</h2>
+    <h2>5. Approved Accounts</h2>
+    <div class="row">
+      <div class="col"><div class="box">${inserted.banking_details_override ? String(inserted.banking_details_override).replace(/\n/g,'<br/>') : (aggregated.banking ? String(aggregated.banking).replace(/\n/g,'<br/>') : 'Account details as shared and approved by ERR will be used for disbursement.')}</div></div>
+      <div class="col"><div class="box rtl">${inserted.banking_details_override ? String(inserted.banking_details_override).replace(/\n/g,'<br/>') : (aggregated.banking ? String(aggregated.banking).replace(/\n/g,'<br/>') : 'تُستخدم تفاصيل الحساب المعتمدة من غرفة الطوارئ في عمليات الصرف.')}</div></div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>6. Budget</h2>
     <div class="row">
       <div class="col"><div class="box">A detailed budget is maintained in the F1(s) linked to this MOU. Procurement procedures apply; changes or obstacles must be reported at least 24 hours in advance.</div></div>
       <div class="col"><div class="box rtl">يتم الاحتفاظ بميزانية تفصيلية في نماذج F1 المرتبطة بهذه المذكرة. تُطبق إجراءات الشراء، ويجب الإبلاغ عن أي تغييرات أو عوائق قبل 24 ساعة على الأقل.</div></div>
     </div>
-  </div>
-
-  <div class="section">
-    <h2>6. Approved Accounts</h2>
-    <div class="row">
-      <div class="col"><div class="box">${proj?.banking_details ? String(proj.banking_details).replace(/\n/g,'<br/>') : 'Account details as shared and approved by ERR will be used for disbursement.'}</div></div>
-      <div class="col"><div class="box rtl">${proj?.banking_details ? String(proj.banking_details).replace(/\n/g,'<br/>') : 'تُستخدم تفاصيل الحساب المعتمدة من غرفة الطوارئ في عمليات الصرف.'}</div></div>
-    </div>
+    ${aggregated.budgetTable ? `<div style="margin-top: 12px;">${aggregated.budgetTable}</div>` : ''}
   </div>
 
   <div class="section">
     <h2>7. Duration</h2>
-    <div>This MOU is effective upon signature by authorized officials of both parties. ${end_date ? `It will terminate on ${end_date}.` : ''} Either party may terminate with written notification.</div>
+    <div>This MOU is effective ${inserted.start_date ? `from ${inserted.start_date}` : 'upon signature by authorized officials of both parties'}. ${end_date ? `It will terminate on ${end_date}.` : ''} Either party may terminate with written notification.</div>
   </div>
 
   <div class="section">
     <h2>8. Contact Information</h2>
-    <div>Partner: ${inserted.partner_name}<br/>ERR: ${inserted.err_name}</div>
+    <div class="row">
+      <div class="col"><div class="box">${inserted.partner_contact_override ? String(inserted.partner_contact_override).replace(/\n/g,'<br/>') : `Partner: ${inserted.partner_name}`}</div></div>
+      <div class="col"><div class="box">${inserted.err_contact_override ? String(inserted.err_contact_override).replace(/\n/g,'<br/>') : `ERR: ${inserted.err_name}`}</div></div>
+    </div>
+    <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid #e5e7eb;">
+      <div class="row" style="margin-top: 16px;">
+        <div class="col">
+          <div style="margin-bottom: 8px; font-weight: 600;">Partner Signature</div>
+          <div style="border-bottom: 2px solid #9ca3af; min-height: 50px; padding-bottom: 4px;">${inserted.partner_signature || '&nbsp;'}</div>
+        </div>
+        <div class="col">
+          <div class="box rtl" style="margin-bottom: 8px; font-weight: 600;">توقيع الشريك</div>
+          <div class="box rtl" style="border-bottom: 2px solid #9ca3af; min-height: 50px; padding-bottom: 4px;">${inserted.partner_signature || '&nbsp;'}</div>
+        </div>
+      </div>
+      <div class="row" style="margin-top: 16px;">
+        <div class="col">
+          <div style="margin-bottom: 8px; font-weight: 600;">ERR Signature</div>
+          <div style="border-bottom: 2px solid #9ca3af; min-height: 50px; padding-bottom: 4px;">${inserted.err_signature || '&nbsp;'}</div>
+        </div>
+        <div class="col">
+          <div class="box rtl" style="margin-bottom: 8px; font-weight: 600;">توقيع غرفة الطوارئ</div>
+          <div class="box rtl" style="border-bottom: 2px solid #9ca3af; min-height: 50px; padding-bottom: 4px;">${inserted.err_signature || '&nbsp;'}</div>
+        </div>
+      </div>
+      <div class="row" style="margin-top: 16px;">
+        <div class="col">
+          <div style="margin-bottom: 8px; font-weight: 600;">Date of Signature</div>
+          <div style="border-bottom: 2px solid #9ca3af; min-height: 50px; padding-bottom: 4px;">${inserted.signature_date ? new Date(inserted.signature_date).toLocaleDateString() : '&nbsp;'}</div>
+        </div>
+        <div class="col">
+          <div class="box rtl" style="margin-bottom: 8px; font-weight: 600;">تاريخ التوقيع</div>
+          <div class="box rtl" style="border-bottom: 2px solid #9ca3af; min-height: 50px; padding-bottom: 4px;">${inserted.signature_date ? new Date(inserted.signature_date).toLocaleDateString() : '&nbsp;'}</div>
+        </div>
+      </div>
+    </div>
   </div>
 
 </body>

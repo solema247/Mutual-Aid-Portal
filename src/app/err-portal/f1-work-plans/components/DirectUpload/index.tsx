@@ -9,7 +9,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Button } from '@/components/ui/button'
 import { FileUp } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
-import type { F1FormData, EmergencyRoom, Sector, State } from '@/app/api/fsystem/types/fsystem'
+import type { F1FormData, EmergencyRoom, State } from '@/app/api/fsystem/types/fsystem'
+import type { RoomWithState } from '@/app/api/rooms/types/rooms'
+
+// Extended type that includes state and all room properties
+type EmergencyRoomWithState = RoomWithState & {
+  err_code: string | null
+  state_reference: string
+}
 import ExtractedDataReview from './ExtractedDataReview'
 import { cn } from '@/lib/utils'
 import { X, Plus } from 'lucide-react'
@@ -17,9 +24,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 
 export default function DirectUpload() {
   const { t } = useTranslation(['common', 'fsystem'])
-  const [rooms, setRooms] = useState<EmergencyRoom[]>([])
+  const [rooms, setRooms] = useState<EmergencyRoomWithState[]>([])
   const [states, setStates] = useState<State[]>([])
-  const [sectors, setSectors] = useState<Sector[]>([])
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   
 
@@ -55,15 +61,6 @@ export default function DirectUpload() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // Fetch sectors
-        const { data: sectorsData, error: sectorsError } = await supabase
-          .from('sectors')
-          .select('*')
-          .order('sector_name_en')
-
-        if (sectorsError) throw sectorsError
-        setSectors(sectorsData)
-
         // Fetch states with distinct state names
         const { data: statesData, error: statesError } = await supabase
           .from('states')
@@ -107,7 +104,16 @@ export default function DirectUpload() {
         const stateIds = (allStateIds || []).map((s: any) => s.id)
         const { data: roomsData, error: roomsError } = await supabase
           .from('emergency_rooms')
-          .select('*')
+          .select(`
+            *,
+            state:states!emergency_rooms_state_reference_fkey(
+              id,
+              state_name,
+              locality,
+              state_name_ar,
+              locality_ar
+            )
+          `)
           .in('state_reference', stateIds)
           .eq('status', 'active')
         if (roomsError) throw roomsError
@@ -291,7 +297,7 @@ export default function DirectUpload() {
       }
 
       // Add the new room to the list and select it
-      setRooms(prev => [...prev, newRoom as EmergencyRoom])
+      setRooms(prev => [...prev, newRoom as EmergencyRoomWithState])
       handleInputChange('emergency_room_id', newRoom.id)
       
       // Close dialog and reset form
@@ -350,6 +356,16 @@ export default function DirectUpload() {
 
       // Add minimal metadata for initial processing
       const selectedState = states.find(s => s.id === formData.state_id)
+      
+      // Get the state from the emergency room's state_reference (this has the correct locality)
+      const roomState = Array.isArray(selectedRoom?.state) 
+        ? selectedRoom?.state[0] 
+        : selectedRoom?.state
+      
+      // Use locality from the room's state_reference, fallback to selected state
+      const locality = roomState?.locality || selectedState?.locality || null
+      const locality_ar = roomState?.locality_ar || selectedState?.locality_ar || null
+      
       const metadata = {
         err_code: selectedRoom?.err_code,
         err_name: selectedRoom?.name_ar || selectedRoom?.name,
@@ -357,8 +373,8 @@ export default function DirectUpload() {
         state_name: selectedState?.state_name || null,
         state_name_ar: selectedState?.state_name_ar || null,
         state_id: selectedState?.id || null,
-        locality: selectedState?.locality || null,
-        locality_ar: selectedState?.locality_ar || null,
+        locality: locality,
+        locality_ar: locality_ar,
         currency: formData.currency,
         exchange_rate: formData.exchange_rate
       }
@@ -407,12 +423,17 @@ export default function DirectUpload() {
       const tempKey = (window as any).__f1_temp_key__ as string
       if (!tempKey) throw new Error('Temp file key missing')
 
-      // Convert expenses to DB format (USD only)
-      const expensesForDB = (translatedData.expenses || []).map((e: any) => ({ activity: e.activity, total_cost: e.total_cost_usd || 0 }))
+      // Convert expenses to DB format (USD only, preserve category and planned_activity tags)
+      const expensesForDB = (translatedData.expenses || []).map((e: any) => ({ 
+        activity: e.activity, 
+        total_cost: e.total_cost_usd || 0,
+        category: e.category || null,
+        planned_activity: e.planned_activity || null,
+        planned_activity_other: e.planned_activity_other || null
+      }))
 
-      // Sector names
-      const primaryNames = sectors.filter(s => formData.primary_sectors.includes(s.id)).map(s => s.sector_name_en).join(', ')
-      const secondaryNames = sectors.filter(s => formData.secondary_sectors.includes(s.id)).map(s => s.sector_name_en).join(', ')
+      // Normalize planned_activities to new format and ensure it's an array of objects
+      const plannedActivitiesForDB = normalizePlannedActivities(translatedData.planned_activities || [])
 
       // ERR room
       const selectedRoom = (rooms as any[]).find(r => r.id === formData.emergency_room_id)
@@ -420,10 +441,9 @@ export default function DirectUpload() {
       // Prepare data for DB - remove metadata fields that will be set in F2
       const { form_currency, exchange_rate, raw_ocr, _selected_state_name, _selected_grant_call_id, _yymm, _existing_serial, _selected_funding_cycle_id, _cycle_state_allocation_id, ...dataForDB } = translatedData
 
-      // Generate project_name: Primary Sector - Secondary Sector - Locality
+      // Generate project_name from locality only (sectors are now set per activity)
       const locality = dataForDB.locality || ''
-      const projectNameParts = [primaryNames, secondaryNames, locality].filter(Boolean)
-      const projectName = projectNameParts.length > 0 ? projectNameParts.join(' - ') : null
+      const projectName = locality || null
 
       // Normalize date for DB (MMYY -> YYYY-MM-01)
       let dbDate: string | null = null
@@ -445,13 +465,13 @@ export default function DirectUpload() {
           ...dataForDB,
           date: dbDate,
           expenses: expensesForDB,
+          planned_activities: plannedActivitiesForDB, // Save as array of objects with category, individuals, families, cost
           emergency_room_id: formData.emergency_room_id,
           err_id: selectedRoom?.err_code || null,
           status: 'pending', // Status for files awaiting F2 approval
           source: 'mutual_aid_portal',
           state: stateName,
-          "Sector (Primary)": primaryNames,
-          "Sector (Secondary)": secondaryNames,
+          // Primary and Secondary categories removed - will be set per activity in planned_activities
           project_name: projectName,
           temp_file_key: tempKey, // Store temp file path
           original_text: originalText,
@@ -500,6 +520,26 @@ export default function DirectUpload() {
   const handleCancelReview = () => {
     setProcessedData(null)
     setIsReviewing(false)
+  }
+
+  // Normalize planned_activities to new format if needed
+  const normalizePlannedActivities = (activities: any[]): any[] => {
+    if (!Array.isArray(activities)) return []
+    if (activities.length === 0) return []
+    
+    // Check if already in new format
+    if (typeof activities[0] === 'object' && activities[0] !== null && 'activity' in activities[0]) {
+      return activities
+    }
+    
+    // Convert old format (string[]) to new format
+    return (activities as string[]).map(activity => ({
+      activity: activity || '',
+      category: null,
+      individuals: null,
+      families: null,
+      planned_activity_cost: null
+    }))
   }
 
   // Translation helper function
@@ -558,15 +598,50 @@ export default function DirectUpload() {
       return translatedItems
     }
 
+    const translatePlannedActivities = async (activities: any[]): Promise<any[]> => {
+      if (!Array.isArray(activities) || activities.length === 0) return []
+      
+      const translatedActivities = []
+      for (const activity of activities) {
+        // Handle both old format (string) and new format (object)
+        if (typeof activity === 'string') {
+          const translated = await translateText(activity)
+          translatedActivities.push({
+            activity: translated || activity,
+            category_id: null,
+            individuals: null,
+            families: null,
+            planned_activity_cost: null
+          })
+        } else if (typeof activity === 'object' && activity !== null) {
+          // New format: object with activity, category, etc.
+          const translatedActivity = await translateText(activity.activity)
+          translatedActivities.push({
+            ...activity,
+            activity: translatedActivity || activity.activity
+          })
+        }
+      }
+      return translatedActivities
+    }
+
     const translateExpenses = async (expenses: any[]): Promise<any[]> => {
       if (!Array.isArray(expenses) || expenses.length === 0) return []
       
       const translatedExpenses = []
       for (const expense of expenses) {
         const translatedActivity = await translateText(expense.activity)
+        const translatedPlannedActivity = expense.planned_activity 
+          ? await translateText(expense.planned_activity) 
+          : expense.planned_activity
+        const translatedPlannedActivityOther = expense.planned_activity_other 
+          ? await translateText(expense.planned_activity_other) 
+          : expense.planned_activity_other
         translatedExpenses.push({
           ...expense,
-          activity: translatedActivity || expense.activity
+          activity: translatedActivity || expense.activity,
+          planned_activity: translatedPlannedActivity || expense.planned_activity,
+          planned_activity_other: translatedPlannedActivityOther || expense.planned_activity_other
         })
       }
       return translatedExpenses
@@ -583,8 +658,16 @@ export default function DirectUpload() {
       program_officer_name: data.program_officer_name,
       reporting_officer_name: data.reporting_officer_name,
       finance_officer_name: data.finance_officer_name,
-      planned_activities: Array.isArray(data.planned_activities) ? [...data.planned_activities] : [],
-      expenses: Array.isArray(data.expenses) ? data.expenses.map((e: any) => ({ activity: e.activity })) : []
+      planned_activities: Array.isArray(data.planned_activities) 
+        ? data.planned_activities.map((a: any) => 
+            typeof a === 'string' ? a : { activity: a.activity }
+          ) 
+        : [],
+      expenses: Array.isArray(data.expenses) ? data.expenses.map((e: any) => ({ 
+        activity: e.activity,
+        planned_activity: e.planned_activity || null,
+        planned_activity_other: e.planned_activity_other || null
+      })) : []
     }
 
     // Translate all text fields
@@ -598,7 +681,7 @@ export default function DirectUpload() {
     translatedData.program_officer_name = await translateText(data.program_officer_name)
     translatedData.reporting_officer_name = await translateText(data.reporting_officer_name)
     translatedData.finance_officer_name = await translateText(data.finance_officer_name)
-    translatedData.planned_activities = await translateArray(data.planned_activities)
+    translatedData.planned_activities = await translatePlannedActivities(data.planned_activities)
     translatedData.expenses = await translateExpenses(data.expenses)
 
     return { translatedData, originalText }
@@ -723,7 +806,7 @@ export default function DirectUpload() {
             {/* No date/serial selection in upload-first step */}
               </div>
 
-          {/* Row 4: Grant Segment */}
+          {/* Grant Segment */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <Label className="mb-2">{t('fsystem:f1.grant_segment')}</Label>
@@ -743,119 +826,6 @@ export default function DirectUpload() {
               </Select>
             </div>
           </div>
-
-          {/* Row 5: Primary and Secondary Sectors */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <Label className="mb-2">{t('fsystem:f1.primary_sectors')}</Label>
-              <Select
-                value={formData.primary_sectors[0] || ''}
-                onValueChange={(value) => {
-                  if (!value) return
-                  const newValues = [...formData.primary_sectors]
-                  if (!newValues.includes(value)) {
-                    newValues.push(value)
-                    handleInputChange('primary_sectors', newValues)
-                  }
-                }}
-              >
-                <SelectTrigger className="h-[38px] w-full">
-                  <SelectValue placeholder={t('fsystem:f1.select_primary_sectors')}>
-                    {formData.primary_sectors.length > 0
-                      ? `${formData.primary_sectors.length} selected`
-                      : t('fsystem:f1.select_primary_sectors')}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  {sectors
-                    .filter(sector => !formData.primary_sectors.includes(sector.id))
-                    .map((sector) => (
-                      <SelectItem key={sector.id} value={sector.id}>
-                        {sector.sector_name_en} {sector.sector_name_ar && `(${sector.sector_name_ar})`}
-                      </SelectItem>
-                    ))}
-                </SelectContent>
-              </Select>
-              {formData.primary_sectors.length > 0 && (
-                <div className="flex flex-wrap gap-1 mt-2">
-                  {formData.primary_sectors.map(sectorId => {
-                    const sector = sectors.find(s => s.id === sectorId)
-                    if (!sector) return null
-                    return (
-                      <Button
-                        key={sector.id}
-                        variant="secondary"
-                        size="sm"
-                        className="bg-emerald-100 hover:bg-emerald-200 text-emerald-700 border-emerald-200"
-                        onClick={() => {
-                          const newValues = formData.primary_sectors.filter(id => id !== sector.id)
-                          handleInputChange('primary_sectors', newValues)
-                        }}
-                      >
-                        {sector.sector_name_en}
-                        <X className="w-4 h-4 ml-2" />
-                      </Button>
-                    )
-                  })}
-                </div>
-              )}
-            </div>
-
-            <div>
-              <Label className="mb-2">{t('fsystem:f1.secondary_sectors')}</Label>
-              <Select
-                value={formData.secondary_sectors[0] || ''}
-                onValueChange={(value) => {
-                  if (!value) return
-                  const newValues = [...formData.secondary_sectors]
-                  if (!newValues.includes(value)) {
-                    newValues.push(value)
-                    handleInputChange('secondary_sectors', newValues)
-                  }
-                }}
-              >
-                <SelectTrigger className="h-[38px] w-full">
-                  <SelectValue placeholder={t('fsystem:f1.select_secondary_sectors')}>
-                    {formData.secondary_sectors.length > 0
-                      ? `${formData.secondary_sectors.length} selected`
-                      : t('fsystem:f1.select_secondary_sectors')}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  {sectors
-                    .filter(sector => !formData.secondary_sectors.includes(sector.id))
-                    .map((sector) => (
-                      <SelectItem key={sector.id} value={sector.id}>
-                        {sector.sector_name_en} {sector.sector_name_ar && `(${sector.sector_name_ar})`}
-                      </SelectItem>
-                    ))}
-                </SelectContent>
-              </Select>
-              {formData.secondary_sectors.length > 0 && (
-                <div className="flex flex-wrap gap-1 mt-2">
-                  {formData.secondary_sectors.map(sectorId => {
-                    const sector = sectors.find(s => s.id === sectorId)
-                    if (!sector) return null
-                    return (
-                      <Button
-                        key={sector.id}
-                        variant="secondary"
-                        size="sm"
-                        className="bg-emerald-100 hover:bg-emerald-200 text-emerald-700 border-emerald-200"
-                        onClick={() => {
-                          const newValues = formData.secondary_sectors.filter(id => id !== sector.id)
-                          handleInputChange('secondary_sectors', newValues)
-                        }}
-                      >
-                        {sector.sector_name_en}
-                        <X className="w-4 h-4 ml-2" />
-                      </Button>
-                    )
-                  })}
-                </div>
-              )}
-            </div>
-          </div>
             </div>
       ) : (
         <ExtractedDataReview
@@ -873,7 +843,7 @@ export default function DirectUpload() {
       )}
 
       {!isReviewing && (
-        <Button type="button" onClick={handleSubmit} disabled={isLoading || !hasRequiredFields()} className="w-full">
+        <Button type="button" onClick={handleSubmit} disabled={isLoading || !hasRequiredFields()} className="w-full bg-green-700 hover:bg-green-800 text-white font-bold">
           <FileUp className="w-4 h-4 mr-2" />
           {isLoading ? t('fsystem:f1.uploading') : t('fsystem:f1.upload_button')}
         </Button>

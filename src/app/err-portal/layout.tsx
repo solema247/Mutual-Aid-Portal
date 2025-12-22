@@ -28,17 +28,14 @@ export default function ErrPortalLayout({
 
   useEffect(() => {
     const getUser = async () => {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (session) {
-        const { data: userData } = await supabase
-          .from('users')
-          .select('*')
-          .eq('auth_user_id', session.user.id)
-          .single()
-        
-        if (userData) {
+      try {
+        const res = await fetch('/api/users/me')
+        if (res.ok) {
+          const userData = await res.json()
           setUser(userData)
         }
+      } catch (error) {
+        console.error('Error fetching user:', error)
       }
     }
     getUser()

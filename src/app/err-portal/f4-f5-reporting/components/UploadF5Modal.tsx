@@ -18,6 +18,7 @@ interface UploadF5ModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   onSaved: () => void
+  initialProjectId?: string | null
 }
 
 // Helper function to extract table data from raw OCR
@@ -71,7 +72,7 @@ const extractTables = (rawOcr: string) => {
   return { activitiesTable, demographicsTable }
 }
 
-export default function UploadF5Modal({ open, onOpenChange, onSaved }: UploadF5ModalProps) {
+export default function UploadF5Modal({ open, onOpenChange, onSaved, initialProjectId }: UploadF5ModalProps) {
   const { t } = useTranslation(['f4f5'])
   const [states, setStates] = useState<string[]>([])
   const [selectedState, setSelectedState] = useState('')
@@ -272,6 +273,29 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved }: UploadF5M
     } catch {}
   }, [open])
 
+  // Auto-select project when initialProjectId is provided
+  useEffect(() => {
+    if (!open || !initialProjectId) return
+    ;(async () => {
+      try {
+        const { data: projectData, error } = await supabase
+          .from('err_projects')
+          .select('id, state, emergency_room_id, emergency_rooms (id, name, name_ar, err_code)')
+          .eq('id', initialProjectId)
+          .eq('status', 'active')
+          .single()
+        
+        if (error || !projectData) return
+        
+        setSelectedState(projectData.state || '')
+        setSelectedRoomId(projectData.emergency_room_id || '')
+        setProjectId(projectData.id)
+      } catch (e) {
+        console.error('Failed to load initial project', e)
+      }
+    })()
+  }, [open, initialProjectId])
+
   useEffect(() => {
     if (!selectedState) { 
       if (!isRestoringRef.current) {
@@ -316,11 +340,55 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved }: UploadF5M
     ;(async () => {
       const { data } = await supabase
         .from('err_projects')
-        .select('id, project_name, submitted_at')
+        .select('id, project_name, submitted_at, locality, planned_activities, expenses')
         .eq('status', 'active')
         .eq('emergency_room_id', selectedRoomId)
         .order('submitted_at', { ascending: false })
-      setProjects(((data as any[]) || []).map((p:any)=> ({ id: p.id, label: p.project_name || p.id })))
+      setProjects(((data as any[]) || []).map((p:any)=> {
+        // Extract category from first planned activity
+        let category = ''
+        try {
+          const plannedArr = Array.isArray(p.planned_activities)
+            ? p.planned_activities
+            : (typeof p.planned_activities === 'string' ? JSON.parse(p.planned_activities || '[]') : [])
+          if (Array.isArray(plannedArr) && plannedArr.length > 0 && plannedArr[0]?.category) {
+            category = plannedArr[0].category
+          }
+        } catch {}
+        
+        // Calculate total from planned_activities (for ERR App submissions)
+        let fromPlanned = 0
+        try {
+          const plannedArr = Array.isArray(p.planned_activities)
+            ? p.planned_activities
+            : (typeof p.planned_activities === 'string' ? JSON.parse(p.planned_activities || '[]') : [])
+          fromPlanned = (Array.isArray(plannedArr) ? plannedArr : []).reduce((s: number, pa: any) => {
+            const inner = Array.isArray(pa?.expenses) ? pa.expenses : []
+            return s + inner.reduce((ss: number, ie: any) => ss + (Number(ie.total) || 0), 0)
+          }, 0)
+        } catch {}
+        
+        // Calculate total from expenses (for mutual_aid_portal submissions)
+        let fromExpenses = 0
+        try {
+          const expensesArr = Array.isArray(p.expenses)
+            ? p.expenses
+            : (typeof p.expenses === 'string' ? JSON.parse(p.expenses || '[]') : [])
+          fromExpenses = (Array.isArray(expensesArr) ? expensesArr : []).reduce((s: number, ex: any) => {
+            return s + (Number(ex.total_cost) || 0)
+          }, 0)
+        } catch {}
+        
+        // Use expenses total if it exists (mutual_aid_portal), otherwise use planned_activities total (ERR App)
+        const total = fromExpenses > 0 ? fromExpenses : fromPlanned
+        
+        const locality = p.locality || ''
+        const totalFormatted = total > 0 ? ` (${total.toLocaleString()})` : ''
+        const label = category 
+          ? `${locality} - ${category}${totalFormatted}` 
+          : (locality ? `${locality}${totalFormatted}` : (p.project_name || p.id))
+        return { id: p.id, label }
+      }))
     })()
   }, [selectedRoomId])
 

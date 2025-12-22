@@ -24,27 +24,17 @@ export default function RoomManagementPage() {
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        // Get the current session
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+        const res = await fetch('/api/users/me')
         
-        if (sessionError || !session) {
-          window.location.href = '/login'
-          return
+        if (!res.ok) {
+          if (res.status === 401) {
+            window.location.href = '/login'
+            return
+          }
+          throw new Error('Failed to fetch user data')
         }
 
-        // Get user data
-        const { data: userData, error: userError } = await supabase
-          .from('users')
-          .select('*')
-          .eq('auth_user_id', session.user.id)
-          .single()
-
-        if (userError || !userData) {
-          console.error('Error fetching user data:', userError)
-          window.location.href = '/login'
-          return
-        }
-
+        const userData = await res.json()
         setUser(userData)
       } catch (error) {
         console.error('Auth check error:', error)
