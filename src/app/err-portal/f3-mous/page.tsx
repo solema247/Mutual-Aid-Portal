@@ -1635,6 +1635,109 @@ export default function F3MOUsPage() {
                         const currentPartnerContact = activeMou?.partner_contact_override || (detail?.partner ? `${detail.partner.name}${detail.partner.contact_person ? `\nRepresentative: ${detail.partner.contact_person}` : ''}${detail.partner.position ? `\nPosition: ${detail.partner.position}` : ''}${detail.partner.email ? `\nEmail: ${detail.partner.email}` : ''}${detail.partner.phone_number ? `\nPhone: ${detail.partner.phone_number}` : ''}` : activeMou?.partner_name || '')
                         const currentErrContact = activeMou?.err_contact_override || `${activeMou?.err_name || ''}${((detail?.projects && detail.projects[0]?.program_officer_name) || detail?.project?.program_officer_name) ? `\nRepresentative: ${(detail?.projects && detail.projects[0]?.program_officer_name) || detail?.project?.program_officer_name}` : ''}${((detail?.projects && detail.projects[0]?.program_officer_phone) || detail?.project?.program_officer_phone) ? `\nPhone: ${(detail?.projects && detail.projects[0]?.program_officer_phone) || detail?.project?.program_officer_phone}` : ''}`
                         
+                        // Convert old signature fields to new format
+                        // This ensures old signatures from partner_signature/err_signature are preserved
+                        // Pre-populate with contact information if available
+                        let initialSignatures: Signature[] = Array.isArray(activeMou?.signatures) ? [...activeMou.signatures] : []
+                        
+                        // Check if legacy signatures already exist in the array
+                        const hasLegacyPartner = initialSignatures.some(sig => sig.id?.startsWith('legacy-partner-'))
+                        const hasLegacyErr = initialSignatures.some(sig => sig.id?.startsWith('legacy-err-'))
+                        
+                        // Extract contact information for pre-populating signatures
+                        // Partner: get representative name and position from contact info
+                        let partnerSignatureName = activeMou?.partner_signature || ''
+                        let partnerSignatureRole = 'Partner'
+                        
+                        // First try structured data from detail
+                        if (!partnerSignatureName && detail?.partner) {
+                          partnerSignatureName = detail.partner.contact_person || ''
+                          partnerSignatureRole = detail.partner.position || 'Partner'
+                        }
+                        
+                        // Then check override string for representative name and position
+                        if (!partnerSignatureName && activeMou?.partner_contact_override) {
+                          const repMatch = activeMou.partner_contact_override.match(/Representative:\s*([^\n]+)/i)
+                          if (repMatch) partnerSignatureName = repMatch[1].trim()
+                          const posMatch = activeMou.partner_contact_override.match(/Position:\s*([^\n]+)/i)
+                          if (posMatch) partnerSignatureRole = posMatch[1].trim()
+                        }
+                        // If we have override but no structured data, also check for position
+                        if (partnerSignatureName && partnerSignatureRole === 'Partner' && activeMou?.partner_contact_override) {
+                          const posMatch = activeMou.partner_contact_override.match(/Position:\s*([^\n]+)/i)
+                          if (posMatch) partnerSignatureRole = posMatch[1].trim()
+                        }
+                        
+                        // ERR: get program officer name from contact info
+                        let errSignatureName = activeMou?.err_signature || ''
+                        
+                        // First try structured data from projects
+                        if (!errSignatureName) {
+                          errSignatureName = (detail?.projects && detail.projects[0]?.program_officer_name) || 
+                                            detail?.project?.program_officer_name || 
+                                            ''
+                        }
+                        
+                        // Then check override string for representative name
+                        if (!errSignatureName && activeMou?.err_contact_override) {
+                          const repMatch = activeMou.err_contact_override.match(/Representative:\s*([^\n]+)/i)
+                          if (repMatch) errSignatureName = repMatch[1].trim()
+                        }
+                        
+                        // If no signatures array exists, the MOU is using old format
+                        // Create Partner and ERR signature entries pre-populated with contact info
+                        const hasNoNewSignatures = !Array.isArray(activeMou?.signatures) || activeMou.signatures.length === 0
+                        
+                        if (hasNoNewSignatures) {
+                          // Add partner signature entry pre-populated with contact info
+                          if (!hasLegacyPartner) {
+                            initialSignatures.push({
+                              id: `legacy-partner-${activeMou.id}`,
+                              name: partnerSignatureName,
+                              role: partnerSignatureRole,
+                              date: activeMou?.signature_date || new Date().toISOString().split('T')[0]
+                            })
+                          }
+                          
+                          // Add ERR signature entry pre-populated with contact info
+                          if (!hasLegacyErr) {
+                            initialSignatures.push({
+                              id: `legacy-err-${activeMou.id}`,
+                              name: errSignatureName,
+                              role: 'ERR',
+                              date: activeMou?.signature_date || new Date().toISOString().split('T')[0]
+                            })
+                          }
+                        } else {
+                          // If we have existing signatures in new format, also add old ones if they have values
+                          // But prefer contact info if old signature is empty
+                          if (!hasLegacyPartner) {
+                            const nameToUse = activeMou?.partner_signature || partnerSignatureName
+                            if (nameToUse) {
+                              initialSignatures.push({
+                                id: `legacy-partner-${activeMou.id}`,
+                                name: nameToUse,
+                                role: partnerSignatureRole,
+                                date: activeMou.signature_date || new Date().toISOString().split('T')[0]
+                              })
+                            }
+                          }
+                          if (!hasLegacyErr) {
+                            const nameToUse = activeMou?.err_signature || errSignatureName
+                            if (nameToUse) {
+                              initialSignatures.push({
+                                id: `legacy-err-${activeMou.id}`,
+                                name: nameToUse,
+                                role: 'ERR',
+                                date: activeMou.signature_date || new Date().toISOString().split('T')[0]
+                              })
+                            }
+                          }
+                        }
+                        
+                        // Set to null if empty array, otherwise use the merged signatures
+                        const finalSignatures = initialSignatures.length > 0 ? initialSignatures : null
+                        
                         setEditingMou({
                           partner_name: activeMou?.partner_name || '',
                           err_name: activeMou?.err_name || '',
@@ -1643,7 +1746,7 @@ export default function F3MOUsPage() {
                           err_contact_override: activeMou?.err_contact_override !== null && activeMou?.err_contact_override !== undefined ? activeMou.err_contact_override : currentErrContact,
                           start_date: activeMou?.start_date || null,
                           end_date: activeMou?.end_date || null,
-                          signatures: activeMou?.signatures || null
+                          signatures: finalSignatures
                         })
                       }}
                     >
