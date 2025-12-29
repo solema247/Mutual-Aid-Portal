@@ -7,6 +7,7 @@ import { PendingUserListItem } from '@/app/api/users/types/users'
 import { getPendingUsers } from '@/app/api/users/utils/users'
 import PendingUsersList from './PendingUsersList'
 import ActiveUsersList from './ActiveUsersList'
+import AccessRightsManagement from './AccessRightsManagement'
 import { supabase } from '@/lib/supabaseClient'
 
 interface User {
@@ -83,12 +84,27 @@ export default function UserManagement() {
 
   if (!currentUser) return null
 
+  const isAdmin = currentUser.role === 'admin'
+
   return (
     <div className="space-y-6">
+      {isAdmin && (
+        <CollapsibleRow
+          title="Access Rights Management"
+          variant="primary"
+          defaultOpen={true}
+        >
+          <AccessRightsManagement
+            currentUserRole={currentUser.role}
+            currentUserErrId={currentUser.err_id}
+          />
+        </CollapsibleRow>
+      )}
+
       <CollapsibleRow
         title={t('users:pending_users_title')}
         variant="primary"
-        defaultOpen={true}
+        defaultOpen={!isAdmin}
       >
         <div className="space-y-4">
           {error && (

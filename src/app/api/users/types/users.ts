@@ -6,6 +6,8 @@ export interface User {
   status: 'pending' | 'active' | 'suspended'
   created_at: string
   updated_at: string | null
+  can_see_all_states?: boolean
+  visible_states?: string[]
   emergency_rooms?: {
     name: string
     name_ar: string | null
@@ -39,4 +41,6 @@ export interface ActiveUserListItem {
   err_name?: string
   err_code?: string
   state_name?: string
+  can_see_all_states?: boolean
+  visible_states?: string[]
 } 

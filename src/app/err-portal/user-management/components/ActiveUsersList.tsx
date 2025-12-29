@@ -55,7 +55,9 @@ export default function ActiveUsersList({
         updatedAt: user.updated_at ? new Date(user.updated_at).toLocaleDateString() : null,
         err_name: user.emergency_rooms?.name || '-',
         err_code: user.emergency_rooms?.err_code || '-',
-        state_name: user.emergency_rooms?.state?.state_name || '-'
+        state_name: user.emergency_rooms?.state?.state_name || '-',
+        can_see_all_states: user.can_see_all_states ?? true,
+        visible_states: user.visible_states || []
       }))
 
       setUsers(formattedUsers)

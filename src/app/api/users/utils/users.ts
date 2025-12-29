@@ -102,7 +102,7 @@ export async function getActiveUsers({
     .from('users')
     .select(`
       *,
-      emergency_rooms!inner(
+      emergency_rooms(
         id,
         name,
         name_ar,
@@ -148,7 +148,19 @@ export async function getActiveUsers({
 
       if (stateRefs && stateRefs.length > 0) {
         const stateIds = stateRefs.map(ref => ref.id)
-        query = query.in('emergency_rooms.state_reference', stateIds)
+        // Get all ERRs in these states
+        const { data: errsInState } = await supabase
+          .from('emergency_rooms')
+          .select('id')
+          .in('state_reference', stateIds)
+
+        if (errsInState && errsInState.length > 0) {
+          const errIds = errsInState.map(err => err.id)
+          query = query.in('err_id', errIds)
+        } else {
+          // No ERRs in this state, so return empty result
+          query = query.eq('id', '00000000-0000-0000-0000-000000000000') // Impossible ID to return empty
+        }
       }
     }
   } else if (currentUserRole === 'base_err' && currentUserErrId) {
