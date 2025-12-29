@@ -30,8 +30,12 @@ function getGoogleSheetsAuth() {
   })
 }
 
-const auth = getGoogleSheetsAuth()
-const sheets = google.sheets({ version: 'v4', auth })
+// Lazy initialization - only create when needed (not at module load time)
+// This prevents deployment failures if env vars aren't available during build
+function getGoogleSheetsClient() {
+  const auth = getGoogleSheetsAuth()
+  return google.sheets({ version: 'v4', auth })
+}
 
 // Google Sheet ID from the URL
 const SPREADSHEET_ID = '1T8St2f501HDS4X2S5GgxRelMDtoZ2EcSW2nFQhL-AP8'
@@ -66,6 +70,11 @@ function normalizeSerialNumber(serialNumber: any): string | null {
  */
 async function fetchSheetData() {
   try {
+    // Lazy initialization - get client only when needed (not at module load time)
+    // This prevents deployment failures if env vars aren't available during build
+    const sheets = getGoogleSheetsClient()
+    const auth = getGoogleSheetsAuth()
+    
     // Verify authentication first
     const authClient = await auth.getClient()
     console.log('Auth client obtained:', authClient ? 'Success' : 'Failed')
