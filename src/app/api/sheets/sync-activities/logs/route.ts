@@ -13,6 +13,8 @@ export async function GET(request: Request) {
     const linesParam = searchParams.get('lines')
     const statsParam = searchParams.get('stats')
 
+    const isServerless = process.env.VERCEL === '1' || process.env.AWS_LAMBDA_FUNCTION_NAME !== undefined
+
     if (statsParam === 'true') {
       // Return sync statistics
       const stats = syncLogger.getSyncStats()
@@ -20,15 +22,17 @@ export async function GET(request: Request) {
         success: true,
         stats: {
           ...stats,
-          logFile: 'logs/sync-activities.log',
-          logFiles: [
+          isServerless,
+          logFile: isServerless ? 'N/A (serverless environment)' : 'logs/sync-activities.log',
+          logFiles: isServerless ? [] : [
             'logs/sync-activities.log',
             'logs/sync-activities.log.1',
             'logs/sync-activities.log.2',
             'logs/sync-activities.log.3',
             'logs/sync-activities.log.4',
             'logs/sync-activities.log.5'
-          ]
+          ],
+          note: isServerless ? 'File-based logging is not available in serverless environments. Check Vercel function logs instead.' : undefined
         }
       })
     }
@@ -39,10 +43,12 @@ export async function GET(request: Request) {
 
     return NextResponse.json({
       success: true,
+      isServerless,
       lines: logLines.length,
       requested: lines,
       logs: logLines,
-      logFile: 'logs/sync-activities.log'
+      logFile: isServerless ? 'N/A (serverless environment)' : 'logs/sync-activities.log',
+      note: isServerless ? 'File-based logging is not available in serverless environments. Check Vercel function logs instead.' : undefined
     })
   } catch (error) {
     return NextResponse.json(

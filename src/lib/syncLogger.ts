@@ -6,40 +6,53 @@
 import fs from 'fs'
 import path from 'path'
 
+// Check if we're in a serverless environment (Vercel, etc.)
+const IS_SERVERLESS = process.env.VERCEL === '1' || process.env.AWS_LAMBDA_FUNCTION_NAME !== undefined
+
 const LOG_DIR = path.join(process.cwd(), 'logs')
 const SYNC_LOG_FILE = path.join(LOG_DIR, 'sync-activities.log')
 const MAX_LOG_SIZE = 10 * 1024 * 1024 // 10MB
 const MAX_LOG_FILES = 5 // Keep 5 rotated log files
 
-// Ensure log directory exists
+// Ensure log directory exists (only in non-serverless environments)
 function ensureLogDir() {
-  if (!fs.existsSync(LOG_DIR)) {
-    fs.mkdirSync(LOG_DIR, { recursive: true })
+  if (IS_SERVERLESS) return
+  try {
+    if (!fs.existsSync(LOG_DIR)) {
+      fs.mkdirSync(LOG_DIR, { recursive: true })
+    }
+  } catch (error) {
+    // Silently fail in serverless environments
   }
 }
 
-// Rotate log file if it gets too large
+// Rotate log file if it gets too large (only in non-serverless environments)
 function rotateLogIfNeeded() {
-  ensureLogDir()
-  
-  if (fs.existsSync(SYNC_LOG_FILE)) {
-    const stats = fs.statSync(SYNC_LOG_FILE)
-    if (stats.size > MAX_LOG_SIZE) {
-      // Rotate existing logs
-      for (let i = MAX_LOG_FILES - 1; i >= 1; i--) {
-        const oldFile = `${SYNC_LOG_FILE}.${i}`
-        const newFile = `${SYNC_LOG_FILE}.${i + 1}`
-        if (fs.existsSync(oldFile)) {
-          if (fs.existsSync(newFile)) {
-            fs.unlinkSync(newFile)
+  if (IS_SERVERLESS) return
+  try {
+    ensureLogDir()
+    
+    if (fs.existsSync(SYNC_LOG_FILE)) {
+      const stats = fs.statSync(SYNC_LOG_FILE)
+      if (stats.size > MAX_LOG_SIZE) {
+        // Rotate existing logs
+        for (let i = MAX_LOG_FILES - 1; i >= 1; i--) {
+          const oldFile = `${SYNC_LOG_FILE}.${i}`
+          const newFile = `${SYNC_LOG_FILE}.${i + 1}`
+          if (fs.existsSync(oldFile)) {
+            if (fs.existsSync(newFile)) {
+              fs.unlinkSync(newFile)
+            }
+            fs.renameSync(oldFile, newFile)
           }
-          fs.renameSync(oldFile, newFile)
         }
+        
+        // Move current log to .1
+        fs.renameSync(SYNC_LOG_FILE, `${SYNC_LOG_FILE}.1`)
       }
-      
-      // Move current log to .1
-      fs.renameSync(SYNC_LOG_FILE, `${SYNC_LOG_FILE}.1`)
     }
+  } catch (error) {
+    // Silently fail in serverless environments
   }
 }
 
@@ -73,23 +86,24 @@ class SyncLogger {
   }
 
   log(level: SyncLogEntry['level'], message: string, details?: any) {
-    // Console logging (for Vercel/server logs)
+    // Console logging (for Vercel/server logs) - always works
     const consoleMethod = level === 'error' ? console.error : 
                           level === 'warn' ? console.warn : 
                           level === 'success' ? console.log : console.log
     
-    consoleMethod(`[SyncLogger] ${message}`, details || '')
+    const logEntry = this.formatLogEntry(level, message, details)
+    consoleMethod(logEntry.trim(), details || '')
 
-    // File logging
-    try {
-      rotateLogIfNeeded()
-      ensureLogDir()
-      
-      const logEntry = this.formatLogEntry(level, message, details)
-      fs.appendFileSync(SYNC_LOG_FILE, logEntry, 'utf8')
-    } catch (error) {
-      // Don't fail sync if logging fails
-      console.error('Failed to write to log file:', error)
+    // File logging (only in non-serverless environments)
+    if (!IS_SERVERLESS) {
+      try {
+        rotateLogIfNeeded()
+        ensureLogDir()
+        fs.appendFileSync(SYNC_LOG_FILE, logEntry, 'utf8')
+      } catch (error) {
+        // Don't fail sync if logging fails
+        console.error('Failed to write to log file:', error)
+      }
     }
   }
 
@@ -109,8 +123,11 @@ class SyncLogger {
     this.log('success', message, details)
   }
 
-  // Get recent logs
+  // Get recent logs (only works in non-serverless environments)
   getRecentLogs(lines: number = 100): string[] {
+    if (IS_SERVERLESS) {
+      return ['File-based logging is not available in serverless environments. Check Vercel function logs instead.']
+    }
     try {
       if (!fs.existsSync(SYNC_LOG_FILE)) {
         return ['No log file found']
@@ -124,13 +141,21 @@ class SyncLogger {
     }
   }
 
-  // Get sync statistics
+  // Get sync statistics (only works in non-serverless environments)
   getSyncStats(): {
     lastSync: string | null
     recentSyncs: number
     recentErrors: number
     totalLogSize: number
   } {
+    if (IS_SERVERLESS) {
+      return {
+        lastSync: null,
+        recentSyncs: 0,
+        recentErrors: 0,
+        totalLogSize: 0
+      }
+    }
     try {
       if (!fs.existsSync(SYNC_LOG_FILE)) {
         return {
