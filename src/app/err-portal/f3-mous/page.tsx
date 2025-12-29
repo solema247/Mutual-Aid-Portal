@@ -155,6 +155,7 @@ export default function F3MOUsPage() {
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1)
   const itemsPerPage = 10
+  const [currentUser, setCurrentUser] = useState<{ role: string } | null>(null)
 
   const toDisplay = (value: any): string => {
     if (value == null) return ''
@@ -759,6 +760,18 @@ export default function F3MOUsPage() {
   useEffect(() => {
     fetchMous()
     fetchGrantsFromGridView()
+    // Fetch current user for role check
+    ;(async () => {
+      try {
+        const res = await fetch('/api/users/me')
+        if (res.ok) {
+          const userData = await res.json()
+          setCurrentUser(userData)
+        }
+      } catch (error) {
+        console.error('Error fetching user:', error)
+      }
+    })()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedState])
   
@@ -839,7 +852,7 @@ export default function F3MOUsPage() {
                     <TableCell>{new Date(m.created_at).toLocaleDateString()}</TableCell>
                     <TableCell className="align-top">
                       <div className="flex items-start gap-3">
-                        {mouAssignmentStatus[m.id]?.hasUnassigned && (
+                        {mouAssignmentStatus[m.id]?.hasUnassigned && (currentUser?.role === 'admin' || currentUser?.role === 'superadmin') && (
                           <div className="flex flex-col items-center gap-0.5 min-w-[50px]">
                             <Button
                               variant="ghost"
@@ -853,7 +866,7 @@ export default function F3MOUsPage() {
                             <span className="text-[10px] text-muted-foreground text-center leading-tight">Assign</span>
                           </div>
                         )}
-                        {mouAssignmentStatus[m.id]?.hasAssigned && (
+                        {mouAssignmentStatus[m.id]?.hasAssigned && (currentUser?.role === 'admin' || currentUser?.role === 'superadmin') && (
                           <div className="flex flex-col items-center gap-0.5 min-w-[50px]">
                             <Button
                               variant="ghost"

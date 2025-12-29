@@ -52,6 +52,7 @@ export default function CommittedF1sTab() {
   const [donorShortNames, setDonorShortNames] = useState<Record<string, string>>({})
   const [selectedGrantMaxSequence, setSelectedGrantMaxSequence] = useState<number>(0)
   const [stateShorts, setStateShorts] = useState<Record<string, string>>({})
+  const [currentUser, setCurrentUser] = useState<{ role: string } | null>(null)
 
   const toggleAll = (checked: boolean) => {
     if (!checked) return setSelected([])
@@ -305,6 +306,18 @@ export default function CommittedF1sTab() {
         .order('name')
       setPartners((data || []) as any)
     })()
+    // Fetch current user for role check
+    ;(async () => {
+      try {
+        const res = await fetch('/api/users/me')
+        if (res.ok) {
+          const userData = await res.json()
+          setCurrentUser(userData)
+        }
+      } catch (error) {
+        console.error('Error fetching user:', error)
+      }
+    })()
   }, [])
   
   useEffect(() => {
@@ -546,7 +559,7 @@ export default function CommittedF1sTab() {
                           <span className="text-muted-foreground">-</span>
                         )}
                       </div>
-                      {f1.grant_id && f1.grant_id.startsWith('LCC-') && (
+                      {f1.grant_id && f1.grant_id.startsWith('LCC-') && (currentUser?.role === 'admin' || currentUser?.role === 'superadmin') && (
                         <Button
                           size="sm"
                           variant="ghost"
