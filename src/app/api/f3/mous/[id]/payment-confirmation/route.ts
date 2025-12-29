@@ -79,7 +79,7 @@ export async function POST(
     // Update confirmations object for this project
     if (projectId) {
       if (!confirmations[projectId]) {
-        confirmations[projectId] = { file_path: confirmations[projectId]?.file_path || '' }
+        confirmations[projectId] = { file_path: '' }
       }
       
       if (filePath) {
