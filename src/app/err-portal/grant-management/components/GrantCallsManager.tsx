@@ -377,7 +377,7 @@ export default function GrantCallsManager() {
                 <SelectItem value="Complete">Complete</SelectItem>
               </SelectContent>
             </Select>
-            {currentUser?.role === 'admin' && (
+            {(currentUser?.role === 'admin' || currentUser?.role === 'superadmin') && (
               <>
                 {!isEditMode ? (
                   <Button 
@@ -637,13 +637,13 @@ export default function GrantCallsManager() {
                 <TableHead>Status</TableHead>
                 <TableHead>Start Date</TableHead>
                 <TableHead>End Date</TableHead>
-                {currentUser?.role === 'admin' && isEditMode && <TableHead>Actions</TableHead>}
+                {(currentUser?.role === 'admin' || currentUser?.role === 'superadmin') && isEditMode && <TableHead>Actions</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
               {grants.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={currentUser?.role === 'admin' && isEditMode ? 10 : 9} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={(currentUser?.role === 'admin' || currentUser?.role === 'superadmin') && isEditMode ? 10 : 9} className="text-center py-8 text-muted-foreground">
                     No grants found
                   </TableCell>
                 </TableRow>
@@ -667,7 +667,7 @@ export default function GrantCallsManager() {
                     </TableCell>
                     <TableCell>{formatDate(grant.grant_start_date)}</TableCell>
                     <TableCell>{formatDate(grant.grant_end_date)}</TableCell>
-                    {currentUser?.role === 'admin' && isEditMode && (
+                    {(currentUser?.role === 'admin' || currentUser?.role === 'superadmin') && isEditMode && (
                       <TableCell>
                         <div className="flex items-center gap-2">
                           <Button

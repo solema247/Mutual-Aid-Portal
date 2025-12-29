@@ -541,7 +541,7 @@ export default function DistributionDecisionsManager() {
             <Button variant="outline" size="icon" onClick={fetchDecisions} disabled={isLoading}>
               <RefreshCw className="h-4 w-4" />
             </Button>
-            {currentUser?.role === 'admin' && (
+            {(currentUser?.role === 'admin' || currentUser?.role === 'superadmin') && (
               <Dialog open={isCreateOpen} onOpenChange={(open) => {
                 setIsCreateOpen(open)
                 if (!open) {
@@ -824,7 +824,7 @@ export default function DistributionDecisionsManager() {
                             )}
                           </TableCell>
                           <TableCell className="text-right">
-                            {currentUser?.role === 'admin' && (
+                            {(currentUser?.role === 'admin' || currentUser?.role === 'superadmin') && (
                               <Button
                                 variant="ghost"
                                 size="icon"
@@ -923,7 +923,7 @@ export default function DistributionDecisionsManager() {
                                                     )}
                                                   </TableCell>
                                                   <TableCell className="text-right">
-                                                    {currentUser?.role === 'admin' && (
+                                                    {(currentUser?.role === 'admin' || currentUser?.role === 'superadmin') && (
                                                       <div className="flex items-center justify-end gap-1">
                                                         {isEditing ? (
                                                           <>
