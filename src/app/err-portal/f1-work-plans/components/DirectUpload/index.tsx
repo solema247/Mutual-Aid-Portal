@@ -350,6 +350,12 @@ export default function DirectUpload() {
     try {
       const selectedRoom = rooms.find((r: any) => r.id === formData.emergency_room_id)
 
+      if (!selectedRoom) {
+        alert('Please select a room')
+        setIsLoading(false)
+        return
+      }
+
       // Process the file first
       const processFormData = new FormData()
       processFormData.append('file', selectedFile)
@@ -358,21 +364,40 @@ export default function DirectUpload() {
       const selectedState = states.find(s => s.id === formData.state_id)
       
       // Get the state from the emergency room's state_reference (this has the correct locality)
-      const roomState = Array.isArray(selectedRoom?.state) 
+      let roomState = Array.isArray(selectedRoom?.state) 
         ? selectedRoom?.state[0] 
         : selectedRoom?.state
       
-      // Use locality from the room's state_reference, fallback to selected state
-      const locality = roomState?.locality || selectedState?.locality || null
-      const locality_ar = roomState?.locality_ar || selectedState?.locality_ar || null
+      // If roomState is not available from the join, fetch it directly using the room's state_reference
+      if (!roomState && selectedRoom.state_reference) {
+        const { data: stateData, error: stateError } = await supabase
+          .from('states')
+          .select('id, state_name, locality, state_name_ar, locality_ar')
+          .eq('id', selectedRoom.state_reference)
+          .single()
+        
+        if (!stateError && stateData) {
+          roomState = stateData
+        }
+      }
+      
+      // Always use locality from the room's state_reference (never fallback to selectedState.locality)
+      // The room's state_reference is the source of truth for locality
+      const locality = roomState?.locality || null
+      const locality_ar = roomState?.locality_ar || null
+      
+      // Use roomState for state info if available, otherwise use selectedState
+      const finalStateName = roomState?.state_name || selectedState?.state_name || null
+      const finalStateNameAr = roomState?.state_name_ar || selectedState?.state_name_ar || null
+      const finalStateId = roomState?.id || selectedState?.id || null
       
       const metadata = {
         err_code: selectedRoom?.err_code,
         err_name: selectedRoom?.name_ar || selectedRoom?.name,
         donor_name: null,
-        state_name: selectedState?.state_name || null,
-        state_name_ar: selectedState?.state_name_ar || null,
-        state_id: selectedState?.id || null,
+        state_name: finalStateName,
+        state_name_ar: finalStateNameAr,
+        state_id: finalStateId,
         locality: locality,
         locality_ar: locality_ar,
         currency: formData.currency,
