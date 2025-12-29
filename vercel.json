@@ -8,7 +8,17 @@
     "src/app/api/fsystem/process/route.ts": {
       "maxDuration": 600,
       "memory": 1536
+    },
+    "src/app/api/sheets/sync-activities/route.ts": {
+      "maxDuration": 300,
+      "memory": 512
     }
-  }
+  },
+  "crons": [
+    {
+      "path": "/api/sheets/sync-activities",
+      "schedule": "*/5 * * * *"
+    }
+  ]
 }
 
