@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
+import { getUserStateAccess } from '@/lib/userStateAccess'
 
 // GET /api/f2/committed - Get all committed F1s with optional filtering
 export async function GET(request: Request) {
@@ -10,6 +11,9 @@ export async function GET(request: Request) {
     const grantId = searchParams.get('grant_id')
     const donorName = searchParams.get('donor_name')
     const state = searchParams.get('state')
+
+    // Get user's state access rights
+    const { allowedStateNames } = await getUserStateAccess()
 
     let query = supabase
       .from('err_projects')
@@ -39,7 +43,12 @@ export async function GET(request: Request) {
       .eq('funding_status', 'committed')
       .order('submitted_at', { ascending: false })
 
-    // Apply filters
+    // Apply state filter from user access rights (if not seeing all states)
+    if (allowedStateNames !== null && allowedStateNames.length > 0) {
+      query = query.in('state', allowedStateNames)
+    }
+
+    // Apply explicit state filter if provided (further restricts)
     if (state) {
       query = query.eq('state', state)
     }

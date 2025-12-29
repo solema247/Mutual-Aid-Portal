@@ -1,10 +1,29 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
+import { getUserStateAccess } from '@/lib/userStateAccess'
 
 export async function GET() {
   try {
     const supabase = getSupabaseRouteClient()
-    const { data: reports, error } = await supabase
+    
+    // Get user's state access rights
+    const { allowedStateNames } = await getUserStateAccess()
+    
+    // First, get allowed project IDs if state filtering is needed
+    let allowedProjectIds: string[] | null = null
+    if (allowedStateNames !== null && allowedStateNames.length > 0) {
+      const { data: allowedProjects } = await supabase
+        .from('err_projects')
+        .select('id')
+        .in('state', allowedStateNames)
+      allowedProjectIds = (allowedProjects || []).map((p: any) => p.id)
+      if (allowedProjectIds.length === 0) {
+        // No projects in allowed states, return empty
+        return NextResponse.json([])
+      }
+    }
+    
+    let query = supabase
       .from('err_program_report')
       .select(`
         id,
@@ -18,6 +37,13 @@ export async function GET() {
         )
       `)
       .order('created_at', { ascending: false })
+    
+    // Filter by allowed project IDs if state filtering is needed
+    if (allowedProjectIds !== null) {
+      query = query.in('project_id', allowedProjectIds)
+    }
+    
+    const { data: reports, error } = await query
     if (error) throw error
 
     const ids = (reports || []).map((r:any)=> r.id)

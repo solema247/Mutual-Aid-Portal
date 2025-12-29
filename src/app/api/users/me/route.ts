@@ -14,7 +14,7 @@ export async function GET() {
 
     const { data: userData, error } = await supabase
       .from('users')
-      .select('id, display_name, role, status, err_id, created_at, updated_at')
+      .select('id, display_name, role, status, err_id, created_at, updated_at, can_see_all_states, visible_states')
       .eq('auth_user_id', session.user.id)
       .single()
 
@@ -27,6 +27,16 @@ export async function GET() {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
 
+    // Parse visible_states if it's a string (JSON)
+    let visibleStates = userData.visible_states
+    if (typeof visibleStates === 'string') {
+      try {
+        visibleStates = JSON.parse(visibleStates)
+      } catch (e) {
+        visibleStates = []
+      }
+    }
+
     // Explicitly exclude sensitive fields - only return safe data
     return NextResponse.json({
       id: userData.id,
@@ -36,6 +46,8 @@ export async function GET() {
       err_id: userData.err_id,
       created_at: userData.created_at,
       updated_at: userData.updated_at,
+      can_see_all_states: userData.can_see_all_states ?? true,
+      visible_states: visibleStates || [],
     })
   } catch (error) {
     console.error('Unexpected error in /api/users/me:', error)

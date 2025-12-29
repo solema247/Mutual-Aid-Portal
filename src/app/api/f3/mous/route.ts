@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { aggregateObjectives, aggregateBeneficiaries, aggregatePlannedActivities, aggregatePlannedActivitiesDetailed, aggregateLocations, getBankingDetails, getBudgetTable } from '@/lib/mou-aggregation'
+import { getUserStateAccess } from '@/lib/userStateAccess'
 
 // GET /api/f3/mous - list MOUs (simple)
 export async function GET(request: Request) {
@@ -10,10 +11,18 @@ export async function GET(request: Request) {
     const search = searchParams.get('search')
     const state = searchParams.get('state')
 
+    // Get user's state access rights
+    const { allowedStateNames } = await getUserStateAccess()
+
     let query = supabase
       .from('mous')
       .select('*')
       .order('created_at', { ascending: false })
+
+    // Apply state filter from user access rights (if not seeing all states)
+    if (allowedStateNames !== null && allowedStateNames.length > 0) {
+      query = query.in('state', allowedStateNames)
+    }
 
     if (search) {
       // Client-side filter after fetch for simplicity
@@ -42,6 +51,7 @@ export async function GET(request: Request) {
       return NextResponse.json(parsed)
     }
 
+    // Apply explicit state filter if provided (further restricts)
     if (state) {
       query = query.eq('state', state)
     }

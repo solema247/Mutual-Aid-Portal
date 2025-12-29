@@ -1,11 +1,30 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
+import { getUserStateAccess } from '@/lib/userStateAccess'
 
 export async function GET() {
   try {
     const supabase = getSupabaseRouteClient()
+    
+    // Get user's state access rights
+    const { allowedStateNames } = await getUserStateAccess()
+    
+    // First, get allowed project IDs if state filtering is needed
+    let allowedProjectIds: string[] | null = null
+    if (allowedStateNames !== null && allowedStateNames.length > 0) {
+      const { data: allowedProjects } = await supabase
+        .from('err_projects')
+        .select('id')
+        .in('state', allowedStateNames)
+      allowedProjectIds = (allowedProjects || []).map((p: any) => p.id)
+      if (allowedProjectIds.length === 0) {
+        // No projects in allowed states, return empty
+        return NextResponse.json([])
+      }
+    }
+    
     // Get F4 summaries with attachment counts and project/room/grant context
-    const { data: summaries, error } = await supabase
+    let query = supabase
       .from('err_summary')
       .select(`
         id,
@@ -24,6 +43,13 @@ export async function GET() {
         )
       `)
       .order('created_at', { ascending: false })
+    
+    // Filter by allowed project IDs if state filtering is needed
+    if (allowedProjectIds !== null) {
+      query = query.in('project_id', allowedProjectIds)
+    }
+    
+    const { data: summaries, error } = await query
 
     if (error) throw error
 

@@ -126,15 +126,27 @@ export async function GET() {
       byGrantHistorical.set(grantId, (byGrantHistorical.get(grantId) || 0) + usd)
     }
 
-    // Fetch all projects to calculate assigned
+    // Get user's state access rights
+    const { getUserStateAccess } = await import('@/lib/userStateAccess')
+    const { allowedStateNames } = await getUserStateAccess()
+
+    // Fetch all projects to calculate assigned (with state filtering)
     const projects = await fetchAllRows<{
       expenses: any;
       funding_status: string | null;
       grant_id: string | null;
+      state: string | null;
     }>(
       supabase,
       'err_projects',
-      'expenses, funding_status, grant_id'
+      'expenses, funding_status, grant_id, state',
+      (q) => {
+        // Apply state filter from user access rights (if not seeing all states)
+        if (allowedStateNames !== null && allowedStateNames.length > 0) {
+          return q.in('state', allowedStateNames)
+        }
+        return q
+      }
     )
 
     const sumExpenses = (rows: any[]) => rows.reduce((sum, p) => {

@@ -1,11 +1,16 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
+import { getUserStateAccess } from '@/lib/userStateAccess'
 
 // GET /api/f2/uncommitted - Get all uncommitted F1s
 export async function GET() {
   try {
     const supabase = getSupabaseRouteClient()
-    const { data, error } = await supabase
+    
+    // Get user's state access rights
+    const { allowedStateNames } = await getUserStateAccess()
+
+    let query = supabase
       .from('err_projects')
       .select(`
         id,
@@ -28,6 +33,13 @@ export async function GET() {
       `)
       .eq('status', 'pending')
       .order('submitted_at', { ascending: false })
+
+    // Apply state filter from user access rights (if not seeing all states)
+    if (allowedStateNames !== null && allowedStateNames.length > 0) {
+      query = query.in('state', allowedStateNames)
+    }
+
+    const { data, error } = await query
 
     if (error) throw error
 

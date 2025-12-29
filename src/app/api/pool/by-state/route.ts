@@ -44,6 +44,10 @@ export async function GET() {
   try {
     const supabase = getSupabaseRouteClient()
     
+    // Get user's state access rights
+    const { getUserStateAccess } = await import('@/lib/userStateAccess')
+    const { allowedStateNames } = await getUserStateAccess()
+    
     // 1. Get allocations from allocations_by_date (replaces cycle_state_allocations)
     const allocData = await fetchAllRows(supabase, 'allocations_by_date', 'State,"Allocation Amount"')
     
@@ -51,6 +55,10 @@ export async function GET() {
     for (const row of allocData || []) {
       const rawState = row['State'] || row['state'] || row.State
       const state = normalizeStateName(rawState)
+      // Filter by user's allowed states
+      if (allowedStateNames !== null && allowedStateNames.length > 0 && !allowedStateNames.includes(state)) {
+        continue
+      }
       const amount = row['Allocation Amount'] ? Number(row['Allocation Amount']) : 0
       allocatedByState.set(state, (allocatedByState.get(state) || 0) + amount)
     }
@@ -62,6 +70,10 @@ export async function GET() {
     for (const row of historicalData || []) {
       const rawState = row['State'] || row['state'] || row.State
       const state = normalizeStateName(rawState)
+      // Filter by user's allowed states
+      if (allowedStateNames !== null && allowedStateNames.length > 0 && !allowedStateNames.includes(state)) {
+        continue
+      }
       const rawUSD = row['USD'] || row['usd'] || row.USD
       let usd = 0
       if (rawUSD !== null && rawUSD !== undefined) {
@@ -72,8 +84,13 @@ export async function GET() {
       }
     }
 
-    // 3. Get committed and pending from err_projects (fetch all rows)
-    const projects = await fetchAllRows(supabase, 'err_projects', 'expenses, funding_status, status, state')
+    // 3. Get committed and pending from err_projects (fetch all rows with state filtering)
+    let projectsQuery = supabase.from('err_projects').select('expenses, funding_status, status, state')
+    if (allowedStateNames !== null && allowedStateNames.length > 0) {
+      projectsQuery = projectsQuery.in('state', allowedStateNames)
+    }
+    const { data: projectsData } = await projectsQuery
+    const projects = projectsData || []
 
     const sumByCommitted = () => {
       const byState = new Map<string, number>()

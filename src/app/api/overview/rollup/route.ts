@@ -59,13 +59,24 @@ const fetchAllRows = async (supabase: any, table: string, select: string) => {
 export async function GET(request: Request) {
   try {
     const supabase = getSupabaseRouteClient()
+    const { getUserStateAccess } = await import('@/lib/userStateAccess')
+
+    // Get user's state access rights
+    const { allowedStateNames } = await getUserStateAccess()
 
     // Build project filter (include more statuses to catch F5 projects)
-    const { data: projects } = await supabase
+    let projectQuery = supabase
       .from('err_projects')
       .select('id, state, grant_call_id, grant_grid_id, emergency_rooms (id, name, name_ar, err_code), planned_activities, expenses, source, status, funding_status, mou_id')
       .in('status', ['approved', 'active', 'pending'])
       .in('funding_status', ['committed', 'allocated'])
+
+    // Apply state filter from user access rights (if not seeing all states)
+    if (allowedStateNames !== null && allowedStateNames.length > 0) {
+      projectQuery = projectQuery.in('state', allowedStateNames)
+    }
+
+    const { data: projects } = await projectQuery
 
     // Resolve MOU codes for projects that have mou_id
     const mouIds = Array.from(new Set(((projects || []).map((p:any)=> p.mou_id).filter(Boolean)))) as string[]
@@ -158,11 +169,16 @@ export async function GET(request: Request) {
 
     // ===== Fetch and process historical data from activities_raw_import =====
     // Fetch all historical data
-    const historicalData = await fetchAllRows(
-      supabase,
-      'activities_raw_import',
-      'id,"ERR CODE","ERR Name","State","Project Donor","USD","MOU Signed","F4","F5","Date Report Completed","Serial Number","Target (Ind.)","Target (Fam.)"'
-    )
+    let historicalDataQuery = supabase
+      .from('activities_raw_import')
+      .select('id,"ERR CODE","ERR Name","State","Project Donor","USD","MOU Signed","F4","F5","Date Report Completed","Serial Number","Target (Ind.)","Target (Fam.)"')
+    
+    // Apply state filter from user access rights (if not seeing all states)
+    if (allowedStateNames !== null && allowedStateNames.length > 0) {
+      historicalDataQuery = historicalDataQuery.in('State', allowedStateNames)
+    }
+    
+    const { data: historicalData } = await historicalDataQuery
 
     // Convert historical data to project row format
     const historicalRows = (historicalData || []).map((row: any) => {
