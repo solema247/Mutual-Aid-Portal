@@ -97,6 +97,7 @@ export default function F3MOUsPage() {
   const { t, i18n } = useTranslation(['f3', 'common'])
   const [mous, setMous] = useState<MOU[]>([])
   const [mouGrantIds, setMouGrantIds] = useState<Record<string, string>>({})
+  const [mouProjectCounts, setMouProjectCounts] = useState<Record<string, number>>({})
   const [selectedState, setSelectedState] = useState<string>('all')
   const [availableStates, setAvailableStates] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
@@ -117,10 +118,9 @@ export default function F3MOUsPage() {
   const [reassigningMouId, setReassigningMouId] = useState<string | null>(null)
   const [paymentModalOpen, setPaymentModalOpen] = useState(false)
   const [selectedMouForPayment, setSelectedMouForPayment] = useState<MOU | null>(null)
-  const [paymentExchangeRate, setPaymentExchangeRate] = useState<string>('')
-  const [paymentTransferDate, setPaymentTransferDate] = useState<string>('')
-  const [paymentFile, setPaymentFile] = useState<File | null>(null)
-  const [uploadingPayment, setUploadingPayment] = useState(false)
+  const [paymentProjects, setPaymentProjects] = useState<Array<{ id: string; err_id: string | null; state: string; locality: string | null; emergency_room_name: string | null }>>([])
+  const [paymentConfirmations, setPaymentConfirmations] = useState<Record<string, { exchange_rate: string; transfer_date: string; file: File | null; file_path?: string }>>({})
+  const [uploadingPayments, setUploadingPayments] = useState<Record<string, boolean>>({})
   const [isAssigning, setIsAssigning] = useState(false)
   const [isReassigning, setIsReassigning] = useState(false)
   const [mouAssignmentStatus, setMouAssignmentStatus] = useState<Record<string, { hasUnassigned: boolean; hasAssigned: boolean; projectCount: number }>>({})
@@ -175,6 +175,45 @@ export default function F3MOUsPage() {
     }
   }
 
+  // Helper functions for payment confirmations
+  const parsePaymentConfirmations = (paymentFile: string | null): Record<string, { file_path: string; exchange_rate?: number; transfer_date?: string }> => {
+    if (!paymentFile) return {}
+    try {
+      // Try to parse as JSON
+      const parsed = JSON.parse(paymentFile)
+      if (typeof parsed === 'object' && parsed !== null) {
+        return parsed
+      }
+    } catch {
+      // If parsing fails, it's the old format (single file path string)
+      // Return it as a single entry for backward compatibility
+      // We'll use a special key or the first project ID when opening the modal
+      return {}
+    }
+    return {}
+  }
+
+  const formatPaymentConfirmations = (confirmations: Record<string, { file_path: string; exchange_rate?: number; transfer_date?: string }>): string => {
+    return JSON.stringify(confirmations)
+  }
+
+  const getPaymentConfirmationCount = (mou: MOU, projectCount: number): { confirmed: number; total: number } => {
+    if (!mou.payment_confirmation_file) {
+      return { confirmed: 0, total: projectCount }
+    }
+    try {
+      const parsed = JSON.parse(mou.payment_confirmation_file)
+      if (typeof parsed === 'object' && parsed !== null) {
+        const confirmed = Object.keys(parsed).length
+        return { confirmed, total: projectCount }
+      }
+    } catch {
+      // Old format - single confirmation
+      return { confirmed: 1, total: projectCount }
+    }
+    return { confirmed: 0, total: projectCount }
+  }
+
   // Aggregate data from all projects
   const aggregatedData = useMemo(() => {
     const projects = detail?.projects || (detail?.project ? [detail.project] : [])
@@ -218,6 +257,31 @@ export default function F3MOUsPage() {
       
       // Check assignment status for each MOU
       await checkMouAssignmentStatus(data.map((m: MOU) => m.id))
+      
+      // Fetch project counts for all MOUs
+      try {
+        const mouIds = data.map((m: MOU) => m.id)
+        if (mouIds.length > 0) {
+          const { data: projectCounts } = await supabase
+            .from('err_projects')
+            .select('mou_id')
+            .in('mou_id', mouIds)
+            .eq('funding_status', 'committed')
+            .eq('status', 'approved')
+          
+          const counts: Record<string, number> = {}
+          if (projectCounts) {
+            projectCounts.forEach((p: any) => {
+              if (p.mou_id) {
+                counts[p.mou_id] = (counts[p.mou_id] || 0) + 1
+              }
+            })
+          }
+          setMouProjectCounts(counts)
+        }
+      } catch (error) {
+        console.error('Error fetching project counts:', error)
+      }
       
       // Fetch grant_ids for all MOUs at once
       try {
@@ -609,6 +673,73 @@ export default function F3MOUsPage() {
     }
   }
   
+  const openPaymentModal = async (mou: MOU) => {
+    setSelectedMouForPayment(mou)
+    
+    // Fetch projects in this MOU
+    try {
+      const { data: projects, error } = await supabase
+        .from('err_projects')
+        .select('id, err_id, state, locality, emergency_rooms (name, name_ar, err_code)')
+        .eq('mou_id', mou.id)
+        .eq('funding_status', 'committed')
+        .eq('status', 'approved')
+        .order('submitted_at', { ascending: true })
+      
+      if (error) {
+        console.error('Error fetching MOU projects:', error)
+        setPaymentProjects([])
+        setPaymentConfirmations({})
+      } else {
+        const projectList = (projects || []).map((p: any) => {
+          const room = p.emergency_rooms
+          const roomName = room?.name || room?.name_ar || room?.err_code || null
+          return { 
+            id: p.id, 
+            err_id: p.err_id, 
+            state: p.state, 
+            locality: p.locality,
+            emergency_room_name: roomName
+          }
+        })
+        setPaymentProjects(projectList)
+        
+        // Parse existing payment confirmations
+        const existing = parsePaymentConfirmations(mou.payment_confirmation_file)
+        const confirmations: Record<string, { exchange_rate: string; transfer_date: string; file: File | null; file_path?: string }> = {}
+        
+        projectList.forEach(project => {
+          const existingData = existing[project.id]
+          confirmations[project.id] = {
+            exchange_rate: existingData?.exchange_rate?.toString() || '',
+            transfer_date: existingData?.transfer_date || '',
+            file: null,
+            file_path: existingData?.file_path
+          }
+        })
+        
+        // Handle backward compatibility: if old format exists and no projects have confirmations yet
+        if (mou.payment_confirmation_file && !mou.payment_confirmation_file.startsWith('{') && projectList.length > 0) {
+          // Old format - assign to first project
+          confirmations[projectList[0].id] = {
+            exchange_rate: mou.exchange_rate?.toString() || '',
+            transfer_date: mou.transfer_date || '',
+            file: null,
+            file_path: mou.payment_confirmation_file
+          }
+        }
+        
+        setPaymentConfirmations(confirmations)
+      }
+    } catch (error) {
+      console.error('Error opening payment modal:', error)
+      setPaymentProjects([])
+      setPaymentConfirmations({})
+    }
+    
+    setPaymentModalOpen(true)
+  }
+
   const calculateGrantRemaining = async (grantId: string, donorName: string) => {
     if (!grantId || !donorName) {
       setGrantRemaining(null)
@@ -963,46 +1094,34 @@ export default function F3MOUsPage() {
                             variant="ghost"
                             size="icon"
                             className="h-8 w-8"
-                            onClick={m.payment_confirmation_file ? async () => {
-                            try {
-                              // First get the signed URL
-                              const response = await fetch(`/api/storage/signed-url?path=${encodeURIComponent(m.payment_confirmation_file || '')}`)
-                              if (!response.ok) {
-                                throw new Error('Failed to get signed URL')
+                            onClick={() => openPaymentModal(m)}
+                            title={t('f3:add_payment')}
+                          >
+                            {(() => {
+                              const projectCount = mouProjectCounts[m.id] || 0
+                              const paymentCount = getPaymentConfirmationCount(m, projectCount)
+                              if (paymentCount.confirmed === 0) {
+                                return <Upload className="h-4 w-4 text-amber-600" />
+                              } else if (paymentCount.confirmed === paymentCount.total) {
+                                return <Receipt className="h-4 w-4 text-green-600" />
+                              } else {
+                                return <Receipt className="h-4 w-4 text-yellow-600" />
                               }
-                              const { url, error } = await response.json()
-                              if (error || !url) {
-                                throw new Error(error || 'No URL returned')
+                            })()}
+                          </Button>
+                          <span className="text-[10px] text-muted-foreground text-center leading-tight whitespace-nowrap">
+                            {(() => {
+                              const projectCount = mouProjectCounts[m.id] || 0
+                              const paymentCount = getPaymentConfirmationCount(m, projectCount)
+                              if (paymentCount.total === 0) {
+                                return t('f3:add_payment')
+                              } else if (paymentCount.confirmed === paymentCount.total) {
+                                return `${paymentCount.confirmed}/${paymentCount.total}`
+                              } else {
+                                return `${paymentCount.confirmed}/${paymentCount.total}`
                               }
-
-                              // Create a link and click it
-                              const link = document.createElement('a')
-                              link.href = url
-                              link.target = '_blank'
-                              link.rel = 'noopener noreferrer'
-                              document.body.appendChild(link)
-                              link.click()
-                              document.body.removeChild(link)
-                            } catch (error) {
-                              console.error('Error getting signed URL:', error)
-                              alert('Failed to open payment confirmation')
-                            }
-                          } : () => {
-                            setSelectedMouForPayment(m)
-                            setPaymentExchangeRate(m.exchange_rate?.toString() || '')
-                            setPaymentTransferDate(m.transfer_date || '')
-                            setPaymentFile(null)
-                            setPaymentModalOpen(true)
-                          }}
-                          title={m.payment_confirmation_file ? t('f3:view_payment') : t('f3:add_payment')}
-                        >
-                          {m.payment_confirmation_file ? (
-                            <Receipt className="h-4 w-4 text-green-600" />
-                          ) : (
-                            <Upload className="h-4 w-4 text-amber-600" />
-                          )}
-                        </Button>
-                        <span className="text-[10px] text-muted-foreground text-center leading-tight whitespace-nowrap">{m.payment_confirmation_file ? t('f3:view_payment') : t('f3:add_payment')}</span>
+                            })()}
+                          </span>
                       </div>
                         <input
                           type="file"
@@ -2663,108 +2782,213 @@ export default function F3MOUsPage() {
 
       {/* Payment Confirmation Modal */}
       <Dialog open={paymentModalOpen} onOpenChange={setPaymentModalOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Add Payment Confirmation</DialogTitle>
+            <DialogTitle>
+              Payment Confirmations - {selectedMouForPayment?.mou_code}
+            </DialogTitle>
+            <p className="text-sm text-muted-foreground">
+              {paymentProjects.length} project{paymentProjects.length !== 1 ? 's' : ''} in this MOU
+            </p>
           </DialogHeader>
-          <div className="space-y-4 mt-4">
-            <div>
-              <Label htmlFor="exchange-rate">Exchange Rate</Label>
-              <Input
-                id="exchange-rate"
-                type="number"
-                step="0.0001"
-                value={paymentExchangeRate}
-                onChange={(e) => setPaymentExchangeRate(e.target.value)}
-                placeholder="Enter exchange rate (e.g., 600.5)"
-                className="mt-1"
-              />
-              <p className="text-xs text-muted-foreground mt-1">Exchange rate used for the payment</p>
-            </div>
+          <div className="mt-4">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-[120px]">Room</TableHead>
+                  <TableHead className="w-[150px]">Exchange Rate</TableHead>
+                  <TableHead className="w-[150px]">Transfer Date</TableHead>
+                  <TableHead className="w-[250px]">Payment File</TableHead>
+                  <TableHead className="w-[100px]">Action</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {paymentProjects.map((project) => {
+                  const confirmation = paymentConfirmations[project.id] || { exchange_rate: '', transfer_date: '', file: null, file_path: undefined }
+                  const hasConfirmation = !!confirmation.file_path
+                  const isUploading = uploadingPayments[project.id] || false
+                  
+                  return (
+                    <TableRow key={project.id}>
+                      <TableCell className="font-medium">
+                        <div className="flex items-center gap-2">
+                          {project.emergency_room_name || '-'}
+                          {hasConfirmation && (
+                            <span className="text-xs bg-green-100 text-green-800 px-1.5 py-0.5 rounded">✓</span>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Input
+                          type="number"
+                          step="0.0001"
+                          value={confirmation.exchange_rate}
+                          onChange={(e) => {
+                            setPaymentConfirmations(prev => ({
+                              ...prev,
+                              [project.id]: { ...prev[project.id], exchange_rate: e.target.value }
+                            }))
+                          }}
+                          placeholder="e.g., 600.5"
+                          className="h-8 text-sm"
+                          disabled={isUploading}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Input
+                          type="date"
+                          value={confirmation.transfer_date}
+                          onChange={(e) => {
+                            setPaymentConfirmations(prev => ({
+                              ...prev,
+                              [project.id]: { ...prev[project.id], transfer_date: e.target.value }
+                            }))
+                          }}
+                          className="h-8 text-sm"
+                          disabled={isUploading}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <Input
+                            type="file"
+                            accept=".pdf,.jpg,.jpeg,.png"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0] || null
+                              setPaymentConfirmations(prev => ({
+                                ...prev,
+                                [project.id]: { ...prev[project.id], file }
+                              }))
+                            }}
+                            className="h-8 text-sm text-xs"
+                            disabled={isUploading}
+                          />
+                          {hasConfirmation && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 text-xs px-2"
+                              onClick={async () => {
+                                try {
+                                  const response = await fetch(`/api/storage/signed-url?path=${encodeURIComponent(confirmation.file_path || '')}`)
+                                  if (!response.ok) {
+                                    throw new Error('Failed to get signed URL')
+                                  }
+                                  const { url, error } = await response.json()
+                                  if (error || !url) {
+                                    throw new Error(error || 'No URL returned')
+                                  }
+                                  const link = document.createElement('a')
+                                  link.href = url
+                                  link.target = '_blank'
+                                  link.rel = 'noopener noreferrer'
+                                  document.body.appendChild(link)
+                                  link.click()
+                                  document.body.removeChild(link)
+                                } catch (error) {
+                                  console.error('Error getting signed URL:', error)
+                                  alert('Failed to open payment confirmation')
+                                }
+                              }}
+                            >
+                              View
+                            </Button>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Button
+                          size="sm"
+                          onClick={async () => {
+                            const conf = paymentConfirmations[project.id]
+                            if (!conf?.file && !hasConfirmation && (!conf?.exchange_rate && !conf?.transfer_date)) {
+                              alert('Please provide at least a file, exchange rate, or transfer date')
+                              return
+                            }
+                            
+                            try {
+                              setUploadingPayments(prev => ({ ...prev, [project.id]: true }))
+                              const formData = new FormData()
+                              if (conf.file) {
+                                formData.append('file', conf.file)
+                              }
+                              if (conf.exchange_rate) {
+                                formData.append('exchange_rate', conf.exchange_rate)
+                              }
+                              if (conf.transfer_date) {
+                                formData.append('transfer_date', conf.transfer_date)
+                              }
+                              formData.append('project_id', project.id)
+                              
+                              const response = await fetch(`/api/f3/mous/${selectedMouForPayment?.id}/payment-confirmation`, {
+                                method: 'POST',
+                                body: formData
+                              })
+                              
+                              if (!response.ok) {
+                                throw new Error('Failed to upload payment confirmation')
+                              }
+                              
+                              const result = await response.json()
+                              
+                              // Refresh MOU data to get updated payment confirmations
+                              const mouResponse = await fetch(`/api/f3/mous?state=${selectedMouForPayment?.state || 'all'}`)
+                              const mouData = await mouResponse.json()
+                              const updatedMou = mouData.find((m: MOU) => m.id === selectedMouForPayment?.id)
+                              
+                              if (updatedMou) {
+                                // Re-parse payment confirmations
+                                const existing = parsePaymentConfirmations(updatedMou.payment_confirmation_file)
+                                const updatedConfirmations: Record<string, { exchange_rate: string; transfer_date: string; file: File | null; file_path?: string }> = {}
+                                
+                                paymentProjects.forEach(p => {
+                                  const existingData = existing[p.id]
+                                  updatedConfirmations[p.id] = {
+                                    exchange_rate: existingData?.exchange_rate?.toString() || '',
+                                    transfer_date: existingData?.transfer_date || '',
+                                    file: null,
+                                    file_path: existingData?.file_path
+                                  }
+                                })
+                                
+                                setPaymentConfirmations(updatedConfirmations)
+                                setSelectedMouForPayment(updatedMou)
+                              }
+                              
+                              // Refresh the MOUs list
+                              await fetchMous()
+                              alert('Payment confirmation saved successfully')
+                            } catch (error) {
+                              console.error('Error uploading payment confirmation:', error)
+                              alert('Failed to save payment confirmation')
+                            } finally {
+                              setUploadingPayments(prev => ({ ...prev, [project.id]: false }))
+                            }
+                          }}
+                          disabled={isUploading}
+                          className="h-8 text-xs"
+                        >
+                          {isUploading ? '...' : hasConfirmation ? 'Update' : 'Upload'}
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  )
+                })}
+              </TableBody>
+            </Table>
             
-            <div>
-              <Label htmlFor="transfer-date">Date of Transfer</Label>
-              <Input
-                id="transfer-date"
-                type="date"
-                value={paymentTransferDate}
-                onChange={(e) => setPaymentTransferDate(e.target.value)}
-                className="mt-1"
-              />
-              <p className="text-xs text-muted-foreground mt-1">Date when funds were transferred</p>
-            </div>
-            
-            <div>
-              <Label htmlFor="payment-file">Payment Confirmation File</Label>
-              <Input
-                id="payment-file"
-                type="file"
-                accept=".pdf,.jpg,.jpeg,.png"
-                onChange={(e) => setPaymentFile(e.target.files?.[0] || null)}
-                className="mt-1"
-              />
-              <p className="text-xs text-muted-foreground mt-1">Upload payment confirmation document</p>
-            </div>
-            
-            <div className="flex justify-end gap-2 pt-4">
+            <div className="flex justify-end gap-2 pt-4 border-t mt-4">
               <Button
                 variant="outline"
                 onClick={() => {
                   setPaymentModalOpen(false)
                   setSelectedMouForPayment(null)
-                  setPaymentExchangeRate('')
-                  setPaymentTransferDate('')
-                  setPaymentFile(null)
+                  setPaymentProjects([])
+                  setPaymentConfirmations({})
+                  setUploadingPayments({})
                 }}
-                disabled={uploadingPayment}
               >
-                Cancel
-              </Button>
-              <Button
-                onClick={async () => {
-                  if (!selectedMouForPayment || !paymentFile) {
-                    alert('Please select a file to upload')
-                    return
-                  }
-                  
-                  try {
-                    setUploadingPayment(true)
-                    const formData = new FormData()
-                    formData.append('file', paymentFile)
-                    if (paymentExchangeRate) {
-                      formData.append('exchange_rate', paymentExchangeRate)
-                    }
-                    if (paymentTransferDate) {
-                      formData.append('transfer_date', paymentTransferDate)
-                    }
-                    
-                    const response = await fetch(`/api/f3/mous/${selectedMouForPayment.id}/payment-confirmation`, {
-                      method: 'POST',
-                      body: formData
-                    })
-                    
-                    if (!response.ok) {
-                      throw new Error('Failed to upload payment confirmation')
-                    }
-                    
-                    // Refresh the MOUs list
-                    await fetchMous()
-                    setPaymentModalOpen(false)
-                    setSelectedMouForPayment(null)
-                    setPaymentExchangeRate('')
-                    setPaymentTransferDate('')
-                    setPaymentFile(null)
-                    alert('Payment confirmation uploaded successfully')
-                  } catch (error) {
-                    console.error('Error uploading payment confirmation:', error)
-                    alert('Failed to upload payment confirmation')
-                  } finally {
-                    setUploadingPayment(false)
-                  }
-                }}
-                disabled={uploadingPayment || !paymentFile}
-              >
-                {uploadingPayment ? 'Uploading...' : 'Upload Payment Confirmation'}
+                Close
               </Button>
             </div>
           </div>
