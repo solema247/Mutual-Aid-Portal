@@ -15,7 +15,7 @@ export async function PUT(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Check if current user is admin
+    // Check if current user is admin or superadmin
     const { data: currentUser, error: userError } = await supabase
       .from('users')
       .select('role')
@@ -26,8 +26,19 @@ export async function PUT(
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
 
-    if (currentUser.role !== 'admin') {
-      return NextResponse.json({ error: 'Forbidden - Admin only' }, { status: 403 })
+    if (currentUser.role !== 'admin' && currentUser.role !== 'superadmin') {
+      return NextResponse.json({ error: 'Forbidden - Admin or Superadmin only' }, { status: 403 })
+    }
+
+    // Get the target user to check their current role
+    const { data: targetUser, error: targetUserError } = await supabase
+      .from('users')
+      .select('role')
+      .eq('id', params.userId)
+      .single()
+
+    if (targetUserError || !targetUser) {
+      return NextResponse.json({ error: 'Target user not found' }, { status: 404 })
     }
 
     // Parse request body
@@ -35,8 +46,29 @@ export async function PUT(
     const { role, can_see_all_states, visible_states } = body
 
     // Validate inputs
-    if (role && !['admin', 'state_err', 'base_err'].includes(role)) {
+    if (role && !['superadmin', 'admin', 'state_err', 'base_err'].includes(role)) {
       return NextResponse.json({ error: 'Invalid role' }, { status: 400 })
+    }
+
+    // Role change restrictions:
+    // 1. Nobody can change superadmin's role
+    if (targetUser.role === 'superadmin' && role && role !== 'superadmin') {
+      return NextResponse.json({ error: 'Cannot change superadmin role' }, { status: 403 })
+    }
+
+    // 2. Only superadmin can set/change admin role
+    if (role === 'admin' && currentUser.role !== 'superadmin') {
+      return NextResponse.json({ error: 'Only superadmin can set admin role' }, { status: 403 })
+    }
+
+    // 3. Only superadmin can change from admin to another role
+    if (targetUser.role === 'admin' && role && role !== 'admin' && currentUser.role !== 'superadmin') {
+      return NextResponse.json({ error: 'Only superadmin can change admin role' }, { status: 403 })
+    }
+
+    // 4. Only superadmin can change state access for admin users
+    if (targetUser.role === 'admin' && (can_see_all_states !== undefined || visible_states !== undefined) && currentUser.role !== 'superadmin') {
+      return NextResponse.json({ error: 'Only superadmin can change state access for admin users' }, { status: 403 })
     }
 
     if (can_see_all_states !== undefined && typeof can_see_all_states !== 'boolean') {

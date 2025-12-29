@@ -75,12 +75,13 @@ export async function getPendingUsers(currentUserRole: string, currentUserErrId:
 interface GetActiveUsersParams {
   page: number
   pageSize: number
-  role?: 'admin' | 'state_err' | 'base_err'
+  role?: 'superadmin' | 'admin' | 'state_err' | 'base_err'
   status?: 'active' | 'suspended'
   sortBy?: string
   sortOrder?: 'asc' | 'desc'
   currentUserRole: string
   currentUserErrId: string | null
+  stateFilter?: string | null // 'all', state name, or 'no_state' for null
 }
 
 interface GetActiveUsersResult {
@@ -96,7 +97,8 @@ export async function getActiveUsers({
   sortBy = 'created_at',
   sortOrder = 'desc',
   currentUserRole,
-  currentUserErrId
+  currentUserErrId,
+  stateFilter
 }: GetActiveUsersParams): Promise<GetActiveUsersResult> {
   let query = supabase
     .from('users')
@@ -123,6 +125,39 @@ export async function getActiveUsers({
   // Apply status filter
   if (status) {
     query = query.eq('status', status)
+  }
+
+  // Apply state filter
+  if (stateFilter && stateFilter !== 'all') {
+    if (stateFilter === 'no_state') {
+      // Filter for users with null err_id
+      query = query.is('err_id', null)
+    } else {
+      // Filter by state name - get all ERRs in this state
+      const { data: stateRefs } = await supabase
+        .from('states')
+        .select('id')
+        .eq('state_name', stateFilter)
+
+      if (stateRefs && stateRefs.length > 0) {
+        const stateIds = stateRefs.map(ref => ref.id)
+        const { data: errsInState } = await supabase
+          .from('emergency_rooms')
+          .select('id')
+          .in('state_reference', stateIds)
+
+        if (errsInState && errsInState.length > 0) {
+          const errIds = errsInState.map(err => err.id)
+          query = query.in('err_id', errIds)
+        } else {
+          // No ERRs in this state, return empty
+          query = query.eq('id', '00000000-0000-0000-0000-000000000000')
+        }
+      } else {
+        // State not found, return empty
+        query = query.eq('id', '00000000-0000-0000-0000-000000000000')
+      }
+    }
   }
 
   // Filter based on user role
@@ -186,7 +221,23 @@ export async function getActiveUsers({
   }
 }
 
-export async function approveUser(userId: string): Promise<void> {
+export async function approveUser(userId: string, currentUserRole?: string): Promise<void> {
+  // Check if target user is superadmin - only superadmin can approve superadmin
+  const { data: targetUser, error: targetError } = await supabase
+    .from('users')
+    .select('role')
+    .eq('id', userId)
+    .single()
+
+  if (targetError) {
+    console.error('Error fetching target user:', targetError)
+    throw targetError
+  }
+
+  if (targetUser?.role === 'superadmin' && currentUserRole !== 'superadmin') {
+    throw new Error('Only superadmin can approve superadmin users')
+  }
+
   const { error } = await supabase
     .from('users')
     .update({ status: 'active' })
@@ -198,7 +249,23 @@ export async function approveUser(userId: string): Promise<void> {
   }
 }
 
-export async function declineUser(userId: string): Promise<void> {
+export async function declineUser(userId: string, currentUserRole?: string): Promise<void> {
+  // Check if target user is superadmin - only superadmin can decline superadmin
+  const { data: targetUser, error: targetError } = await supabase
+    .from('users')
+    .select('role')
+    .eq('id', userId)
+    .single()
+
+  if (targetError) {
+    console.error('Error fetching target user:', targetError)
+    throw targetError
+  }
+
+  if (targetUser?.role === 'superadmin' && currentUserRole !== 'superadmin') {
+    throw new Error('Only superadmin can decline superadmin users')
+  }
+
   const { error } = await supabase
     .from('users')
     .delete()
@@ -210,7 +277,23 @@ export async function declineUser(userId: string): Promise<void> {
   }
 }
 
-export async function suspendUser(userId: string): Promise<void> {
+export async function suspendUser(userId: string, currentUserRole?: string): Promise<void> {
+  // Check if target user is admin - only superadmin can suspend admin
+  const { data: targetUser, error: targetError } = await supabase
+    .from('users')
+    .select('role')
+    .eq('id', userId)
+    .single()
+
+  if (targetError) {
+    console.error('Error fetching target user:', targetError)
+    throw targetError
+  }
+
+  if (targetUser?.role === 'admin' && currentUserRole !== 'superadmin') {
+    throw new Error('Only superadmin can suspend admin users')
+  }
+
   const { error } = await supabase
     .from('users')
     .update({ 
@@ -225,7 +308,23 @@ export async function suspendUser(userId: string): Promise<void> {
   }
 }
 
-export async function activateUser(userId: string): Promise<void> {
+export async function activateUser(userId: string, currentUserRole?: string): Promise<void> {
+  // Check if target user is admin - only superadmin can activate admin
+  const { data: targetUser, error: targetError } = await supabase
+    .from('users')
+    .select('role')
+    .eq('id', userId)
+    .single()
+
+  if (targetError) {
+    console.error('Error fetching target user:', targetError)
+    throw targetError
+  }
+
+  if (targetUser?.role === 'admin' && currentUserRole !== 'superadmin') {
+    throw new Error('Only superadmin can activate admin users')
+  }
+
   const { error } = await supabase
     .from('users')
     .update({ 

@@ -56,17 +56,19 @@ export default function UserManagement() {
     try {
       setIsLoading(true)
       const users = await getPendingUsers(currentUser.role, currentUser.err_id)
-      const formattedUsers: PendingUserListItem[] = users.map(user => ({
-        id: user.id,
-        err_id: user.err_id,
-        display_name: user.display_name,
-        role: user.role as 'admin' | 'state_err' | 'base_err',
-        createdAt: new Date(user.created_at || '').toLocaleDateString(),
-        status: user.status as 'pending' | 'active' | 'suspended',
-        err_name: user.emergency_rooms?.name || '-',
-        err_code: user.emergency_rooms?.err_code || '-',
-        state_name: user.emergency_rooms?.state?.state_name || '-'
-      }))
+      const formattedUsers: PendingUserListItem[] = users
+        .filter(user => user.role !== 'superadmin') // Exclude superadmin from display
+        .map(user => ({
+          id: user.id,
+          err_id: user.err_id,
+          display_name: user.display_name,
+          role: user.role as 'superadmin' | 'admin' | 'state_err' | 'base_err',
+          createdAt: new Date(user.created_at || '').toLocaleDateString(),
+          status: user.status as 'pending' | 'active' | 'suspended',
+          err_name: user.emergency_rooms?.name || '-',
+          err_code: user.emergency_rooms?.err_code || '-',
+          state_name: user.emergency_rooms?.state?.state_name || '-'
+        }))
       setPendingUsers(formattedUsers)
     } catch (err) {
       setError(t('common:error_fetching_data'))
@@ -84,7 +86,7 @@ export default function UserManagement() {
 
   if (!currentUser) return null
 
-  const isAdmin = currentUser.role === 'admin'
+  const isAdmin = currentUser.role === 'admin' || currentUser.role === 'superadmin'
 
   return (
     <div className="space-y-6">
@@ -97,6 +99,7 @@ export default function UserManagement() {
           <AccessRightsManagement
             currentUserRole={currentUser.role}
             currentUserErrId={currentUser.err_id}
+            currentUserId={currentUser.id}
           />
         </CollapsibleRow>
       )}
@@ -114,6 +117,7 @@ export default function UserManagement() {
             users={pendingUsers}
             isLoading={isLoading}
             onUpdate={fetchPendingUsers}
+            currentUserRole={currentUser.role}
           />
         </div>
       </CollapsibleRow>

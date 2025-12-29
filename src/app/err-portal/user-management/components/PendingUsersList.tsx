@@ -9,31 +9,49 @@ interface PendingUsersListProps {
   users: PendingUserListItem[]
   isLoading: boolean
   onUpdate: () => void
+  currentUserRole: string
 }
 
-export default function PendingUsersList({ users, isLoading, onUpdate }: PendingUsersListProps) {
+export default function PendingUsersList({ users, isLoading, onUpdate, currentUserRole }: PendingUsersListProps) {
   const { t } = useTranslation(['users'])
   const [processingId, setProcessingId] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
-  const handleApprove = async (userId: string) => {
+  const canApprove = (userRole: string) => {
+    // Everyone can approve (except superadmin which is filtered out)
+    return true
+  }
+
+  const canDecline = (userRole: string) => {
+    // Only superadmin and admin can decline
+    return currentUserRole === 'superadmin' || currentUserRole === 'admin'
+  }
+
+  const handleApprove = async (userId: string, userRole: string) => {
     try {
       setProcessingId(userId)
-      await approveUser(userId)
+      setError(null)
+      await approveUser(userId, currentUserRole)
       onUpdate()
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to approve user:', error)
+      setError(error.message || 'Failed to approve user')
+      setTimeout(() => setError(null), 5000)
     } finally {
       setProcessingId(null)
     }
   }
 
-  const handleDecline = async (userId: string) => {
+  const handleDecline = async (userId: string, userRole: string) => {
     try {
       setProcessingId(userId)
-      await declineUser(userId)
+      setError(null)
+      await declineUser(userId, currentUserRole)
       onUpdate()
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to decline user:', error)
+      setError(error.message || 'Failed to decline user')
+      setTimeout(() => setError(null), 5000)
     } finally {
       setProcessingId(null)
     }
@@ -48,8 +66,12 @@ export default function PendingUsersList({ users, isLoading, onUpdate }: Pending
   }
 
   return (
-    <div className="rounded-md border">
-      <div className="grid grid-cols-7 gap-4 p-4 font-medium border-b">
+    <div className="space-y-4">
+      {error && (
+        <div className="text-destructive text-sm bg-destructive/10 p-3 rounded-md">{error}</div>
+      )}
+      <div className="rounded-md border">
+        <div className="grid grid-cols-7 gap-4 p-4 font-medium border-b">
         <div>{t('users:err_name')}</div>
         <div>{t('users:state')}</div>
         <div>{t('users:display_name')}</div>
@@ -71,22 +93,25 @@ export default function PendingUsersList({ users, isLoading, onUpdate }: Pending
               <button 
                 className="text-green-600 hover:text-green-800 disabled:opacity-50"
                 title={t('users:approve')}
-                onClick={() => handleApprove(user.id)}
-                disabled={processingId === user.id}
+                onClick={() => handleApprove(user.id, user.role)}
+                disabled={processingId === user.id || !canApprove(user.role)}
               >
                 {processingId === user.id ? '...' : '✓'}
               </button>
-              <button 
-                className="text-red-600 hover:text-red-800 disabled:opacity-50"
-                title={t('users:decline')}
-                onClick={() => handleDecline(user.id)}
-                disabled={processingId === user.id}
-              >
-                {processingId === user.id ? '...' : '✕'}
-              </button>
+              {canDecline(user.role) && (
+                <button 
+                  className="text-red-600 hover:text-red-800 disabled:opacity-50"
+                  title={t('users:decline')}
+                  onClick={() => handleDecline(user.id, user.role)}
+                  disabled={processingId === user.id}
+                >
+                  {processingId === user.id ? '...' : '✕'}
+                </button>
+              )}
             </div>
           </div>
         ))}
+        </div>
       </div>
     </div>
   )

@@ -24,13 +24,15 @@ interface State {
 interface AccessRightsManagementProps {
   currentUserRole: string
   currentUserErrId: string | null
+  currentUserId?: string
 }
 
 const PAGE_SIZE = 20
 
 export default function AccessRightsManagement({
   currentUserRole,
-  currentUserErrId
+  currentUserErrId,
+  currentUserId
 }: AccessRightsManagementProps) {
   const { t } = useTranslation(['users', 'common'])
   const [users, setUsers] = useState<ActiveUserListItem[]>([])
@@ -39,6 +41,7 @@ export default function AccessRightsManagement({
   const [currentPage, setCurrentPage] = useState(1)
   const [totalUsers, setTotalUsers] = useState(0)
   const [selectedRole, setSelectedRole] = useState<string>('all')
+  const [selectedState, setSelectedState] = useState<string>('all')
   const [states, setStates] = useState<State[]>([])
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null)
   const [editingUser, setEditingUser] = useState<string | null>(null)
@@ -80,37 +83,42 @@ export default function AccessRightsManagement({
       const { users: fetchedUsers, total } = await getActiveUsers({
         page: currentPage,
         pageSize: PAGE_SIZE,
-        role: selectedRole === 'all' ? undefined : selectedRole as 'admin' | 'state_err' | 'base_err',
+        role: selectedRole === 'all' ? undefined : selectedRole as 'superadmin' | 'admin' | 'state_err' | 'base_err',
         status: 'active',
         sortOrder: 'desc',
         currentUserRole,
-        currentUserErrId
+        currentUserErrId,
+        stateFilter: selectedState === 'all' ? undefined : selectedState
       })
 
-      const formattedUsers: ActiveUserListItem[] = fetchedUsers.map(user => ({
-        id: user.id,
-        err_id: user.err_id,
-        display_name: user.display_name,
-        role: user.role as 'admin' | 'state_err' | 'base_err',
-        status: user.status as 'active' | 'suspended',
-        createdAt: new Date(user.created_at || '').toLocaleDateString(),
-        updatedAt: user.updated_at ? new Date(user.updated_at).toLocaleDateString() : null,
-        err_name: user.emergency_rooms?.name || '-',
-        err_code: user.emergency_rooms?.err_code || '-',
-        state_name: user.emergency_rooms?.state?.state_name || '-',
-        can_see_all_states: user.can_see_all_states ?? true,
-        visible_states: user.visible_states || []
-      }))
+      const formattedUsers: ActiveUserListItem[] = fetchedUsers
+        .filter(user => user.role !== 'superadmin') // Exclude superadmin from display
+        .map(user => ({
+          id: user.id,
+          err_id: user.err_id,
+          display_name: user.display_name,
+          role: user.role as 'superadmin' | 'admin' | 'state_err' | 'base_err',
+          status: user.status as 'active' | 'suspended',
+          createdAt: new Date(user.created_at || '').toLocaleDateString(),
+          updatedAt: user.updated_at ? new Date(user.updated_at).toLocaleDateString() : null,
+          err_name: user.emergency_rooms?.name || '-',
+          err_code: user.emergency_rooms?.err_code || '-',
+          state_name: user.emergency_rooms?.state?.state_name || '-',
+          can_see_all_states: user.can_see_all_states ?? true,
+          visible_states: user.visible_states || []
+        }))
 
       setUsers(formattedUsers)
-      setTotalUsers(total)
+      // Adjust total count to exclude superadmins
+      const superadminCount = fetchedUsers.filter(u => u.role === 'superadmin').length
+      setTotalUsers(total - superadminCount)
     } catch (err) {
       setError(t('common:error_fetching_data'))
       console.error(err)
     } finally {
       setIsLoading(false)
     }
-  }, [currentPage, selectedRole, currentUserRole, currentUserErrId, t])
+  }, [currentPage, selectedRole, selectedState, currentUserRole, currentUserErrId, t])
 
   useEffect(() => {
     fetchUsers()
@@ -119,9 +127,9 @@ export default function AccessRightsManagement({
   // Reset to first page when filter changes
   useEffect(() => {
     setCurrentPage(1)
-  }, [selectedRole])
+  }, [selectedRole, selectedState])
 
-  const handleRoleChange = async (userId: string, newRole: 'admin' | 'state_err' | 'base_err') => {
+  const handleRoleChange = async (userId: string, newRole: 'superadmin' | 'admin' | 'state_err' | 'base_err') => {
     try {
       setSavingUserId(userId)
       const res = await fetch(`/api/users/${userId}/access-rights`, {
@@ -147,8 +155,17 @@ export default function AccessRightsManagement({
   const handleAccessRightsChange = async (
     userId: string,
     canSeeAllStates: boolean,
-    visibleStates: string[]
+    visibleStates: string[],
+    userRole: string
   ) => {
+    // Only superadmin can change state access for admin users
+    if (userRole === 'admin' && currentUserRole !== 'superadmin') {
+      setError('Only superadmin can change state access for admin users')
+      setTimeout(() => setError(null), 5000)
+      setOpenDropdownId(null)
+      return
+    }
+
     try {
       setSavingUserId(userId)
       const res = await fetch(`/api/users/${userId}/access-rights`, {
@@ -161,15 +178,17 @@ export default function AccessRightsManagement({
       })
 
       if (!res.ok) {
-        throw new Error('Failed to update access rights')
+        const errorData = await res.json().catch(() => ({}))
+        throw new Error(errorData.error || 'Failed to update access rights')
       }
 
       // Refresh users
       await fetchUsers()
       setOpenDropdownId(null)
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error updating access rights:', error)
-      setError(t('common:error_updating_user'))
+      setError(error.message || t('common:error_updating_user'))
+      setTimeout(() => setError(null), 5000)
     } finally {
       setSavingUserId(null)
     }
@@ -202,12 +221,31 @@ export default function AccessRightsManagement({
             <SelectItem value="base_err">{t('users:base_err_role')}</SelectItem>
           </SelectContent>
         </Select>
+
+        <Select
+          value={selectedState}
+          onValueChange={setSelectedState}
+        >
+          <SelectTrigger className="w-[180px]">
+            <SelectValue placeholder="Filter by State" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All States</SelectItem>
+            <SelectItem value="no_state">No State</SelectItem>
+            {states.map((state) => (
+              <SelectItem key={state.id} value={state.state_name}>
+                {state.state_name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       <div className="rounded-md border">
-        <div className="grid grid-cols-5 gap-4 p-4 font-medium border-b">
+        <div className="grid grid-cols-6 gap-4 p-4 font-medium border-b">
           <div>{t('users:display_name')}</div>
           <div>{t('users:role')}</div>
+          <div>State</div>
           <div>State Access</div>
           <div>{t('users:err_name')}</div>
           <div>{t('users:status')}</div>
@@ -217,22 +255,32 @@ export default function AccessRightsManagement({
             const isDropdownOpen = openDropdownId === user.id
             const userStates = user.visible_states || []
             const canSeeAll = user.can_see_all_states ?? true
+            const canChangeStateAccess = currentUserRole === 'superadmin' || user.role !== 'admin'
 
             return (
-              <div key={user.id} className="grid grid-cols-5 gap-4 p-4 hover:bg-muted/50">
+              <div key={user.id} className="grid grid-cols-6 gap-4 p-4 hover:bg-muted/50">
                 <div className="flex items-center">{user.display_name || '-'}</div>
                 
                 <div className="flex items-center">
                   <Select
                     value={user.role}
-                    onValueChange={(value) => handleRoleChange(user.id, value as 'admin' | 'state_err' | 'base_err')}
-                    disabled={savingUserId === user.id}
+                    onValueChange={(value) => handleRoleChange(user.id, value as 'superadmin' | 'admin' | 'state_err' | 'base_err')}
+                    disabled={
+                      savingUserId === user.id ||
+                      user.role === 'superadmin' || // Cannot change superadmin role
+                      (user.role === 'admin' && currentUserRole !== 'superadmin') // Only superadmin can change admin
+                    }
                   >
                     <SelectTrigger className="w-[140px]">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="admin">{t('users:admin_role')}</SelectItem>
+                      {currentUserRole === 'superadmin' && (
+                        <SelectItem value="superadmin">Superadmin</SelectItem>
+                      )}
+                      {currentUserRole === 'superadmin' && (
+                        <SelectItem value="admin">{t('users:admin_role')}</SelectItem>
+                      )}
                       <SelectItem value="state_err">{t('users:state_err_role')}</SelectItem>
                       <SelectItem value="base_err">{t('users:base_err_role')}</SelectItem>
                     </SelectContent>
@@ -240,22 +288,50 @@ export default function AccessRightsManagement({
                   {savingUserId === user.id && (
                     <span className="ml-2 text-xs text-muted-foreground">Saving...</span>
                   )}
+                  {user.role === 'superadmin' && (
+                    <span className="ml-2 text-xs text-muted-foreground">(Protected)</span>
+                  )}
                 </div>
+
+                <div className="flex items-center">{user.state_name || '-'}</div>
 
                 <div className="relative" ref={openDropdownId === user.id ? dropdownRef : null}>
                   <div
-                    className="flex flex-wrap gap-1 cursor-pointer min-h-[32px] p-1 border rounded-md hover:bg-accent"
-                    onClick={() => setOpenDropdownId(isDropdownOpen ? null : user.id)}
+                    className={`flex flex-wrap gap-1 min-h-[32px] p-1 border rounded-md ${
+                      canChangeStateAccess 
+                        ? 'cursor-pointer hover:bg-accent' 
+                        : 'cursor-not-allowed opacity-60'
+                    }`}
+                    onClick={() => {
+                      if (canChangeStateAccess) {
+                        setOpenDropdownId(isDropdownOpen ? null : user.id)
+                      }
+                    }}
+                    title={!canChangeStateAccess ? 'Only superadmin can change state access for admin users' : ''}
                   >
                     {canSeeAll ? (
-                      <Badge variant="default" className="bg-blue-500 hover:bg-blue-600">
+                      <Badge variant="default" className="bg-blue-200 hover:bg-blue-300 text-blue-800 border-blue-300">
                         All States
                       </Badge>
                     ) : userStates.length > 0 ? (
-                      userStates.map((stateId) => {
+                      userStates.map((stateId, index) => {
                         const state = states.find(s => s.id === stateId)
+                        // Use a palette of modern pastel colors
+                        const pastelColors = [
+                          'bg-pink-200 hover:bg-pink-300 text-pink-800 border-pink-300',
+                          'bg-purple-200 hover:bg-purple-300 text-purple-800 border-purple-300',
+                          'bg-indigo-200 hover:bg-indigo-300 text-indigo-800 border-indigo-300',
+                          'bg-cyan-200 hover:bg-cyan-300 text-cyan-800 border-cyan-300',
+                          'bg-teal-200 hover:bg-teal-300 text-teal-800 border-teal-300',
+                          'bg-emerald-200 hover:bg-emerald-300 text-emerald-800 border-emerald-300',
+                          'bg-lime-200 hover:bg-lime-300 text-lime-800 border-lime-300',
+                          'bg-amber-200 hover:bg-amber-300 text-amber-800 border-amber-300',
+                          'bg-orange-200 hover:bg-orange-300 text-orange-800 border-orange-300',
+                          'bg-rose-200 hover:bg-rose-300 text-rose-800 border-rose-300',
+                        ]
+                        const colorClass = pastelColors[index % pastelColors.length]
                         return state ? (
-                          <Badge key={stateId} variant="secondary" className="bg-green-500 hover:bg-green-600">
+                          <Badge key={stateId} variant="secondary" className={colorClass}>
                             {state.state_name}
                           </Badge>
                         ) : null
@@ -272,11 +348,14 @@ export default function AccessRightsManagement({
                           <Checkbox
                             id={`all-states-${user.id}`}
                             checked={canSeeAll}
+                            disabled={!canChangeStateAccess}
                             onCheckedChange={(checked) => {
-                              if (checked) {
-                                handleAccessRightsChange(user.id, true, [])
-                              } else {
-                                handleAccessRightsChange(user.id, false, userStates)
+                              if (canChangeStateAccess) {
+                                if (checked) {
+                                  handleAccessRightsChange(user.id, true, [], user.role)
+                                } else {
+                                  handleAccessRightsChange(user.id, false, userStates, user.role)
+                                }
                               }
                             }}
                           />
@@ -300,16 +379,19 @@ export default function AccessRightsManagement({
                                 const isSelected = userStates.includes(state.id)
                                 return (
                                   <div key={state.id} className="flex items-center space-x-2">
-                                    <Checkbox
-                                      id={`state-${user.id}-${state.id}`}
-                                      checked={isSelected}
-                                      onCheckedChange={(checked) => {
+                                  <Checkbox
+                                    id={`state-${user.id}-${state.id}`}
+                                    checked={isSelected}
+                                    disabled={!canChangeStateAccess}
+                                    onCheckedChange={(checked) => {
+                                      if (canChangeStateAccess) {
                                         const newStates = checked
                                           ? [...userStates, state.id]
                                           : userStates.filter(id => id !== state.id)
-                                        handleAccessRightsChange(user.id, false, newStates)
-                                      }}
-                                    />
+                                        handleAccessRightsChange(user.id, false, newStates, user.role)
+                                      }
+                                    }}
+                                  />
                                     <label
                                       htmlFor={`state-${user.id}-${state.id}`}
                                       className="text-sm cursor-pointer flex-1"

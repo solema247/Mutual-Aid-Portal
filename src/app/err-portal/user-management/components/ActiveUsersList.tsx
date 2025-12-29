@@ -38,29 +38,32 @@ export default function ActiveUsersList({
       const { users: fetchedUsers } = await getActiveUsers({
         page: 1,
         pageSize: 20,
-        role: selectedRole === 'all' ? undefined : selectedRole as 'admin' | 'state_err' | 'base_err',
+        role: selectedRole === 'all' ? undefined : selectedRole as 'superadmin' | 'admin' | 'state_err' | 'base_err',
         status: selectedStatus,
         sortOrder,
         currentUserRole,
         currentUserErrId
       })
 
-      const formattedUsers: ActiveUserListItem[] = fetchedUsers.map(user => ({
-        id: user.id,
-        err_id: user.err_id,
-        display_name: user.display_name,
-        role: user.role as 'admin' | 'state_err' | 'base_err',
-        status: user.status as 'active' | 'suspended',
-        createdAt: new Date(user.created_at || '').toLocaleDateString(),
-        updatedAt: user.updated_at ? new Date(user.updated_at).toLocaleDateString() : null,
-        err_name: user.emergency_rooms?.name || '-',
-        err_code: user.emergency_rooms?.err_code || '-',
-        state_name: user.emergency_rooms?.state?.state_name || '-',
-        can_see_all_states: user.can_see_all_states ?? true,
-        visible_states: user.visible_states || []
-      }))
+      const formattedUsers: ActiveUserListItem[] = fetchedUsers
+        .filter(user => user.role !== 'superadmin') // Exclude superadmin from display
+        .map(user => ({
+          id: user.id,
+          err_id: user.err_id,
+          display_name: user.display_name,
+          role: user.role as 'superadmin' | 'admin' | 'state_err' | 'base_err',
+          status: user.status as 'active' | 'suspended',
+          createdAt: new Date(user.created_at || '').toLocaleDateString(),
+          updatedAt: user.updated_at ? new Date(user.updated_at).toLocaleDateString() : null,
+          err_name: user.emergency_rooms?.name || '-',
+          err_code: user.emergency_rooms?.err_code || '-',
+          state_name: user.emergency_rooms?.state?.state_name || '-',
+          can_see_all_states: user.can_see_all_states ?? true,
+          visible_states: user.visible_states || []
+        }))
 
       setUsers(formattedUsers)
+      // Note: total count from API includes superadmins, but we filter them out in display
     } catch (err) {
       setError(t('common:error_fetching_data'))
       console.error(err)
@@ -73,17 +76,25 @@ export default function ActiveUsersList({
     fetchUsers()
   }, [selectedRole, selectedStatus, sortOrder, fetchUsers])
 
-  const handleStatusChange = async (userId: string, newStatus: 'active' | 'suspended') => {
+  const canChangeStatus = (userRole: string) => {
+    // Only superadmin and admin can change status
+    return currentUserRole === 'superadmin' || currentUserRole === 'admin'
+  }
+
+  const handleStatusChange = async (userId: string, newStatus: 'active' | 'suspended', userRole: string) => {
     try {
       setProcessingId(userId)
+      setError(null)
       if (newStatus === 'suspended') {
-        await suspendUser(userId)
+        await suspendUser(userId, currentUserRole)
       } else {
-        await activateUser(userId)
+        await activateUser(userId, currentUserRole)
       }
       fetchUsers()
-    } catch (error) {
+    } catch (error: any) {
       console.error(t('common:error_updating_user_status'), error)
+      setError(error.message || t('common:error_updating_user_status'))
+      setTimeout(() => setError(null), 5000) // Clear error after 5 seconds
     } finally {
       setProcessingId(null)
     }
@@ -103,6 +114,9 @@ export default function ActiveUsersList({
 
   return (
     <div className="space-y-4">
+      {error && (
+        <div className="text-destructive text-sm bg-destructive/10 p-3 rounded-md">{error}</div>
+      )}
       <div className="flex gap-4 items-center">
         <Select
           value={selectedRole}
@@ -162,16 +176,27 @@ export default function ActiveUsersList({
               <div>{user.createdAt}</div>
               <div>{user.updatedAt || '-'}</div>
               <div>
-                <button
-                  className={`${
-                    user.status === 'active' ? 'text-red-600 hover:text-red-800' : 'text-green-600 hover:text-green-800'
-                  } disabled:opacity-50`}
-                  title={t(user.status === 'active' ? 'users:suspend' : 'users:activate')}
-                  onClick={() => handleStatusChange(user.id, user.status === 'active' ? 'suspended' : 'active')}
-                  disabled={processingId === user.id}
-                >
-                  {processingId === user.id ? '...' : user.status === 'active' ? '⊘' : '✓'}
-                </button>
+                {canChangeStatus(user.role) ? (
+                  <button
+                    className={`${
+                      user.status === 'active' ? 'text-red-600 hover:text-red-800' : 'text-green-600 hover:text-green-800'
+                    } disabled:opacity-50`}
+                    title={
+                      user.role === 'admin' && currentUserRole !== 'superadmin'
+                        ? 'Only superadmin can change admin status'
+                        : t(user.status === 'active' ? 'users:suspend' : 'users:activate')
+                    }
+                    onClick={() => handleStatusChange(user.id, user.status === 'active' ? 'suspended' : 'active', user.role)}
+                    disabled={
+                      processingId === user.id ||
+                      (user.role === 'admin' && currentUserRole !== 'superadmin')
+                    }
+                  >
+                    {processingId === user.id ? '...' : user.status === 'active' ? '⊘' : '✓'}
+                  </button>
+                ) : (
+                  <span className="text-xs text-muted-foreground">-</span>
+                )}
               </div>
             </div>
           ))}
