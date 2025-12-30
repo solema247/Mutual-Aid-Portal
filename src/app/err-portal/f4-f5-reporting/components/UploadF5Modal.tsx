@@ -74,6 +74,16 @@ const extractTables = (rawOcr: string) => {
 
 export default function UploadF5Modal({ open, onOpenChange, onSaved, initialProjectId }: UploadF5ModalProps) {
   const { t } = useTranslation(['f4f5'])
+  
+  // Style object to ensure text is selectable in inputs with visible selection
+  const selectableInputStyle: React.CSSProperties = {
+    userSelect: 'text',
+    WebkitUserSelect: 'text',
+    MozUserSelect: 'text',
+    msUserSelect: 'text',
+    cursor: 'text',
+  }
+
   const [states, setStates] = useState<string[]>([])
   const [selectedState, setSelectedState] = useState('')
   const [rooms, setRooms] = useState<Array<{ id: string; label: string }>>([])
@@ -490,7 +500,6 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved, initialProj
           setTempKey('')
           setFileUrl('')
           setRawOcr('')
-          setActiveTab('form')
         }
       }
     }}>
@@ -573,34 +582,64 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved, initialProj
             <div className="space-y-3">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label>{t('f5.preview.summary.report_date')}</Label>
-                  <Input type="date" value={summaryDraft?.report_date ?? reportDate} onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), report_date: e.target.value }))} />
+                  <Label className="select-text" style={{ userSelect: 'text' }}>{t('f5.preview.summary.report_date')}</Label>
+                  <Input className="select-text" type="date" value={summaryDraft?.report_date ?? reportDate} onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), report_date: e.target.value }))} />
                 </div>
                 <div>
-                  <Label>{t('f5.preview.summary.reporting_person')}</Label>
-                  <Input value={summaryDraft?.reporting_person ?? ''} onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), reporting_person: e.target.value }))} />
+                  <Label className="select-text" style={{ userSelect: 'text' }}>{t('f5.preview.summary.reporting_person')}</Label>
+                  <Input 
+                    className="select-text selection:bg-blue-200 selection:text-blue-900 dark:selection:bg-blue-800 dark:selection:text-blue-100" 
+                    style={selectableInputStyle}
+                    value={summaryDraft?.reporting_person ?? ''} 
+                    onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), reporting_person: e.target.value }))} 
+                  />
                 </div>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <Label>{t('f5.preview.summary.positive_changes')}</Label>
-                  <Input value={summaryDraft?.positive_changes ?? ''} onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), positive_changes: e.target.value }))} />
+                  <Label className="select-text" style={{ userSelect: 'text' }}>{t('f5.preview.summary.positive_changes')}</Label>
+                  <Input 
+                    className="select-text selection:bg-blue-200 selection:text-blue-900 dark:selection:bg-blue-800 dark:selection:text-blue-100" 
+                    style={selectableInputStyle}
+                    value={summaryDraft?.positive_changes ?? ''} 
+                    onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), positive_changes: e.target.value }))} 
+                  />
                 </div>
                 <div>
-                  <Label>{t('f5.preview.summary.negative_results')}</Label>
-                  <Input value={summaryDraft?.negative_results ?? ''} onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), negative_results: e.target.value }))} />
+                  <Label className="select-text" style={{ userSelect: 'text' }}>{t('f5.preview.summary.negative_results')}</Label>
+                  <Input 
+                    className="select-text selection:bg-blue-200 selection:text-blue-900 dark:selection:bg-blue-800 dark:selection:text-blue-100" 
+                    style={selectableInputStyle}
+                    value={summaryDraft?.negative_results ?? ''} 
+                    onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), negative_results: e.target.value }))} 
+                  />
                 </div>
                 <div>
-                  <Label>{t('f5.preview.summary.unexpected_results')}</Label>
-                  <Input value={summaryDraft?.unexpected_results ?? ''} onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), unexpected_results: e.target.value }))} />
+                  <Label className="select-text" style={{ userSelect: 'text' }}>{t('f5.preview.summary.unexpected_results')}</Label>
+                  <Input 
+                    className="select-text selection:bg-blue-200 selection:text-blue-900 dark:selection:bg-blue-800 dark:selection:text-blue-100" 
+                    style={selectableInputStyle}
+                    value={summaryDraft?.unexpected_results ?? ''} 
+                    onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), unexpected_results: e.target.value }))} 
+                  />
                 </div>
                 <div>
-                  <Label>{t('f5.preview.summary.lessons_learned')}</Label>
-                  <Input value={summaryDraft?.lessons_learned ?? ''} onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), lessons_learned: e.target.value }))} />
+                  <Label className="select-text" style={{ userSelect: 'text' }}>{t('f5.preview.summary.lessons_learned')}</Label>
+                  <Input 
+                    className="select-text selection:bg-blue-200 selection:text-blue-900 dark:selection:bg-blue-800 dark:selection:text-blue-100" 
+                    style={selectableInputStyle}
+                    value={summaryDraft?.lessons_learned ?? ''} 
+                    onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), lessons_learned: e.target.value }))} 
+                  />
                 </div>
                 <div className="md:col-span-2">
-                  <Label>{t('f5.preview.summary.suggestions')}</Label>
-                  <Input value={summaryDraft?.suggestions ?? ''} onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), suggestions: e.target.value }))} />
+                  <Label className="select-text" style={{ userSelect: 'text' }}>{t('f5.preview.summary.suggestions')}</Label>
+                  <Input 
+                    className="select-text selection:bg-blue-200 selection:text-blue-900 dark:selection:bg-blue-800 dark:selection:text-blue-100" 
+                    style={selectableInputStyle}
+                    value={summaryDraft?.suggestions ?? ''} 
+                    onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), suggestions: e.target.value }))} 
+                  />
                 </div>
               </div>
             </div>
@@ -608,7 +647,7 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved, initialProj
             {/* Activities Table */}
             <div>
               <div className="flex items-center justify-between mb-2">
-                <Label>{t('f5.preview.activities.title')}</Label>
+                <Label className="select-text" style={{ userSelect: 'text' }}>{t('f5.preview.activities.title')}</Label>
                 <Button
                   variant="secondary"
                   size="sm"
@@ -635,27 +674,71 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved, initialProj
                   <Table className="select-text">
                     <TableHeader>
                       <TableRow>
-                        <TableHead className="py-1 px-2 text-xs">{t('f5.preview.activities.cols.activity_name')}</TableHead>
-                        <TableHead className="py-1 px-2 text-xs">{t('f5.preview.activities.cols.activity_goal')}</TableHead>
-                        <TableHead className="py-1 px-2 text-xs">{t('f5.preview.activities.cols.location')}</TableHead>
-                        <TableHead className="py-1 px-2 text-xs">{t('f5.preview.activities.cols.start')}</TableHead>
-                        <TableHead className="py-1 px-2 text-xs">{t('f5.preview.activities.cols.end')}</TableHead>
-                        <TableHead className="py-1 px-2 text-xs">{t('f5.preview.activities.cols.beneficiaries_individuals')}</TableHead>
-                        <TableHead className="py-1 px-2 text-xs">{t('f5.preview.activities.cols.beneficiaries_families')}</TableHead>
-                        <TableHead className="py-1 px-2 text-xs text-right">{t('f5.preview.activities.cols.actions')}</TableHead>
+                        <TableHead className="py-1 px-2 text-xs select-text" style={{ userSelect: 'text' }}>{t('f5.preview.activities.cols.activity_name')}</TableHead>
+                        <TableHead className="py-1 px-2 text-xs select-text" style={{ userSelect: 'text' }}>{t('f5.preview.activities.cols.activity_goal')}</TableHead>
+                        <TableHead className="py-1 px-2 text-xs select-text" style={{ userSelect: 'text' }}>{t('f5.preview.activities.cols.location')}</TableHead>
+                        <TableHead className="py-1 px-2 text-xs select-text" style={{ userSelect: 'text' }}>{t('f5.preview.activities.cols.start')}</TableHead>
+                        <TableHead className="py-1 px-2 text-xs select-text" style={{ userSelect: 'text' }}>{t('f5.preview.activities.cols.end')}</TableHead>
+                        <TableHead className="py-1 px-2 text-xs select-text" style={{ userSelect: 'text' }}>{t('f5.preview.activities.cols.beneficiaries_individuals')}</TableHead>
+                        <TableHead className="py-1 px-2 text-xs select-text" style={{ userSelect: 'text' }}>{t('f5.preview.activities.cols.beneficiaries_families')}</TableHead>
+                        <TableHead className="py-1 px-2 text-xs text-right select-text" style={{ userSelect: 'text' }}>{t('f5.preview.activities.cols.actions')}</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {reachDraft.map((row, idx) => (
                         <TableRow key={idx} className="text-sm">
-                          <TableCell className="py-1 px-2"><Input className="h-8" placeholder={t('f5.preview.activities.cols.activity_name') as string} value={row.activity_name || ''} onChange={(e)=>{ const arr=[...reachDraft]; arr[idx]={...arr[idx], activity_name: e.target.value}; setReachDraft(arr) }} /></TableCell>
-                          <TableCell className="py-1 px-2"><Input className="h-8" placeholder={t('f5.preview.activities.cols.activity_goal') as string} value={row.activity_goal || ''} onChange={(e)=>{ const arr=[...reachDraft]; arr[idx]={...arr[idx], activity_goal: e.target.value}; setReachDraft(arr) }} /></TableCell>
-                          <TableCell className="py-1 px-2"><Input className="h-8" placeholder={t('f5.preview.activities.cols.location') as string} value={row.location || ''} onChange={(e)=>{ const arr=[...reachDraft]; arr[idx]={...arr[idx], location: e.target.value}; setReachDraft(arr) }} /></TableCell>
-                          <TableCell className="py-1 px-2"><Input className="h-8" type="date" value={row.start_date || ''} onChange={(e)=>{ const arr=[...reachDraft]; arr[idx]={...arr[idx], start_date: e.target.value}; setReachDraft(arr) }} /></TableCell>
-                          <TableCell className="py-1 px-2"><Input className="h-8" type="date" value={row.end_date || ''} onChange={(e)=>{ const arr=[...reachDraft]; arr[idx]={...arr[idx], end_date: e.target.value}; setReachDraft(arr) }} /></TableCell>
-                          <TableCell className="py-1 px-2">
+                          <TableCell className="py-1 px-2" style={{ userSelect: 'text' }}>
+                            <Input 
+                              className="h-8 select-text selection:bg-blue-200 selection:text-blue-900 dark:selection:bg-blue-800 dark:selection:text-blue-100" 
+                              style={selectableInputStyle}
+                              placeholder={t('f5.preview.activities.cols.activity_name') as string} 
+                              value={row.activity_name || ''} 
+                              onChange={(e)=>{ const arr=[...reachDraft]; arr[idx]={...arr[idx], activity_name: e.target.value}; setReachDraft(arr) }} 
+                            />
+                          </TableCell>
+                          <TableCell className="py-1 px-2" style={{ userSelect: 'text' }}>
+                            <Input 
+                              className="h-8 select-text selection:bg-blue-200 selection:text-blue-900 dark:selection:bg-blue-800 dark:selection:text-blue-100" 
+                              style={selectableInputStyle}
+                              placeholder={t('f5.preview.activities.cols.activity_goal') as string} 
+                              value={row.activity_goal || ''} 
+                              onChange={(e)=>{ const arr=[...reachDraft]; arr[idx]={...arr[idx], activity_goal: e.target.value}; setReachDraft(arr) }} 
+                            />
+                          </TableCell>
+                          <TableCell className="py-1 px-2" style={{ userSelect: 'text' }}>
+                            <Input 
+                              className="h-8 select-text selection:bg-blue-200 selection:text-blue-900 dark:selection:bg-blue-800 dark:selection:text-blue-100" 
+                              style={selectableInputStyle}
+                              placeholder={t('f5.preview.activities.cols.location') as string} 
+                              value={row.location || ''} 
+                              onChange={(e)=>{ const arr=[...reachDraft]; arr[idx]={...arr[idx], location: e.target.value}; setReachDraft(arr) }} 
+                            />
+                          </TableCell>
+                          <TableCell className="py-1 px-2" style={{ userSelect: 'text' }}>
+                            <Input 
+                              className="h-8 select-text" 
+                              type="date" 
+                              value={row.start_date || ''} 
+                              onChange={(e)=>{ const arr=[...reachDraft]; arr[idx]={...arr[idx], start_date: e.target.value}; setReachDraft(arr) }} 
+                            />
+                          </TableCell>
+                          <TableCell className="py-1 px-2" style={{ userSelect: 'text' }}>
+                            <Input 
+                              className="h-8 select-text" 
+                              type="date" 
+                              value={row.end_date || ''} 
+                              onChange={(e)=>{ const arr=[...reachDraft]; arr[idx]={...arr[idx], end_date: e.target.value}; setReachDraft(arr) }} 
+                            />
+                          </TableCell>
+                          <TableCell className="py-1 px-2" style={{ userSelect: 'text' }}>
                             <div className="relative flex items-center gap-2">
-                              <Input className="h-8" type="number" value={row.individual_count ?? ''} onChange={(e)=>{ const arr=[...reachDraft]; arr[idx]={...arr[idx], individual_count: parseInt(e.target.value)||0}; setReachDraft(arr) }} />
+                              <Input 
+                                className="h-8 select-text selection:bg-blue-200 selection:text-blue-900 dark:selection:bg-blue-800 dark:selection:text-blue-100" 
+                                style={selectableInputStyle}
+                                type="number" 
+                                value={row.individual_count ?? ''} 
+                                onChange={(e)=>{ const arr=[...reachDraft]; arr[idx]={...arr[idx], individual_count: parseInt(e.target.value)||0}; setReachDraft(arr) }} 
+                              />
                               {keyAdjustedValue(row, 'individuals') != null && (
                                 <span className="absolute right-10 top-1.5 z-10 cursor-help pointer-events-auto" title={deltaInfo(row, 'individuals')}>
                                   <Flag className="h-3.5 w-3.5 text-red-500" />
@@ -667,9 +750,15 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved, initialProj
                               {/* adjustment handled via modal */}
                             </div>
                           </TableCell>
-                          <TableCell className="py-1 px-2">
+                          <TableCell className="py-1 px-2" style={{ userSelect: 'text' }}>
                             <div className="relative flex items-center gap-2">
-                              <Input className="h-8" type="number" value={row.household_count ?? ''} onChange={(e)=>{ const arr=[...reachDraft]; arr[idx]={...arr[idx], household_count: parseInt(e.target.value)||0}; setReachDraft(arr) }} />
+                              <Input 
+                                className="h-8 select-text selection:bg-blue-200 selection:text-blue-900 dark:selection:bg-blue-800 dark:selection:text-blue-100" 
+                                style={selectableInputStyle}
+                                type="number" 
+                                value={row.household_count ?? ''} 
+                                onChange={(e)=>{ const arr=[...reachDraft]; arr[idx]={...arr[idx], household_count: parseInt(e.target.value)||0}; setReachDraft(arr) }} 
+                              />
                               {keyAdjustedValue(row, 'households') != null && (
                                 <span className="absolute right-10 top-1.5 z-10 cursor-help pointer-events-auto" title={deltaInfo(row, 'households')}>
                                   <Flag className="h-3.5 w-3.5 text-red-500" />
@@ -694,7 +783,7 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved, initialProj
 
             {/* Demographics Breakdown Table */}
             <div>
-              <Label>{t('f5.preview.demographics.title')}</Label>
+              <Label className="select-text" style={{ userSelect: 'text' }}>{t('f5.preview.demographics.title')}</Label>
               <div className="border rounded overflow-hidden select-text">
                 {reachDraft.length === 0 ? (
                   <div className="p-3 text-sm text-muted-foreground">{t('f5.preview.demographics.empty')}</div>
@@ -702,21 +791,27 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved, initialProj
                   <Table className="select-text">
                     <TableHeader>
                       <TableRow>
-                        <TableHead className="py-1 px-2 text-xs">{t('f5.preview.demographics.cols.activity')}</TableHead>
-                        <TableHead className="py-1 px-2 text-xs">{t('f5.preview.demographics.cols.male')}</TableHead>
-                        <TableHead className="py-1 px-2 text-xs">{t('f5.preview.demographics.cols.female')}</TableHead>
-                        <TableHead className="py-1 px-2 text-xs">{t('f5.preview.demographics.cols.male_u18')}</TableHead>
-                        <TableHead className="py-1 px-2 text-xs">{t('f5.preview.demographics.cols.female_u18')}</TableHead>
-                        <TableHead className="py-1 px-2 text-xs">{t('f5.preview.demographics.cols.pwd')}</TableHead>
+                        <TableHead className="py-1 px-2 text-xs select-text" style={{ userSelect: 'text' }}>{t('f5.preview.demographics.cols.activity')}</TableHead>
+                        <TableHead className="py-1 px-2 text-xs select-text" style={{ userSelect: 'text' }}>{t('f5.preview.demographics.cols.male')}</TableHead>
+                        <TableHead className="py-1 px-2 text-xs select-text" style={{ userSelect: 'text' }}>{t('f5.preview.demographics.cols.female')}</TableHead>
+                        <TableHead className="py-1 px-2 text-xs select-text" style={{ userSelect: 'text' }}>{t('f5.preview.demographics.cols.male_u18')}</TableHead>
+                        <TableHead className="py-1 px-2 text-xs select-text" style={{ userSelect: 'text' }}>{t('f5.preview.demographics.cols.female_u18')}</TableHead>
+                        <TableHead className="py-1 px-2 text-xs select-text" style={{ userSelect: 'text' }}>{t('f5.preview.demographics.cols.pwd')}</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {reachDraft.map((row, idx) => (
                         <TableRow key={idx} className="text-sm">
-                          <TableCell className="py-1 px-2">{row.activity_name || '-'}</TableCell>
-                          <TableCell className="py-1 px-2">
+                          <TableCell className="py-1 px-2 select-text" style={{ userSelect: 'text' }}>{row.activity_name || '-'}</TableCell>
+                          <TableCell className="py-1 px-2" style={{ userSelect: 'text' }}>
                             <div className="relative flex items-center gap-2">
-                              <Input className="h-8" type="number" value={row.male_count ?? ''} onChange={(e)=>{ const arr=[...reachDraft]; arr[idx]={...arr[idx], male_count: parseInt(e.target.value)||0}; setReachDraft(arr) }} />
+                              <Input 
+                                className="h-8 select-text selection:bg-blue-200 selection:text-blue-900 dark:selection:bg-blue-800 dark:selection:text-blue-100" 
+                                style={selectableInputStyle}
+                                type="number" 
+                                value={row.male_count ?? ''} 
+                                onChange={(e)=>{ const arr=[...reachDraft]; arr[idx]={...arr[idx], male_count: parseInt(e.target.value)||0}; setReachDraft(arr) }} 
+                              />
                               {keyAdjustedValue(row,'male') != null && (
                                 <span className="absolute right-10 top-1.5 z-10 cursor-help pointer-events-auto" title={deltaInfo(row,'male')}>
                                   <Flag className="h-3.5 w-3.5 text-red-500" />
@@ -728,9 +823,15 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved, initialProj
                               {/* adjustment handled via modal */}
                             </div>
                           </TableCell>
-                          <TableCell className="py-1 px-2">
+                          <TableCell className="py-1 px-2" style={{ userSelect: 'text' }}>
                             <div className="relative flex items-center gap-2">
-                              <Input className="h-8" type="number" value={row.female_count ?? ''} onChange={(e)=>{ const arr=[...reachDraft]; arr[idx]={...arr[idx], female_count: parseInt(e.target.value)||0}; setReachDraft(arr) }} />
+                              <Input 
+                                className="h-8 select-text selection:bg-blue-200 selection:text-blue-900 dark:selection:bg-blue-800 dark:selection:text-blue-100" 
+                                style={selectableInputStyle}
+                                type="number" 
+                                value={row.female_count ?? ''} 
+                                onChange={(e)=>{ const arr=[...reachDraft]; arr[idx]={...arr[idx], female_count: parseInt(e.target.value)||0}; setReachDraft(arr) }} 
+                              />
                               {keyAdjustedValue(row,'female') != null && (
                                 <span className="absolute right-10 top-1.5 z-10 cursor-help pointer-events-auto" title={deltaInfo(row,'female')}>
                                   <Flag className="h-3.5 w-3.5 text-red-500" />
@@ -742,9 +843,15 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved, initialProj
                               {/* adjustment handled via modal */}
                             </div>
                           </TableCell>
-                          <TableCell className="py-1 px-2">
+                          <TableCell className="py-1 px-2" style={{ userSelect: 'text' }}>
                             <div className="relative flex items-center gap-2">
-                              <Input className="h-8" type="number" value={row.under18_male ?? ''} onChange={(e)=>{ const arr=[...reachDraft]; arr[idx]={...arr[idx], under18_male: parseInt(e.target.value)||0}; setReachDraft(arr) }} />
+                              <Input 
+                                className="h-8 select-text selection:bg-blue-200 selection:text-blue-900 dark:selection:bg-blue-800 dark:selection:text-blue-100" 
+                                style={selectableInputStyle}
+                                type="number" 
+                                value={row.under18_male ?? ''} 
+                                onChange={(e)=>{ const arr=[...reachDraft]; arr[idx]={...arr[idx], under18_male: parseInt(e.target.value)||0}; setReachDraft(arr) }} 
+                              />
                               {keyAdjustedValue(row,'under18_male') != null && (
                                 <span className="absolute right-10 top-1.5 z-10 cursor-help pointer-events-auto" title={deltaInfo(row,'under18_male')}>
                                   <Flag className="h-3.5 w-3.5 text-red-500" />
@@ -756,9 +863,15 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved, initialProj
                               {/* adjustment handled via modal */}
                             </div>
                           </TableCell>
-                          <TableCell className="py-1 px-2">
+                          <TableCell className="py-1 px-2" style={{ userSelect: 'text' }}>
                             <div className="relative flex items-center gap-2">
-                              <Input className="h-8" type="number" value={row.under18_female ?? ''} onChange={(e)=>{ const arr=[...reachDraft]; arr[idx]={...arr[idx], under18_female: parseInt(e.target.value)||0}; setReachDraft(arr) }} />
+                              <Input 
+                                className="h-8 select-text selection:bg-blue-200 selection:text-blue-900 dark:selection:bg-blue-800 dark:selection:text-blue-100" 
+                                style={selectableInputStyle}
+                                type="number" 
+                                value={row.under18_female ?? ''} 
+                                onChange={(e)=>{ const arr=[...reachDraft]; arr[idx]={...arr[idx], under18_female: parseInt(e.target.value)||0}; setReachDraft(arr) }} 
+                              />
                               {keyAdjustedValue(row,'under18_female') != null && (
                                 <span className="absolute right-10 top-1.5 z-10 cursor-help pointer-events-auto" title={deltaInfo(row,'under18_female')}>
                                   <Flag className="h-3.5 w-3.5 text-red-500" />
@@ -770,7 +883,15 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved, initialProj
                               {/* adjustment handled via modal */}
                             </div>
                           </TableCell>
-                          <TableCell className="py-1 px-2"><Input className="h-8" type="number" value={summaryDraft?.demographics?.special_needs ?? ''} onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), demographics: { ...(s?.demographics||{}), special_needs: parseInt(e.target.value)||0 } }))} /></TableCell>
+                          <TableCell className="py-1 px-2" style={{ userSelect: 'text' }}>
+                            <Input 
+                              className="h-8 select-text selection:bg-blue-200 selection:text-blue-900 dark:selection:bg-blue-800 dark:selection:text-blue-100" 
+                              style={selectableInputStyle}
+                              type="number" 
+                              value={summaryDraft?.demographics?.special_needs ?? ''} 
+                              onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), demographics: { ...(s?.demographics||{}), special_needs: parseInt(e.target.value)||0 } }))} 
+                            />
+                          </TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
