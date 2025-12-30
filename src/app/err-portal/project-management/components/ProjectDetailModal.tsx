@@ -40,6 +40,7 @@ export default function ProjectDetailModal({ projectId, open, onOpenChange }: Pr
   const project = data?.project
   const room = project?.emergency_rooms
   const summaries = data?.summaries || []
+  const f5Reports = data?.f5Reports || []
   const isHistorical = data?.is_historical || project?.is_historical
   const fileKeys = data?.file_keys || {}
 
@@ -478,7 +479,7 @@ export default function ProjectDetailModal({ projectId, open, onOpenChange }: Pr
             {!isHistorical && (
               <>
                 <div>
-                  <Label>{t('management.detail_modal.labels.f4_reports')}</Label>
+                  <Label className="text-base font-semibold mb-3">F4 Financial Reports</Label>
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -535,6 +536,114 @@ export default function ProjectDetailModal({ projectId, open, onOpenChange }: Pr
                         ))}
                       </TableBody>
                     </Table>
+                  </div>
+                )}
+
+                {/* F5 Reports */}
+                {f5Reports.length > 0 && (
+                  <>
+                    <div>
+                      <Label className="text-base font-semibold mb-3">F5 Program Reports</Label>
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Report Date</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {f5Reports.map((r:any)=> (
+                            <TableRow key={r.id}>
+                              <TableCell>{r.report_date ? new Date(r.report_date).toLocaleDateString() : '-'}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+
+                    {/* F5 Report Details (for latest report) */}
+                    {f5Reports[0] && (
+                      <div className="space-y-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <Label className="text-sm font-medium">Positive Changes</Label>
+                            <div className="min-h-[40px] px-3 py-2 rounded border bg-muted/50 text-sm whitespace-pre-wrap">
+                              {f5Reports[0].positive_changes || '-'}
+                            </div>
+                          </div>
+                          <div>
+                            <Label className="text-sm font-medium">Negative Results</Label>
+                            <div className="min-h-[40px] px-3 py-2 rounded border bg-muted/50 text-sm whitespace-pre-wrap">
+                              {f5Reports[0].negative_results || '-'}
+                            </div>
+                          </div>
+                          <div>
+                            <Label className="text-sm font-medium">Unexpected Results</Label>
+                            <div className="min-h-[40px] px-3 py-2 rounded border bg-muted/50 text-sm whitespace-pre-wrap">
+                              {f5Reports[0].unexpected_results || '-'}
+                            </div>
+                          </div>
+                          <div>
+                            <Label className="text-sm font-medium">Lessons Learned</Label>
+                            <div className="min-h-[40px] px-3 py-2 rounded border bg-muted/50 text-sm whitespace-pre-wrap">
+                              {f5Reports[0].lessons_learned || '-'}
+                            </div>
+                          </div>
+                          <div className="md:col-span-2">
+                            <Label className="text-sm font-medium">Suggestions</Label>
+                            <div className="min-h-[40px] px-3 py-2 rounded border bg-muted/50 text-sm whitespace-pre-wrap">
+                              {f5Reports[0].suggestions || '-'}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* F5 Reach Activities */}
+                        {f5Reports[0].reach && f5Reports[0].reach.length > 0 && (
+                          <div>
+                            <Label className="text-sm font-medium mb-2">Implemented Activities</Label>
+                            <Table>
+                              <TableHeader>
+                                <TableRow>
+                                  <TableHead>Activity Name</TableHead>
+                                  <TableHead>Activity Goal</TableHead>
+                                  <TableHead>Location</TableHead>
+                                  <TableHead>Start Date</TableHead>
+                                  <TableHead>End Date</TableHead>
+                                  <TableHead className="text-right">Individuals</TableHead>
+                                  <TableHead className="text-right">Households</TableHead>
+                                  <TableHead className="text-right">Male</TableHead>
+                                  <TableHead className="text-right">Female</TableHead>
+                                  <TableHead className="text-right">Male &lt;18</TableHead>
+                                  <TableHead className="text-right">Female &lt;18</TableHead>
+                                </TableRow>
+                              </TableHeader>
+                              <TableBody>
+                                {f5Reports[0].reach.map((r: any, idx: number) => (
+                                  <TableRow key={r.id || idx}>
+                                    <TableCell>{r.activity_name || '-'}</TableCell>
+                                    <TableCell>{r.activity_goal || '-'}</TableCell>
+                                    <TableCell>{r.location || '-'}</TableCell>
+                                    <TableCell>{r.start_date ? new Date(r.start_date).toLocaleDateString() : '-'}</TableCell>
+                                    <TableCell>{r.end_date ? new Date(r.end_date).toLocaleDateString() : '-'}</TableCell>
+                                    <TableCell className="text-right">{r.individual_count ? Number(r.individual_count).toLocaleString() : '-'}</TableCell>
+                                    <TableCell className="text-right">{r.household_count ? Number(r.household_count).toLocaleString() : '-'}</TableCell>
+                                    <TableCell className="text-right">{r.male_count ? Number(r.male_count).toLocaleString() : '-'}</TableCell>
+                                    <TableCell className="text-right">{r.female_count ? Number(r.female_count).toLocaleString() : '-'}</TableCell>
+                                    <TableCell className="text-right">{r.under18_male ? Number(r.under18_male).toLocaleString() : '-'}</TableCell>
+                                    <TableCell className="text-right">{r.under18_female ? Number(r.under18_female).toLocaleString() : '-'}</TableCell>
+                                  </TableRow>
+                                ))}
+                              </TableBody>
+                            </Table>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </>
+                )}
+                {f5Reports.length === 0 && (
+                  <div>
+                    <Label className="text-base font-semibold mb-3">F5 Program Reports</Label>
+                    <div className="py-4 text-center text-muted-foreground">No F5 reports</div>
                   </div>
                 )}
               </>

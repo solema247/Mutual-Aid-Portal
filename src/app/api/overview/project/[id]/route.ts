@@ -160,9 +160,37 @@ export async function GET(
         expenses: expensesBySummary[s.id] || []
       }))
 
+      // Load F5 reports for this project
+      const { data: f5Reports, error: f5Err } = await supabase
+        .from('err_program_report')
+        .select('id, report_date, positive_changes, negative_results, unexpected_results, lessons_learned, suggestions, reporting_person, created_at, is_draft')
+        .eq('project_id', id)
+        .order('created_at', { ascending: false })
+      if (f5Err) throw f5Err
+
+      const reportIds = (f5Reports || []).map((r: any) => r.id)
+      let reachByReport: Record<string, any[]> = {}
+      if (reportIds.length) {
+        const { data: reach } = await supabase
+          .from('err_program_reach')
+          .select('*')
+          .in('report_id', reportIds)
+        for (const r of (reach || [])) {
+          const rid = (r as any).report_id
+          reachByReport[rid] = reachByReport[rid] || []
+          reachByReport[rid].push(r)
+        }
+      }
+
+      const f5ReportsWithReach = (f5Reports || []).map((r: any) => ({
+        ...r,
+        reach: reachByReport[r.id] || []
+      }))
+
       return NextResponse.json({ 
         project, 
-        summaries: summariesWithExpenses, 
+        summaries: summariesWithExpenses,
+        f5Reports: f5ReportsWithReach,
         is_historical: false,
         file_keys: {
           f1_file: project.file_key || null,
