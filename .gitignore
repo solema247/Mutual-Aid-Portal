@@ -46,3 +46,7 @@ next-env.d.ts
 *-credentials.json
 *-service-account.json
 *-web-chat-*.json
+
+# Logs
+/logs
+*.log
