@@ -3,7 +3,9 @@
 import { useEffect, useState } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
+import { Button } from '@/components/ui/button'
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '@/components/ui/table'
+import { FileText } from 'lucide-react'
 
 interface ViewF5ModalProps {
   reportId: string | null
@@ -38,6 +40,7 @@ export default function ViewF5Modal({ reportId, open, onOpenChange, onSaved }: V
   const project = report?.err_projects
   const room = project?.emergency_rooms
   const reach = data?.reach || []
+  const files = data?.files || []
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -163,6 +166,50 @@ export default function ViewF5Modal({ reportId, open, onOpenChange, onSaved }: V
                   ))}
                 </TableBody>
               </Table>
+            </div>
+
+            {/* File Attachments */}
+            <div>
+              <Label>Attachments</Label>
+              <div className="flex flex-wrap gap-2 mt-2">
+                {files.length === 0 ? (
+                  <span className="text-sm text-muted-foreground">—</span>
+                ) : files.map((file:any, i:number)=> (
+                  <Button
+                    key={i}
+                    variant="outline"
+                    size="sm"
+                    onClick={async () => {
+                      if (!file.file_url) return
+                      try {
+                        const response = await fetch(`/api/storage/signed-url?path=${encodeURIComponent(file.file_url)}`)
+                        if (!response.ok) {
+                          throw new Error('Failed to get signed URL')
+                        }
+                        const { url, error } = await response.json()
+                        if (error || !url) {
+                          throw new Error(error || 'No URL returned')
+                        }
+                        const link = document.createElement('a')
+                        link.href = url
+                        link.target = '_blank'
+                        link.rel = 'noopener noreferrer'
+                        link.download = file.file_name || file.file_url.split('/').pop() || 'file'
+                        document.body.appendChild(link)
+                        link.click()
+                        document.body.removeChild(link)
+                      } catch (error) {
+                        console.error('Error opening file:', error)
+                        alert(`Failed to open file`)
+                      }
+                    }}
+                    className="flex items-center gap-2"
+                  >
+                    <FileText className="h-4 w-4" />
+                    {file.file_name || file.file_url.split('/').pop() || 'Original File'}
+                  </Button>
+                ))}
+              </div>
             </div>
           </div>
         )}

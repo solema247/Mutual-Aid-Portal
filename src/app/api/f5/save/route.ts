@@ -112,13 +112,16 @@ export async function POST(req: Request) {
         // Best-effort delete temp
         try { await supabase.storage.from('images').remove([tempKey]) } catch {}
 
-        // Record attachment with final path (using err_summary_attachments table for now)
+        // Record attachment with final path in err_program_files table
+        const fileName = finalPath.split('/').pop() || `report.${ext}`
         await supabase
-          .from('err_summary_attachments')
+          .from('err_program_files')
           .insert({ 
-            summary_id: report_id, 
-            file_key: finalPath, 
-            file_type: 'f5_program_report', 
+            report_id: report_id, 
+            file_name: fileName,
+            file_url: finalPath, 
+            file_type: 'program_report', 
+            file_size: blob.size,
             uploaded_by: uploaded_by || null 
           })
       } catch (e) {

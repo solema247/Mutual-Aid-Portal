@@ -23,7 +23,13 @@ export async function GET(
       .eq('report_id', id)
     if (reachErr) throw reachErr
 
-    return NextResponse.json({ report, reach: reach || [] })
+    const { data: files, error: filesErr } = await supabase
+      .from('err_program_files')
+      .select('*')
+      .eq('report_id', id)
+    if (filesErr) throw filesErr
+
+    return NextResponse.json({ report, reach: reach || [], files: files || [] })
   } catch (e) {
     console.error('F5 detail error', e)
     return NextResponse.json({ error: 'Failed to load F5 report' }, { status: 500 })

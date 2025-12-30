@@ -43,6 +43,8 @@ export default function ProjectDetailModal({ projectId, open, onOpenChange }: Pr
   const f5Reports = data?.f5Reports || []
   const isHistorical = data?.is_historical || project?.is_historical
   const fileKeys = data?.file_keys || {}
+  const f4Files = data?.f4_files || []
+  const f5Files = data?.f5_files || []
 
   const handleFileClick = async (fileKey: string, fileName: string) => {
     if (!fileKey) return
@@ -294,7 +296,7 @@ export default function ProjectDetailModal({ projectId, open, onOpenChange }: Pr
                 </div>
 
                 {/* File Links */}
-                {(fileKeys.f1_file || fileKeys.f2_approval || fileKeys.payment_confirmation || fileKeys.signed_mou) && (
+                {(fileKeys.f1_file || fileKeys.f2_approval || fileKeys.payment_confirmation || fileKeys.signed_mou || f4Files.length > 0 || f5Files.length > 0) && (
                   <div>
                     <Label className="text-base font-semibold mb-3">Project Files</Label>
                     <div className="flex flex-wrap gap-2">
@@ -342,6 +344,40 @@ export default function ProjectDetailModal({ projectId, open, onOpenChange }: Pr
                           Signed MOU
                         </Button>
                       )}
+                      {f4Files.map((file: any, idx: number) => {
+                        const summary = summaries.find((s: any) => s.id === file.summary_id)
+                        const reportDate = summary?.report_date ? new Date(summary.report_date).toLocaleDateString() : null
+                        const label = reportDate ? `F4 Financial Report (${reportDate})` : 'F4 Financial Report'
+                        return (
+                          <Button
+                            key={idx}
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleFileClick(file.file_key, label)}
+                            className="flex items-center gap-2"
+                          >
+                            <FileText className="h-4 w-4" />
+                            {label}
+                          </Button>
+                        )
+                      })}
+                      {f5Files.map((file: any, idx: number) => {
+                        const report = f5Reports.find((r: any) => r.id === file.report_id)
+                        const reportDate = report?.report_date ? new Date(report.report_date).toLocaleDateString() : null
+                        const label = reportDate ? `F5 Program Report (${reportDate})` : 'F5 Program Report'
+                        return (
+                          <Button
+                            key={idx}
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleFileClick(file.file_url, label)}
+                            className="flex items-center gap-2"
+                          >
+                            <FileText className="h-4 w-4" />
+                            {label}
+                          </Button>
+                        )
+                      })}
                     </div>
                   </div>
                 )}

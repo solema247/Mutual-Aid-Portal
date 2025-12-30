@@ -187,6 +187,30 @@ export async function GET(
         reach: reachByReport[r.id] || []
       }))
 
+      // Load F4 file attachments
+      const f4FileAttachments: any[] = []
+      if (summaryIds.length) {
+        const { data: f4Attachments } = await supabase
+          .from('err_summary_attachments')
+          .select('summary_id, file_key, file_type')
+          .in('summary_id', summaryIds as any)
+        if (f4Attachments) {
+          f4FileAttachments.push(...f4Attachments)
+        }
+      }
+
+      // Load F5 file attachments
+      const f5FileAttachments: any[] = []
+      if (reportIds.length) {
+        const { data: f5Attachments } = await supabase
+          .from('err_program_files')
+          .select('report_id, file_url, file_name, file_type')
+          .in('report_id', reportIds)
+        if (f5Attachments) {
+          f5FileAttachments.push(...f5Attachments)
+        }
+      }
+
       return NextResponse.json({ 
         project, 
         summaries: summariesWithExpenses,
@@ -197,7 +221,9 @@ export async function GET(
           f2_approval: project.approval_file_key || null,
           payment_confirmation: mouFileKeys?.payment_confirmation_file || null,
           signed_mou: mouFileKeys?.signed_mou_file_key || null
-        }
+        },
+        f4_files: f4FileAttachments,
+        f5_files: f5FileAttachments
       })
     }
   } catch (e) {
