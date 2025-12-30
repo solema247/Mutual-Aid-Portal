@@ -9,9 +9,9 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { supabase } from '@/lib/supabaseClient'
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '@/components/ui/table'
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { CollapsibleRow } from '@/components/ui/collapsible'
 import { Pencil, Flag } from 'lucide-react'
 
 interface UploadF5ModalProps {
@@ -89,7 +89,6 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved, initialProj
   const [tempKey, setTempKey] = useState<string>('')
   const [fileUrl, setFileUrl] = useState<string>('')
   const [rawOcr, setRawOcr] = useState<string>('')
-  const [activeTab, setActiveTab] = useState('form')
   const [adjustOpen, setAdjustOpen] = useState<{ row: number; key: string } | null>(null)
   const [adjustTempValue, setAdjustTempValue] = useState<number | ''>('')
   const [adjustTempNote, setAdjustTempNote] = useState<string>('')
@@ -230,7 +229,6 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved, initialProj
         setTempKey('')
         setFileUrl('')
         setRawOcr('')
-        setActiveTab('form')
         return
       }
     } catch {}
@@ -260,7 +258,6 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved, initialProj
           } else if (p.fileUrl) {
             setFileUrl(p.fileUrl)
           }
-          if (p.activeTab) setActiveTab(p.activeTab)
           // Clear snapshot after restoring and reset restore flag after state updates
           try { window.localStorage.removeItem('err_minimized_modal'); window.localStorage.removeItem('err_minimized_payload'); window.dispatchEvent(new CustomEvent('err_minimized_modal_change')) } catch {}
           // Reset restore flag after a brief delay to allow all state updates to propagate
@@ -464,7 +461,6 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved, initialProj
     setTempKey('')
     setFileUrl('')
     setRawOcr('')
-    setActiveTab('form')
   }
 
   return (
@@ -505,7 +501,7 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved, initialProj
           if (adjustDialogOpen) { e.preventDefault(); return }
           e.preventDefault(); 
           try {
-            const snapshot = JSON.stringify({ type: 'f5', step, summaryDraft, reachDraft, reportDate, selectedState, selectedRoomId, projectId, tempKey, fileUrl, activeTab })
+            const snapshot = JSON.stringify({ type: 'f5', step, summaryDraft, reachDraft, reportDate, selectedState, selectedRoomId, projectId, tempKey, fileUrl })
             window.localStorage.setItem('err_minimized_modal','f5')
             window.localStorage.setItem('err_minimized_payload', snapshot)
             window.dispatchEvent(new CustomEvent('err_minimized_modal_change', { detail: 'f5' } as any))
@@ -569,14 +565,10 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved, initialProj
             </div>
           </div>
         ) : (
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <TabsList className="grid w-full grid-cols-3">
-              <TabsTrigger value="form">{t('f5.preview.tabs.edit_form')}</TabsTrigger>
-              <TabsTrigger value="file">{t('f5.preview.tabs.view_file')}</TabsTrigger>
-              <TabsTrigger value="tables">{t('f5.preview.tabs.tables')}</TabsTrigger>
-            </TabsList>
-            
-            <TabsContent value="form" className="space-y-6 select-text mt-6">
+          <div className="space-y-4">
+            {/* Edit Form - Collapsible Section */}
+            <CollapsibleRow title={t('f5.preview.tabs.edit_form')} defaultOpen={true}>
+              <div className="space-y-6 select-text">
             {/* Summary */}
             <div className="space-y-3">
               <div className="grid grid-cols-2 gap-4">
@@ -791,9 +783,11 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved, initialProj
               <Button variant="outline" onClick={()=>setStep('select')}>{t('f5.preview.buttons.back')}</Button>
               <Button onClick={handleSave} disabled={isLoading || isRestoring}>{isLoading ? t('f5.preview.buttons.saving') : t('f5.preview.buttons.save')}</Button>
             </div>
-            </TabsContent>
-            
-            <TabsContent value="file" className="mt-6">
+              </div>
+            </CollapsibleRow>
+
+            {/* View File - Collapsible Section */}
+            <CollapsibleRow title={t('f5.preview.tabs.view_file')} defaultOpen={false}>
               <Card>
                 <CardHeader>
                   <CardTitle>Uploaded File</CardTitle>
@@ -822,9 +816,10 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved, initialProj
                   )}
                 </CardContent>
               </Card>
-            </TabsContent>
-            
-            <TabsContent value="tables" className="mt-6">
+            </CollapsibleRow>
+
+            {/* Extracted Tables - Collapsible Section */}
+            <CollapsibleRow title={t('f5.preview.tabs.tables')} defaultOpen={false}>
               <div className="space-y-6">
                 {(() => {
                   const { activitiesTable, demographicsTable } = extractTables(rawOcr)
@@ -866,8 +861,8 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved, initialProj
                   )
                 })()}
               </div>
-            </TabsContent>
-          </Tabs>
+            </CollapsibleRow>
+          </div>
         )}
       </DialogContent>
     </Dialog>
