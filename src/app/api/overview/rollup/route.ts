@@ -29,6 +29,36 @@ function normalizeStateName(state: any): string {
   return normalized === '' ? 'Unknown' : normalized
 }
 
+// Helper function to normalize state names from activities_raw_import
+// to match the spelling used in err_projects
+function normalizeActivitiesStateName(state: any): string {
+  if (!state) return 'Unknown'
+  let normalized = String(state).trim()
+  if (normalized === '') return 'Unknown'
+  
+  // Normalize specific state name variations from activities_raw_import
+  const stateMappings: Record<string, string> = {
+    'Al Jazirah': 'Al Jazeera',
+    'Gadarif': 'Gadaref',
+    'Sinar': 'Sennar'
+  }
+  
+  // Check for exact match first
+  if (stateMappings[normalized]) {
+    return stateMappings[normalized]
+  }
+  
+  // Check case-insensitive match
+  const lowerNormalized = normalized.toLowerCase()
+  for (const [key, value] of Object.entries(stateMappings)) {
+    if (key.toLowerCase() === lowerNormalized) {
+      return value
+    }
+  }
+  
+  return normalized
+}
+
 // Helper function to fetch all rows using pagination
 const fetchAllRows = async (supabase: any, table: string, select: string) => {
   let allData: any[] = []
@@ -193,7 +223,7 @@ export async function GET(request: Request) {
       
       return {
         project_id: `historical_${row.id}`, // Use a prefix to distinguish historical projects
-        state: normalizeStateName(row['State'] || row['state'] || row.State),
+        state: normalizeActivitiesStateName(row['State'] || row['state'] || row.State),
         err_id: row['ERR CODE'] || row['ERR Name'] || row['err_code'] || row['err_name'] || null,
         grant_call_id: null, // Historical data doesn't have grant_call_id
         grant_grid_id: null, // Historical data doesn't have grant_grid_id
