@@ -66,128 +66,223 @@ function normalizeSerialNumber(serialNumber: any): string | null {
 }
 
 /**
- * Fetch all data from Google Sheets Activities sheet
+ * Retry helper with exponential backoff
+ */
+async function retryWithBackoff<T>(
+  fn: () => Promise<T>,
+  maxRetries: number = 3,
+  baseDelay: number = 1000
+): Promise<T> {
+  let lastError: any
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      return await fn()
+    } catch (error: any) {
+      lastError = error
+      const isRetryable = 
+        error?.code === 429 || // Rate limit
+        error?.code === 500 || // Internal server error
+        error?.code === 503 || // Service unavailable
+        error?.code === 408 || // Request timeout
+        error?.message?.includes('timeout') ||
+        error?.message?.includes('ECONNRESET') ||
+        error?.message?.includes('ETIMEDOUT')
+      
+      if (!isRetryable || attempt === maxRetries - 1) {
+        throw error
+      }
+      
+      const delay = baseDelay * Math.pow(2, attempt)
+      syncLogger.warn(`Retry attempt ${attempt + 1}/${maxRetries} after ${delay}ms`, { 
+        error: error.message,
+        code: error.code 
+      })
+      await new Promise(resolve => setTimeout(resolve, delay))
+    }
+  }
+  throw lastError
+}
+
+/**
+ * Fetch all data from Google Sheets Activities sheet with retry logic
  */
 async function fetchSheetData() {
-  try {
-    // Lazy initialization - get client only when needed (not at module load time)
-    // This prevents deployment failures if env vars aren't available during build
-    const sheets = getGoogleSheetsClient()
-    const auth = getGoogleSheetsAuth()
-    
-    // Verify authentication first
-    const authClient = await auth.getClient()
-    console.log('Auth client obtained:', authClient ? 'Success' : 'Failed')
-    
-    // Get access token for debugging
-    const token = await auth.getAccessToken()
-    console.log('Access token obtained:', token ? 'Success' : 'Failed')
-    
-    // First, get the sheet metadata to determine the range
-    console.log('Attempting to access spreadsheet:', SPREADSHEET_ID)
-    const sheetMetadata = await sheets.spreadsheets.get({
-      spreadsheetId: SPREADSHEET_ID,
-    })
-
-    // List all available sheets for debugging
-    const availableSheets = sheetMetadata.data.sheets?.map((s) => s.properties?.title) || []
-    console.log('Available sheets:', availableSheets)
-
-    // Find the activities sheet (try multiple variations)
-    let activitiesSheet = sheetMetadata.data.sheets?.find(
-      (sheet) => sheet.properties?.title?.toLowerCase() === SHEET_NAME.toLowerCase()
-    )
-
-    // If not found, try to find by gid (14343785 from the URL)
-    if (!activitiesSheet) {
-      activitiesSheet = sheetMetadata.data.sheets?.find(
-        (sheet) => sheet.properties?.sheetId === 14343785
-      )
-    }
-
-    // If still not found, try common variations
-    if (!activitiesSheet) {
-      activitiesSheet = sheetMetadata.data.sheets?.find(
-        (sheet) => sheet.properties?.title?.toLowerCase().includes('activit')
-      )
-    }
-
-    if (!activitiesSheet) {
-      throw new Error(
-        `Sheet "${SHEET_NAME}" not found in spreadsheet. Available sheets: ${availableSheets.join(', ')}`
-      )
-    }
-
-    console.log(`Found sheet: ${activitiesSheet.properties?.title} (ID: ${activitiesSheet.properties?.sheetId})`)
-
-    const sheetId = activitiesSheet.properties?.sheetId
-    const lastRow = activitiesSheet.properties?.gridProperties?.rowCount || 1000
-    const lastCol = activitiesSheet.properties?.gridProperties?.columnCount || 50
-
-    // Convert column number to letter (e.g., 1 -> A, 27 -> AA)
-    const colToLetter = (col: number): string => {
-      let result = ''
-      while (col > 0) {
-        col--
-        result = String.fromCharCode(65 + (col % 26)) + result
-        col = Math.floor(col / 26)
+  return retryWithBackoff(async () => {
+    try {
+      // Lazy initialization - get client only when needed (not at module load time)
+      // This prevents deployment failures if env vars aren't available during build
+      const auth = getGoogleSheetsAuth()
+      const sheets = google.sheets({ version: 'v4', auth })
+      
+      // Verify authentication first
+      syncLogger.info('Authenticating with Google Sheets API...')
+      const authClient = await auth.getClient()
+      if (!authClient) {
+        throw new Error('Failed to obtain Google Auth client')
       }
-      return result
-    }
-
-    const range = `${activitiesSheet.properties?.title}!A1:${colToLetter(lastCol)}${lastRow}`
-
-    // Fetch all data
-    const response = await sheets.spreadsheets.values.get({
-      spreadsheetId: SPREADSHEET_ID,
-      range,
-    })
-
-    const rows = response.data.values || []
-
-    if (rows.length === 0) {
-      return { headers: [], data: [] }
-    }
-
-    // First row is headers
-    const headers = rows[0].map((h: string) => h.trim())
-    const dataRows = rows.slice(1)
-
-    // Convert rows to objects
-    const data = dataRows
-      .map((row, index) => {
-        // Pad row to match header length
-        const paddedRow = [...row]
-        while (paddedRow.length < headers.length) {
-          paddedRow.push('')
-        }
-        return rowToObject(headers, paddedRow)
-      })
-      .filter((row) => {
-        // Filter out completely empty rows
-        return Object.values(row).some((val) => val !== null && val !== '')
+      syncLogger.info('Auth client obtained successfully')
+      
+      // Get access token for debugging (but don't log the token itself)
+      const token = await auth.getAccessToken()
+      if (!token) {
+        throw new Error('Failed to obtain access token')
+      }
+      syncLogger.info('Access token obtained successfully')
+      
+      // First, get the sheet metadata to determine the range
+      syncLogger.info(`Accessing spreadsheet: ${SPREADSHEET_ID}`)
+      const sheetMetadata = await sheets.spreadsheets.get({
+        spreadsheetId: SPREADSHEET_ID,
       })
 
-    return { headers, data }
-  } catch (error: any) {
-    console.error('Error fetching sheet data:', error)
-    
-    // Provide more helpful error messages
-    if (error?.code === 403 || error?.message?.includes('permission') || error?.message?.includes('does not have permission')) {
-      throw new Error(
-        `Permission denied. Please ensure:\n` +
-        `1. Google Sheets API is enabled in Google Cloud Console\n` +
-        `2. The sheet is shared with: mutual-aid-portal@p2h-database-setup.iam.gserviceaccount.com\n` +
-        `3. The service account has at least "Viewer" access\n` +
-        `Original error: ${error.message}`
+      // List all available sheets for debugging
+      const availableSheets = sheetMetadata.data.sheets?.map((s) => s.properties?.title) || []
+      syncLogger.info(`Available sheets: ${availableSheets.join(', ')}`)
+
+      // Find the activities sheet (try multiple variations)
+      let activitiesSheet = sheetMetadata.data.sheets?.find(
+        (sheet) => sheet.properties?.title?.toLowerCase() === SHEET_NAME.toLowerCase()
       )
+
+      // If not found, try to find by gid (14343785 from the URL)
+      if (!activitiesSheet) {
+        activitiesSheet = sheetMetadata.data.sheets?.find(
+          (sheet) => sheet.properties?.sheetId === 14343785
+        )
+      }
+
+      // If still not found, try common variations
+      if (!activitiesSheet) {
+        activitiesSheet = sheetMetadata.data.sheets?.find(
+          (sheet) => sheet.properties?.title?.toLowerCase().includes('activit')
+        )
+      }
+
+      if (!activitiesSheet) {
+        throw new Error(
+          `Sheet "${SHEET_NAME}" not found in spreadsheet. Available sheets: ${availableSheets.join(', ')}`
+        )
+      }
+
+      syncLogger.info(`Found sheet: ${activitiesSheet.properties?.title} (ID: ${activitiesSheet.properties?.sheetId})`)
+
+      const sheetId = activitiesSheet.properties?.sheetId
+      const lastRow = activitiesSheet.properties?.gridProperties?.rowCount || 1000
+      const lastCol = activitiesSheet.properties?.gridProperties?.columnCount || 50
+
+      // Convert column number to letter (e.g., 1 -> A, 27 -> AA)
+      const colToLetter = (col: number): string => {
+        let result = ''
+        while (col > 0) {
+          col--
+          result = String.fromCharCode(65 + (col % 26)) + result
+          col = Math.floor(col / 26)
+        }
+        return result
+      }
+
+      const range = `${activitiesSheet.properties?.title}!A1:${colToLetter(lastCol)}${lastRow}`
+      syncLogger.info(`Fetching data from range: ${range}`)
+
+      // Fetch all data
+      const response = await sheets.spreadsheets.values.get({
+        spreadsheetId: SPREADSHEET_ID,
+        range,
+      })
+
+      const rows = response.data.values || []
+      syncLogger.info(`Received ${rows.length} rows from Google Sheets`)
+
+      if (rows.length === 0) {
+        syncLogger.warn('No rows returned from Google Sheets')
+        return { headers: [], data: [] }
+      }
+
+      // First row is headers
+      const headers = rows[0].map((h: string) => h.trim())
+      const dataRows = rows.slice(1)
+      syncLogger.info(`Processing ${dataRows.length} data rows with ${headers.length} columns`)
+
+      // Convert rows to objects
+      const data = dataRows
+        .map((row, index) => {
+          // Pad row to match header length
+          const paddedRow = [...row]
+          while (paddedRow.length < headers.length) {
+            paddedRow.push('')
+          }
+          return rowToObject(headers, paddedRow)
+        })
+        .filter((row) => {
+          // Filter out completely empty rows
+          return Object.values(row).some((val) => val !== null && val !== '')
+        })
+
+      syncLogger.info(`Processed ${data.length} non-empty rows`)
+      return { headers, data }
+    } catch (error: any) {
+      syncLogger.error('Error fetching sheet data', { 
+        error: error.message,
+        code: error.code,
+        response: error.response?.data 
+      })
+      
+      // Provide more helpful error messages
+      if (error?.code === 403 || error?.message?.includes('permission') || error?.message?.includes('does not have permission')) {
+        const enhancedError = new Error(
+          `Permission denied. Please ensure:\n` +
+          `1. Google Sheets API is enabled in Google Cloud Console\n` +
+          `2. The sheet is shared with the service account email\n` +
+          `3. The service account has at least "Viewer" access\n` +
+          `Original error: ${error.message}`
+        )
+        ;(enhancedError as any).code = error.code
+        throw enhancedError
+      }
+      
+      if (error?.code === 404) {
+        const enhancedError = new Error(`Spreadsheet not found. Check that the spreadsheet ID is correct: ${SPREADSHEET_ID}`)
+        ;(enhancedError as any).code = error.code
+        throw enhancedError
+      }
+      
+      if (error?.code === 429) {
+        const enhancedError = new Error(`Rate limit exceeded. The sync will retry automatically. Original error: ${error.message}`)
+        ;(enhancedError as any).code = error.code
+        throw enhancedError
+      }
+      
+      if (error?.code === 500 || error?.code === 503) {
+        const enhancedError = new Error(`Google Sheets API server error. The sync will retry automatically. Original error: ${error.message}`)
+        ;(enhancedError as any).code = error.code
+        throw enhancedError
+      }
+      
+      throw error
     }
-    
-    if (error?.code === 404) {
-      throw new Error(`Spreadsheet not found. Check that the spreadsheet ID is correct: ${SPREADSHEET_ID}`)
-    }
-    
-    throw error
+  }, 3, 2000) // 3 retries with 2s base delay (2s, 4s, 8s)
+}
+
+/**
+ * Validate all required environment variables
+ */
+function validateEnvironment() {
+  const missing: string[] = []
+  
+  if (!process.env.GOOGLE_SHEETS) {
+    missing.push('GOOGLE_SHEETS')
+  }
+  
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
+    missing.push('NEXT_PUBLIC_SUPABASE_URL')
+  }
+  
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    missing.push('SUPABASE_SERVICE_ROLE_KEY')
+  }
+  
+  if (missing.length > 0) {
+    throw new Error(`Missing required environment variables: ${missing.join(', ')}`)
   }
 }
 
@@ -196,24 +291,26 @@ async function fetchSheetData() {
  */
 export async function POST(req: Request) {
   try {
-    // Check if GOOGLE_SHEETS environment variable is set
-    if (!process.env.GOOGLE_SHEETS) {
-      return NextResponse.json(
-        {
-          error: 'GOOGLE_SHEETS environment variable is not set',
-          details: 'Please configure GOOGLE_SHEETS with your Google service account credentials',
-        },
-        { status: 500 }
-      )
-    }
+    // Validate environment variables first
+    validateEnvironment()
 
     const syncId = `sync-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
     syncLogger.startSync(syncId)
     syncLogger.info('Starting sync from Google Sheets to activities_raw_import...')
 
-    // Fetch data from Google Sheets
-    const { headers, data } = await fetchSheetData()
-    syncLogger.info(`Fetched ${data.length} rows from Google Sheets`)
+    // Fetch data from Google Sheets (with error handling)
+    let headers: string[]
+    let data: any[]
+    try {
+      const sheetData = await fetchSheetData()
+      headers = sheetData.headers
+      data = sheetData.data
+      syncLogger.info(`Fetched ${data.length} rows from Google Sheets`)
+    } catch (fetchError) {
+      const errorMsg = fetchError instanceof Error ? fetchError.message : 'Unknown error'
+      syncLogger.error('Failed to fetch data from Google Sheets', { error: errorMsg })
+      throw new Error(`Failed to fetch Google Sheets data: ${errorMsg}`)
+    }
 
     if (data.length === 0) {
       return NextResponse.json({
@@ -225,8 +322,15 @@ export async function POST(req: Request) {
 
     console.log(`Fetched ${data.length} rows from Google Sheets`)
 
-    // Get Supabase admin client
-    const supabase = getSupabaseAdmin()
+    // Get Supabase admin client (with error handling)
+    let supabase
+    try {
+      supabase = getSupabaseAdmin()
+    } catch (supabaseError) {
+      const errorMsg = supabaseError instanceof Error ? supabaseError.message : 'Unknown error'
+      syncLogger.error('Failed to initialize Supabase admin client', { error: errorMsg })
+      throw new Error(`Supabase initialization failed: ${errorMsg}`)
+    }
 
     // Helper function to clean numeric values
     const cleanNumeric = (value: any): number | null => {
@@ -624,40 +728,82 @@ export async function POST(req: Request) {
       errors: errors.length > 0 ? errors : undefined,
     })
   } catch (error) {
-    syncLogger.error('Error syncing activities', { error: error instanceof Error ? error.message : 'Unknown error' })
-    syncLogger.endSync(false, { error: error instanceof Error ? error.message : 'Unknown error' })
-    return NextResponse.json(
-      {
-        error: 'Failed to sync activities',
-        details: error instanceof Error ? error.message : 'Unknown error',
-      },
-      { status: 500 }
-    )
+    // Safely handle errors - ensure we always return a response
+    try {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      const errorCode = (error as any)?.code
+      const errorDetails = {
+        message: errorMessage,
+        code: errorCode,
+        stack: error instanceof Error ? error.stack : undefined,
+      }
+      
+      // Try to log error, but don't fail if logging fails
+      try {
+        syncLogger.error('Error syncing activities (POST)', errorDetails)
+        syncLogger.endSync(false, errorDetails)
+      } catch (logError) {
+        // Log to console as fallback
+        console.error('Failed to log sync error:', logError)
+        console.error('Original error:', error)
+      }
+      
+      // Determine appropriate HTTP status code
+      let statusCode = 500
+      if (errorCode === 403) statusCode = 403
+      else if (errorCode === 404) statusCode = 404
+      else if (errorCode === 429) statusCode = 429
+      
+      return NextResponse.json(
+        {
+          error: 'Failed to sync activities',
+          details: errorMessage,
+          code: errorCode,
+          timestamp: new Date().toISOString(),
+        },
+        { status: statusCode }
+      )
+    } catch (fallbackError) {
+      // Ultimate fallback - return basic error response
+      console.error('Critical error in error handler:', fallbackError)
+      return NextResponse.json(
+        {
+          error: 'Internal Server Error',
+          details: 'An unexpected error occurred during sync',
+          timestamp: new Date().toISOString(),
+        },
+        { status: 500 }
+      )
+    }
   }
 }
 
 /**
  * GET endpoint to manually trigger sync (for testing)
+ * Also used by cron jobs
  */
 export async function GET() {
   try {
-    // Check if GOOGLE_SHEETS environment variable is set
-    if (!process.env.GOOGLE_SHEETS) {
-      return NextResponse.json(
-        {
-          error: 'GOOGLE_SHEETS environment variable is not set',
-          details: 'Please configure GOOGLE_SHEETS with your Google service account credentials',
-        },
-        { status: 500 }
-      )
-    }
+    // Validate environment variables first
+    validateEnvironment()
 
     const syncId = `sync-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
     syncLogger.startSync(syncId)
     syncLogger.info('Manual sync triggered via GET request')
 
-    // Fetch data from Google Sheets
-    const { headers, data } = await fetchSheetData()
+    // Fetch data from Google Sheets (with error handling)
+    let headers: string[]
+    let data: any[]
+    try {
+      const sheetData = await fetchSheetData()
+      headers = sheetData.headers
+      data = sheetData.data
+      syncLogger.info(`Fetched ${data.length} rows from Google Sheets`)
+    } catch (fetchError) {
+      const errorMsg = fetchError instanceof Error ? fetchError.message : 'Unknown error'
+      syncLogger.error('Failed to fetch data from Google Sheets', { error: errorMsg })
+      throw new Error(`Failed to fetch Google Sheets data: ${errorMsg}`)
+    }
 
     if (data.length === 0) {
       syncLogger.warn('No data to sync')
@@ -669,10 +815,15 @@ export async function GET() {
       })
     }
 
-    syncLogger.info(`Fetched ${data.length} rows from Google Sheets`)
-
-    // Get Supabase admin client
-    const supabase = getSupabaseAdmin()
+    // Get Supabase admin client (with error handling)
+    let supabase
+    try {
+      supabase = getSupabaseAdmin()
+    } catch (supabaseError) {
+      const errorMsg = supabaseError instanceof Error ? supabaseError.message : 'Unknown error'
+      syncLogger.error('Failed to initialize Supabase admin client', { error: errorMsg })
+      throw new Error(`Supabase initialization failed: ${errorMsg}`)
+    }
 
     // Prepare data for insertion - map directly to activities_raw_import table columns
     const recordsToInsert = data.map((row, index) => {
@@ -1034,14 +1185,52 @@ export async function GET() {
       errors: errors.length > 0 ? errors : undefined,
     })
   } catch (error) {
-    syncLogger.error('Error syncing activities', { error: error instanceof Error ? error.message : 'Unknown error' })
-    syncLogger.endSync(false, { error: error instanceof Error ? error.message : 'Unknown error' })
-    return NextResponse.json(
-      {
-        error: 'Failed to sync activities',
-        details: error instanceof Error ? error.message : 'Unknown error',
-      },
-      { status: 500 }
-    )
+    // Safely handle errors - ensure we always return a response
+    try {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      const errorCode = (error as any)?.code
+      const errorDetails = {
+        message: errorMessage,
+        code: errorCode,
+        stack: error instanceof Error ? error.stack : undefined,
+      }
+      
+      // Try to log error, but don't fail if logging fails
+      try {
+        syncLogger.error('Error syncing activities (GET)', errorDetails)
+        syncLogger.endSync(false, errorDetails)
+      } catch (logError) {
+        // Log to console as fallback
+        console.error('Failed to log sync error:', logError)
+        console.error('Original error:', error)
+      }
+      
+      // Determine appropriate HTTP status code
+      let statusCode = 500
+      if (errorCode === 403) statusCode = 403
+      else if (errorCode === 404) statusCode = 404
+      else if (errorCode === 429) statusCode = 429
+      
+      return NextResponse.json(
+        {
+          error: 'Failed to sync activities',
+          details: errorMessage,
+          code: errorCode,
+          timestamp: new Date().toISOString(),
+        },
+        { status: statusCode }
+      )
+    } catch (fallbackError) {
+      // Ultimate fallback - return basic error response
+      console.error('Critical error in error handler:', fallbackError)
+      return NextResponse.json(
+        {
+          error: 'Internal Server Error',
+          details: 'An unexpected error occurred during sync',
+          timestamp: new Date().toISOString(),
+        },
+        { status: 500 }
+      )
+    }
   }
 }

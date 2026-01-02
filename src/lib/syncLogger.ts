@@ -68,10 +68,26 @@ class SyncLogger {
   private currentSyncId: string | null = null
 
   private formatLogEntry(level: SyncLogEntry['level'], message: string, details?: any): string {
-    const timestamp = new Date().toISOString()
-    const syncId = this.currentSyncId || 'unknown'
-    const detailsStr = details ? ` | Details: ${JSON.stringify(details)}` : ''
-    return `[${timestamp}] [${level.toUpperCase()}] [Sync: ${syncId}] ${message}${detailsStr}\n`
+    try {
+      const timestamp = new Date().toISOString()
+      const syncId = this.currentSyncId || 'unknown'
+      let detailsStr = ''
+      if (details) {
+        try {
+          // Try to stringify, but limit size and handle circular references
+          const detailsJson = JSON.stringify(details, null, 0)
+          // Limit details to 1000 characters to prevent huge log entries
+          detailsStr = ` | Details: ${detailsJson.length > 1000 ? detailsJson.substring(0, 1000) + '...' : detailsJson}`
+        } catch (jsonError) {
+          // If JSON.stringify fails (circular reference, etc.), use a safe representation
+          detailsStr = ` | Details: [Object - could not serialize]`
+        }
+      }
+      return `[${timestamp}] [${level.toUpperCase()}] [Sync: ${syncId}] ${message}${detailsStr}\n`
+    } catch (error) {
+      // Ultimate fallback - return basic log entry
+      return `[${new Date().toISOString()}] [${level.toUpperCase()}] ${message}\n`
+    }
   }
 
   startSync(syncId: string) {
