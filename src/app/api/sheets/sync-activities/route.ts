@@ -456,7 +456,7 @@ export async function POST(req: Request) {
     syncLogger.info(`Deduplicated ${recordsToInsert.length} rows to ${finalRecordsToInsert.length} unique records`)
 
     // Upsert data in batches
-    const batchSize = 100
+    const batchSize = 200
     let totalSynced = 0
     let errors: any[] = []
     
@@ -913,7 +913,7 @@ export async function GET() {
     syncLogger.info(`Deduplicated ${recordsToInsert.length} rows to ${finalRecordsToInsert.length} unique records`)
 
     // Upsert data in batches
-    const batchSize = 100
+    const batchSize = 200
     let totalSynced = 0
     let errors: any[] = []
     
