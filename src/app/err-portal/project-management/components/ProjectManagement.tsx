@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Label } from '@/components/ui/label'
+import { Input } from '@/components/ui/input'
 import { RefreshCw, ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { supabase } from '@/lib/supabaseClient'
@@ -28,6 +29,11 @@ export default function ProjectManagement() {
   // Grant filter state
   const [selectedGrantId, setSelectedGrantId] = useState<string>('all')
   const [grants, setGrants] = useState<Array<{ id: string; grant_id: string; donor_name: string; project_name: string | null }>>([])
+  
+  // Grant Serial search state
+  const [grantSerialSearch, setGrantSerialSearch] = useState<string>('')
+  const grantSerialSearchRef = useRef<HTMLInputElement>(null)
+  const shouldSelectAllRef = useRef<boolean>(false)
 
   // Drill-down state
   const [level, setLevel] = useState<'state'|'room'|'project'>('state')
@@ -101,18 +107,21 @@ export default function ProjectManagement() {
     loadRollup()
   }, [])
 
-  // Filter rows by grant
+  // Filter rows by grant and grant serial search
   useEffect(() => {
+    let filtered = allRows
+    
+    // First apply grant filter
     if (selectedGrantId === 'all') {
-      setRows(allRows)
+      filtered = allRows
     } else if (selectedGrantId === 'unassigned') {
       // Show only current projects with null grant_grid_id
-      setRows(allRows.filter((r: any) => !r.is_historical && !r.grant_grid_id))
+      filtered = allRows.filter((r: any) => !r.is_historical && !r.grant_grid_id)
     } else {
       // Filter by selected grant
       const selectedGrant = grants.find(g => g.id === selectedGrantId)
       if (selectedGrant) {
-        setRows(allRows.filter((r: any) => {
+        filtered = allRows.filter((r: any) => {
           if (r.is_historical) {
             // Historical projects: filter by project_donor matching grant_id (text comparison)
             const projectDonor = r.project_donor ? String(r.project_donor).trim() : null
@@ -122,12 +131,28 @@ export default function ProjectManagement() {
             // Current projects: filter by grant_grid_id matching grant's id
             return r.grant_grid_id === selectedGrant.id
           }
-        }))
+        })
       } else {
-        setRows(allRows)
+        filtered = allRows
       }
     }
-  }, [selectedGrantId, allRows, grants])
+    
+    // Then apply grant serial search filter if provided
+    if (grantSerialSearch.trim()) {
+      const searchTerm = grantSerialSearch.trim().toLowerCase()
+      filtered = filtered.filter((r: any) => {
+        const grantSerial = r.grant_serial_id ? String(r.grant_serial_id).toLowerCase().trim() : ''
+        if (!grantSerial) return false
+        // Use startsWith for flexible but precise matching
+        // "LCC-P2H-JA-1224-0001-319" will match that exact serial
+        // "LCC-P2H-JA-1224" will match all JA projects starting with that prefix
+        // But "LCC-P2H-JA-1224-0001-319" will NOT match "LCC-P2H-KA-1224-0001-220"
+        return grantSerial.startsWith(searchTerm)
+      })
+    }
+    
+    setRows(filtered)
+  }, [selectedGrantId, allRows, grants, grantSerialSearch])
 
   // Project-level counters for the current filtered slice
   const counters = useMemo(() => {
@@ -199,7 +224,92 @@ export default function ProjectManagement() {
     return rows.filter((r:any)=> r.state === selectedStateName && (r.err_id || '—') === selectedErrId)
   }, [rows, selectedStateName, selectedErrId])
 
-  const displayed = level === 'state' ? stateRows : (level === 'room' ? roomRows : projectRows)
+  // When searching by Grant Serial, show all matching projects directly
+  const searchRows = useMemo(() => {
+    if (!grantSerialSearch.trim()) return null
+    // Return all rows that match the search (already filtered in the useEffect)
+    // Deduplicate by project_id to avoid showing the same project twice
+    const seen = new Set<string>()
+    return rows.filter((r: any) => {
+      const key = r.project_id || `${r.err_id}-${r.state}-${r.grant_serial_id}`
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+  }, [rows, grantSerialSearch])
+
+  // Auto-switch to project level when searching, reset to state level when search is cleared
+  useEffect(() => {
+    if (grantSerialSearch.trim()) {
+      if (level !== 'project') {
+        setLevel('project')
+        setSelectedStateName('')
+        setSelectedErrId('')
+      }
+    } else {
+      // When search is cleared, reset to initial state view
+      if (level !== 'state') {
+        setLevel('state')
+        setSelectedStateName('')
+        setSelectedErrId('')
+      }
+    }
+  }, [grantSerialSearch, level])
+
+  // Inject styles to make text selection visible in the search input
+  useEffect(() => {
+    const styleId = 'grant-serial-search-selection-styles'
+    // Remove existing style if present
+    const existingStyle = document.getElementById(styleId)
+    if (existingStyle) {
+      existingStyle.remove()
+    }
+
+    const style = document.createElement('style')
+    style.id = styleId
+    style.textContent = `
+      /* Override Input component's selection styles with maximum specificity */
+      input[data-slot="input"]#grant-serial-search::selection,
+      input[data-slot="input"]#grant-serial-search::-moz-selection {
+        background: rgb(191 219 254) !important;
+        background-color: rgb(191 219 254) !important;
+        color: rgb(30 58 138) !important;
+        -webkit-text-fill-color: rgb(30 58 138) !important;
+      }
+      .dark input[data-slot="input"]#grant-serial-search::selection,
+      .dark input[data-slot="input"]#grant-serial-search::-moz-selection {
+        background: rgb(30 64 175) !important;
+        background-color: rgb(30 64 175) !important;
+        color: rgb(219 234 254) !important;
+        -webkit-text-fill-color: rgb(219 234 254) !important;
+      }
+      /* Fallback for browsers that don't support data-slot selector */
+      input#grant-serial-search::selection,
+      input#grant-serial-search::-moz-selection {
+        background: rgb(191 219 254) !important;
+        background-color: rgb(191 219 254) !important;
+        color: rgb(30 58 138) !important;
+        -webkit-text-fill-color: rgb(30 58 138) !important;
+      }
+      .dark input#grant-serial-search::selection,
+      .dark input#grant-serial-search::-moz-selection {
+        background: rgb(30 64 175) !important;
+        background-color: rgb(30 64 175) !important;
+        color: rgb(219 234 254) !important;
+        -webkit-text-fill-color: rgb(219 234 254) !important;
+      }
+    `
+    document.head.appendChild(style)
+
+    return () => {
+      const styleToRemove = document.getElementById(styleId)
+      if (styleToRemove) {
+        styleToRemove.remove()
+      }
+    }
+  }, [])
+
+  const displayed = searchRows ? searchRows : (level === 'state' ? stateRows : (level === 'room' ? roomRows : projectRows))
 
   // Calculate totals for the displayed rows
   const totals = useMemo(() => {
@@ -240,6 +350,13 @@ export default function ProjectManagement() {
   }, [displayed])
 
   const onRowClick = (r: any) => {
+    // If searching, always open detail modal (projects are shown directly)
+    if (searchRows) {
+      setDetailProjectId(r.project_id || null)
+      setDetailOpen(true)
+      return
+    }
+    
     if (level === 'state') {
       setSelectedStateName(r.state)
       setLevel('room')
@@ -383,8 +500,8 @@ export default function ProjectManagement() {
               </div>
             </CardHeader>
             <CardContent>
-          {/* Grant Filter */}
-          <div className="mb-4 flex items-center gap-4">
+          {/* Grant Filter and Search */}
+          <div className="mb-4 flex items-center gap-4 flex-wrap">
             <div className="flex items-center gap-2">
               <Label htmlFor="grant-filter" className="text-sm font-medium">Filter by Grant:</Label>
               <Select value={selectedGrantId} onValueChange={setSelectedGrantId}>
@@ -402,21 +519,75 @@ export default function ProjectManagement() {
                 </SelectContent>
               </Select>
             </div>
+            <div className="flex items-center gap-2">
+              <Label htmlFor="grant-serial-search" className="text-sm font-medium">Search by Grant Serial:</Label>
+              <Input
+                ref={grantSerialSearchRef}
+                id="grant-serial-search"
+                type="text"
+                placeholder="Enter grant serial..."
+                value={grantSerialSearch}
+                onChange={(e) => {
+                  setGrantSerialSearch(e.target.value)
+                  shouldSelectAllRef.current = false
+                }}
+                onFocus={(e) => {
+                  shouldSelectAllRef.current = true
+                  // Use requestAnimationFrame to ensure selection happens after all events
+                  requestAnimationFrame(() => {
+                    if (shouldSelectAllRef.current && grantSerialSearchRef.current) {
+                      grantSerialSearchRef.current.select()
+                    }
+                  })
+                }}
+                onMouseDown={(e) => {
+                  // If we're about to select all, prevent default to keep selection
+                  if (shouldSelectAllRef.current && e.currentTarget === document.activeElement) {
+                    e.preventDefault()
+                    requestAnimationFrame(() => {
+                      if (grantSerialSearchRef.current) {
+                        grantSerialSearchRef.current.select()
+                      }
+                    })
+                  }
+                }}
+                onClick={(e) => {
+                  // If input is focused and we want to select all, do it
+                  if (shouldSelectAllRef.current && e.currentTarget === document.activeElement) {
+                    requestAnimationFrame(() => {
+                      if (grantSerialSearchRef.current) {
+                        grantSerialSearchRef.current.select()
+                      }
+                    })
+                  }
+                }}
+                onDoubleClick={(e) => {
+                  // Double click should select all
+                  e.currentTarget.select()
+                  shouldSelectAllRef.current = false
+                }}
+                className="w-[250px] select-text [&::selection]:!bg-blue-200 [&::selection]:!text-blue-900 dark:[&::selection]:!bg-blue-800 dark:[&::selection]:!text-blue-100"
+              />
+            </div>
           </div>
           <div className="text-xs text-muted-foreground mb-2">
-            {level === 'state' && (
+            {searchRows ? (
+              <span>
+                Showing projects matching Grant Serial search. {grantSerialSearch && <span className="font-medium text-foreground">Search: "{grantSerialSearch}"</span>}
+              </span>
+            ) : level === 'state' ? (
               <span>
                 {t('management.table.tips.state')} 
                 <span className="ml-2 font-medium text-foreground">→ Click a row to view ERR rooms</span>
               </span>
-            )}
-            {level === 'room' && (
+            ) : level === 'room' ? (
               <span>
                 {t('management.table.tips.room')} 
                 <span className="ml-2 font-medium text-foreground">→ Click a row to view projects</span>
               </span>
+            ) : (
+              t('management.table.tips.project')
             )}
-            {level === 'project' && t('management.table.tips.project')}
           </div>
           {loading ? (
             <div className="py-8 text-center text-muted-foreground">{t('management.table.loading')}</div>
@@ -424,20 +595,21 @@ export default function ProjectManagement() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                  {level === 'state' ? (
-                    <>
-                      <TableHead>{t('management.table.state')}</TableHead>
-                    </>
-                  ) : level === 'room' ? (
+                  {searchRows || level === 'project' ? (
                     <>
                       <TableHead>{t('management.table.err')}</TableHead>
+                      <TableHead>{t('management.table.state')}</TableHead>
+                      <TableHead>{t('management.table.mou')}</TableHead>
+                      <TableHead>Grant Serial</TableHead>
+                    </>
+                  ) : level === 'state' ? (
+                    <>
                       <TableHead>{t('management.table.state')}</TableHead>
                     </>
                   ) : (
                     <>
                       <TableHead>{t('management.table.err')}</TableHead>
                       <TableHead>{t('management.table.state')}</TableHead>
-                      <TableHead>{t('management.table.mou')}</TableHead>
                     </>
                   )}
                   <TableHead className="text-right">{t('management.table.plan')}</TableHead>
@@ -450,29 +622,30 @@ export default function ProjectManagement() {
                   <TableHead>{t('management.table.f5_complete')}</TableHead>
                   <TableHead>{t('management.table.last_f4')}</TableHead>
                   <TableHead>{t('management.table.last_f5')}</TableHead>
-                  {level === 'project' && <TableHead>{t('management.table.actions')}</TableHead>}
+                  {(searchRows || level === 'project') && <TableHead>{t('management.table.actions')}</TableHead>}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                 {(displayed||[]).length===0 ? (
-                  <TableRow><TableCell colSpan={level==='project'?14:(level==='room'?12:11)} className="text-center text-muted-foreground">{t('management.table.no_data')}</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={level==='project'?15:(level==='room'?12:11)} className="text-center text-muted-foreground">{t('management.table.no_data')}</TableCell></TableRow>
                 ) : (
                   <>
                     {/* Total Row */}
                     <TableRow className="bg-muted/50 font-semibold">
-                      {level === 'state' ? (
-                        <>
-                          <TableCell className="font-semibold">Total</TableCell>
-                        </>
-                      ) : level === 'room' ? (
+                      {searchRows || level === 'project' ? (
                         <>
                           <TableCell className="font-semibold">Total</TableCell>
                           <TableCell></TableCell>
+                          <TableCell></TableCell>
+                          <TableCell></TableCell>
+                        </>
+                      ) : level === 'state' ? (
+                        <>
+                          <TableCell className="font-semibold">Total</TableCell>
                         </>
                       ) : (
                         <>
                           <TableCell className="font-semibold">Total</TableCell>
-                          <TableCell></TableCell>
                           <TableCell></TableCell>
                         </>
                       )}
@@ -482,32 +655,49 @@ export default function ProjectManagement() {
                       <TableCell className="text-right font-semibold">{totals.burn ? (totals.burn * 100).toFixed(0) + '%' : '0%'}</TableCell>
                       <TableCell className="font-semibold">{totals.f4_count || 0}</TableCell>
                       <TableCell className="text-right font-semibold">
-                        {level === 'project' 
+                        {(searchRows || level === 'project')
                           ? (totals.f4_count > 0 ? '100%' : '0%')
                           : `${totals.total_projects > 0 ? Math.round((totals.projects_with_f4 / totals.total_projects) * 100) : 0}%`
                         }
                       </TableCell>
                       <TableCell className="font-semibold">{totals.f5_count || 0}</TableCell>
                       <TableCell className="text-right font-semibold">
-                        {level === 'project' 
+                        {(searchRows || level === 'project')
                           ? (totals.f5_count > 0 ? '100%' : '0%')
                           : `${totals.total_projects > 0 ? Math.round((totals.projects_with_f5 / totals.total_projects) * 100) : 0}%`
                         }
                       </TableCell>
                       <TableCell></TableCell>
                       <TableCell></TableCell>
-                      {level === 'project' && <TableCell></TableCell>}
+                      {(searchRows || level === 'project') && <TableCell></TableCell>}
+                      {(searchRows || level === 'project') && <TableCell></TableCell>}
                     </TableRow>
                     {displayed.map((r:any, idx:number)=> (
                   <TableRow 
-                    key={r.project_id || r.err_id || r.state || idx} 
+                    key={`${r.project_id || 'no-id'}-${r.err_id || 'no-err'}-${r.state || 'no-state'}-${idx}`}
                     className={cn(
                       "cursor-pointer transition-colors",
-                      level !== 'project' && "hover:bg-muted/50"
+                      (searchRows || level === 'project') && "hover:bg-muted/50"
                     )}
                     onClick={()=>onRowClick(r)}
                   >
-                    {level === 'state' ? (
+                    {searchRows || level === 'project' ? (
+                      <>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <span>{r.err_id || '-'}</span>
+                            {r.is_historical && (
+                              <span className="px-2 py-0.5 text-xs rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border border-amber-200 dark:border-amber-800">
+                                Historical
+                              </span>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell>{r.state || '-'}</TableCell>
+                        <TableCell>{r.has_mou ? (r.mou_code || 'Yes') : '-'}</TableCell>
+                        <TableCell>{r.grant_serial_id || '-'}</TableCell>
+                      </>
+                    ) : level === 'state' ? (
                       <>
                         <TableCell>
                           <div className="flex items-center gap-2">
@@ -516,7 +706,7 @@ export default function ProjectManagement() {
                           </div>
                         </TableCell>
                       </>
-                    ) : level === 'room' ? (
+                    ) : (
                       <>
                         <TableCell>
                           <div className="flex items-center gap-2">
@@ -525,12 +715,6 @@ export default function ProjectManagement() {
                           </div>
                         </TableCell>
                         <TableCell>{r.state || '-'}</TableCell>
-                      </>
-                    ) : (
-                      <>
-                        <TableCell>{r.err_id || '-'}</TableCell>
-                        <TableCell>{r.state || '-'}</TableCell>
-                        <TableCell>{r.has_mou ? (r.mou_code || 'Yes') : '-'}</TableCell>
                       </>
                     )}
                     <TableCell className="text-right">{Number(r.plan||0).toLocaleString()}</TableCell>

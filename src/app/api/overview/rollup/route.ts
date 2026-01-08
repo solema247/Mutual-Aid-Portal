@@ -97,7 +97,7 @@ export async function GET(request: Request) {
     // Build project filter (include more statuses to catch F5 projects)
     let projectQuery = supabase
       .from('err_projects')
-      .select('id, state, grant_call_id, grant_grid_id, emergency_rooms (id, name, name_ar, err_code), planned_activities, expenses, source, status, funding_status, mou_id')
+      .select('id, state, grant_call_id, grant_grid_id, grant_serial_id, emergency_rooms (id, name, name_ar, err_code), planned_activities, expenses, source, status, funding_status, mou_id')
       .in('status', ['approved', 'active', 'pending'])
       .in('funding_status', ['committed', 'allocated'])
 
@@ -231,6 +231,7 @@ export async function GET(request: Request) {
         err_id: p.emergency_rooms?.err_code || p.emergency_rooms?.name || null,
         grant_call_id: p.grant_call_id,
         grant_grid_id: p.grant_grid_id,
+        grant_serial_id: p.grant_serial_id || null,
         has_mou: !!p.mou_id,
         mou_code: p.mou_id ? (mouCodeById[p.mou_id] || null) : null,
         plan,
@@ -266,6 +267,7 @@ export async function GET(request: Request) {
         err_id: row['ERR CODE'] || row['ERR Name'] || row['err_code'] || row['err_name'] || null,
         grant_call_id: null, // Historical data doesn't have grant_call_id
         grant_grid_id: null, // Historical data doesn't have grant_grid_id
+        grant_serial_id: row['Serial Number'] || row['serial_number'] || null, // For historical projects, use "Serial Number" field
         project_donor: projectDonor, // For historical projects, use "Project Donor" field
         has_mou: hasMou,
         mou_code: hasMou ? (row['MOU Signed'] || 'Yes') : null,
