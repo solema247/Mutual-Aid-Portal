@@ -22,23 +22,64 @@ export async function POST(req: Request) {
     if (isHistorical) {
       // Extract real UUID from historical project ID
       const realUuid = String(project_id).replace('historical_', '')
-      activities_raw_import_id = realUuid
-      actual_project_id = null // Historical projects don't have project_id
       
+      // Verify the record exists in activities_raw_import before proceeding
+      let historicalPrj: any = null
       try {
-        const { data: historicalPrj } = await supabase
+        const { data, error } = await supabase
           .from('activities_raw_import')
-          .select('"ERR CODE","ERR Name","State","Serial Number"')
+          .select('id, "ERR CODE", "ERR Name", "State", "Serial Number"')
           .eq('id', realUuid)
           .single()
         
-        if (historicalPrj) {
-          err_code = historicalPrj['ERR CODE'] || historicalPrj['ERR Name'] || null
-          err_id = err_code
-          state_name = historicalPrj['State'] || null
-          grant_serial_id = historicalPrj['Serial Number'] || null
+        if (error) {
+          console.error('F4 save error - activities_raw_import lookup failed:', error)
+          console.error('F4 save error - realUuid:', realUuid)
+          console.error('F4 save error - project_id received:', project_id)
+          
+          // Try to find the record by checking if it exists at all
+          const { data: checkData, error: checkError } = await supabase
+            .from('activities_raw_import')
+            .select('id')
+            .limit(1)
+          
+          if (checkError) {
+            console.error('F4 save error - cannot query activities_raw_import table:', checkError)
+          } else {
+            console.error('F4 save error - activities_raw_import table is accessible, but UUID not found')
+          }
+          
+          return NextResponse.json({ 
+            error: `Historical project not found: ${realUuid}. The project may have been deleted from the Google Sheet. Please refresh the page and try again.` 
+          }, { status: 404 })
         }
-      } catch {}
+        
+        if (!data) {
+          console.error('F4 save error - no data returned for UUID:', realUuid)
+          console.error('F4 save error - project_id received:', project_id)
+          return NextResponse.json({ 
+            error: `Historical project not found in database: ${realUuid}. The project may have been deleted. Please refresh the page and try again.` 
+          }, { status: 404 })
+        }
+        
+        historicalPrj = data
+      } catch (e: any) {
+        console.error('F4 save error - exception during lookup:', e)
+        return NextResponse.json({ 
+          error: `Failed to verify historical project: ${e.message || 'Unknown error'}` 
+        }, { status: 500 })
+      }
+      
+      // Only set activities_raw_import_id if we confirmed the record exists
+      activities_raw_import_id = realUuid
+      actual_project_id = null // Historical projects don't have project_id
+      
+      if (historicalPrj) {
+        err_code = historicalPrj['ERR CODE'] || historicalPrj['ERR Name'] || null
+        err_id = err_code
+        state_name = historicalPrj['State'] || null
+        grant_serial_id = historicalPrj['Serial Number'] || null
+      }
     } else {
       // Regular portal project
       actual_project_id = project_id

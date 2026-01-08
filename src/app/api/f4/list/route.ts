@@ -24,7 +24,7 @@ export async function GET() {
     }
     
     // Get F4 summaries with attachment counts and project/room/grant context
-    // Include both portal projects and historical projects
+    // First, get portal projects only (exclude historical projects)
     let query = supabase
       .from('err_summary')
       .select(`
@@ -42,15 +42,9 @@ export async function GET() {
           grant_call_id,
           emergency_rooms ( name, name_ar, err_code ),
           grant_calls ( name, shortname, donors ( name, short_name ) )
-        ),
-        activities_raw_import (
-          id,
-          "ERR CODE",
-          "ERR Name",
-          "State",
-          "Project Donor"
         )
       `)
+      .is('activities_raw_import_id', null) // Only portal projects
       .order('created_at', { ascending: false })
     
     // Filter by allowed project IDs if state filtering is needed
@@ -61,7 +55,7 @@ export async function GET() {
     const { data: summaries, error } = await query
     if (error) throw error
 
-    // Also get historical F4 reports (those with activities_raw_import_id)
+    // Get historical F4 reports (those with activities_raw_import_id)
     let historicalQuery = supabase
       .from('err_summary')
       .select(`
@@ -81,7 +75,7 @@ export async function GET() {
           "Project Donor"
         )
       `)
-      .not('activities_raw_import_id', 'is', null)
+      .not('activities_raw_import_id', 'is', null) // Only historical projects
       .order('created_at', { ascending: false })
     
     const { data: historicalSummaries } = await historicalQuery
@@ -95,7 +89,7 @@ export async function GET() {
       })
     }
     
-    // Combine portal and historical summaries
+    // Combine portal and historical summaries (no duplicates now)
     const allSummaries = [...(summaries || []), ...filteredHistorical]
     
     // Get attachment counts
