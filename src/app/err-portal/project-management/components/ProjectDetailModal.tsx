@@ -201,71 +201,257 @@ export default function ProjectDetailModal({ projectId, open, onOpenChange }: Pr
                   <Label>Date Report Completed</Label>
                   <div className="h-10 flex items-center px-3 rounded border bg-muted/50">{project?.date_report_completed ? new Date(project.date_report_completed).toLocaleDateString() : '-'}</div>
                 </div>
-                {(project?.individuals || project?.family) && (
-                  <div>
-                    <Label>Reach Data</Label>
-                    <div className="grid grid-cols-2 gap-4 mt-2">
-                      <div>
-                        <div className="text-sm text-muted-foreground mb-1">Individuals</div>
-                        <div className="h-10 flex items-center px-3 rounded border bg-muted/50">{project?.individuals ? Number(project.individuals).toLocaleString() : '-'}</div>
+
+                {/* F4 Financial Reports Section for Historical Projects */}
+                <div className="mt-6 pt-6 border-t">
+                  <Label className="text-base font-semibold mb-3">F4 Financial Reports</Label>
+                  {summaries.length > 0 ? (
+                    <>
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Report Date</TableHead>
+                            <TableHead className="text-right">Total Grant (USD)</TableHead>
+                            <TableHead className="text-right">Total Expenses (USD)</TableHead>
+                            <TableHead className="text-right">Total Expenses (SDG)</TableHead>
+                            <TableHead className="text-right">Remainder (USD)</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {summaries.map((s: any) => (
+                            <TableRow key={s.id}>
+                              <TableCell>{s.report_date ? new Date(s.report_date).toLocaleDateString() : '-'}</TableCell>
+                              <TableCell className="text-right">{Number(s.total_grant || 0).toLocaleString()}</TableCell>
+                              <TableCell className="text-right">{Number(s.total_expenses || 0).toLocaleString()}</TableCell>
+                              <TableCell className="text-right">{Number(s.total_expenses_sdg || 0).toLocaleString()}</TableCell>
+                              <TableCell className="text-right">{Number(s.remainder || 0).toLocaleString()}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+
+                      {/* F4 Expenses for Latest Report */}
+                      {summaries[0]?.expenses && summaries[0].expenses.length > 0 && (
+                        <div className="mt-4">
+                          <Label className="text-sm font-medium mb-2">Latest F4 Expenses</Label>
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead>Activity</TableHead>
+                                <TableHead>Description</TableHead>
+                                <TableHead className="text-right">Amount (USD)</TableHead>
+                                <TableHead className="text-right">Amount (SDG)</TableHead>
+                                <TableHead>Payment Date</TableHead>
+                                <TableHead>Method</TableHead>
+                                <TableHead>Receipt No.</TableHead>
+                                <TableHead>Seller</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {summaries[0].expenses.map((e: any) => (
+                                <TableRow key={e.expense_id}>
+                                  <TableCell>{e.expense_activity || '-'}</TableCell>
+                                  <TableCell>{e.expense_description || '-'}</TableCell>
+                                  <TableCell className="text-right">{Number(e.expense_amount || 0).toLocaleString()}</TableCell>
+                                  <TableCell className="text-right">{Number(e.expense_amount_sdg || 0).toLocaleString()}</TableCell>
+                                  <TableCell>{e.payment_date ? new Date(e.payment_date).toLocaleDateString() : '-'}</TableCell>
+                                  <TableCell>{e.payment_method || '-'}</TableCell>
+                                  <TableCell>{e.receipt_no || '-'}</TableCell>
+                                  <TableCell>{e.seller || '-'}</TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      )}
+
+                      {/* F4 Additional Fields */}
+                      {summaries[0] && (
+                        <div className="mt-4 space-y-4">
+                          {summaries[0].beneficiaries && (
+                            <div>
+                              <Label className="text-sm font-medium">Beneficiaries</Label>
+                              <div className="min-h-[40px] px-3 py-2 rounded border bg-muted/50 text-sm whitespace-pre-wrap">
+                                {summaries[0].beneficiaries}
+                              </div>
+                            </div>
+                          )}
+                          {summaries[0].lessons && (
+                            <div>
+                              <Label className="text-sm font-medium">Lessons Learned</Label>
+                              <div className="min-h-[40px] px-3 py-2 rounded border bg-muted/50 text-sm whitespace-pre-wrap">
+                                {summaries[0].lessons}
+                              </div>
+                            </div>
+                          )}
+                          {summaries[0].training && (
+                            <div>
+                              <Label className="text-sm font-medium">Training Needs</Label>
+                              <div className="min-h-[40px] px-3 py-2 rounded border bg-muted/50 text-sm whitespace-pre-wrap">
+                                {summaries[0].training}
+                              </div>
+                            </div>
+                          )}
+                          {summaries[0].project_objectives && (
+                            <div>
+                              <Label className="text-sm font-medium">Project Objectives</Label>
+                              <div className="min-h-[40px] px-3 py-2 rounded border bg-muted/50 text-sm whitespace-pre-wrap">
+                                {summaries[0].project_objectives}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <div className="py-4 text-center text-muted-foreground">No F4 reports available</div>
+                  )}
+                </div>
+
+                {/* F5 Program Data Section */}
+                {(project?.volunteers !== null && project?.volunteers !== undefined) ||
+                 project?.family ||
+                 project?.individuals ||
+                 (project?.male_over_18 !== null && project?.male_over_18 !== undefined) ||
+                 (project?.female_over_18 !== null && project?.female_over_18 !== undefined) ||
+                 (project?.male_under_18 !== null && project?.male_under_18 !== undefined) ||
+                 (project?.female_under_18 !== null && project?.female_under_18 !== undefined) ||
+                 (project?.people_with_special_needs !== null && project?.people_with_special_needs !== undefined) ||
+                 project?.lessons_learned ||
+                 project?.challenges ||
+                 project?.recommendations ||
+                 project?.comments ? (
+                  <div className="mt-6 pt-6 border-t">
+                    <Label className="text-base font-semibold mb-3">F5 Program Data</Label>
+                    
+                    {/* Reach Data */}
+                    {(project?.volunteers !== null && project?.volunteers !== undefined) ||
+                     project?.family ||
+                     project?.individuals ||
+                     (project?.male_over_18 !== null && project?.male_over_18 !== undefined) ||
+                     (project?.female_over_18 !== null && project?.female_over_18 !== undefined) ||
+                     (project?.male_under_18 !== null && project?.male_under_18 !== undefined) ||
+                     (project?.female_under_18 !== null && project?.female_under_18 !== undefined) ||
+                     (project?.people_with_special_needs !== null && project?.people_with_special_needs !== undefined) ? (
+                      <div className="mb-4">
+                        <Label className="text-sm font-medium mb-2">Reach Data</Label>
+                        <div className="grid grid-cols-2 gap-4">
+                          {(project?.volunteers !== null && project?.volunteers !== undefined) && (
+                            <div>
+                              <div className="text-sm text-muted-foreground mb-1">Volunteers</div>
+                              <div className="h-10 flex items-center px-3 rounded border bg-muted/50">{Number(project.volunteers).toLocaleString()}</div>
+                            </div>
+                          )}
+                          {project?.family && (
+                            <div>
+                              <div className="text-sm text-muted-foreground mb-1">Families</div>
+                              <div className="h-10 flex items-center px-3 rounded border bg-muted/50">{project.family}</div>
+                            </div>
+                          )}
+                          {project?.individuals && (
+                            <div>
+                              <div className="text-sm text-muted-foreground mb-1">Individuals</div>
+                              <div className="h-10 flex items-center px-3 rounded border bg-muted/50">{project.individuals}</div>
+                            </div>
+                          )}
+                          {(project?.people_with_special_needs !== null && project?.people_with_special_needs !== undefined) && (
+                            <div>
+                              <div className="text-sm text-muted-foreground mb-1">People with Special Needs</div>
+                              <div className="h-10 flex items-center px-3 rounded border bg-muted/50">{Number(project.people_with_special_needs).toLocaleString()}</div>
+                            </div>
+                          )}
+                        </div>
+                        {(project?.male_over_18 !== null && project?.male_over_18 !== undefined) ||
+                         (project?.female_over_18 !== null && project?.female_over_18 !== undefined) ||
+                         (project?.male_under_18 !== null && project?.male_under_18 !== undefined) ||
+                         (project?.female_under_18 !== null && project?.female_under_18 !== undefined) ? (
+                          <div className="grid grid-cols-4 gap-4 mt-2">
+                            {(project?.male_over_18 !== null && project?.male_over_18 !== undefined) && (
+                              <div>
+                                <div className="text-sm text-muted-foreground mb-1">Male &gt;18</div>
+                                <div className="h-10 flex items-center px-3 rounded border bg-muted/50">{Number(project.male_over_18).toLocaleString()}</div>
+                              </div>
+                            )}
+                            {(project?.female_over_18 !== null && project?.female_over_18 !== undefined) && (
+                              <div>
+                                <div className="text-sm text-muted-foreground mb-1">Female &gt;18</div>
+                                <div className="h-10 flex items-center px-3 rounded border bg-muted/50">{Number(project.female_over_18).toLocaleString()}</div>
+                              </div>
+                            )}
+                            {(project?.male_under_18 !== null && project?.male_under_18 !== undefined) && (
+                              <div>
+                                <div className="text-sm text-muted-foreground mb-1">Male &lt;18</div>
+                                <div className="h-10 flex items-center px-3 rounded border bg-muted/50">{Number(project.male_under_18).toLocaleString()}</div>
+                              </div>
+                            )}
+                            {(project?.female_under_18 !== null && project?.female_under_18 !== undefined) && (
+                              <div>
+                                <div className="text-sm text-muted-foreground mb-1">Female &lt;18</div>
+                                <div className="h-10 flex items-center px-3 rounded border bg-muted/50">{Number(project.female_under_18).toLocaleString()}</div>
+                              </div>
+                            )}
+                          </div>
+                        ) : null}
                       </div>
-                      <div>
-                        <div className="text-sm text-muted-foreground mb-1">Families</div>
-                        <div className="h-10 flex items-center px-3 rounded border bg-muted/50">{project?.family ? Number(project.family).toLocaleString() : '-'}</div>
-                      </div>
+                    ) : null}
+
+                    {/* F5 Narrative Fields */}
+                    <div className="space-y-4">
+                      {project?.lessons_learned && (
+                        <div>
+                          <Label className="text-sm font-medium">Lessons Learned</Label>
+                          <div className="min-h-[40px] px-3 py-2 rounded border bg-muted/50 text-sm whitespace-pre-wrap">{project.lessons_learned}</div>
+                        </div>
+                      )}
+                      {project?.challenges && (
+                        <div>
+                          <Label className="text-sm font-medium">Challenges</Label>
+                          <div className="min-h-[40px] px-3 py-2 rounded border bg-muted/50 text-sm whitespace-pre-wrap">{project.challenges}</div>
+                        </div>
+                      )}
+                      {project?.recommendations && (
+                        <div>
+                          <Label className="text-sm font-medium">Recommendations</Label>
+                          <div className="min-h-[40px] px-3 py-2 rounded border bg-muted/50 text-sm whitespace-pre-wrap">{project.recommendations}</div>
+                        </div>
+                      )}
+                      {project?.comments && (
+                        <div>
+                          <Label className="text-sm font-medium">Comments</Label>
+                          <div className="min-h-[40px] px-3 py-2 rounded border bg-muted/50 text-sm whitespace-pre-wrap">{project.comments}</div>
+                        </div>
+                      )}
                     </div>
-                    {(project?.male_over_18 || project?.female_over_18 || project?.male_under_18 || project?.female_under_18) && (
-                      <div className="grid grid-cols-4 gap-4 mt-2">
-                        <div>
-                          <div className="text-sm text-muted-foreground mb-1">Male &gt;18</div>
-                          <div className="h-10 flex items-center px-3 rounded border bg-muted/50">{project?.male_over_18 ? Number(project.male_over_18).toLocaleString() : '-'}</div>
-                        </div>
-                        <div>
-                          <div className="text-sm text-muted-foreground mb-1">Female &gt;18</div>
-                          <div className="h-10 flex items-center px-3 rounded border bg-muted/50">{project?.female_over_18 ? Number(project.female_over_18).toLocaleString() : '-'}</div>
-                        </div>
-                        <div>
-                          <div className="text-sm text-muted-foreground mb-1">Male &lt;18</div>
-                          <div className="h-10 flex items-center px-3 rounded border bg-muted/50">{project?.male_under_18 ? Number(project.male_under_18).toLocaleString() : '-'}</div>
-                        </div>
-                        <div>
-                          <div className="text-sm text-muted-foreground mb-1">Female &lt;18</div>
-                          <div className="h-10 flex items-center px-3 rounded border bg-muted/50">{project?.female_under_18 ? Number(project.female_under_18).toLocaleString() : '-'}</div>
-                        </div>
-                      </div>
-                    )}
-                    {project?.people_with_special_needs !== null && project?.people_with_special_needs !== undefined && (
-                      <div className="mt-2">
-                        <div className="text-sm text-muted-foreground mb-1">People with special needs</div>
-                        <div className="h-10 flex items-center px-3 rounded border bg-muted/50">{Number(project.people_with_special_needs).toLocaleString()}</div>
-                      </div>
-                    )}
                   </div>
-                )}
-                {project?.lessons_learned && (
-                  <div>
-                    <Label>Lessons Learned</Label>
-                    <div className="min-h-[40px] px-3 py-2 rounded border bg-muted/50 text-sm whitespace-pre-wrap">{project.lessons_learned}</div>
-                  </div>
-                )}
-                {project?.challenges && (
-                  <div>
-                    <Label>Challenges</Label>
-                    <div className="min-h-[40px] px-3 py-2 rounded border bg-muted/50 text-sm whitespace-pre-wrap">{project.challenges}</div>
-                  </div>
-                )}
-                {project?.recommendations && (
-                  <div>
-                    <Label>Recommendations</Label>
-                    <div className="min-h-[40px] px-3 py-2 rounded border bg-muted/50 text-sm whitespace-pre-wrap">{project.recommendations}</div>
-                  </div>
-                )}
-                {project?.comments && (
-                  <div>
-                    <Label>Comments</Label>
-                    <div className="min-h-[40px] px-3 py-2 rounded border bg-muted/50 text-sm whitespace-pre-wrap">{project.comments}</div>
-                  </div>
-                )}
+                ) : null}
+
+                {/* Related Files Section for Historical Projects */}
+                <div className="mt-6 pt-6 border-t">
+                  <Label className="text-base font-semibold mb-3">Related Files</Label>
+                  {f4Files.length > 0 ? (
+                    <div className="flex flex-wrap gap-2">
+                      {f4Files.map((file: any, idx: number) => {
+                        const summary = summaries.find((s: any) => s.id === file.summary_id)
+                        const reportDate = summary?.report_date ? new Date(summary.report_date).toLocaleDateString() : null
+                        const label = reportDate ? `F4 Financial Report (${reportDate})` : 'F4 Financial Report'
+                        return (
+                          <Button
+                            key={idx}
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleFileClick(file.file_key, label)}
+                            className="flex items-center gap-2"
+                          >
+                            <FileText className="h-4 w-4" />
+                            {label}
+                          </Button>
+                        )
+                      })}
+                    </div>
+                  ) : (
+                    <div className="py-4 text-center text-muted-foreground">No related files available</div>
+                  )}
+                </div>
               </>
             ) : (
               <>

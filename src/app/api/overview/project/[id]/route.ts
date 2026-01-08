@@ -27,6 +27,66 @@ export async function GET(
         return NextResponse.json({ error: 'Historical project not found' }, { status: 404 })
       }
 
+      // Fetch F4 summaries for this historical project
+      const { data: historicalSummaries } = await supabase
+        .from('err_summary')
+        .select(`
+          id,
+          report_date,
+          total_grant,
+          total_expenses,
+          total_expenses_sdg,
+          remainder,
+          beneficiaries,
+          lessons,
+          training,
+          project_objectives,
+          created_at
+        `)
+        .eq('activities_raw_import_id', actualId)
+        .order('created_at', { ascending: false })
+
+      // Fetch expenses for each summary
+      const summaryIds = (historicalSummaries || []).map((s: any) => s.id)
+      let summariesWithExpenses: any[] = []
+      if (summaryIds.length > 0) {
+        const { data: expenses } = await supabase
+          .from('err_expense')
+          .select('*')
+          .in('summary_id', summaryIds)
+        
+        // Group expenses by summary_id
+        const expensesBySummary: Record<number, any[]> = {}
+        ;(expenses || []).forEach((e: any) => {
+          if (e.summary_id) {
+            if (!expensesBySummary[e.summary_id]) {
+              expensesBySummary[e.summary_id] = []
+            }
+            expensesBySummary[e.summary_id].push(e)
+          }
+        })
+
+        // Attach expenses to summaries
+        summariesWithExpenses = (historicalSummaries || []).map((s: any) => ({
+          ...s,
+          expenses: expensesBySummary[s.id] || []
+        }))
+      } else {
+        summariesWithExpenses = historicalSummaries || []
+      }
+
+      // Fetch F4 file attachments for historical projects
+      const f4FileAttachments: any[] = []
+      if (summaryIds.length > 0) {
+        const { data: f4Attachments } = await supabase
+          .from('err_summary_attachments')
+          .select('summary_id, file_key, file_type')
+          .in('summary_id', summaryIds)
+        if (f4Attachments) {
+          f4FileAttachments.push(...f4Attachments)
+        }
+      }
+
       // Map historical project to match the expected structure
       const project = {
         id: id,
@@ -87,8 +147,16 @@ export async function GET(
         grant_segment: historicalProject['Grant Segment'] || historicalProject['grant_segment'] || null
       }
 
-      // Historical projects don't have F4 summaries in err_summary, return empty array
-      return NextResponse.json({ project, summaries: [], is_historical: true })
+      // Return historical project with F4 summaries and files
+      return NextResponse.json({ 
+        project, 
+        summaries: summariesWithExpenses,
+        f5Reports: [],
+        is_historical: true,
+        file_keys: {},
+        f4_files: f4FileAttachments,
+        f5_files: []
+      })
     } else {
       // Load F1 project (err_projects)
       const { data: project, error: projErr } = await supabase
