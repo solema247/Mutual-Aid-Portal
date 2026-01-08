@@ -56,6 +56,7 @@ export async function GET() {
     if (error) throw error
 
     // Get historical F4 reports (those with activities_raw_import_id)
+    // Exclude summaries that also have project_id to prevent duplicates
     let historicalQuery = supabase
       .from('err_summary')
       .select(`
@@ -76,6 +77,7 @@ export async function GET() {
         )
       `)
       .not('activities_raw_import_id', 'is', null) // Only historical projects
+      .is('project_id', null) // Exclude summaries that also have project_id
       .order('created_at', { ascending: false })
     
     const { data: historicalSummaries } = await historicalQuery
@@ -89,8 +91,16 @@ export async function GET() {
       })
     }
     
-    // Combine portal and historical summaries (no duplicates now)
-    const allSummaries = [...(summaries || []), ...filteredHistorical]
+    // Combine portal and historical summaries
+    // Deduplicate by summary ID to prevent counting the same summary twice
+    const allSummariesMap = new Map<number, any>()
+    for (const s of (summaries || [])) {
+      if (s.id) allSummariesMap.set(s.id, s)
+    }
+    for (const s of filteredHistorical) {
+      if (s.id) allSummariesMap.set(s.id, s)
+    }
+    const allSummaries = Array.from(allSummariesMap.values())
     
     // Get attachment counts
     const ids = allSummaries.map((s: any) => s.id)

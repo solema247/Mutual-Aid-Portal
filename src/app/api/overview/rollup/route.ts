@@ -150,17 +150,19 @@ export async function GET(request: Request) {
     }
 
     // Summaries for actuals (portal projects)
-    let sq = supabase.from('err_summary').select('project_id, total_expenses, report_date')
+    // Only get summaries that are NOT historical (exclude those with activities_raw_import_id)
+    let sq = supabase.from('err_summary').select('id, project_id, total_expenses, report_date').is('activities_raw_import_id', null)
     if (projectIds.length) sq = sq.in('project_id', projectIds)
     const { data: summaries } = await sq
     
     // Get historical F4 summaries (linked to activities_raw_import)
     // Fetch all historical summaries first (no filtering at query level)
+    // Only get summaries that are historical (have activities_raw_import_id) and don't have project_id
     const allHistoricalSummaries = await fetchAllRows(
       supabase,
       'err_summary',
-      'activities_raw_import_id, total_expenses, report_date'
-    ).then((data: any[]) => (data || []).filter((s: any) => s.activities_raw_import_id != null))
+      'id, activities_raw_import_id, total_expenses, report_date'
+    ).then((data: any[]) => (data || []).filter((s: any) => s.activities_raw_import_id != null && !s.project_id))
     
     // Filter historical summaries by state AFTER normalization (using the state map we created)
     let filteredHistoricalSummaries = allHistoricalSummaries || []
@@ -172,7 +174,15 @@ export async function GET(request: Request) {
     }
     
     // Combine portal and historical summaries for processing
-    const allSummaries = [...(summaries || []), ...filteredHistoricalSummaries]
+    // Deduplicate by summary ID to prevent counting the same summary twice
+    const allSummariesMap = new Map<number, any>()
+    for (const s of (summaries || [])) {
+      if (s.id) allSummariesMap.set(s.id, s)
+    }
+    for (const s of filteredHistoricalSummaries) {
+      if (s.id) allSummariesMap.set(s.id, s)
+    }
+    const allSummaries = Array.from(allSummariesMap.values())
 
     // F5 reports for program reporting - get reach data for totals
     let f5q = supabase.from('err_program_report').select('id, project_id, report_date')

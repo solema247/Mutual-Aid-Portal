@@ -55,15 +55,80 @@ export default function ProjectManagement() {
   const [f4Reports, setF4Reports] = useState<any[]>([])
   const [f5Reports, setF5Reports] = useState<any[]>([])
   const [loadingReports, setLoadingReports] = useState(false)
+  // Store portal F4/F5 counts per project (for historical projects, only count portal uploads)
+  const [portalF4Counts, setPortalF4Counts] = useState<Record<string, number>>({})
+  const [portalF5Counts, setPortalF5Counts] = useState<Record<string, number>>({})
 
   const loadRollup = async () => {
     setLoading(true)
-    const res = await fetch(`/api/overview/rollup`)
-    const j = await res.json()
-    setKpis(j.kpis || {})
-    setAllRows(j.rows || [])
-    setRows(j.rows || [])
-    setLoading(false)
+    try {
+      const res = await fetch(`/api/overview/rollup`)
+      const j = await res.json()
+      setKpis(j.kpis || {})
+      setAllRows(j.rows || [])
+      setRows(j.rows || [])
+      
+      // Load portal F4 and F5 counts for all projects
+      await loadPortalReportCounts()
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const loadPortalReportCounts = async () => {
+    try {
+      // Fetch F4 reports
+      const f4Res = await fetch('/api/f4/list')
+      const f4Data = await f4Res.json()
+      
+      // Fetch F5 reports
+      const f5Res = await fetch('/api/f5/list')
+      const f5Data = await f5Res.json()
+      
+      // Build counts map: project_id -> count
+      const f4Counts: Record<string, number> = {}
+      const f5Counts: Record<string, number> = {}
+      
+      // Count F4 reports by project_id or activities_raw_import_id
+      // Use a Set to track which F4 IDs we've already counted to prevent duplicates
+      const countedF4Ids = new Set<number>()
+      for (const f4 of (f4Data || [])) {
+        // Skip if we've already counted this F4 (by its id)
+        if (f4.id && countedF4Ids.has(f4.id)) continue
+        
+        // Count for portal project if it has project_id (and no activities_raw_import_id, though query should prevent this)
+        if (f4.project_id && !f4.activities_raw_import_id) {
+          f4Counts[f4.project_id] = (f4Counts[f4.project_id] || 0) + 1
+          if (f4.id) countedF4Ids.add(f4.id)
+        }
+        // Count for historical project if it has activities_raw_import_id (and no project_id, though query should prevent this)
+        else if (f4.activities_raw_import_id && !f4.project_id) {
+          const historicalId = `historical_${f4.activities_raw_import_id}`
+          f4Counts[historicalId] = (f4Counts[historicalId] || 0) + 1
+          if (f4.id) countedF4Ids.add(f4.id)
+        }
+        // If somehow both are set (shouldn't happen with query filters, but handle gracefully)
+        else if (f4.project_id && f4.activities_raw_import_id) {
+          // Count only for portal project to avoid double counting
+          f4Counts[f4.project_id] = (f4Counts[f4.project_id] || 0) + 1
+          if (f4.id) countedF4Ids.add(f4.id)
+        }
+      }
+      
+      // Count F5 reports by project_id (F5 doesn't support historical projects yet)
+      for (const f5 of (f5Data || [])) {
+        if (f5.project_id) {
+          f5Counts[f5.project_id] = (f5Counts[f5.project_id] || 0) + 1
+        }
+      }
+      
+      setPortalF4Counts(f4Counts)
+      setPortalF5Counts(f5Counts)
+    } catch (e) {
+      console.error('Failed to load portal report counts', e)
+    }
   }
 
   const fetchGrants = async () => {
@@ -788,41 +853,51 @@ export default function ProjectManagement() {
                                   setUploadF4Open(true);
                                 }
                               }}
-                            >F4 {r.f4_count > 0 ? `(${r.f4_count})` : ''}</Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="bg-blue-50 hover:bg-blue-100"
-                              onClick={async (e)=>{ 
-                                e.stopPropagation(); 
-                                const projectId = r.project_id || null;
-                                setSelectedProjectId(projectId);
-                                // Load existing F5 reports for this project
-                                if (projectId) {
-                                  setLoadingReports(true);
-                                  try {
-                                    const res = await fetch('/api/f5/list');
-                                    const data = await res.json();
-                                    const projectF5s = (data || []).filter((f5: any) => f5.project_id === projectId);
-                                    setF5Reports(projectF5s);
-                                    if (projectF5s.length > 0) {
-                                      // If reports exist, show list (edit only)
-                                      setF5ListOpen(true);
-                                    } else {
-                                      // If no reports, allow upload
+                            >F4 {(() => {
+                              // For historical projects, only show count if there are portal uploads
+                              if (r.is_historical) {
+                                const portalCount = portalF4Counts[r.project_id] || 0
+                                return portalCount > 0 ? `(${portalCount})` : ''
+                              }
+                              // For portal projects, use the count from rollup
+                              return r.f4_count > 0 ? `(${r.f4_count})` : ''
+                            })()}</Button>
+                            {!r.is_historical && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="bg-blue-50 hover:bg-blue-100"
+                                onClick={async (e)=>{ 
+                                  e.stopPropagation();
+                                  const projectId = r.project_id || null;
+                                  setSelectedProjectId(projectId);
+                                  // Load existing F5 reports for this project
+                                  if (projectId) {
+                                    setLoadingReports(true);
+                                    try {
+                                      const res = await fetch('/api/f5/list');
+                                      const data = await res.json();
+                                      const projectF5s = (data || []).filter((f5: any) => f5.project_id === projectId);
+                                      setF5Reports(projectF5s);
+                                      if (projectF5s.length > 0) {
+                                        // If reports exist, show list (edit only)
+                                        setF5ListOpen(true);
+                                      } else {
+                                        // If no reports, allow upload
+                                        setUploadF5Open(true);
+                                      }
+                                    } catch (err) {
+                                      console.error(err);
                                       setUploadF5Open(true);
+                                    } finally {
+                                      setLoadingReports(false);
                                     }
-                                  } catch (err) {
-                                    console.error(err);
+                                  } else {
                                     setUploadF5Open(true);
-                                  } finally {
-                                    setLoadingReports(false);
                                   }
-                                } else {
-                                  setUploadF5Open(true);
-                                }
-                              }}
-                            >F5 {r.f5_count > 0 ? `(${r.f5_count})` : ''}</Button>
+                                }}
+                              >F5 {r.f5_count > 0 ? `(${r.f5_count})` : ''}</Button>
+                            )}
                           </div>
                         </TableCell>
                     )}

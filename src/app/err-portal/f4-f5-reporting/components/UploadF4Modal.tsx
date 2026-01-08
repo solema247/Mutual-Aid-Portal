@@ -132,9 +132,25 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
     } catch {}
   }, [open])
 
+  // Initialize all input values when modal opens to prevent uncontrolled input warnings
+  useEffect(() => {
+    if (!open) return
+    
+    // Ensure all string inputs have defined values (empty strings) when modal opens
+    // This prevents React warnings about uncontrolled inputs
+    if (typeof reportDate !== 'string') setReportDate('')
+    if (typeof projectId !== 'string') setProjectId('')
+    if (typeof selectedState !== 'string') setSelectedState('')
+    if (typeof selectedRoomId !== 'string') setSelectedRoomId('')
+  }, [open])
+
   // Auto-select project when initialProjectId is provided
   useEffect(() => {
-    if (!open || !initialProjectId) return
+    if (!open || !initialProjectId) {
+      // Ensure projectId is cleared if modal opens without initialProjectId
+      if (!isRestoringRef.current) setProjectId('')
+      return
+    }
     
     // Set projectId immediately to avoid race conditions
     const isHistorical = String(initialProjectId).startsWith('historical_')
@@ -455,14 +471,14 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
       setRawOcr(parseJson.summaryDraft?.raw_ocr || '')
       setAiOutput(parseJson.aiOutput || null)
       setExpensesDraft((parseJson.expensesDraft || []).map((ex: any) => ({
-        expense_activity: ex.expense_activity ?? '',
-        expense_description: ex.expense_description ?? '',
-        expense_amount_sdg: ex.expense_amount_sdg ?? null,
-        expense_amount: ex.expense_amount ?? null,
-        payment_date: ex.payment_date ?? '',
-        payment_method: ex.payment_method || 'Bank Transfer',
-        receipt_no: ex.receipt_no ?? '',
-        seller: ex.seller ?? '',
+        expense_activity: ex.expense_activity != null ? String(ex.expense_activity) : '',
+        expense_description: ex.expense_description != null ? String(ex.expense_description) : '',
+        expense_amount_sdg: ex.expense_amount_sdg != null ? Number(ex.expense_amount_sdg) : null,
+        expense_amount: ex.expense_amount != null ? Number(ex.expense_amount) : null,
+        payment_date: ex.payment_date != null ? String(ex.payment_date) : '',
+        payment_method: ex.payment_method != null ? String(ex.payment_method) : 'Bank Transfer',
+        receipt_no: ex.receipt_no != null ? String(ex.receipt_no) : '',
+        seller: ex.seller != null ? String(ex.seller) : '',
         is_draft: ex.is_draft ?? true
       })))
       
@@ -690,7 +706,7 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
                 </div>
               <div>
                 <Label>{t('f4.preview.labels.report_date')}</Label>
-                <Input className="select-text" type="date" value={summaryDraft?.report_date ?? reportDate ?? ''} onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), report_date: e.target.value }))} />
+                <Input className="select-text" type="date" value={summaryDraft?.report_date || reportDate || ''} onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), report_date: e.target.value }))} />
               </div>
               </div>
               <div>
@@ -702,7 +718,7 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
                 <Input 
                   className="select-text selection:bg-blue-200 selection:text-blue-900 dark:selection:bg-blue-800 dark:selection:text-blue-100" 
                   style={selectableInputStyle}
-                  value={String(summaryDraft?.beneficiaries ?? projectMeta?.beneficiaries ?? '')} 
+                  value={summaryDraft?.beneficiaries || projectMeta?.beneficiaries || ''} 
                   onMouseDown={(e) => {
                     const input = e.target as HTMLInputElement
                     // Store the mouse down position for drag selection
@@ -1074,7 +1090,7 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
                 <Input 
                   className="select-text selection:bg-blue-200 selection:text-blue-900 dark:selection:bg-blue-800 dark:selection:text-blue-100" 
                   style={selectableInputStyle}
-                  value={summaryDraft?.excess_expenses ?? ''} 
+                  value={summaryDraft?.excess_expenses != null ? String(summaryDraft.excess_expenses) : ''} 
                   onMouseDown={(e) => {
                     // Removed logging('Excess Expenses onMouseDown', e.target as HTMLInputElement, e)
                   }}
@@ -1098,7 +1114,7 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
                 <Input 
                   className="select-text selection:bg-blue-200 selection:text-blue-900 dark:selection:bg-blue-800 dark:selection:text-blue-100" 
                   style={selectableInputStyle}
-                  value={summaryDraft?.surplus_use ?? ''} 
+                  value={summaryDraft?.surplus_use != null ? String(summaryDraft.surplus_use) : ''} 
                   onMouseDown={(e) => {
                     // Removed logging('Surplus Use onMouseDown', e.target as HTMLInputElement, e)
                   }}
@@ -1116,7 +1132,7 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
                 <Input 
                   className="select-text selection:bg-blue-200 selection:text-blue-900 dark:selection:bg-blue-800 dark:selection:text-blue-100" 
                   style={selectableInputStyle}
-                  value={summaryDraft?.lessons ?? ''} 
+                  value={summaryDraft?.lessons != null ? String(summaryDraft.lessons) : ''} 
                   onMouseDown={(e) => {
                     // Removed logging('Lessons Learned onMouseDown', e.target as HTMLInputElement, e)
                   }}
@@ -1134,7 +1150,7 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
                 <Input 
                   className="select-text selection:bg-blue-200 selection:text-blue-900 dark:selection:bg-blue-800 dark:selection:text-blue-100" 
                   style={selectableInputStyle}
-                  value={summaryDraft?.training ?? ''} 
+                  value={summaryDraft?.training != null ? String(summaryDraft.training) : ''} 
                   onMouseDown={(e) => {
                     // Removed logging('Training Needs onMouseDown', e.target as HTMLInputElement, e)
                   }}
