@@ -12,7 +12,7 @@ export async function GET(
 
     const { data: summary, error } = await supabase
       .from('err_summary')
-      .select('*, err_projects (err_id, state, project_objectives, emergency_rooms (name, name_ar, err_code))')
+      .select('*, err_projects (err_id, state, project_objectives, emergency_rooms (name, name_ar, err_code)), activities_raw_import (id, "ERR CODE", "ERR Name", "State", "Description of ERRs activity")')
       .eq('id', summaryId)
       .single()
     if (error) throw error
@@ -21,7 +21,7 @@ export async function GET(
       supabase.from('err_summary_attachments').select('*').eq('summary_id', summaryId)
     ])
 
-    // Prefer expenses linked to this summary; fall back to project-level if summary_id not present
+    // Prefer expenses linked to this summary; fall back to project-level or activities_raw_import-level if summary_id not present
     let expenses: any[] | null = null
     const { data: expBySummary } = await supabase
       .from('err_expense')
@@ -30,11 +30,22 @@ export async function GET(
     if (Array.isArray(expBySummary) && expBySummary.length > 0) {
       expenses = expBySummary
     } else {
-      const { data: expByProject } = await supabase
-        .from('err_expense')
-        .select('*')
-        .eq('project_id', summary?.project_id || '')
-      expenses = expByProject || []
+      // Try project_id first (portal projects)
+      if (summary?.project_id) {
+        const { data: expByProject } = await supabase
+          .from('err_expense')
+          .select('*')
+          .eq('project_id', summary.project_id)
+        expenses = expByProject || []
+      }
+      // If no expenses found and this is a historical project, try activities_raw_import_id
+      if ((!expenses || expenses.length === 0) && summary?.activities_raw_import_id) {
+        const { data: expByHistorical } = await supabase
+          .from('err_expense')
+          .select('*')
+          .eq('activities_raw_import_id', summary.activities_raw_import_id)
+        expenses = expByHistorical || []
+      }
     }
 
     // receipts grouped by expense

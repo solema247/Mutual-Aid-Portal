@@ -135,20 +135,77 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
   // Auto-select project when initialProjectId is provided
   useEffect(() => {
     if (!open || !initialProjectId) return
+    
+    // Set projectId immediately to avoid race conditions
+    const isHistorical = String(initialProjectId).startsWith('historical_')
+    if (isHistorical) {
+      setProjectId(initialProjectId)
+    } else {
+      setProjectId(initialProjectId)
+    }
+    
     ;(async () => {
       try {
-        const { data: projectData, error } = await supabase
-          .from('err_projects')
-          .select('id, state, emergency_room_id, emergency_rooms (id, name, name_ar, err_code)')
-          .eq('id', initialProjectId)
-          .eq('status', 'active')
-          .single()
-        
-        if (error || !projectData) return
-        
-        setSelectedState(projectData.state || '')
-        setSelectedRoomId(projectData.emergency_room_id || '')
-        setProjectId(projectData.id)
+        if (isHistorical) {
+          // Load historical project from activities_raw_import
+          const realUuid = String(initialProjectId).replace('historical_', '')
+          const { data: historicalData, error } = await supabase
+            .from('activities_raw_import')
+            .select('id, "State", "ERR CODE", "ERR Name", "USD", "Description of ERRs activity", "Target (Ind.)", "Target (Fam.)"')
+            .eq('id', realUuid)
+            .single()
+          
+          if (error || !historicalData) {
+            console.error('Failed to load historical project:', error)
+            setProjectMeta(null)
+            return
+          }
+          
+          setSelectedState(historicalData['State'] || '')
+          
+          // Set projectMeta with all necessary fields
+          // Check for field name variations like the rollup API does
+          const dataAny = historicalData as any
+          const usd = Number(dataAny['USD'] || dataAny['usd'] || dataAny.USD || 0)
+          const errCode = dataAny['ERR CODE'] || dataAny['ERR Name'] || dataAny['err_code'] || dataAny['err_name'] || ''
+          const description = historicalData['Description of ERRs activity'] || ''
+          const targetInd = historicalData['Target (Ind.)'] || null
+          const targetFam = historicalData['Target (Fam.)'] || null
+          
+          console.log('Initial project load (historical) - loaded data:', {
+            usd,
+            errCode,
+            description: description.substring(0, 50),
+            targetInd,
+            targetFam,
+            rawData: historicalData
+          })
+          
+          setProjectMeta({
+            roomLabel: errCode,
+            project_objectives: description,
+            beneficiaries: targetInd || targetFam ? `${targetInd || 0} individuals, ${targetFam || 0} families` : '',
+            total_grant_from_project: usd
+          })
+          // projectId already set above
+        } else {
+          // Load regular portal project
+          const { data: projectData, error } = await supabase
+            .from('err_projects')
+            .select('id, state, emergency_room_id, emergency_rooms (id, name, name_ar, err_code)')
+            .eq('id', initialProjectId)
+            .eq('status', 'active')
+            .single()
+          
+          if (error || !projectData) {
+            console.error('Failed to load portal project:', error)
+            return
+          }
+          
+          setSelectedState(projectData.state || '')
+          setSelectedRoomId(projectData.emergency_room_id || '')
+          // projectId already set above
+        }
       } catch (e) {
         console.error('Failed to load initial project', e)
       }
@@ -256,59 +313,125 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
   // Load selected project meta
   useEffect(() => {
     const loadProject = async () => {
-      if (!projectId) { setProjectMeta(null); return }
-      const { data, error } = await supabase
-        .from('err_projects')
-        .select(`
-          id,
-          project_objectives,
-          intended_beneficiaries,
-          estimated_beneficiaries,
-          expenses,
-          planned_activities,
-          emergency_rooms (err_code, name, name_ar)
-        `)
-        .eq('id', projectId)
-        .single()
-      if (error) { console.error('loadProject meta', error); setProjectMeta(null); return }
-      // Calculate total from planned_activities (for ERR App submissions)
-      const plannedArr = Array.isArray((data as any)?.planned_activities)
-        ? (data as any).planned_activities
-        : (typeof (data as any)?.planned_activities === 'string' ? JSON.parse((data as any)?.planned_activities || '[]') : [])
-      const fromPlanned = (Array.isArray(plannedArr) ? plannedArr : []).reduce((s: number, pa: any) => {
-        const inner = Array.isArray(pa?.expenses) ? pa.expenses : []
-        return s + inner.reduce((ss: number, ie: any) => ss + (Number(ie.total) || 0), 0)
-      }, 0)
+      if (!projectId) { 
+        // Only clear projectMeta if we don't have initialProjectId either
+        // This preserves projectMeta for historical projects loaded via initialProjectId
+        if (!initialProjectId) {
+          setProjectMeta(null)
+        }
+        return 
+      }
+      
+      // Skip if this is being loaded from initialProjectId (let that useEffect handle it)
+      // This prevents race conditions where both useEffects try to load the same data
+      if (initialProjectId && String(projectId) === String(initialProjectId)) {
+        // The initialProjectId useEffect will handle loading, so we skip here
+        // But make sure projectMeta is preserved - don't clear it
+        return
+      }
+      
+      const isHistorical = String(projectId).startsWith('historical_')
+      
+      if (isHistorical) {
+        // Load historical project metadata from activities_raw_import
+        const realUuid = String(projectId).replace('historical_', '')
+        const { data, error } = await supabase
+          .from('activities_raw_import')
+          .select('id, "ERR CODE", "ERR Name", "USD", "Description of ERRs activity", "Target (Ind.)", "Target (Fam.)"')
+          .eq('id', realUuid)
+          .single()
+        
+        if (error) { 
+          console.error('loadProject meta (historical) - error:', error)
+          console.error('loadProject meta (historical) - realUuid:', realUuid)
+          setProjectMeta(null)
+          return
+        }
+        
+        if (!data) {
+          console.error('loadProject meta (historical) - no data returned for UUID:', realUuid)
+          setProjectMeta(null)
+          return
+        }
+        
+        // Check for field name variations like the rollup API does
+        const dataAny = data as any
+        const usd = Number(dataAny['USD'] || dataAny['usd'] || dataAny.USD || 0)
+        const errCode = dataAny['ERR CODE'] || dataAny['ERR Name'] || dataAny['err_code'] || dataAny['err_name'] || ''
+        const description = data['Description of ERRs activity'] || ''
+        const targetInd = data['Target (Ind.)'] || null
+        const targetFam = data['Target (Fam.)'] || null
+        
+        console.log('loadProject meta (historical) - loaded data:', {
+          usd,
+          errCode,
+          description: description.substring(0, 50),
+          targetInd,
+          targetFam
+        })
+        
+        setProjectMeta({
+          roomLabel: errCode,
+          project_objectives: description,
+          beneficiaries: targetInd || targetFam ? `${targetInd || 0} individuals, ${targetFam || 0} families` : '',
+          total_grant_from_project: usd
+        })
+      } else {
+        // Load regular portal project metadata
+        const { data, error } = await supabase
+          .from('err_projects')
+          .select(`
+            id,
+            project_objectives,
+            intended_beneficiaries,
+            estimated_beneficiaries,
+            expenses,
+            planned_activities,
+            emergency_rooms (err_code, name, name_ar)
+          `)
+          .eq('id', projectId)
+          .single()
+        if (error) { console.error('loadProject meta', error); setProjectMeta(null); return }
+        // Calculate total from planned_activities (for ERR App submissions)
+        const plannedArr = Array.isArray((data as any)?.planned_activities)
+          ? (data as any).planned_activities
+          : (typeof (data as any)?.planned_activities === 'string' ? JSON.parse((data as any)?.planned_activities || '[]') : [])
+        const fromPlanned = (Array.isArray(plannedArr) ? plannedArr : []).reduce((s: number, pa: any) => {
+          const inner = Array.isArray(pa?.expenses) ? pa.expenses : []
+          return s + inner.reduce((ss: number, ie: any) => ss + (Number(ie.total) || 0), 0)
+        }, 0)
 
-      // Calculate total from expenses (for mutual_aid_portal submissions)
-      const expensesArr = Array.isArray((data as any)?.expenses)
-        ? (data as any).expenses
-        : (typeof (data as any)?.expenses === 'string' ? JSON.parse((data as any)?.expenses || '[]') : [])
-      const fromExpenses = (Array.isArray(expensesArr) ? expensesArr : []).reduce((s: number, ex: any) => {
-        return s + (Number(ex.total_cost) || 0)
-      }, 0)
+        // Calculate total from expenses (for mutual_aid_portal submissions)
+        const expensesArr = Array.isArray((data as any)?.expenses)
+          ? (data as any).expenses
+          : (typeof (data as any)?.expenses === 'string' ? JSON.parse((data as any)?.expenses || '[]') : [])
+        const fromExpenses = (Array.isArray(expensesArr) ? expensesArr : []).reduce((s: number, ex: any) => {
+          return s + (Number(ex.total_cost) || 0)
+        }, 0)
 
-      // Use expenses total if it exists (mutual_aid_portal), otherwise use planned_activities total (ERR App)
-      const grantSum = fromExpenses > 0 ? fromExpenses : fromPlanned
-      const room = (data as any)?.emergency_rooms
-      const roomLabel = room?.err_code || room?.name_ar || room?.name || ''
-      setProjectMeta({
-        roomLabel,
-        project_objectives: (data as any)?.project_objectives || '',
-        beneficiaries: (data as any)?.intended_beneficiaries || (data as any)?.estimated_beneficiaries || '',
-        total_grant_from_project: grantSum
-      })
+        // Use expenses total if it exists (mutual_aid_portal), otherwise use planned_activities total (ERR App)
+        const grantSum = fromExpenses > 0 ? fromExpenses : fromPlanned
+        const room = (data as any)?.emergency_rooms
+        const roomLabel = room?.err_code || room?.name_ar || room?.name || ''
+        setProjectMeta({
+          roomLabel,
+          project_objectives: (data as any)?.project_objectives || '',
+          beneficiaries: (data as any)?.intended_beneficiaries || (data as any)?.estimated_beneficiaries || '',
+          total_grant_from_project: grantSum
+        })
+      }
     }
     loadProject()
-  }, [projectId])
+  }, [projectId, initialProjectId])
 
   const handleUploadAndParse = async () => {
-    if (!projectId || !file) return
+    const actualProjectId = projectId || initialProjectId
+    if (!actualProjectId || !file) return
     setIsLoading(true)
     try {
       const ext = (file.name.split('.').pop() || 'pdf').toLowerCase()
       // init temp key
-      const initRes = await fetch('/api/f4/upload/init', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ project_id: projectId, ext }) })
+      const initRes = await fetch('/api/f4/upload/init', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ project_id: actualProjectId, ext }) })
       const initJson = await initRes.json()
       if (!initRes.ok) throw new Error(initJson.error || 'Init failed')
       const key = initJson.file_key_temp as string
@@ -323,7 +446,7 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
         setFileUrl(signedUrl.signedUrl)
       }
 
-      const parseRes = await fetch('/api/f4/parse', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ project_id: projectId, file_key_temp: key }) })
+      const parseRes = await fetch('/api/f4/parse', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ project_id: actualProjectId, file_key_temp: key }) })
       const text = await parseRes.text()
       let parseJson: any
       try { parseJson = JSON.parse(text) } catch { throw new Error(`Parse failed: ${parseRes.status} ${parseRes.statusText} — ${text.slice(0, 200)}`) }
@@ -332,13 +455,48 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
       setRawOcr(parseJson.summaryDraft?.raw_ocr || '')
       setAiOutput(parseJson.aiOutput || null)
       setExpensesDraft((parseJson.expensesDraft || []).map((ex: any) => ({
-        ...ex,
-        // Ensure both SDG and USD amounts are preserved
+        expense_activity: ex.expense_activity ?? '',
+        expense_description: ex.expense_description ?? '',
         expense_amount_sdg: ex.expense_amount_sdg ?? null,
         expense_amount: ex.expense_amount ?? null,
-        // default payment method so it persists even if user doesn't touch the select
-        payment_method: ex.payment_method || 'Bank Transfer'
+        payment_date: ex.payment_date ?? '',
+        payment_method: ex.payment_method || 'Bank Transfer',
+        receipt_no: ex.receipt_no ?? '',
+        seller: ex.seller ?? '',
+        is_draft: ex.is_draft ?? true
       })))
+      
+      // Preserve projectMeta for historical projects - reload if needed
+      const isHistorical = String(actualProjectId).startsWith('historical_')
+      if (isHistorical && !projectMeta) {
+        console.log('projectMeta is missing after OCR, reloading for historical project:', actualProjectId)
+        const realUuid = String(actualProjectId).replace('historical_', '')
+        const { data: histData, error: histError } = await supabase
+          .from('activities_raw_import')
+          .select('id, "ERR CODE", "ERR Name", "USD", "Description of ERRs activity", "Target (Ind.)", "Target (Fam.)"')
+          .eq('id', realUuid)
+          .single()
+        
+        if (!histError && histData) {
+          const dataAny = histData as any
+          const usd = Number(dataAny['USD'] || dataAny['usd'] || dataAny.USD || 0)
+          const errCode = dataAny['ERR CODE'] || dataAny['ERR Name'] || dataAny['err_code'] || dataAny['err_name'] || ''
+          const description = histData['Description of ERRs activity'] || ''
+          const targetInd = histData['Target (Ind.)'] || null
+          const targetFam = histData['Target (Fam.)'] || null
+          
+          setProjectMeta({
+            roomLabel: errCode,
+            project_objectives: description,
+            beneficiaries: targetInd || targetFam ? `${targetInd || 0} individuals, ${targetFam || 0} families` : '',
+            total_grant_from_project: usd
+          })
+          console.log('Reloaded projectMeta after OCR:', { usd, errCode })
+        }
+      } else {
+        console.log('projectMeta after OCR:', projectMeta)
+      }
+      
       setStep('preview')
     } catch (e) {
       console.error(e)
@@ -353,8 +511,9 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
       console.warn('Cannot save while restoring state')
       return
     }
-    if (!projectId || !summaryDraft) {
-      console.warn('Missing required fields:', { projectId, hasSummaryDraft: !!summaryDraft })
+    const actualProjectId = projectId || initialProjectId
+    if (!actualProjectId || !summaryDraft) {
+      console.warn('Missing required fields:', { projectId: actualProjectId, hasSummaryDraft: !!summaryDraft })
       return
     }
     setIsLoading(true)
@@ -371,7 +530,7 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
         total_expenses_sdg: totalExpensesSDG,
         remainder: remainderUSD
       }
-      const res = await fetch('/api/f4/save', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ project_id: projectId, summary: summaryToSave, expenses: expensesDraft, file_key_temp: tempKey }) })
+      const res = await fetch('/api/f4/save', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ project_id: actualProjectId, summary: summaryToSave, expenses: expensesDraft, file_key_temp: tempKey }) })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error || 'Save failed')
       try { window.localStorage.removeItem('err_minimized_modal') } catch {}
@@ -443,7 +602,7 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
         <DialogHeader>
           <DialogTitle>{t('f4.modal.title')}</DialogTitle>
         </DialogHeader>
-        {step === 'select' ? (
+        {step === 'select' && !initialProjectId ? (
           <div className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <div className="space-y-1">
@@ -495,7 +654,31 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
             </div>
           </div>
         ) : (
+          // When project is pre-selected (from project management), show simplified file upload form
+          step === 'select' && initialProjectId ? (
+            <div className="space-y-4">
+              <div className="space-y-1">
+                <Label>{t('f4.modal.report_date')}</Label>
+                <Input type="date" value={reportDate} onChange={(e) => setReportDate(e.target.value)} />
+              </div>
+              <div className="space-y-1">
+                <Label>{t('f4.modal.summary_file')}</Label>
+                <Input type="file" accept=".pdf,image/*" onChange={(e) => setFile(e.target.files?.[0] || null)} />
+                <div className="text-xs text-muted-foreground">{t('f4.modal.choose_file_hint')}</div>
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => onOpenChange(false)}>{t('f4.modal.cancel')}</Button>
+                <Button onClick={handleUploadAndParse} disabled={(!projectId && !initialProjectId) || !file || isLoading}>{isLoading ? 'Processing…' : t('f4.modal.process')}</Button>
+              </div>
+            </div>
+          ) : step === 'preview' ? (
           <div className="space-y-6 select-text">
+            {/* Debug: Log projectMeta when preview renders */}
+            {(() => {
+              console.log('Preview step rendering - projectMeta:', projectMeta)
+              console.log('Preview step rendering - projectId:', projectId, 'initialProjectId:', initialProjectId)
+              return null
+            })()}
             {/* Form Content */}
             <div className="space-y-6">
             {/* Summary Header */}
@@ -507,7 +690,7 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
                 </div>
               <div>
                 <Label>{t('f4.preview.labels.report_date')}</Label>
-                <Input className="select-text" type="date" value={summaryDraft?.report_date ?? reportDate} onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), report_date: e.target.value }))} />
+                <Input className="select-text" type="date" value={summaryDraft?.report_date ?? reportDate ?? ''} onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), report_date: e.target.value }))} />
               </div>
               </div>
               <div>
@@ -519,7 +702,7 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
                 <Input 
                   className="select-text selection:bg-blue-200 selection:text-blue-900 dark:selection:bg-blue-800 dark:selection:text-blue-100" 
                   style={selectableInputStyle}
-                  value={summaryDraft?.beneficiaries ?? projectMeta?.beneficiaries ?? ''} 
+                  value={String(summaryDraft?.beneficiaries ?? projectMeta?.beneficiaries ?? '')} 
                   onMouseDown={(e) => {
                     const input = e.target as HTMLInputElement
                     // Store the mouse down position for drag selection
@@ -578,7 +761,7 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
                     className="select-text selection:bg-blue-200 selection:text-blue-900 dark:selection:bg-blue-800 dark:selection:text-blue-100" 
                     style={selectableInputStyle}
                     type="number" 
-                    value={fxRate ?? ''} 
+                    value={fxRate != null ? String(fxRate) : ''} 
                     onMouseDown={(e) => {
                       // Removed logging('FX Rate onMouseDown', e.target as HTMLInputElement, e)
                     }}
@@ -632,7 +815,7 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
                     receipt_no: '',
                     seller: '',
                     is_draft: true
-                  }]))}
+                  } as any]))}
                 >{t('f4.preview.expenses.add')}</Button>
               </div>
               <div className="border rounded overflow-hidden select-text">
@@ -710,7 +893,7 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
                               style={selectableInputStyle}
                               type="number" 
                               placeholder="SDG" 
-                              value={ex.expense_amount_sdg ?? ''} 
+                              value={ex.expense_amount_sdg != null ? String(ex.expense_amount_sdg) : ''} 
                               onMouseDown={(e) => {
                                 // Removed logging(`Expense ${idx} SDG Amount onMouseDown`, e.target as HTMLInputElement, e)
                               }}
@@ -739,7 +922,7 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
                               style={selectableInputStyle}
                               type="number" 
                               placeholder="USD" 
-                              value={ex.expense_amount ?? ''} 
+                              value={ex.expense_amount != null ? String(ex.expense_amount) : ''} 
                               onMouseDown={(e) => {
                                 // Removed logging(`Expense ${idx} USD Amount onMouseDown`, e.target as HTMLInputElement, e)
                               }}
@@ -871,7 +1054,7 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
               </div>
               <div>
                 <Label>{t('f4.preview.financials.remainder')} (USD)</Label>
-                <Input className="select-text" type="number" value={(projectMeta?.total_grant_from_project || 0) - expensesDraft.reduce((s, ex) => s + (Number(ex.expense_amount) || 0), 0)} readOnly />
+                <Input className="select-text" type="number" value={String((projectMeta?.total_grant_from_project || 0) - expensesDraft.reduce((s, ex) => s + (Number(ex.expense_amount) || 0), 0))} readOnly />
               </div>
               <div>
                 <Label>{t('f4.preview.financials.total_other_sources')}</Label>
@@ -879,7 +1062,7 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
                   className="select-text selection:bg-blue-200 selection:text-blue-900 dark:selection:bg-blue-800 dark:selection:text-blue-100" 
                   style={selectableInputStyle}
                   type="number" 
-                  value={summaryDraft?.total_other_sources ?? ''} 
+                  value={summaryDraft?.total_other_sources != null ? String(summaryDraft.total_other_sources) : ''} 
                   onFocus={(e) => {
                     // Removed logging('Total Other Sources onFocus', e.target as HTMLInputElement, e)
                   }}
@@ -967,7 +1150,7 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
             </div>
 
             <div className="flex justify-between">
-              <Button variant="outline" onClick={()=>setStep('select')}>{t('f4.preview.buttons.back')}</Button>
+              <Button variant="outline" onClick={()=>setStep('select')} disabled={!!initialProjectId}>{t('f4.preview.buttons.back')}</Button>
               <Button onClick={handleSave} disabled={isLoading || isRestoring}>{isLoading ? t('f4.preview.buttons.saving') : t('f4.preview.buttons.save')}</Button>
             </div>
             </div>
@@ -1035,6 +1218,7 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
               </div>
             </CollapsibleRow>
           </div>
+          ) : null
         )}
       </DialogContent>
     </Dialog>

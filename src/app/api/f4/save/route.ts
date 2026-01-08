@@ -8,22 +8,52 @@ export async function POST(req: Request) {
     const { project_id, summary, expenses, file_key_temp, uploaded_by } = await req.json()
     if (!project_id || !summary) return NextResponse.json({ error: 'project_id and summary required' }, { status: 400 })
 
+    // Check if this is a historical project from activities_raw_import
+    const isHistorical = String(project_id).startsWith('historical_')
+    let activities_raw_import_id: string | null = null
+    let actual_project_id: string | null = null
+
     // Fetch project context (ERR, state, human project code)
     let err_id: string | null = null
     let state_name: string | null = null
     let grant_serial_id: string | null = null
     let err_code: string | null = null
-    try {
-      const { data: prj } = await supabase
-        .from('err_projects')
-        .select('err_id, state, grant_serial_id, emergency_rooms ( err_code )')
-        .eq('id', project_id)
-        .single()
-      err_id = (prj as any)?.err_id || null
-      state_name = (prj as any)?.state || null
-      grant_serial_id = (prj as any)?.grant_serial_id || null
-      err_code = (prj as any)?.emergency_rooms?.err_code || null
-    } catch {}
+    
+    if (isHistorical) {
+      // Extract real UUID from historical project ID
+      const realUuid = String(project_id).replace('historical_', '')
+      activities_raw_import_id = realUuid
+      actual_project_id = null // Historical projects don't have project_id
+      
+      try {
+        const { data: historicalPrj } = await supabase
+          .from('activities_raw_import')
+          .select('"ERR CODE","ERR Name","State","Serial Number"')
+          .eq('id', realUuid)
+          .single()
+        
+        if (historicalPrj) {
+          err_code = historicalPrj['ERR CODE'] || historicalPrj['ERR Name'] || null
+          err_id = err_code
+          state_name = historicalPrj['State'] || null
+          grant_serial_id = historicalPrj['Serial Number'] || null
+        }
+      } catch {}
+    } else {
+      // Regular portal project
+      actual_project_id = project_id
+      try {
+        const { data: prj } = await supabase
+          .from('err_projects')
+          .select('err_id, state, grant_serial_id, emergency_rooms ( err_code )')
+          .eq('id', project_id)
+          .single()
+        err_id = (prj as any)?.err_id || null
+        state_name = (prj as any)?.state || null
+        grant_serial_id = (prj as any)?.grant_serial_id || null
+        err_code = (prj as any)?.emergency_rooms?.err_code || null
+      } catch {}
+    }
 
     // Detect language and translate if needed
     const sourceLanguage = summary.language || 'en'
@@ -36,7 +66,8 @@ export async function POST(req: Request) {
     const { data: inserted, error: insErr } = await supabase
       .from('err_summary')
       .insert({
-        project_id,
+        project_id: actual_project_id,
+        activities_raw_import_id: activities_raw_import_id,
         err_id,
         report_date: translatedSummary.report_date || null,
         total_grant: translatedSummary.total_grant ?? null,
@@ -102,7 +133,8 @@ export async function POST(req: Request) {
       console.log('F4 expenses translation completed. Original text preserved for', expensesOriginalText.length, 'expenses')
 
       const payload = translatedExpenses.map((e: any, index: number) => ({
-        project_id,
+        project_id: actual_project_id,
+        activities_raw_import_id: activities_raw_import_id,
         summary_id,
         expense_activity: e.expense_activity || null,
         expense_description: e.expense_description || null,

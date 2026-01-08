@@ -121,10 +121,58 @@ export async function GET(request: Request) {
 
     const projectIds = (projects || []).map((p:any)=> p.id)
 
-    // Summaries for actuals
+    // ===== Fetch ALL historical data from activities_raw_import FIRST =====
+    // This ensures we have all data before filtering, making it more stable
+    const allHistoricalData = await fetchAllRows(
+      supabase,
+      'activities_raw_import',
+      'id,"ERR CODE","ERR Name","State","Project Donor","USD","MOU Signed","F4","F5","Date Report Completed","Serial Number","Target (Ind.)","Target (Fam.)"'
+    )
+
+    // Filter historical data by state AFTER normalization (like Pool Overview By State)
+    let filteredHistoricalData = allHistoricalData || []
+    if (allowedStateNames !== null && allowedStateNames.length > 0) {
+      filteredHistoricalData = (allHistoricalData || []).filter((row: any) => {
+        const rawState = row['State'] || row['state'] || row.State
+        const normalizedState = normalizeActivitiesStateName(rawState)
+        return allowedStateNames.includes(normalizedState)
+      })
+    }
+
+    // Create a map of historical project IDs to normalized states for quick lookup
+    const historicalStateMap = new Map<string, string>()
+    for (const row of filteredHistoricalData) {
+      if (row.id) {
+        const rawState = row['State'] || row['state'] || row.State
+        const normalizedState = normalizeActivitiesStateName(rawState)
+        historicalStateMap.set(row.id, normalizedState)
+      }
+    }
+
+    // Summaries for actuals (portal projects)
     let sq = supabase.from('err_summary').select('project_id, total_expenses, report_date')
     if (projectIds.length) sq = sq.in('project_id', projectIds)
     const { data: summaries } = await sq
+    
+    // Get historical F4 summaries (linked to activities_raw_import)
+    // Fetch all historical summaries first (no filtering at query level)
+    const allHistoricalSummaries = await fetchAllRows(
+      supabase,
+      'err_summary',
+      'activities_raw_import_id, total_expenses, report_date'
+    ).then((data: any[]) => (data || []).filter((s: any) => s.activities_raw_import_id != null))
+    
+    // Filter historical summaries by state AFTER normalization (using the state map we created)
+    let filteredHistoricalSummaries = allHistoricalSummaries || []
+    if (allowedStateNames !== null && allowedStateNames.length > 0 && filteredHistoricalSummaries.length > 0) {
+      filteredHistoricalSummaries = filteredHistoricalSummaries.filter((s: any) => {
+        const normalizedState = historicalStateMap.get(s.activities_raw_import_id)
+        return normalizedState && allowedStateNames.includes(normalizedState)
+      })
+    }
+    
+    // Combine portal and historical summaries for processing
+    const allSummaries = [...(summaries || []), ...filteredHistoricalSummaries]
 
     // F5 reports for program reporting - get reach data for totals
     let f5q = supabase.from('err_program_report').select('id, project_id, report_date')
@@ -146,10 +194,10 @@ export async function GET(request: Request) {
     const totalIndividuals = f5ReachData.reduce((sum, r) => sum + (Number(r.individual_count) || 0), 0)
     const totalFamilies = f5ReachData.reduce((sum, r) => sum + (Number(r.household_count) || 0), 0)
 
-    // Index summaries by project
+    // Index summaries by project (portal) or activities_raw_import_id (historical)
     const sumByProject = new Map<string, { actual: number; count: number; last: string | null }>()
-    for (const s of (summaries || [])) {
-      const pid = (s as any).project_id
+    for (const s of allSummaries) {
+      const pid = (s as any).project_id || `historical_${(s as any).activities_raw_import_id}`
       const prev = sumByProject.get(pid) || { actual: 0, count: 0, last: null }
       const actual = prev.actual + (Number((s as any).total_expenses) || 0)
       const count = prev.count + 1
@@ -197,21 +245,8 @@ export async function GET(request: Request) {
       }
     })
 
-    // ===== Fetch and process historical data from activities_raw_import =====
-    // Fetch all historical data
-    let historicalDataQuery = supabase
-      .from('activities_raw_import')
-      .select('id,"ERR CODE","ERR Name","State","Project Donor","USD","MOU Signed","F4","F5","Date Report Completed","Serial Number","Target (Ind.)","Target (Fam.)"')
-    
-    // Apply state filter from user access rights (if not seeing all states)
-    if (allowedStateNames !== null && allowedStateNames.length > 0) {
-      historicalDataQuery = historicalDataQuery.in('State', allowedStateNames)
-    }
-    
-    const { data: historicalData } = await historicalDataQuery
-
-    // Convert historical data to project row format
-    const historicalRows = (historicalData || []).map((row: any) => {
+    // Convert filtered historical data to project row format
+    const historicalRows = filteredHistoricalData.map((row: any) => {
       const usd = Number(row['USD'] || row['usd'] || row.USD || 0)
       const hasMou = row['MOU Signed'] && String(row['MOU Signed']).trim().toLowerCase() !== 'no' && String(row['MOU Signed']).trim() !== ''
       const f4Value = row['F4'] || row['f4'] || row.F4
@@ -221,8 +256,12 @@ export async function GET(request: Request) {
       const reportDate = row['Date Report Completed'] || row['date_report_completed'] || row['Date Report Completed']
       const projectDonor = row['Project Donor'] || row['project_donor'] || row['Project Donor'] || null
       
+      // Get F4 count from err_summary for this historical project
+      const historicalProjectId = `historical_${row.id}`
+      const f4Agg = sumByProject.get(historicalProjectId) || { actual: 0, count: 0, last: null }
+      
       return {
-        project_id: `historical_${row.id}`, // Use a prefix to distinguish historical projects
+        project_id: historicalProjectId, // Use a prefix to distinguish historical projects
         state: normalizeActivitiesStateName(row['State'] || row['state'] || row.State),
         err_id: row['ERR CODE'] || row['ERR Name'] || row['err_code'] || row['err_name'] || null,
         grant_call_id: null, // Historical data doesn't have grant_call_id
@@ -231,11 +270,11 @@ export async function GET(request: Request) {
         has_mou: hasMou,
         mou_code: hasMou ? (row['MOU Signed'] || 'Yes') : null,
         plan: usd,
-        actual: 0, // Historical data doesn't have actual expenses from err_summary
-        variance: usd, // Since actual is 0, variance equals plan
-        burn: 0, // No actual expenses, so burn is 0
-        f4_count: hasF4 ? 1 : 0,
-        last_report_date: reportDate || null,
+        actual: f4Agg.actual, // Use actual expenses from err_summary if available
+        variance: usd - f4Agg.actual, // Calculate variance based on actual expenses
+        burn: usd > 0 ? f4Agg.actual / usd : 0, // Calculate burn rate
+        f4_count: f4Agg.count, // Use count from err_summary
+        last_report_date: f4Agg.last || reportDate || null, // Prefer date from err_summary
         f5_count: hasF5 ? 1 : 0,
         last_f5_date: reportDate || null, // Use same date if available
         is_historical: true
@@ -245,13 +284,13 @@ export async function GET(request: Request) {
     // Combine err_projects and historical data
     const allRows = [...projRows, ...historicalRows]
 
-    // Calculate target individuals and families from historical data
-    const historicalTargetIndividuals = (historicalData || []).reduce((sum, row: any) => {
+    // Calculate target individuals and families from filtered historical data
+    const historicalTargetIndividuals = filteredHistoricalData.reduce((sum, row: any) => {
       const targetInd = row['Target (Ind.)'] || row['target_ind'] || row['Target (Ind.)']
       return sum + (Number(targetInd) || 0)
     }, 0)
     
-    const historicalTargetFamilies = (historicalData || []).reduce((sum, row: any) => {
+    const historicalTargetFamilies = filteredHistoricalData.reduce((sum, row: any) => {
       const targetFam = row['Target (Fam.)'] || row['target_fam'] || row['Target (Fam.)']
       return sum + (Number(targetFam) || 0)
     }, 0)

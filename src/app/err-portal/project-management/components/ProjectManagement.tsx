@@ -568,14 +568,26 @@ export default function ProjectManagement() {
                               onClick={async (e)=>{ 
                                 e.stopPropagation(); 
                                 const projectId = r.project_id || null;
-                                setSelectedProjectId(projectId);
+                                // For historical projects, extract the real UUID
+                                const actualProjectId = projectId && String(projectId).startsWith('historical_') 
+                                  ? projectId // Keep the historical_ prefix for the modal to handle
+                                  : projectId;
+                                setSelectedProjectId(actualProjectId);
                                 // Load existing F4 reports for this project
                                 if (projectId) {
                                   setLoadingReports(true);
                                   try {
                                     const res = await fetch('/api/f4/list');
                                     const data = await res.json();
-                                    const projectF4s = (data || []).filter((f4: any) => f4.project_id === projectId);
+                                    // Check both project_id and activities_raw_import_id for historical projects
+                                    const isHistorical = String(projectId).startsWith('historical_');
+                                    const realUuid = isHistorical ? String(projectId).replace('historical_', '') : null;
+                                    const projectF4s = (data || []).filter((f4: any) => {
+                                      if (isHistorical && realUuid) {
+                                        return f4.activities_raw_import_id === realUuid;
+                                      }
+                                      return f4.project_id === projectId;
+                                    });
                                     setF4Reports(projectF4s);
                                     if (projectF4s.length > 0) {
                                       // If reports exist, show list (edit only)
