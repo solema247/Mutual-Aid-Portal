@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { supabase } from '@/lib/supabaseClient'
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '@/components/ui/table'
@@ -689,12 +690,6 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
             </div>
           ) : step === 'preview' ? (
           <div className="space-y-6 select-text">
-            {/* Debug: Log projectMeta when preview renders */}
-            {(() => {
-              console.log('Preview step rendering - projectMeta:', projectMeta)
-              console.log('Preview step rendering - projectId:', projectId, 'initialProjectId:', initialProjectId)
-              return null
-            })()}
             {/* Form Content */}
             <div className="space-y-6">
             {/* Summary Header */}
@@ -772,7 +767,7 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
               {/* FX Rate (moved here) */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label>{t('f4.preview.labels.fx_rate')}</Label>
+                  <Label className="font-bold text-red-600">{t('f4.preview.labels.fx_rate')} *</Label>
                   <Input 
                     className="select-text selection:bg-blue-200 selection:text-blue-900 dark:selection:bg-blue-800 dark:selection:text-blue-100" 
                     style={selectableInputStyle}
@@ -1087,79 +1082,37 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
               </div>
               <div className="col-span-2">
                 <Label>{t('f4.preview.financials.excess_expenses')}</Label>
-                <Input 
-                  className="select-text selection:bg-blue-200 selection:text-blue-900 dark:selection:bg-blue-800 dark:selection:text-blue-100" 
+                <Textarea 
+                  className="select-text selection:bg-blue-200 selection:text-blue-900 dark:selection:bg-blue-800 dark:selection:text-blue-100 min-h-[100px]" 
                   style={selectableInputStyle}
                   value={summaryDraft?.excess_expenses != null ? String(summaryDraft.excess_expenses) : ''} 
-                  onMouseDown={(e) => {
-                    // Removed logging('Excess Expenses onMouseDown', e.target as HTMLInputElement, e)
-                  }}
-                  onMouseUp={(e) => {
-                    // Removed logging('Excess Expenses onMouseUp', e.target as HTMLInputElement, e)
-                  }}
-                  onSelect={(e) => {
-                    // Removed logging('Excess Expenses onSelect', e.target as HTMLInputElement, e)
-                  }}
-                  onClick={(e) => {
-                    // Removed logging('Excess Expenses onClick', e.target as HTMLInputElement, e)
-                  }}
-                  onFocus={(e) => {
-                    // Removed logging('Excess Expenses onFocus', e.target as HTMLInputElement, e)
-                  }}
                   onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), excess_expenses: e.target.value }))} 
                 />
               </div>
               <div className="col-span-2">
                 <Label>{t('f4.preview.financials.surplus_use')}</Label>
-                <Input 
-                  className="select-text selection:bg-blue-200 selection:text-blue-900 dark:selection:bg-blue-800 dark:selection:text-blue-100" 
+                <Textarea 
+                  className="select-text selection:bg-blue-200 selection:text-blue-900 dark:selection:bg-blue-800 dark:selection:text-blue-100 min-h-[100px]" 
                   style={selectableInputStyle}
                   value={summaryDraft?.surplus_use != null ? String(summaryDraft.surplus_use) : ''} 
-                  onMouseDown={(e) => {
-                    // Removed logging('Surplus Use onMouseDown', e.target as HTMLInputElement, e)
-                  }}
-                  onSelect={(e) => {
-                    // Removed logging('Surplus Use onSelect', e.target as HTMLInputElement, e)
-                  }}
-                  onFocus={(e) => {
-                    // Removed logging('Surplus Use onFocus', e.target as HTMLInputElement, e)
-                  }}
                   onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), surplus_use: e.target.value }))} 
                 />
               </div>
               <div className="col-span-2">
                 <Label>{t('f4.preview.financials.lessons_learned')}</Label>
-                <Input 
-                  className="select-text selection:bg-blue-200 selection:text-blue-900 dark:selection:bg-blue-800 dark:selection:text-blue-100" 
+                <Textarea 
+                  className="select-text selection:bg-blue-200 selection:text-blue-900 dark:selection:bg-blue-800 dark:selection:text-blue-100 min-h-[100px]" 
                   style={selectableInputStyle}
                   value={summaryDraft?.lessons != null ? String(summaryDraft.lessons) : ''} 
-                  onMouseDown={(e) => {
-                    // Removed logging('Lessons Learned onMouseDown', e.target as HTMLInputElement, e)
-                  }}
-                  onSelect={(e) => {
-                    // Removed logging('Lessons Learned onSelect', e.target as HTMLInputElement, e)
-                  }}
-                  onFocus={(e) => {
-                    // Removed logging('Lessons Learned onFocus', e.target as HTMLInputElement, e)
-                  }}
                   onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), lessons: e.target.value }))} 
                 />
               </div>
               <div className="col-span-2">
                 <Label>{t('f4.preview.financials.training_needs')}</Label>
-                <Input 
-                  className="select-text selection:bg-blue-200 selection:text-blue-900 dark:selection:bg-blue-800 dark:selection:text-blue-100" 
+                <Textarea 
+                  className="select-text selection:bg-blue-200 selection:text-blue-900 dark:selection:bg-blue-800 dark:selection:text-blue-100 min-h-[100px]" 
                   style={selectableInputStyle}
                   value={summaryDraft?.training != null ? String(summaryDraft.training) : ''} 
-                  onMouseDown={(e) => {
-                    // Removed logging('Training Needs onMouseDown', e.target as HTMLInputElement, e)
-                  }}
-                  onSelect={(e) => {
-                    // Removed logging('Training Needs onSelect', e.target as HTMLInputElement, e)
-                  }}
-                  onFocus={(e) => {
-                    // Removed logging('Training Needs onFocus', e.target as HTMLInputElement, e)
-                  }}
                   onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), training: e.target.value }))} 
                 />
               </div>

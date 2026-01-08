@@ -282,21 +282,56 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved, initialProj
 
   // Auto-select project when initialProjectId is provided
   useEffect(() => {
-    if (!open || !initialProjectId) return
+    if (!open || !initialProjectId) {
+      // Ensure projectId is cleared if modal opens without initialProjectId
+      if (!isRestoringRef.current) setProjectId('')
+      return
+    }
+    
+    // Set projectId immediately to avoid race conditions
+    const isHistorical = String(initialProjectId).startsWith('historical_')
+    if (isHistorical) {
+      setProjectId(initialProjectId)
+    } else {
+      setProjectId(initialProjectId)
+    }
+    
     ;(async () => {
       try {
-        const { data: projectData, error } = await supabase
-          .from('err_projects')
-          .select('id, state, emergency_room_id, emergency_rooms (id, name, name_ar, err_code)')
-          .eq('id', initialProjectId)
-          .eq('status', 'active')
-          .single()
-        
-        if (error || !projectData) return
-        
-        setSelectedState(projectData.state || '')
-        setSelectedRoomId(projectData.emergency_room_id || '')
-        setProjectId(projectData.id)
+        if (isHistorical) {
+          // Load historical project from activities_raw_import
+          const realUuid = String(initialProjectId).replace('historical_', '')
+          const { data: historicalData, error } = await supabase
+            .from('activities_raw_import')
+            .select('id, "State", "ERR CODE", "ERR Name"')
+            .eq('id', realUuid)
+            .single()
+          
+          if (error || !historicalData) {
+            console.error('Failed to load historical project:', error)
+            return
+          }
+          
+          setSelectedState(historicalData['State'] || '')
+          // projectId already set above
+        } else {
+          // Load regular portal project
+          const { data: projectData, error } = await supabase
+            .from('err_projects')
+            .select('id, state, emergency_room_id, emergency_rooms (id, name, name_ar, err_code)')
+            .eq('id', initialProjectId)
+            .eq('status', 'active')
+            .single()
+          
+          if (error || !projectData) {
+            console.error('Failed to load portal project:', error)
+            return
+          }
+          
+          setSelectedState(projectData.state || '')
+          setSelectedRoomId(projectData.emergency_room_id || '')
+          // projectId already set above
+        }
       } catch (e) {
         console.error('Failed to load initial project', e)
       }
@@ -400,18 +435,19 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved, initialProj
   }, [selectedRoomId])
 
   const handleUploadAndParse = async () => {
-    if (!projectId || !file) return
+    const actualProjectId = projectId || initialProjectId
+    if (!actualProjectId || !file) return
     setIsLoading(true)
     try {
       const ext = (file.name.split('.').pop() || 'pdf').toLowerCase()
-      const initRes = await fetch('/api/f4/upload/init', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ project_id: projectId, ext }) })
+      const initRes = await fetch('/api/f4/upload/init', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ project_id: actualProjectId, ext }) })
       const initJson = await initRes.json()
       if (!initRes.ok) throw new Error(initJson.error || 'Init failed')
       const key = initJson.file_key_temp as string
       setTempKey(key)
       const { error: upErr } = await supabase.storage.from('images').upload(key, file, { upsert: true })
       if (upErr) throw upErr
-      const parseRes = await fetch('/api/f5/parse', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ project_id: projectId, file_key_temp: key }) })
+      const parseRes = await fetch('/api/f5/parse', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ project_id: actualProjectId, file_key_temp: key }) })
       const parseJson = await parseRes.json()
       if (!parseRes.ok) throw new Error(parseJson.error || 'Parse failed')
       setSummaryDraft({ ...(parseJson.summaryDraft || {}), report_date: reportDate || (parseJson.summaryDraft?.report_date || '') })
@@ -438,14 +474,15 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved, initialProj
       console.warn('Cannot save while restoring state')
       return
     }
-    if (!projectId || !summaryDraft) {
-      console.warn('Missing required fields:', { projectId, hasSummaryDraft: !!summaryDraft })
+    const actualProjectId = projectId || initialProjectId
+    if (!actualProjectId || !summaryDraft) {
+      console.warn('Missing required fields:', { projectId: actualProjectId, hasSummaryDraft: !!summaryDraft })
       return
     }
     setIsLoading(true)
     try {
       const summaryToSave = { ...summaryDraft }
-      const res = await fetch('/api/f5/save', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ project_id: projectId, summary: summaryToSave, reach: reachDraft, file_key_temp: tempKey }) })
+      const res = await fetch('/api/f5/save', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ project_id: actualProjectId, summary: summaryToSave, reach: reachDraft, file_key_temp: tempKey }) })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error || 'Save failed')
       try { window.localStorage.removeItem('err_minimized_modal') } catch {}
@@ -522,7 +559,7 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved, initialProj
         <DialogHeader>
           <DialogTitle>{t('f5.modal.title')}</DialogTitle>
         </DialogHeader>
-        {step === 'select' ? (
+        {step === 'select' && !initialProjectId ? (
           <div className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <div className="space-y-1">
@@ -574,8 +611,26 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved, initialProj
             </div>
           </div>
         ) : (
-          <div className="space-y-4">
-            {/* Edit Form - Collapsible Section */}
+          // When project is pre-selected (from project management), show simplified file upload form
+          step === 'select' && initialProjectId ? (
+            <div className="space-y-4">
+              <div className="space-y-1">
+                <Label>{t('f5.modal.report_date')}</Label>
+                <Input type="date" value={reportDate} onChange={(e) => setReportDate(e.target.value)} />
+              </div>
+              <div className="space-y-1">
+                <Label>{t('f5.modal.report_file')}</Label>
+                <Input type="file" accept=".pdf,image/*" onChange={(e) => setFile(e.target.files?.[0] || null)} />
+                <div className="text-xs text-muted-foreground">{t('f5.modal.choose_file_hint')}</div>
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => onOpenChange(false)}>{t('f5.modal.cancel')}</Button>
+                <Button onClick={handleUploadAndParse} disabled={(!projectId && !initialProjectId) || !file || isLoading}>{isLoading ? 'Processing…' : t('f5.modal.process')}</Button>
+              </div>
+            </div>
+          ) : step === 'preview' ? (
+            <div className="space-y-4">
+              {/* Edit Form - Collapsible Section */}
             <CollapsibleRow title={t('f5.preview.tabs.edit_form')} defaultOpen={true}>
               <div className="space-y-6 select-text">
             {/* Summary */}
@@ -984,7 +1039,9 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved, initialProj
               </div>
             </CollapsibleRow>
           </div>
-        )}
+          ) : null
+        )
+        }
       </DialogContent>
     </Dialog>
 
