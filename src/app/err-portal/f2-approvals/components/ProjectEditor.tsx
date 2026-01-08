@@ -26,7 +26,10 @@ export default function ProjectEditor({ open, onOpenChange, projectId, onSaved }
 
   const [form, setForm] = useState<any>({})
   const [expenses, setExpenses] = useState<Expense[]>([])
+  // Display-only strings for planned activities
   const [activities, setActivities] = useState<string[]>([])
+  // Raw planned_activities objects/strings from DB so we can preserve budgets & metadata
+  const [rawPlannedActivities, setRawPlannedActivities] = useState<any[]>([])
   const [availableRooms, setAvailableRooms] = useState<Array<{id: string, name: string, name_ar: string | null, err_code: string | null, state_name: string, locality: string | null}>>([])
   const [selectedStateFilter, setSelectedStateFilter] = useState<string>('')
   const [availableStates, setAvailableStates] = useState<Array<{id: string, name: string, name_ar: string | null}>>([])
@@ -203,9 +206,36 @@ export default function ProjectEditor({ open, onOpenChange, projectId, onSaved }
         }
 
         setForm(data)
-        setExpenses(Array.isArray(data?.expenses) ? data.expenses : (typeof data?.expenses === 'string' ? JSON.parse(data?.expenses || '[]') : []))
-        const pa = Array.isArray(data?.planned_activities) ? data.planned_activities : (typeof data?.planned_activities === 'string' ? JSON.parse(data?.planned_activities || '[]') : [])
-        setActivities(pa)
+        setExpenses(
+          Array.isArray(data?.expenses)
+            ? data.expenses
+            : (typeof data?.expenses === 'string' ? JSON.parse(data?.expenses || '[]') : [])
+        )
+
+        // Normalize planned_activities for display while preserving original structure
+        const paRaw = Array.isArray(data?.planned_activities)
+          ? data.planned_activities
+          : (typeof data?.planned_activities === 'string'
+            ? JSON.parse(data?.planned_activities || '[]')
+            : [])
+
+        setRawPlannedActivities(Array.isArray(paRaw) ? paRaw : [])
+
+        const paDisplay: string[] = (Array.isArray(paRaw) ? paRaw : []).map((item: any) => {
+          if (typeof item === 'string') return item
+          if (item && typeof item === 'object') {
+            if ('activity' in item && item.activity) return String(item.activity)
+            if ('description' in item && item.description) return String(item.description)
+          }
+          // Fallback – avoid [object Object] in the UI
+          try {
+            return JSON.stringify(item)
+          } catch {
+            return ''
+          }
+        })
+
+        setActivities(paDisplay)
       } catch (e) {
         console.error('Load project error', e)
       } finally {
@@ -306,6 +336,54 @@ export default function ProjectEditor({ open, onOpenChange, projectId, onSaved }
         }
       }
 
+      // Build planned_activities payload preserving existing structure where possible
+      let plannedActivitiesForSave: any[] = []
+      const displayActivities = activities || []
+
+      if (rawPlannedActivities.length === displayActivities.length && rawPlannedActivities.length > 0) {
+        // Update existing entries, preserving costs/categories/etc.
+        plannedActivitiesForSave = rawPlannedActivities.map((item, idx) => {
+          const text = displayActivities[idx] ?? ''
+          if (typeof item === 'string') return text
+          if (item && typeof item === 'object') {
+            return { ...item, activity: text }
+          }
+          return text || item
+        })
+      } else if (rawPlannedActivities.length === 0 && displayActivities.length > 0) {
+        // No original structure – create objects in the new standard format
+        plannedActivitiesForSave = displayActivities.map(a => ({
+          activity: a || '',
+          category: null,
+          individuals: null,
+          families: null,
+          planned_activity_cost: null
+        }))
+      } else {
+        // Mismatch (activities added/removed) – best-effort update:
+        // try to update existing ones, convert extras to new-format objects.
+        const maxLen = Math.max(rawPlannedActivities.length, displayActivities.length)
+        for (let i = 0; i < maxLen; i++) {
+          const original = rawPlannedActivities[i]
+          const text = displayActivities[i] ?? ''
+          if (original === undefined) {
+            plannedActivitiesForSave.push({
+              activity: text || '',
+              category: null,
+              individuals: null,
+              families: null,
+              planned_activity_cost: null
+            })
+          } else if (typeof original === 'string') {
+            plannedActivitiesForSave.push(text)
+          } else if (original && typeof original === 'object') {
+            plannedActivitiesForSave.push({ ...original, activity: text })
+          } else {
+            plannedActivitiesForSave.push(text || original)
+          }
+        }
+      }
+
       const payload: any = {
         project_objectives: form.project_objectives || null,
         intended_beneficiaries: form.intended_beneficiaries || null,
@@ -319,7 +397,7 @@ export default function ProjectEditor({ open, onOpenChange, projectId, onSaved }
         reporting_officer_phone: form.reporting_officer_phone || null,
         finance_officer_name: form.finance_officer_name || null,
         finance_officer_phone: form.finance_officer_phone || null,
-        planned_activities: activities,
+        planned_activities: plannedActivitiesForSave,
         expenses
       }
 
