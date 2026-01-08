@@ -253,13 +253,21 @@ export async function GET(request: Request) {
       const f4Value = row['F4'] || row['f4'] || row.F4
       const f5Value = row['F5'] || row['f5'] || row.F5
       const hasF4 = f4Value && String(f4Value).trim() !== '' && String(f4Value).trim().toLowerCase() !== 'no'
-      const hasF5 = f5Value && String(f5Value).trim() !== '' && String(f5Value).trim().toLowerCase() !== 'no'
+      // Check if F4 column is 'Completed' (case-insensitive)
+      const f4Completed = f4Value && String(f4Value).trim().toLowerCase() === 'completed'
+      // Check if F5 column is 'Completed' (case-insensitive)
+      const f5Completed = f5Value && String(f5Value).trim().toLowerCase() === 'completed'
       const reportDate = row['Date Report Completed'] || row['date_report_completed'] || row['Date Report Completed']
       const projectDonor = row['Project Donor'] || row['project_donor'] || row['Project Donor'] || null
       
-      // Get F4 count from err_summary for this historical project
+      // Get F4 count from err_summary for this historical project (F4s uploaded through portal)
       const historicalProjectId = `historical_${row.id}`
       const f4Agg = sumByProject.get(historicalProjectId) || { actual: 0, count: 0, last: null }
+      
+      // For historical projects: F4 count = F4='Completed' from activities_raw_import (1 if completed) + F4s uploaded through portal
+      const f4CountFromSheet = f4Completed ? 1 : 0
+      const f4CountFromPortal = f4Agg.count || 0
+      const totalF4Count = f4CountFromSheet + f4CountFromPortal
       
       return {
         project_id: historicalProjectId, // Use a prefix to distinguish historical projects
@@ -275,9 +283,9 @@ export async function GET(request: Request) {
         actual: f4Agg.actual, // Use actual expenses from err_summary if available
         variance: usd - f4Agg.actual, // Calculate variance based on actual expenses
         burn: usd > 0 ? f4Agg.actual / usd : 0, // Calculate burn rate
-        f4_count: f4Agg.count, // Use count from err_summary
+        f4_count: totalF4Count, // F4='Completed' from sheet + F4s uploaded through portal
         last_report_date: f4Agg.last || reportDate || null, // Prefer date from err_summary
-        f5_count: hasF5 ? 1 : 0,
+        f5_count: f5Completed ? 1 : 0, // F5='Completed' from activities_raw_import
         last_f5_date: reportDate || null, // Use same date if available
         is_historical: true
       }

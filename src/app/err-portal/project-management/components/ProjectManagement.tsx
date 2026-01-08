@@ -241,20 +241,24 @@ export default function ProjectManagement() {
   // Auto-switch to project level when searching, reset to state level when search is cleared
   useEffect(() => {
     if (grantSerialSearch.trim()) {
+      // When searching, switch to project level
       if (level !== 'project') {
         setLevel('project')
         setSelectedStateName('')
         setSelectedErrId('')
       }
     } else {
-      // When search is cleared, reset to initial state view
-      if (level !== 'state') {
+      // When search is cleared, only reset if we're currently in search mode (project level due to search)
+      // Don't reset if user is drilling down normally
+      // We can detect this by checking if we're at project level but have no selectedStateName/selectedErrId
+      // This means we got here via search, not via drill-down
+      if (level === 'project' && !selectedStateName && !selectedErrId) {
         setLevel('state')
         setSelectedStateName('')
         setSelectedErrId('')
       }
     }
-  }, [grantSerialSearch, level])
+  }, [grantSerialSearch]) // Removed 'level' from dependencies to prevent interference with drill-down
 
   // Inject styles to make text selection visible in the search input
   useEffect(() => {
@@ -351,17 +355,19 @@ export default function ProjectManagement() {
 
   const onRowClick = (r: any) => {
     // If searching, always open detail modal (projects are shown directly)
-    if (searchRows) {
+    if (grantSerialSearch.trim()) {
       setDetailProjectId(r.project_id || null)
       setDetailOpen(true)
       return
     }
     
     if (level === 'state') {
-      setSelectedStateName(r.state)
+      const newState = r.state || '—'
+      setSelectedStateName(newState)
       setLevel('room')
     } else if (level === 'room') {
-      setSelectedErrId(r.err_id || '—')
+      const newErrId = r.err_id || '—'
+      setSelectedErrId(newErrId)
       setLevel('project')
     } else if (level === 'project') {
       setDetailProjectId(r.project_id || null)
@@ -620,14 +626,12 @@ export default function ProjectManagement() {
                   <TableHead>{t('management.table.f4_complete')}</TableHead>
                   <TableHead>{t('management.table.f5s')}</TableHead>
                   <TableHead>{t('management.table.f5_complete')}</TableHead>
-                  <TableHead>{t('management.table.last_f4')}</TableHead>
-                  <TableHead>{t('management.table.last_f5')}</TableHead>
                   {(searchRows || level === 'project') && <TableHead>{t('management.table.actions')}</TableHead>}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                 {(displayed||[]).length===0 ? (
-                  <TableRow><TableCell colSpan={level==='project'?15:(level==='room'?12:11)} className="text-center text-muted-foreground">{t('management.table.no_data')}</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={(searchRows || level==='project')?13:(level==='room'?12:11)} className="text-center text-muted-foreground">{t('management.table.no_data')}</TableCell></TableRow>
                 ) : (
                   <>
                     {/* Total Row */}
@@ -667,19 +671,15 @@ export default function ProjectManagement() {
                           : `${totals.total_projects > 0 ? Math.round((totals.projects_with_f5 / totals.total_projects) * 100) : 0}%`
                         }
                       </TableCell>
-                      <TableCell></TableCell>
-                      <TableCell></TableCell>
-                      {(searchRows || level === 'project') && <TableCell></TableCell>}
                       {(searchRows || level === 'project') && <TableCell></TableCell>}
                     </TableRow>
                     {displayed.map((r:any, idx:number)=> (
                   <TableRow 
                     key={`${r.project_id || 'no-id'}-${r.err_id || 'no-err'}-${r.state || 'no-state'}-${idx}`}
                     className={cn(
-                      "cursor-pointer transition-colors",
-                      (searchRows || level === 'project') && "hover:bg-muted/50"
+                      "cursor-pointer transition-colors hover:bg-muted/50"
                     )}
-                    onClick={()=>onRowClick(r)}
+                    onClick={() => onRowClick(r)}
                   >
                     {searchRows || level === 'project' ? (
                       <>
@@ -735,9 +735,7 @@ export default function ProjectManagement() {
                         : `${r.total_projects > 0 ? Math.round((r.projects_with_f5 / r.total_projects) * 100) : 0}%`
                       }
                     </TableCell>
-                    <TableCell>{r.last_report_date ? new Date(r.last_report_date).toLocaleDateString() : '-'}</TableCell>
-                    <TableCell>{r.last_f5_date ? new Date(r.last_f5_date).toLocaleDateString() : '-'}</TableCell>
-                    {level === 'project' && (
+                    {(searchRows || level === 'project') && (
                         <TableCell>
                           <div className="flex gap-1 flex-wrap">
                             <Button
