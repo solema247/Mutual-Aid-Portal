@@ -94,11 +94,11 @@ export async function GET(request: Request) {
     // Get user's state access rights
     const { allowedStateNames } = await getUserStateAccess()
 
-    // Build project filter (include more statuses to catch F5 projects)
+    // Build project filter (include more statuses to catch F5 projects and completed projects)
     let projectQuery = supabase
       .from('err_projects')
       .select('id, state, grant_call_id, grant_grid_id, grant_serial_id, emergency_rooms (id, name, name_ar, err_code), planned_activities, expenses, source, status, funding_status, mou_id')
-      .in('status', ['approved', 'active', 'pending'])
+      .in('status', ['approved', 'active', 'pending', 'completed'])
       .in('funding_status', ['committed', 'allocated'])
 
     // Apply state filter from user access rights (if not seeing all states)
@@ -252,6 +252,7 @@ export async function GET(request: Request) {
         last_report_date: agg.last,
         f5_count: f5Agg.count,
         last_f5_date: f5Agg.last,
+        status: p.status || null,
         is_historical: false
       }
     })

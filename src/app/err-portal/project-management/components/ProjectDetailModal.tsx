@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Label } from '@/components/ui/label'
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
-import { FileText, FileCheck, Receipt, FileSignature } from 'lucide-react'
+import { FileText, FileCheck, Receipt, FileSignature, CheckCircle } from 'lucide-react'
 
 interface ProjectDetailModalProps {
   projectId: string | null
@@ -18,6 +18,7 @@ export default function ProjectDetailModal({ projectId, open, onOpenChange }: Pr
   const { t } = useTranslation(['projects'])
   const [loading, setLoading] = useState(false)
   const [data, setData] = useState<any | null>(null)
+  const [completing, setCompleting] = useState(false)
 
   useEffect(() => {
     if (!open || !projectId) { setData(null); return }
@@ -71,14 +72,68 @@ export default function ProjectDetailModal({ projectId, open, onOpenChange }: Pr
     }
   }
 
+  const handleCompleteProject = async () => {
+    if (!projectId || isHistorical) return
+    
+    if (!confirm('Are you sure you want to mark this project as completed?')) {
+      return
+    }
+
+    try {
+      setCompleting(true)
+      const response = await fetch(`/api/projects/${projectId}/status`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ status: 'completed' }),
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || 'Failed to complete project')
+      }
+
+      // Refresh project data
+      const res = await fetch(`/api/overview/project/${projectId}`)
+      const j = await res.json()
+      if (!res.ok) throw new Error(j.error || 'Failed to reload project')
+      setData(j)
+    } catch (error: any) {
+      console.error('Error completing project:', error)
+      alert(error.message || 'Failed to complete project')
+    } finally {
+      setCompleting(false)
+    }
+  }
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-5xl w-[95vw] max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>
-            {t('management.detail_modal.title')}
-            {isHistorical && <span className="ml-2 text-sm text-muted-foreground font-normal">(Historical Project)</span>}
-          </DialogTitle>
+          <div className="flex items-center justify-between">
+            <DialogTitle>
+              {t('management.detail_modal.title')}
+              {isHistorical && <span className="ml-2 text-sm text-muted-foreground font-normal">(Historical Project)</span>}
+            </DialogTitle>
+            {!isHistorical && project?.status !== 'completed' && (
+              <Button
+                onClick={handleCompleteProject}
+                disabled={completing}
+                variant="default"
+                className="flex items-center gap-2"
+              >
+                <CheckCircle className="h-4 w-4" />
+                {completing ? 'Completing...' : 'Complete Project'}
+              </Button>
+            )}
+            {!isHistorical && project?.status === 'completed' && (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <CheckCircle className="h-4 w-4" />
+                <span>Completed</span>
+              </div>
+            )}
+          </div>
         </DialogHeader>
         {loading ? (
           <div className="py-8 text-center text-muted-foreground">{t('management.detail_modal.loading')}</div>

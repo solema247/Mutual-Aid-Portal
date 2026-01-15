@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
-import { RefreshCw, ChevronRight } from 'lucide-react'
+import { RefreshCw, ChevronRight, CheckCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { supabase } from '@/lib/supabaseClient'
 import ProjectDetailModal from './ProjectDetailModal'
@@ -58,6 +58,7 @@ export default function ProjectManagement() {
   // Store portal F4/F5 counts per project (for historical projects, only count portal uploads)
   const [portalF4Counts, setPortalF4Counts] = useState<Record<string, number>>({})
   const [portalF5Counts, setPortalF5Counts] = useState<Record<string, number>>({})
+  const [completingProjectId, setCompletingProjectId] = useState<string | null>(null)
 
   const loadRollup = async () => {
     setLoading(true)
@@ -447,6 +448,38 @@ export default function ProjectManagement() {
     } else if (level === 'room') {
       setLevel('state')
       setSelectedStateName('')
+    }
+  }
+
+  const handleCompleteProject = async (projectId: string) => {
+    if (!projectId || projectId.startsWith('historical_')) return
+    
+    if (!confirm('Are you sure you want to mark this project as completed?')) {
+      return
+    }
+
+    try {
+      setCompletingProjectId(projectId)
+      const response = await fetch(`/api/projects/${projectId}/status`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ status: 'completed' }),
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || 'Failed to complete project')
+      }
+
+      // Refresh the data to show updated status
+      await loadRollup()
+    } catch (error: any) {
+      console.error('Error completing project:', error)
+      alert(error.message || 'Failed to complete project')
+    } finally {
+      setCompletingProjectId(null)
     }
   }
 
@@ -897,6 +930,29 @@ export default function ProjectManagement() {
                                   }
                                 }}
                               >F5 {r.f5_count > 0 ? `(${r.f5_count})` : ''}</Button>
+                            )}
+                            {!r.is_historical && r.status !== 'completed' && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="bg-purple-50 hover:bg-purple-100"
+                                disabled={completingProjectId === r.project_id}
+                                onClick={async (e)=>{ 
+                                  e.stopPropagation();
+                                  if (r.project_id) {
+                                    await handleCompleteProject(r.project_id);
+                                  }
+                                }}
+                              >
+                                <CheckCircle className="h-4 w-4 mr-1" />
+                                {completingProjectId === r.project_id ? 'Completing...' : 'Complete'}
+                              </Button>
+                            )}
+                            {!r.is_historical && r.status === 'completed' && (
+                              <div className="flex items-center gap-1 text-sm text-muted-foreground px-2">
+                                <CheckCircle className="h-4 w-4" />
+                                <span>Completed</span>
+                              </div>
                             )}
                           </div>
                         </TableCell>

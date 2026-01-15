@@ -267,7 +267,7 @@ export default function F3MOUsPage() {
             .select('mou_id')
             .in('mou_id', mouIds)
             .eq('funding_status', 'committed')
-            .eq('status', 'approved')
+            .in('status', ['approved', 'completed'])
           
           const counts: Record<string, number> = {}
           if (projectCounts) {
