@@ -274,12 +274,12 @@ export default function LoginPage() {
         </CardHeader>
 
         <Tabs defaultValue="err" className="w-full">
-          <TabsList className="grid w-full grid-cols-2 mb-4">
-            <TabsTrigger value="err" className="rounded-full">
+          <TabsList className="grid w-full grid-cols-2 mb-4 h-auto">
+            <TabsTrigger value="err" className="rounded-full whitespace-normal h-auto min-h-[36px] py-2">
               {t('login:err_staff')}
             </TabsTrigger>
-            <TabsTrigger value="donor" className="rounded-full">
-              {t('login:partner')}
+            <TabsTrigger value="donor" className="rounded-full whitespace-normal h-auto min-h-[36px] py-2 text-xs sm:text-sm leading-tight">
+              {t('login:partner_forecast_access')}
             </TabsTrigger>
           </TabsList>
 
@@ -335,6 +335,9 @@ export default function LoginPage() {
           <TabsContent value="donor">
             <form onSubmit={handlePartnerLogin}>
               <CardContent className="space-y-4 px-6">
+                <div className="text-sm text-muted-foreground mb-4 pb-2 border-b">
+                  {t('login:partner_forecast_note')}
+                </div>
                 {error && (
                   <div className="bg-destructive/15 text-destructive text-sm p-3 rounded-md">
                     {error}
@@ -382,6 +385,19 @@ export default function LoginPage() {
           </TabsContent>
         </Tabs>
       </Card>
+
+      {/* Localization Hub Logo and Credit */}
+      <div className="mt-8 flex flex-col items-center justify-center gap-2 text-sm text-muted-foreground text-center">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/lohub.jpeg"
+          alt="Localization Hub Logo"
+          width={220}
+          height={220}
+          className="object-contain flex-shrink-0"
+        />
+        <span className="hidden sm:inline">{t('login:localization_hub_credit')}</span>
+      </div>
     </div>
   )
 } 

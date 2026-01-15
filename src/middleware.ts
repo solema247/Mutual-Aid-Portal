@@ -107,6 +107,6 @@ export const config = {
     '/forecast/:path*',
     '/dashboard/:path*',
     '/change-password',
-    '/((?!api|_next/static|_next/image|favicon.ico|logo.jpg).*)',
+    '/((?!api|_next/static|_next/image|favicon.ico|logo.jpg|lohub.jpeg).*)',
   ],
 } 

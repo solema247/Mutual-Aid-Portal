@@ -1,7 +1,9 @@
 {
   "title": "Mutual Aid Sudan Portal",
-  "err_staff": "ERR Staff",
+  "err_staff": "ERR Login",
   "partner": "Partner",
+  "partner_forecast_access": "Upload Forecasting Tool",
+  "partner_forecast_note": "This is for donors and partners to upload resource forecasting for the ERRs.",
   "visit_lcc": "Visit LCC Sudan Website",
   "login_title": "Login",
   "access_text": "Access Mutual Aid Sudan Portal",
@@ -32,5 +34,6 @@
   "invalid_link_instructions": "The password reset link is invalid or has expired. Please request a new one.",
   "request_new_link": "Request New Link",
   "passwords_not_match": "Passwords do not match",
-  "password_too_short": "Password must be at least 6 characters long"
+  "password_too_short": "Password must be at least 6 characters long",
+  "localization_hub_credit": "Designed and developed by the Localization Hub for the Emergency Response Rooms"
 } 
