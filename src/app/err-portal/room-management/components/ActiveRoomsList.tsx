@@ -398,8 +398,9 @@ export default function ActiveRoomsList({
       {!isLoading && !error && rooms.length > 0 && (
         <>
           <div className="rounded-md border">
-            <div className="grid grid-cols-6 gap-4 p-4 font-medium border-b">
+            <div className="grid grid-cols-7 gap-4 p-4 font-medium border-b">
               <div>{t('rooms:name')}</div>
+              <div>{t('rooms:err_code')}</div>
               <div>{t('rooms:type')}</div>
               <div>{t('rooms:state')}</div>
               <div>{t('rooms:locality')}</div>
@@ -408,8 +409,9 @@ export default function ActiveRoomsList({
             </div>
             <div className="divide-y">
               {rooms.map((room) => (
-                <div key={room.id} className="grid grid-cols-6 gap-4 p-4">
+                <div key={room.id} className="grid grid-cols-7 gap-4 p-4">
                   <div>{i18n.language === 'ar' && room.name_ar ? room.name_ar : room.name}</div>
+                  <div>{room.err_code || '—'}</div>
                   <div>{t(`rooms:${room.type}_type`)}</div>
                   <div>{i18n.language === 'ar' ? room.state?.state_name_ar : room.state?.state_name}</div>
                   <div>{i18n.language === 'ar' ? room.state?.locality_ar : room.state?.locality}</div>

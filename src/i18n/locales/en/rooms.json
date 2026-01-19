@@ -7,6 +7,7 @@
   "no_access": "You do not have permission to access this page",
   "coming_soon": "This feature is coming soon...",
   "name": "Room Name",
+  "err_code": "ERR Code",
   "type": "Type",
   "state": "State",
   "locality": "Locality",

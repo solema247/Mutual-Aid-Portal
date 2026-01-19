@@ -10,6 +10,7 @@ export interface RoomWithState {
   type: 'state' | 'base'
   created_at: string
   status: 'active' | 'inactive'
+  err_code: string | null
   state?: State
 }
 
