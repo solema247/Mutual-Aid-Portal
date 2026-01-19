@@ -21,7 +21,7 @@ export async function DELETE(
     if (fetchError) throw fetchError
 
     // If no record found, try with trimmed versions (in case DB has trailing spaces)
-    let recordToDelete = records?.[0]
+    let recordToDelete: { id: string } | undefined = records?.[0]
     if (!recordToDelete) {
       // Try fetching all and matching with trimmed comparison
       const { data: allRecords, error: allError } = await supabase
@@ -30,11 +30,15 @@ export async function DELETE(
 
       if (allError) throw allError
 
-      recordToDelete = allRecords?.find(
+      const foundRecord = allRecords?.find(
         (r) =>
           (r.decision_id_proposed?.trim() === decisionId) ||
           (r.decision_id?.trim() === decisionId)
       )
+      
+      if (foundRecord) {
+        recordToDelete = { id: foundRecord.id }
+      }
     }
 
     if (!recordToDelete) {
