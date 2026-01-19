@@ -58,8 +58,8 @@ export default function ErrPortalPage() {
 
   if (isLoading) return <div>Loading...</div>
 
-  // Only show room management for admin and state users
-  const canManageRooms = user?.role === 'admin' || user?.role === 'state_err'
+  // Only show room management for admin, superadmin, and state users
+  const canManageRooms = user?.role === 'admin' || user?.role === 'superadmin' || user?.role === 'state_err'
 
   const handleLogout = async () => {
     try {

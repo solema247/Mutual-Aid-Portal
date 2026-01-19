@@ -49,7 +49,8 @@ export default function RoomManagementPage() {
 
   if (isLoading) return <div>Loading...</div>
 
-  // Only show room management for admin and state ERR users
+  // Only show room management for admin, superadmin, and state ERR users
+  // Block only base_err users
   if (user?.role === 'base_err') {
     return (
       <div className="text-center text-muted-foreground">
