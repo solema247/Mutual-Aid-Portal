@@ -129,6 +129,7 @@ interface GetActiveRoomsParams {
   page: number
   pageSize: number
   type?: 'state' | 'base'
+  stateId?: string
   sortBy?: string
   sortOrder?: 'asc' | 'desc'
   currentUserRole?: string
@@ -209,6 +210,7 @@ export async function getActiveRooms({
   page = 1,
   pageSize = 20,
   type,
+  stateId,
   sortBy = 'created_at',
   sortOrder = 'desc',
   currentUserRole,
@@ -232,6 +234,36 @@ export async function getActiveRooms({
   // Filter by type if specified
   if (type) {
     query = query.eq('type', type)
+  }
+
+  // Filter by state if specified
+  // Need to get all state IDs with the same state_name since rooms can reference different state IDs
+  if (stateId) {
+    // First, get the state_name from the selected state ID
+    const { data: selectedState, error: stateError } = await supabase
+      .from('states')
+      .select('state_name')
+      .eq('id', stateId)
+      .single()
+
+    if (!stateError && selectedState?.state_name) {
+      // Get all state IDs with the same state_name
+      const { data: allStateIds, error: allStatesError } = await supabase
+        .from('states')
+        .select('id')
+        .eq('state_name', selectedState.state_name)
+
+      if (!allStatesError && allStateIds && allStateIds.length > 0) {
+        const stateIds = allStateIds.map((s: any) => s.id)
+        query = query.in('state_reference', stateIds)
+      } else {
+        // If no states found, return empty result
+        query = query.eq('id', '00000000-0000-0000-0000-000000000000')
+      }
+    } else {
+      // If state not found, return empty result
+      query = query.eq('id', '00000000-0000-0000-0000-000000000000')
+    }
   }
 
   // Filter based on user role

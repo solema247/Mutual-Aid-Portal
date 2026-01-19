@@ -36,9 +36,7 @@ export default function ActiveRoomsList({
   const [error, setError] = useState<string | null>(null)
   const [selectedType, setSelectedType] = useState<'all' | 'state' | 'base'>('all')
   const [selectedState, setSelectedState] = useState<string>('all')
-  const [selectedLocality, setSelectedLocality] = useState<string>('all')
-  const [states, setStates] = useState<{id: string, name: string, localities: string[]}[]>([])
-  const [localities, setLocalities] = useState<string[]>([])
+  const [states, setStates] = useState<{id: string, name: string}[]>([])
   const [currentPage, setCurrentPage] = useState(1)
   const [totalRooms, setTotalRooms] = useState(0)
   const [modifyDialogOpen, setModifyDialogOpen] = useState(false)
@@ -59,96 +57,66 @@ export default function ActiveRoomsList({
         page: currentPage,
         pageSize: PAGE_SIZE,
         type: selectedType === 'all' ? undefined : selectedType,
+        stateId: selectedState !== 'all' ? selectedState : undefined,
         currentUserRole: userRole,
         currentUserErrId: userErrId
       })
       
       setTotalRooms(total)
-      
-      // Extract unique states and localities for filters first
-      // Group by state_name instead of state.id to avoid duplicates
-      const stateMap = new Map<string, {id: string, name: string, localities: string[]}>()
-      
-      fetchedRooms
-        .filter(room => room.state && room.state.state_name)
-        .forEach(room => {
-          const stateName = room.state?.state_name || ''
-          const stateNameDisplay = i18n.language === 'ar' 
-            ? (room.state?.state_name_ar || room.state?.state_name || '') 
-            : (room.state?.state_name || '')
-          const locality = i18n.language === 'ar' 
-            ? (room.state?.locality_ar || room.state?.locality || '') 
-            : (room.state?.locality || '')
-          
-          if (!stateName) return
-          
-          if (!stateMap.has(stateName)) {
-            // Use the first state.id we encounter for this state_name
-            stateMap.set(stateName, {
-              id: room.state?.id || '',
-              name: stateNameDisplay,
-              localities: locality ? [locality] : []
-            })
-          } else {
-            const existing = stateMap.get(stateName)!
-            if (locality && !existing.localities.includes(locality)) {
-              existing.localities.push(locality)
-            }
-          }
-        })
-      
-      const uniqueStates = Array.from(stateMap.values())
-      
-      // Apply client-side filtering for state and locality
-      let filteredRooms = fetchedRooms;
-      
-      if (selectedState !== 'all') {
-        // Find the state_name for the selected state id
-        const selectedStateObj = uniqueStates.find(s => s.id === selectedState)
-        if (selectedStateObj) {
-          // Get state_name from any room with this state id
-          const selectedStateName = fetchedRooms.find(r => r.state?.id === selectedState)?.state?.state_name
-          
-          if (selectedStateName) {
-            filteredRooms = filteredRooms.filter(
-              room => room.state?.state_name === selectedStateName
-            )
-          }
-        }
-      }
-      
-      if (selectedLocality !== 'all') {
-        filteredRooms = filteredRooms.filter(
-          room => room.state?.locality === selectedLocality
-        );
-      }
-      
-      setStates(uniqueStates);
-      
-      // Update localities when state is selected
-      if (selectedState !== 'all') {
-        const stateObj = uniqueStates.find(s => s.id === selectedState);
-        const validLocalities = (stateObj?.localities || []).filter(locality => locality);
-        setLocalities(validLocalities);
-      } else {
-        const allLocalities = Array.from(
-          new Set(
-            fetchedRooms
-              .filter(room => room.state && (room.state.locality || room.state.locality_ar))
-              .map(room => i18n.language === 'ar' ? (room.state?.locality_ar || room.state?.locality || '') : (room.state?.locality || ''))
-          )
-        ).filter(locality => locality);
-        setLocalities(allLocalities);
-      }
-      
-      setRooms(filteredRooms)
+      setRooms(fetchedRooms)
     } catch (err) {
       console.error('Error fetching active rooms:', err)
       setError('Failed to fetch rooms')
     } finally {
       setIsLoading(false)
     }
-  }, [selectedType, selectedState, selectedLocality, currentPage, userRole, userErrId, i18n.language])
+  }, [selectedType, selectedState, currentPage, userRole, userErrId, i18n.language])
+
+  // Fetch unique states for filter dropdown (only once on mount and language change)
+  useEffect(() => {
+    const fetchStates = async () => {
+      try {
+        const { data: statesData, error: statesError } = await supabase
+          .from('emergency_rooms')
+          .select(`
+            state:states!emergency_rooms_state_reference_fkey(
+              id,
+              state_name,
+              state_name_ar
+            )
+          `)
+          .eq('status', 'active')
+          .not('state_reference', 'is', null)
+
+        if (!statesError && statesData) {
+          const stateMap = new Map<string, {id: string, name: string}>()
+          
+          statesData.forEach((room: any) => {
+            const state = room.state
+            if (state && state.state_name) {
+              if (!stateMap.has(state.state_name)) {
+                const stateNameDisplay = i18n.language === 'ar' 
+                  ? (state.state_name_ar || state.state_name || '') 
+                  : (state.state_name || '')
+                
+                stateMap.set(state.state_name, {
+                  id: state.id,
+                  name: stateNameDisplay
+                })
+              }
+            }
+          })
+          
+          const uniqueStates = Array.from(stateMap.values())
+          setStates(uniqueStates)
+        }
+      } catch (error) {
+        console.error('Error fetching states:', error)
+      }
+    }
+
+    fetchStates()
+  }, [i18n.language])
 
   useEffect(() => {
     fetchRooms()
@@ -157,16 +125,7 @@ export default function ActiveRoomsList({
   // Reset to first page when filters change
   useEffect(() => {
     setCurrentPage(1)
-  }, [selectedType, selectedState, selectedLocality])
-
-  // Update localities when state changes
-  useEffect(() => {
-    if (selectedState !== 'all') {
-      const stateObj = states.find(s => s.id === selectedState);
-      setLocalities(stateObj?.localities || []);
-      setSelectedLocality('all'); // Reset locality selection
-    }
-  }, [selectedState, states]);
+  }, [selectedType, selectedState])
 
   const totalPages = Math.ceil(totalRooms / PAGE_SIZE)
 
@@ -368,21 +327,6 @@ export default function ActiveRoomsList({
           </SelectContent>
         </Select>
         
-        <Select
-          value={selectedLocality}
-          onValueChange={(value) => setSelectedLocality(value)}
-          disabled={localities.length === 0}
-        >
-          <SelectTrigger className="w-[180px]">
-            <SelectValue placeholder={t('rooms:filter_by_locality')} />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">{t('rooms:all_localities')}</SelectItem>
-            {localities.filter(locality => locality).map((locality) => (
-              <SelectItem key={locality} value={locality}>{locality}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
       </div>
 
       {isLoading && <div className="text-muted-foreground">{t('rooms:loading')}</div>}
