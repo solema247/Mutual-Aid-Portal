@@ -88,14 +88,23 @@ export default function ErrPortalPage() {
   return (
     <div className="max-w-4xl mx-auto">
       <div className="text-center mb-12">
-        <Image
-          src="/logo.jpg"
-          alt="LCC Sudan Logo"
-          width={200}
-          height={233}
-          priority
-          className="mx-auto mb-6"
-        />
+        <div className="flex items-center justify-center gap-6 mb-6 flex-wrap">
+          <Image
+            src="/logo.jpg"
+            alt="LCC Sudan Logo"
+            width={200}
+            height={233}
+            priority
+            className="h-[233px] w-auto object-contain"
+          />
+          <Image
+            src="/new_logo.jpeg"
+            alt="LCC Sudan Logo"
+            width={200}
+            height={233}
+            className="h-[233px] w-auto object-contain"
+          />
+        </div>
         <h1 className="text-4xl font-bold mb-4">{t('err:title')}</h1>
         <p className="text-xl mb-8">
           {t('err:welcome', { name: user?.display_name || t('login:err_staff') })}
