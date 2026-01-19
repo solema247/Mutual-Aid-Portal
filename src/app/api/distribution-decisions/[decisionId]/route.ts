@@ -8,15 +8,46 @@ export async function DELETE(
 ) {
   try {
     const supabase = getSupabaseRouteClient()
-    const decisionId = params.decisionId
+    // Trim the decisionId to handle trailing/leading whitespace issues
+    const decisionId = params.decisionId.trim()
 
-    // Delete by decision_id_proposed (string key)
-    const { error } = await supabase
+    // First, find the record by checking both decision_id_proposed and decision_id
+    // We need to handle potential whitespace in the database values
+    const { data: records, error: fetchError } = await supabase
+      .from('distribution_decision_master_sheet_1')
+      .select('id')
+      .or(`decision_id_proposed.eq.${decisionId},decision_id.eq.${decisionId}`)
+
+    if (fetchError) throw fetchError
+
+    // If no record found, try with trimmed versions (in case DB has trailing spaces)
+    let recordToDelete = records?.[0]
+    if (!recordToDelete) {
+      // Try fetching all and matching with trimmed comparison
+      const { data: allRecords, error: allError } = await supabase
+        .from('distribution_decision_master_sheet_1')
+        .select('id, decision_id_proposed, decision_id')
+
+      if (allError) throw allError
+
+      recordToDelete = allRecords?.find(
+        (r) =>
+          (r.decision_id_proposed?.trim() === decisionId) ||
+          (r.decision_id?.trim() === decisionId)
+      )
+    }
+
+    if (!recordToDelete) {
+      return NextResponse.json({ error: 'Distribution decision not found' }, { status: 404 })
+    }
+
+    // Delete by UUID id (most reliable)
+    const { error: deleteError } = await supabase
       .from('distribution_decision_master_sheet_1')
       .delete()
-      .eq('decision_id_proposed', decisionId)
+      .eq('id', recordToDelete.id)
 
-    if (error) throw error
+    if (deleteError) throw deleteError
 
     return NextResponse.json({ success: true })
   } catch (error) {

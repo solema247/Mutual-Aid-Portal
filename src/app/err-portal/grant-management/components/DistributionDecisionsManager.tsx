@@ -256,7 +256,9 @@ export default function DistributionDecisionsManager() {
   const handleDeleteDecision = async (decisionKey: string) => {
     try {
       setIsDeleting((prev) => ({ ...prev, [decisionKey]: true }))
-      const res = await fetch(`/api/distribution-decisions/${decisionKey}`, { method: 'DELETE' })
+      // Trim the decisionKey to remove any whitespace before sending to API
+      const trimmedKey = decisionKey.trim()
+      const res = await fetch(`/api/distribution-decisions/${encodeURIComponent(trimmedKey)}`, { method: 'DELETE' })
       if (!res.ok) {
         const err = await res.json()
         throw new Error(err.error || 'Failed to delete decision')
