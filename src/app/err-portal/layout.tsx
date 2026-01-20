@@ -61,7 +61,7 @@ export default function ErrPortalLayout({
     return () => window.removeEventListener('storage', onStorage)
   }, [])
 
-  const canManageRooms = user?.role === 'admin' || user?.role === 'state_err'
+  const canManageRooms = user?.role === 'admin' || user?.role === 'superadmin' || user?.role === 'state_err'
 
   const sidebarItems = [
     {
