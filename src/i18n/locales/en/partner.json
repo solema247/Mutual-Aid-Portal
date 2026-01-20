@@ -3,6 +3,8 @@
   "welcome": "Welcome, {{name}}",
   "forecast": "Forecasting Tool",
   "forecast_desc": "Plan and manage your forecasts",
+  "dashboard": "Dashboard",
+  "dashboard_desc": "View reports and dashboards",
   "grants": {
     "title": "Grant Management",
     "description": "Manage your grant calls and applications",

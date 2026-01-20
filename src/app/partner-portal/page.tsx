@@ -6,7 +6,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { Button } from '@/components/ui/button'
 import LanguageSwitch from '@/components/LanguageSwitch'
-import { BarChart2, PieChart, LogOut } from 'lucide-react'
+import { BarChart2, PieChart, LogOut, LayoutDashboard } from 'lucide-react'
 import '@/i18n/config'
 
 interface Donor {
@@ -50,6 +50,19 @@ export default function PartnerPortalPage() {
       </div>
       
       <nav className="space-y-4">
+        <Link href="/dashboard" className="block">
+          <Button className="w-full p-4" variant="outline">
+            <div className="flex items-center gap-4 w-full">
+              <div className="flex items-center gap-2">
+                <LayoutDashboard className="h-6 w-6" />
+                {t('partner:dashboard')}
+              </div>
+              <span className="text-sm text-muted-foreground">
+                {t('partner:dashboard_desc')}
+              </span>
+            </div>
+          </Button>
+        </Link>
         <Link href="/forecast" className="block">
           <Button className="w-full p-4" variant="outline">
             <div className="flex items-center gap-4 w-full">

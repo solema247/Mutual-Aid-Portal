@@ -89,9 +89,6 @@ export async function middleware(req: NextRequest) {
   }
 
   // Role-based access control
-  if (userType?.value === 'partner' && req.nextUrl.pathname.startsWith('/dashboard')) {
-    return NextResponse.redirect(new URL('/', req.url))
-  }
   if (userType?.value === 'err' && req.nextUrl.pathname.startsWith('/forecast')) {
     return NextResponse.redirect(new URL('/', req.url))
   }
