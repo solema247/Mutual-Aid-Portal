@@ -11,7 +11,7 @@ import PoolDashboard from './components/PoolDashboard'
 
 export default function F1WorkPlansPage() {
   const { t } = useTranslation(['f1_plans', 'common'])
-  const [currentTab, setCurrentTab] = useState<'err_app' | 'direct_upload'>('err_app')
+  const [currentTab, setCurrentTab] = useState<'err_app' | 'direct_upload'>('direct_upload')
   const [isByStateCollapsed, setIsByStateCollapsed] = useState(true)
 
   return (
@@ -37,7 +37,7 @@ export default function F1WorkPlansPage() {
         </CardHeader>
         <CardContent>
           <Tabs 
-            defaultValue="err_app" 
+            defaultValue="direct_upload" 
             className="w-full" 
             onValueChange={(value) => setCurrentTab(value as 'err_app' | 'direct_upload')}
           >
