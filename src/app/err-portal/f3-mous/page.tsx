@@ -107,6 +107,7 @@ export default function F3MOUsPage() {
   const [detail, setDetail] = useState<MOUDetail | null>(null)
   const [translations, setTranslations] = useState<{ objectives_en?: string; beneficiaries_en?: string; activities_en?: string; objectives_ar?: string; beneficiaries_ar?: string; activities_ar?: string }>({})
   const [exporting, setExporting] = useState(false)
+  const [forceBudgetExpanded, setForceBudgetExpanded] = useState(false)
   const [editMode, setEditMode] = useState(false)
   const [editingMou, setEditingMou] = useState<Partial<MOU>>({})
   const [saving, setSaving] = useState(false)
@@ -1440,7 +1441,7 @@ export default function F3MOUsPage() {
                   <div className="rounded-md border p-3 text-sm" dir="rtl">{t('f3:budget_ar_desc')}</div>
                 </div>
                 {aggregatedData.budgetTableData ? (
-                  <HierarchicalBudgetTable data={aggregatedData.budgetTableData} />
+                  <HierarchicalBudgetTable data={aggregatedData.budgetTableData} forceExpanded={forceBudgetExpanded} />
                 ) : aggregatedData.budgetTable && (
                   <div className="mt-4 overflow-x-auto" dangerouslySetInnerHTML={{ __html: aggregatedData.budgetTable }} />
                 )}
@@ -1880,6 +1881,11 @@ export default function F3MOUsPage() {
                   onClick={async () => {
                     try {
                       setExporting(true)
+                      // Force budget table to be expanded for PDF
+                      setForceBudgetExpanded(true)
+                      // Wait a tick for React to re-render with expanded table
+                      await new Promise(resolve => setTimeout(resolve, 100))
+                      
                       const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
                         import('html2canvas'),
                         import('jspdf') as any
@@ -2168,6 +2174,8 @@ export default function F3MOUsPage() {
                       console.error('PDF export failed', e)
                     } finally {
                       setExporting(false)
+                      // Reset force expansion after PDF generation
+                      setForceBudgetExpanded(false)
                     }
                   }}
                   disabled={exporting || editMode}
