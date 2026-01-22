@@ -555,11 +555,6 @@ export function getBudgetTableData(projects: Project[]): BudgetTableData | null 
     // Add project to ERR
     errData.projects.push(project)
 
-    // Add beneficiaries (sum them)
-    if (project.estimated_beneficiaries) {
-      errData.beneficiaries += project.estimated_beneficiaries
-    }
-
     // Parse planned_activities to extract categories, costs, and beneficiaries
     if (project.planned_activities) {
       try {
@@ -617,12 +612,15 @@ export function getBudgetTableData(projects: Project[]): BudgetTableData | null 
 
     // Calculate subtotal
     const subtotal = activities.reduce((sum, act) => sum + act.amount, 0)
+    
+    // Calculate total beneficiaries from all planned activities (sum of individuals)
+    const totalBeneficiaries = activities.reduce((sum, act) => sum + (act.beneficiaries || 0), 0)
 
     errs.push({
       errId,
       errCode: data.errCode,
       errName: data.errName,
-      beneficiaries: data.beneficiaries,
+      beneficiaries: totalBeneficiaries,
       activities,
       subtotal
     })
