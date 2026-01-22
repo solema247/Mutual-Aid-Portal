@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
@@ -10,7 +10,13 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { supabase } from '@/lib/supabaseClient'
 
-type Expense = { activity: string; total_cost: number }
+type Expense = { 
+  activity: string
+  total_cost: number
+  category?: string | null
+  planned_activity?: string | null
+  planned_activity_other?: string | null
+}
 
 interface ProjectEditorProps {
   open: boolean
@@ -26,13 +32,23 @@ export default function ProjectEditor({ open, onOpenChange, projectId, onSaved }
 
   const [form, setForm] = useState<any>({})
   const [expenses, setExpenses] = useState<Expense[]>([])
-  // Display-only strings for planned activities
+  // Planned activities as objects with individuals, families, etc.
+  const [plannedActivities, setPlannedActivities] = useState<Array<{
+    activity: string
+    category: string | null
+    individuals: number | null
+    families: number | null
+    planned_activity_cost: number | null
+  }>>([])
+  // Display-only strings for planned activities (for backward compatibility)
   const [activities, setActivities] = useState<string[]>([])
   // Raw planned_activities objects/strings from DB so we can preserve budgets & metadata
   const [rawPlannedActivities, setRawPlannedActivities] = useState<any[]>([])
   const [availableRooms, setAvailableRooms] = useState<Array<{id: string, name: string, name_ar: string | null, err_code: string | null, state_name: string, locality: string | null}>>([])
   const [selectedStateFilter, setSelectedStateFilter] = useState<string>('')
   const [availableStates, setAvailableStates] = useState<Array<{id: string, name: string, name_ar: string | null}>>([])
+  const [availablePlannedActivities, setAvailablePlannedActivities] = useState<Array<{ id: string; activity_name: string; activity_name_ar: string | null; language: string | null }>>([])
+  const [sectors, setSectors] = useState<Array<{ id: string; sector_name_en: string; sector_name_ar: string | null }>>([])
 
   // Fetch available states for filtering rooms
   useEffect(() => {
@@ -66,6 +82,44 @@ export default function ProjectEditor({ open, onOpenChange, projectId, onSaved }
     }
 
     fetchStates()
+  }, [open])
+
+  // Load planned activities for dropdown
+  useEffect(() => {
+    const loadPlannedActivities = async () => {
+      if (!open) return
+      try {
+        const { data: activitiesData, error } = await supabase
+          .from('planned_activities')
+          .select('id, activity_name, activity_name_ar, language')
+          .order('activity_name')
+        
+        if (error) throw error
+        setAvailablePlannedActivities(activitiesData || [])
+      } catch (error) {
+        console.error('Error loading planned activities:', error)
+      }
+    }
+    loadPlannedActivities()
+  }, [open])
+
+  // Load sectors for sector dropdown
+  useEffect(() => {
+    const loadSectors = async () => {
+      if (!open) return
+      try {
+        const { data: sectorsData, error } = await supabase
+          .from('sectors')
+          .select('id, sector_name_en, sector_name_ar')
+          .order('sector_name_en')
+        
+        if (error) throw error
+        setSectors(sectorsData || [])
+      } catch (error) {
+        console.error('Error loading sectors:', error)
+      }
+    }
+    loadSectors()
   }, [open])
 
   // Set state filter when form loads with a state
@@ -206,11 +260,22 @@ export default function ProjectEditor({ open, onOpenChange, projectId, onSaved }
         }
 
         setForm(data)
-        setExpenses(
-          Array.isArray(data?.expenses)
-            ? data.expenses
-            : (typeof data?.expenses === 'string' ? JSON.parse(data?.expenses || '[]') : [])
-        )
+        
+        // Parse expenses - ensure they have planned_activity fields
+        const parsedExpenses = Array.isArray(data?.expenses)
+          ? data.expenses
+          : (typeof data?.expenses === 'string' ? JSON.parse(data?.expenses || '[]') : [])
+        
+        // Ensure expenses have planned_activity fields
+        const expensesWithTags = parsedExpenses.map((exp: any) => ({
+          activity: exp.activity || '',
+          total_cost: exp.total_cost || 0,
+          category: exp.category || null,
+          planned_activity: exp.planned_activity || null,
+          planned_activity_other: exp.planned_activity_other || null
+        }))
+        
+        setExpenses(expensesWithTags)
 
         // Normalize planned_activities for display while preserving original structure
         const paRaw = Array.isArray(data?.planned_activities)
@@ -220,21 +285,61 @@ export default function ProjectEditor({ open, onOpenChange, projectId, onSaved }
             : [])
 
         setRawPlannedActivities(Array.isArray(paRaw) ? paRaw : [])
-
-        const paDisplay: string[] = (Array.isArray(paRaw) ? paRaw : []).map((item: any) => {
-          if (typeof item === 'string') return item
-          if (item && typeof item === 'object') {
-            if ('activity' in item && item.activity) return String(item.activity)
-            if ('description' in item && item.description) return String(item.description)
-          }
-          // Fallback – avoid [object Object] in the UI
-          try {
-            return JSON.stringify(item)
-          } catch {
-            return ''
+        
+        // Auto-populate planned activities from tagged expenses
+        const activityMap = new Map<string, { activity: string; cost: number; category: string | null; individuals: number | null; families: number | null }>()
+        
+        expensesWithTags.forEach((expense: any) => {
+          if (expense.planned_activity && expense.planned_activity.trim()) {
+            const plannedActivityLower = expense.planned_activity.toLowerCase()
+            const isOther = plannedActivityLower.includes('other') || expense.planned_activity.includes('أخرى')
+            
+            let activityName: string
+            if (isOther && expense.planned_activity_other && expense.planned_activity_other.trim()) {
+              activityName = expense.planned_activity_other.trim()
+            } else {
+              activityName = expense.planned_activity.trim()
+            }
+            
+            if (activityName) {
+              const existing = activityMap.get(activityName)
+              if (existing) {
+                existing.cost += expense.total_cost || 0
+              } else {
+                // Try to find existing data from raw planned activities
+                const existingPa = Array.isArray(paRaw) ? paRaw.find((pa: any) => {
+                  if (typeof pa === 'string') return pa === activityName
+                  if (pa && typeof pa === 'object') {
+                    return (pa.activity === activityName || pa.description === activityName)
+                  }
+                  return false
+                }) : null
+                
+                activityMap.set(activityName, {
+                  activity: activityName,
+                  cost: expense.total_cost || 0,
+                  category: (existingPa && typeof existingPa === 'object' && existingPa.category) ? existingPa.category : null,
+                  individuals: (existingPa && typeof existingPa === 'object' && existingPa.individuals != null) ? existingPa.individuals : null,
+                  families: (existingPa && typeof existingPa === 'object' && existingPa.families != null) ? existingPa.families : null
+                })
+              }
+            }
           }
         })
 
+        // Convert map to planned activities array
+        const paObjects = Array.from(activityMap.values()).map(item => ({
+          activity: item.activity,
+          category: item.category,
+          individuals: item.individuals,
+          families: item.families,
+          planned_activity_cost: item.cost
+        }))
+
+        setPlannedActivities(paObjects)
+        
+        // Also set activities for backward compatibility
+        const paDisplay: string[] = paObjects.map(item => item.activity)
         setActivities(paDisplay)
       } catch (e) {
         console.error('Load project error', e)
@@ -294,12 +399,81 @@ export default function ProjectEditor({ open, onOpenChange, projectId, onSaved }
     }
   }
 
+  // Auto-populate planned activities from tagged expenses
+  const updatePlannedActivitiesFromExpenses = useCallback((expensesList: Expense[]) => {
+    setPlannedActivities(prevPlannedActivities => {
+      const activityMap = new Map<string, { activity: string; cost: number; category: string | null; individuals: number | null; families: number | null }>()
+      
+      expensesList.forEach((expense) => {
+        if (expense.planned_activity && expense.planned_activity.trim()) {
+          const plannedActivityLower = expense.planned_activity.toLowerCase()
+          const isOther = plannedActivityLower.includes('other') || expense.planned_activity.includes('أخرى')
+          
+          let activityName: string
+          if (isOther && expense.planned_activity_other && expense.planned_activity_other.trim()) {
+            activityName = expense.planned_activity_other.trim()
+          } else {
+            activityName = expense.planned_activity.trim()
+          }
+          
+          if (activityName) {
+            const existing = activityMap.get(activityName)
+            if (existing) {
+              existing.cost += expense.total_cost || 0
+            } else {
+              // Preserve existing category, individuals, families from current planned activities
+              const existingPa = prevPlannedActivities.find(pa => pa.activity === activityName)
+              activityMap.set(activityName, {
+                activity: activityName,
+                cost: expense.total_cost || 0,
+                category: existingPa?.category || null,
+                individuals: existingPa?.individuals ?? null,
+                families: existingPa?.families ?? null
+              })
+            }
+          }
+        }
+      })
+
+      // Convert map to planned activities array
+      const newPlannedActivities = Array.from(activityMap.values()).map(item => ({
+        activity: item.activity,
+        category: item.category,
+        individuals: item.individuals,
+        families: item.families,
+        planned_activity_cost: item.cost
+      }))
+
+      setActivities(newPlannedActivities.map(a => a.activity))
+      return newPlannedActivities
+    })
+  }, [])
+
+  // Auto-update planned activities when expenses change
+  useEffect(() => {
+    if (expenses.length > 0) {
+      updatePlannedActivitiesFromExpenses(expenses)
+    }
+  }, [expenses, updatePlannedActivitiesFromExpenses])
+
   const updateExpense = (idx: number, key: keyof Expense, value: any) => {
-    setExpenses(prev => prev.map((e, i) => i === idx ? { ...e, [key]: key === 'total_cost' ? Number(value) || 0 : value } : e))
+    const newExpenses = expenses.map((e, i) => 
+      i === idx 
+        ? { ...e, [key]: key === 'total_cost' ? Number(value) || 0 : value } 
+        : e
+    )
+    setExpenses(newExpenses)
   }
 
-  const addExpense = () => setExpenses(prev => [...prev, { activity: '', total_cost: 0 }])
-  const removeExpense = (idx: number) => setExpenses(prev => prev.filter((_, i) => i !== idx))
+  const addExpense = () => {
+    const newExpenses = [...expenses, { activity: '', total_cost: 0, category: null, planned_activity: null, planned_activity_other: null }]
+    setExpenses(newExpenses)
+  }
+  
+  const removeExpense = (idx: number) => {
+    const newExpenses = expenses.filter((_, i) => i !== idx)
+    setExpenses(newExpenses)
+  }
 
   const total = expenses.reduce((s, e) => s + (e.total_cost || 0), 0)
 
@@ -336,53 +510,14 @@ export default function ProjectEditor({ open, onOpenChange, projectId, onSaved }
         }
       }
 
-      // Build planned_activities payload preserving existing structure where possible
-      let plannedActivitiesForSave: any[] = []
-      const displayActivities = activities || []
-
-      if (rawPlannedActivities.length === displayActivities.length && rawPlannedActivities.length > 0) {
-        // Update existing entries, preserving costs/categories/etc.
-        plannedActivitiesForSave = rawPlannedActivities.map((item, idx) => {
-          const text = displayActivities[idx] ?? ''
-          if (typeof item === 'string') return text
-          if (item && typeof item === 'object') {
-            return { ...item, activity: text }
-          }
-          return text || item
-        })
-      } else if (rawPlannedActivities.length === 0 && displayActivities.length > 0) {
-        // No original structure – create objects in the new standard format
-        plannedActivitiesForSave = displayActivities.map(a => ({
-          activity: a || '',
-          category: null,
-          individuals: null,
-          families: null,
-          planned_activity_cost: null
-        }))
-      } else {
-        // Mismatch (activities added/removed) – best-effort update:
-        // try to update existing ones, convert extras to new-format objects.
-        const maxLen = Math.max(rawPlannedActivities.length, displayActivities.length)
-        for (let i = 0; i < maxLen; i++) {
-          const original = rawPlannedActivities[i]
-          const text = displayActivities[i] ?? ''
-          if (original === undefined) {
-            plannedActivitiesForSave.push({
-              activity: text || '',
-              category: null,
-              individuals: null,
-              families: null,
-              planned_activity_cost: null
-            })
-          } else if (typeof original === 'string') {
-            plannedActivitiesForSave.push(text)
-          } else if (original && typeof original === 'object') {
-            plannedActivitiesForSave.push({ ...original, activity: text })
-          } else {
-            plannedActivitiesForSave.push(text || original)
-          }
-        }
-      }
+      // Build planned_activities payload from the plannedActivities state
+      const plannedActivitiesForSave = plannedActivities.map(pa => ({
+        activity: pa.activity || '',
+        category: pa.category || null,
+        individuals: pa.individuals ?? null,
+        families: pa.families ?? null,
+        planned_activity_cost: pa.planned_activity_cost ?? null
+      }))
 
       const payload: any = {
         project_objectives: form.project_objectives || null,
@@ -398,7 +533,13 @@ export default function ProjectEditor({ open, onOpenChange, projectId, onSaved }
         finance_officer_name: form.finance_officer_name || null,
         finance_officer_phone: form.finance_officer_phone || null,
         planned_activities: plannedActivitiesForSave,
-        expenses
+        expenses: expenses.map(e => ({
+          activity: e.activity,
+          total_cost: e.total_cost,
+          category: e.category || null,
+          planned_activity: e.planned_activity || null,
+          planned_activity_other: e.planned_activity_other || null
+        }))
       }
 
       // Include emergency_room_id, state, and locality if they exist
@@ -429,7 +570,7 @@ export default function ProjectEditor({ open, onOpenChange, projectId, onSaved }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-5xl max-h-[85vh] overflow-y-auto">
+      <DialogContent className="max-w-7xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{t('projects:project_details')}</DialogTitle>
         </DialogHeader>
@@ -554,36 +695,209 @@ export default function ProjectEditor({ open, onOpenChange, projectId, onSaved }
             </div>
 
             <div>
-              <div className="flex items-center justify-between">
-                <Label>{t('projects:planned_activities')}</Label>
-                <Button variant="outline" size="sm" onClick={() => setActivities(prev => [...prev, ''])}>{t('projects:add_activity')}</Button>
-              </div>
-              <div className="mt-2 space-y-2">
-                {activities.map((a, i) => (
-                  <div key={i} className="flex gap-2">
-                    <Input value={a} onChange={(e) => setActivities(prev => prev.map((v, idx) => idx === i ? e.target.value : v))} />
-                    <Button variant="outline" size="sm" onClick={() => setActivities(prev => prev.filter((_, idx) => idx !== i))}>{t('projects:remove_activity')}</Button>
-                  </div>
-                ))}
+              <Label className="text-lg font-semibold mb-2">{t('projects:planned_activities')}</Label>
+              <div className="border rounded-lg overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-muted">
+                      <tr>
+                        <th className="px-4 py-2 text-left min-w-[200px]">{t('projects:activity') || 'Activity'}</th>
+                        <th className="px-4 py-2 text-left min-w-[180px]">Sector</th>
+                        <th className="px-4 py-2 text-left min-w-[120px]">Individuals</th>
+                        <th className="px-4 py-2 text-left min-w-[120px]">Families</th>
+                        <th className="px-4 py-2 text-left min-w-[150px]">Planned Activity Cost</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {plannedActivities.map((pa, i) => (
+                        <tr key={i} className="border-t">
+                          <td className="px-4 py-2">
+                            <div className="p-2 bg-muted rounded-md text-sm h-8 flex items-center">
+                              {pa.activity || '-'}
+                            </div>
+                          </td>
+                          <td className="px-4 py-2">
+                            <Select
+                              value={sectors.find(s => s.sector_name_en === pa.category)?.id || undefined}
+                              onValueChange={(value) => {
+                                const selectedSector = sectors.find(s => s.id === value)
+                                const newActivities = [...plannedActivities]
+                                newActivities[i] = { 
+                                  ...newActivities[i], 
+                                  category: selectedSector ? selectedSector.sector_name_en : null 
+                                }
+                                setPlannedActivities(newActivities)
+                              }}
+                            >
+                              <SelectTrigger className="h-8 w-full">
+                                <SelectValue placeholder="Select sector" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {sectors.map((sector) => (
+                                  <SelectItem key={sector.id} value={sector.id}>
+                                    {sector.sector_name_en} {sector.sector_name_ar && `(${sector.sector_name_ar})`}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </td>
+                          <td className="px-4 py-2">
+                            <Input
+                              type="number"
+                              value={pa.individuals || ''}
+                              onChange={(e) => {
+                                const newActivities = [...plannedActivities]
+                                newActivities[i] = {
+                                  ...newActivities[i],
+                                  individuals: e.target.value ? parseInt(e.target.value) : null
+                                }
+                                setPlannedActivities(newActivities)
+                              }}
+                              className="h-8"
+                              placeholder="0"
+                              min="0"
+                            />
+                          </td>
+                          <td className="px-4 py-2">
+                            <Input
+                              type="number"
+                              value={pa.families || ''}
+                              onChange={(e) => {
+                                const newActivities = [...plannedActivities]
+                                newActivities[i] = {
+                                  ...newActivities[i],
+                                  families: e.target.value ? parseInt(e.target.value) : null
+                                }
+                                setPlannedActivities(newActivities)
+                              }}
+                              className="h-8"
+                              placeholder="0"
+                              min="0"
+                            />
+                          </td>
+                          <td className="px-4 py-2">
+                            <div className="p-2 bg-muted rounded-md text-sm h-8 flex items-center justify-end font-medium">
+                              {pa.planned_activity_cost?.toLocaleString() || '0.00'}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="p-4 border-t">
+                  <p className="text-sm text-muted-foreground">
+                    Planned activities are automatically populated from tagged expenses. Select Sector and add Individuals and Families for each activity.
+                  </p>
+                </div>
               </div>
             </div>
 
             <div>
-              <div className="flex items-center justify-between">
-                <Label>{t('projects:expenses')}</Label>
-                <div className="text-sm text-muted-foreground">{t('projects:total')}: {total.toLocaleString()}</div>
-              </div>
-              <div className="mt-2 space-y-2">
-                {expenses.map((e, i) => (
-                  <div key={i} className="grid grid-cols-3 gap-2">
-                    <Input placeholder={t('projects:activity') || 'Activity'} value={e.activity} onChange={(ev) => updateExpense(i, 'activity', ev.target.value)} />
-                    <Input type="number" placeholder={t('projects:amount') || 'Amount'} value={e.total_cost} onChange={(ev) => updateExpense(i, 'total_cost', ev.target.value)} />
-                    <div className="flex gap-2">
-                      <Button variant="outline" size="sm" onClick={() => removeExpense(i)}>{t('projects:remove_expense')}</Button>
+              <Label className="text-lg font-semibold mb-2">{t('projects:expenses')}</Label>
+              <div className="border rounded-lg overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-muted">
+                      <tr>
+                        <th className="px-4 py-2 text-left">Expenses</th>
+                        <th className="px-4 py-2 text-left min-w-[200px]">Planned Activity</th>
+                        <th className="px-4 py-2 text-right">USD</th>
+                        <th className="w-16 px-4 py-2"></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {expenses.map((expense, index) => (
+                        <tr key={index} className="border-t">
+                          <td className="px-4 py-2">
+                            <Input
+                              value={expense.activity}
+                              onChange={(e) => updateExpense(index, 'activity', e.target.value)}
+                              className="border-0 focus-visible:ring-0 px-0 py-0 h-8"
+                              placeholder="Expense description"
+                            />
+                          </td>
+                          <td className="px-4 py-2">
+                            <div className="space-y-2">
+                              <Select
+                                value={availablePlannedActivities.find(pa => pa.activity_name === expense.planned_activity)?.id || undefined}
+                                onValueChange={(value) => {
+                                  const selectedActivity = availablePlannedActivities.find(pa => pa.id === value)
+                                  const activityName = selectedActivity ? selectedActivity.activity_name : null
+                                  
+                                  const isOther = activityName && (activityName.toLowerCase().includes('other') || activityName.includes('أخرى'))
+                                  
+                                  // Update both fields in a single state update
+                                  const newExpenses = expenses.map((e, i) => 
+                                    i === index 
+                                      ? { 
+                                          ...e, 
+                                          planned_activity: activityName,
+                                          planned_activity_other: isOther ? e.planned_activity_other : null
+                                        } 
+                                      : e
+                                  )
+                                  setExpenses(newExpenses)
+                                }}
+                              >
+                                <SelectTrigger className="h-8 w-full">
+                                  <SelectValue placeholder="Select planned activity" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {availablePlannedActivities.map((activity) => (
+                                    <SelectItem key={activity.id} value={activity.id}>
+                                      {activity.activity_name} {activity.activity_name_ar && `(${activity.activity_name_ar})`}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              {expense.planned_activity && (expense.planned_activity.toLowerCase().includes('other') || expense.planned_activity.includes('أخرى')) && (
+                                <Input
+                                  value={expense.planned_activity_other || ''}
+                                  onChange={(e) => updateExpense(index, 'planned_activity_other', e.target.value)}
+                                  className="h-8"
+                                  placeholder="Specify other activity"
+                                />
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-4 py-2">
+                            <Input
+                              type="number"
+                              value={expense.total_cost}
+                              onChange={(e) => updateExpense(index, 'total_cost', e.target.value)}
+                              className="border-0 focus-visible:ring-0 px-0 py-0 h-8 text-right"
+                              placeholder="0"
+                              min="0"
+                              step="0.01"
+                            />
+                          </td>
+                          <td className="px-4 py-2 text-center">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => removeExpense(index)}
+                              className="h-8 w-8 p-0"
+                            >
+                              ×
+                            </Button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="p-4 border-t">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm text-muted-foreground">
+                      Tag expenses with planned activities to automatically populate the planned activities table above.
+                    </p>
+                    <div className="text-sm font-medium">
+                      {t('projects:total')}: {total.toLocaleString()}
                     </div>
                   </div>
-                ))}
-                <Button variant="outline" size="sm" onClick={addExpense}>{t('projects:add_expense')}</Button>
+                  <Button variant="outline" size="sm" onClick={addExpense} className="mt-2">{t('projects:add_expense')}</Button>
+                </div>
               </div>
             </div>
 
