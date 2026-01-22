@@ -19,12 +19,12 @@ export default function DashboardPage() {
           title={t('dashboard:reports_title')}
           defaultOpen={true}
         >
-          <div className="p-4 overflow-auto">
-            <div style={{ transform: 'scale(0.6)', transformOrigin: 'top left', width: '166.67%', height: '1400px' }}>
+          <div className="p-4 overflow-hidden" style={{ height: '1040px' }}>
+            <div style={{ transform: 'scale(0.65)', transformOrigin: 'top left', width: '153.85%', height: '1600px' }}>
               <iframe
                 src="https://lookerstudio.google.com/embed/reporting/dd8151a5-bba2-45fb-8441-8dc0805bd7f2/page/p_r0tcdcayzd"
                 width="100%"
-                height="1400"
+                height="1600"
                 style={{ border: 0 }}
                 allowFullScreen
                 sandbox="allow-storage-access-by-user-activation allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox"
