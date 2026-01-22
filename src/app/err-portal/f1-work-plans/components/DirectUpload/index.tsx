@@ -56,6 +56,10 @@ export default function DirectUpload() {
   const [isCreatingRoom, setIsCreatingRoom] = useState(false)
   const [selectedLocality, setSelectedLocality] = useState<string>('')
   const [availableLocalities, setAvailableLocalities] = useState<Array<{id: string, locality: string | null, locality_ar: string | null}>>([])
+  const [showCreateLocality, setShowCreateLocality] = useState(false)
+  const [newLocalityName, setNewLocalityName] = useState('')
+  const [newLocalityNameAr, setNewLocalityNameAr] = useState('')
+  const [isCreatingLocality, setIsCreatingLocality] = useState(false)
   
 
   useEffect(() => {
@@ -892,27 +896,138 @@ export default function DirectUpload() {
           </DialogHeader>
           <div className="space-y-4 mt-4">
             <div>
-              <Label htmlFor="room-locality">Locality *</Label>
-              <Select
-                value={selectedLocality}
-                onValueChange={setSelectedLocality}
-                disabled={isCreatingRoom || availableLocalities.length === 0}
-              >
-                <SelectTrigger className="h-[38px] w-full">
-                  <SelectValue placeholder={availableLocalities.length === 0 ? "Loading localities..." : "Select locality"} />
-                </SelectTrigger>
-                <SelectContent>
-                  {availableLocalities.map((loc) => (
-                    <SelectItem key={loc.id} value={loc.id}>
-                      {loc.locality || '(No locality)'} {loc.locality_ar ? `(${loc.locality_ar})` : ''}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {availableLocalities.length === 0 && formData.state_id && (
-                <p className="text-xs text-muted-foreground mt-1">
-                  No localities found for this state
-                </p>
+              <div className="flex items-center justify-between mb-2">
+                <Label htmlFor="room-locality">Locality *</Label>
+                {!showCreateLocality && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={() => setShowCreateLocality(true)}
+                    className="h-7 text-xs bg-green-700 hover:bg-green-800 text-white font-bold"
+                  >
+                    <Plus className="w-3 h-3 mr-1" />
+                    Add New Locality
+                  </Button>
+                )}
+              </div>
+              {showCreateLocality ? (
+                <div className="space-y-2">
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="Locality name (English)"
+                      value={newLocalityName}
+                      onChange={(e) => setNewLocalityName(e.target.value)}
+                      disabled={isCreatingLocality}
+                      className="flex-1"
+                    />
+                    <Input
+                      placeholder="Locality name (Arabic)"
+                      value={newLocalityNameAr}
+                      onChange={(e) => setNewLocalityNameAr(e.target.value)}
+                      disabled={isCreatingLocality}
+                      className="flex-1"
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setShowCreateLocality(false)
+                        setNewLocalityName('')
+                        setNewLocalityNameAr('')
+                      }}
+                      disabled={isCreatingLocality}
+                      className="flex-1"
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={async () => {
+                        if (!newLocalityName.trim()) {
+                          alert('Please enter a locality name')
+                          return
+                        }
+                        if (!formData.state_id) {
+                          alert('Please select a state first')
+                          return
+                        }
+                        
+                        setIsCreatingLocality(true)
+                        try {
+                          const selectedState = states.find(s => s.id === formData.state_id)
+                          if (!selectedState) {
+                            alert('State not found')
+                            return
+                          }
+
+                          // Create new state row with the new locality
+                          const { data: newState, error: createError } = await supabase
+                            .from('states')
+                            .insert({
+                              state_name: selectedState.state_name,
+                              state_name_ar: selectedState.state_name_ar,
+                              locality: newLocalityName.trim(),
+                              locality_ar: newLocalityNameAr.trim() || null,
+                              state_short: selectedState.state_short
+                            })
+                            .select()
+                            .single()
+
+                          if (createError) throw createError
+
+                          // Add to available localities and select it
+                          const newLocality = {
+                            id: newState.id,
+                            locality: newState.locality,
+                            locality_ar: newState.locality_ar
+                          }
+                          setAvailableLocalities(prev => [...prev, newLocality])
+                          setSelectedLocality(newState.id)
+                          setShowCreateLocality(false)
+                          setNewLocalityName('')
+                          setNewLocalityNameAr('')
+                        } catch (error: any) {
+                          console.error('Error creating locality:', error)
+                          alert('Failed to create locality: ' + (error.message || 'Unknown error'))
+                        } finally {
+                          setIsCreatingLocality(false)
+                        }
+                      }}
+                      disabled={isCreatingLocality || !newLocalityName.trim()}
+                      className="flex-1 bg-green-700 hover:bg-green-800 text-white font-bold"
+                    >
+                      {isCreatingLocality ? 'Creating...' : 'Create Locality'}
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <Select
+                    value={selectedLocality}
+                    onValueChange={setSelectedLocality}
+                    disabled={isCreatingRoom || availableLocalities.length === 0}
+                  >
+                    <SelectTrigger className="h-[38px] w-full">
+                      <SelectValue placeholder={availableLocalities.length === 0 ? "Loading localities..." : "Select locality"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {availableLocalities.map((loc) => (
+                        <SelectItem key={loc.id} value={loc.id}>
+                          {loc.locality || '(No locality)'} {loc.locality_ar ? `(${loc.locality_ar})` : ''}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {availableLocalities.length === 0 && formData.state_id && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      No localities found for this state
+                    </p>
+                  )}
+                </>
               )}
             </div>
             <div>
@@ -954,6 +1069,9 @@ export default function DirectUpload() {
                   setNewRoomName('')
                   setNewRoomNameAr('')
                   setSelectedLocality('')
+                  setShowCreateLocality(false)
+                  setNewLocalityName('')
+                  setNewLocalityNameAr('')
                 }}
                 disabled={isCreatingRoom}
               >
