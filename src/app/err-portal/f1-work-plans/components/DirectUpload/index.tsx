@@ -865,8 +865,8 @@ export default function DirectUpload() {
           onConfirm={handleConfirmUpload}
           onCancel={handleCancelReview}
           onValidationError={(message) => {
-            alert(message)
-            setIsReviewing(false)
+            // Don't close the form on validation error - let user fix the issue
+            // Error message is already displayed in the ExtractedDataReview component
           }}
           selectedState={formData.state_id}
           selectedFile={selectedFile}
