@@ -495,3 +495,146 @@ function escapeHtml(text: string): string {
     .replace(/'/g, '&#039;')
 }
 
+/**
+ * Returns structured budget data grouped by ERR for hierarchical table display
+ */
+export interface BudgetActivity {
+  category: string
+  amount: number
+  beneficiaries: number
+}
+
+export interface BudgetERR {
+  errId: string
+  errCode: string
+  errName: string
+  beneficiaries: number
+  activities: BudgetActivity[]
+  subtotal: number
+}
+
+export interface BudgetTableData {
+  errs: BudgetERR[]
+  allCategories: string[]
+  grandTotal: number
+}
+
+export function getBudgetTableData(projects: Project[]): BudgetTableData | null {
+  if (!projects || projects.length === 0) return null
+
+  // Group projects by ERR
+  const errMap = new Map<string, {
+    errCode: string
+    errName: string
+    projects: Project[]
+    categoryMap: Map<string, { cost: number; beneficiaries: number }> // category -> {cost, beneficiaries} across all projects in this ERR
+    beneficiaries: number
+  }>()
+
+  const allCategories = new Set<string>()
+
+  projects.forEach(project => {
+    // Get ERR identifier (use err_id or emergency_room_id)
+    const errKey = project.err_id || project.emergency_room_id || 'unknown'
+    const errCode = project.err_id || project.emergency_rooms?.err_code || '-'
+    const errName = project.emergency_rooms?.name || project.emergency_rooms?.name_ar || '-'
+
+    // Get or create ERR entry
+    if (!errMap.has(errKey)) {
+      errMap.set(errKey, {
+        errCode,
+        errName,
+        projects: [],
+        categoryMap: new Map(),
+        beneficiaries: 0
+      })
+    }
+
+    const errData = errMap.get(errKey)!
+
+    // Add project to ERR
+    errData.projects.push(project)
+
+    // Add beneficiaries (sum them)
+    if (project.estimated_beneficiaries) {
+      errData.beneficiaries += project.estimated_beneficiaries
+    }
+
+    // Parse planned_activities to extract categories, costs, and beneficiaries
+    if (project.planned_activities) {
+      try {
+        const raw = typeof project.planned_activities === 'string'
+          ? JSON.parse(project.planned_activities)
+          : project.planned_activities
+
+        if (Array.isArray(raw)) {
+          raw.forEach((item: any) => {
+            const category = item?.category
+            const cost = item?.planned_activity_cost || 0
+            const activityBeneficiaries = item?.individuals || 0
+
+            if (cost > 0) {
+              const categoryName = (category && typeof category === 'string' && category.trim())
+                ? category.trim()
+                : 'Uncategorized'
+
+              allCategories.add(categoryName)
+
+              // Sum costs and beneficiaries for the same category across all projects in this ERR
+              const current = errData.categoryMap.get(categoryName) || { cost: 0, beneficiaries: 0 }
+              errData.categoryMap.set(categoryName, {
+                cost: current.cost + cost,
+                beneficiaries: current.beneficiaries + (activityBeneficiaries || 0)
+              })
+            }
+          })
+        }
+      } catch {
+        // If parsing fails, skip this project's activities
+      }
+    }
+  })
+
+  if (errMap.size === 0) return null
+
+  // Convert to array and calculate subtotals
+  const sortedCategories = Array.from(allCategories).sort()
+  const errs: BudgetERR[] = []
+
+  errMap.forEach((data, errId) => {
+    // Convert category map to activities array
+    const activities: BudgetActivity[] = sortedCategories
+      .map(category => {
+        const categoryData = data.categoryMap.get(category)
+        if (!categoryData || categoryData.cost === 0) return null
+        return {
+          category,
+          amount: categoryData.cost,
+          beneficiaries: categoryData.beneficiaries
+        }
+      })
+      .filter((act): act is BudgetActivity => act !== null)
+
+    // Calculate subtotal
+    const subtotal = activities.reduce((sum, act) => sum + act.amount, 0)
+
+    errs.push({
+      errId,
+      errCode: data.errCode,
+      errName: data.errName,
+      beneficiaries: data.beneficiaries,
+      activities,
+      subtotal
+    })
+  })
+
+  // Calculate grand total
+  const grandTotal = errs.reduce((sum, err) => sum + err.subtotal, 0)
+
+  return {
+    errs,
+    allCategories: sortedCategories,
+    grandTotal
+  }
+}
+

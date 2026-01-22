@@ -12,7 +12,8 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Eye, Upload, Receipt, FileSignature, FileCheck, Link2, X, Plus, RefreshCw } from 'lucide-react'
 import dynamic from 'next/dynamic'
-import { aggregateObjectives, aggregateBeneficiaries, aggregatePlannedActivities, aggregatePlannedActivitiesDetailed, aggregateLocations, getBankingDetails, getBudgetTable } from '@/lib/mou-aggregation'
+import { aggregateObjectives, aggregateBeneficiaries, aggregatePlannedActivities, aggregatePlannedActivitiesDetailed, aggregateLocations, getBankingDetails, getBudgetTable, getBudgetTableData } from '@/lib/mou-aggregation'
+import HierarchicalBudgetTable from './components/HierarchicalBudgetTable'
 import { supabase } from '@/lib/supabaseClient'
 import PoolByDonor from '@/app/err-portal/f2-approvals/components/PoolByDonor'
 
@@ -225,7 +226,8 @@ export default function F3MOUsPage() {
         activitiesDetailed: null,
         locations: { localities: '', state: null },
         banking: null,
-        budgetTable: null
+        budgetTable: null,
+        budgetTableData: null
       }
     }
 
@@ -236,7 +238,8 @@ export default function F3MOUsPage() {
       activitiesDetailed: aggregatePlannedActivitiesDetailed(projects),
       locations: aggregateLocations(projects),
       banking: getBankingDetails(projects),
-      budgetTable: getBudgetTable(projects)
+      budgetTable: getBudgetTable(projects),
+      budgetTableData: getBudgetTableData(projects)
     }
   }, [detail])
 
@@ -1248,7 +1251,7 @@ export default function F3MOUsPage() {
           setEditingMou({})
         }
       }}>
-        <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+        <DialogContent className="max-w-7xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{activeMou?.mou_code || 'MOU'}</DialogTitle>
           </DialogHeader>
@@ -1436,7 +1439,9 @@ export default function F3MOUsPage() {
                   <div className="rounded-md border p-3 text-sm">{t('f3:budget_en_desc')}</div>
                   <div className="rounded-md border p-3 text-sm" dir="rtl">{t('f3:budget_ar_desc')}</div>
                 </div>
-                {aggregatedData.budgetTable && (
+                {aggregatedData.budgetTableData ? (
+                  <HierarchicalBudgetTable data={aggregatedData.budgetTableData} />
+                ) : aggregatedData.budgetTable && (
                   <div className="mt-4 overflow-x-auto" dangerouslySetInnerHTML={{ __html: aggregatedData.budgetTable }} />
                 )}
               </div>
