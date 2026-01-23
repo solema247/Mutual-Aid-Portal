@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useSearchParams } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -18,6 +19,7 @@ import ProjectEditor from './ProjectEditor'
 
 export default function CommittedF1sTab() {
   const { t, i18n } = useTranslation(['f2', 'common'])
+  const searchParams = useSearchParams()
   const [f1s, setF1s] = useState<CommittedF1[]>([])
   const [filterOptions, setFilterOptions] = useState<FilterOptions>({
     grantCalls: [],
@@ -301,6 +303,14 @@ export default function CommittedF1sTab() {
     fetchCommittedF1s()
     fetchFilterOptions()
     fetchGrantsFromGridView() // Fetch grants from grants_grid_view
+    
+    // Check for editProjectId in URL query params
+    const editProjectId = searchParams.get('editProjectId')
+    if (editProjectId) {
+      setEditorProjectId(editProjectId)
+      setEditorOpen(true)
+    }
+    
     ;(async () => {
       const { data } = await supabase
         .from('partners')

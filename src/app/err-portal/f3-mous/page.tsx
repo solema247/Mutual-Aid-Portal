@@ -12,7 +12,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Eye, Upload, Receipt, FileSignature, FileCheck, Link2, X, Plus, RefreshCw } from 'lucide-react'
 import dynamic from 'next/dynamic'
-import { aggregateObjectives, aggregateBeneficiaries, aggregatePlannedActivities, aggregatePlannedActivitiesDetailed, aggregateLocations, getBankingDetails, getBudgetTable, getBudgetTableData } from '@/lib/mou-aggregation'
+import { aggregateObjectives, aggregateBeneficiaries, aggregatePlannedActivities, aggregatePlannedActivitiesDetailed, aggregateLocations, getBankingDetails, getBudgetTable, getBudgetTableData, formatProjectPlannedActivities, formatProjectSummary } from '@/lib/mou-aggregation'
 import HierarchicalBudgetTable from './components/HierarchicalBudgetTable'
 import { supabase } from '@/lib/supabaseClient'
 import PoolByDonor from '@/app/err-portal/f2-approvals/components/PoolByDonor'
@@ -51,6 +51,7 @@ interface MOU {
 interface MOUDetail {
   mou: MOU
   projects?: Array<{
+    id?: string
     banking_details: string | null
     program_officer_name: string | null
     program_officer_phone: string | null
@@ -66,6 +67,7 @@ interface MOUDetail {
     state: string | null
     "Sector (Primary)"?: string | null
     "Sector (Secondary)"?: string | null
+    emergency_rooms?: { name: string | null; name_ar: string | null; err_code: string | null } | null
   }> | null
   project?: {
     banking_details: string | null
@@ -83,6 +85,7 @@ interface MOUDetail {
     state: string | null
     "Sector (Primary)"?: string | null
     "Sector (Secondary)"?: string | null
+    emergency_rooms?: { name: string | null; name_ar: string | null; err_code: string | null } | null
   } | null
   partner?: {
     name: string
@@ -1313,24 +1316,95 @@ export default function F3MOUsPage() {
                   <div className="rounded-md border p-3">
                     <div className="font-medium mb-2">{t('f3:shall_err', { err: activeMou.err_name })}</div>
                     <div className="text-sm space-y-2">
-                      {(translations.objectives_en || aggregatedData.objectives) && (
-                        <div>
-                          <div className="font-semibold">{t('f3:objectives')}</div>
-                          <div className="whitespace-pre-wrap">{translations.objectives_en || aggregatedData.objectives || ''}</div>
-                        </div>
-                      )}
-                      {(translations.beneficiaries_en || aggregatedData.beneficiaries) && (
-                        <div>
-                          <div className="font-semibold">{t('f3:target_beneficiaries')}</div>
-                          <div className="whitespace-pre-wrap">{translations.beneficiaries_en || aggregatedData.beneficiaries || ''}</div>
-                        </div>
-                      )}
-                      {(aggregatedData.activitiesDetailed || translations.activities_en || aggregatedData.activities) && (
-                        <div>
-                          <div className="font-semibold">{t('f3:planned_activities')}</div>
-                          <div className="whitespace-pre-wrap">{aggregatedData.activitiesDetailed || translations.activities_en || aggregatedData.activities || ''}</div>
-                        </div>
-                      )}
+                      {(() => {
+                        const projects = detail?.projects || (detail?.project ? [detail.project] : [])
+                        const uniqueLocalities = new Set<string>()
+                        projects.forEach(p => {
+                          if (p.locality) uniqueLocalities.add(p.locality)
+                        })
+                        const localityCount = uniqueLocalities.size
+                        const localityList = Array.from(uniqueLocalities).join(', ')
+                        const projectText = localityCount === 1 ? 'Project' : 'Projects'
+                        const localityText = localityCount === 1 ? 'locality' : 'localities'
+                        const standardObjective = `${projectText} to deliver humanitarian assistance across ${localityCount} ${localityText}: ${localityList}. Below is a summary of projects by each ERR.`
+                        return (
+                          <div>
+                            <div className="font-semibold">{t('f3:objectives')}</div>
+                            <div className="whitespace-pre-wrap">{standardObjective}</div>
+                          </div>
+                        )
+                      })()}
+                      {(() => {
+                        const projects = detail?.projects || (detail?.project ? [detail.project] : [])
+                        let totalIndividuals = 0
+                        
+                        projects.forEach(project => {
+                          if (project.planned_activities) {
+                            try {
+                              const raw = typeof project.planned_activities === 'string' 
+                                ? JSON.parse(project.planned_activities) 
+                                : project.planned_activities
+                              
+                              if (Array.isArray(raw)) {
+                                raw.forEach((item: any) => {
+                                  const individuals = item?.individuals || 0
+                                  if (typeof individuals === 'number' && individuals > 0) {
+                                    totalIndividuals += individuals
+                                  }
+                                })
+                              }
+                            } catch {
+                              // Skip if parsing fails
+                            }
+                          }
+                        })
+                        
+                        if (totalIndividuals > 0) {
+                          return (
+                            <div>
+                              <div className="font-semibold">{t('f3:target_beneficiaries')}</div>
+                              <div className="whitespace-pre-wrap">{totalIndividuals.toLocaleString()}</div>
+                            </div>
+                          )
+                        }
+                        return null
+                      })()}
+                      {(() => {
+                        const projects = detail?.projects || (detail?.project ? [detail.project] : [])
+                        const projectsWithActivities = projects
+                          .map(p => {
+                            const errName = p.emergency_rooms?.name || activeMou.err_name
+                            return formatProjectSummary(p, errName)
+                          })
+                          .filter((summary): summary is NonNullable<typeof summary> => summary !== null)
+                        
+                        if (projectsWithActivities.length > 0) {
+                          return (
+                            <div>
+                              <div className="font-semibold">{t('f3:planned_activities')}</div>
+                              <div className="space-y-3 mt-2">
+                                {projectsWithActivities.map((summary, idx) => {
+                                  const activitiesText = summary.activities
+                                    .map(act => `${act.activity}: $${act.cost.toLocaleString()}`)
+                                    .join(' | ')
+                                  return (
+                                    <div key={idx} className="text-sm">
+                                      <span className="font-medium">{summary.errName}</span>
+                                      {': '}
+                                      <span>{activitiesText}</span>
+                                      {'. '}
+                                      <span className="text-muted-foreground">
+                                        Total: ${summary.totalCost.toLocaleString()}, Individuals: {summary.totalIndividuals.toLocaleString()}
+                                      </span>
+                                    </div>
+                                  )
+                                })}
+                              </div>
+                            </div>
+                          )
+                        }
+                        return null
+                      })()}
                       {(aggregatedData.locations.localities || aggregatedData.locations.state) && (
                         <div className="text-xs text-muted-foreground">{t('f3:location', { lng: 'en' })}: {aggregatedData.locations.localities || '-'} / {aggregatedData.locations.state || '-'}</div>
                       )}
@@ -1353,24 +1427,95 @@ export default function F3MOUsPage() {
                   <div className="rounded-md border p-3" dir="rtl">
                     <div className="font-medium mb-2">تلتزم {activeMou.err_name}</div>
                     <div className="text-sm space-y-2">
-                      {(translations.objectives_ar || aggregatedData.objectives) && (
-                        <div>
-                          <div className="font-semibold">الأهداف</div>
-                          <div className="whitespace-pre-wrap">{translations.objectives_ar || aggregatedData.objectives || ''}</div>
-                        </div>
-                      )}
-                      {(translations.beneficiaries_ar || aggregatedData.beneficiaries) && (
-                        <div>
-                          <div className="font-semibold">المستفيدون المستهدفون</div>
-                          <div className="whitespace-pre-wrap">{translations.beneficiaries_ar || aggregatedData.beneficiaries || ''}</div>
-                        </div>
-                      )}
-                      {(aggregatedData.activitiesDetailed || translations.activities_ar || aggregatedData.activities) && (
-                        <div>
-                          <div className="font-semibold">الأنشطة المخططة</div>
-                          <div className="whitespace-pre-wrap">{aggregatedData.activitiesDetailed || translations.activities_ar || aggregatedData.activities || ''}</div>
-                        </div>
-                      )}
+                      {(() => {
+                        const projects = detail?.projects || (detail?.project ? [detail.project] : [])
+                        const uniqueLocalities = new Set<string>()
+                        projects.forEach(p => {
+                          if (p.locality) uniqueLocalities.add(p.locality)
+                        })
+                        const localityCount = uniqueLocalities.size
+                        const localityList = Array.from(uniqueLocalities).join(', ')
+                        const projectText = localityCount === 1 ? 'مشروع' : 'مشاريع'
+                        const localityText = localityCount === 1 ? 'منطقة' : 'مناطق'
+                        const standardObjective = `${projectText} لتقديم المساعدات الإنسانية عبر ${localityCount} ${localityText}: ${localityList}. فيما يلي ملخص للمشاريع حسب كل غرفة طوارئ.`
+                        return (
+                          <div>
+                            <div className="font-semibold">الأهداف</div>
+                            <div className="whitespace-pre-wrap">{standardObjective}</div>
+                          </div>
+                        )
+                      })()}
+                      {(() => {
+                        const projects = detail?.projects || (detail?.project ? [detail.project] : [])
+                        let totalIndividuals = 0
+                        
+                        projects.forEach(project => {
+                          if (project.planned_activities) {
+                            try {
+                              const raw = typeof project.planned_activities === 'string' 
+                                ? JSON.parse(project.planned_activities) 
+                                : project.planned_activities
+                              
+                              if (Array.isArray(raw)) {
+                                raw.forEach((item: any) => {
+                                  const individuals = item?.individuals || 0
+                                  if (typeof individuals === 'number' && individuals > 0) {
+                                    totalIndividuals += individuals
+                                  }
+                                })
+                              }
+                            } catch {
+                              // Skip if parsing fails
+                            }
+                          }
+                        })
+                        
+                        if (totalIndividuals > 0) {
+                          return (
+                            <div>
+                              <div className="font-semibold">المستفيدون المستهدفون</div>
+                              <div className="whitespace-pre-wrap">{totalIndividuals.toLocaleString()}</div>
+                            </div>
+                          )
+                        }
+                        return null
+                      })()}
+                      {(() => {
+                        const projects = detail?.projects || (detail?.project ? [detail.project] : [])
+                        const projectsWithActivities = projects
+                          .map(p => {
+                            const errName = p.emergency_rooms?.name_ar || p.emergency_rooms?.name || activeMou.err_name
+                            return formatProjectSummary(p, errName)
+                          })
+                          .filter((summary): summary is NonNullable<typeof summary> => summary !== null)
+                        
+                        if (projectsWithActivities.length > 0) {
+                          return (
+                            <div>
+                              <div className="font-semibold">الأنشطة المخططة</div>
+                              <div className="space-y-3 mt-2">
+                                {projectsWithActivities.map((summary, idx) => {
+                                  const activitiesText = summary.activities
+                                    .map(act => `${act.activity}: $${act.cost.toLocaleString()}`)
+                                    .join(' | ')
+                                  return (
+                                    <div key={idx} className="text-sm">
+                                      <span className="font-medium">{summary.errName}</span>
+                                      {': '}
+                                      <span>{activitiesText}</span>
+                                      {'. '}
+                                      <span className="text-muted-foreground">
+                                        Total: ${summary.totalCost.toLocaleString()}, Individuals: {summary.totalIndividuals.toLocaleString()}
+                                      </span>
+                                    </div>
+                                  )
+                                })}
+                              </div>
+                            </div>
+                          )
+                        }
+                        return null
+                      })()}
                       {(aggregatedData.locations.localities || aggregatedData.locations.state) && (
                         <div className="text-xs text-muted-foreground">الموقع: {aggregatedData.locations.localities || '-'} / {aggregatedData.locations.state || '-'}</div>
                       )}

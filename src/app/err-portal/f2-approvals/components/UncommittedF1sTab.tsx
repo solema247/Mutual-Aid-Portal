@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useSearchParams } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -19,6 +20,7 @@ import type { UncommittedF1, GrantCallOption } from '../types'
 
 export default function UncommittedF1sTab() {
   const { t, i18n } = useTranslation(['f2', 'common'])
+  const searchParams = useSearchParams()
   const [f1s, setF1s] = useState<UncommittedF1[]>([])
   const [grantCalls, setGrantCalls] = useState<GrantCallOption[]>([])
   const [selectedF1s, setSelectedF1s] = useState<string[]>([])
@@ -37,7 +39,14 @@ export default function UncommittedF1sTab() {
   useEffect(() => {
     fetchUncommittedF1s()
     fetchGrantCalls()
-  }, [])
+    
+    // Check for editProjectId in URL query params
+    const editProjectId = searchParams.get('editProjectId')
+    if (editProjectId) {
+      setEditorProjectId(editProjectId)
+      setEditorOpen(true)
+    }
+  }, [searchParams])
 
   const fetchUncommittedF1s = async () => {
     try {

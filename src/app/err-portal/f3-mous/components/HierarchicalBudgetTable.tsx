@@ -1,8 +1,10 @@
 'use client'
 
 import React, { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { BudgetTableData } from '@/lib/mou-aggregation'
-import { Minus, Plus } from 'lucide-react'
+import { Minus, Plus, Edit2 } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 
 interface HierarchicalBudgetTableProps {
   data: BudgetTableData
@@ -10,6 +12,7 @@ interface HierarchicalBudgetTableProps {
 }
 
 export default function HierarchicalBudgetTable({ data, forceExpanded = false }: HierarchicalBudgetTableProps) {
+  const router = useRouter()
   const [expandedErrs, setExpandedErrs] = useState<Set<string>>(new Set(data.errs.map(err => err.errId)))
   
   // If forceExpanded is true, always show all rows as expanded
@@ -55,19 +58,23 @@ export default function HierarchicalBudgetTable({ data, forceExpanded = false }:
               )}
             </th>
             <th className="border border-gray-300 p-2 text-center" style={{ width: '50px' }}>ID</th>
-            <th className="border border-gray-300 p-2">ERR Name / Sector</th>
-            <th className="border border-gray-300 p-2 text-right">Beneficiaries</th>
-            <th className="border border-gray-300 p-2 text-right">Allocated Amount</th>
+            <th className="border border-gray-300 p-2" style={{ width: '25%' }}>ERR Name / Sector</th>
+            <th className="border border-gray-300 p-2" style={{ width: '25%' }}>Serial Number</th>
+            <th className="border border-gray-300 p-2 text-right" style={{ width: '15%' }}>Beneficiaries</th>
+            <th className="border border-gray-300 p-2 text-right" style={{ width: '20%' }}>Allocated Amount</th>
+            {!forceExpanded && (
+              <th className="border border-gray-300 p-2 text-center" style={{ width: '80px' }}>Actions</th>
+            )}
           </tr>
         </thead>
         <tbody>
           {data.errs.map((err, errIndex) => {
             const isExpanded = effectiveExpandedErrs.has(err.errId)
-            const errNumber = errIndex + 1
+            const rowNumber = errIndex + 1
 
             return (
               <React.Fragment key={err.errId}>
-                {/* Parent ERR row */}
+                {/* Project row */}
                 <tr className="bg-gray-50 hover:bg-gray-100">
                   <td className="border border-gray-300 p-2 text-center">
                     {!forceExpanded && (
@@ -85,7 +92,7 @@ export default function HierarchicalBudgetTable({ data, forceExpanded = false }:
                     )}
                   </td>
                   <td className="border border-gray-300 p-2 text-center font-medium">
-                    {errNumber}
+                    {rowNumber}
                   </td>
                   <td className="border border-gray-300 p-2">
                     <div>
@@ -93,17 +100,41 @@ export default function HierarchicalBudgetTable({ data, forceExpanded = false }:
                       <span className="text-xs text-gray-600">{err.errCode}</span>
                     </div>
                   </td>
+                  <td className="border border-gray-300 p-2" style={{ width: '25%' }}>
+                    {err.grantId ? (
+                      <span className="font-medium">{err.grantId}</span>
+                    ) : (
+                      <span className="text-xs text-gray-500 italic whitespace-normal">Will be updated once MOU is assigned to grant</span>
+                    )}
+                  </td>
                   <td className="border border-gray-300 p-2 text-right font-medium">
                     {err.beneficiaries > 0 ? err.beneficiaries.toLocaleString() : '-'}
                   </td>
                   <td className="border border-gray-300 p-2 text-right font-medium">
                     Subtotal: {err.subtotal.toLocaleString()}
                   </td>
+                  {!forceExpanded && (
+                    <td className="border border-gray-300 p-2 text-center">
+                      {err.projectId ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => router.push(`/err-portal/f2-approvals?editProjectId=${err.projectId}`)}
+                          title="Edit F1"
+                          className="h-6 w-6 p-0"
+                        >
+                          <Edit2 className="w-3 h-3" />
+                        </Button>
+                      ) : (
+                        <span className="text-xs text-gray-400">-</span>
+                      )}
+                    </td>
+                  )}
                 </tr>
 
-                {/* Child activity rows */}
+                {/* Activity rows */}
                 {isExpanded && err.activities.map((activity, activityIndex) => {
-                  const activityNumber = `${errNumber}.${activityIndex + 1}`
+                  const activityNumber = `${rowNumber}.${activityIndex + 1}`
                   return (
                     <tr key={`${err.errId}-${activity.category}`} className="hover:bg-gray-50">
                       <td className="border border-gray-300 p-2"></td>
@@ -113,12 +144,16 @@ export default function HierarchicalBudgetTable({ data, forceExpanded = false }:
                       <td className="border border-gray-300 p-2 pl-6">
                         {activity.category}
                       </td>
+                      <td className="border border-gray-300 p-2"></td>
                       <td className="border border-gray-300 p-2 text-right">
                         {activity.beneficiaries > 0 ? activity.beneficiaries.toLocaleString() : '-'}
                       </td>
                       <td className="border border-gray-300 p-2 text-right">
                         {activity.amount.toLocaleString()}
                       </td>
+                      {!forceExpanded && (
+                        <td className="border border-gray-300 p-2"></td>
+                      )}
                     </tr>
                   )
                 })}
@@ -128,7 +163,7 @@ export default function HierarchicalBudgetTable({ data, forceExpanded = false }:
 
           {/* Grand Total row */}
           <tr className="bg-gray-200 font-bold">
-            <td className="border border-gray-300 p-2" colSpan={3}>
+            <td className="border border-gray-300 p-2" colSpan={forceExpanded ? 4 : 5}>
               Grand Total
             </td>
             <td className="border border-gray-300 p-2 text-right">-</td>

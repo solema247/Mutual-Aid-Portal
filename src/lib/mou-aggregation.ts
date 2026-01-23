@@ -197,6 +197,188 @@ export function aggregatePlannedActivitiesDetailed(projects: Project[]): string 
 }
 
 /**
+ * Formats planned activities for a single project with detailed information (cost/amount).
+ * Returns formatted string showing activity name -> amount.
+ */
+export function formatProjectPlannedActivities(project: Project): string | null {
+  if (!project) return null
+  
+  interface ActivityDetail {
+    activity: string
+    cost: number | null
+  }
+  
+  const activityMap = new Map<string, ActivityDetail>()
+  
+  if (project.planned_activities) {
+    try {
+      const raw = typeof project.planned_activities === 'string' 
+        ? JSON.parse(project.planned_activities) 
+        : project.planned_activities
+      
+      if (Array.isArray(raw)) {
+        raw.forEach((item: any) => {
+          const activityName = item?.activity || item?.selectedActivity || item?.activity_name
+          if (activityName && typeof activityName === 'string') {
+            const key = activityName.trim()
+            const existing = activityMap.get(key)
+            const cost = item?.planned_activity_cost || item?.cost || null
+            
+            if (existing) {
+              // Aggregate cost if activity already exists in this project
+              if (cost !== null && cost > 0) {
+                existing.cost = (existing.cost || 0) + cost
+              }
+            } else {
+              // Add new activity
+              activityMap.set(key, {
+                activity: key,
+                cost: cost
+              })
+            }
+          }
+        })
+      }
+    } catch {
+      // If parsing fails, try using resolved activities
+      if (project.planned_activities_resolved) {
+        const activities = project.planned_activities_resolved
+          .split('\n')
+          .map(a => a.trim())
+          .filter(Boolean)
+        activities.forEach(a => {
+          if (!activityMap.has(a)) {
+            activityMap.set(a, {
+              activity: a,
+              cost: null
+            })
+          }
+        })
+      } else if (typeof project.planned_activities === 'string') {
+        // Try as plain string
+        project.planned_activities.split('\n').forEach((a: string) => {
+          const trimmed = a.trim()
+          if (trimmed && !activityMap.has(trimmed)) {
+            activityMap.set(trimmed, {
+              activity: trimmed,
+              cost: null
+            })
+          }
+        })
+      }
+    }
+  } else if (project.planned_activities_resolved) {
+    // Use resolved activities if available
+    const activities = project.planned_activities_resolved
+      .split('\n')
+      .map(a => a.trim())
+      .filter(Boolean)
+    activities.forEach(a => {
+      if (!activityMap.has(a)) {
+        activityMap.set(a, {
+          activity: a,
+          cost: null
+        })
+      }
+    })
+  }
+  
+  if (activityMap.size === 0) return null
+  
+  // Format activities as: "• Activity Name -> $Amount"
+  const formatted = Array.from(activityMap.values()).map(act => {
+    if (act.cost !== null && act.cost > 0) {
+      return `• ${act.activity} -> $${act.cost.toLocaleString()}`
+    } else {
+      return `• ${act.activity}`
+    }
+  })
+  
+  return formatted.join('\n')
+}
+
+/**
+ * Formats a project summary with ERR name, all activities (sorted by cost, highest first), total cost, and total individuals.
+ * Returns object with errName, activities array, totalCost, and totalIndividuals.
+ */
+export function formatProjectSummary(project: Project, errName?: string): {
+  errName: string
+  activities: Array<{ activity: string; cost: number }>
+  totalCost: number
+  totalIndividuals: number
+} | null {
+  if (!project) return null
+  
+  const displayErrName = errName || project.emergency_rooms?.name || 'Unknown ERR'
+  
+  interface ActivityDetail {
+    activity: string
+    cost: number
+    individuals: number
+  }
+  
+  const activityMap = new Map<string, ActivityDetail>()
+  let totalCost = 0
+  let totalIndividuals = 0
+  
+  if (project.planned_activities) {
+    try {
+      const raw = typeof project.planned_activities === 'string' 
+        ? JSON.parse(project.planned_activities) 
+        : project.planned_activities
+      
+      if (Array.isArray(raw)) {
+        raw.forEach((item: any) => {
+          const activityName = item?.activity || item?.selectedActivity || item?.activity_name
+          if (activityName && typeof activityName === 'string') {
+            const key = activityName.trim()
+            const cost = item?.planned_activity_cost || item?.cost || 0
+            const individuals = item?.individuals || 0
+            
+            if (cost > 0) {
+              const existing = activityMap.get(key)
+              if (existing) {
+                // Aggregate if same activity appears multiple times
+                existing.cost += cost
+                existing.individuals += (individuals || 0)
+              } else {
+                activityMap.set(key, {
+                  activity: key,
+                  cost: cost,
+                  individuals: individuals || 0
+                })
+              }
+              totalCost += cost
+              totalIndividuals += (individuals || 0)
+            }
+          }
+        })
+      }
+    } catch {
+      // If parsing fails, return null
+      return null
+    }
+  }
+  
+  if (activityMap.size === 0) return null
+  
+  // Convert to array and sort by cost (highest first)
+  const activities = Array.from(activityMap.values())
+    .sort((a, b) => b.cost - a.cost)
+    .map(act => ({
+      activity: act.activity,
+      cost: act.cost
+    }))
+  
+  return {
+    errName: displayErrName,
+    activities,
+    totalCost,
+    totalIndividuals
+  }
+}
+
+/**
  * Aggregates locations from all projects.
  * Returns a comma-separated list of unique localities, or a count if there are many.
  */
@@ -508,6 +690,8 @@ export interface BudgetERR {
   errId: string
   errCode: string
   errName: string
+  grantId: string | null
+  projectId: string | null
   beneficiaries: number
   activities: BudgetActivity[]
   subtotal: number
@@ -522,40 +706,22 @@ export interface BudgetTableData {
 export function getBudgetTableData(projects: Project[]): BudgetTableData | null {
   if (!projects || projects.length === 0) return null
 
-  // Group projects by ERR
-  const errMap = new Map<string, {
-    errCode: string
-    errName: string
-    projects: Project[]
-    categoryMap: Map<string, { cost: number; beneficiaries: number }> // category -> {cost, beneficiaries} across all projects in this ERR
-    beneficiaries: number
-  }>()
-
+  // Process each project individually - no grouping by ERR
   const allCategories = new Set<string>()
+  const projectRows: BudgetERR[] = []
 
-  projects.forEach(project => {
-    // Get ERR identifier (use err_id or emergency_room_id)
-    const errKey = project.err_id || project.emergency_room_id || 'unknown'
+  projects.forEach((project, projectIndex) => {
+    // Get ERR info for this project
     const errCode = project.err_id || project.emergency_rooms?.err_code || '-'
     const errName = project.emergency_rooms?.name || project.emergency_rooms?.name_ar || '-'
+    const grantId = project.grant_id || null
+    // Use project ID as unique identifier since we want one row per project
+    const projectId = (project as any)?.id || `project-${projectIndex}`
 
-    // Get or create ERR entry
-    if (!errMap.has(errKey)) {
-      errMap.set(errKey, {
-        errCode,
-        errName,
-        projects: [],
-        categoryMap: new Map(),
-        beneficiaries: 0
-      })
-    }
+    const categoryMap = new Map<string, { cost: number; beneficiaries: number }>()
+    let totalBeneficiaries = 0
 
-    const errData = errMap.get(errKey)!
-
-    // Add project to ERR
-    errData.projects.push(project)
-
-    // Parse planned_activities to extract categories, costs, and beneficiaries
+    // Parse planned_activities to extract categories, costs, and beneficiaries for THIS project only
     if (project.planned_activities) {
       try {
         const raw = typeof project.planned_activities === 'string'
@@ -575,12 +741,14 @@ export function getBudgetTableData(projects: Project[]): BudgetTableData | null 
 
               allCategories.add(categoryName)
 
-              // Sum costs and beneficiaries for the same category across all projects in this ERR
-              const current = errData.categoryMap.get(categoryName) || { cost: 0, beneficiaries: 0 }
-              errData.categoryMap.set(categoryName, {
+              // Sum costs and beneficiaries for the same category in THIS project
+              const current = categoryMap.get(categoryName) || { cost: 0, beneficiaries: 0 }
+              categoryMap.set(categoryName, {
                 cost: current.cost + cost,
                 beneficiaries: current.beneficiaries + (activityBeneficiaries || 0)
               })
+              
+              totalBeneficiaries += (activityBeneficiaries || 0)
             }
           })
         }
@@ -588,19 +756,12 @@ export function getBudgetTableData(projects: Project[]): BudgetTableData | null 
         // If parsing fails, skip this project's activities
       }
     }
-  })
 
-  if (errMap.size === 0) return null
-
-  // Convert to array and calculate subtotals
-  const sortedCategories = Array.from(allCategories).sort()
-  const errs: BudgetERR[] = []
-
-  errMap.forEach((data, errId) => {
     // Convert category map to activities array
+    const sortedCategories = Array.from(allCategories).sort()
     const activities: BudgetActivity[] = sortedCategories
       .map(category => {
-        const categoryData = data.categoryMap.get(category)
+        const categoryData = categoryMap.get(category)
         if (!categoryData || categoryData.cost === 0) return null
         return {
           category,
@@ -610,27 +771,30 @@ export function getBudgetTableData(projects: Project[]): BudgetTableData | null 
       })
       .filter((act): act is BudgetActivity => act !== null)
 
-    // Calculate subtotal
+    // Calculate subtotal for this project
     const subtotal = activities.reduce((sum, act) => sum + act.amount, 0)
-    
-    // Calculate total beneficiaries from all planned activities (sum of individuals)
-    const totalBeneficiaries = activities.reduce((sum, act) => sum + (act.beneficiaries || 0), 0)
 
-    errs.push({
-      errId,
-      errCode: data.errCode,
-      errName: data.errName,
+    // Add this project as a row
+    projectRows.push({
+      errId: projectId,
+      errCode: errCode,
+      errName: errName,
+      grantId: grantId,
+      projectId: (project as any)?.id || null,
       beneficiaries: totalBeneficiaries,
       activities,
       subtotal
     })
   })
 
+  if (projectRows.length === 0) return null
+
   // Calculate grand total
-  const grandTotal = errs.reduce((sum, err) => sum + err.subtotal, 0)
+  const sortedCategories = Array.from(allCategories).sort()
+  const grandTotal = projectRows.reduce((sum, row) => sum + row.subtotal, 0)
 
   return {
-    errs,
+    errs: projectRows,
     allCategories: sortedCategories,
     grandTotal
   }
