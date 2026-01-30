@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Calendar as CalendarIcon } from 'lucide-react'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -350,6 +351,14 @@ export default function ProjectEditor({ open, onOpenChange, projectId, onSaved }
     load()
   }, [open, projectId, availableStates])
 
+  // Format YYYY-MM-DD for display (e.g. dd/mm/yy)
+  const formatDateDisplay = (iso: string | null | undefined) => {
+    if (!iso || typeof iso !== 'string') return ''
+    const [y, m, d] = iso.split('-')
+    if (!y || !m || !d) return ''
+    return `${d}/${m}/${y.slice(2)}`
+  }
+
   const updateField = (key: string, value: any) => {
     setForm((prev: any) => ({ ...prev, [key]: value }))
   }
@@ -520,6 +529,7 @@ export default function ProjectEditor({ open, onOpenChange, projectId, onSaved }
       }))
 
       const payload: any = {
+        date: form.date || null,
         project_objectives: form.project_objectives || null,
         intended_beneficiaries: form.intended_beneficiaries || null,
         estimated_beneficiaries: form.estimated_beneficiaries ?? null,
@@ -582,7 +592,23 @@ export default function ProjectEditor({ open, onOpenChange, projectId, onSaved }
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <Label>{t('projects:date')}</Label>
-                <Input value={form.date || ''} onChange={(e) => updateField('date', e.target.value)} />
+                <div className="relative w-full">
+                  <input
+                    type="date"
+                    value={form.date || ''}
+                    onChange={(e) => updateField('date', e.target.value || null)}
+                    className="absolute inset-0 opacity-0 cursor-pointer w-full min-h-[2.5rem]"
+                    aria-label={t('projects:date') || 'Choose date'}
+                  />
+                  <Input
+                    type="text"
+                    readOnly
+                    value={formatDateDisplay(form.date)}
+                    placeholder={t('projects:choose_date') || 'Choose date'}
+                    className="w-full pr-10 pointer-events-none"
+                  />
+                  <CalendarIcon className="h-4 w-4 absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+                </div>
               </div>
               <div>
                 <Label>{t('projects:emergency_room') || 'Emergency Room'}</Label>
