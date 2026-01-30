@@ -7,11 +7,12 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { ChevronDown, ChevronUp, BarChart } from 'lucide-react'
 import ERRAppSubmissions from './components/ERRAppSubmissions'
 import DirectUpload from './components/DirectUpload'
+import ManualEntry from './components/ManualEntry'
 import PoolDashboard from './components/PoolDashboard'
 
 export default function F1WorkPlansPage() {
   const { t } = useTranslation(['f1_plans', 'common'])
-  const [currentTab, setCurrentTab] = useState<'err_app' | 'direct_upload'>('direct_upload')
+  const [currentTab, setCurrentTab] = useState<'err_app' | 'direct_upload' | 'manual_entry'>('direct_upload')
   const [isByStateCollapsed, setIsByStateCollapsed] = useState(true)
 
   return (
@@ -39,14 +40,17 @@ export default function F1WorkPlansPage() {
           <Tabs 
             defaultValue="direct_upload" 
             className="w-full" 
-            onValueChange={(value) => setCurrentTab(value as 'err_app' | 'direct_upload')}
+            onValueChange={(value) => setCurrentTab(value as 'err_app' | 'direct_upload' | 'manual_entry')}
           >
-            <TabsList className="grid w-full grid-cols-2">
+            <TabsList className="grid w-full grid-cols-3">
               <TabsTrigger value="err_app">
                 {t('f1_plans:err_app_submissions')}
               </TabsTrigger>
               <TabsTrigger value="direct_upload">
                 {t('f1_plans:direct_upload.title')}
+              </TabsTrigger>
+              <TabsTrigger value="manual_entry">
+                {t('f1_plans:manual_entry', { defaultValue: 'Manual Entry' })}
               </TabsTrigger>
             </TabsList>
 
@@ -56,6 +60,10 @@ export default function F1WorkPlansPage() {
 
             <TabsContent value="direct_upload" className="mt-6">
               <DirectUpload />
+            </TabsContent>
+
+            <TabsContent value="manual_entry" className="mt-6">
+              <ManualEntry onSuccess={() => setCurrentTab('direct_upload')} />
             </TabsContent>
           </Tabs>
         </CardContent>
