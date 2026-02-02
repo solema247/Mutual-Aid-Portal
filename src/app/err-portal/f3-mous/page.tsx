@@ -210,7 +210,9 @@ export default function F3MOUsPage() {
       const parsed = JSON.parse(mou.payment_confirmation_file)
       if (typeof parsed === 'object' && parsed !== null) {
         const confirmed = Object.keys(parsed).length
-        return { confirmed, total: projectCount }
+        // Use max so we show correct icon when projectCount is 0 (e.g. status filter) but payment data exists
+        const total = Math.max(projectCount, confirmed)
+        return { confirmed, total }
       }
     } catch {
       // Old format - single confirmation
@@ -683,14 +685,12 @@ export default function F3MOUsPage() {
   const openPaymentModal = async (mou: MOU) => {
     setSelectedMouForPayment(mou)
     
-    // Fetch projects in this MOU
+    // Fetch projects in this MOU (no status filter - show all linked projects so payment data is visible)
     try {
       const { data: projects, error } = await supabase
         .from('err_projects')
         .select('id, err_id, state, locality, emergency_rooms (name, name_ar, err_code)')
         .eq('mou_id', mou.id)
-        .eq('funding_status', 'committed')
-        .eq('status', 'approved')
         .order('submitted_at', { ascending: true })
       
       if (error) {
@@ -698,7 +698,7 @@ export default function F3MOUsPage() {
         setPaymentProjects([])
         setPaymentConfirmations({})
       } else {
-        const projectList = (projects || []).map((p: any) => {
+        let projectList = (projects || []).map((p: any) => {
           const room = p.emergency_rooms
           const roomName = room?.name || room?.name_ar || room?.err_code || null
           return { 
@@ -709,10 +709,24 @@ export default function F3MOUsPage() {
             emergency_room_name: roomName
           }
         })
-        setPaymentProjects(projectList)
-        
-        // Parse existing payment confirmations
+
+        // Fallback: if no projects by mou_id but payment data exists, fetch by project IDs in payment_confirmation_file
         const existing = parsePaymentConfirmations(mou.payment_confirmation_file)
+        if (projectList.length === 0 && Object.keys(existing).length > 0) {
+          const projectIds = Object.keys(existing)
+          const { data: fallbackProjects } = await supabase
+            .from('err_projects')
+            .select('id, err_id, state, locality, emergency_rooms (name, name_ar, err_code)')
+            .in('id', projectIds)
+          const byId = new Map((fallbackProjects || []).map((p: any) => {
+            const room = p.emergency_rooms
+            const roomName = room?.name || room?.name_ar || room?.err_code || null
+            return [p.id, { id: p.id, err_id: p.err_id, state: p.state, locality: p.locality, emergency_room_name: roomName }]
+          }))
+          projectList = projectIds.map(id => byId.get(id)).filter(Boolean) as typeof projectList
+        }
+
+        setPaymentProjects(projectList)
         const confirmations: Record<string, { exchange_rate: string; transfer_date: string; file: File | null; file_path?: string }> = {}
         
         projectList.forEach(project => {
@@ -1102,7 +1116,11 @@ export default function F3MOUsPage() {
                             size="icon"
                             className="h-8 w-8"
                             onClick={() => openPaymentModal(m)}
-                            title={t('f3:add_payment')}
+                            title={(() => {
+                              const projectCount = mouProjectCounts[m.id] || 0
+                              const paymentCount = getPaymentConfirmationCount(m, projectCount)
+                              return paymentCount.confirmed > 0 ? t('f3:view_payment') : t('f3:add_payment')
+                            })()}
                           >
                             {(() => {
                               const projectCount = mouProjectCounts[m.id] || 0
@@ -1120,13 +1138,14 @@ export default function F3MOUsPage() {
                             {(() => {
                               const projectCount = mouProjectCounts[m.id] || 0
                               const paymentCount = getPaymentConfirmationCount(m, projectCount)
+                              // When payment data exists, show "View Payment Information" so users know they can view the list
+                              if (paymentCount.confirmed > 0) {
+                                return t('f3:view_payment')
+                              }
                               if (paymentCount.total === 0) {
                                 return t('f3:add_payment')
-                              } else if (paymentCount.confirmed === paymentCount.total) {
-                                return `${paymentCount.confirmed}/${paymentCount.total}`
-                              } else {
-                                return `${paymentCount.confirmed}/${paymentCount.total}`
                               }
+                              return `${paymentCount.confirmed}/${paymentCount.total}`
                             })()}
                           </span>
                       </div>
@@ -2963,7 +2982,7 @@ export default function F3MOUsPage() {
               <TableBody>
                 {paymentProjects.map((project) => {
                   const confirmation = paymentConfirmations[project.id] || { exchange_rate: '', transfer_date: '', file: null, file_path: undefined }
-                  const hasConfirmation = !!confirmation.file_path
+                  const hasConfirmation = !!confirmation.file_path || (!!confirmation.exchange_rate && !!confirmation.transfer_date)
                   const isUploading = uploadingPayments[project.id] || false
                   
                   return (
@@ -3021,7 +3040,7 @@ export default function F3MOUsPage() {
                             className="h-8 text-sm text-xs"
                             disabled={isUploading}
                           />
-                          {hasConfirmation && (
+                          {confirmation.file_path && (
                             <Button
                               variant="ghost"
                               size="sm"
