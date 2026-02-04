@@ -99,7 +99,7 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved, initialProj
   const [tempKey, setTempKey] = useState<string>('')
   const [fileUrl, setFileUrl] = useState<string>('')
   const [rawOcr, setRawOcr] = useState<string>('')
-  const [adjustOpen, setAdjustOpen] = useState<{ row: number; key: string } | null>(null)
+  const [adjustOpen, setAdjustOpen] = useState<{ row: number | null; key: string } | null>(null)
   const [adjustTempValue, setAdjustTempValue] = useState<number | ''>('')
   const [adjustTempNote, setAdjustTempNote] = useState<string>('')
   const [adjustDialogOpen, setAdjustDialogOpen] = useState(false)
@@ -117,11 +117,13 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved, initialProj
       case 'female': return Number(row.female_count || 0)
       case 'under18_male': return Number(row.under18_male || 0)
       case 'under18_female': return Number(row.under18_female || 0)
+      case 'people_with_disabilities': return Number(row.people_with_disabilities || 0)
       default: return 0
     }
   }
 
   const keyAdjustedValue = (row: any, key: string): number | undefined => {
+    // Handle row-based adjustments
     const obj = row?.adjusted_counts || {}
     const entry = obj ? obj[key] : undefined
     if (entry == null) return undefined
@@ -132,6 +134,7 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved, initialProj
   }
 
   const keyAdjustedNote = (row: any, key: string): string | undefined => {
+    // Handle row-based adjustments
     const obj = row?.adjusted_counts || {}
     const entry = obj ? obj[key] : undefined
     if (entry && typeof entry === 'object' && 'note' in entry) {
@@ -154,11 +157,15 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved, initialProj
     return `${orig} → ${adj}${note}`
   }
 
-  const openAdjustFor = (rowIdx: number, key: string) => {
+  const openAdjustFor = (rowIdx: number | null, key: string) => {
+    if (rowIdx == null) return
+    
     const row = reachDraft[rowIdx]
     const current = keyAdjustedValue(row, key)
+    const note = keyAdjustedNote(row, key)
+    
     setAdjustTempValue(current == null ? '' : Number(current))
-    setAdjustTempNote(keyAdjustedNote(row, key) || '')
+    setAdjustTempNote(note || '')
     setAdjustOpen({ row: rowIdx, key })
     const titleMap: Record<string, string> = {
       individuals: 'Adjusted individuals',
@@ -166,15 +173,18 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved, initialProj
       male: 'Adjusted male',
       female: 'Adjusted female',
       under18_male: 'Adjusted male \u003c 18',
-      under18_female: 'Adjusted female \u003c 18'
+      under18_female: 'Adjusted female \u003c 18',
+      people_with_disabilities: 'Adjusted People with Disabilities'
     }
     setAdjustDialogTitle(titleMap[key] || 'Adjustment')
     setAdjustDialogOpen(true)
   }
 
   const saveAdjust = () => {
-    if (!adjustOpen) return
+    if (!adjustOpen || adjustOpen.row == null) return
     const { row, key } = adjustOpen
+    
+    // Handle row-based adjustments
     const arr = [...reachDraft]
     const r = { ...(arr[row] || {}) }
     const counts = { ...(r.adjusted_counts || {}) } as any
@@ -186,13 +196,16 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved, initialProj
     r.adjusted_counts = counts
     arr[row] = r
     setReachDraft(arr)
+    
     setAdjustOpen(null)
     setAdjustDialogOpen(false)
   }
 
   const resetAdjust = () => {
-    if (!adjustOpen) return
+    if (!adjustOpen || adjustOpen.row == null) return
     const { row, key } = adjustOpen
+    
+    // Handle row-based adjustments
     const arr = [...reachDraft]
     const r = { ...(arr[row] || {}) }
     const counts = { ...(r.adjusted_counts || {}) }
@@ -200,6 +213,7 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved, initialProj
     r.adjusted_counts = counts
     arr[row] = r
     setReachDraft(arr)
+    
     setAdjustTempValue('')
     setAdjustOpen(null)
     setAdjustDialogOpen(false)
@@ -718,6 +732,7 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved, initialProj
                     female_count: null,
                     under18_male: null,
                     under18_female: null,
+                    people_with_disabilities: null,
                     is_draft: true
                   }]))}
                 >{t('f5.preview.activities.add')}</Button>
@@ -838,7 +853,27 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved, initialProj
 
             {/* Demographics Breakdown Table */}
             <div>
-              <Label className="select-text" style={{ userSelect: 'text' }}>{t('f5.preview.demographics.title')}</Label>
+              <div className="flex items-center justify-between mb-2">
+                <Label className="select-text" style={{ userSelect: 'text' }}>{t('f5.preview.demographics.title')}</Label>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setReachDraft(prev => ([...prev, {
+                    activity_name: '',
+                    activity_goal: '',
+                    location: '',
+                    start_date: '',
+                    end_date: '',
+                    individual_count: null,
+                    household_count: null,
+                    male_count: null,
+                    female_count: null,
+                    under18_male: null,
+                    under18_female: null,
+                    is_draft: true
+                  }]))}
+                >{t('f5.preview.activities.add')}</Button>
+              </div>
               <div className="border rounded overflow-hidden select-text">
                 {reachDraft.length === 0 ? (
                   <div className="p-3 text-sm text-muted-foreground">{t('f5.preview.demographics.empty')}</div>
@@ -852,12 +887,21 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved, initialProj
                         <TableHead className="py-1 px-2 text-xs select-text" style={{ userSelect: 'text' }}>{t('f5.preview.demographics.cols.male_u18')}</TableHead>
                         <TableHead className="py-1 px-2 text-xs select-text" style={{ userSelect: 'text' }}>{t('f5.preview.demographics.cols.female_u18')}</TableHead>
                         <TableHead className="py-1 px-2 text-xs select-text" style={{ userSelect: 'text' }}>{t('f5.preview.demographics.cols.pwd')}</TableHead>
+                        <TableHead className="py-1 px-2 text-xs text-right select-text" style={{ userSelect: 'text' }}>{t('f5.preview.activities.cols.actions')}</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {reachDraft.map((row, idx) => (
                         <TableRow key={idx} className="text-sm">
-                          <TableCell className="py-1 px-2 select-text" style={{ userSelect: 'text' }}>{row.activity_name || '-'}</TableCell>
+                          <TableCell className="py-1 px-2 select-text" style={{ userSelect: 'text' }}>
+                            <Input 
+                              className="h-8 select-text selection:bg-blue-200 selection:text-blue-900 dark:selection:bg-blue-800 dark:selection:text-blue-100" 
+                              style={selectableInputStyle}
+                              placeholder={t('f5.preview.demographics.cols.activity') as string} 
+                              value={row.activity_name || ''} 
+                              onChange={(e)=>{ const arr=[...reachDraft]; arr[idx]={...arr[idx], activity_name: e.target.value}; setReachDraft(arr) }} 
+                            />
+                          </TableCell>
                           <TableCell className="py-1 px-2" style={{ userSelect: 'text' }}>
                             <div className="relative flex items-center gap-2">
                               <Input 
@@ -939,13 +983,27 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved, initialProj
                             </div>
                           </TableCell>
                           <TableCell className="py-1 px-2" style={{ userSelect: 'text' }}>
-                            <Input 
-                              className="h-8 select-text selection:bg-blue-200 selection:text-blue-900 dark:selection:bg-blue-800 dark:selection:text-blue-100" 
-                              style={selectableInputStyle}
-                              type="number" 
-                              value={summaryDraft?.demographics?.special_needs ?? ''} 
-                              onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), demographics: { ...(s?.demographics||{}), special_needs: parseInt(e.target.value)||0 } }))} 
-                            />
+                            <div className="relative flex items-center gap-2">
+                              <Input 
+                                className="h-8 select-text selection:bg-blue-200 selection:text-blue-900 dark:selection:bg-blue-800 dark:selection:text-blue-100" 
+                                style={selectableInputStyle}
+                                type="number" 
+                                value={row.people_with_disabilities ?? ''} 
+                                onChange={(e)=>{ const arr=[...reachDraft]; arr[idx]={...arr[idx], people_with_disabilities: parseInt(e.target.value)||0}; setReachDraft(arr) }} 
+                              />
+                              {keyAdjustedValue(row, 'people_with_disabilities') != null && (
+                                <span className="absolute right-10 top-1.5 z-10 cursor-help pointer-events-auto" title={deltaInfo(row, 'people_with_disabilities')}>
+                                  <Flag className="h-3.5 w-3.5 text-red-500" />
+                                </span>
+                              )}
+                              <Button type="button" variant="ghost" size="icon" className="h-7 w-7" onClick={()=>openAdjustFor(idx, 'people_with_disabilities')}>
+                                <Pencil className="w-4 h-4" />
+                              </Button>
+                              {/* adjustment handled via modal */}
+                            </div>
+                          </TableCell>
+                          <TableCell className="py-1 px-2 text-right">
+                            <Button variant="destructive" size="sm" onClick={()=>{ const arr=[...reachDraft]; arr.splice(idx,1); setReachDraft(arr) }}>{t('f5.preview.activities.cols.delete')}</Button>
                           </TableCell>
                         </TableRow>
                       ))}
@@ -1076,7 +1134,7 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved, initialProj
             <Label className="text-xs">Note (optional)</Label>
             <Input className="h-9" value={adjustTempNote} onChange={(e)=>setAdjustTempNote(e.target.value)} />
           </div>
-          {adjustOpen && (
+          {adjustOpen && adjustOpen.row != null && (
             <div className="text-xs text-muted-foreground">
               Original: {keyToOriginal(reachDraft[adjustOpen.row], adjustOpen.key)}
             </div>

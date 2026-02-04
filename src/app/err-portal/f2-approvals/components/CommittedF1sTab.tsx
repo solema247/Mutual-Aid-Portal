@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useSearchParams } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -10,13 +11,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
 import { supabase } from '@/lib/supabaseClient'
-import { Search, Filter, ArrowRightLeft } from 'lucide-react'
+import { Search, Filter, ArrowRightLeft, Edit2 } from 'lucide-react'
 import type { CommittedF1, FilterOptions } from '../types'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import ProjectEditor from './ProjectEditor'
 
 export default function CommittedF1sTab() {
   const { t, i18n } = useTranslation(['f2', 'common'])
+  const searchParams = useSearchParams()
   const [f1s, setF1s] = useState<CommittedF1[]>([])
   const [filterOptions, setFilterOptions] = useState<FilterOptions>({
     grantCalls: [],
@@ -53,6 +56,8 @@ export default function CommittedF1sTab() {
   const [selectedGrantMaxSequence, setSelectedGrantMaxSequence] = useState<number>(0)
   const [stateShorts, setStateShorts] = useState<Record<string, string>>({})
   const [currentUser, setCurrentUser] = useState<{ role: string } | null>(null)
+  const [editorOpen, setEditorOpen] = useState(false)
+  const [editorProjectId, setEditorProjectId] = useState<string | null>(null)
 
   const toggleAll = (checked: boolean) => {
     if (!checked) return setSelected([])
@@ -298,6 +303,14 @@ export default function CommittedF1sTab() {
     fetchCommittedF1s()
     fetchFilterOptions()
     fetchGrantsFromGridView() // Fetch grants from grants_grid_view
+    
+    // Check for editProjectId in URL query params
+    const editProjectId = searchParams.get('editProjectId')
+    if (editProjectId) {
+      setEditorProjectId(editProjectId)
+      setEditorOpen(true)
+    }
+    
     ;(async () => {
       const { data } = await supabase
         .from('partners')
@@ -532,6 +545,7 @@ export default function CommittedF1sTab() {
                 <TableHead>{t('f2:status')}</TableHead>
                 <TableHead>{t('f2:community_approval')}</TableHead>
                 <TableHead>MOU</TableHead>
+                <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -629,6 +643,19 @@ export default function CommittedF1sTab() {
                     {f1.mou_id ? (
                       <a className="text-primary underline" href="/err-portal/f3-mous">{t('f2:view_mou')}</a>
                     ) : '-'}
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => { setEditorProjectId(f1.id); setEditorOpen(true) }}
+                        title={t('projects:edit_project') as string}
+                        className="h-8 w-8 p-0"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
@@ -807,6 +834,13 @@ export default function CommittedF1sTab() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <ProjectEditor
+        open={editorOpen}
+        onOpenChange={setEditorOpen}
+        projectId={editorProjectId}
+        onSaved={async () => { await fetchCommittedF1s() }}
+      />
     </div>
   )
 }

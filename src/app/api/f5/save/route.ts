@@ -25,8 +25,34 @@ export async function POST(req: Request) {
       err_code = (prj as any)?.emergency_rooms?.err_code || null
     } catch {}
 
+    // Helper function to detect language from text content
+    const detectLanguage = (text: string): 'ar' | 'en' => {
+      if (!text) return 'en'
+      const arabicPattern = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/g
+      const englishPattern = /[a-zA-Z]/g
+      const arabicCount = (text.match(arabicPattern) || []).length
+      const englishCount = (text.match(englishPattern) || []).length
+      return arabicCount > englishCount ? 'ar' : 'en'
+    }
+
     // Detect language and translate if needed
-    const sourceLanguage = summary.language || 'en'
+    let sourceLanguage = summary.language
+    if (!sourceLanguage) {
+      // Try to detect language from content if not set
+      const textToCheck = [
+        summary.positive_changes,
+        summary.negative_results,
+        summary.unexpected_results,
+        summary.lessons_learned,
+        summary.suggestions
+      ].filter(Boolean).join(' ')
+      
+      if (textToCheck) {
+        sourceLanguage = detectLanguage(textToCheck)
+      } else {
+        sourceLanguage = 'en' // Default fallback
+      }
+    }
     console.log('F5 detected source language:', sourceLanguage)
     
     const { translatedData: translatedSummary, originalText: summaryOriginalText } = await translateF5Report(summary, sourceLanguage)
@@ -149,6 +175,7 @@ export async function POST(req: Request) {
         female_count: r.female_count ?? null,
         under18_male: r.under18_male ?? null,
         under18_female: r.under18_female ?? null,
+        people_with_disabilities: r.people_with_disabilities ?? null,
         adjusted_counts: r.adjusted_counts ?? null,
         adjusted_note: r.adjusted_note ?? null,
         is_draft: r.is_draft || false,
