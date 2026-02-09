@@ -154,7 +154,7 @@ export async function PATCH(request: Request) {
 
     const { data: project, error: fetchError } = await supabase
       .from('err_projects')
-      .select('id, state, funding_status')
+      .select('id, state, funding_status, mou_id')
       .eq('id', id)
       .single()
 
@@ -210,6 +210,26 @@ export async function PATCH(request: Request) {
       .eq('id', id)
 
     if (updateError) throw updateError
+
+    // Recalculate and update MOU total_amount when linking or unlinking
+    const mouIdToRecalc = updates.mou_id === null
+      ? (project as { mou_id?: string | null }).mou_id
+      : (typeof updates.mou_id === 'string' ? updates.mou_id : null)
+    if (mouIdToRecalc) {
+      const { data: linkedProjects } = await supabase
+        .from('err_projects')
+        .select('expenses')
+        .eq('mou_id', mouIdToRecalc)
+      const sumExpenses = (exp: unknown): number => {
+        const arr = typeof exp === 'string' ? JSON.parse(exp || '[]') : (Array.isArray(exp) ? exp : [])
+        return arr.reduce((s: number, e: any) => s + (Number(e?.total_cost) || 0), 0)
+      }
+      const total_amount = (linkedProjects || []).reduce((s: number, p: any) => s + sumExpenses(p.expenses), 0)
+      await supabase
+        .from('mous')
+        .update({ total_amount })
+        .eq('id', mouIdToRecalc)
+    }
 
     return NextResponse.json({ success: true })
   } catch (error) {
