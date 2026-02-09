@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, ReactNode, ReactElement } from 'react'
+import { cn } from '@/lib/utils'
 import Sidebar from './Sidebar'
 import Navbar from './Navbar'
 
@@ -19,10 +20,17 @@ export default function MainLayout({ children, sidebarItems, userName }: MainLay
   const [sidebarOpen, setSidebarOpen] = useState(true)
 
   return (
-    <div className="min-h-screen overflow-x-hidden">
-      <div className="flex">
-        <Sidebar items={sidebarItems} isOpen={sidebarOpen} />
-        <main className="flex-1 transition-all duration-300 min-w-0 w-full">
+    <div className="flex min-h-screen overflow-x-hidden">
+      <Sidebar items={sidebarItems} isOpen={sidebarOpen} />
+      {/* Spacer so main content is not hidden under the fixed sidebar */}
+      <div
+        className={cn(
+          'hidden shrink-0 transition-[width] duration-300 lg:block',
+          sidebarOpen ? 'w-64' : 'w-16'
+        )}
+        aria-hidden
+      />
+      <main className="flex-1 min-w-0 min-h-screen w-0">
           <Navbar
             userName={userName}
             sidebarOpen={sidebarOpen}
@@ -33,8 +41,7 @@ export default function MainLayout({ children, sidebarItems, userName }: MainLay
               {children}
             </div>
           </div>
-        </main>
-      </div>
+      </main>
     </div>
   )
 } 

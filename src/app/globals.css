@@ -4,6 +4,16 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
+  /* Brand palette (hex) */
+  --color-brand-header: #2F4A73;
+  --color-brand-dark-blue: #243A5E;
+  --color-brand-orange: #F29C1F;
+  --color-brand-purple: #5B3C6E;
+  --color-brand-body: #333333;
+  --color-brand-light-blue: #3FA9C9;
+  --color-brand-pink: #E63B7A;
+  --color-brand-success: #2ECC71;
+  --color-brand-bg: #F5FAFD;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
@@ -45,37 +55,39 @@
 
 :root {
   --radius: 0.625rem;
-  --background: 0 0% 100%;
-  --foreground: 222.2 84% 4.9%;
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: 222.2 47.4% 11.2%;
-  --primary-foreground: 210 40% 98%;
-  --secondary: 210 40% 96.1%;
-  --secondary-foreground: 222.2 47.4% 11.2%;
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: 210 40% 96.1%;
-  --accent-foreground: 222.2 47.4% 11.2%;
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: 214.3 31.8% 91.4%;
-  --input: 214.3 31.8% 91.4%;
-  --ring: 222.2 84% 4.9%;
+  /* Brand: dark blue #243A5E, orange #F29C1F, purple #5B3C6E, body #333, light blue #3FA9C9, pink #E63B7A, success #2ECC71, bg #F5FAFD */
+  --background: #F5FAFD;
+  --foreground: #333333;
+  --card: #ffffff;
+  --card-foreground: #333333;
+  --popover: #ffffff;
+  --popover-foreground: #333333;
+  --primary: #F29C1F;
+  --primary-foreground: #FFFFFF;
+  --secondary: transparent;
+  --secondary-foreground: #5B3C6E;
+  --muted: #f0f4f8;
+  --muted-foreground: #5B3C6E;
+  --accent: #F5FAFD;
+  --accent-foreground: #243A5E;
+  --destructive: #E63B7A;
+  --border: #3FA9C9;
+  --input: #3FA9C9;
+  --ring: #5B3C6E;
   --chart-1: oklch(0.646 0.222 41.116);
   --chart-2: oklch(0.6 0.118 184.704);
   --chart-3: oklch(0.398 0.07 227.392);
   --chart-4: oklch(0.828 0.189 84.429);
   --chart-5: oklch(0.769 0.188 70.08);
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  /* Sidebar: dark blue bg, white text, orange hover, purple active */
+  --sidebar: #243A5E;
+  --sidebar-foreground: #FFFFFF;
+  --sidebar-primary: #5B3C6E;
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent: #5B3C6E;
+  --sidebar-accent-foreground: #FFFFFF;
+  --sidebar-border: rgba(255,255,255,0.1);
+  --sidebar-ring: #E63B7A;
   --font-sans: var(--font-inter);
 }
 
@@ -128,6 +140,13 @@
     @apply bg-background text-foreground;
     overflow-x: hidden;
   }
+  /* Main headings: dark blue; sub-headings: dark purple */
+  h1, h2, h3 {
+    @apply text-brand-dark-blue;
+  }
+  h4, h5, h6 {
+    @apply text-brand-purple;
+  }
   
   /* Make text selection visible in input fields */
   input[type="text"]::selection,
@@ -151,18 +170,3 @@
 @tailwind components;
 @tailwind utilities;
 
-@layer base {
-  :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
-  }
-}

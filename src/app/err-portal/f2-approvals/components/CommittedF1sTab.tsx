@@ -712,14 +712,14 @@ export default function CommittedF1sTab() {
                     {new Date(f1.committed_at).toLocaleDateString()}
                   </TableCell>
                   <TableCell>
-                    <Badge variant="default">
+                    <Badge variant="success">
                       {t(`f2:${f1.funding_status}`)}
                     </Badge>
                   </TableCell>
                   {/* Community Approval */}
                   <TableCell>
                     {f1.approval_file_key ? (
-                      <Badge variant="default">{t('f2:approval_uploaded')}</Badge>
+                      <Badge variant="success">{t('f2:approval_uploaded')}</Badge>
                     ) : (
                       <div className="flex items-center gap-2">
                         <input

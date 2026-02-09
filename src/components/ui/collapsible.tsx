@@ -36,7 +36,7 @@ const CollapsibleRow = ({
     >
       <CollapsibleTrigger 
         className={cn(
-          "flex w-full items-center justify-between rounded-md border px-4 py-2 font-medium",
+          "flex w-full items-center justify-between rounded-md px-4 py-2 font-medium",
           variant === 'primary' 
             ? 'bg-[#007229]/10 border-[#007229]/20 text-[#007229] hover:bg-[#007229]/20' 
             : 'bg-muted/50 hover:bg-muted',

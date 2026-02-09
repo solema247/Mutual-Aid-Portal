@@ -61,15 +61,15 @@ export default function Navbar({ title, userName: userNameProp, className = '', 
 
   return (
     <nav
-      className={`sticky top-0 z-40 w-full border-b border-gray-200 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80 ${className}`}
+      className={`sticky top-0 z-40 w-full text-white backdrop-blur bg-gradient-to-r from-brand-header to-brand-purple ${className}`}
     >
       <div className="mx-auto flex h-14 max-w-full items-center justify-between px-4 sm:px-6 lg:px-8">
         <div className="flex min-w-0 flex-1 items-center gap-4">
           {onSidebarToggle != null && (
             <Button
-              variant="outline"
+              variant="ghost"
               size="icon"
-              className="hidden shrink-0 lg:flex"
+              className="hidden shrink-0 lg:flex text-white hover:text-brand-orange hover:bg-white/10"
               onClick={onSidebarToggle}
               aria-label={sidebarOpen ? (t('common:sidebar_hide') || 'Hide sidebar') : (t('common:sidebar_show') || 'Show sidebar')}
             >
@@ -77,11 +77,11 @@ export default function Navbar({ title, userName: userNameProp, className = '', 
             </Button>
           )}
           {title != null ? (
-            <div className="truncate text-lg font-semibold text-gray-900">
+            <div className="truncate text-lg font-semibold text-white">
               {title}
             </div>
           ) : (
-            <div className="truncate text-lg font-semibold text-gray-900">
+            <div className="truncate text-lg font-semibold text-white">
               Mutual Aid Portal
             </div>
           )}
@@ -89,16 +89,16 @@ export default function Navbar({ title, userName: userNameProp, className = '', 
         <div className="flex shrink-0 items-center gap-3">
           <Button
             onClick={toggleLanguage}
-            variant="outline"
+            variant="ghost"
             size="sm"
-            className="gap-1.5 border-2 px-3 py-1.5 font-medium hover:bg-accent"
+            className="gap-1.5 px-3 py-1.5 font-medium text-white hover:text-brand-orange hover:bg-white/10"
             aria-label={i18n.language === 'en' ? 'Switch to Arabic' : 'Switch to English'}
           >
             <Globe className="h-4 w-4" />
             {i18n.language === 'en' ? 'العربية' : 'English'}
           </Button>
           <span
-            className="max-w-[140px] truncate rounded-md bg-gray-100 px-3 py-1.5 text-sm font-medium text-gray-700 sm:max-w-[200px]"
+            className="max-w-[140px] truncate rounded-md bg-white/15 px-3 py-1.5 text-sm font-medium text-white sm:max-w-[200px]"
             title={displayName}
           >
             {displayName}
