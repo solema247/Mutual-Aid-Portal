@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
 import { supabase } from '@/lib/supabaseClient'
-import { Search, Filter, ArrowRightLeft, Edit2, Trash2, Unlink } from 'lucide-react'
+import { Search, Filter, ArrowRightLeft, Edit2, Trash2, Unlink, Link2 } from 'lucide-react'
 import type { CommittedF1, FilterOptions } from '../types'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -64,6 +64,11 @@ export default function CommittedF1sTab() {
   const [removeFromMouDialogOpen, setRemoveFromMouDialogOpen] = useState(false)
   const [removingFromMouF1Id, setRemovingFromMouF1Id] = useState<string | null>(null)
   const [isRemovingFromMou, setIsRemovingFromMou] = useState(false)
+  const [addToMouDialogOpen, setAddToMouDialogOpen] = useState(false)
+  const [addingToMouF1Id, setAddingToMouF1Id] = useState<string | null>(null)
+  const [existingMous, setExistingMous] = useState<Array<{ id: string; mou_code: string; partner_name: string; state: string | null }>>([])
+  const [selectedMouIdForAdd, setSelectedMouIdForAdd] = useState<string>('')
+  const [isAddingToMou, setIsAddingToMou] = useState(false)
 
   const toggleAll = (checked: boolean) => {
     if (!checked) return setSelected([])
@@ -495,6 +500,52 @@ export default function CommittedF1sTab() {
     }
   }
 
+  const handleAddToMouClick = async (f1Id: string) => {
+    setAddingToMouF1Id(f1Id)
+    setSelectedMouIdForAdd('')
+    setAddToMouDialogOpen(true)
+    try {
+      const res = await fetch('/api/f3/mous')
+      if (!res.ok) throw new Error('Failed to fetch MOUs')
+      const data = await res.json()
+      setExistingMous((data || []).map((m: any) => ({
+        id: m.id,
+        mou_code: m.mou_code || m.id,
+        partner_name: m.partner_name || '',
+        state: m.state || null
+      })))
+    } catch (e) {
+      console.error('Error fetching MOUs:', e)
+      setExistingMous([])
+    }
+  }
+
+  const handleAddToMouConfirm = async () => {
+    if (!addingToMouF1Id || !selectedMouIdForAdd) return
+    setIsAddingToMou(true)
+    try {
+      const response = await fetch('/api/f2/committed', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: addingToMouF1Id, mou_id: selectedMouIdForAdd })
+      })
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({ error: 'Failed to add F1 to MOU' }))
+        alert(err.error || t('f2:add_to_mou_failed'))
+        return
+      }
+      await fetchCommittedF1s()
+      setAddToMouDialogOpen(false)
+      setAddingToMouF1Id(null)
+      setSelectedMouIdForAdd('')
+    } catch (error) {
+      console.error('Error adding F1 to MOU:', error)
+      alert(t('f2:add_to_mou_failed'))
+    } finally {
+      setIsAddingToMou(false)
+    }
+  }
+
   if (isLoading) {
     return <div className="text-center py-8">{t('common:loading')}</div>
   }
@@ -722,7 +773,18 @@ export default function CommittedF1sTab() {
                           <span className="text-xs">{t('f2:remove_from_mou')}</span>
                         </Button>
                       </div>
-                    ) : '-'}
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 px-1.5 text-green-600 hover:text-green-700 hover:bg-green-50"
+                        onClick={() => handleAddToMouClick(f1.id)}
+                        title={t('f2:add_to_mou') as string}
+                      >
+                        <Link2 className="h-3.5 w-3.5 mr-0.5" />
+                        <span className="text-xs">{t('f2:add_to_mou')}</span>
+                      </Button>
+                    )}
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2">
@@ -782,6 +844,52 @@ export default function CommittedF1sTab() {
           </div>
         </div>
       )}
+
+      {/* Add to MOU Dialog */}
+      <Dialog open={addToMouDialogOpen} onOpenChange={setAddToMouDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t('f2:add_to_mou') || 'Add F1 to MOU'}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            {addingToMouF1Id && (() => {
+              const f1 = f1s.find(f => f.id === addingToMouF1Id)
+              if (!f1) return null
+              return (
+                <div className="p-3 bg-muted rounded-md">
+                  <div className="font-medium">{f1.err_id}</div>
+                  <div className="text-sm text-muted-foreground">
+                    {f1.state} - {f1.locality}
+                  </div>
+                </div>
+              )
+            })()}
+            <div>
+              <Label>{t('f2:select_mou') || 'Select MOU'}</Label>
+              <Select value={selectedMouIdForAdd} onValueChange={setSelectedMouIdForAdd}>
+                <SelectTrigger className="w-full mt-1">
+                  <SelectValue placeholder={t('f2:select_mou_placeholder') || 'Choose an MOU'} />
+                </SelectTrigger>
+                <SelectContent>
+                  {existingMous.map((mou) => (
+                    <SelectItem key={mou.id} value={mou.id}>
+                      {mou.mou_code} — {mou.partner_name}{mou.state ? ` (${mou.state})` : ''}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => { setAddToMouDialogOpen(false); setAddingToMouF1Id(null); setSelectedMouIdForAdd('') }}>
+                {t('common:cancel')}
+              </Button>
+              <Button onClick={handleAddToMouConfirm} disabled={!selectedMouIdForAdd || isAddingToMou}>
+                {isAddingToMou ? t('common:loading') : (t('f2:add_to_mou') || 'Add to MOU')}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Remove from MOU Confirmation Dialog */}
       <Dialog open={removeFromMouDialogOpen} onOpenChange={setRemoveFromMouDialogOpen}>

@@ -179,6 +179,25 @@ export async function PATCH(request: Request) {
     const updates: Record<string, unknown> = {}
     if (mouId === null || mouId === undefined) {
       updates.mou_id = null
+    } else if (typeof mouId === 'string' && mouId.trim()) {
+      const mouUuid = mouId.trim()
+      const { data: mou, error: mouErr } = await supabase
+        .from('mous')
+        .select('id, state')
+        .eq('id', mouUuid)
+        .single()
+
+      if (mouErr || !mou) {
+        return NextResponse.json({ error: 'MOU not found' }, { status: 404 })
+      }
+
+      if (allowedStateNames !== null && allowedStateNames.length > 0 && mou.state) {
+        if (!allowedStateNames.includes(mou.state)) {
+          return NextResponse.json({ error: 'Not allowed to add to this MOU' }, { status: 403 })
+        }
+      }
+
+      updates.mou_id = mouUuid
     }
 
     if (Object.keys(updates).length === 0) {

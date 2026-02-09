@@ -123,5 +123,9 @@
   "delete_failed": "فشل حذف المشروع",
   "remove_from_mou": "إزالة من مذكرة التفاهم",
   "remove_from_mou_confirmation": "إزالة هذا F1 من مذكرته؟ ستظل خطة العمل F1 في النظام كملتزمة ولن تكون مرتبطة بمذكرة التفاهم.",
-  "remove_from_mou_failed": "فشل في إزالة F1 من مذكرة التفاهم"
+  "remove_from_mou_failed": "فشل في إزالة F1 من مذكرة التفاهم",
+  "add_to_mou": "إضافة إلى مذكرة التفاهم",
+  "add_to_mou_failed": "فشل في إضافة F1 إلى مذكرة التفاهم",
+  "select_mou": "اختر مذكرة التفاهم",
+  "select_mou_placeholder": "اختر مذكرة تفاهم"
 }

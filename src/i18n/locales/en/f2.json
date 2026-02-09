@@ -123,5 +123,9 @@
   "delete_failed": "Failed to delete project",
   "remove_from_mou": "Remove from MOU",
   "remove_from_mou_confirmation": "Remove this F1 from its MOU? The F1 work plan will stay in the system as committed and will no longer be linked to the MOU.",
-  "remove_from_mou_failed": "Failed to remove F1 from MOU"
+  "remove_from_mou_failed": "Failed to remove F1 from MOU",
+  "add_to_mou": "Add to MOU",
+  "add_to_mou_failed": "Failed to add F1 to MOU",
+  "select_mou": "Select MOU",
+  "select_mou_placeholder": "Choose an MOU"
 }
