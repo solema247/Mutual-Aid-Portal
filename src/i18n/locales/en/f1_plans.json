@@ -1,0 +1,77 @@
+{
+  "title": "F1 Work Plans",
+  "description": "Manage and review F1 work plans from ERR App submissions and direct uploads",
+  "err_app_submissions": "ERR App Submissions",
+  "direct_upload": {
+    "title": "Upload F1 Work Plan",
+    "description": "Upload pre-vetted F1 work plans directly",
+    "select_file": "Please select a file first",
+    "download_template": "Download Template",
+    "upload": "Upload Work Plan",
+    "uploading": "Uploading..."
+  },
+  "grant_details": {
+    "grant": "Grant Call",
+    "serial": "Grant Serial",
+    "select_grant": "Select Grant",
+    "select_state": "Select State Allocation",
+    "no_allocation": "No allocation available for this state",
+    "amount_exceeded": "Amount exceeds state allocation"
+  },
+  "status": {
+    "unassigned": "Unassigned",
+    "allocated": "Allocated",
+    "reassigned": "Reassigned"
+  },
+  "pool_overview": "Pool Overview",
+  "pool": {
+    "loading": "Loading balances…",
+    "total": "Total",
+    "committed": "Committed",
+    "pending": "Pending",
+    "remaining": "Remaining",
+    "by_state": {
+      "title": "By State",
+      "state": "State",
+      "state_desc": "State name",
+      "allocated": "Allocated",
+      "allocated_desc": "Total assigned",
+      "committed": "Committed",
+      "committed_desc": "Approved spend",
+      "pending": "Pending",
+      "pending_desc": "Not yet committed",
+      "remaining": "Remaining",
+      "remaining_desc": "Alloc - Committed - Pending",
+      "proposed": "Proposed",
+      "proposed_desc": "This upload",
+      "remainder": "Remainder",
+      "remainder_desc": "If Applied (after proposal)"
+    },
+    "by_donor": {
+      "title": "By Donor/Grant",
+      "donor": "Donor",
+      "donor_desc": "Funder name",
+      "grant": "Grant",
+      "grant_desc": "Grant Call",
+      "included": "Included",
+      "included_desc": "Added to pool",
+      "committed": "Committed",
+      "committed_desc": "Approved spend",
+      "pending": "Pending",
+      "pending_desc": "Not yet committed",
+      "remaining": "Remaining",
+      "remaining_desc": "Included - Committed - Pending",
+      "proposed": "Proposed",
+      "proposed_desc": "This upload",
+      "remainder": "Remainder",
+      "remainder_desc": "If Applied (after proposal)"
+    }
+  }
+  ,
+  "err_tabs": {
+    "new": "New Projects",
+    "feedback": "Feedback Required",
+    "declined": "Declined Projects",
+    "staging": "Project Staging"
+  }
+}

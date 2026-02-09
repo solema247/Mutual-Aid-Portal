@@ -1,0 +1,109 @@
+'use client'
+
+import { useState, useEffect } from 'react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { supabase } from '@/lib/supabaseClient'
+
+export default function ChangePasswordPage() {
+  const [password, setPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  // Check if user is authenticated via magic link
+  useEffect(() => {
+    const checkSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        // If no session, redirect to login
+        window.location.href = '/login'
+      }
+    }
+    checkSession()
+  }, [])
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setIsLoading(true)
+    setError(null)
+
+    try {
+      if (password !== confirmPassword) {
+        throw new Error('Passwords do not match')
+      }
+
+      // Update password
+      const { error: updateError } = await supabase.auth.updateUser({
+        password: password,
+        data: { 
+          has_changed_password: true,
+          is_temporary_password: false  // Add this to remove the temporary flag
+        }
+      })
+
+      if (updateError) throw updateError
+
+      // Determine redirect based on user type
+      const userType = document.cookie.split(';').find(c => c.trim().startsWith('userType='))?.split('=')[1]
+      if (userType === 'err') {
+        window.location.href = '/err-portal'
+      } else {
+        window.location.href = '/partner-portal'
+      }
+    } catch (err) {
+      console.error('Password change error:', err)
+      setError(err instanceof Error ? err.message : 'Failed to update password')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-background p-4">
+      <Card className="w-full max-w-md">
+        <CardHeader>
+          <CardTitle>Change Password</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {error && (
+              <div className="bg-destructive/15 text-destructive text-sm p-3 rounded-md">
+                {error}
+              </div>
+            )}
+            <div className="space-y-2">
+              <Label htmlFor="password">New Password</Label>
+              <Input
+                id="password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="confirmPassword">Confirm Password</Label>
+              <Input
+                id="confirmPassword"
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                required
+              />
+            </div>
+            <Button 
+              type="submit" 
+              className="w-full"
+              disabled={isLoading}
+            >
+              {isLoading ? 'Updating...' : 'Update Password'}
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
+    </div>
+  )
+} 

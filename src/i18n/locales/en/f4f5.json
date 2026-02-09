@@ -1,0 +1,172 @@
+{
+  "tabs": {
+    "f4": "F4 Financial",
+    "f5": "F5 Program"
+  },
+  "f4": {
+    "title": "F4 Financial Reports",
+    "upload": "Upload F4",
+    "search": "Search…",
+    "modal": {
+      "title": "Upload F4 Financial Report",
+      "project": "Project",
+      "project_placeholder": "Select project by objectives",
+      "err": "ERR (with active projects)",
+      "err_placeholder": "Select ERR",
+      "state": "State",
+      "state_placeholder": "Select state",
+      "report_date": "Report Date",
+      "summary_file": "Summary File (PDF/Image)",
+      "choose_file_hint": "No file chosen — Choose file",
+      "process": "Process",
+      "cancel": "Cancel"
+    },
+    "filters": {
+      "err": "ERR",
+      "state": "State",
+      "donor": "Donor",
+      "grant": "Grant Call",
+      "all": "All",
+      "reset": "Reset"
+    },
+    "headers": {
+      "err": "ERR",
+      "state": "State",
+      "grant": "Grant Call",
+      "donor": "Donor",
+      "report_date": "Report Date",
+      "total_grant": "Total Grant",
+      "total_expenses": "Total Expenses",
+      "remainder": "Remainder",
+      "files": "Files",
+      "updated": "Updated",
+      "actions": ""
+    },
+    "view": "View",
+    "loading": "Loading…",
+    "empty": "No F4 reports yet",
+    "preview": {
+      "tabs": { "edit_form": "Edit Form", "view_file": "View File" },
+      "labels": {
+        "err_room": "ERR Room",
+        "report_date": "Report Date",
+        "project_activities": "Project Activities",
+        "beneficiaries": "Beneficiaries",
+        "fx_rate": "FX Rate (SDG per 1 USD)",
+        "fx_placeholder": "e.g. 3200"
+      },
+      "expenses": {
+        "title": "Expenses",
+        "empty": "No expenses parsed",
+        "add": "Add expense",
+        "cols": {
+          "activity": "Activity",
+          "description": "Description",
+          "amount": "Amount",
+          "payment_date": "Payment Date",
+          "method": "Method",
+          "receipt_no": "Receipt No.",
+          "seller": "Seller",
+          "actions": "Actions",
+          "delete": "Delete"
+        }
+      },
+      "financials": {
+        "total_grant": "Total Grant",
+        "total_expenses": "Total Expenses (from table)",
+        "remainder": "Remainder",
+        "total_other_sources": "Total Other Sources",
+        "excess_expenses": "Excess Expenses (How covered?)",
+        "surplus_use": "Surplus Use",
+        "lessons_learned": "Lessons Learned",
+        "training_needs": "Training Needs"
+      },
+      "file": { "uploaded_file": "Uploaded File", "no_preview": "No file preview available" },
+      "buttons": { "back": "Back", "save": "Save F4", "saving": "Saving…" }
+    }
+  },
+  "f5": {
+    "title": "F5 Program Reports",
+    "upload": "Upload F5",
+    "search": "Search…",
+    "modal": {
+      "title": "Upload F5 Program Report",
+      "project": "Project",
+      "project_placeholder": "Select project by objectives",
+      "err": "ERR (with projects)",
+      "err_placeholder": "Select ERR",
+      "state": "State",
+      "state_placeholder": "Select state",
+      "report_date": "Report Date",
+      "report_file": "Report File (PDF/Image)",
+      "choose_file_hint": "No file chosen — Choose file",
+      "process": "Process",
+      "cancel": "Cancel"
+    },
+    "filters": {
+      "err": "ERR",
+      "state": "State",
+      "donor": "Donor",
+      "grant": "Grant Call",
+      "all": "All",
+      "reset": "Reset"
+    },
+    "headers": {
+      "err": "ERR",
+      "state": "State",
+      "grant": "Grant Call",
+      "donor": "Donor",
+      "report_date": "Report Date",
+      "activities": "Activities",
+      "updated": "Updated",
+      "actions": ""
+    },
+    "view": "View",
+    "loading": "Loading…",
+    "empty": "No F5 reports yet",
+    "preview": {
+      "tabs": { "edit_form": "Edit Form", "view_file": "View File", "tables": "Extracted Tables" },
+      "summary": {
+        "report_date": "Report Date",
+        "reporting_person": "Reporting Person",
+        "positive_changes": "Positive Changes",
+        "negative_results": "Negative Results",
+        "unexpected_results": "Unexpected Results",
+        "lessons_learned": "Lessons Learned",
+        "suggestions": "Suggestions"
+      },
+      "activities": {
+        "title": "Implemented Activities",
+        "add": "Add row",
+        "empty": "No rows parsed",
+        "cols": {
+          "activity_name": "Activity Name",
+          "activity_goal": "Goal/Details of Activity",
+          "location": "Implementation Location",
+          "start": "Start",
+          "end": "End",
+          "beneficiaries_individuals": "Beneficiaries (Individuals)",
+          "beneficiaries_families": "Beneficiaries (Families)",
+          "actions": "Actions",
+          "delete": "Delete"
+        }
+      },
+      "demographics": {
+        "title": "Additional Beneficiary Breakdown",
+        "empty": "No activities to show demographics",
+        "cols": {
+          "activity": "Activity",
+          "male": "Male",
+          "female": "Female",
+          "male_u18": "Male <18",
+          "female_u18": "Female <18",
+          "pwd": "People with Disabilities"
+        }
+      },
+      "file": { "uploaded_file": "Uploaded File", "no_preview": "No file preview available" },
+      "buttons": { "back": "Back", "save": "Save F5", "saving": "Saving…" }
+    }
+  }
+}
+
+

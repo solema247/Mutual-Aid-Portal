@@ -1,0 +1,100 @@
+{
+  "upload": {
+    "title": "رفع ملفات نظام F",
+    "description": "رفع وإدارة ملفات ومستندات نظام F",
+    "form_type": "اختر نوع النموذج",
+    "form_type_desc": "اختر نوع النموذج الذي تريد رفعه"
+  },
+  "f1": {
+    "title": "رفع نموذج F1",
+    "description": "رفع نموذج F1 وتقديم التفاصيل اللازمة",
+    "select_grant": "اختر منحة",
+    "select_grant_placeholder": "اختر منحة للإدارة",
+    "grant_amount": "مبلغ المنحة",
+    "state_allocations": "تخصيصات الولايات",
+    "allocated_amount": "المخصص",
+    "committed_amount": "الملتزم به",
+    "remaining_amount": "المتبقي",
+    "upload_label": "رفع نموذج F1",
+    "select_allocation_first": "الرجاء اختيار تخصيص الولاية من الجدول أعلاه",
+    "allocation_not_found": "لم يتم العثور على التخصيص المحدد. الرجاء المحاولة مرة أخرى",
+    "click_to_select": "انقر لاختيار تخصيص هذه الولاية",
+    "amount_exceeds_allocation": "المبلغ يتجاوز التخصيص المتبقي",
+    "select_allocation_hint": "انقر على تخصيص الولاية لاختياره لنموذج F1 هذا",
+    "refresh": "تحديث",
+    "donor": "المانح",
+    "state": "الولاية",
+    "auto_from_allocation": "تلقائي من التخصيص",
+    "select_donor": "اختر المانح",
+    "select_state": "اختر الولاية",
+    "select_emergency_room": "اختر غرفة الطوارئ",
+    "emergency_response_room": "غرفة الطوارئ",
+    "primary_sectors": "القطاعات الرئيسية",
+    "secondary_sectors": "القطاعات الثانوية",
+    "select_primary_sectors": "اختر القطاعات الرئيسية",
+    "select_secondary_sectors": "اختر القطاعات الثانوية",
+    "date": "التاريخ",
+    "date_placeholder": "MMYY",
+    "grant_serial": "الرقم التسلسلي للمنحة",
+    "select_grant_serial": "اختر الرقم التسلسلي للمنحة",
+    "grant_serial_placeholder": "4 أرقام",
+    "create_new_serial": "إنشاء رقم تسلسلي جديد",
+    "grant_segment": "قطاع المنحة",
+    "select_grant_segment": "اختر قطاع المنحة",
+    "generated_id": "معرف النموذج المنشأ",
+    "generating": "جاري الإنشاء...",
+    "complete_fields": "أكمل الحقول المطلوبة لإنشاء المعرف",
+    "preview_note": "هذا معاينة. سيتم إنشاء المعرف النهائي عند الرفع.",
+    "uploading": "جاري الرفع...",
+    "upload_button": "رفع النموذج"
+  },
+  "f4": {
+    "title": "رفع نموذج F4",
+    "coming_soon": "قريباً"
+  },
+  "f5": {
+    "title": "رفع نموذج F5",
+    "coming_soon": "قريباً"
+  },
+  "review": {
+    "title": "مراجعة البيانات المستخرجة",
+    "description": "يرجى مراجعة وتأكيد البيانات المستخرجة من المستند",
+    "errors": {
+      "exceeds_allocation": "المبلغ الإجمالي ({{amount}}) يتجاوز المبلغ المتبقي ({{remaining}}) لولاية {{state}}",
+      "amount_too_high": "المبلغ يتجاوز المبلغ المتبقي {{remaining}}",
+      "cannot_exceed_allocation": "لا يمكن أن يتجاوز المبلغ الإجمالي المبلغ المتبقي",
+      "amount_exceeds_available": "مبلغ نموذج F1 ({{amount}}) يتجاوز المبلغ المتاح ({{available}})"
+    },
+    "fields": {
+      "date": "التاريخ",
+      "state": "الولاية",
+      "locality": "المحلية",
+      "project_objectives": "أهداف المشروع",
+      "intended_beneficiaries": "المستفيدون المستهدفون",
+      "estimated_beneficiaries": "العدد المقدر للمستفيدين",
+      "estimated_timeframe": "المدة المقدرة",
+      "additional_support": "الدعم الإضافي",
+      "banking_details": "التفاصيل المصرفية",
+      "planned_activities": "الأنشطة المخططة",
+      "expenses": "المصروفات",
+      "activity": "النشاط",
+      "total_cost": "التكلفة الإجمالية",
+      "total": "المجموع",
+      "available_amount": "المبلغ المتاح",
+      "f1_amount": "مبلغ نموذج F1",
+      "add_activity": "إضافة نشاط",
+      "add_activity_placeholder": "أدخل نشاطاً جديداً",
+      "add_expense": "إضافة مصروف",
+      "officers": {
+        "program": "مسؤول البرنامج",
+        "reporting": "مسؤول التقارير",
+        "finance": "المسؤول المالي",
+        "name": "الاسم",
+        "phone": "الهاتف"
+      }
+    },
+    "cancel": "إلغاء",
+    "submit": "تأكيد",
+    "submitting": "جاري التأكيد..."
+  }
+}

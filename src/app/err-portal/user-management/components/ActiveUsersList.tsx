@@ -1,0 +1,207 @@
+'use client'
+
+import { useTranslation } from 'react-i18next'
+import { useState, useEffect, useCallback } from 'react'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { ActiveUserListItem } from '@/app/api/users/types/users'
+import { getActiveUsers, suspendUser, activateUser } from '@/app/api/users/utils/users'
+
+interface ActiveUsersListProps {
+  isLoading: boolean;
+  currentUserRole: string;
+  currentUserErrId: string | null;
+}
+
+export default function ActiveUsersList({ 
+  isLoading: initialLoading,
+  currentUserRole,
+  currentUserErrId
+}: ActiveUsersListProps) {
+  const { t } = useTranslation(['users', 'common'])
+  const [users, setUsers] = useState<ActiveUserListItem[]>([])
+  const [isLoading, setIsLoading] = useState(initialLoading)
+  const [error, setError] = useState<string | null>(null)
+  const [processingId, setProcessingId] = useState<string | null>(null)
+  const [selectedRole, setSelectedRole] = useState<string>('all')
+  const [selectedStatus, setSelectedStatus] = useState<'active' | 'suspended'>('active')
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
+
+  const fetchUsers = useCallback(async () => {
+    try {
+      setIsLoading(true)
+      const { users: fetchedUsers } = await getActiveUsers({
+        page: 1,
+        pageSize: 20,
+        role: selectedRole === 'all' ? undefined : selectedRole as 'superadmin' | 'admin' | 'state_err' | 'base_err',
+        status: selectedStatus,
+        sortOrder,
+        currentUserRole,
+        currentUserErrId
+      })
+
+      const formattedUsers: ActiveUserListItem[] = fetchedUsers
+        .filter(user => user.role !== 'superadmin') // Exclude superadmin from display
+        .map(user => ({
+          id: user.id,
+          err_id: user.err_id,
+          display_name: user.display_name,
+          role: user.role as 'superadmin' | 'admin' | 'state_err' | 'base_err',
+          status: user.status as 'active' | 'suspended',
+          createdAt: new Date(user.created_at || '').toLocaleDateString(),
+          updatedAt: user.updated_at ? new Date(user.updated_at).toLocaleDateString() : null,
+          err_name: user.emergency_rooms?.name || '-',
+          err_code: user.emergency_rooms?.err_code || '-',
+          state_name: user.emergency_rooms?.state?.state_name || '-',
+          can_see_all_states: user.can_see_all_states ?? true,
+          visible_states: user.visible_states || []
+        }))
+
+      setUsers(formattedUsers)
+      // Note: total count from API includes superadmins, but we filter them out in display
+    } catch (err) {
+      setError(t('common:error_fetching_data'))
+      console.error(err)
+    } finally {
+      setIsLoading(false)
+    }
+  }, [selectedRole, selectedStatus, sortOrder, currentUserRole, currentUserErrId, t])
+
+  useEffect(() => {
+    fetchUsers()
+  }, [selectedRole, selectedStatus, sortOrder, fetchUsers])
+
+  const canChangeStatus = (userRole: string) => {
+    // Only superadmin and admin can change status
+    return currentUserRole === 'superadmin' || currentUserRole === 'admin'
+  }
+
+  const handleStatusChange = async (userId: string, newStatus: 'active' | 'suspended', userRole: string) => {
+    try {
+      setProcessingId(userId)
+      setError(null)
+      if (newStatus === 'suspended') {
+        await suspendUser(userId, currentUserRole)
+      } else {
+        await activateUser(userId, currentUserRole)
+      }
+      fetchUsers()
+    } catch (error: any) {
+      console.error(t('common:error_updating_user_status'), error)
+      setError(error.message || t('common:error_updating_user_status'))
+      setTimeout(() => setError(null), 5000) // Clear error after 5 seconds
+    } finally {
+      setProcessingId(null)
+    }
+  }
+
+  if (isLoading) {
+    return <div className="text-muted-foreground">{t('users:loading')}</div>
+  }
+
+  if (error) {
+    return <div className="text-destructive text-sm">{error}</div>
+  }
+
+  if (users.length === 0) {
+    return <div className="text-muted-foreground">{t('users:no_active_users')}</div>
+  }
+
+  return (
+    <div className="space-y-4">
+      {error && (
+        <div className="text-destructive text-sm bg-destructive/10 p-3 rounded-md">{error}</div>
+      )}
+      <div className="flex gap-4 items-center">
+        <Select
+          value={selectedRole}
+          onValueChange={setSelectedRole}
+        >
+          <SelectTrigger className="w-[180px]">
+            <SelectValue placeholder={t('users:filter_by_role')} />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">{t('users:all_roles')}</SelectItem>
+            <SelectItem value="admin">{t('users:admin_role')}</SelectItem>
+            <SelectItem value="state_err">{t('users:state_err_role')}</SelectItem>
+            <SelectItem value="base_err">{t('users:base_err_role')}</SelectItem>
+          </SelectContent>
+        </Select>
+
+        <Select
+          value={selectedStatus}
+          onValueChange={(value) => setSelectedStatus(value as 'active' | 'suspended')}
+        >
+          <SelectTrigger className="w-[180px]">
+            <SelectValue placeholder={t('users:filter_by_status')} />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="active">{t('users:active_status')}</SelectItem>
+            <SelectItem value="suspended">{t('users:suspended_status')}</SelectItem>
+          </SelectContent>
+        </Select>
+
+        <button
+          onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
+          className="text-sm text-muted-foreground hover:text-foreground"
+        >
+          {sortOrder === 'asc' ? t('users:sort_desc') : t('users:sort_asc')}
+        </button>
+      </div>
+
+      <div className="rounded-md border">
+        <div className="grid grid-cols-8 gap-4 p-4 font-medium border-b">
+          <div>{t('users:err_name')}</div>
+          <div>{t('users:state')}</div>
+          <div>{t('users:display_name')}</div>
+          <div>{t('users:role')}</div>
+          <div>{t('users:status')}</div>
+          <div>{t('users:created_at')}</div>
+          <div>{t('users:updated_at')}</div>
+          <div>{t('users:actions')}</div>
+        </div>
+        <div className="divide-y">
+          {users.map((user) => (
+            <div key={user.id} className="grid grid-cols-8 gap-4 p-4">
+              <div>{user.err_name || '-'}</div>
+              <div>{user.state_name || '-'}</div>
+              <div>{user.display_name || '-'}</div>
+              <div>{t(`users:${user.role}_role`)}</div>
+              <div>{t(`users:${user.status}_status`)}</div>
+              <div>{user.createdAt}</div>
+              <div>{user.updatedAt || '-'}</div>
+              <div>
+                {canChangeStatus(user.role) ? (
+                  <button
+                    className={`${
+                      user.status === 'active' ? 'text-red-600 hover:text-red-800' : 'text-green-600 hover:text-green-800'
+                    } disabled:opacity-50`}
+                    title={
+                      user.role === 'admin' && currentUserRole !== 'superadmin'
+                        ? 'Only superadmin can change admin status'
+                        : t(user.status === 'active' ? 'users:suspend' : 'users:activate')
+                    }
+                    onClick={() => handleStatusChange(user.id, user.status === 'active' ? 'suspended' : 'active', user.role)}
+                    disabled={
+                      processingId === user.id ||
+                      (user.role === 'admin' && currentUserRole !== 'superadmin')
+                    }
+                  >
+                    {processingId === user.id ? '...' : user.status === 'active' ? '⊘' : '✓'}
+                  </button>
+                ) : (
+                  <span className="text-xs text-muted-foreground">-</span>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+} 
