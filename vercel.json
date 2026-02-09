@@ -12,11 +12,19 @@
     "src/app/api/sheets/sync-activities/route.ts": {
       "maxDuration": 600,
       "memory": 512
+    },
+    "src/app/api/airtable/sync/route.ts": {
+      "maxDuration": 600,
+      "memory": 512
     }
   },
   "crons": [
     {
       "path": "/api/sheets/sync-activities",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/airtable/sync",
       "schedule": "*/5 * * * *"
     }
   ]
