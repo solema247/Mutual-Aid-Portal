@@ -57,7 +57,11 @@
   "position": "Position",
   "email": "Email",
   "phone": "Phone",
-  "err_label": "ERR"
+  "err_label": "ERR",
+  "remove_mou": "Remove MOU",
+  "remove_mou_confirmation": "Remove this MOU? The F1 work plans linked to it will stay as committed and will no longer be grouped under this MOU. This action cannot be undone.",
+  "remove_mou_success": "MOU removed. F1 work plans are still committed and no longer linked to this MOU.",
+  "remove_mou_failed": "Failed to remove MOU"
 }
 
 

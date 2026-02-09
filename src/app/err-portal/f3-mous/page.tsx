@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Eye, Upload, Receipt, FileSignature, FileCheck, Link2, X, Plus, RefreshCw } from 'lucide-react'
+import { Eye, Upload, Receipt, FileSignature, FileCheck, Link2, X, Plus, RefreshCw, Trash2 } from 'lucide-react'
 import dynamic from 'next/dynamic'
 import { aggregateObjectives, aggregateBeneficiaries, aggregatePlannedActivities, aggregatePlannedActivitiesDetailed, aggregateLocations, getBankingDetails, getBudgetTable, getBudgetTableData, formatProjectPlannedActivities, formatProjectSummary } from '@/lib/mou-aggregation'
 import HierarchicalBudgetTable from './components/HierarchicalBudgetTable'
@@ -129,6 +129,9 @@ export default function F3MOUsPage() {
   const [isAssigning, setIsAssigning] = useState(false)
   const [isReassigning, setIsReassigning] = useState(false)
   const [mouAssignmentStatus, setMouAssignmentStatus] = useState<Record<string, { hasUnassigned: boolean; hasAssigned: boolean; projectCount: number }>>({})
+  const [removeMouDialogOpen, setRemoveMouDialogOpen] = useState(false)
+  const [removingMouId, setRemovingMouId] = useState<string | null>(null)
+  const [isRemovingMou, setIsRemovingMou] = useState(false)
   
   // Assignment form state
   const [tempGrantId, setTempGrantId] = useState<string>('')
@@ -623,6 +626,33 @@ export default function F3MOUsPage() {
       }
     } catch (error) {
       console.error('Error fetching MOU projects for reassign:', error)
+    }
+  }
+
+  const handleRemoveMouClick = (mouId: string) => {
+    setRemovingMouId(mouId)
+    setRemoveMouDialogOpen(true)
+  }
+
+  const handleRemoveMouConfirm = async () => {
+    if (!removingMouId) return
+    setIsRemovingMou(true)
+    try {
+      const response = await fetch(`/api/f3/mous/${removingMouId}`, { method: 'DELETE' })
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({ error: 'Failed to remove MOU' }))
+        alert(err.error || t('f3:remove_mou_failed'))
+        return
+      }
+      setRemoveMouDialogOpen(false)
+      setRemovingMouId(null)
+      await fetchMous()
+      alert(t('f3:remove_mou_success') || 'MOU removed. F1 work plans are still committed and no longer linked to this MOU.')
+    } catch (error) {
+      console.error('Error removing MOU:', error)
+      alert(t('f3:remove_mou_failed') || 'Failed to remove MOU')
+    } finally {
+      setIsRemovingMou(false)
     }
   }
   
@@ -1225,6 +1255,18 @@ export default function F3MOUsPage() {
                         </Button>
                         <span className="text-[10px] text-muted-foreground text-center leading-tight whitespace-nowrap">{m.signed_mou_file_key ? 'View MOU' : 'Upload MOU'}</span>
                       </div>
+                        <div className="flex flex-col items-center gap-0.5 min-w-[50px]">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50"
+                            onClick={() => handleRemoveMouClick(m.id)}
+                            title={t('f3:remove_mou') || 'Remove MOU (keep F1s)'}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                          <span className="text-[10px] text-muted-foreground text-center leading-tight">{t('f3:remove_mou') || 'Remove MOU'}</span>
+                        </div>
                       </div>
                     </TableCell>
                       </TableRow>
@@ -2951,6 +2993,41 @@ export default function F3MOUsPage() {
                 className="bg-orange-600 hover:bg-orange-700 text-white"
               >
                 {isReassigning ? 'Reassigning...' : 'Reassign to Grant'}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Remove MOU Confirmation Dialog */}
+      <Dialog open={removeMouDialogOpen} onOpenChange={setRemoveMouDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t('f3:remove_mou') || 'Remove MOU'}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              {t('f3:remove_mou_confirmation') || 'Remove this MOU? The F1 work plans linked to it will stay as committed and will no longer be grouped under this MOU. This action cannot be undone.'}
+            </p>
+            {removingMouId && (() => {
+              const mou = mous.find(m => m.id === removingMouId)
+              if (!mou) return null
+              const count = mouProjectCounts[mou.id] ?? 0
+              return (
+                <div className="p-3 bg-muted rounded-md">
+                  <div className="font-medium">{mou.mou_code}</div>
+                  <div className="text-sm text-muted-foreground">
+                    {mou.partner_name} — {count} work plan(s) will be unlinked
+                  </div>
+                </div>
+              )
+            })()}
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => { setRemoveMouDialogOpen(false); setRemovingMouId(null) }}>
+                {t('common:cancel')}
+              </Button>
+              <Button variant="destructive" onClick={handleRemoveMouConfirm} disabled={isRemovingMou}>
+                {isRemovingMou ? t('common:loading') : (t('f3:remove_mou') || 'Remove MOU')}
               </Button>
             </div>
           </div>

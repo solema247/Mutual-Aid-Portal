@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
+import { getUserStateAccess } from '@/lib/userStateAccess'
 
 export async function GET(
   _request: Request,
@@ -191,5 +192,70 @@ export async function PATCH(
       console.error('Error updating MOU:', error)
     }
     return NextResponse.json({ error: 'Failed to update MOU' }, { status: 500 })
+  }
+}
+
+// DELETE /api/f3/mous/[id] - Remove MOU and unlink F1s (F1s remain as committed, only mou_id cleared)
+export async function DELETE(
+  _request: Request,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const supabase = getSupabaseRouteClient()
+    const id = params.id
+    if (!id) {
+      return NextResponse.json({ error: 'MOU ID is required' }, { status: 400 })
+    }
+
+    const { allowedStateNames } = await getUserStateAccess()
+
+    const { data: mou, error: mouErr } = await supabase
+      .from('mous')
+      .select('id, state')
+      .eq('id', id)
+      .single()
+
+    if (mouErr || !mou) {
+      return NextResponse.json({ error: 'MOU not found' }, { status: 404 })
+    }
+
+    if (allowedStateNames !== null && allowedStateNames.length > 0 && mou.state) {
+      if (!allowedStateNames.includes(mou.state)) {
+        return NextResponse.json({ error: 'Not allowed to remove this MOU' }, { status: 403 })
+      }
+    }
+
+    // Unlink all F1s: set mou_id = null so projects remain but are no longer part of this MOU
+    const { error: unlinkErr } = await supabase
+      .from('err_projects')
+      .update({ mou_id: null })
+      .eq('mou_id', id)
+
+    if (unlinkErr) {
+      console.error('Error unlinking projects from MOU:', unlinkErr)
+      return NextResponse.json(
+        { error: 'Failed to unlink projects from MOU' },
+        { status: 500 }
+      )
+    }
+
+    // Delete the MOU record
+    const { error: deleteErr } = await supabase
+      .from('mous')
+      .delete()
+      .eq('id', id)
+
+    if (deleteErr) {
+      console.error('Error deleting MOU:', deleteErr)
+      return NextResponse.json({ error: 'Failed to delete MOU' }, { status: 500 })
+    }
+
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    console.error('Error removing MOU:', error)
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Failed to remove MOU' },
+      { status: 500 }
+    )
   }
 }
