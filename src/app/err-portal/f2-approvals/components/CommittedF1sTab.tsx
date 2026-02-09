@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
 import { supabase } from '@/lib/supabaseClient'
-import { Search, Filter, ArrowRightLeft, Edit2, Trash2 } from 'lucide-react'
+import { Search, Filter, ArrowRightLeft, Edit2, Trash2, Unlink } from 'lucide-react'
 import type { CommittedF1, FilterOptions } from '../types'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -61,6 +61,9 @@ export default function CommittedF1sTab() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [deletingF1Id, setDeletingF1Id] = useState<string | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [removeFromMouDialogOpen, setRemoveFromMouDialogOpen] = useState(false)
+  const [removingFromMouF1Id, setRemovingFromMouF1Id] = useState<string | null>(null)
+  const [isRemovingFromMou, setIsRemovingFromMou] = useState(false)
 
   const toggleAll = (checked: boolean) => {
     if (!checked) return setSelected([])
@@ -461,6 +464,37 @@ export default function CommittedF1sTab() {
     }
   }
 
+  const handleRemoveFromMouClick = (f1Id: string) => {
+    setRemovingFromMouF1Id(f1Id)
+    setRemoveFromMouDialogOpen(true)
+  }
+
+  const handleRemoveFromMouConfirm = async () => {
+    if (!removingFromMouF1Id) return
+    setIsRemovingFromMou(true)
+    try {
+      const response = await fetch('/api/f2/committed', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: removingFromMouF1Id, mou_id: null })
+      })
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({ error: 'Failed to remove F1 from MOU' }))
+        alert(err.error || t('f2:remove_from_mou_failed'))
+        return
+      }
+      setSelected(prev => prev.filter(id => id !== removingFromMouF1Id))
+      await fetchCommittedF1s()
+      setRemoveFromMouDialogOpen(false)
+      setRemovingFromMouF1Id(null)
+    } catch (error) {
+      console.error('Error removing F1 from MOU:', error)
+      alert(t('f2:remove_from_mou_failed'))
+    } finally {
+      setIsRemovingFromMou(false)
+    }
+  }
+
   if (isLoading) {
     return <div className="text-center py-8">{t('common:loading')}</div>
   }
@@ -675,7 +709,19 @@ export default function CommittedF1sTab() {
                   </TableCell>
                   <TableCell>
                     {f1.mou_id ? (
-                      <a className="text-primary underline" href="/err-portal/f3-mous">{t('f2:view_mou')}</a>
+                      <div className="flex items-center gap-2">
+                        <a className="text-primary underline" href="/err-portal/f3-mous">{t('f2:view_mou')}</a>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 px-1.5 text-amber-600 hover:text-amber-700 hover:bg-amber-50"
+                          onClick={() => handleRemoveFromMouClick(f1.id)}
+                          title={t('f2:remove_from_mou') as string}
+                        >
+                          <Unlink className="h-3.5 w-3.5 mr-0.5" />
+                          <span className="text-xs">{t('f2:remove_from_mou')}</span>
+                        </Button>
+                      </div>
                     ) : '-'}
                   </TableCell>
                   <TableCell>
@@ -736,6 +782,40 @@ export default function CommittedF1sTab() {
           </div>
         </div>
       )}
+
+      {/* Remove from MOU Confirmation Dialog */}
+      <Dialog open={removeFromMouDialogOpen} onOpenChange={setRemoveFromMouDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t('f2:remove_from_mou') || 'Remove F1 from MOU'}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              {t('f2:remove_from_mou_confirmation') || 'Remove this F1 from its MOU? The F1 work plan will stay in the system as committed and will no longer be linked to the MOU.'}
+            </p>
+            {removingFromMouF1Id && (() => {
+              const f1 = f1s.find(f => f.id === removingFromMouF1Id)
+              if (!f1) return null
+              return (
+                <div className="p-3 bg-muted rounded-md">
+                  <div className="font-medium">{f1.err_id}</div>
+                  <div className="text-sm text-muted-foreground">
+                    {f1.state} - {f1.locality}
+                  </div>
+                </div>
+              )
+            })()}
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => { setRemoveFromMouDialogOpen(false); setRemovingFromMouF1Id(null) }}>
+                {t('common:cancel')}
+              </Button>
+              <Button variant="secondary" onClick={handleRemoveFromMouConfirm} disabled={isRemovingFromMou}>
+                {isRemovingFromMou ? t('common:loading') : (t('f2:remove_from_mou') || 'Remove from MOU')}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Delete Confirmation Dialog */}
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>

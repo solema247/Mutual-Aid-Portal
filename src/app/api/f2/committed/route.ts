@@ -139,6 +139,69 @@ export async function GET(request: Request) {
   }
 }
 
+// PATCH /api/f2/committed - Update committed F1 (e.g. remove from MOU: set mou_id = null)
+export async function PATCH(request: Request) {
+  try {
+    const supabase = getSupabaseRouteClient()
+    const body = await request.json()
+    const { id, mou_id: mouId } = body ?? {}
+
+    if (!id) {
+      return NextResponse.json({ error: 'F1 ID is required' }, { status: 400 })
+    }
+
+    const { allowedStateNames } = await getUserStateAccess()
+
+    const { data: project, error: fetchError } = await supabase
+      .from('err_projects')
+      .select('id, state, funding_status')
+      .eq('id', id)
+      .single()
+
+    if (fetchError) throw fetchError
+    if (!project) {
+      return NextResponse.json({ error: 'Project not found' }, { status: 404 })
+    }
+
+    if (project.funding_status !== 'committed') {
+      return NextResponse.json(
+        { error: 'Only committed F1s can be updated from this endpoint' },
+        { status: 400 }
+      )
+    }
+
+    if (allowedStateNames !== null && allowedStateNames.length > 0 && project.state) {
+      if (!allowedStateNames.includes(project.state)) {
+        return NextResponse.json({ error: 'Not allowed to update this project' }, { status: 403 })
+      }
+    }
+
+    const updates: Record<string, unknown> = {}
+    if (mouId === null || mouId === undefined) {
+      updates.mou_id = null
+    }
+
+    if (Object.keys(updates).length === 0) {
+      return NextResponse.json({ error: 'No valid update provided' }, { status: 400 })
+    }
+
+    const { error: updateError } = await supabase
+      .from('err_projects')
+      .update(updates)
+      .eq('id', id)
+
+    if (updateError) throw updateError
+
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    console.error('Error updating committed F1:', error)
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Failed to update committed F1' },
+      { status: 500 }
+    )
+  }
+}
+
 // DELETE /api/f2/committed - Delete a committed F1 project
 export async function DELETE(request: Request) {
   try {

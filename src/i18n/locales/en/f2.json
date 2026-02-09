@@ -120,5 +120,8 @@
   "deleting": "Deleting...",
   "delete_confirmation": "Are you sure you want to delete this F1 project submission? This action cannot be undone.",
   "delete_committed_confirmation": "Are you sure you want to delete this committed F1? This will remove the project and its commitment. This action cannot be undone.",
-  "delete_failed": "Failed to delete project"
+  "delete_failed": "Failed to delete project",
+  "remove_from_mou": "Remove from MOU",
+  "remove_from_mou_confirmation": "Remove this F1 from its MOU? The F1 work plan will stay in the system as committed and will no longer be linked to the MOU.",
+  "remove_from_mou_failed": "Failed to remove F1 from MOU"
 }
