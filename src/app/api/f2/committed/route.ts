@@ -138,3 +138,71 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Failed to fetch committed F1s' }, { status: 500 })
   }
 }
+
+// DELETE /api/f2/committed - Delete a committed F1 project
+export async function DELETE(request: Request) {
+  try {
+    const supabase = getSupabaseRouteClient()
+    const { id } = await request.json()
+
+    if (!id) {
+      return NextResponse.json({ error: 'F1 ID is required' }, { status: 400 })
+    }
+
+    const { allowedStateNames } = await getUserStateAccess()
+
+    const { data: project, error: fetchError } = await supabase
+      .from('err_projects')
+      .select('id, state, funding_status, temp_file_key, approval_file_key, file_key')
+      .eq('id', id)
+      .single()
+
+    if (fetchError) throw fetchError
+    if (!project) {
+      return NextResponse.json({ error: 'Project not found' }, { status: 404 })
+    }
+
+    if (project.funding_status !== 'committed') {
+      return NextResponse.json(
+        { error: 'Only committed F1s can be deleted from this endpoint' },
+        { status: 400 }
+      )
+    }
+
+    if (allowedStateNames !== null && allowedStateNames.length > 0 && project.state) {
+      if (!allowedStateNames.includes(project.state)) {
+        return NextResponse.json({ error: 'Not allowed to delete this project' }, { status: 403 })
+      }
+    }
+
+    // Remove ledger entries for this workplan
+    await supabase
+      .from('grant_project_commitment_ledger')
+      .delete()
+      .eq('workplan_id', id)
+
+    const filesToDelete: string[] = []
+    if (project.temp_file_key) filesToDelete.push(project.temp_file_key)
+    if (project.approval_file_key) filesToDelete.push(project.approval_file_key)
+    if (project.file_key) filesToDelete.push(project.file_key)
+
+    if (filesToDelete.length > 0) {
+      await supabase.storage.from('images').remove(filesToDelete)
+    }
+
+    const { error: deleteError } = await supabase
+      .from('err_projects')
+      .delete()
+      .eq('id', id)
+
+    if (deleteError) throw deleteError
+
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    console.error('Error deleting committed F1:', error)
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Failed to delete committed F1' },
+      { status: 500 }
+    )
+  }
+}
