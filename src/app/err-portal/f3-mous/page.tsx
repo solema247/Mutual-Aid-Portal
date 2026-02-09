@@ -123,7 +123,7 @@ export default function F3MOUsPage() {
   const [reassigningMouId, setReassigningMouId] = useState<string | null>(null)
   const [paymentModalOpen, setPaymentModalOpen] = useState(false)
   const [selectedMouForPayment, setSelectedMouForPayment] = useState<MOU | null>(null)
-  const [paymentProjects, setPaymentProjects] = useState<Array<{ id: string; err_id: string | null; state: string; locality: string | null; emergency_room_name: string | null }>>([])
+  const [paymentProjects, setPaymentProjects] = useState<Array<{ id: string; err_id: string | null; state: string; locality: string | null; emergency_room_name: string | null; grant_id: string | null }>>([])
   const [paymentConfirmations, setPaymentConfirmations] = useState<Record<string, { exchange_rate: string; transfer_date: string; file: File | null; file_path?: string }>>({})
   const [uploadingPayments, setUploadingPayments] = useState<Record<string, boolean>>({})
   const [isAssigning, setIsAssigning] = useState(false)
@@ -689,7 +689,7 @@ export default function F3MOUsPage() {
     try {
       const { data: projects, error } = await supabase
         .from('err_projects')
-        .select('id, err_id, state, locality, emergency_rooms (name, name_ar, err_code)')
+        .select('id, err_id, state, locality, grant_id, emergency_rooms (name, name_ar, err_code)')
         .eq('mou_id', mou.id)
         .order('submitted_at', { ascending: true })
       
@@ -706,7 +706,8 @@ export default function F3MOUsPage() {
             err_id: p.err_id, 
             state: p.state, 
             locality: p.locality,
-            emergency_room_name: roomName
+            emergency_room_name: roomName,
+            grant_id: p.grant_id || null
           }
         })
 
@@ -716,12 +717,12 @@ export default function F3MOUsPage() {
           const projectIds = Object.keys(existing)
           const { data: fallbackProjects } = await supabase
             .from('err_projects')
-            .select('id, err_id, state, locality, emergency_rooms (name, name_ar, err_code)')
+            .select('id, err_id, state, locality, grant_id, emergency_rooms (name, name_ar, err_code)')
             .in('id', projectIds)
           const byId = new Map((fallbackProjects || []).map((p: any) => {
             const room = p.emergency_rooms
             const roomName = room?.name || room?.name_ar || room?.err_code || null
-            return [p.id, { id: p.id, err_id: p.err_id, state: p.state, locality: p.locality, emergency_room_name: roomName }]
+            return [p.id, { id: p.id, err_id: p.err_id, state: p.state, locality: p.locality, emergency_room_name: roomName, grant_id: p.grant_id || null }]
           }))
           projectList = projectIds.map(id => byId.get(id)).filter(Boolean) as typeof projectList
         }
@@ -2973,6 +2974,7 @@ export default function F3MOUsPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-[120px]">Room</TableHead>
+                  <TableHead className="w-[180px]">Grant Serial ID</TableHead>
                   <TableHead className="w-[150px]">Exchange Rate</TableHead>
                   <TableHead className="w-[150px]">Transfer Date</TableHead>
                   <TableHead className="w-[250px]">Payment File</TableHead>
@@ -2994,6 +2996,9 @@ export default function F3MOUsPage() {
                             <span className="text-xs bg-green-100 text-green-800 px-1.5 py-0.5 rounded">✓</span>
                           )}
                         </div>
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {project.grant_id || '-'}
                       </TableCell>
                       <TableCell>
                         <Input
