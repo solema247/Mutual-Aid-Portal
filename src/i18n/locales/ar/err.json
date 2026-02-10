@@ -30,9 +30,9 @@
   "grant_management_desc": "إدارة وتخصيص أموال المنح للولايات",
   "gm": {
     "total_included": "إجمالي المضاف",
-    "total_included_desc": "الأموال المضافة إلى المجمّع عبر الدورات",
+    "total_included_desc": "الأموال المخصصة عبر جميع قرارات التوزيع",
     "total_grants": "إجمالي المتاح في المنح",
-    "not_included": "لم يتم إدراجه بعد",
+    "not_included": "الرصيد",
     "committed": "المُلتزم",
     "committed_desc": "إنفاق مُعتمد ومؤكد على المنح",
     "pending": "قيد الانتظار",

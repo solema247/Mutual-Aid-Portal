@@ -30,9 +30,9 @@
   "grant_management_desc": "Manage and allocate grant funds to states",
   "gm": {
     "total_included": "Total Included",
-    "total_included_desc": "Funds added to the pool across cycles",
+    "total_included_desc": "Funds allocated across all distribution decisions",
     "total_grants": "Total Available in Grants",
-    "not_included": "Not Yet Included",
+    "not_included": "Balance",
     "committed": "Committed",
     "committed_desc": "Approved spend confirmed against grants",
     "pending": "Pending",

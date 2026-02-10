@@ -44,11 +44,12 @@ export async function GET() {
   try {
     const supabase = getSupabaseRouteClient()
     
-    // 1. Get Total from allocations_by_date (new Allocated)
-    const allocData = await fetchAllRows(supabase, 'allocations_by_date', '"Allocation Amount"')
+    // 1. Total Included = sum of all allocation_amount from allocations table (foreign table)
+    const allocationsSupabase = getSupabaseAdmin()
+    const allocData = await fetchAllRows(allocationsSupabase, 'allocations', 'allocation_amount')
     const total_included = (allocData || []).reduce((sum, row) => {
-      const amount = row['Allocation Amount'] ? Number(row['Allocation Amount']) : 0
-      return sum + amount
+      const amount = row['allocation_amount'] != null ? Number(row['allocation_amount']) : 0
+      return sum + (Number.isNaN(amount) ? 0 : amount)
     }, 0)
 
     // 2. Get Historical Committed from activities_raw_import

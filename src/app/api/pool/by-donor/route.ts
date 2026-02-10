@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
+import { getSupabaseAdmin } from '@/lib/supabaseAdmin'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -31,63 +32,74 @@ async function fetchAllRows<T>(
   return allRows
 }
 
-// GET /api/pool/by-donor - Aggregated by donor and grant from grants_grid_view
+// Extract activity serials from grants.activities jsonb (array of strings or objects with id/serial)
+function activitySerialsFromJsonb(activities: unknown): string[] {
+  if (activities == null) return []
+  if (Array.isArray(activities)) {
+    return activities
+      .map((item) => (typeof item === 'string' ? item : (item as Record<string, unknown>)?.id ?? (item as Record<string, unknown>)?.serial))
+      .filter((s): s is string => typeof s === 'string' && s.trim() !== '')
+  }
+  if (typeof activities === 'string') {
+    try {
+      const parsed = JSON.parse(activities)
+      return activitySerialsFromJsonb(parsed)
+    } catch {
+      return activities.split(',').map((s) => s.trim()).filter(Boolean)
+    }
+  }
+  return []
+}
+
+// GET /api/pool/by-donor - Aggregated by grant from grants table (foreign table). Included = total_transferred - transfer_fee
 export async function GET() {
   try {
     const supabase = getSupabaseRouteClient()
-    
-    // Fetch all grants from grants_grid_view with activities
+    const grantsSupabase = getSupabaseAdmin()
+
+    // Fetch grants from public.grants (foreign table): grant_id, project_name, total_transferred_amount_usd, sum_transfer_fee_amount, activities
     const grants = await fetchAllRows<{
       grant_id: string | null;
-      donor_name: string | null;
       project_name: string | null;
-      donor_id: string | null;
-      sum_activity_amount: number | null;
-      activities: string | null;
+      total_transferred_amount_usd: number | null;
+      sum_transfer_fee_amount: number | null;
+      activities: unknown;
     }>(
-      supabase,
-      'grants_grid_view',
-      'grant_id, donor_name, project_name, donor_id, sum_activity_amount, activities',
+      grantsSupabase,
+      'grants',
+      'grant_id, project_name, total_transferred_amount_usd, sum_transfer_fee_amount, activities',
       (q) => q.order('grant_id', { ascending: true })
     )
 
-    // Get unique grants (group by grant_id only)
-    const uniqueGrants = new Map<string, { 
-      grant_id: string; 
-      donor_name: string; 
-      project_name: string | null; 
-      donor_id: string | null; 
+    // Group by grant_id; Included = total_transferred_amount_usd - sum_transfer_fee_amount (summed if multiple rows)
+    const uniqueGrants = new Map<string, {
+      grant_id: string;
+      project_name: string | null;
       included: number;
       activitySerials: string[];
     }>()
-    
+
     for (const grant of grants) {
-      // Skip if grant_id is null or empty
       if (!grant.grant_id || grant.grant_id.trim() === '') continue
-      
-      const key = grant.grant_id.trim() // Group by grant_id only (normalized)
-      const activitySerials = grant.activities 
-        ? grant.activities.split(',').map((s: string) => s.trim()).filter(Boolean)
-        : []
-      
+
+      const key = grant.grant_id.trim()
+      const transferred = grant.total_transferred_amount_usd != null ? Number(grant.total_transferred_amount_usd) : 0
+      const fee = grant.sum_transfer_fee_amount != null ? Number(grant.sum_transfer_fee_amount) : 0
+      const included = (Number.isNaN(transferred) ? 0 : transferred) - (Number.isNaN(fee) ? 0 : fee)
+      const activitySerials = activitySerialsFromJsonb(grant.activities)
+
       if (!uniqueGrants.has(key)) {
         uniqueGrants.set(key, {
           grant_id: grant.grant_id,
-          donor_name: grant.donor_name || 'Unknown',
           project_name: grant.project_name || grant.grant_id,
-          donor_id: grant.donor_id || null,
-          included: grant.sum_activity_amount || 0,
+          included: Math.max(0, included),
           activitySerials
         })
       } else {
-        // If duplicate grant_id, sum the amounts and merge activity serials
         const existing = uniqueGrants.get(key)!
-        existing.included += (grant.sum_activity_amount || 0)
-        // Merge activity serials (avoid duplicates)
-        const newSerials = activitySerials.filter(s => !existing.activitySerials.includes(s))
+        existing.included += Math.max(0, included)
+        const newSerials = activitySerials.filter((s) => !existing.activitySerials.includes(s))
         existing.activitySerials.push(...newSerials)
-        // Keep the first donor_name encountered (or update if needed)
-        // For now, keep the first one
       }
     }
 
@@ -187,10 +199,11 @@ export async function GET() {
         const historical = byGrantHistorical.get(grantId) || 0
         const remaining = grant.included - historical - assigned
         return {
-          donor_id: grant.donor_id,
-          donor_name: grant.donor_name,
+          donor_id: null,
+          donor_name: null,
           grant_id: grant.grant_id,
           grant_call_name: grant.project_name || grant.grant_id,
+          project_name: grant.project_name || grant.grant_id,
           included: grant.included,
           historical,
           assigned,
