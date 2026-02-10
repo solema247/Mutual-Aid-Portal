@@ -38,7 +38,7 @@ function normalizeActivitiesStateName(state: any): string {
   
   // Normalize specific state name variations from activities_raw_import
   const stateMappings: Record<string, string> = {
-    'Al Jazirah': 'Al Jazeera',
+    'Al Jazeera': 'Al Jazirah',
     'Gadarif': 'Gadaref',
     'Sinar': 'Sennar'
   }

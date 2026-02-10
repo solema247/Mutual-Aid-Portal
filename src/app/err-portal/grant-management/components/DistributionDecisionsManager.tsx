@@ -347,7 +347,7 @@ export default function DistributionDecisionsManager() {
       'Central Darfur': 'Central Darfur',
       'West Darfur': 'West Darfur',
       'Kassala': 'Kassala',
-      'Al Jazirah': 'Al Jazeera', // CSV uses "Al Jazirah", system uses "Al Jazeera"
+      'Al Jazeera': 'Al Jazirah', // Normalize to Al Jazirah (states table spelling)
       'Sennar': 'Sennar',
       'North Kordofan': 'North Kordofan',
       'South Kordofan': 'South Kordofan',

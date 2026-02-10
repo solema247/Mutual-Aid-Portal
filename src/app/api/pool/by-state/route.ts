@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
+import { getSupabaseAdmin } from '@/lib/supabaseAdmin'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -21,7 +22,7 @@ function normalizeActivitiesStateName(state: any): string {
   
   // Normalize specific state name variations from activities_raw_import
   const stateMappings: Record<string, string> = {
-    'Al Jazirah': 'Al Jazeera',
+    'Al Jazeera': 'Al Jazirah',
     'Gadarif': 'Gadaref',
     'Sinar': 'Sennar'
   }
@@ -78,19 +79,23 @@ export async function GET() {
     const { getUserStateAccess } = await import('@/lib/userStateAccess')
     const { allowedStateNames } = await getUserStateAccess()
     
-    // 1. Get allocations from allocations_by_date (replaces cycle_state_allocations)
-    const allocData = await fetchAllRows(supabase, 'allocations_by_date', 'State,"Allocation Amount"')
-    
+    // 1. Get allocations from allocations foreign table (state + allocation_amount numeric)
+    const allocationsSupabase = getSupabaseAdmin()
+    const { data: allocationsData } = await allocationsSupabase
+      .from('allocations')
+      .select('state, allocation_amount')
+
     const allocatedByState = new Map<string, number>()
-    for (const row of allocData || []) {
-      const rawState = row['State'] || row['state'] || row.State
-      const state = normalizeStateName(rawState)
-      // Filter by user's allowed states
+    for (const row of allocationsData || []) {
+      const rawState = row?.state
+      const state = normalizeActivitiesStateName(rawState)
       if (allowedStateNames !== null && allowedStateNames.length > 0 && !allowedStateNames.includes(state)) {
         continue
       }
-      const amount = row['Allocation Amount'] ? Number(row['Allocation Amount']) : 0
-      allocatedByState.set(state, (allocatedByState.get(state) || 0) + amount)
+      const amount = row?.allocation_amount != null ? Number(row.allocation_amount) : 0
+      if (!Number.isNaN(amount) && amount > 0) {
+        allocatedByState.set(state, (allocatedByState.get(state) || 0) + amount)
+      }
     }
 
     // 2. Get historical commitments from activities_raw_import
@@ -130,7 +135,7 @@ export async function GET() {
         try {
           const exps = typeof p.expenses === 'string' ? JSON.parse(p.expenses) : p.expenses
           const amount = (exps || []).reduce((s: number, e: any) => s + (e.total_cost || 0), 0)
-          const state = normalizeStateName(p.state)
+          const state = normalizeActivitiesStateName(p.state)
           byState.set(state, (byState.get(state) || 0) + amount)
         } catch { /* ignore */ }
       }
@@ -145,7 +150,7 @@ export async function GET() {
           try {
             const exps = typeof p.expenses === 'string' ? JSON.parse(p.expenses) : p.expenses
             const amount = (exps || []).reduce((s: number, e: any) => s + (e.total_cost || 0), 0)
-            const state = normalizeStateName(p.state)
+            const state = normalizeActivitiesStateName(p.state)
             byState.set(state, (byState.get(state) || 0) + amount)
           } catch { /* ignore */ }
         }

@@ -31,27 +31,6 @@ function parseDecisionDate(decisionDate: unknown): string | null {
   return null
 }
 
-/** Parse decision_amount jsonb (e.g. [485000]) to a single number. */
-function parseDecisionAmount(decisionAmount: unknown): number | null {
-  if (decisionAmount == null) return null
-  if (typeof decisionAmount === 'number' && !Number.isNaN(decisionAmount)) return decisionAmount
-  if (Array.isArray(decisionAmount) && decisionAmount.length > 0) {
-    const first = decisionAmount[0]
-    const n = typeof first === 'number' ? first : Number(first)
-    return Number.isNaN(n) ? null : n
-  }
-  if (typeof decisionAmount === 'string') {
-    try {
-      const parsed = JSON.parse(decisionAmount)
-      return parseDecisionAmount(parsed)
-    } catch {
-      const n = Number(decisionAmount)
-      return Number.isNaN(n) ? null : n
-    }
-  }
-  return null
-}
-
 /**
  * GET /api/allocations - List allocations from foreign table.
  * Uses service role to read public.allocations.
@@ -62,15 +41,14 @@ export async function GET() {
     const supabase = getSupabaseAdmin()
     const { data, error } = await supabase
       .from('allocations')
-      .select('allocation_id, state, allocation_amount, percent_decision_amount, restriction, decision_amount, decision_date')
+      .select('allocation_id, state, allocation_amount, percent_decision_amount, restriction, decision_date')
       .order('allocation_id', { ascending: true })
 
     if (error) throw error
 
     const list = (data || []).map((row: Record<string, unknown>) => {
       const allocationId = row.allocation_id != null ? String(row.allocation_id) : null
-      const amountFromDecision = parseDecisionAmount(row.decision_amount)
-      const amount = amountFromDecision ?? (row.allocation_amount != null ? Number(row.allocation_amount) : null)
+      const amount = row.allocation_amount != null ? Number(row.allocation_amount) : null
       return {
         allocation_id: allocationId,
         decision_key: decisionKeyFromAllocationId(allocationId),
