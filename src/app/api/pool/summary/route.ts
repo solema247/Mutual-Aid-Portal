@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
+import { getSupabaseAdmin } from '@/lib/supabaseAdmin'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -82,11 +83,12 @@ export async function GET() {
     // 5. Remaining = Total - Committed - Pending
     const remaining = total_included - total_committed - pending
 
-    // 6. Get Total Grants from grants_grid_view (sum of sum_activity_amount)
-    const grantsData = await fetchAllRows(supabase, 'grants_grid_view', 'sum_activity_amount')
+    // 6. Get Total Grants from public.grants (foreign table) – sum of sum_activity_amount
+    const grantsSupabase = getSupabaseAdmin()
+    const grantsData = await fetchAllRows(grantsSupabase, 'grants', 'sum_activity_amount')
     const total_grants = (grantsData || []).reduce((sum, row) => {
-      const amount = row['sum_activity_amount'] ? Number(row['sum_activity_amount']) : 0
-      return sum + amount
+      const amount = row['sum_activity_amount'] != null ? Number(row['sum_activity_amount']) : 0
+      return sum + (Number.isNaN(amount) ? 0 : amount)
     }, 0)
 
     // 7. Total Not Included = Total Grants - Total Included
