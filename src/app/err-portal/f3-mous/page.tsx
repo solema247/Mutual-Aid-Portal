@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Eye, Upload, Receipt, FileSignature, FileCheck, Link2, X, Plus, RefreshCw } from 'lucide-react'
+import { Eye, Upload, Receipt, FileSignature, FileCheck, Link2, X, Plus, RefreshCw, ListOrdered } from 'lucide-react'
 import dynamic from 'next/dynamic'
 import { aggregateObjectives, aggregateBeneficiaries, aggregatePlannedActivities, aggregatePlannedActivitiesDetailed, aggregateLocations, getBankingDetails, getBudgetTable, getBudgetTableData, formatProjectPlannedActivities, formatProjectSummary } from '@/lib/mou-aggregation'
 import HierarchicalBudgetTable from './components/HierarchicalBudgetTable'
@@ -129,6 +129,18 @@ export default function F3MOUsPage() {
   const [isAssigning, setIsAssigning] = useState(false)
   const [isReassigning, setIsReassigning] = useState(false)
   const [mouAssignmentStatus, setMouAssignmentStatus] = useState<Record<string, { hasUnassigned: boolean; hasAssigned: boolean; projectCount: number }>>({})
+  
+  // List Projects modal state
+  const [listProjectsModalOpen, setListProjectsModalOpen] = useState(false)
+  const [listProjectsMouId, setListProjectsMouId] = useState<string | null>(null)
+  const [listProjectsMouCode, setListProjectsMouCode] = useState<string>('')
+  const [listProjectsList, setListProjectsList] = useState<Array<{ id: string; err_id: string | null; state: string; locality: string | null; grant_id: string | null; amount_usd: number; categories: string; project_objectives: string | null }>>([])
+  const [listProjectsLoading, setListProjectsLoading] = useState(false)
+  const [listProjectsMouAssigned, setListProjectsMouAssigned] = useState(false)
+  const [listProjectsAddMode, setListProjectsAddMode] = useState(false)
+  const [candidatesForAdd, setCandidatesForAdd] = useState<Array<{ id: string; err_id: string | null; state: string; locality: string | null; amount_usd: number; categories: string; project_objectives: string | null }>>([])
+  const [selectedCandidates, setSelectedCandidates] = useState<Set<string>>(new Set())
+  const [listProjectsActionLoading, setListProjectsActionLoading] = useState(false)
   
   // Assignment form state
   const [tempGrantId, setTempGrantId] = useState<string>('')
@@ -626,6 +638,60 @@ export default function F3MOUsPage() {
     }
   }
   
+  const getCategoriesFromPlannedActivities = (plannedActivities: any): string => {
+    try {
+      const arr = typeof plannedActivities === 'string' ? JSON.parse(plannedActivities || '[]') : (Array.isArray(plannedActivities) ? plannedActivities : [])
+      const categories = Array.from(new Set(arr.map((a: any) => a?.category).filter(Boolean))) as string[]
+      return categories.length ? categories.join(', ') : '—'
+    } catch {
+      return '—'
+    }
+  }
+
+  const sumExpensesUsd = (expenses: any): number => {
+    try {
+      const arr = typeof expenses === 'string' ? JSON.parse(expenses || '[]') : (Array.isArray(expenses) ? expenses : [])
+      return arr.reduce((s: number, e: any) => s + (e?.total_cost || 0), 0)
+    } catch {
+      return 0
+    }
+  }
+
+  const openListProjectsModal = async (mou: MOU) => {
+    setListProjectsMouId(mou.id)
+    setListProjectsMouCode(mou.mou_code)
+    setListProjectsModalOpen(true)
+    setListProjectsList([])
+    setListProjectsMouAssigned(false)
+    setListProjectsAddMode(false)
+    setSelectedCandidates(new Set())
+    setListProjectsLoading(true)
+    try {
+      const res = await fetch(`/api/f3/mous/${mou.id}`)
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to load MOU')
+      const projects = data.projects || []
+      const list = projects.map((p: any) => ({
+        id: p.id,
+        err_id: p.err_id ?? null,
+        state: p.state ?? '',
+        locality: p.locality ?? null,
+        grant_id: p.grant_id ?? null,
+        amount_usd: sumExpensesUsd(p.expenses),
+        categories: getCategoriesFromPlannedActivities(p.planned_activities),
+        project_objectives: p.project_objectives ?? null,
+      }))
+      setListProjectsList(list)
+      const isAssigned = list.some((p: any) => p.grant_id && String(p.grant_id).startsWith('LCC-'))
+      setListProjectsMouAssigned(isAssigned)
+    } catch (e) {
+      console.error('Error loading MOU projects:', e)
+      setListProjectsList([])
+    } finally {
+      setListProjectsLoading(false)
+    }
+  }
+
   const openAssignModal = async (mouId: string) => {
     setAssigningMouId(mouId)
     setAssignModalOpen(true)
@@ -950,12 +1016,12 @@ export default function F3MOUsPage() {
   }, [assignModalOpen, reassignModalOpen, mouProjects])
 
   return (
-    <div className="max-w-7xl mx-auto p-6 space-y-6">
-      <Card>
+    <div className="max-w-[1600px] w-full mx-auto p-6 space-y-6">
+      <Card className="w-full">
         <CardHeader>
           <CardTitle>{t('f3:title')}</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-4 w-full overflow-x-auto">
           <div className="flex items-center gap-2">
             <Select value={selectedState} onValueChange={setSelectedState}>
               <SelectTrigger className="w-[180px]">
@@ -974,17 +1040,17 @@ export default function F3MOUsPage() {
             <div className="py-8 text-center text-muted-foreground">{t('common:loading') || 'Loading...'}</div>
           ) : (
             <>
-              <Table dir={i18n.language === 'ar' ? 'rtl' : 'ltr'}>
+              <Table dir={i18n.language === 'ar' ? 'rtl' : 'ltr'} className="w-full min-w-[1000px]">
                 <TableHeader>
                   <TableRow>
-                    <TableHead>{t('f3:headers.mou_code')}</TableHead>
-                    <TableHead>Grant ID</TableHead>
-                    <TableHead>{t('f3:headers.partner')}</TableHead>
-                    <TableHead>{t('f3:headers.err_state')}</TableHead>
-                    <TableHead className="text-right">{t('f3:headers.total')}</TableHead>
-                    <TableHead>{t('f3:headers.end_date')}</TableHead>
-                    <TableHead>{t('f3:headers.created')}</TableHead>
-                    <TableHead>{t('f3:headers.actions')}</TableHead>
+                    <TableHead className="min-w-[120px]">{t('f3:headers.mou_code')}</TableHead>
+                    <TableHead className="min-w-[140px]">Grant ID</TableHead>
+                    <TableHead className="min-w-[140px]">{t('f3:headers.partner')}</TableHead>
+                    <TableHead className="min-w-[180px]">{t('f3:headers.err_state')}</TableHead>
+                    <TableHead className="text-right min-w-[90px]">{t('f3:headers.total')}</TableHead>
+                    <TableHead className="min-w-[100px]">{t('f3:headers.end_date')}</TableHead>
+                    <TableHead className="min-w-[100px]">{t('f3:headers.created')}</TableHead>
+                    <TableHead className="min-w-[320px]">{t('f3:headers.actions')}</TableHead>
                   </TableRow>
                 </TableHeader>
               <TableBody>
@@ -1003,8 +1069,20 @@ export default function F3MOUsPage() {
                     <TableCell className="text-right">{Number(m.total_amount || 0).toLocaleString()}</TableCell>
                     <TableCell>{m.end_date ? new Date(m.end_date).toLocaleDateString() : '-'}</TableCell>
                     <TableCell>{new Date(m.created_at).toLocaleDateString()}</TableCell>
-                    <TableCell className="align-top">
-                      <div className="flex items-start gap-3">
+                    <TableCell className="align-top whitespace-nowrap">
+                      <div className="flex items-start gap-3 flex-wrap">
+                        <div className="flex flex-col items-center gap-0.5 min-w-[50px] flex-shrink-0">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={() => openListProjectsModal(m)}
+                            title="List Projects"
+                          >
+                            <ListOrdered className="h-4 w-4 text-slate-600" />
+                          </Button>
+                          <span className="text-[10px] text-muted-foreground text-center leading-tight">List Projects</span>
+                        </div>
                         {mouAssignmentStatus[m.id]?.hasUnassigned && (currentUser?.role === 'admin' || currentUser?.role === 'superadmin') && (
                           <div className="flex flex-col items-center gap-0.5 min-w-[50px]">
                             <Button
@@ -2352,6 +2430,259 @@ export default function F3MOUsPage() {
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* List Projects Modal */}
+      <Dialog open={listProjectsModalOpen} onOpenChange={(open) => {
+        setListProjectsModalOpen(open)
+        if (!open) {
+          setListProjectsAddMode(false)
+          setSelectedCandidates(new Set())
+        }
+      }}>
+        <DialogContent className="max-w-6xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Projects in {listProjectsMouCode || 'MOU'}</DialogTitle>
+          </DialogHeader>
+          <div className="mt-4 space-y-4">
+            {listProjectsLoading ? (
+              <p className="text-sm text-muted-foreground">Loading…</p>
+            ) : listProjectsMouAssigned ? (
+              <>
+                <p className="text-sm text-muted-foreground">This MOU is assigned to a grant. Projects are read-only.</p>
+                <div className="border rounded-md overflow-auto max-h-[50vh]">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>ERR ID</TableHead>
+                        <TableHead>State</TableHead>
+                        <TableHead>Locality</TableHead>
+                        <TableHead className="text-right">USD</TableHead>
+                        <TableHead>Categories</TableHead>
+                        <TableHead>Grant ID</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {listProjectsList.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={6} className="text-center text-muted-foreground py-8">No projects linked</TableCell>
+                        </TableRow>
+                      ) : (
+                        listProjectsList.map((p) => (
+                          <TableRow key={p.id} title={p.project_objectives ?? undefined}>
+                            <TableCell className="font-mono text-sm">{p.err_id ?? '-'}</TableCell>
+                            <TableCell>{p.state || '-'}</TableCell>
+                            <TableCell>{p.locality ?? '-'}</TableCell>
+                            <TableCell className="text-right font-mono text-sm">{p.amount_usd != null ? p.amount_usd.toLocaleString() : '—'}</TableCell>
+                            <TableCell className="text-sm">{p.categories}</TableCell>
+                            <TableCell className="font-mono text-sm">{p.grant_id ?? '-'}</TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              </>
+            ) : (
+              <>
+                <p className="text-sm text-muted-foreground">Add or remove projects before assigning this MOU to a grant.</p>
+                {!listProjectsAddMode ? (
+                  <>
+                    <div className="border rounded-md overflow-auto max-h-[40vh]">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>ERR ID</TableHead>
+                            <TableHead>State</TableHead>
+                            <TableHead>Locality</TableHead>
+                            <TableHead className="text-right">USD</TableHead>
+                            <TableHead>Categories</TableHead>
+                            <TableHead className="w-[80px]">Actions</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {listProjectsList.length === 0 ? (
+                            <TableRow>
+                              <TableCell colSpan={6} className="text-center text-muted-foreground py-8">No projects linked</TableCell>
+                            </TableRow>
+                          ) : (
+                            listProjectsList.map((p) => (
+                              <TableRow key={p.id} title={p.project_objectives ?? undefined}>
+                                <TableCell className="font-mono text-sm">{p.err_id ?? '-'}</TableCell>
+                                <TableCell>{p.state || '-'}</TableCell>
+                                <TableCell>{p.locality ?? '-'}</TableCell>
+                                <TableCell className="text-right font-mono text-sm">{p.amount_usd != null ? p.amount_usd.toLocaleString() : '—'}</TableCell>
+                                <TableCell className="text-sm">{p.categories}</TableCell>
+                                <TableCell>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="text-destructive hover:text-destructive"
+                                    disabled={listProjectsActionLoading}
+                                    onClick={async () => {
+                                      if (!listProjectsMouId) return
+                                      setListProjectsActionLoading(true)
+                                      try {
+                                        const res = await fetch(`/api/f3/mous/${listProjectsMouId}/projects/remove`, {
+                                          method: 'POST',
+                                          headers: { 'Content-Type': 'application/json' },
+                                          body: JSON.stringify({ project_ids: [p.id] }),
+                                        })
+                                        const data = await res.json()
+                                        if (!res.ok) throw new Error(data.error || 'Failed to remove')
+                                        setListProjectsList((prev) => prev.filter((x) => x.id !== p.id))
+                                        const regen = await fetch(`/api/f3/mous/${listProjectsMouId}/regenerate`, { method: 'POST' })
+                                        if (regen.ok) { /* doc updated */ }
+                                        await fetchMous()
+                                        await checkMouAssignmentStatus([listProjectsMouId])
+                                      } catch (e) {
+                                        console.error(e)
+                                        alert(e instanceof Error ? e.message : 'Failed to remove project')
+                                      } finally {
+                                        setListProjectsActionLoading(false)
+                                      }
+                                    }}
+                                  >
+                                    Remove
+                                  </Button>
+                                </TableCell>
+                              </TableRow>
+                            ))
+                          )}
+                        </TableBody>
+                      </Table>
+                    </div>
+                    <Button
+                      variant="outline"
+                      onClick={async () => {
+                        setListProjectsAddMode(true)
+                        setSelectedCandidates(new Set())
+                        try {
+                          const res = await fetch('/api/f2/committed')
+                          const data = await res.json()
+                          if (!res.ok) throw new Error(data.error || 'Failed to load')
+                          const f1s = Array.isArray(data) ? data : (data?.f1s || [])
+                          const withoutMou = f1s.filter((f: any) => !f.mou_id)
+                          setCandidatesForAdd(withoutMou.map((f: any) => ({
+                            id: f.id,
+                            err_id: f.err_id ?? null,
+                            state: f.state ?? '',
+                            locality: f.locality ?? null,
+                            amount_usd: sumExpensesUsd(f.expenses),
+                            categories: getCategoriesFromPlannedActivities(f.planned_activities),
+                            project_objectives: f.project_objectives ?? null,
+                          })))
+                        } catch (e) {
+                          console.error(e)
+                          setCandidatesForAdd([])
+                        }
+                      }}
+                    >
+                      <Plus className="h-4 w-4 mr-2" />
+                      Add projects
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-sm">Select committed work plans that are not linked to any MOU:</p>
+                    <div className="border rounded-md overflow-auto max-h-[35vh]">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="w-10">Add</TableHead>
+                            <TableHead>ERR ID</TableHead>
+                            <TableHead>State</TableHead>
+                            <TableHead>Locality</TableHead>
+                            <TableHead className="text-right">USD</TableHead>
+                            <TableHead>Categories</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {candidatesForAdd.length === 0 ? (
+                            <TableRow>
+                              <TableCell colSpan={6} className="text-center text-muted-foreground py-6">No unlinked committed projects</TableCell>
+                            </TableRow>
+                          ) : (
+                            candidatesForAdd.map((c) => (
+                              <TableRow key={c.id} title={c.project_objectives ?? undefined}>
+                                <TableCell>
+                                  <input
+                                    type="checkbox"
+                                    checked={selectedCandidates.has(c.id)}
+                                    onChange={(e) => {
+                                      setSelectedCandidates((prev) => {
+                                        const next = new Set(prev)
+                                        if (e.target.checked) next.add(c.id)
+                                        else next.delete(c.id)
+                                        return next
+                                      })
+                                    }}
+                                  />
+                                </TableCell>
+                                <TableCell className="font-mono text-sm">{c.err_id ?? '-'}</TableCell>
+                                <TableCell>{c.state || '-'}</TableCell>
+                                <TableCell>{c.locality ?? '-'}</TableCell>
+                                <TableCell className="text-right font-mono text-sm">{c.amount_usd != null ? c.amount_usd.toLocaleString() : '—'}</TableCell>
+                                <TableCell className="text-sm">{c.categories}</TableCell>
+                              </TableRow>
+                            ))
+                          )}
+                        </TableBody>
+                      </Table>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        disabled={selectedCandidates.size === 0 || listProjectsActionLoading}
+                        onClick={async () => {
+                          if (!listProjectsMouId || selectedCandidates.size === 0) return
+                          setListProjectsActionLoading(true)
+                          try {
+                            const res = await fetch(`/api/f3/mous/${listProjectsMouId}/projects/add`, {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ project_ids: Array.from(selectedCandidates) }),
+                            })
+                            const data = await res.json()
+                            if (!res.ok) throw new Error(data.error || 'Failed to add')
+                            setListProjectsAddMode(false)
+                            setSelectedCandidates(new Set())
+                            const regen = await fetch(`/api/f3/mous/${listProjectsMouId}/regenerate`, { method: 'POST' })
+                            if (regen.ok) { /* doc updated */ }
+                            await fetchMous()
+                            await checkMouAssignmentStatus([listProjectsMouId])
+                            const refetchRes = await fetch(`/api/f3/mous/${listProjectsMouId}`)
+                            const refetchData = await refetchRes.json()
+                            const projects = refetchData.projects || []
+                            setListProjectsList(projects.map((p: any) => ({
+                              id: p.id,
+                              err_id: p.err_id ?? null,
+                              state: p.state ?? '',
+                              locality: p.locality ?? null,
+                              grant_id: p.grant_id ?? null,
+                              amount_usd: sumExpensesUsd(p.expenses),
+                              categories: getCategoriesFromPlannedActivities(p.planned_activities),
+                              project_objectives: p.project_objectives ?? null,
+                            })))
+                          } catch (e) {
+                            console.error(e)
+                            alert(e instanceof Error ? e.message : 'Failed to add projects')
+                          } finally {
+                            setListProjectsActionLoading(false)
+                          }
+                        }}
+                      >
+                        Add selected ({selectedCandidates.size})
+                      </Button>
+                      <Button variant="outline" onClick={() => { setListProjectsAddMode(false); setSelectedCandidates(new Set()) }}>
+                        Cancel
+                      </Button>
+                    </div>
+                  </>
+                )}
+              </>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
 

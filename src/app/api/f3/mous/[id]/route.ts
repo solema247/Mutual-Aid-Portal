@@ -39,6 +39,8 @@ export async function GET(
         err_id,
         emergency_room_id,
         grant_id,
+        source,
+        project_name,
         emergency_rooms (name, name_ar, err_code),
         "Sector (Primary)",
         "Sector (Secondary)"
