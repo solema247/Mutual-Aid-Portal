@@ -32,6 +32,13 @@ async function fetchAllRows<T>(
   return allRows
 }
 
+// Display key for By Grant table: group FCDO-HELP-S, FCDO-SHPR etc. as one row "FCDO"
+function toDisplayKey(grantId: string): string {
+  const id = grantId.trim()
+  if (id.startsWith('FCDO-')) return 'FCDO'
+  return id
+}
+
 // Extract activity serials from grants.activities jsonb (array of strings or objects with id/serial)
 function activitySerialsFromJsonb(activities: unknown): string[] {
   if (activities == null) return []
@@ -71,7 +78,7 @@ export async function GET() {
       (q) => q.order('grant_id', { ascending: true })
     )
 
-    // Group by grant_id; Included = total_transferred_amount_usd - sum_transfer_fee_amount (summed if multiple rows)
+    // Group by display key (e.g. FCDO-HELP-S + FCDO-SHPR → one row "FCDO"); Included = total_transferred - transfer_fee
     const uniqueGrants = new Map<string, {
       grant_id: string;
       project_name: string | null;
@@ -82,7 +89,8 @@ export async function GET() {
     for (const grant of grants) {
       if (!grant.grant_id || grant.grant_id.trim() === '') continue
 
-      const key = grant.grant_id.trim()
+      const rawId = grant.grant_id.trim()
+      const key = toDisplayKey(rawId)
       const transferred = grant.total_transferred_amount_usd != null ? Number(grant.total_transferred_amount_usd) : 0
       const fee = grant.sum_transfer_fee_amount != null ? Number(grant.sum_transfer_fee_amount) : 0
       const included = (Number.isNaN(transferred) ? 0 : transferred) - (Number.isNaN(fee) ? 0 : fee)
@@ -90,8 +98,8 @@ export async function GET() {
 
       if (!uniqueGrants.has(key)) {
         uniqueGrants.set(key, {
-          grant_id: grant.grant_id,
-          project_name: grant.project_name || grant.grant_id,
+          grant_id: key,
+          project_name: grant.project_name || rawId,
           included: Math.max(0, included),
           activitySerials
         })
@@ -100,6 +108,9 @@ export async function GET() {
         existing.included += Math.max(0, included)
         const newSerials = activitySerials.filter((s) => !existing.activitySerials.includes(s))
         existing.activitySerials.push(...newSerials)
+        // For FCDO row, prefer project_name from FCDO-SHPR over FCDO-HELP-S
+        if (key === 'FCDO' && rawId === 'FCDO-SHPR') existing.project_name = grant.project_name || rawId
+        else if (!existing.project_name && (grant.project_name || rawId)) existing.project_name = grant.project_name || rawId
       }
     }
 
@@ -115,45 +126,51 @@ export async function GET() {
       '"Project Donor",USD'
     )
 
-    // Calculate historical by grant_id (matching Project Donor to grant_id)
+    // Historical by display key (e.g. FCDO-HELP-S and FCDO both contribute to "FCDO")
     const byGrantHistorical = new Map<string, number>()
     for (const row of historicalData || []) {
       const rawDonor = row['Project Donor'] || row['project_donor'] || row['Project Donor']
       const rawUSD = row['USD'] || row['usd'] || row.USD
-      
       if (!rawDonor) continue
-      
       const grantId = String(rawDonor).trim()
       if (!grantId) continue
-      
       let usd = 0
       if (rawUSD !== null && rawUSD !== undefined) {
         usd = Number(rawUSD)
         if (isNaN(usd) || usd === 0) continue
-      } else {
-        continue
-      }
-      
-      // Use normalized grant_id (same as grouping key)
-      byGrantHistorical.set(grantId, (byGrantHistorical.get(grantId) || 0) + usd)
+      } else continue
+      const displayKey = toDisplayKey(grantId)
+      byGrantHistorical.set(displayKey, (byGrantHistorical.get(displayKey) || 0) + usd)
     }
 
     // Get user's state access rights
     const { getUserStateAccess } = await import('@/lib/userStateAccess')
     const { allowedStateNames } = await getUserStateAccess()
 
-    // Fetch all projects to calculate assigned (with state filtering)
+    // grants_grid_view: map grant_grid_id (UUID) → grant_id (e.g. "FCDO") for assigned projects
+    const gridViewRows = await fetchAllRows<{ id: string; grant_id: string | null }>(
+      supabase,
+      'grants_grid_view',
+      'id, grant_id',
+      (q) => q.not('grant_id', 'is', null)
+    )
+    const grantGridIdToGrantId = new Map<string, string>()
+    for (const row of gridViewRows || []) {
+      if (row.id && row.grant_id) grantGridIdToGrantId.set(row.id, String(row.grant_id).trim())
+    }
+
+    // Fetch all projects (include grant_grid_id for assignment lookup)
     const projects = await fetchAllRows<{
       expenses: any;
       funding_status: string | null;
       grant_id: string | null;
+      grant_grid_id: string | null;
       state: string | null;
     }>(
       supabase,
       'err_projects',
-      'expenses, funding_status, grant_id, state',
+      'expenses, funding_status, grant_id, grant_grid_id, state',
       (q) => {
-        // Apply state filter from user access rights (if not seeing all states)
         if (allowedStateNames !== null && allowedStateNames.length > 0) {
           return q.in('state', allowedStateNames)
         }
@@ -168,28 +185,27 @@ export async function GET() {
       } catch { return sum }
     }, 0)
 
-    // Build a map of project serial to grant_id for quick lookup
-    const projectSerialToGrantId = new Map<string, string>()
-    for (const [grantId, grant] of uniqueGrants.entries()) {
+    // Project serial → display key (from grants table activities, for fallback)
+    const projectSerialToDisplayKey = new Map<string, string>()
+    for (const [displayKey, grant] of uniqueGrants.entries()) {
       for (const serial of grant.activitySerials) {
-        projectSerialToGrantId.set(serial, grantId)
+        projectSerialToDisplayKey.set(serial, displayKey)
       }
     }
 
-    // Calculate assigned by grant_id (projects assigned to a grant after MOU)
+    // Assigned: by display key. Prefer grant_grid_id → grants_grid_view → grant_id → display key; else serial in activities
     const byGrantAssigned = new Map<string, number>()
-    
     for (const p of projects) {
-      if (!p.grant_id) continue // Only count projects assigned to a grant
-      
-      // Find which grant this project belongs to by checking if its grant_id (serial) is in any grant's activities
-      const grantId = projectSerialToGrantId.get(p.grant_id)
-      if (!grantId) continue // Project serial not found in any grant's activities
-      
-      // Only count projects that are assigned (have a grant_id that matches a serial in activities)
-      // This means they've been assigned after MOU
+      if (!p.grant_id && !p.grant_grid_id) continue
+      let displayKey: string | null = null
+      if (p.grant_grid_id) {
+        const grantId = grantGridIdToGrantId.get(p.grant_grid_id)
+        if (grantId) displayKey = toDisplayKey(grantId)
+      }
+      if (!displayKey && p.grant_id) displayKey = projectSerialToDisplayKey.get(p.grant_id) ?? null
+      if (!displayKey) continue
       const amt = sumExpenses([p])
-      byGrantAssigned.set(grantId, (byGrantAssigned.get(grantId) || 0) + amt)
+      byGrantAssigned.set(displayKey, (byGrantAssigned.get(displayKey) || 0) + amt)
     }
 
     // Build result rows (grouped by grant_id only)

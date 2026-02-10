@@ -162,6 +162,7 @@ export default function F3MOUsPage() {
   } | null>(null)
   const [stateAllocationRemaining, setStateAllocationRemaining] = useState<{
     total: number;
+    historical: number;
     committed: number;
     allocated: number;
     remaining: number;
@@ -828,83 +829,24 @@ export default function F3MOUsPage() {
     setPaymentModalOpen(true)
   }
 
-  const calculateGrantRemaining = async (grantId: string, donorName: string) => {
-    if (!grantId || !donorName) {
+  const calculateGrantRemaining = async (grantId: string, _donorName: string) => {
+    if (!grantId) {
       setGrantRemaining(null)
       return
     }
-    
     try {
       setGrantRemaining(prev => prev ? { ...prev, loading: true } : { total: 0, committed: 0, allocated: 0, remaining: 0, loading: true })
-      
-      // Get grant from grants_grid_view
-      const { data: grant, error: grantError } = await supabase
-        .from('grants_grid_view')
-        .select('total_transferred_amount_usd, sum_activity_amount, activities')
-        .eq('grant_id', grantId)
-        .eq('donor_name', donorName)
-        .single()
-      
-      if (grantError || !grant) {
+      const res = await fetch(`/api/pool/grant-remaining?grantId=${encodeURIComponent(grantId)}`, { cache: 'no-store' })
+      if (!res.ok) {
         setGrantRemaining(null)
         return
       }
-      
-      // Total is the sum_activity_amount from grants_grid_view
-      const totalIncluded = Number(grant.sum_activity_amount || 0)
-      
-      // Get allocated amounts from projects that match this grant
-      // Projects assigned to this grant will have grant_id in the activities list
-      const activitySerials = grant.activities 
-        ? grant.activities.split(',').map((s: string) => s.trim()).filter(Boolean)
-        : []
-      
-      if (activitySerials.length === 0) {
-        // No activities yet, so no committed or allocated
-        setGrantRemaining({
-          total: totalIncluded,
-          committed: 0,
-          allocated: 0,
-          remaining: totalIncluded,
-          loading: false
-        })
-        return
-      }
-      
-      // Get projects that match these serials
-      const { data: projects, error: projectsError } = await supabase
-        .from('err_projects')
-        .select('expenses, funding_status, grant_id')
-        .in('grant_id', activitySerials)
-      
-      if (projectsError) throw projectsError
-      
-      const sumExpenses = (exp: any): number => {
-        try {
-          const arr = typeof exp === 'string' ? JSON.parse(exp || '[]') : (exp || [])
-          return arr.reduce((s: number, e: any) => s + (e?.total_cost || 0), 0)
-        } catch {
-          return 0
-        }
-      }
-      
-      // Committed = projects with funding_status = 'committed'
-      const totalCommitted = (projects || [])
-        .filter((p: any) => p.funding_status === 'committed')
-        .reduce((sum: number, p: any) => sum + sumExpenses(p.expenses), 0)
-      
-      // Allocated = projects with funding_status = 'allocated' or (unassigned + pending)
-      const totalAllocated = (projects || [])
-        .filter((p: any) => p.funding_status === 'allocated' || (p.funding_status === 'unassigned' && p.status === 'pending'))
-        .reduce((sum: number, p: any) => sum + sumExpenses(p.expenses), 0)
-      
-      const remaining = totalIncluded - totalCommitted - totalAllocated
-      
+      const data = await res.json()
       setGrantRemaining({
-        total: totalIncluded,
-        committed: totalCommitted,
-        allocated: totalAllocated,
-        remaining,
+        total: data.total ?? 0,
+        committed: data.committed ?? 0,
+        allocated: data.allocated ?? 0,
+        remaining: data.remaining ?? 0,
         loading: false
       })
     } catch (error) {
@@ -918,55 +860,20 @@ export default function F3MOUsPage() {
       setStateAllocationRemaining(null)
       return
     }
-    
     try {
-      setStateAllocationRemaining(prev => prev ? { ...prev, loading: true } : { total: 0, committed: 0, allocated: 0, remaining: 0, loading: true })
-      
-      // Get all allocations for this state from allocations_by_date
-      const { data: allocations, error: allocationsError } = await supabase
-        .from('allocations_by_date')
-        .select('"Allocation Amount", State')
-        .eq('State', stateName)
-      
-      if (allocationsError) throw allocationsError
-      
-      const totalAllocated = (allocations || []).reduce((sum: number, alloc: any) => {
-        const amount = alloc['Allocation Amount'] ? Number(alloc['Allocation Amount']) : 0
-        return sum + amount
-      }, 0)
-      
-      // Get committed and allocated amounts from projects for this state
-      const { data: projects, error: projectsError } = await supabase
-        .from('err_projects')
-        .select('expenses, funding_status, state')
-        .eq('state', stateName)
-      
-      if (projectsError) throw projectsError
-      
-      const sumExpenses = (exp: any): number => {
-        try {
-          const arr = typeof exp === 'string' ? JSON.parse(exp || '[]') : (exp || [])
-          return arr.reduce((s: number, e: any) => s + (e?.total_cost || 0), 0)
-        } catch {
-          return 0
-        }
+      setStateAllocationRemaining(prev => prev ? { ...prev, loading: true } : { total: 0, historical: 0, committed: 0, allocated: 0, remaining: 0, loading: true })
+      const res = await fetch(`/api/pool/state-allocation-remaining?state=${encodeURIComponent(stateName)}`, { cache: 'no-store' })
+      if (!res.ok) {
+        setStateAllocationRemaining(null)
+        return
       }
-      
-      const totalCommitted = (projects || [])
-        .filter((p: any) => p.funding_status === 'committed')
-        .reduce((sum: number, p: any) => sum + sumExpenses(p.expenses), 0)
-      
-      const totalAllocatedProjects = (projects || [])
-        .filter((p: any) => p.funding_status === 'allocated' || (p.funding_status === 'unassigned' && p.status === 'pending'))
-        .reduce((sum: number, p: any) => sum + sumExpenses(p.expenses), 0)
-      
-      const remaining = totalAllocated - totalCommitted - totalAllocatedProjects
-      
+      const data = await res.json()
       setStateAllocationRemaining({
-        total: totalAllocated,
-        committed: totalCommitted,
-        allocated: totalAllocatedProjects,
-        remaining,
+        total: data.total ?? 0,
+        historical: data.historical ?? 0,
+        committed: data.committed ?? 0,
+        allocated: data.allocated ?? 0,
+        remaining: data.remaining ?? 0,
         loading: false
       })
     } catch (error) {
@@ -2877,6 +2784,10 @@ export default function F3MOUsPage() {
                             <span className="font-medium">${stateAllocationRemaining.total.toLocaleString()}</span>
                           </div>
                           <div className="flex justify-between">
+                            <span className="text-muted-foreground">Historical:</span>
+                            <span>${(stateAllocationRemaining.historical ?? 0).toLocaleString()}</span>
+                          </div>
+                          <div className="flex justify-between">
                             <span className="text-muted-foreground">Committed:</span>
                             <span>${stateAllocationRemaining.committed.toLocaleString()}</span>
                           </div>
@@ -2894,6 +2805,7 @@ export default function F3MOUsPage() {
                               ${stateAllocationRemaining.remaining.toLocaleString()}
                             </span>
                           </div>
+                          <p className="text-xs text-muted-foreground pt-0.5">Remaining = Total − Historical − Committed − Allocated</p>
                           {mouTotalAmount > 0 && (
                             <div className="pt-1 text-xs">
                               <div className="flex justify-between text-muted-foreground">
@@ -3186,6 +3098,10 @@ export default function F3MOUsPage() {
                             <span className="font-medium">${stateAllocationRemaining.total.toLocaleString()}</span>
                           </div>
                           <div className="flex justify-between">
+                            <span className="text-muted-foreground">Historical:</span>
+                            <span>${(stateAllocationRemaining.historical ?? 0).toLocaleString()}</span>
+                          </div>
+                          <div className="flex justify-between">
                             <span className="text-muted-foreground">Committed:</span>
                             <span>${stateAllocationRemaining.committed.toLocaleString()}</span>
                           </div>
@@ -3203,6 +3119,7 @@ export default function F3MOUsPage() {
                               ${stateAllocationRemaining.remaining.toLocaleString()}
                             </span>
                           </div>
+                          <p className="text-xs text-muted-foreground pt-0.5">Remaining = Total − Historical − Committed − Allocated</p>
                           {mouTotalAmount > 0 && (
                             <div className="pt-1 text-xs">
                               <div className="flex justify-between text-muted-foreground">
