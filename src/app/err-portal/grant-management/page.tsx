@@ -8,7 +8,7 @@ import { useEffect, useState } from 'react'
 import { ArrowLeft } from 'lucide-react'
 
 import { GrantCallsManager } from './components'
-import DistributionDecisionsManager from './components/DistributionDecisionsManager'
+import DistributionDecisionTableView from './components/DistributionDecisionTableView'
 import PoolOverviewByState from './components/PoolOverviewByState'
 
 export default function GrantManagementPage() {
@@ -99,8 +99,8 @@ export default function GrantManagementPage() {
       {/* Grant Calls Management */}
       <GrantCallsManager />
 
-      {/* Distribution Decisions (decoupled from grants) */}
-      <DistributionDecisionsManager />
+      {/* Distribution Decisions (read-only from Airtable; original DistributionDecisionsManager kept for later use) */}
+      <DistributionDecisionTableView />
 
       {/* Pool Overview By State */}
       <PoolOverviewByState />
