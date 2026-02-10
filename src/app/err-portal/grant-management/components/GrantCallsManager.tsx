@@ -1,5 +1,8 @@
 'use client'
 
+// Set to true to re-enable editing the grants table (e.g. when not using read-only Airtable-linked 'grants' table).
+const GRANTS_TABLE_EDIT_ENABLED = false
+
 import React, { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useForm } from 'react-hook-form'
@@ -72,16 +75,13 @@ interface Donor {
 interface GrantCall {
   id: string
   grant_id: string
-  donor_id: string
-  donor_name: string
   project_name: string | null
-  partner_name: string | null
   grant_start_date: string | null
   grant_end_date: string | null
   status: string | null
   total_transferred_amount_usd: number | null
   sum_activity_amount: number | null
-  donor: Donor
+  sum_transfer_fee_amount: number | null
 }
 
 interface User {
@@ -165,66 +165,17 @@ export default function GrantCallsManager() {
 
   const fetchGrants = async () => {
     try {
-      let query = supabase
-        .from('grants_grid_view')
-        .select(`
-          id,
-          grant_id,
-          donor_id,
-          donor_name,
-          project_name,
-          partner_name,
-          grant_start_date,
-          grant_end_date,
-          status,
-          total_transferred_amount_usd,
-          sum_activity_amount,
-          donors (
-            id,
-            name,
-            short_name
-          )
-        `)
-        .order('created_at', { ascending: false })
-
-      if (statusFilter !== 'all') {
-        query = query.eq('status', statusFilter)
+      // Fetch via API so the server uses the service role to read public.grants (foreign table).
+      const res = await fetch(
+        `/api/grants?status=${encodeURIComponent(statusFilter)}`,
+        { cache: 'no-store' }
+      )
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error || res.statusText)
       }
-
-      const { data, error } = await query
-      if (error) throw error
-      
-      // Get unique grants (group by grant_id and donor_name)
-      const uniqueGrants = new Map()
-      ;(data || []).forEach((item: any) => {
-        const key = `${item.grant_id}|${item.donor_name}`
-        if (!uniqueGrants.has(key)) {
-          uniqueGrants.set(key, {
-            id: item.id,
-            grant_id: item.grant_id,
-            donor_id: item.donor_id,
-            donor_name: item.donor_name,
-            project_name: item.project_name,
-            partner_name: item.partner_name,
-            grant_start_date: item.grant_start_date,
-            grant_end_date: item.grant_end_date,
-            status: item.status,
-            total_transferred_amount_usd: item.total_transferred_amount_usd,
-            sum_activity_amount: item.sum_activity_amount,
-            donor: item.donors ? {
-              id: item.donors.id,
-              name: item.donors.name,
-              short_name: item.donors.short_name
-            } : {
-              id: item.donor_id || '',
-              name: item.donor_name || '',
-              short_name: null
-            }
-          })
-        }
-      })
-      
-      setGrants(Array.from(uniqueGrants.values()))
+      const list = await res.json()
+      setGrants(list)
     } catch (error) {
       console.error('Error fetching grants:', error)
       alert('Failed to fetch grants')
@@ -279,10 +230,10 @@ export default function GrantCallsManager() {
     setEditingGrant(grant)
     form.reset({
       grant_id: grant.grant_id,
-      donor_id: grant.donor_id,
-      donor_name: grant.donor_name,
+      donor_id: '',
+      donor_name: '',
       project_name: grant.project_name || '',
-      partner_name: grant.partner_name || '',
+      partner_name: '',
       grant_start_date: grant.grant_start_date || '',
       grant_end_date: grant.grant_end_date || '',
       status: grant.status || 'Active',
@@ -377,7 +328,7 @@ export default function GrantCallsManager() {
                 <SelectItem value="Complete">Complete</SelectItem>
               </SelectContent>
             </Select>
-            {(currentUser?.role === 'admin' || currentUser?.role === 'superadmin') && (
+            {(currentUser?.role === 'admin' || currentUser?.role === 'superadmin') && GRANTS_TABLE_EDIT_ENABLED && (
               <>
                 {!isEditMode ? (
                   <Button 
@@ -629,21 +580,20 @@ export default function GrantCallsManager() {
             <TableHeader>
               <TableRow>
                 <TableHead>Grant ID</TableHead>
-                <TableHead>Donor</TableHead>
                 <TableHead>Project Name</TableHead>
-                <TableHead>Partner</TableHead>
-                <TableHead>Total Transferred</TableHead>
-                <TableHead>Sum Activity Amount</TableHead>
-                <TableHead>Status</TableHead>
                 <TableHead>Start Date</TableHead>
                 <TableHead>End Date</TableHead>
-                {(currentUser?.role === 'admin' || currentUser?.role === 'superadmin') && isEditMode && <TableHead>Actions</TableHead>}
+                <TableHead>Status</TableHead>
+                <TableHead>Total Transferred (USD)</TableHead>
+                <TableHead>Sum Activity Amount (USD)</TableHead>
+                <TableHead>Sum Transfer Fee (USD)</TableHead>
+                {(currentUser?.role === 'admin' || currentUser?.role === 'superadmin') && GRANTS_TABLE_EDIT_ENABLED && isEditMode && <TableHead>Actions</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
               {grants.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={(currentUser?.role === 'admin' || currentUser?.role === 'superadmin') && isEditMode ? 10 : 9} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={(currentUser?.role === 'admin' || currentUser?.role === 'superadmin') && GRANTS_TABLE_EDIT_ENABLED && isEditMode ? 10 : 9} className="text-center py-8 text-muted-foreground">
                     No grants found
                   </TableCell>
                 </TableRow>
@@ -651,23 +601,18 @@ export default function GrantCallsManager() {
                 grants.map((grant) => (
                   <TableRow key={grant.id}>
                     <TableCell className="font-medium">{grant.grant_id}</TableCell>
-                    <TableCell>
-                      <Badge variant="outline">
-                        {grant.donor.short_name || grant.donor.name || grant.donor_name}
-                      </Badge>
-                    </TableCell>
                     <TableCell>{grant.project_name || '—'}</TableCell>
-                    <TableCell>{grant.partner_name || '—'}</TableCell>
-                    <TableCell>{formatCurrency(grant.total_transferred_amount_usd)}</TableCell>
-                    <TableCell>{formatCurrency(grant.sum_activity_amount)}</TableCell>
+                    <TableCell>{formatDate(grant.grant_start_date)}</TableCell>
+                    <TableCell>{formatDate(grant.grant_end_date)}</TableCell>
                     <TableCell>
                       <Badge variant={grant.status === 'Active' ? 'default' : 'secondary'}>
                         {grant.status || '—'}
                       </Badge>
                     </TableCell>
-                    <TableCell>{formatDate(grant.grant_start_date)}</TableCell>
-                    <TableCell>{formatDate(grant.grant_end_date)}</TableCell>
-                    {(currentUser?.role === 'admin' || currentUser?.role === 'superadmin') && isEditMode && (
+                    <TableCell>{formatCurrency(grant.total_transferred_amount_usd)}</TableCell>
+                    <TableCell>{formatCurrency(grant.sum_activity_amount)}</TableCell>
+                    <TableCell>{formatCurrency(grant.sum_transfer_fee_amount)}</TableCell>
+                    {(currentUser?.role === 'admin' || currentUser?.role === 'superadmin') && GRANTS_TABLE_EDIT_ENABLED && isEditMode && (
                       <TableCell>
                         <div className="flex items-center gap-2">
                           <Button
