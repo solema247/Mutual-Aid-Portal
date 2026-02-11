@@ -1,0 +1,20 @@
+{
+  "e81c94d3-d159-44ac-9079-cb8b67e3a872": {
+    "add": [],
+    "remove": [
+      "f5_upload",
+      "f4_upload"
+    ]
+  },
+  "62e2b429-a4b7-4991-8351-5234cdd287df": {
+    "add": [],
+    "remove": [
+      "f4_upload",
+      "f4_save",
+      "f5_upload",
+      "f5_adjust",
+      "f5_save",
+      "f2_remove_from_mou"
+    ]
+  }
+}

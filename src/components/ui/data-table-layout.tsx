@@ -64,21 +64,21 @@ export function DataTableLayout({
   const showPagination = onPageChange != null && totalItems > 0 && itemsPerPage > 0
 
   return (
-    <div className={cn('rounded-lg bg-white p-4 shadow-sm', className)}>
+    <div className={cn('rounded-lg bg-white p-4 border border-table-border shadow-sm', className)}>
       <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
-        {actions && <div className="flex items-center gap-2">{actions}</div>}
+        <h2 className="text-lg font-semibold text-brand-body">{title}</h2>
+        {actions && <div className="flex items-center gap-2 [&_button]:text-brand-purple [&_button:hover]:text-brand-orange [&_svg]:text-brand-purple [&_svg:hover]:text-brand-orange">{actions}</div>}
       </div>
 
       <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         {showEntries && (
-          <div className="flex items-center gap-2 text-sm text-gray-600">
+          <div className="flex items-center gap-2 text-sm text-brand-body">
             <span>Show</span>
             <Select
               value={String(entriesPerPage)}
               onValueChange={(v) => onEntriesPerPageChange(Number(v))}
             >
-              <SelectTrigger className="h-8 w-16 rounded-md border-gray-300 bg-gray-50">
+              <SelectTrigger className="h-8 w-16 rounded-md border-table-border bg-white">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -99,14 +99,14 @@ export function DataTableLayout({
               value={searchValue}
               onChange={(e) => onSearchChange(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && onSearchGo?.()}
-              className="h-8 w-48 border-gray-300 sm:w-56"
+              className="h-8 w-48 sm:w-56"
             />
             {onSearchGo && (
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
-                className="h-8 border-gray-300 bg-gray-50 px-3"
+                className="h-8 px-3"
                 onClick={onSearchGo}
               >
                 Go →
@@ -121,14 +121,14 @@ export function DataTableLayout({
 
       {showPagination && (
         <div className="mt-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-sm text-gray-600">
+          <p className="text-sm text-brand-body">
             Showing {startIndex} to {endIndex} of {totalItems} entries
           </p>
           <div className="flex items-center gap-1">
             <Button
               variant="outline"
               size="sm"
-              className="h-8 border-gray-300 bg-white px-3"
+              className="h-8 border-brand-dark-blue text-brand-dark-blue bg-white px-3 hover:bg-brand-orange hover:text-white hover:border-brand-orange"
               onClick={() => onPageChange(Math.max(1, currentPage - 1))}
               disabled={currentPage <= 1}
             >
@@ -149,8 +149,8 @@ export function DataTableLayout({
                   className={cn(
                     'h-8 min-w-8 px-2',
                     currentPage === pageNum
-                      ? 'bg-blue-600 text-white hover:bg-blue-700'
-                      : 'border-gray-300 bg-white text-blue-600 hover:bg-gray-50'
+                      ? 'bg-brand-orange text-white hover:bg-brand-orange/90'
+                      : 'border-brand-dark-blue text-brand-dark-blue bg-white hover:bg-brand-orange hover:text-white hover:border-brand-orange'
                   )}
                   onClick={() => onPageChange(pageNum)}
                 >
@@ -161,7 +161,7 @@ export function DataTableLayout({
             <Button
               variant="outline"
               size="sm"
-              className="h-8 border-gray-300 bg-white px-3"
+              className="h-8 border-brand-dark-blue text-brand-dark-blue bg-white px-3 hover:bg-brand-orange hover:text-white hover:border-brand-orange"
               onClick={() => onPageChange(Math.min(totalPages, currentPage + 1))}
               disabled={currentPage >= totalPages}
             >

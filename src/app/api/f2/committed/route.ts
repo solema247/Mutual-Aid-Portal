@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { getUserStateAccess } from '@/lib/userStateAccess'
+import { requirePermission } from '@/lib/requirePermission'
 
 // GET /api/f2/committed - Get all committed F1s with optional filtering
 export async function GET(request: Request) {
@@ -142,9 +143,12 @@ export async function GET(request: Request) {
 // PATCH /api/f2/committed - Update committed F1 (e.g. remove from MOU: set mou_id = null)
 export async function PATCH(request: Request) {
   try {
-    const supabase = getSupabaseRouteClient()
     const body = await request.json()
     const { id, mou_id: mouId } = body ?? {}
+    const code = mouId == null || mouId === '' ? 'f2_remove_from_mou' : 'f2_add_to_mou'
+    const auth = await requirePermission(code)
+    if (auth instanceof NextResponse) return auth
+    const supabase = getSupabaseRouteClient()
 
     if (!id) {
       return NextResponse.json({ error: 'F1 ID is required' }, { status: 400 })
@@ -244,6 +248,8 @@ export async function PATCH(request: Request) {
 // DELETE /api/f2/committed - Delete a committed F1 project
 export async function DELETE(request: Request) {
   try {
+    const auth = await requirePermission('f2_delete_committed')
+    if (auth instanceof NextResponse) return auth
     const supabase = getSupabaseRouteClient()
     const { id } = await request.json()
 

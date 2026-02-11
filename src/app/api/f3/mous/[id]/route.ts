@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { getUserStateAccess } from '@/lib/userStateAccess'
+import { requirePermission } from '@/lib/requirePermission'
 
 export async function GET(
   _request: Request,
@@ -111,6 +112,8 @@ export async function PATCH(
   { params }: { params: { id: string } }
 ) {
   try {
+    const auth = await requirePermission('f3_edit_mou')
+    if (auth instanceof NextResponse) return auth
     const supabase = getSupabaseRouteClient()
     const id = params.id
     const body = await request.json()
@@ -201,6 +204,8 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
+    const auth = await requirePermission('f3_remove_mou')
+    if (auth instanceof NextResponse) return auth
     const supabase = getSupabaseRouteClient()
     const id = params.id
     if (!id) {

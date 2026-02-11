@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
+import { requirePermission } from '@/lib/requirePermission'
 
 // POST /api/f3/mous/[id]/signed-mou - Upload signed MOU file
 export async function POST(
@@ -7,6 +8,8 @@ export async function POST(
   { params }: { params: { id: string } }
 ) {
   try {
+    const auth = await requirePermission('f3_upload_signed')
+    if (auth instanceof NextResponse) return auth
     const supabase = getSupabaseRouteClient()
     const { id: mouId } = params
     const formData = await request.formData()

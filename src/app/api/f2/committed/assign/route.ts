@@ -1,8 +1,11 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
+import { requirePermission } from '@/lib/requirePermission'
 
 export async function POST(request: Request) {
   try {
+    const auth = await requirePermission('f2_assign_committed')
+    if (auth instanceof NextResponse) return auth
     const supabase = getSupabaseRouteClient()
     const { f1_ids, funding_cycle_id, grant_call_id, mmyy, grant_serial } = await request.json()
     

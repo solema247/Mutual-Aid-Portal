@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
+import { requirePermission } from '@/lib/requirePermission'
 
 // GET /api/cycles - Get all funding cycles
 export async function GET(request: Request) {
@@ -60,6 +61,8 @@ export async function GET(request: Request) {
 // POST /api/cycles - Create new funding cycle
 export async function POST(request: Request) {
   try {
+    const auth = await requirePermission('grant_create_cycle')
+    if (auth instanceof NextResponse) return auth
     const supabase = getSupabaseRouteClient()
     const body = await request.json()
     const { cycle_number, year, name, start_date, end_date, grant_inclusions, type, tranche_count, pool_amount, tranche_splits } = body

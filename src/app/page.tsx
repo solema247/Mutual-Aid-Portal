@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
-import Navbar from '@/components/layout/Navbar'
+import LanguageSwitch from '@/components/LanguageSwitch'
 import { useTranslation } from 'react-i18next'
 import '@/i18n/config'
 
@@ -87,7 +87,17 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-white">
-      <Navbar title={<>{t('common:welcome')}, {userName ?? t('common:guest')}</>} userName={userName} />
+      {/* Navbar */}
+      <nav className="border-b border-gray-200 bg-white">
+        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+          <h1 className="text-2xl font-bold text-gray-900">
+            {t('common:welcome') || 'Welcome'}, {userName}
+          </h1>
+          <div className="flex items-center gap-4">
+            <LanguageSwitch />
+          </div>
+        </div>
+      </nav>
 
       {/* Main Content */}
       <div className="max-w-4xl mx-auto p-6">

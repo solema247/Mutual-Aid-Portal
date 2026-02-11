@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
+import { requirePermission } from '@/lib/requirePermission'
 
 // GET /api/cycles/[id]/allocations - Get state allocations for a cycle
 export async function GET(
@@ -74,6 +75,8 @@ export async function POST(
   { params }: { params: { id: string } }
 ) {
   try {
+    const auth = await requirePermission('grant_add_state')
+    if (auth instanceof NextResponse) return auth
     const supabase = getSupabaseRouteClient()
     const body = await request.json()
     const { allocations } = body

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
+import { requirePermission } from '@/lib/requirePermission'
 import { aggregateObjectives, aggregateBeneficiaries, aggregatePlannedActivities, aggregatePlannedActivitiesDetailed, aggregateLocations, getBankingDetails, getBudgetTable } from '@/lib/mou-aggregation'
 import { getUserStateAccess } from '@/lib/userStateAccess'
 
@@ -82,6 +83,8 @@ export async function GET(request: Request) {
 // POST /api/f3/mous - create an MOU and link committed projects
 export async function POST(request: Request) {
   try {
+    const auth = await requirePermission('f3_create_mou')
+    if (auth instanceof NextResponse) return auth
     const supabase = getSupabaseRouteClient()
     const body = await request.json()
     const { project_ids, mou_code, end_date, partner_name, partner_id, err_name, state } = body || {}

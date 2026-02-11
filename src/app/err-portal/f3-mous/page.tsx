@@ -4,6 +4,7 @@ import { useEffect, useState, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { TablePagination } from '@/components/ui/table-pagination'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -1275,32 +1276,13 @@ export default function F3MOUsPage() {
                 </TableBody>
               </Table>
               
-              {/* Pagination Controls */}
-              {mous.length > itemsPerPage && (
-                <div className="flex items-center justify-between mt-4">
-                  <div className="text-sm text-muted-foreground">
-                    Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, mous.length)} of {mous.length} MOUs
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                      disabled={currentPage === 1}
-                    >
-                      Previous
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setCurrentPage(prev => Math.min(Math.ceil(mous.length / itemsPerPage), prev + 1))}
-                      disabled={currentPage >= Math.ceil(mous.length / itemsPerPage)}
-                    >
-                      Next
-                    </Button>
-                  </div>
-                </div>
-              )}
+              <TablePagination
+                totalItems={mous.length}
+                currentPage={currentPage}
+                onPageChange={setCurrentPage}
+                itemsPerPage={itemsPerPage}
+                itemLabel="MOUs"
+              />
             </>
           )}
         </CardContent>

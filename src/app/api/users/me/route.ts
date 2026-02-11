@@ -1,6 +1,7 @@
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
 import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
+import { getAllowedFunctions } from '@/lib/permissions'
 
 export async function GET() {
   try {
@@ -37,6 +38,11 @@ export async function GET() {
       }
     }
 
+    const allowed_functions = getAllowedFunctions({
+      id: userData.id,
+      role: userData.role,
+    })
+
     // Explicitly exclude sensitive fields - only return safe data
     return NextResponse.json({
       id: userData.id,
@@ -48,6 +54,7 @@ export async function GET() {
       updated_at: userData.updated_at,
       can_see_all_states: userData.can_see_all_states ?? true,
       visible_states: visibleStates || [],
+      allowed_functions,
     })
   } catch (error) {
     console.error('Unexpected error in /api/users/me:', error)

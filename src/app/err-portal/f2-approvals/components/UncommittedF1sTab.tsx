@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { TablePagination } from '@/components/ui/table-pagination'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Badge } from '@/components/ui/badge'
 import { supabase } from '@/lib/supabaseClient'
@@ -411,32 +412,13 @@ export default function UncommittedF1sTab() {
         </CardContent>
       </Card>
 
-      {/* Pagination */}
-      {f1s.length > itemsPerPage && (
-        <div className="flex items-center justify-between">
-          <div className="text-sm text-muted-foreground">
-            Showing {startIndex + 1} to {Math.min(endIndex, f1s.length)} of {f1s.length} projects
-          </div>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-              disabled={currentPage === 1}
-            >
-              Previous
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-              disabled={currentPage === totalPages}
-            >
-              Next
-            </Button>
-          </div>
-        </div>
-      )}
+      <TablePagination
+        totalItems={f1s.length}
+        currentPage={currentPage}
+        onPageChange={setCurrentPage}
+        itemsPerPage={itemsPerPage}
+        itemLabel="projects"
+      />
       <ProjectEditor
         open={editorOpen}
         onOpenChange={setEditorOpen}

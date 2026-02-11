@@ -14,6 +14,11 @@
   --color-brand-pink: #E63B7A;
   --color-brand-success: #2ECC71;
   --color-brand-bg: #F5FAFD;
+  /* Table */
+  --color-table-border: #E6EEF5;
+  --color-table-zebra: #F5FAFD;
+  --color-table-hover: #EAF3F9;
+  --color-table-selected: #EEE6F2;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);

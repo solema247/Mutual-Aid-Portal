@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
+import { requirePermission } from '@/lib/requirePermission'
 
 const selectCols = '"Allocation_ID","Decision_ID","Decision_Date","State","Allocation Amount","%_Decision_Amount","Decision_Amount","Grant_ID","Partner","Decision Maker","Restriction","Notes","Status","Flow Oversight","Serial"'
 
@@ -53,6 +54,8 @@ export async function POST(
   { params }: { params: { decisionId: string } }
 ) {
   try {
+    const auth = await requirePermission('grant_add_allocation')
+    if (auth instanceof NextResponse) return auth
     const supabase = getSupabaseRouteClient()
     const decisionId = params.decisionId
     const body = await request.json()

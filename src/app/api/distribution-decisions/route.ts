@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
+import { requirePermission } from '@/lib/requirePermission'
 
 // GET /api/distribution-decisions - list distribution decisions
 // POST /api/distribution-decisions - create a distribution decision (decoupled from grants)
@@ -42,6 +43,8 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    const auth = await requirePermission('grant_create_decision')
+    if (auth instanceof NextResponse) return auth
     const supabase = getSupabaseRouteClient()
     const body = await request.json()
 

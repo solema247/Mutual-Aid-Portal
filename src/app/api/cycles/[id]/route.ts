@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
+import { requirePermission } from '@/lib/requirePermission'
 
 // GET /api/cycles/[id] - Get specific funding cycle
 export async function GET(
@@ -53,6 +54,8 @@ export async function PUT(
   { params }: { params: { id: string } }
 ) {
   try {
+    const auth = await requirePermission('grant_edit_cycle')
+    if (auth instanceof NextResponse) return auth
     const supabase = getSupabaseRouteClient()
     const body = await request.json()
     const { name, start_date, end_date, status, type, tranche_count, tranche_splits } = body
@@ -88,6 +91,8 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
+    const auth = await requirePermission('grant_edit_cycle')
+    if (auth instanceof NextResponse) return auth
     const supabase = getSupabaseRouteClient()
     // Check if cycle has any workplans or allocations
     const { data: workplans, error: workplansError } = await supabase

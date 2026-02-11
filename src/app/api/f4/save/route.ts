@@ -1,9 +1,12 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
+import { requirePermission } from '@/lib/requirePermission'
 import { translateF4Summary, translateF4Expenses } from '@/lib/translateHelper'
 
 export async function POST(req: Request) {
   try {
+    const auth = await requirePermission('f4_save')
+    if (auth instanceof NextResponse) return auth
     const supabase = getSupabaseRouteClient()
     const { project_id, summary, expenses, file_key_temp, uploaded_by } = await req.json()
     if (!project_id || !summary) return NextResponse.json({ error: 'project_id and summary required' }, { status: 400 })

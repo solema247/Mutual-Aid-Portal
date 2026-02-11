@@ -1,21 +1,23 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
+import { requirePermission } from '@/lib/requirePermission'
 
 export async function PUT(
   request: Request,
   { params }: { params: { userId: string } }
 ) {
   try {
+    const auth = await requirePermission('users_edit_access')
+    if (auth instanceof NextResponse) return auth
     const supabase = getSupabaseRouteClient()
     
-    // Get current user session
+    // Get current user session (requirePermission already validated admin/superadmin via can())
     const { data: { session }, error: sessionError } = await supabase.auth.getSession()
     
     if (sessionError || !session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Check if current user is admin or superadmin
     const { data: currentUser, error: userError } = await supabase
       .from('users')
       .select('role')
@@ -24,10 +26,6 @@ export async function PUT(
 
     if (userError || !currentUser) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
-    }
-
-    if (currentUser.role !== 'admin' && currentUser.role !== 'superadmin') {
-      return NextResponse.json({ error: 'Forbidden - Admin or Superadmin only' }, { status: 403 })
     }
 
     // Get the target user to check their current role

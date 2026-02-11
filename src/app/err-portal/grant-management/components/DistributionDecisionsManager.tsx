@@ -27,6 +27,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { TablePagination } from '@/components/ui/table-pagination'
 import { Badge } from '@/components/ui/badge'
 import { Textarea } from '@/components/ui/textarea'
 import {
@@ -790,7 +791,7 @@ export default function DistributionDecisionsManager() {
               <TableBody>
                 {sortedDecisions.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center text-muted-foreground py-6">
+                    <TableCell colSpan={9} className="text-center text-muted-foreground py-6">
                       No distribution decisions found
                     </TableCell>
                   </TableRow>
@@ -840,8 +841,8 @@ export default function DistributionDecisionsManager() {
                         </TableRow>
                         {isOpen && (
                           <TableRow>
-                            <TableCell colSpan={8} className="bg-muted/40">
-                              <div className="space-y-4">
+                            <TableCell colSpan={9} className="bg-muted/40 px-0">
+                              <div className="space-y-4 w-full min-w-0 px-4">
                                 <div className="flex items-center justify-between">
                                   <div className="font-semibold">State Allocations</div>
                                   <Button
@@ -857,13 +858,13 @@ export default function DistributionDecisionsManager() {
                                 {isAllocLoading[fetchKey] ? (
                                   <div className="text-muted-foreground">Loading allocations...</div>
                                 ) : (
-                                  <div className="space-y-2">
-                                    <Table>
+                                  <div className="space-y-2 min-w-[720px]">
+                                    <Table className="table-fixed w-full min-w-[720px]">
                                       <TableHeader>
                                         <TableRow>
-                                          <TableHead>State</TableHead>
-                                          <TableHead className="text-right">Amount</TableHead>
-                                          <TableHead className="text-right">% of Decision</TableHead>
+                                          <TableHead className="w-[40%]">State</TableHead>
+                                          <TableHead className="w-[25%] text-right">Amount</TableHead>
+                                          <TableHead className="w-[20%] text-right">% of Decision</TableHead>
                                           <TableHead className="w-[140px] text-right"></TableHead>
                                         </TableRow>
                                       </TableHeader>
@@ -1056,7 +1057,7 @@ export default function DistributionDecisionsManager() {
                                         )}
                                         {allocRows.map((row, idx) => (
                                           <TableRow key={`new-${idx}`}>
-                                            <TableCell>
+                                            <TableCell className="align-middle">
                                               <Select
                                                 value={row.state}
                                                 onValueChange={(val) =>
@@ -1065,7 +1066,7 @@ export default function DistributionDecisionsManager() {
                                                   )
                                                 }
                                               >
-                                                <SelectTrigger>
+                                                <SelectTrigger className="w-full min-w-0">
                                                   <SelectValue placeholder="Select state" />
                                                 </SelectTrigger>
                                                 <SelectContent>
@@ -1077,7 +1078,7 @@ export default function DistributionDecisionsManager() {
                                                 </SelectContent>
                                               </Select>
                                             </TableCell>
-                                            <TableCell className="text-right">
+                                            <TableCell className="text-right align-middle">
                                               <Input
                                                 type="number"
                                                 value={row.amount}
@@ -1086,10 +1087,11 @@ export default function DistributionDecisionsManager() {
                                                     prev.map((r, i) => (i === idx ? { ...r, amount: e.target.value } : r))
                                                   )
                                                 }
+                                                className="w-full min-w-0 text-right"
                                               />
                                             </TableCell>
-                                            <TableCell className="text-right">—</TableCell>
-                                            <TableCell className="text-right">
+                                            <TableCell className="text-right align-middle">—</TableCell>
+                                            <TableCell className="text-right align-middle">
                                               <div className="flex justify-end gap-2">
                                                 {allocRows.length > 1 && (
                                                   <Button
@@ -1144,34 +1146,13 @@ export default function DistributionDecisionsManager() {
             </Table>
           </div>
         )}
-        {sortedDecisions.length > itemsPerPage && (
-          <div className="flex items-center justify-between mt-4">
-            <div className="text-sm text-muted-foreground">
-              Showing {startIndex + 1}-{Math.min(endIndex, sortedDecisions.length)} of {sortedDecisions.length}
-            </div>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                disabled={currentPage === 1}
-              >
-                Previous
-              </Button>
-              <div className="text-sm">
-                Page {currentPage} of {totalPages}
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                disabled={currentPage === totalPages}
-              >
-                Next
-              </Button>
-            </div>
-          </div>
-        )}
+        <TablePagination
+          totalItems={sortedDecisions.length}
+          currentPage={currentPage}
+          onPageChange={setCurrentPage}
+          itemsPerPage={itemsPerPage}
+          itemLabel="decisions"
+        />
       </CardContent>
       )}
 

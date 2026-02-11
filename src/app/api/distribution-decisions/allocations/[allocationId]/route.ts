@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
+import { requirePermission } from '@/lib/requirePermission'
 
 // PUT /api/distribution-decisions/allocations/[allocationId] - Update a specific allocation
 export async function PUT(
@@ -7,6 +8,8 @@ export async function PUT(
   { params }: { params: { allocationId: string } }
 ) {
   try {
+    const auth = await requirePermission('grant_edit_allocation')
+    if (auth instanceof NextResponse) return auth
     const supabase = getSupabaseRouteClient()
     const body = await request.json()
     const { state, amount } = body
@@ -87,6 +90,8 @@ export async function DELETE(
   { params }: { params: { allocationId: string } }
 ) {
   try {
+    const auth = await requirePermission('grant_delete_allocation')
+    if (auth instanceof NextResponse) return auth
     const supabase = getSupabaseRouteClient()
 
     // Get decision ID before deleting

@@ -2,7 +2,9 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
+import Link from 'next/link'
 import { CollapsibleRow } from '@/components/ui/collapsible'
+import { Button } from '@/components/ui/button'
 import { PendingUserListItem } from '@/app/api/users/types/users'
 import { getPendingUsers } from '@/app/api/users/utils/users'
 import PendingUsersList from './PendingUsersList'
@@ -90,6 +92,13 @@ export default function UserManagement() {
 
   return (
     <div className="space-y-6">
+      {isAdmin && (
+        <div className="flex justify-end">
+          <Button variant="outline" asChild>
+            <Link href="/err-portal/user-management/permissions">Function Permissions</Link>
+          </Button>
+        </div>
+      )}
       {isAdmin && (
         <CollapsibleRow
           title="Access Rights Management"

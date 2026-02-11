@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
+import { requirePermission } from '@/lib/requirePermission'
 
 // DELETE /api/distribution-decisions/[decisionId] - delete a decision and cascading allocations (FK handles allocations)
 export async function DELETE(
@@ -7,6 +8,8 @@ export async function DELETE(
   { params }: { params: { decisionId: string } }
 ) {
   try {
+    const auth = await requirePermission('grant_delete_decision')
+    if (auth instanceof NextResponse) return auth
     const supabase = getSupabaseRouteClient()
     // Trim the decisionId to handle trailing/leading whitespace issues
     const decisionId = params.decisionId.trim()

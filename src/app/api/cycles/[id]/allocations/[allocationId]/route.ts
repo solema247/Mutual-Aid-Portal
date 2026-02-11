@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
+import { requirePermission } from '@/lib/requirePermission'
 
 // PUT /api/cycles/[id]/allocations/[allocationId] - Update a specific allocation
 export async function PUT(
@@ -7,6 +8,8 @@ export async function PUT(
   { params }: { params: { id: string; allocationId: string } }
 ) {
   try {
+    const auth = await requirePermission('grant_edit_state_allocation')
+    if (auth instanceof NextResponse) return auth
     const supabase = getSupabaseRouteClient()
     const body = await request.json()
     const { amount } = body
@@ -38,6 +41,8 @@ export async function DELETE(
   { params }: { params: { id: string; allocationId: string } }
 ) {
   try {
+    const auth = await requirePermission('grant_delete_state_allocation')
+    if (auth instanceof NextResponse) return auth
     const supabase = getSupabaseRouteClient()
     // Check if allocation has any committed or pending projects
     const { data: projects, error: projectsError } = await supabase

@@ -1,13 +1,23 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
+import { requirePermission } from '@/lib/requirePermission'
+
+const STATUS_TO_PERMISSION: Record<string, string> = {
+  approved: 'f1_approve',
+  declined: 'f1_decline',
+  feedback: 'f1_feedback',
+}
 
 export async function PATCH(
   request: Request,
   { params }: { params: { id: string } }
 ) {
   try {
-    const supabase = getSupabaseRouteClient()
     const { status } = await request.json()
+    const permCode = STATUS_TO_PERMISSION[status] || 'f1_approve'
+    const auth = await requirePermission(permCode)
+    if (auth instanceof NextResponse) return auth
+    const supabase = getSupabaseRouteClient()
     const projectId = params.id
 
     if (!projectId) {

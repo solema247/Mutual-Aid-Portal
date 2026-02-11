@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
+import { requirePermission } from '@/lib/requirePermission'
 
 // POST /api/cycles/[id]/grants - Add grants to a cycle
 export async function POST(
@@ -7,6 +8,8 @@ export async function POST(
   { params }: { params: { id: string } }
 ) {
   try {
+    const auth = await requirePermission('grant_add_grant')
+    if (auth instanceof NextResponse) return auth
     const supabase = getSupabaseRouteClient()
     const { id: cycleId } = params
     const { grant_inclusions } = await request.json()

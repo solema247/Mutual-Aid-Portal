@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
+import { requirePermission } from '@/lib/requirePermission'
 
 // DELETE /api/cycles/[id]/grants/[grantId] - Remove a grant from a cycle
 export async function DELETE(
@@ -7,6 +8,8 @@ export async function DELETE(
   { params }: { params: { id: string; grantId: string } }
 ) {
   try {
+    const auth = await requirePermission('grant_remove_grant')
+    if (auth instanceof NextResponse) return auth
     const supabase = getSupabaseRouteClient()
     const { id: cycleId, grantId } = params
 

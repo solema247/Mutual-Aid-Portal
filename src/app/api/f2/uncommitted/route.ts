@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { getUserStateAccess } from '@/lib/userStateAccess'
+import { requirePermission } from '@/lib/requirePermission'
 
 // GET /api/f2/uncommitted - Get all uncommitted F1s
 export async function GET() {
@@ -75,6 +76,8 @@ export async function GET() {
 // PATCH /api/f2/uncommitted - Update F1 expenses, grant call, or metadata
 export async function PATCH(request: Request) {
   try {
+    const auth = await requirePermission('f2_save_expenses')
+    if (auth instanceof NextResponse) return auth
     const supabase = getSupabaseRouteClient()
     const { id, expenses, grant_call_id, approval_file_key, donor_id, funding_cycle_id, grant_serial_id, workplan_number, cycle_state_allocation_id, grant_id, file_key } = await request.json()
     
@@ -138,6 +141,8 @@ export async function POST(request: Request) {
 // DELETE /api/f2/uncommitted - Delete an F1 project
 export async function DELETE(request: Request) {
   try {
+    const auth = await requirePermission('f1_delete')
+    if (auth instanceof NextResponse) return auth
     const supabase = getSupabaseRouteClient()
     const { id } = await request.json()
     
