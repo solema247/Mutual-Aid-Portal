@@ -955,7 +955,6 @@ export default function F3MOUsPage() {
                     <TableHead className="min-w-[140px]">{t('f3:headers.partner')}</TableHead>
                     <TableHead className="min-w-[180px]">{t('f3:headers.err_state')}</TableHead>
                     <TableHead className="text-right min-w-[90px]">{t('f3:headers.total')}</TableHead>
-                    <TableHead className="min-w-[100px]">{t('f3:headers.end_date')}</TableHead>
                     <TableHead className="min-w-[100px]">{t('f3:headers.created')}</TableHead>
                     <TableHead className="min-w-[320px]">{t('f3:headers.actions')}</TableHead>
                   </TableRow>
@@ -974,10 +973,9 @@ export default function F3MOUsPage() {
                     <TableCell>{m.partner_name}</TableCell>
                     <TableCell>{m.err_name}{m.state ? ` — ${m.state}` : ''}</TableCell>
                     <TableCell className="text-right">{Number(m.total_amount || 0).toLocaleString()}</TableCell>
-                    <TableCell>{m.end_date ? new Date(m.end_date).toLocaleDateString() : '-'}</TableCell>
                     <TableCell>{new Date(m.created_at).toLocaleDateString()}</TableCell>
                     <TableCell className="align-top whitespace-nowrap">
-                      <div className="flex items-start gap-3 flex-wrap">
+                      <div className="flex items-start gap-3 flex-nowrap">
                         <div className="flex flex-col items-center gap-0.5 min-w-[50px] flex-shrink-0">
                           <Button
                             variant="ghost"
@@ -1124,9 +1122,9 @@ export default function F3MOUsPage() {
                             {(() => {
                               const projectCount = mouProjectCounts[m.id] || 0
                               const paymentCount = getPaymentConfirmationCount(m, projectCount)
-                              // When payment data exists, show "View Payment Information" so users know they can view the list
+                              // When payment data exists, show short label so action row stays on one line
                               if (paymentCount.confirmed > 0) {
-                                return t('f3:view_payment')
+                                return t('f3:view_payment_short')
                               }
                               if (paymentCount.total === 0) {
                                 return t('f3:add_payment')
