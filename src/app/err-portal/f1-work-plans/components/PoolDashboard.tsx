@@ -9,7 +9,7 @@ import { RefreshCw, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react'
 import { CollapsibleRow } from '@/components/ui/collapsible'
 
 export default function PoolDashboard({ showProposals = true, showByDonor = true, showSummaryCards = true, showByState = true }: { showProposals?: boolean; showByDonor?: boolean; showSummaryCards?: boolean; showByState?: boolean }) {
-  const { t } = useTranslation(['f1_plans'])
+  const { t } = useTranslation(['f1_plans', 'err'])
   const [summary, setSummary] = useState<{ total_included: number; total_committed: number; total_pending: number; remaining: number; total_grants: number; total_not_included: number } | null>(null)
   const [byState, setByState] = useState<any[]>([])
   const [byDonor, setByDonor] = useState<any[]>([])
@@ -147,11 +147,48 @@ export default function PoolDashboard({ showProposals = true, showByDonor = true
   return (
     <div className="space-y-6">
       {showSummaryCards && summary && (
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <Card><CardHeader><CardTitle>{t('pool.total')}</CardTitle></CardHeader><CardContent className="text-2xl font-bold">{fmt(summary.total_included)}</CardContent></Card>
-          <Card><CardHeader><CardTitle>{t('pool.committed')}</CardTitle></CardHeader><CardContent className="text-2xl font-bold">{fmt(summary.total_committed)}</CardContent></Card>
-          <Card><CardHeader><CardTitle>{t('pool.pending')}</CardTitle></CardHeader><CardContent className="text-2xl font-bold">{fmt(summary.total_pending)}</CardContent></Card>
-          <Card><CardHeader><CardTitle>{t('pool.remaining')}</CardTitle></CardHeader><CardContent className={`text-2xl font-bold ${summary.remaining >= 0 ? 'text-green-700' : 'text-red-700'}`}>{fmt(summary.remaining)}</CardContent></Card>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>{t('err:gm.total_funds_allocated')}</CardTitle>
+              <div className="text-xs text-muted-foreground">{t('err:gm.total_funds_allocated_desc')}</div>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{fmt(summary.total_included)}</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle>{t('err:gm.total_funds_transferred')}</CardTitle>
+              <div className="text-xs text-muted-foreground">{t('err:gm.total_funds_transferred_desc')}</div>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{fmt(summary.total_grants)}</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle>{t('err:gm.committed')}</CardTitle>
+              <div className="text-xs text-muted-foreground">{t('err:gm.committed_desc')}</div>
+            </CardHeader>
+            <CardContent className="text-2xl font-bold">{fmt(summary.total_committed)}</CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle>{t('err:gm.pending')}</CardTitle>
+              <div className="text-xs text-muted-foreground">{t('err:gm.pending_desc')}</div>
+            </CardHeader>
+            <CardContent className="text-2xl font-bold">{fmt(summary.total_pending)}</CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle>{t('err:gm.remaining')}</CardTitle>
+              <div className="text-xs text-muted-foreground">{t('err:gm.remaining_desc')}</div>
+            </CardHeader>
+            <CardContent className={`text-2xl font-bold ${(summary.total_grants - summary.total_committed - summary.total_pending) >= 0 ? 'text-green-700' : 'text-red-700'}`}>
+              {fmt(summary.total_grants - summary.total_committed - summary.total_pending)}
+            </CardContent>
+          </Card>
         </div>
       )}
 

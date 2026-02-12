@@ -54,22 +54,27 @@ export default function GrantManagementPage() {
         </div>
       </div>
 
-      {/* Overview cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      {/* Overview cards: 1=Allocated, 2=Transferred, 3=Committed, 4=Pending, 5=Remaining (Transferred − Committed − Pending) */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
         <Card>
           <CardHeader>
-            <CardTitle>{t('err:gm.total_included')}</CardTitle>
-            <div className="text-xs text-muted-foreground">{t('err:gm.total_included_desc')}</div>
+            <CardTitle>{t('err:gm.total_funds_allocated')}</CardTitle>
+            <div className="text-xs text-muted-foreground">{t('err:gm.total_funds_allocated_desc')}</div>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
               {summary ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(summary.total_included) : '—'}
             </div>
-            <div className="text-sm text-muted-foreground mt-2">
-              {t('err:gm.total_grants')}: {summary ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(summary.total_grants) : '—'}
-            </div>
-            <div className={`text-sm mt-1 ${summary && summary.total_not_included >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-              {t('err:gm.not_included')}: {summary ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(summary.total_not_included) : '—'}
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>{t('err:gm.total_funds_transferred')}</CardTitle>
+            <div className="text-xs text-muted-foreground">{t('err:gm.total_funds_transferred_desc')}</div>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {summary ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(summary.total_grants) : '—'}
             </div>
           </CardContent>
         </Card>
@@ -92,7 +97,9 @@ export default function GrantManagementPage() {
             <CardTitle>{t('err:gm.remaining')}</CardTitle>
             <div className="text-xs text-muted-foreground">{t('err:gm.remaining_desc')}</div>
           </CardHeader>
-          <CardContent className={`text-2xl font-bold ${summary && summary.remaining >= 0 ? 'text-green-700' : 'text-red-700'}`}>{summary ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(summary.remaining) : '—'}</CardContent>
+          <CardContent className={`text-2xl font-bold ${summary && (summary.total_grants - summary.total_committed - summary.total_pending) >= 0 ? 'text-green-700' : 'text-red-700'}`}>
+            {summary ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(summary.total_grants - summary.total_committed - summary.total_pending) : '—'}
+          </CardContent>
         </Card>
       </div>
 
