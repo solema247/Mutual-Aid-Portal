@@ -2,6 +2,8 @@
 
 import { useTranslation } from 'react-i18next'
 import { CollapsibleRow } from '@/components/ui/collapsible'
+import { GrantsStackedBarChart } from './GrantsStackedBarChart'
+import { ProjectsByDonorChart } from './ProjectsByDonorChart'
 
 export default function DashboardPage() {
   const { t } = useTranslation(['dashboard', 'err'])
@@ -15,6 +17,10 @@ export default function DashboardPage() {
       </div>
 
       <div className="space-y-4">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <ProjectsByDonorChart />
+          <GrantsStackedBarChart />
+        </div>
         <CollapsibleRow
           title={t('dashboard:reports_title')}
           defaultOpen={true}
