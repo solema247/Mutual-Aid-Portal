@@ -146,6 +146,8 @@
     },
     "table": {
       "title": "All Active Projects",
+      "title_by_grant": "Summary by Grant",
+      "grant": "Grant",
       "back": "Back",
       "state": "State",
       "err": "ERR",

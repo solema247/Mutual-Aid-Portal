@@ -17,12 +17,8 @@ export default function DashboardPage() {
       </div>
 
       <div className="space-y-4">
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          <ProjectsByDonorChart />
-          <GrantsStackedBarChart />
-        </div>
         <CollapsibleRow
-          title={t('dashboard:reports_title')}
+          title="Looker Studio Dashboard"
           defaultOpen={true}
         >
           <div className="p-4 overflow-hidden" style={{ height: '1040px' }}>
@@ -36,6 +32,18 @@ export default function DashboardPage() {
                 sandbox="allow-storage-access-by-user-activation allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox"
                 title="Sudan ERR Reports"
               />
+            </div>
+          </div>
+        </CollapsibleRow>
+
+        <CollapsibleRow
+          title="Dashboard (Work-in-progress)"
+          defaultOpen={true}
+        >
+          <div className="p-4">
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+              <ProjectsByDonorChart />
+              <GrantsStackedBarChart />
             </div>
           </div>
         </CollapsibleRow>

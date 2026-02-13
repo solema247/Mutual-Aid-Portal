@@ -149,6 +149,20 @@ export async function GET(request: Request) {
       }
     }
 
+    // Historical financial reports: actuals by serial (match historical_financial_reports.budget_items = activities_raw_import."Serial Number")
+    const historicalFinancialReports = await fetchAllRows(
+      supabase,
+      'historical_financial_reports',
+      'budget_items, total_errs_expenditure_usd'
+    )
+    const actualBySerial = new Map<string, number>()
+    for (const r of (historicalFinancialReports || [])) {
+      const key = (r.budget_items != null ? String(r.budget_items).trim() : '') || ''
+      if (key === '') continue
+      const val = Number((r as any).total_errs_expenditure_usd) || 0
+      actualBySerial.set(key, (actualBySerial.get(key) ?? 0) + val)
+    }
+
     // Summaries for actuals (portal projects)
     // Only get summaries that are NOT historical (exclude those with activities_raw_import_id)
     let sq = supabase.from('err_summary').select('id, project_id, total_expenses, report_date').is('activities_raw_import_id', null)
@@ -274,6 +288,10 @@ export async function GET(request: Request) {
       // Get F4 count from err_summary for this historical project (F4s uploaded through portal)
       const historicalProjectId = `historical_${row.id}`
       const f4Agg = sumByProject.get(historicalProjectId) || { actual: 0, count: 0, last: null }
+      // Actuals: prefer historical_financial_reports.total_errs_expenditure_usd (match budget_items = activities_raw_import."Serial Number")
+      const serial = (row['Serial Number'] ?? row['serial_number'] ?? '').toString().trim()
+      const actualFromFinancial = serial ? (actualBySerial.get(serial) ?? null) : null
+      const actual = actualFromFinancial != null ? actualFromFinancial : f4Agg.actual
       
       // For historical projects: F4 count = F4='Completed' from activities_raw_import (1 if completed) + F4s uploaded through portal
       const f4CountFromSheet = f4Completed ? 1 : 0
@@ -291,9 +309,9 @@ export async function GET(request: Request) {
         has_mou: hasMou,
         mou_code: hasMou ? (row['MOU Signed'] || 'Yes') : null,
         plan: usd,
-        actual: f4Agg.actual, // Use actual expenses from err_summary if available
-        variance: usd - f4Agg.actual, // Calculate variance based on actual expenses
-        burn: usd > 0 ? f4Agg.actual / usd : 0, // Calculate burn rate
+        actual, // From historical_financial_reports.total_errs_expenditure_usd (match budget_items = serial) or err_summary
+        variance: usd - actual,
+        burn: usd > 0 ? actual / usd : 0,
         f4_count: totalF4Count, // F4='Completed' from sheet + F4s uploaded through portal
         last_report_date: f4Agg.last || reportDate || null, // Prefer date from err_summary
         f5_count: f5Completed ? 1 : 0, // F5='Completed' from activities_raw_import

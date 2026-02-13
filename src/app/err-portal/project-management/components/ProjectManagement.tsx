@@ -231,6 +231,56 @@ export default function ProjectManagement() {
     return { total, withMou, withF4, withF5, pctF4, pctF5 }
   }, [rows])
 
+  // Grant-level summary rows (aggregate allRows by grant; used for "Summary by Grant" table)
+  const grantSummaryRows = useMemo(() => {
+    const out: Array<{ grantLabel: string; plan: number; actual: number; variance: number; burn: number; f4_count: number; f5_count: number; total_projects: number; projects_with_f4: number; projects_with_f5: number }> = []
+    // Unassigned: current projects with no grant_grid_id
+    const unassignedRows = (allRows || []).filter((r: any) => !r.is_historical && !r.grant_grid_id)
+    if (unassignedRows.length > 0) {
+      const plan = unassignedRows.reduce((s: number, r: any) => s + (Number(r.plan) || 0), 0)
+      const actual = unassignedRows.reduce((s: number, r: any) => s + (Number(r.actual) || 0), 0)
+      out.push({
+        grantLabel: 'Unassigned',
+        plan,
+        actual,
+        variance: plan - actual,
+        burn: plan > 0 ? actual / plan : 0,
+        f4_count: unassignedRows.reduce((s: number, r: any) => s + (Number(r.f4_count) || 0), 0),
+        f5_count: unassignedRows.reduce((s: number, r: any) => s + (Number(r.f5_count) || 0), 0),
+        total_projects: unassignedRows.length,
+        projects_with_f4: unassignedRows.filter((r: any) => Number(r.f4_count || 0) > 0).length,
+        projects_with_f5: unassignedRows.filter((r: any) => Number(r.f5_count || 0) > 0).length
+      })
+    }
+    // One row per grant from grants list
+    for (const grant of grants) {
+      const grantRows = (allRows || []).filter((r: any) => {
+        if (r.is_historical) {
+          const projectDonor = (r.project_donor != null ? String(r.project_donor).trim() : '') || ''
+          const grantId = (grant.grant_id != null ? String(grant.grant_id).trim() : '') || ''
+          return projectDonor === grantId
+        }
+        return r.grant_grid_id === grant.id
+      })
+      if (grantRows.length === 0) continue
+      const plan = grantRows.reduce((s: number, r: any) => s + (Number(r.plan) || 0), 0)
+      const actual = grantRows.reduce((s: number, r: any) => s + (Number(r.actual) || 0), 0)
+      out.push({
+        grantLabel: `${grant.grant_id} - ${grant.project_name || grant.grant_id} (${grant.donor_name})`,
+        plan,
+        actual,
+        variance: plan - actual,
+        burn: plan > 0 ? actual / plan : 0,
+        f4_count: grantRows.reduce((s: number, r: any) => s + (Number(r.f4_count) || 0), 0),
+        f5_count: grantRows.reduce((s: number, r: any) => s + (Number(r.f5_count) || 0), 0),
+        total_projects: grantRows.length,
+        projects_with_f4: grantRows.filter((r: any) => Number(r.f4_count || 0) > 0).length,
+        projects_with_f5: grantRows.filter((r: any) => Number(r.f5_count || 0) > 0).length
+      })
+    }
+    return out.sort((a, b) => (a.grantLabel === 'Unassigned' ? -1 : b.grantLabel === 'Unassigned' ? 1 : a.grantLabel.localeCompare(b.grantLabel)))
+  }, [allRows, grants])
+
   // Aggregations for drill-down
   const stateRows = useMemo(() => {
     const byState = new Map<string, { state: string; plan: number; actual: number; variance: number; burn: number; f4_count: number; f5_count: number; total_projects: number; projects_with_f4: number; projects_with_f5: number; last_report_date: string | null; last_f5_date: string | null }>()
@@ -966,6 +1016,100 @@ export default function ProjectManagement() {
               )}
             </CardContent>
           </Card>
+
+      {/* Summary by Grant table */}
+      <Card>
+        <CardHeader>
+          <CardTitle>{t('management.table.title_by_grant')}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {loading ? (
+            <div className="py-8 text-center text-muted-foreground">{t('management.table.loading')}</div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>{t('management.table.grant')}</TableHead>
+                  <TableHead className="text-right">{t('management.table.plan')}</TableHead>
+                  <TableHead className="text-right">{t('management.table.actuals')}</TableHead>
+                  <TableHead className="text-right">{t('management.table.variance')}</TableHead>
+                  <TableHead className="text-right">{t('management.table.burn')}</TableHead>
+                  <TableHead>{t('management.table.f4s')}</TableHead>
+                  <TableHead className="text-right">{t('management.table.f4_complete')}</TableHead>
+                  <TableHead>{t('management.table.f5s')}</TableHead>
+                  <TableHead className="text-right">{t('management.table.f5_complete')}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {grantSummaryRows.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={9} className="text-center text-muted-foreground">{t('management.table.no_data')}</TableCell>
+                  </TableRow>
+                ) : (
+                  <>
+                    <TableRow className="bg-muted/50 font-semibold">
+                      <TableCell className="font-semibold">Total</TableCell>
+                      <TableCell className="text-right font-semibold">
+                        {grantSummaryRows.reduce((s, r) => s + r.plan, 0).toLocaleString()}
+                      </TableCell>
+                      <TableCell className="text-right font-semibold">
+                        {grantSummaryRows.reduce((s, r) => s + r.actual, 0).toLocaleString()}
+                      </TableCell>
+                      <TableCell className="text-right font-semibold">
+                        {grantSummaryRows.reduce((s, r) => s + r.variance, 0).toLocaleString()}
+                      </TableCell>
+                      <TableCell className="text-right font-semibold">
+                        {(() => {
+                          const totalPlan = grantSummaryRows.reduce((s, r) => s + r.plan, 0)
+                          const totalActual = grantSummaryRows.reduce((s, r) => s + r.actual, 0)
+                          return totalPlan > 0 ? (totalActual / totalPlan * 100).toFixed(0) + '%' : '0%'
+                        })()}
+                      </TableCell>
+                      <TableCell className="font-semibold">
+                        {grantSummaryRows.reduce((s, r) => s + r.f4_count, 0)}
+                      </TableCell>
+                      <TableCell className="text-right font-semibold">
+                        {(() => {
+                          const total = grantSummaryRows.reduce((s, r) => s + r.total_projects, 0)
+                          const withF4 = grantSummaryRows.reduce((s, r) => s + r.projects_with_f4, 0)
+                          return total > 0 ? Math.round((withF4 / total) * 100) + '%' : '0%'
+                        })()}
+                      </TableCell>
+                      <TableCell className="font-semibold">
+                        {grantSummaryRows.reduce((s, r) => s + r.f5_count, 0)}
+                      </TableCell>
+                      <TableCell className="text-right font-semibold">
+                        {(() => {
+                          const total = grantSummaryRows.reduce((s, r) => s + r.total_projects, 0)
+                          const withF5 = grantSummaryRows.reduce((s, r) => s + r.projects_with_f5, 0)
+                          return total > 0 ? Math.round((withF5 / total) * 100) + '%' : '0%'
+                        })()}
+                      </TableCell>
+                    </TableRow>
+                    {grantSummaryRows.map((r, idx) => (
+                      <TableRow key={`grant-${idx}-${r.grantLabel}`}>
+                        <TableCell className="font-medium">{r.grantLabel}</TableCell>
+                        <TableCell className="text-right">{Number(r.plan || 0).toLocaleString()}</TableCell>
+                        <TableCell className="text-right">{Number(r.actual || 0).toLocaleString()}</TableCell>
+                        <TableCell className="text-right">{Number(r.variance || 0).toLocaleString()}</TableCell>
+                        <TableCell className="text-right">{r.burn ? (r.burn * 100).toFixed(0) + '%' : '0%'}</TableCell>
+                        <TableCell>{r.f4_count || 0}</TableCell>
+                        <TableCell className="text-right">
+                          {r.total_projects > 0 ? Math.round((r.projects_with_f4 / r.total_projects) * 100) + '%' : '0%'}
+                        </TableCell>
+                        <TableCell>{r.f5_count || 0}</TableCell>
+                        <TableCell className="text-right">
+                          {r.total_projects > 0 ? Math.round((r.projects_with_f5 / r.total_projects) * 100) + '%' : '0%'}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </>
+                )}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Project detail modal when at project level and a row is clicked via explicit action */}
       <ProjectDetailModal
