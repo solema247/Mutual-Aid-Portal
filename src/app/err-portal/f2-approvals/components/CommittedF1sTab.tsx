@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
 import { supabase } from '@/lib/supabaseClient'
-import { Search, Filter, ArrowRightLeft, Edit2 } from 'lucide-react'
+import { Search, Filter, ArrowRightLeft, Edit2, Undo2 } from 'lucide-react'
 import type { CommittedF1, FilterOptions } from '../types'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -58,6 +58,9 @@ export default function CommittedF1sTab() {
   const [currentUser, setCurrentUser] = useState<{ role: string } | null>(null)
   const [editorOpen, setEditorOpen] = useState(false)
   const [editorProjectId, setEditorProjectId] = useState<string | null>(null)
+  const [decommitDialogOpen, setDecommitDialogOpen] = useState(false)
+  const [decommittingF1Id, setDecommittingF1Id] = useState<string | null>(null)
+  const [isDecommitting, setIsDecommitting] = useState(false)
 
   const toggleAll = (checked: boolean) => {
     if (!checked) return setSelected([])
@@ -185,6 +188,37 @@ export default function CommittedF1sTab() {
       alert('Failed to reassign F1s')
     } finally {
       setIsReassigning(false)
+    }
+  }
+
+  const handleDecommitClick = (f1Id: string) => {
+    setDecommittingF1Id(f1Id)
+    setDecommitDialogOpen(true)
+  }
+
+  const handleDecommitConfirm = async () => {
+    if (!decommittingF1Id) return
+    setIsDecommitting(true)
+    try {
+      const response = await fetch('/api/f2/committed/decommit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: decommittingF1Id })
+      })
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ error: 'Failed to de-commit' }))
+        alert(error.error || t('f2:decommit_failed'))
+        return
+      }
+      setDecommitDialogOpen(false)
+      setDecommittingF1Id(null)
+      await fetchCommittedF1s()
+      alert(t('f2:decommit_success'))
+    } catch (error) {
+      console.error('Error de-committing F1:', error)
+      alert(t('f2:decommit_failed'))
+    } finally {
+      setIsDecommitting(false)
     }
   }
 
@@ -655,6 +689,17 @@ export default function CommittedF1sTab() {
                       >
                         <Edit2 className="w-4 h-4" />
                       </Button>
+                      {!f1.mou_id && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => handleDecommitClick(f1.id)}
+                          title={t('f2:decommit_project') as string}
+                          className="h-8 w-8 p-0 text-amber-600 hover:text-amber-700 hover:bg-amber-50"
+                        >
+                          <Undo2 className="w-4 h-4" />
+                        </Button>
+                      )}
                     </div>
                   </TableCell>
                 </TableRow>
@@ -841,6 +886,51 @@ export default function CommittedF1sTab() {
         projectId={editorProjectId}
         onSaved={async () => { await fetchCommittedF1s() }}
       />
+
+      {/* De-commit confirmation dialog */}
+      <Dialog open={decommitDialogOpen} onOpenChange={setDecommitDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t('f2:decommit_project') || 'De-commit Project'}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              {t('f2:decommit_confirmation') || 'Move this project back to the uncommitted list? You can then delete it from there if needed.'}
+            </p>
+            {decommittingF1Id && (() => {
+              const f1 = f1s.find(f => f.id === decommittingF1Id)
+              if (!f1) return null
+              return (
+                <div className="p-3 bg-muted rounded-md">
+                  <div className="font-medium">{f1.err_id}</div>
+                  <div className="text-sm text-muted-foreground">
+                    {f1.state} - {f1.locality}
+                  </div>
+                </div>
+              )
+            })()}
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setDecommitDialogOpen(false)
+                  setDecommittingF1Id(null)
+                }}
+                disabled={isDecommitting}
+              >
+                {t('common:cancel')}
+              </Button>
+              <Button
+                variant="secondary"
+                onClick={handleDecommitConfirm}
+                disabled={isDecommitting}
+              >
+                {isDecommitting ? t('f2:decommitting') || 'De-committing...' : t('f2:decommit') || 'De-commit'}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
