@@ -87,6 +87,19 @@ export async function GET(
         }
       }
 
+      // Fetch historical financial report (topline) matched by budget_items = Serial Number
+      const serialNumber = (historicalProject['Serial Number'] ?? historicalProject['serial_number'] ?? '').toString().trim()
+      let historicalFinancialReports: any[] = []
+      if (serialNumber) {
+        const { data: hfrRows } = await supabase
+          .from('historical_financial_reports')
+          .select('*')
+          .eq('budget_items', serialNumber)
+        if (hfrRows && hfrRows.length > 0) {
+          historicalFinancialReports = hfrRows
+        }
+      }
+
       // Map historical project to match the expected structure
       const project = {
         id: id,
@@ -147,10 +160,11 @@ export async function GET(
         grant_segment: historicalProject['Grant Segment'] || historicalProject['grant_segment'] || null
       }
 
-      // Return historical project with F4 summaries and files
+      // Return historical project with F4 summaries, historical financial reports, and files
       return NextResponse.json({ 
         project, 
         summaries: summariesWithExpenses,
+        historical_financial_reports: historicalFinancialReports,
         f5Reports: [],
         is_historical: true,
         file_keys: {},

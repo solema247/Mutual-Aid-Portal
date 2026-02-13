@@ -41,6 +41,7 @@ export default function ProjectDetailModal({ projectId, open, onOpenChange }: Pr
   const project = data?.project
   const room = project?.emergency_rooms
   const summaries = data?.summaries || []
+  const historicalFinancialReports = data?.historical_financial_reports || []
   const f5Reports = data?.f5Reports || []
   const isHistorical = data?.is_historical || project?.is_historical
   const fileKeys = data?.file_keys || {}
@@ -260,8 +261,69 @@ export default function ProjectDetailModal({ projectId, open, onOpenChange }: Pr
                 {/* F4 Financial Reports Section for Historical Projects */}
                 <div className="mt-6 pt-6 border-t">
                   <Label className="text-base font-semibold mb-3">F4 Financial Reports</Label>
+                  {/* Historical financial report topline (from historical_financial_reports table) */}
+                  {historicalFinancialReports.length > 0 && (
+                    <div className="mb-6">
+                      <Label className="text-sm font-medium mb-2">Historical Financial Report (topline)</Label>
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>State</TableHead>
+                            <TableHead className="text-right">Total ERRs Expenditure (USD)</TableHead>
+                            <TableHead className="text-right">Total Budget Received (USD)</TableHead>
+                            <TableHead className="text-right">Submit %</TableHead>
+                            <TableHead className="text-right">Balance (USD)</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {historicalFinancialReports.map((hfr: any, idx: number) => (
+                            <TableRow key={hfr.id ?? idx}>
+                              <TableCell>{hfr.state ?? '-'}</TableCell>
+                              <TableCell className="text-right">{Number(hfr.total_errs_expenditure_usd ?? 0).toLocaleString()}</TableCell>
+                              <TableCell className="text-right">{Number(hfr.total_budget_received_usd ?? 0).toLocaleString()}</TableCell>
+                              <TableCell className="text-right">{hfr.submit_pct != null ? Number(hfr.submit_pct).toLocaleString() + '%' : '-'}</TableCell>
+                              <TableCell className="text-right">{hfr.balance_usd ?? '-'}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                      {/* Category breakdown (optional topline) */}
+                      {historicalFinancialReports[0] && (
+                        <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
+                          {[
+                            { key: 'protection', label: 'Protection' },
+                            { key: 'shelter_nfis', label: 'Shelter / NFI' },
+                            { key: 'wash', label: 'WASH' },
+                            { key: 'food_security', label: 'Food Security' },
+                            { key: 'health', label: 'Health' },
+                            { key: 'support_logistics', label: 'Support / Logistics' },
+                            { key: 'volunteer_support', label: 'Volunteer Support' },
+                            { key: 'women_children_needs', label: 'Women & Children' },
+                            { key: 'mental_physical_health', label: 'Mental / Physical Health' },
+                            { key: 'education', label: 'Education' },
+                            { key: 'capacity_building', label: 'Capacity Building' },
+                            { key: 'livelihoods', label: 'Livelihoods' },
+                            { key: 'agriculture_support', label: 'Agriculture' },
+                            { key: 'media', label: 'Media' },
+                            { key: 'local_contribution', label: 'Local Contribution' }
+                          ].map(({ key, label }) => {
+                            const val = historicalFinancialReports[0][key]
+                            if (val == null || val === '') return null
+                            return (
+                              <div key={key} className="flex justify-between gap-2 py-1 border-b border-muted/50">
+                                <span className="text-muted-foreground">{label}</span>
+                                <span>{typeof val === 'number' ? Number(val).toLocaleString() : String(val)}</span>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {/* Portal-uploaded F4 summaries (err_summary / err_expense) */}
                   {summaries.length > 0 ? (
                     <>
+                      <Label className="text-sm font-medium mb-2">F4 Reports (portal)</Label>
                       <Table>
                         <TableHeader>
                           <TableRow>
@@ -358,7 +420,8 @@ export default function ProjectDetailModal({ projectId, open, onOpenChange }: Pr
                         </div>
                       )}
                     </>
-                  ) : (
+                  ) : null}
+                  {historicalFinancialReports.length === 0 && summaries.length === 0 && (
                     <div className="py-4 text-center text-muted-foreground">No F4 reports available</div>
                   )}
                 </div>
