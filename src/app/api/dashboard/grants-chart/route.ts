@@ -9,13 +9,13 @@ async function fetchAllRows<T>(
   supabase: ReturnType<typeof getSupabaseAdmin>,
   table: string,
   select: string,
-  filter?: (q: ReturnType<ReturnType<typeof getSupabaseAdmin>['from']>) => ReturnType<ReturnType<typeof getSupabaseAdmin>['from']>
+  filter?: (q: any) => any
 ): Promise<T[]> {
   const all: T[] = []
   let from = 0
   const pageSize = 1000
   while (true) {
-    let q = supabase.from(table).select(select).range(from, from + pageSize - 1)
+    let q: any = supabase.from(table).select(select).range(from, from + pageSize - 1)
     if (filter) q = filter(q)
     const { data, error } = await q
     if (error) throw error

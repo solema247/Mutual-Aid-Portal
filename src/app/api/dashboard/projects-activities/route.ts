@@ -11,14 +11,14 @@ async function fetchAllRows<T>(
   supabase: ReturnType<typeof getSupabaseRouteClient>,
   viewName: string,
   select: string,
-  filter?: (query: ReturnType<ReturnType<typeof getSupabaseRouteClient>['from']>) => ReturnType<ReturnType<typeof getSupabaseRouteClient>['from']>
+  filter?: (query: any) => any
 ): Promise<T[]> {
   const allRows: T[] = []
   let from = 0
   const pageSize = 1000
 
   while (true) {
-    let query = supabase.from(viewName).select(select).range(from, from + pageSize - 1)
+    let query: any = supabase.from(viewName).select(select).range(from, from + pageSize - 1)
     if (filter) {
       query = filter(query)
     }

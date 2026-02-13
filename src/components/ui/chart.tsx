@@ -56,18 +56,20 @@ ChartContainer.displayName = 'ChartContainer'
 
 const ChartTooltip = Tooltip
 
-const ChartTooltipContent = React.forwardRef<
-  HTMLDivElement,
-  React.ComponentProps<typeof Tooltip> &
-    React.ComponentProps<'div'> & {
-      hideLabel?: boolean
-      hideIndicator?: boolean
-      indicator?: 'line' | 'dot' | 'dashed'
-      nameKey?: string
-      labelKey?: string
-      formatter?: (value: number, name: string, item: unknown) => React.ReactNode
-    }
->(
+type TooltipPayloadItem = { value?: number; dataKey?: string; name?: string; color?: string; payload?: Record<string, unknown> }
+type ChartTooltipContentProps = React.ComponentProps<'div'> & {
+  active?: boolean
+  payload?: TooltipPayloadItem[]
+  label?: string
+  hideLabel?: boolean
+  hideIndicator?: boolean
+  indicator?: 'line' | 'dot' | 'dashed'
+  nameKey?: string
+  labelKey?: string
+  formatter?: (value: number, name: string, item: unknown) => React.ReactNode
+}
+
+const ChartTooltipContent = React.forwardRef<HTMLDivElement, ChartTooltipContentProps>(
   (
     {
       active,
