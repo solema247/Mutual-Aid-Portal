@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { requirePermission } from '@/lib/requirePermission'
+import { userCanAccessAllStates } from '@/lib/userStateAccess'
 
 export async function POST(
   request: Request,
@@ -38,6 +39,10 @@ export async function POST(
     const assignedF1s = f1s.filter((f1: any) => f1.grant_id && f1.grant_id.startsWith('LCC-'))
     if (assignedF1s.length === 0) {
       return NextResponse.json({ error: 'No assigned projects found for this MOU' }, { status: 400 })
+    }
+    const canAccess = await userCanAccessAllStates(assignedF1s.map((f: any) => f.state))
+    if (!canAccess) {
+      return NextResponse.json({ error: 'You do not have access to this MOU or its projects' }, { status: 403 })
     }
     
     // Get grant from grants_grid_view

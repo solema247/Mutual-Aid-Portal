@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
+import { userCanAccessState } from '@/lib/userStateAccess'
 
 export async function GET(
   _req: Request,
@@ -25,6 +26,11 @@ export async function GET(
       if (histErr) throw histErr
       if (!historicalProject) {
         return NextResponse.json({ error: 'Historical project not found' }, { status: 404 })
+      }
+      const histState = historicalProject['State'] || historicalProject['state'] || null
+      const canAccessHist = await userCanAccessState(histState)
+      if (!canAccessHist) {
+        return NextResponse.json({ error: 'You do not have access to this project' }, { status: 403 })
       }
 
       // Fetch F4 summaries for this historical project
@@ -184,6 +190,10 @@ export async function GET(
         .eq('id', id)
         .single()
       if (projErr) throw projErr
+      const canAccess = await userCanAccessState((project as any)?.state)
+      if (!canAccess) {
+        return NextResponse.json({ error: 'You do not have access to this project' }, { status: 403 })
+      }
 
       // Load MOU file keys if mou_id exists
       let mouFileKeys: { payment_confirmation_file: string | null; signed_mou_file_key: string | null } | null = null

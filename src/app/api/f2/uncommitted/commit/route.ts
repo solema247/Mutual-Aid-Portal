@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { requirePermission } from '@/lib/requirePermission'
+import { userCanAccessAllStates } from '@/lib/userStateAccess'
 
 // POST /api/f2/uncommitted/commit - Commit selected F1s (set funding_status to committed and status to approved)
 export async function POST(request: Request) {
@@ -13,6 +14,23 @@ export async function POST(request: Request) {
 
     if (!f1_ids || !Array.isArray(f1_ids) || f1_ids.length === 0) {
       return NextResponse.json({ error: 'F1 IDs array is required' }, { status: 400 })
+    }
+
+    // Ensure user can only commit projects in their allowed states
+    const { data: projects, error: fetchErr } = await supabase
+      .from('err_projects')
+      .select('id, state')
+      .in('id', f1_ids)
+      .eq('status', 'pending')
+
+    if (fetchErr) throw fetchErr
+    if (!projects || projects.length !== f1_ids.length) {
+      return NextResponse.json({ error: 'Some projects not found or not pending' }, { status: 400 })
+    }
+
+    const canAccess = await userCanAccessAllStates(projects.map((p: any) => p.state))
+    if (!canAccess) {
+      return NextResponse.json({ error: 'You do not have access to one or more projects in the selected states' }, { status: 403 })
     }
 
     const { error } = await supabase

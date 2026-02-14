@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { requirePermission } from '@/lib/requirePermission'
 import { aggregateObjectives, aggregateBeneficiaries, aggregatePlannedActivities, aggregatePlannedActivitiesDetailed, aggregateLocations, getBankingDetails, getBudgetTable } from '@/lib/mou-aggregation'
-import { getUserStateAccess } from '@/lib/userStateAccess'
+import { getUserStateAccess, userCanAccessAllStates } from '@/lib/userStateAccess'
 
 // GET /api/f3/mous - list MOUs (simple)
 export async function GET(request: Request) {
@@ -113,6 +113,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Some projects already linked to an MOU', project_ids: alreadyLinked.map((p: any) => p.id) }, { status: 400 })
     }
 
+    // Ensure user can only create MOUs for projects in their allowed states
+    const inferredState = state || projects[0]?.state || null
+    const statesToCheck = [inferredState, ...projects.map((p: any) => p.state)].filter(Boolean)
+    const canAccess = await userCanAccessAllStates(statesToCheck)
+    if (!canAccess) {
+      return NextResponse.json({ error: 'You do not have access to create an MOU for one or more of the selected projects or state' }, { status: 403 })
+    }
+
     // Compute total amount
     const sumExpenses = (exp: any): number => {
       const arr = typeof exp === 'string' ? JSON.parse(exp || '[]') : (Array.isArray(exp) ? exp : [])
@@ -120,8 +128,7 @@ export async function POST(request: Request) {
     }
     const total_amount = projects.reduce((s: number, p: any) => s + sumExpenses(p.expenses), 0)
 
-    // Infer defaults if not provided
-    const inferredState = state || projects[0]?.state || null
+    // Infer defaults if not provided (inferredState already set above for access check)
     const inferredErrName = err_name || projects[0]?.emergency_rooms?.[0]?.name || projects[0]?.emergency_rooms?.[0]?.name_ar || `${inferredState || ''} Emergency Room`
     let inferredPartner = partner_name || 'Localization Hub'
 

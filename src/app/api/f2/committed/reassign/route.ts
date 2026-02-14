@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { requirePermission } from '@/lib/requirePermission'
+import { userCanAccessAllStates } from '@/lib/userStateAccess'
 
 export async function POST(request: Request) {
   try {
@@ -31,6 +32,10 @@ export async function POST(request: Request) {
     if (fetchError) throw fetchError
     if (!f1s || f1s.length === 0) {
       return NextResponse.json({ error: 'F1s not found or not committed' }, { status: 400 })
+    }
+    const canAccess = await userCanAccessAllStates(f1s.map((f: any) => f.state))
+    if (!canAccess) {
+      return NextResponse.json({ error: 'You do not have access to one or more projects in the selected states' }, { status: 403 })
     }
     
     // Get grant from grants_grid_view

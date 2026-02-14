@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
-import { getUserStateAccess } from '@/lib/userStateAccess'
+import { getUserStateAccess, userCanAccessState } from '@/lib/userStateAccess'
 import { requirePermission } from '@/lib/requirePermission'
 
 export async function GET(
@@ -17,6 +17,10 @@ export async function GET(
       .eq('id', id)
       .single()
     if (mouErr) throw mouErr
+    const canAccess = await userCanAccessState((mou as any)?.state)
+    if (!canAccess) {
+      return NextResponse.json({ error: 'You do not have access to this MOU' }, { status: 403 })
+    }
 
     // Load linked projects to pull banking/contact fields; prefer ones with rich details
     const { data: projects, error: projErr } = await supabase
@@ -117,6 +121,19 @@ export async function PATCH(
     const supabase = getSupabaseRouteClient()
     const id = params.id
     const body = await request.json()
+
+    const { data: existingMou, error: fetchErr } = await supabase
+      .from('mous')
+      .select('id, state')
+      .eq('id', id)
+      .single()
+    if (fetchErr || !existingMou) {
+      return NextResponse.json({ error: 'MOU not found' }, { status: 404 })
+    }
+    const canAccess = await userCanAccessState((existingMou as any).state)
+    if (!canAccess) {
+      return NextResponse.json({ error: 'You do not have access to this MOU' }, { status: 403 })
+    }
 
     // Only allow updating specific editable fields
     const allowedFields = [

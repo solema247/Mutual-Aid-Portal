@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
-import { getUserStateAccess } from '@/lib/userStateAccess'
+import { getUserStateAccess, userCanAccessState } from '@/lib/userStateAccess'
 import { requirePermission } from '@/lib/requirePermission'
 
 // GET /api/f2/uncommitted - Get all uncommitted F1s
@@ -85,6 +85,19 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: 'F1 ID is required' }, { status: 400 })
     }
 
+    const { data: project, error: fetchErr } = await supabase
+      .from('err_projects')
+      .select('state')
+      .eq('id', id)
+      .single()
+    if (fetchErr || !project) {
+      return NextResponse.json({ error: 'Project not found' }, { status: 404 })
+    }
+    const canAccess = await userCanAccessState(project.state)
+    if (!canAccess) {
+      return NextResponse.json({ error: 'You do not have access to this project in this state' }, { status: 403 })
+    }
+
     const updateData: any = {}
     if (expenses !== undefined) updateData.expenses = expenses
     if (grant_call_id !== undefined) updateData.grant_call_id = grant_call_id
@@ -150,10 +163,10 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ error: 'F1 ID is required' }, { status: 400 })
     }
 
-    // First, fetch the project to get file keys for cleanup
+    // First, fetch the project to get file keys and state for access check
     const { data: project, error: fetchError } = await supabase
       .from('err_projects')
-      .select('temp_file_key, approval_file_key, status, funding_status')
+      .select('temp_file_key, approval_file_key, status, funding_status, state')
       .eq('id', id)
       .single()
 
@@ -161,6 +174,11 @@ export async function DELETE(request: Request) {
 
     if (!project) {
       return NextResponse.json({ error: 'Project not found' }, { status: 404 })
+    }
+
+    const canAccess = await userCanAccessState((project as any).state)
+    if (!canAccess) {
+      return NextResponse.json({ error: 'You do not have access to this project in this state' }, { status: 403 })
     }
 
     // Only allow deletion of uncommitted (pending status) projects

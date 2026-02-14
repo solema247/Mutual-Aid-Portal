@@ -81,3 +81,27 @@ export async function getUserStateAccess(): Promise<{
   }
 }
 
+/**
+ * Check if the current user is allowed to access a given state (for create/update/delete checks).
+ * @param stateName - State name to check (e.g. from project or MOU)
+ * @returns true if user can access (can see all states, or state is in their visible list)
+ */
+export async function userCanAccessState(stateName: string | null | undefined): Promise<boolean> {
+  if (stateName == null || stateName === '') return true
+  const { allowedStateNames } = await getUserStateAccess()
+  if (allowedStateNames === null) return true // can see all states
+  if (allowedStateNames.length === 0) return false // restricted but no states assigned
+  return allowedStateNames.includes(stateName)
+}
+
+/**
+ * Check if the current user is allowed to access all of the given state names.
+ */
+export async function userCanAccessAllStates(stateNames: (string | null | undefined)[]): Promise<boolean> {
+  const { allowedStateNames } = await getUserStateAccess()
+  if (allowedStateNames === null) return true
+  if (allowedStateNames.length === 0) return stateNames.length === 0
+  const names = stateNames.filter((s): s is string => s != null && s !== '')
+  return names.length > 0 && names.every((s) => allowedStateNames.includes(s))
+}
+
