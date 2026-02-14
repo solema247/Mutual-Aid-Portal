@@ -39,7 +39,7 @@ export async function requirePermission(
 
   if (!can(permUser, functionCode)) {
     return NextResponse.json(
-      { error: 'Forbidden - You do not have permission for this action' },
+      { error: 'Forbidden - You do not have permission for this action', code: 'PERMISSION_DENIED', functionCode },
       { status: 403 }
     )
   }

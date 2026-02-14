@@ -7,6 +7,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
 import { Plus, Trash2, Pencil, Building2, ChevronDown, ChevronUp } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
+import { useAllowedFunctions } from '@/hooks/useAllowedFunctions'
 
 import {
   Card,
@@ -93,6 +94,7 @@ interface User {
 
 export default function GrantCallsManager() {
   const { t } = useTranslation(['err', 'common'])
+  const { can } = useAllowedFunctions()
   const [donors, setDonors] = useState<Donor[]>([])
   const [grants, setGrants] = useState<GrantCall[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -377,12 +379,14 @@ export default function GrantCallsManager() {
                 <SelectItem value="Complete">Complete</SelectItem>
               </SelectContent>
             </Select>
-            {(currentUser?.role === 'admin' || currentUser?.role === 'superadmin') && (
+            {(can('grant_edit_call') || can('grant_create_call') || can('grant_delete_call')) && (
               <>
                 {!isEditMode ? (
                   <Button 
                     className="bg-[#007229] hover:bg-[#007229]/90 text-white"
                     onClick={() => setIsEditMode(true)}
+                    disabled={!can('grant_edit_call')}
+                    title={!can('grant_edit_call') ? t('common:no_permission') : undefined}
                   >
                     Edit Grant Call Table
                   </Button>
@@ -402,7 +406,7 @@ export default function GrantCallsManager() {
                       }
                     }}>
                       <DialogTrigger asChild>
-                        <Button className="bg-[#007229] hover:bg-[#007229]/90 text-white">
+                        <Button className="bg-[#007229] hover:bg-[#007229]/90 text-white" disabled={!can('grant_create_call')} title={!can('grant_create_call') ? t('common:no_permission') : undefined}>
                           <Plus className="h-4 w-4 mr-2" />
                           Create Grant
                         </Button>
@@ -667,12 +671,14 @@ export default function GrantCallsManager() {
                     </TableCell>
                     <TableCell>{formatDate(grant.grant_start_date)}</TableCell>
                     <TableCell>{formatDate(grant.grant_end_date)}</TableCell>
-                    {(currentUser?.role === 'admin' || currentUser?.role === 'superadmin') && isEditMode && (
+                    {(can('grant_edit_call') || can('grant_delete_call')) && isEditMode && (
                       <TableCell>
                         <div className="flex items-center gap-2">
                           <Button
                             variant="ghost"
                             size="icon"
+                            disabled={!can('grant_edit_call')}
+                            title={!can('grant_edit_call') ? t('common:no_permission') : undefined}
                             onClick={() => {
                               handleEdit(grant)
                               setIsFormOpen(true)
@@ -684,6 +690,8 @@ export default function GrantCallsManager() {
                           <Button
                             variant="ghost"
                             size="icon"
+                            disabled={!can('grant_delete_call')}
+                            title={!can('grant_delete_call') ? t('common:no_permission') : undefined}
                             onClick={() => handleDeleteClick(grant.id)}
                             className="h-8 w-8 text-destructive hover:text-destructive/80"
                           >

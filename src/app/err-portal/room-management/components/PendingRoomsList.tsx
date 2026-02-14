@@ -5,6 +5,7 @@ import { useState } from 'react'
 import { PendingRoomListItem } from '@/app/api/rooms/types/rooms'
 import { approveRoom, declineRoom } from '@/app/api/rooms/utils/rooms'
 import { useRouter } from 'next/navigation'
+import { useAllowedFunctions } from '@/hooks/useAllowedFunctions'
 
 interface PendingRoomsListProps {
   rooms: PendingRoomListItem[]
@@ -13,7 +14,8 @@ interface PendingRoomsListProps {
 }
 
 export default function PendingRoomsList({ rooms, isLoading, onUpdate }: PendingRoomsListProps) {
-  const { t, i18n } = useTranslation(['rooms'])
+  const { t, i18n } = useTranslation(['rooms', 'common'])
+  const { can } = useAllowedFunctions()
   const [processingId, setProcessingId] = useState<string | null>(null)
 
   const handleApprove = async (roomId: string) => {
@@ -69,20 +71,22 @@ export default function PendingRoomsList({ rooms, isLoading, onUpdate }: Pending
             <div className="flex gap-2">
               <button 
                 className="text-green-600 hover:text-green-800 disabled:opacity-50"
-                title={t('rooms:accept')}
+                title={!can('rooms_approve') ? t('common:no_permission') : t('rooms:accept')}
                 onClick={() => handleApprove(room.id)}
-                disabled={processingId === room.id}
+                disabled={processingId === room.id || !can('rooms_approve')}
               >
                 {processingId === room.id ? '...' : '✓'}
               </button>
-              <button 
-                className="text-red-600 hover:text-red-800 disabled:opacity-50"
-                title={t('rooms:decline')}
-                onClick={() => handleDecline(room.id)}
-                disabled={processingId === room.id}
-              >
-                {processingId === room.id ? '...' : '✕'}
-              </button>
+              {can('rooms_decline') && (
+                <button 
+                  className="text-red-600 hover:text-red-800 disabled:opacity-50"
+                  title={t('rooms:decline')}
+                  onClick={() => handleDecline(room.id)}
+                  disabled={processingId === room.id}
+                >
+                  {processingId === room.id ? '...' : '✕'}
+                </button>
+              )}
             </div>
           </div>
         ))}

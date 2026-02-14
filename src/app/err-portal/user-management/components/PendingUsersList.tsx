@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { useState } from 'react'
 import { PendingUserListItem } from '@/app/api/users/types/users'
 import { approveUser, declineUser } from '@/app/api/users/utils/users'
+import { useAllowedFunctions } from '@/hooks/useAllowedFunctions'
 
 interface PendingUsersListProps {
   users: PendingUserListItem[]
@@ -13,19 +14,10 @@ interface PendingUsersListProps {
 }
 
 export default function PendingUsersList({ users, isLoading, onUpdate, currentUserRole }: PendingUsersListProps) {
-  const { t } = useTranslation(['users'])
+  const { t } = useTranslation(['users', 'common'])
+  const { can } = useAllowedFunctions()
   const [processingId, setProcessingId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-
-  const canApprove = (userRole: string) => {
-    // Everyone can approve (except superadmin which is filtered out)
-    return true
-  }
-
-  const canDecline = (userRole: string) => {
-    // Only superadmin and admin can decline
-    return currentUserRole === 'superadmin' || currentUserRole === 'admin'
-  }
 
   const handleApprove = async (userId: string, userRole: string) => {
     try {
@@ -92,13 +84,13 @@ export default function PendingUsersList({ users, isLoading, onUpdate, currentUs
             <div className="flex gap-2">
               <button 
                 className="text-green-600 hover:text-green-800 disabled:opacity-50"
-                title={t('users:approve')}
+                title={!can('users_approve') ? t('common:no_permission') : t('users:approve')}
                 onClick={() => handleApprove(user.id, user.role)}
-                disabled={processingId === user.id || !canApprove(user.role)}
+                disabled={processingId === user.id || !can('users_approve')}
               >
                 {processingId === user.id ? '...' : '✓'}
               </button>
-              {canDecline(user.role) && (
+              {can('users_decline') && (
                 <button 
                   className="text-red-600 hover:text-red-800 disabled:opacity-50"
                   title={t('users:decline')}

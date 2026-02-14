@@ -1,8 +1,11 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
+import { requirePermission } from '@/lib/requirePermission'
 
 export async function POST(request: Request) {
   try {
+    const auth = await requirePermission('f5_upload')
+    if (auth instanceof NextResponse) return auth
     const supabase = getSupabaseRouteClient()
     const { project_id, file_key_temp } = await request.json()
     if (!project_id || !file_key_temp) return NextResponse.json({ error: 'project_id and file_key_temp required' }, { status: 400 })

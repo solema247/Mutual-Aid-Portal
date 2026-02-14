@@ -44,10 +44,25 @@ function getOverrides(): UserOverridesMap {
   try {
     const fs = require('fs') as typeof import('fs')
     const path = require('path') as typeof import('path')
-    const p = path.join(process.cwd(), 'src', 'data', 'userOverrides.json')
-    const raw = fs.readFileSync(p, 'utf-8')
-    return JSON.parse(raw) as UserOverridesMap
-  } catch {
+    const cwd = process.cwd()
+    const candidates = [
+      path.join(cwd, 'src', 'data', 'userOverrides.json'),
+      path.join(cwd, 'data', 'userOverrides.json'),
+    ]
+    for (const p of candidates) {
+      if (fs.existsSync(p)) {
+        const raw = fs.readFileSync(p, 'utf-8')
+        return JSON.parse(raw) as UserOverridesMap
+      }
+    }
+    if (process.env.NODE_ENV === 'development') {
+      console.warn('[permissions] userOverrides.json not found at', candidates.join(' or '), '- using static import (changes may need restart)')
+    }
+    return staticOverrides
+  } catch (e) {
+    if (process.env.NODE_ENV === 'development') {
+      console.warn('[permissions] Failed to read userOverrides.json:', e)
+    }
     return staticOverrides
   }
 }

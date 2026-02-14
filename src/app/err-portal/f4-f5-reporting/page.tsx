@@ -69,6 +69,25 @@ function F4F5ReportingPageContent() {
   const [uploadF5Open, setUploadF5Open] = useState(false)
   const [viewF5Id, setViewF5Id] = useState<string | null>(null)
   const [viewF5Open, setViewF5Open] = useState(false)
+  const [allowedFunctions, setAllowedFunctions] = useState<string[]>([])
+
+  useEffect(() => {
+    const fetchMe = async () => {
+      try {
+        const res = await fetch('/api/users/me')
+        if (res.ok) {
+          const data = await res.json()
+          setAllowedFunctions(data.allowed_functions || [])
+        }
+      } catch (e) {
+        console.error(e)
+      }
+    }
+    fetchMe()
+  }, [])
+
+  const canUploadF4 = allowedFunctions.length === 0 || allowedFunctions.includes('f4_upload')
+  const canUploadF5 = allowedFunctions.length === 0 || allowedFunctions.includes('f5_upload')
 
   const load = async () => {
     try {
@@ -134,7 +153,7 @@ function F4F5ReportingPageContent() {
         <TabsContent value="f4" className="mt-4 space-y-4">
           <div className="flex items-center justify-between">
             <div className="text-lg font-semibold">{t('f4.title')}</div>
-            <Button className="bg-green-700 hover:bg-green-800 text-white font-bold" onClick={() => { try { window.localStorage.removeItem('err_minimized_modal'); window.localStorage.removeItem('err_minimized_payload'); window.localStorage.removeItem('err_restore'); window.dispatchEvent(new CustomEvent('err_minimized_modal_change')) } catch {}; setUploadOpen(true) }}>{t('f4.upload')}</Button>
+            <Button className="bg-green-700 hover:bg-green-800 text-white font-bold" disabled={!canUploadF4} title={!canUploadF4 ? (t('f4f5:no_permission') || 'You do not have permission to upload F4') : undefined} onClick={() => { try { window.localStorage.removeItem('err_minimized_modal'); window.localStorage.removeItem('err_minimized_payload'); window.localStorage.removeItem('err_restore'); window.dispatchEvent(new CustomEvent('err_minimized_modal_change')) } catch {}; setUploadOpen(true) }}>{t('f4.upload')}</Button>
           </div>
 
           <div className="flex flex-wrap md:flex-nowrap gap-2 items-center">
@@ -240,7 +259,7 @@ function F4F5ReportingPageContent() {
         <TabsContent value="f5" className="mt-4 space-y-4">
           <div className="flex items-center justify-between">
             <div className="text-lg font-semibold">{t('f5.title')}</div>
-            <Button className="bg-green-700 hover:bg-green-800 text-white font-bold" onClick={() => { try { window.localStorage.removeItem('err_minimized_modal'); window.localStorage.removeItem('err_minimized_payload'); window.localStorage.removeItem('err_restore'); window.dispatchEvent(new CustomEvent('err_minimized_modal_change')) } catch {}; setUploadF5Open(true) }}>{t('f5.upload')}</Button>
+            <Button className="bg-green-700 hover:bg-green-800 text-white font-bold" disabled={!canUploadF5} title={!canUploadF5 ? (t('f4f5:no_permission') || 'You do not have permission to upload F5') : undefined} onClick={() => { try { window.localStorage.removeItem('err_minimized_modal'); window.localStorage.removeItem('err_minimized_payload'); window.localStorage.removeItem('err_restore'); window.dispatchEvent(new CustomEvent('err_minimized_modal_change')) } catch {}; setUploadF5Open(true) }}>{t('f5.upload')}</Button>
           </div>
 
           <div className="flex flex-wrap md:flex-nowrap gap-2 items-center">

@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { supabase } from '@/lib/supabaseClient'
+import { useAllowedFunctions } from '@/hooks/useAllowedFunctions'
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '@/components/ui/table'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { CollapsibleRow } from '@/components/ui/collapsible'
@@ -22,6 +23,7 @@ interface UploadF4ModalProps {
 
 export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProjectId }: UploadF4ModalProps) {
   const { t } = useTranslation(['f4f5'])
+  const { can } = useAllowedFunctions()
   
   // Style object to ensure text is selectable in inputs with visible selection
   const selectableInputStyle: React.CSSProperties = {
@@ -517,7 +519,8 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
       setStep('preview')
     } catch (e) {
       console.error(e)
-      alert('Failed to process file')
+      const msg = e instanceof Error ? e.message : 'Failed to process file'
+      alert(msg)
     } finally {
       setIsLoading(false)
     }
@@ -1120,7 +1123,7 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
 
             <div className="flex justify-between">
               <Button variant="outline" onClick={()=>setStep('select')} disabled={!!initialProjectId}>{t('f4.preview.buttons.back')}</Button>
-              <Button onClick={handleSave} disabled={isLoading || isRestoring}>{isLoading ? t('f4.preview.buttons.saving') : t('f4.preview.buttons.save')}</Button>
+              <Button onClick={handleSave} disabled={isLoading || isRestoring || !can('f4_save')} title={!can('f4_save') ? t('no_permission') : undefined}>{isLoading ? t('f4.preview.buttons.saving') : t('f4.preview.buttons.save')}</Button>
             </div>
             </div>
 

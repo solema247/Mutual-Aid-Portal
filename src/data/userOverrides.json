@@ -3,18 +3,15 @@
     "add": [],
     "remove": [
       "f5_upload",
+      "f3_edit_mou",
       "f4_upload"
     ]
   },
   "62e2b429-a4b7-4991-8351-5234cdd287df": {
     "add": [],
     "remove": [
-      "f4_upload",
-      "f4_save",
-      "f5_upload",
-      "f5_adjust",
-      "f5_save",
-      "f2_remove_from_mou"
+      "f2_remove_from_mou",
+      "f3_edit_mou"
     ]
   }
 }

@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Plus, Save, Trash2, MapPin, Pencil, X, ChevronDown, ChevronUp } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useAllowedFunctions } from '@/hooks/useAllowedFunctions'
 
 import {
   Card,
@@ -53,6 +54,7 @@ interface StateAllocationManagerProps {
 
 export default function StateAllocationManager({ cycleId, cycle, refreshToken, onAllocationsChanged }: StateAllocationManagerProps) {
   const { t } = useTranslation(['err', 'common'])
+  const { can } = useAllowedFunctions()
   const [states, setStates] = useState<State[]>([])
   const [allocations, setAllocations] = useState<CycleStateAllocation[]>([])
   const [activeTranche, setActiveTranche] = useState<number>(1)
@@ -787,7 +789,8 @@ export default function StateAllocationManager({ cycleId, cycle, refreshToken, o
               onClick={handleAddState}
               variant="outline"
               size="sm"
-              disabled={!trancheStatus?.isOpen || trancheStatus?.isAllocated}
+              disabled={!trancheStatus?.isOpen || trancheStatus?.isAllocated || !can('grant_add_state')}
+              title={!can('grant_add_state') ? t('common:no_permission') : undefined}
             >
               <Plus className="h-4 w-4 mr-2" />
               {!trancheStatus?.isOpen ? 'Tranche Closed' : trancheStatus?.isAllocated ? 'Tranche Full' : t('err:cycles.alloc.add_state')}
@@ -795,7 +798,8 @@ export default function StateAllocationManager({ cycleId, cycle, refreshToken, o
             {newAllocations.length > 0 && (
               <Button
                 onClick={handleSaveAllocations}
-                disabled={isSubmitting}
+                disabled={isSubmitting || !can('grant_save_allocations')}
+                title={!can('grant_save_allocations') ? t('common:no_permission') : undefined}
                 className="bg-[#007229] hover:bg-[#007229]/90 text-white"
                 size="sm"
               >
@@ -814,6 +818,8 @@ export default function StateAllocationManager({ cycleId, cycle, refreshToken, o
             onClick={handleAddState}
             variant="outline"
             size="sm"
+            disabled={!can('grant_add_state')}
+            title={!can('grant_add_state') ? t('common:no_permission') : undefined}
           >
             <Plus className="h-4 w-4 mr-2" />
             {t('err:cycles.alloc.add_state')}
@@ -821,7 +827,8 @@ export default function StateAllocationManager({ cycleId, cycle, refreshToken, o
           {newAllocations.length > 0 && (
             <Button
               onClick={handleSaveAllocations}
-              disabled={isSubmitting}
+              disabled={isSubmitting || !can('grant_save_allocations')}
+              title={!can('grant_save_allocations') ? t('common:no_permission') : undefined}
               className="bg-[#007229] hover:bg-[#007229]/90 text-white"
               size="sm"
             >
@@ -1048,7 +1055,8 @@ export default function StateAllocationManager({ cycleId, cycle, refreshToken, o
                                 variant="ghost"
                                 size="icon"
                                 onClick={() => handleEditAllocation(allocation.id, allocation.amount)}
-                                disabled={isSubmitting}
+                                disabled={isSubmitting || !can('grant_edit_state_allocation')}
+                                title={!can('grant_edit_state_allocation') ? t('common:no_permission') : undefined}
                                 className="h-8 w-8 text-blue-600 hover:text-blue-700"
                               >
                                 <Pencil className="h-4 w-4" />
@@ -1057,9 +1065,9 @@ export default function StateAllocationManager({ cycleId, cycle, refreshToken, o
                                 variant="ghost"
                                 size="icon"
                                 onClick={() => handleDeleteAllocation(allocation.id, allocation.state_name)}
-                                disabled={isSubmitting || (allocation.total_committed || 0) > 0}
+                                disabled={isSubmitting || (allocation.total_committed || 0) > 0 || !can('grant_delete_state_allocation')}
+                                title={!can('grant_delete_state_allocation') ? t('common:no_permission') : ((allocation.total_committed || 0) > 0 ? t('err:cycles.alloc.cannot_delete_committed') : t('err:cycles.alloc.delete_allocation'))}
                                 className="h-8 w-8 text-destructive hover:text-destructive/80"
-                                title={(allocation.total_committed || 0) > 0 ? t('err:cycles.alloc.cannot_delete_committed') : t('err:cycles.alloc.delete_allocation')}
                               >
                                 <Trash2 className="h-4 w-4" />
                               </Button>

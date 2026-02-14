@@ -14,6 +14,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Badge } from '@/components/ui/badge'
 import { supabase } from '@/lib/supabaseClient'
 import { cn } from '@/lib/utils'
+import { useAllowedFunctions } from '@/hooks/useAllowedFunctions'
 import { Edit2, Save, X, Trash2 } from 'lucide-react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import ProjectEditor from './ProjectEditor'
@@ -21,6 +22,7 @@ import type { UncommittedF1, GrantCallOption } from '../types'
 
 export default function UncommittedF1sTab() {
   const { t, i18n } = useTranslation(['f2', 'common'])
+  const { can } = useAllowedFunctions()
   const searchParams = useSearchParams()
   const [f1s, setF1s] = useState<UncommittedF1[]>([])
   const [grantCalls, setGrantCalls] = useState<GrantCallOption[]>([])
@@ -238,8 +240,9 @@ export default function UncommittedF1sTab() {
         <div className="flex gap-2">
           <Button
             onClick={handleCommitSelected}
-            disabled={selectedF1s.length === 0 || isCommitting}
+            disabled={selectedF1s.length === 0 || isCommitting || !can('f2_commit')}
             className="bg-green-600 hover:bg-green-700"
+            title={!can('f2_commit') ? t('common:no_permission') : undefined}
           >
             {isCommitting ? t('f2:committing') : t('f2:commit_selected', { count: selectedF1s.length })}
           </Button>
@@ -321,6 +324,8 @@ export default function UncommittedF1sTab() {
                           <Button
                             size="sm"
                             onClick={() => handleSaveExpenses(f1.id)}
+                            disabled={!can('f2_save_expenses')}
+                            title={!can('f2_save_expenses') ? t('common:no_permission') : undefined}
                           >
                             <Save className="w-3 h-3" />
                           </Button>
@@ -397,7 +402,8 @@ export default function UncommittedF1sTab() {
                         size="sm"
                         variant="outline"
                         onClick={() => handleDeleteClick(f1.id)}
-                        title={t('f2:delete_project') as string}
+                        disabled={!can('f1_delete')}
+                        title={!can('f1_delete') ? t('common:no_permission') : (t('f2:delete_project') as string)}
                         className="text-red-600 hover:text-red-700 hover:bg-red-50"
                       >
                         <Trash2 className="w-4 h-4" />

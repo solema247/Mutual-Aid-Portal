@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ChevronRight, ChevronDown, Plus, Trash2, Pencil, DollarSign, Building2, MapPin, RefreshCw } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useAllowedFunctions } from '@/hooks/useAllowedFunctions'
 
 import {
   Table,
@@ -70,6 +71,7 @@ export default function CycleDetailsTable({
   onAllocationsChanged
 }: CycleDetailsTableProps) {
   const { t } = useTranslation(['err', 'common'])
+  const { can } = useAllowedFunctions()
   const [isExpanded, setIsExpanded] = useState(false)
   const [isGrantBudgetExpanded, setIsGrantBudgetExpanded] = useState(false)
   const [isStatesExpanded, setIsStatesExpanded] = useState(false)
@@ -435,13 +437,15 @@ export default function CycleDetailsTable({
                       <RefreshCw className={cn("h-4 w-4", isRefreshingBudget && "animate-spin")} />
                     </Button>
                   )}
-                  {includedGrants.length === 0 && (
+                  {includedGrants.length === 0 && can('grant_add_grant') && (
                     <Dialog open={isAddGrantOpen} onOpenChange={setIsAddGrantOpen}>
                       <DialogTrigger asChild>
                         <Button 
                           size="sm" 
                           className="bg-[#007229] hover:bg-[#007229]/90 text-white"
                           onClick={(e) => e.stopPropagation()}
+                          disabled={!can('grant_add_grant')}
+                          title={!can('grant_add_grant') ? t('common:no_permission') : undefined}
                         >
                           <Plus className="h-4 w-4 mr-2" />
                           Add Grant
@@ -489,8 +493,9 @@ export default function CycleDetailsTable({
                             </Button>
                             <Button 
                               onClick={handleAddGrant}
-                              disabled={!selectedGrant || !amountIncluded}
+                              disabled={!selectedGrant || !amountIncluded || !can('grant_add_grant')}
                               className="bg-[#007229] hover:bg-[#007229]/90 text-white"
+                              title={!can('grant_add_grant') ? t('common:no_permission') : undefined}
                             >
                               Add
                             </Button>
@@ -519,6 +524,8 @@ export default function CycleDetailsTable({
                         <Button
                           variant="ghost"
                           size="icon"
+                          disabled={!can('grant_remove_grant')}
+                          title={!can('grant_remove_grant') ? t('common:no_permission') : undefined}
                           onClick={(e) => {
                             e.stopPropagation()
                             handleRemoveGrant(includedGrants[0]?.grant_calls?.id || '')
@@ -589,12 +596,15 @@ export default function CycleDetailsTable({
                     {allocations.length} states • {formatCurrency(getTotalAllocated())}
                   </Badge>
                 </div>
+                {can('grant_add_state') && (
                 <Dialog open={isAddStateOpen} onOpenChange={setIsAddStateOpen}>
                   <DialogTrigger asChild>
                     <Button 
                       size="sm" 
                       className="bg-[#007229] hover:bg-[#007229]/90 text-white"
                       onClick={(e) => e.stopPropagation()}
+                      disabled={!can('grant_add_state')}
+                      title={!can('grant_add_state') ? t('common:no_permission') : undefined}
                     >
                       <Plus className="h-4 w-4 mr-2" />
                       Add State
@@ -651,6 +661,8 @@ export default function CycleDetailsTable({
                         </Button>
                         <Button 
                           onClick={handleSaveAllocations}
+                          disabled={!can('grant_save_allocations')}
+                          title={!can('grant_save_allocations') ? t('common:no_permission') : undefined}
                           className="bg-[#007229] hover:bg-[#007229]/90 text-white"
                         >
                           Save
@@ -659,6 +671,7 @@ export default function CycleDetailsTable({
                     </div>
                   </DialogContent>
                 </Dialog>
+                )}
               </div>
               
               {isStatesExpanded && (
@@ -724,6 +737,8 @@ export default function CycleDetailsTable({
                                       <Button
                                         variant="ghost"
                                         size="icon"
+                                        disabled={!can('grant_edit_state_allocation')}
+                                        title={!can('grant_edit_state_allocation') ? t('common:no_permission') : undefined}
                                         onClick={(e) => {
                                           e.stopPropagation()
                                           handleEditAllocation(allocation.id, allocation.amount)
@@ -735,6 +750,8 @@ export default function CycleDetailsTable({
                                       <Button
                                         variant="ghost"
                                         size="icon"
+                                        disabled={!can('grant_delete_state_allocation')}
+                                        title={!can('grant_delete_state_allocation') ? t('common:no_permission') : undefined}
                                         onClick={(e) => {
                                           e.stopPropagation()
                                           handleDeleteAllocation(allocation.id, allocation.state_name)

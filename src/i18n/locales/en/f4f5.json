@@ -3,6 +3,7 @@
     "f4": "F4 Financial",
     "f5": "F5 Program"
   },
+  "no_permission": "You do not have permission to upload",
   "f4": {
     "title": "F4 Financial Reports",
     "upload": "Upload F4",

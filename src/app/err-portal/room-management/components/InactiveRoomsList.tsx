@@ -12,6 +12,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { RoomWithState } from '@/app/api/rooms/types/rooms'
 import { getInactiveRooms, deleteRoom } from '@/app/api/rooms/utils/rooms'
+import { useAllowedFunctions } from '@/hooks/useAllowedFunctions'
 import { Trash2 } from 'lucide-react'
 
 const PAGE_SIZE = 50
@@ -27,7 +28,8 @@ export default function InactiveRoomsList({
   userRole = '',
   userErrId = null
 }: InactiveRoomsListProps) {
-  const { t, i18n } = useTranslation(['rooms'])
+  const { t, i18n } = useTranslation(['rooms', 'common'])
+  const { can } = useAllowedFunctions()
   const [rooms, setRooms] = useState<RoomWithState[]>([])
   const [isLoading, setIsLoading] = useState(initialLoading)
   const [error, setError] = useState<string | null>(null)
@@ -254,8 +256,8 @@ export default function InactiveRoomsList({
                       variant="outline"
                       size="sm"
                       onClick={() => handleDelete(room.id)}
-                      disabled={processingId === room.id}
-                      title={t('rooms:delete')}
+                      disabled={processingId === room.id || !can('rooms_delete')}
+                      title={!can('rooms_delete') ? t('common:no_permission') : t('rooms:delete')}
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>

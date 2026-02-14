@@ -16,6 +16,7 @@ import dynamic from 'next/dynamic'
 import { aggregateObjectives, aggregateBeneficiaries, aggregatePlannedActivities, aggregatePlannedActivitiesDetailed, aggregateLocations, getBankingDetails, getBudgetTable, getBudgetTableData, formatProjectPlannedActivities, formatProjectSummary } from '@/lib/mou-aggregation'
 import HierarchicalBudgetTable from './components/HierarchicalBudgetTable'
 import { supabase } from '@/lib/supabaseClient'
+import { useAllowedFunctions } from '@/hooks/useAllowedFunctions'
 import PoolByDonor from '@/app/err-portal/f2-approvals/components/PoolByDonor'
 
 interface Signature {
@@ -100,6 +101,7 @@ interface MOUDetail {
 
 export default function F3MOUsPage() {
   const { t, i18n } = useTranslation(['f3', 'common'])
+  const { can } = useAllowedFunctions()
   const [mous, setMous] = useState<MOU[]>([])
   const [mouGrantIds, setMouGrantIds] = useState<Record<string, string>>({})
   const [mouProjectCounts, setMouProjectCounts] = useState<Record<string, number>>({})
@@ -1035,7 +1037,7 @@ export default function F3MOUsPage() {
                     <TableCell>{new Date(m.created_at).toLocaleDateString()}</TableCell>
                     <TableCell className="align-top">
                       <div className="flex items-start gap-3">
-                        {mouAssignmentStatus[m.id]?.hasUnassigned && (currentUser?.role === 'admin' || currentUser?.role === 'superadmin') && (
+                        {mouAssignmentStatus[m.id]?.hasUnassigned && can('f3_assign_mou') && (
                           <div className="flex flex-col items-center gap-0.5 min-w-[50px]">
                             <Button
                               variant="ghost"
@@ -1049,7 +1051,7 @@ export default function F3MOUsPage() {
                             <span className="text-[10px] text-muted-foreground text-center leading-tight">Assign</span>
                           </div>
                         )}
-                        {mouAssignmentStatus[m.id]?.hasAssigned && (currentUser?.role === 'admin' || currentUser?.role === 'superadmin') && (
+                        {mouAssignmentStatus[m.id]?.hasAssigned && can('f3_reassign_mou') && (
                           <div className="flex flex-col items-center gap-0.5 min-w-[50px]">
                             <Button
                               variant="ghost"
@@ -1147,7 +1149,8 @@ export default function F3MOUsPage() {
                             size="icon"
                             className="h-8 w-8"
                             onClick={() => openPaymentModal(m)}
-                            title={(() => {
+                            disabled={!can('f3_upload_payment')}
+                            title={!can('f3_upload_payment') ? t('common:no_permission') : (() => {
                               const projectCount = mouProjectCounts[m.id] || 0
                               const paymentCount = getPaymentConfirmationCount(m, projectCount)
                               return paymentCount.confirmed > 0 ? t('f3:view_payment') : t('f3:add_payment')
@@ -1219,50 +1222,45 @@ export default function F3MOUsPage() {
                             variant="ghost"
                             size="icon"
                             className="h-8 w-8"
+                            disabled={!can('f3_upload_signed')}
                             onClick={m.signed_mou_file_key ? async () => {
-                            try {
-                              // First get the signed URL
-                              const response = await fetch(`/api/storage/signed-url?path=${encodeURIComponent(m.signed_mou_file_key || '')}`)
-                              if (!response.ok) {
-                                throw new Error('Failed to get signed URL')
+                              try {
+                                const response = await fetch(`/api/storage/signed-url?path=${encodeURIComponent(m.signed_mou_file_key || '')}`)
+                                if (!response.ok) throw new Error('Failed to get signed URL')
+                                const { url, error } = await response.json()
+                                if (error || !url) throw new Error(error || 'No URL returned')
+                                const link = document.createElement('a')
+                                link.href = url
+                                link.target = '_blank'
+                                link.rel = 'noopener noreferrer'
+                                document.body.appendChild(link)
+                                link.click()
+                                document.body.removeChild(link)
+                              } catch (error) {
+                                console.error('Error getting signed URL:', error)
+                                alert('Failed to open signed MOU')
                               }
-                              const { url, error } = await response.json()
-                              if (error || !url) {
-                                throw new Error(error || 'No URL returned')
-                              }
-
-                              // Create a link and click it
-                              const link = document.createElement('a')
-                              link.href = url
-                              link.target = '_blank'
-                              link.rel = 'noopener noreferrer'
-                              document.body.appendChild(link)
-                              link.click()
-                              document.body.removeChild(link)
-                            } catch (error) {
-                              console.error('Error getting signed URL:', error)
-                              alert('Failed to open signed MOU')
-                            }
-                          } : () => {
-                            document.getElementById(`signed-mou-upload-${m.id}`)?.click()
-                          }}
-                          title={m.signed_mou_file_key ? 'View Signed MOU' : 'Upload Signed MOU'}
-                        >
-                          {m.signed_mou_file_key ? (
-                            <FileCheck className="h-4 w-4 text-green-600" />
-                          ) : (
-                            <FileSignature className="h-4 w-4 text-amber-600" />
-                          )}
-                        </Button>
-                        <span className="text-[10px] text-muted-foreground text-center leading-tight whitespace-nowrap">{m.signed_mou_file_key ? 'View MOU' : 'Upload MOU'}</span>
-                      </div>
+                            } : () => {
+                              document.getElementById(`signed-mou-upload-${m.id}`)?.click()
+                            }}
+                            title={!can('f3_upload_signed') ? t('common:no_permission') : (m.signed_mou_file_key ? 'View Signed MOU' : 'Upload Signed MOU')}
+                          >
+                            {m.signed_mou_file_key ? (
+                              <FileCheck className="h-4 w-4 text-green-600" />
+                            ) : (
+                              <FileSignature className="h-4 w-4 text-amber-600" />
+                            )}
+                          </Button>
+                          <span className="text-[10px] text-muted-foreground text-center leading-tight whitespace-nowrap">{m.signed_mou_file_key ? 'View MOU' : 'Upload MOU'}</span>
+                        </div>
                         <div className="flex flex-col items-center gap-0.5 min-w-[50px]">
                           <Button
                             variant="ghost"
                             size="icon"
                             className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50"
                             onClick={() => handleRemoveMouClick(m.id)}
-                            title={t('f3:remove_mou') || 'Remove MOU (keep F1s)'}
+                            disabled={!can('f3_remove_mou')}
+                            title={!can('f3_remove_mou') ? t('common:no_permission') : (t('f3:remove_mou') || 'Remove MOU (keep F1s)')}
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
@@ -1941,6 +1939,8 @@ export default function F3MOUsPage() {
                     <Button variant="outline" onClick={() => setPreviewOpen(false)}>Close</Button>
                     <Button
                       variant="outline"
+                      disabled={!can('f3_edit_mou')}
+                      title={!can('f3_edit_mou') ? t('common:no_permission') : undefined}
                       onClick={() => {
                         setEditMode(true)
                         // Initialize with current display values (override if exists, otherwise aggregated/fallback data)

@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '@/components/ui/table'
+import { useAllowedFunctions } from '@/hooks/useAllowedFunctions'
 import { FileText } from 'lucide-react'
 
 interface ViewF5ModalProps {
@@ -16,6 +17,7 @@ interface ViewF5ModalProps {
 }
 
 export default function ViewF5Modal({ reportId, open, onOpenChange, onSaved }: ViewF5ModalProps) {
+  const { can } = useAllowedFunctions()
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [data, setData] = useState<any | null>(null)
@@ -146,11 +148,11 @@ export default function ViewF5Modal({ reportId, open, onOpenChange, onSaved }: V
           <div className="flex items-center justify-between">
             <DialogTitle>F5 Report Details</DialogTitle>
             {!isEditing ? (
-              <Button onClick={() => setIsEditing(true)}>Edit</Button>
+              <Button onClick={() => setIsEditing(true)} disabled={!can('f5_save') && !can('f5_adjust')} title={(!can('f5_save') && !can('f5_adjust')) ? 'You do not have permission' : undefined}>Edit</Button>
             ) : (
               <div className="flex gap-2">
                 <Button variant="outline" onClick={() => setIsEditing(false)}>Cancel</Button>
-                <Button onClick={handleSave} disabled={saving}>{saving ? 'Saving...' : 'Save'}</Button>
+                <Button onClick={handleSave} disabled={saving || (!can('f5_save') && !can('f5_adjust'))} title={(!can('f5_save') && !can('f5_adjust')) ? 'You do not have permission' : undefined}>{saving ? 'Saving...' : 'Save'}</Button>
               </div>
             )}
           </div>

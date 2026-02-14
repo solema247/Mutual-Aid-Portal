@@ -5,6 +5,7 @@ import { Plus, ChevronDown, ChevronUp, RefreshCw, Upload, FileSpreadsheet, FileT
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { supabase } from '@/lib/supabaseClient'
+import { useAllowedFunctions } from '@/hooks/useAllowedFunctions'
 import Papa from 'papaparse'
 import * as XLSX from 'xlsx'
 import {
@@ -73,6 +74,7 @@ const decisionSchema = z.object({
 })
 
 export default function DistributionDecisionsManager() {
+  const { can } = useAllowedFunctions()
   const [decisions, setDecisions] = useState<Decision[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [isCreateOpen, setIsCreateOpen] = useState(false)
@@ -544,7 +546,7 @@ export default function DistributionDecisionsManager() {
             <Button variant="outline" size="icon" onClick={fetchDecisions} disabled={isLoading}>
               <RefreshCw className="h-4 w-4" />
             </Button>
-            {(currentUser?.role === 'admin' || currentUser?.role === 'superadmin') && (
+            {can('grant_create_decision') && (
               <Dialog open={isCreateOpen} onOpenChange={(open) => {
                 setIsCreateOpen(open)
                 if (!open) {
@@ -755,7 +757,8 @@ export default function DistributionDecisionsManager() {
                       <Button 
                         type="submit" 
                         className="bg-[#007229] hover:bg-[#007229]/90 text-white"
-                        disabled={useCsvUpload && !csvFile}
+                        disabled={(useCsvUpload && !csvFile) || !can('grant_create_decision')}
+                        title={!can('grant_create_decision') ? 'You do not have permission' : undefined}
                       >
                         Create
                       </Button>
@@ -827,7 +830,7 @@ export default function DistributionDecisionsManager() {
                             )}
                           </TableCell>
                           <TableCell className="text-right">
-                            {(currentUser?.role === 'admin' || currentUser?.role === 'superadmin') && (
+                            {can('grant_delete_decision') && (
                               <Button
                                 variant="ghost"
                                 size="icon"
@@ -988,6 +991,8 @@ export default function DistributionDecisionsManager() {
                                                               variant="ghost"
                                                               size="icon"
                                                               className="h-7 w-7"
+                                                              disabled={!can('grant_edit_allocation')}
+                                                              title={!can('grant_edit_allocation') ? 'You do not have permission' : undefined}
                                                               onClick={() => {
                                                                 setEditingAllocation(alloc.allocation_id)
                                                                 setEditAllocationState(alloc.state || '')
@@ -1000,6 +1005,8 @@ export default function DistributionDecisionsManager() {
                                                               variant="ghost"
                                                               size="icon"
                                                               className="h-7 w-7 text-destructive hover:text-destructive/80"
+                                                              disabled={!can('grant_delete_allocation') || isDeletingAllocation === alloc.allocation_id}
+                                                              title={!can('grant_delete_allocation') ? 'You do not have permission' : undefined}
                                                               onClick={async () => {
                                                                 if (!confirm(`Delete allocation for ${alloc.state || 'this state'}?`)) return
                                                                 setIsDeletingAllocation(alloc.allocation_id)
@@ -1019,7 +1026,6 @@ export default function DistributionDecisionsManager() {
                                                                   setIsDeletingAllocation(null)
                                                                 }
                                                               }}
-                                                              disabled={isDeletingAllocation === alloc.allocation_id}
                                                             >
                                                               <Trash2 className="h-3 w-3" />
                                                             </Button>
@@ -1128,6 +1134,8 @@ export default function DistributionDecisionsManager() {
                                         type="button"
                                         className="bg-[#007229] hover:bg-[#007229]/90 text-white"
                                         onClick={() => handleAddAllocation(fetchKey)}
+                                        disabled={!can('grant_add_allocation')}
+                                        title={!can('grant_add_allocation') ? 'You do not have permission' : undefined}
                                       >
                                         Save allocations
                                       </Button>

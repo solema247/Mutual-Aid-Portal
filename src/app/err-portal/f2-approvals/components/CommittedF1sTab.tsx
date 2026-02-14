@@ -12,6 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { TablePagination } from '@/components/ui/table-pagination'
 import { Badge } from '@/components/ui/badge'
 import { supabase } from '@/lib/supabaseClient'
+import { useAllowedFunctions } from '@/hooks/useAllowedFunctions'
 import { Search, Filter, ArrowRightLeft, Edit2, Trash2, Unlink, Link2 } from 'lucide-react'
 import type { CommittedF1, FilterOptions } from '../types'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -20,6 +21,7 @@ import ProjectEditor from './ProjectEditor'
 
 export default function CommittedF1sTab() {
   const { t, i18n } = useTranslation(['f2', 'common'])
+  const { can } = useAllowedFunctions()
   const searchParams = useSearchParams()
   const [f1s, setF1s] = useState<CommittedF1[]>([])
   const [filterOptions, setFilterOptions] = useState<FilterOptions>({
@@ -566,11 +568,12 @@ export default function CommittedF1sTab() {
         <div className="flex items-center gap-2">
           <Button
             onClick={openPartnerModal}
-            disabled={selected.length === 0 || selected.some(id => {
+            disabled={selected.length === 0 || !can('f3_create_mou') || selected.some(id => {
               const f1 = f1s.find(f => f.id === id)
               return !!f1?.mou_id
             })}
             className="bg-green-600 hover:bg-green-700 text-white"
+            title={!can('f3_create_mou') ? t('common:no_permission') : undefined}
           >
             Create F3 MOU
           </Button>
@@ -693,7 +696,7 @@ export default function CommittedF1sTab() {
                           <span className="text-muted-foreground">-</span>
                         )}
                       </div>
-                      {f1.grant_id && f1.grant_id.startsWith('LCC-') && (currentUser?.role === 'admin' || currentUser?.role === 'superadmin') && (
+                      {f1.grant_id && f1.grant_id.startsWith('LCC-') && can('f2_reassign_committed') && (
                         <Button
                           size="sm"
                           variant="ghost"
@@ -768,7 +771,8 @@ export default function CommittedF1sTab() {
                           variant="ghost"
                           className="h-7 px-1.5 text-amber-600 hover:text-amber-700 hover:bg-amber-50"
                           onClick={() => handleRemoveFromMouClick(f1.id)}
-                          title={t('f2:remove_from_mou') as string}
+                          disabled={!can('f2_remove_from_mou')}
+                          title={!can('f2_remove_from_mou') ? t('common:no_permission') : (t('f2:remove_from_mou') as string)}
                         >
                           <Unlink className="h-3.5 w-3.5 mr-0.5" />
                           <span className="text-xs">{t('f2:remove_from_mou')}</span>
@@ -780,7 +784,8 @@ export default function CommittedF1sTab() {
                         variant="ghost"
                         className="h-7 px-1.5 text-green-600 hover:text-green-700 hover:bg-green-50"
                         onClick={() => handleAddToMouClick(f1.id)}
-                        title={t('f2:add_to_mou') as string}
+                        disabled={!can('f2_add_to_mou')}
+                        title={!can('f2_add_to_mou') ? t('common:no_permission') : (t('f2:add_to_mou') as string)}
                       >
                         <Link2 className="h-3.5 w-3.5 mr-0.5" />
                         <span className="text-xs">{t('f2:add_to_mou')}</span>
@@ -802,7 +807,8 @@ export default function CommittedF1sTab() {
                         size="sm"
                         variant="ghost"
                         onClick={() => handleDeleteClick(f1.id)}
-                        title={t('f2:delete_project') as string}
+                        disabled={!can('f2_delete_committed')}
+                        title={!can('f2_delete_committed') ? t('common:no_permission') : (t('f2:delete_project') as string)}
                         className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
                       >
                         <Trash2 className="w-4 h-4" />
@@ -1077,7 +1083,7 @@ export default function CommittedF1sTab() {
           </div>
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={() => setPartnerModalOpen(false)}>Cancel</Button>
-            <Button onClick={createMOU} disabled={!selectedPartnerId} className="bg-green-600 hover:bg-green-700 text-white">Create</Button>
+            <Button onClick={createMOU} disabled={!selectedPartnerId || !can('f3_create_mou')} className="bg-green-600 hover:bg-green-700 text-white" title={!can('f3_create_mou') ? t('common:no_permission') : undefined}>Create</Button>
           </div>
         </DialogContent>
       </Dialog>

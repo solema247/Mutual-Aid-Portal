@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
+import { requirePermission } from '@/lib/requirePermission'
 import { processFForm } from '@/lib/ocrProcess'
 
 export const runtime = 'nodejs'
@@ -8,6 +9,8 @@ export const maxDuration = 60
 
 export async function POST(request: Request) {
   try {
+    const auth = await requirePermission('f4_upload')
+    if (auth instanceof NextResponse) return auth
     const supabase = getSupabaseRouteClient()
     const routeStart = Date.now()
     const { project_id, file_key_temp } = await request.json()

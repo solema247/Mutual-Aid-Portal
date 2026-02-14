@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Button } from '@/components/ui/button'
 import { FileUp } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
+import { useAllowedFunctions } from '@/hooks/useAllowedFunctions'
 import type { F1FormData, EmergencyRoom, State } from '@/app/api/fsystem/types/fsystem'
 import type { RoomWithState } from '@/app/api/rooms/types/rooms'
 
@@ -24,6 +25,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 
 export default function DirectUpload() {
   const { t } = useTranslation(['common', 'fsystem'])
+  const { can } = useAllowedFunctions()
   const [rooms, setRooms] = useState<EmergencyRoomWithState[]>([])
   const [states, setStates] = useState<State[]>([])
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
@@ -879,7 +881,7 @@ export default function DirectUpload() {
       )}
 
       {!isReviewing && (
-        <Button type="button" onClick={handleSubmit} disabled={isLoading || !hasRequiredFields()} className="w-full bg-green-700 hover:bg-green-800 text-white font-bold">
+        <Button type="button" onClick={handleSubmit} disabled={isLoading || !hasRequiredFields() || !can('f1_upload')} className="w-full bg-green-700 hover:bg-green-800 text-white font-bold" title={!can('f1_upload') ? t('common:no_permission') : undefined}>
           <FileUp className="w-4 h-4 mr-2" />
           {isLoading ? t('fsystem:f1.uploading') : t('fsystem:f1.upload_button')}
         </Button>

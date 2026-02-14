@@ -6,6 +6,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
 import { Calendar, Save, X } from 'lucide-react'
+import { useAllowedFunctions } from '@/hooks/useAllowedFunctions'
 
 import {
   Form,
@@ -43,6 +44,7 @@ interface CycleCreationFormProps {
 
 export default function CycleCreationForm({ onSuccess }: CycleCreationFormProps) {
   const { t } = useTranslation(['err', 'common'])
+  const { can } = useAllowedFunctions()
   const [isLoading, setIsLoading] = useState(false)
   const [nextCycleNumber, setNextCycleNumber] = useState(1)
   const [lastCycleName, setLastCycleName] = useState('')
@@ -339,8 +341,9 @@ export default function CycleCreationForm({ onSuccess }: CycleCreationFormProps)
           </Button>
           <Button
             type="submit"
-            disabled={isLoading}
+            disabled={isLoading || !can('grant_create_cycle')}
             className="bg-[#007229] hover:bg-[#007229]/90 text-white"
+            title={!can('grant_create_cycle') ? t('common:no_permission') : undefined}
           >
             <Save className="h-4 w-4 mr-2" />
             {isLoading ? t('err:cycles.create.creating') : t('err:cycles.create.create_button')}

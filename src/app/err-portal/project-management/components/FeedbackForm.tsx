@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
+import { useAllowedFunctions } from '@/hooks/useAllowedFunctions'
 
 type FeedbackFormProps = {
   projectId: string
@@ -13,6 +14,7 @@ type FeedbackFormProps = {
 
 export default function FeedbackForm({ projectId, onSubmit, className = '' }: FeedbackFormProps) {
   const { t } = useTranslation(['projects', 'common'])
+  const { can } = useAllowedFunctions()
   const [feedback, setFeedback] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
 
@@ -45,11 +47,12 @@ export default function FeedbackForm({ projectId, onSubmit, className = '' }: Fe
         <Button
           onClick={() => handleSubmit('approve')}
           className="flex-1"
-          disabled={isSubmitting}
+          disabled={isSubmitting || !can('f1_approve')}
+          title={!can('f1_approve') ? t('common:no_permission') : undefined}
         >
           {t('projects:approve')}
         </Button>
-        {feedback && (
+        {feedback && can('f1_feedback') && (
           <Button
             onClick={() => handleSubmit('feedback')}
             variant="outline"
@@ -63,7 +66,8 @@ export default function FeedbackForm({ projectId, onSubmit, className = '' }: Fe
           onClick={() => handleSubmit('decline')}
           variant="destructive"
           className="flex-1"
-          disabled={isSubmitting || !feedback}
+          disabled={isSubmitting || !feedback || !can('f1_decline')}
+          title={!can('f1_decline') ? t('common:no_permission') : undefined}
         >
           {t('projects:decline')}
         </Button>

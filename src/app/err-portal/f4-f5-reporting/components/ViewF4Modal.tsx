@@ -9,6 +9,7 @@ import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { supabase } from '@/lib/supabaseClient'
 import { useTranslation } from 'react-i18next'
+import { useAllowedFunctions } from '@/hooks/useAllowedFunctions'
 import { FileText } from 'lucide-react'
 
 interface ViewF4ModalProps {
@@ -20,6 +21,7 @@ interface ViewF4ModalProps {
 
 export default function ViewF4Modal({ summaryId, open, onOpenChange, onSaved }: ViewF4ModalProps) {
   const { t } = useTranslation(['f4f5'])
+  const { can } = useAllowedFunctions()
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [data, setData] = useState<any | null>(null)
@@ -197,11 +199,11 @@ export default function ViewF4Modal({ summaryId, open, onOpenChange, onSaved }: 
           <div className="flex items-center justify-between">
             <DialogTitle>F4 Report Details</DialogTitle>
             {!isEditing ? (
-              <Button onClick={() => setIsEditing(true)}>Edit</Button>
+              <Button onClick={() => setIsEditing(true)} disabled={!can('f4_save')} title={!can('f4_save') ? t('no_permission') : undefined}>Edit</Button>
             ) : (
               <div className="flex gap-2">
                 <Button variant="outline" onClick={() => setIsEditing(false)}>Cancel</Button>
-                <Button onClick={handleSave} disabled={saving}>{saving ? 'Saving...' : 'Save'}</Button>
+                <Button onClick={handleSave} disabled={saving || !can('f4_save')} title={!can('f4_save') ? t('no_permission') : undefined}>{saving ? 'Saving...' : 'Save'}</Button>
               </div>
             )}
           </div>

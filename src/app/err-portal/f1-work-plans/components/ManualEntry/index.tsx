@@ -9,6 +9,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { supabase } from '@/lib/supabaseClient'
+import { useAllowedFunctions } from '@/hooks/useAllowedFunctions'
 import { Plus, Paperclip, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { defaultFormData, type ManualEntryFormData, type Expense, type PlannedActivity } from './types'
@@ -29,6 +30,7 @@ interface ManualEntryProps {
 
 export default function ManualEntry({ onSuccess }: ManualEntryProps) {
   const { t } = useTranslation(['common', 'fsystem'])
+  const { can } = useAllowedFunctions()
   const [states, setStates] = useState<State[]>([])
   const [rooms, setRooms] = useState<RoomRow[]>([])
   const [stateId, setStateId] = useState<string>('')
@@ -764,7 +766,8 @@ export default function ManualEntry({ onSuccess }: ManualEntryProps) {
         <div className="flex justify-end pt-4">
           <Button
             onClick={handleSubmit}
-            disabled={isSubmitting || !stateId || !emergencyRoomId}
+            disabled={isSubmitting || !stateId || !emergencyRoomId || !can('f1_submit')}
+            title={!can('f1_submit') ? t('common:no_permission') : undefined}
             className={cn('bg-green-600 hover:bg-green-700')}
           >
             {isSubmitting ? (t('fsystem:review.submitting') || 'Submitting…') : (t('fsystem:review.submit') || 'Submit F1')}

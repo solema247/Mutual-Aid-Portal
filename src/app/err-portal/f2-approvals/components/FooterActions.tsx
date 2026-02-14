@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { CheckSquare, XSquare } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
+import { useAllowedFunctions } from '@/hooks/useAllowedFunctions'
 
 interface FooterActionsProps {
   selectedWorkplans: string[];
@@ -20,6 +21,7 @@ export default function FooterActions({
   onClearSelection
 }: FooterActionsProps) {
   const { t } = useTranslation(['f2', 'common'])
+  const { can } = useAllowedFunctions()
   const [isLoading, setIsLoading] = useState(false)
   const [sendBackOpen, setSendBackOpen] = useState(false)
   const [sendBackReason, setSendBackReason] = useState('')
@@ -261,15 +263,17 @@ export default function FooterActions({
             <Button
               variant="outline"
               onClick={() => setSendBackOpen(true)}
-              disabled={selectedWorkplans.length === 0 || isLoading}
+              disabled={selectedWorkplans.length === 0 || isLoading || !can('f2_send_back')}
+              title={!can('f2_send_back') ? t('common:no_permission') : undefined}
             >
               <XSquare className="h-4 w-4 mr-2" />
               {t('f2:send_back_selected')}
             </Button>
             <Button
               onClick={() => handleApprove(selectedWorkplans)}
-              disabled={selectedWorkplans.length === 0 || isLoading}
+              disabled={selectedWorkplans.length === 0 || isLoading || !can('f2_approve')}
               className="bg-[#007229] hover:bg-[#007229]/90 text-white"
+              title={!can('f2_approve') ? t('common:no_permission') : undefined}
             >
               <CheckSquare className="h-4 w-4 mr-2" />
               {isLoading ? t('f2:approving') : t('f2:approve_selected')}
