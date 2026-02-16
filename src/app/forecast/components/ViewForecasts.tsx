@@ -13,7 +13,14 @@ export function ViewForecasts() {
     <div className="space-y-4">
       <div className="space-y-4 pt-4">
         <ForecastStatusByMonthChart />
-        <ForecastSankeyChart />
+        <div className="flex gap-4">
+          <div className="w-1/2 min-w-0">
+            <ForecastSankeyChart />
+          </div>
+          <div className="w-1/2 min-w-0">
+            {/* Placeholder for another chart */}
+          </div>
+        </div>
         {isLoading && (
           <div className="absolute inset-0 flex items-center justify-center bg-white/80">
             <div className="text-center">
