@@ -2,6 +2,8 @@
 
 import { useTranslation } from 'react-i18next'
 import { useState } from 'react'
+import { ForecastStatusByMonthChart } from './ForecastStatusByMonthChart'
+import { ForecastSankeyChart } from './ForecastSankeyChart'
 
 export function ViewForecasts() {
   const { t } = useTranslation(['forecast', 'common'])
@@ -10,6 +12,8 @@ export function ViewForecasts() {
   return (
     <div className="space-y-4">
       <div className="space-y-4 pt-4">
+        <ForecastStatusByMonthChart />
+        <ForecastSankeyChart />
         {isLoading && (
           <div className="absolute inset-0 flex items-center justify-center bg-white/80">
             <div className="text-center">
