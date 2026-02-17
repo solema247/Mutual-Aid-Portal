@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { useState } from 'react'
 import { ForecastStatusByMonthChart } from './ForecastStatusByMonthChart'
 import { ForecastSankeyChart } from './ForecastSankeyChart'
+import { ForecastStateSupportChart } from './ForecastStateSupportChart'
 
 export function ViewForecasts() {
   const { t } = useTranslation(['forecast', 'common'])
@@ -18,7 +19,7 @@ export function ViewForecasts() {
             <ForecastSankeyChart />
           </div>
           <div className="w-1/2 min-w-0">
-            {/* Placeholder for another chart */}
+            <ForecastStateSupportChart />
           </div>
         </div>
         {isLoading && (

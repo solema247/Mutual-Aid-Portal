@@ -2,9 +2,11 @@
 -- Full flexible RPC for charts from partners.donor_forecasts_summary_view.
 -- Call: supabase.rpc('get_forecast_summary') or .rpc('get_forecast_summary', { p_chart_type: 'month_status' })
 --       or .rpc('get_forecast_summary', { p_chart_type: 'transfer_state' })
---       or .rpc('get_forecast_summary', { p_chart_type: 'org_transfer_state' }).
+--       or .rpc('get_forecast_summary', { p_chart_type: 'org_transfer_state' })
+--       or .rpc('get_forecast_summary', { p_chart_type: 'month_state' }).
 --
 -- For org_transfer_state the view must expose source. Returns rows: source, transfer_method, state_name, amount.
+-- For month_state: returns month, state_name, amount for stacked bar (State-level Support).
 
 create or replace function public.get_forecast_summary(p_chart_type text default 'month_status')
 returns jsonb
@@ -79,10 +81,30 @@ begin
         order by d.source, d.transfer_method, d.state_name
       ) sub;
 
+    -- Stacked bar: month, state_name, amount (State-level Support)
+    when 'month_state' then
+      select jsonb_agg(
+        jsonb_build_object(
+          'month',      month,
+          'state_name', state_name,
+          'amount',     amount
+        )
+      )
+      into result
+      from (
+        select
+          d.month::text as month,
+          coalesce(d.state_name, 'Unknown')::text as state_name,
+          sum(d.amount)::numeric as amount
+        from partners.donor_forecasts_summary_view d
+        group by d.month, d.state_name
+        order by d.month, d.state_name
+      ) sub;
+
     else
       return jsonb_build_object(
         'error', 'Unknown chart type: ' || coalesce(p_chart_type, 'null'),
-        'allowed', array['month_status', 'transfer_state', 'org_transfer_state']
+        'allowed', array['month_status', 'transfer_state', 'org_transfer_state', 'month_state']
       );
   end case;
 
@@ -96,4 +118,4 @@ end;
 $$;
 
 comment on function public.get_forecast_summary(text) is
-  'Charts from partners.donor_forecasts_summary_view. p_chart_type: month_status (default), transfer_state (2-level Sankey), org_transfer_state (3-level Sankey: source -> transfer_method -> state_name).';
+  'Charts from partners.donor_forecasts_summary_view. p_chart_type: month_status (default), transfer_state (2-level Sankey), org_transfer_state (3-level Sankey), month_state (State-level Support stacked bar).';
