@@ -152,7 +152,7 @@ const ChartTooltipContent = React.forwardRef<HTMLDivElement, ChartTooltipContent
                     ) : null}
                   </div>
                 )}
-                <div className="flex flex-1 justify-between leading-none">
+                <div className="flex flex-1 justify-between gap-4 leading-none">
                   <span className="text-muted-foreground">
                     {configItem?.label ?? key}
                   </span>

@@ -5,6 +5,8 @@ import { useState } from 'react'
 import { ForecastStatusByMonthChart } from './ForecastStatusByMonthChart'
 import { ForecastSankeyChart } from './ForecastSankeyChart'
 import { ForecastStateSupportChart } from './ForecastStateSupportChart'
+import { ForecastSourceOverTimeChart } from './ForecastSourceOverTimeChart'
+import { ForecastReceivingMagOverTimeChart } from './ForecastReceivingMagOverTimeChart'
 
 export function ViewForecasts() {
   const { t } = useTranslation(['forecast', 'common'])
@@ -20,6 +22,14 @@ export function ViewForecasts() {
           </div>
           <div className="w-1/2 min-w-0 flex flex-col">
             <ForecastStateSupportChart />
+          </div>
+        </div>
+        <div className="flex gap-4">
+          <div className="w-1/2 min-w-0">
+            <ForecastSourceOverTimeChart />
+          </div>
+          <div className="w-1/2 min-w-0">
+            <ForecastReceivingMagOverTimeChart />
           </div>
         </div>
         {isLoading && (

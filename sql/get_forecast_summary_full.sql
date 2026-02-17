@@ -101,10 +101,50 @@ begin
         order by d.month, d.state_name
       ) sub;
 
+    -- Source over time: month, source, amount (Funding Sources area chart)
+    when 'month_source' then
+      select jsonb_agg(
+        jsonb_build_object(
+          'month',  month,
+          'source', source,
+          'amount', amount
+        )
+      )
+      into result
+      from (
+        select
+          d.month::text as month,
+          coalesce(d.source, 'Unknown')::text as source,
+          sum(d.amount)::numeric as amount
+        from partners.donor_forecasts_summary_view d
+        group by d.month, d.source
+        order by d.month, d.source
+      ) sub;
+
+    -- Receiving MAG over time: month, receiving_mag, amount (Receiving MAG by month area chart)
+    when 'month_receiving_mag' then
+      select jsonb_agg(
+        jsonb_build_object(
+          'month',         month,
+          'receiving_mag', receiving_mag,
+          'amount',        amount
+        )
+      )
+      into result
+      from (
+        select
+          d.month::text as month,
+          coalesce(d.receiving_mag, 'Unknown')::text as receiving_mag,
+          sum(d.amount)::numeric as amount
+        from partners.donor_forecasts_summary_view d
+        group by d.month, d.receiving_mag
+        order by d.month, d.receiving_mag
+      ) sub;
+
     else
       return jsonb_build_object(
         'error', 'Unknown chart type: ' || coalesce(p_chart_type, 'null'),
-        'allowed', array['month_status', 'transfer_state', 'org_transfer_state', 'month_state']
+        'allowed', array['month_status', 'transfer_state', 'org_transfer_state', 'month_state', 'month_source', 'month_receiving_mag']
       );
   end case;
 
@@ -118,4 +158,4 @@ end;
 $$;
 
 comment on function public.get_forecast_summary(text) is
-  'Charts from partners.donor_forecasts_summary_view. p_chart_type: month_status (default), transfer_state (2-level Sankey), org_transfer_state (3-level Sankey), month_state (State-level Support stacked bar).';
+  'Charts from partners.donor_forecasts_summary_view. p_chart_type: month_status (default), transfer_state (2-level Sankey), org_transfer_state (3-level Sankey), month_state (State-level Support stacked bar), month_source (Funding Sources over time), month_receiving_mag (Receiving MAG by month).';
