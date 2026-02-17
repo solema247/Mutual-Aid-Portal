@@ -55,7 +55,11 @@ function formatMonthLabel(month: string): string {
   return month
 }
 
-export function ForecastStateSupportChart() {
+const PDF_CAPTURE_SHOW_LAST_MONTH = 'pdf-capture-show-last-month'
+
+type ForecastStateSupportChartProps = { pdfChartId?: string }
+
+export function ForecastStateSupportChart({ pdfChartId = 'state-support' }: ForecastStateSupportChartProps = {}) {
   const { t } = useTranslation(['forecast', 'common'])
   const [rows, setRows] = useState<MonthStateRow[]>([])
   const [loading, setLoading] = useState(true)
@@ -146,6 +150,17 @@ export function ForecastStateSupportChart() {
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<{ chartId: string }>).detail
+      if (detail?.chartId === pdfChartId && chartData.length > 0) {
+        setPinnedMonthLabel(chartData[chartData.length - 1].month)
+      }
+    }
+    window.addEventListener(PDF_CAPTURE_SHOW_LAST_MONTH, handler)
+    return () => window.removeEventListener(PDF_CAPTURE_SHOW_LAST_MONTH, handler)
+  }, [pdfChartId, chartData])
 
   if (loading) {
     return (

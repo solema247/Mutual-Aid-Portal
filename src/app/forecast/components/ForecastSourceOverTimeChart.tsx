@@ -121,7 +121,7 @@ export function ForecastSourceOverTimeChart() {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>{t('forecast:charts.funding_sources_title', 'Funding Sources')}</CardTitle>
+          <CardTitle>{t('forecast:charts.funding_sources_title', 'Funding Sources by month')}</CardTitle>
           <CardDescription>{t('common:loading')}</CardDescription>
         </CardHeader>
         <CardContent className="min-h-[280px] flex items-center justify-center text-muted-foreground text-sm">
@@ -135,7 +135,7 @@ export function ForecastSourceOverTimeChart() {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>{t('forecast:charts.funding_sources_title', 'Funding Sources')}</CardTitle>
+          <CardTitle>{t('forecast:charts.funding_sources_title', 'Funding Sources by month')}</CardTitle>
           <CardDescription>{t('forecast:charts.funding_sources_desc', 'Funding by source over time')}</CardDescription>
         </CardHeader>
         <CardContent className="min-h-[280px] flex items-center justify-center text-destructive text-sm">
@@ -149,7 +149,7 @@ export function ForecastSourceOverTimeChart() {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>{t('forecast:charts.funding_sources_title', 'Funding Sources')}</CardTitle>
+          <CardTitle>{t('forecast:charts.funding_sources_title', 'Funding Sources by month')}</CardTitle>
           <CardDescription>{t('forecast:charts.funding_sources_desc', 'Funding by source over time')}</CardDescription>
         </CardHeader>
         <CardContent className="min-h-[280px] flex items-center justify-center text-muted-foreground text-sm">
@@ -162,9 +162,9 @@ export function ForecastSourceOverTimeChart() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>{t('forecast:charts.funding_sources_title', 'Funding Sources')}</CardTitle>
+        <CardTitle>{t('forecast:charts.funding_sources_title', 'Funding Sources by month')}</CardTitle>
         <CardDescription>
-          {t('forecast:charts.funding_sources_desc', 'Funding by source over time (stacked).')}
+          {t('forecast:charts.funding_sources_desc', 'Funding by source over time')}
         </CardDescription>
       </CardHeader>
       <CardContent className="px-2 pt-4 sm:px-6 sm:pt-6">

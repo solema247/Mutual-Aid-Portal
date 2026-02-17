@@ -246,9 +246,9 @@ export function ForecastSankeyChart() {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>{t('forecast:charts.sankey_title', 'Transfer method to state')}</CardTitle>
+          <CardTitle>{t('forecast:charts.sankey_title', 'Funding Flows')}</CardTitle>
           <CardDescription>
-            {t('forecast:charts.sankey_desc', 'Flow from transfer method (origin) to state (destination) by amount · Click a node to focus; click again or Escape to clear. Tooltip % is share of total at each node level.')}
+            {t('forecast:charts.sankey_desc', 'Flow from funding source to transfer method to state by amount · Click a node to focus; click again or Escape to clear. Tooltip % is share of total at each node level.')}
           </CardDescription>
         </CardHeader>
         <CardContent className="flex items-center justify-center min-h-[320px]">
@@ -262,9 +262,9 @@ export function ForecastSankeyChart() {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>{t('forecast:charts.sankey_title', 'Transfer method to state')}</CardTitle>
+          <CardTitle>{t('forecast:charts.sankey_title', 'Funding Flows')}</CardTitle>
           <CardDescription>
-            {t('forecast:charts.sankey_desc', 'Flow from transfer method (origin) to state (destination) by amount · Click a node to focus; click again or Escape to clear. Tooltip % is share of total at each node level.')}
+            {t('forecast:charts.sankey_desc', 'Flow from funding source to transfer method to state by amount · Click a node to focus; click again or Escape to clear. Tooltip % is share of total at each node level.')}
           </CardDescription>
         </CardHeader>
         <CardContent className="flex items-center justify-center min-h-[320px]">
@@ -278,9 +278,9 @@ export function ForecastSankeyChart() {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>{t('forecast:charts.sankey_title', 'Transfer method to state')}</CardTitle>
+          <CardTitle>{t('forecast:charts.sankey_title', 'Funding Flows')}</CardTitle>
           <CardDescription>
-            {t('forecast:charts.sankey_desc', 'Flow from transfer method (origin) to state (destination) by amount · Click a node to focus; click again or Escape to clear. Tooltip % is share of total at each node level.')}
+            {t('forecast:charts.sankey_desc', 'Flow from funding source to transfer method to state by amount · Click a node to focus; click again or Escape to clear. Tooltip % is share of total at each node level.')}
           </CardDescription>
         </CardHeader>
         <CardContent className="flex items-center justify-center min-h-[320px]">
@@ -293,9 +293,9 @@ export function ForecastSankeyChart() {
   return (
     <Card className="flex flex-1 flex-col min-h-0">
       <CardHeader>
-        <CardTitle>{t('forecast:charts.sankey_title', 'Transfer method to state')}</CardTitle>
+        <CardTitle>{t('forecast:charts.sankey_title', 'Funding Flows')}</CardTitle>
         <CardDescription>
-          {t('forecast:charts.sankey_desc', 'Flow from transfer method (origin) to state (destination) by amount · Click a node to focus; click again or Escape to clear. Tooltip % is share of total at each node level.')}
+          {t('forecast:charts.sankey_desc', 'Flow from funding source to transfer method to state by amount · Click a node to focus; click again or Escape to clear. Tooltip % is share of total at each node level.')}
         </CardDescription>
       </CardHeader>
       <CardContent className="relative flex flex-1 flex-col min-h-0">

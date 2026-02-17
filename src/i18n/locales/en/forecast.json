@@ -91,11 +91,13 @@
   "no_uploads": "No previous uploads",
   "no_forecasts": "No forecasts found",
   "charts": {
-    "status_by_month_title": "Forecast by status and month",
+    "status_by_month_title": "Mutual Aid forecast by status and month",
     "status_by_month_desc": "Amount by month and status",
     "no_data": "No forecast data yet",
-    "sankey_title": "Transfer method to state",
-    "sankey_desc": "Flow from transfer method (origin) to state (destination) by amount",
+    "sankey_title": "Funding Flows",
+    "sankey_desc": "Flow from funding source to transfer method to state by amount",
+    "funding_sources_title": "Funding Sources by month",
+    "funding_sources_desc": "Funding by source over time",
     "amount": "Amount"
   }
 } 

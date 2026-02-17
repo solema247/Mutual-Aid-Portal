@@ -18,12 +18,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
-import {
-  ChartContainer,
-  ChartTooltip,
-  ChartTooltipContent,
-  type ChartConfig,
-} from '@/components/ui/chart'
+import { ChartContainer, type ChartConfig } from '@/components/ui/chart'
 
 /** Pastel colors to match Sankey and State-level Support charts */
 const COMPLETE_COLOR = '#9ee6c2'  /* mint green */
@@ -127,7 +122,7 @@ export function ForecastStatusByMonthChart() {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>{t('forecast:charts.status_by_month_title', 'Forecast by status and month')}</CardTitle>
+          <CardTitle>{t('forecast:charts.status_by_month_title', 'Mutual Aid forecast by status and month')}</CardTitle>
           <CardDescription>{t('forecast:charts.status_by_month_desc', 'Amount by month and status')}</CardDescription>
         </CardHeader>
         <CardContent className="flex items-center justify-center min-h-[280px]">
@@ -141,7 +136,7 @@ export function ForecastStatusByMonthChart() {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>{t('forecast:charts.status_by_month_title', 'Forecast by status and month')}</CardTitle>
+          <CardTitle>{t('forecast:charts.status_by_month_title', 'Mutual Aid forecast by status and month')}</CardTitle>
           <CardDescription>{t('forecast:charts.status_by_month_desc', 'Amount by month and status')}</CardDescription>
         </CardHeader>
         <CardContent className="flex items-center justify-center min-h-[280px]">
@@ -155,7 +150,7 @@ export function ForecastStatusByMonthChart() {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>{t('forecast:charts.status_by_month_title', 'Forecast by status and month')}</CardTitle>
+          <CardTitle>{t('forecast:charts.status_by_month_title', 'Mutual Aid forecast by status and month')}</CardTitle>
           <CardDescription>{t('forecast:charts.status_by_month_desc', 'Amount by month and status')}</CardDescription>
         </CardHeader>
         <CardContent className="flex items-center justify-center min-h-[280px]">
@@ -168,7 +163,7 @@ export function ForecastStatusByMonthChart() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>{t('forecast:charts.status_by_month_title', 'Forecast by status and month')}</CardTitle>
+        <CardTitle>{t('forecast:charts.status_by_month_title', 'Mutual Aid forecast by status and month')}</CardTitle>
         <CardDescription>{t('forecast:charts.status_by_month_desc', 'Amount by month and status')}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -204,10 +199,6 @@ export function ForecastStatusByMonthChart() {
                 <CartesianGrid horizontal={false} />
                 <YAxis dataKey="month" type="category" hide />
                 <XAxis dataKey="value" type="number" hide />
-                <ChartTooltip
-                  cursor={false}
-                  content={<ChartTooltipContent className="bg-white text-foreground border-border shadow-xl" indicator="line" formatter={(v) => (v as number).toLocaleString()} />}
-                />
                 <Bar dataKey="value" layout="vertical" fill={COMPLETE_COLOR} radius={4} barSize={30}>
                   <LabelList
                     dataKey="value"
@@ -235,10 +226,6 @@ export function ForecastStatusByMonthChart() {
                 <CartesianGrid horizontal={false} />
                 <YAxis dataKey="month" type="category" hide />
                 <XAxis dataKey="value" type="number" hide />
-                <ChartTooltip
-                  cursor={false}
-                  content={<ChartTooltipContent className="bg-white text-foreground border-border shadow-xl" indicator="line" formatter={(v) => { const n = v as number; return n ? n.toLocaleString() : '–'; }} />}
-                />
                 <Bar dataKey="value" layout="vertical" fill={PLANNED_COLOR} radius={4} barSize={30}>
                   <LabelList
                     dataKey="value"
