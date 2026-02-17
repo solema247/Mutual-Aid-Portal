@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { type ComponentProps, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   Bar,
@@ -47,14 +47,16 @@ const MIN_BAR_WIDTH_FOR_INSIDE_LABEL = 72
 
 /** Custom label: inside bar when it fits, outside when bar is too small */
 function valueLabelContent(
-  props: { viewBox?: { width?: number }; value?: number | string; [key: string]: unknown },
+  propsUnknown: unknown,
   formatter: (v: number) => string
 ) {
+  const props = propsUnknown as { viewBox?: { width?: number }; value?: unknown; [key: string]: unknown }
   const width = props.viewBox?.width ?? 0
   const position = width >= MIN_BAR_WIDTH_FOR_INSIDE_LABEL ? 'insideRight' : 'right'
   const raw = props.value
   const text = typeof raw === 'number' ? formatter(raw) : String(raw ?? '')
-  return <Label {...props} position={position} offset={8} value={text} />
+  // Pass full props (including viewBox) so Label positions each bar's label correctly; assert type for Recharts LabelProps
+  return <Label {...(props as ComponentProps<typeof Label>)} position={position} offset={8} value={text} />
 }
 
 export function ForecastStatusByMonthChart() {
@@ -199,10 +201,10 @@ export function ForecastStatusByMonthChart() {
                 <CartesianGrid horizontal={false} />
                 <YAxis dataKey="month" type="category" hide />
                 <XAxis dataKey="value" type="number" hide />
-                <Bar dataKey="value" layout="vertical" fill={COMPLETE_COLOR} radius={4} barSize={30}>
+                <Bar dataKey="value" fill={COMPLETE_COLOR} radius={4} barSize={30}>
                   <LabelList
                     dataKey="value"
-                    content={(props: { viewBox?: { width?: number }; value?: number | string }) =>
+                    content={(props) =>
                       valueLabelContent(props, (v) => (v ? v.toLocaleString() : ''))
                     }
                     className="fill-foreground"
@@ -226,10 +228,10 @@ export function ForecastStatusByMonthChart() {
                 <CartesianGrid horizontal={false} />
                 <YAxis dataKey="month" type="category" hide />
                 <XAxis dataKey="value" type="number" hide />
-                <Bar dataKey="value" layout="vertical" fill={PLANNED_COLOR} radius={4} barSize={30}>
+                <Bar dataKey="value" fill={PLANNED_COLOR} radius={4} barSize={30}>
                   <LabelList
                     dataKey="value"
-                    content={(props: { viewBox?: { width?: number }; value?: number | string }) =>
+                    content={(props) =>
                       valueLabelContent(props, (v) => (v ? v.toLocaleString() : '–'))
                     }
                     className="fill-foreground"

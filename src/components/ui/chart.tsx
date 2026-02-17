@@ -54,7 +54,18 @@ const ChartContainer = React.forwardRef<
 })
 ChartContainer.displayName = 'ChartContainer'
 
-const ChartTooltip = Tooltip
+/** Recharts Tooltip; boolean cursor is normalized to undefined so it never reaches the DOM (React warns on non-boolean attribute `cursor`). */
+function ChartTooltip<ValueType extends number | string | Array<number | string>, NameType extends number | string>(
+  props: React.ComponentProps<typeof Tooltip<ValueType, NameType>>
+) {
+  const { cursor, ...rest } = props
+  return (
+    <Tooltip<ValueType, NameType>
+      {...rest}
+      cursor={typeof cursor === 'boolean' ? undefined : cursor}
+    />
+  )
+}
 
 type TooltipPayloadItem = { value?: number; dataKey?: string; name?: string; color?: string; payload?: Record<string, unknown> }
 type ChartTooltipContentProps = React.ComponentProps<'div'> & {
@@ -67,6 +78,28 @@ type ChartTooltipContentProps = React.ComponentProps<'div'> & {
   nameKey?: string
   labelKey?: string
   formatter?: (value: number, name: string, item: unknown) => React.ReactNode
+  /** Recharts passes these to content; we strip them so they are not spread onto the DOM */
+  labelFormatter?: unknown
+  cursor?: unknown
+  allowEscapeViewBox?: unknown
+  animationDuration?: unknown
+  viewBox?: unknown
+  coordinate?: unknown
+  position?: unknown
+  wrapperStyle?: unknown
+  contentStyle?: unknown
+  itemStyle?: unknown
+  labelStyle?: unknown
+  isAnimationActive?: unknown
+  accessibilityLayer?: unknown
+  activeIndex?: unknown
+  useTranslate3d?: unknown
+  reverseDirection?: unknown
+  itemSorter?: unknown
+  includeHidden?: unknown
+  filterNull?: unknown
+  axisId?: unknown
+  animationEasing?: unknown
 }
 
 const ChartTooltipContent = React.forwardRef<HTMLDivElement, ChartTooltipContentProps>(
@@ -82,7 +115,28 @@ const ChartTooltipContent = React.forwardRef<HTMLDivElement, ChartTooltipContent
       labelKey,
       nameKey,
       formatter,
-      ...props
+      labelFormatter: _labelFormatter,
+      cursor: _cursor,
+      allowEscapeViewBox: _allowEscapeViewBox,
+      animationDuration: _animationDuration,
+      viewBox: _viewBox,
+      coordinate: _coordinate,
+      position: _position,
+      wrapperStyle: _wrapperStyle,
+      contentStyle: _contentStyle,
+      itemStyle: _itemStyle,
+      labelStyle: _labelStyle,
+      isAnimationActive: _isAnimationActive,
+      accessibilityLayer: _accessibilityLayer,
+      activeIndex: _activeIndex,
+      useTranslate3d: _useTranslate3d,
+      reverseDirection: _reverseDirection,
+      itemSorter: _itemSorter,
+      includeHidden: _includeHidden,
+      filterNull: _filterNull,
+      axisId: _axisId,
+      animationEasing: _animationEasing,
+      ...divProps
     },
     ref
   ) => {
@@ -103,7 +157,7 @@ const ChartTooltipContent = React.forwardRef<HTMLDivElement, ChartTooltipContent
           'grid min-w-[8rem] items-start gap-1.5 rounded-lg border border-border/50 bg-background px-2.5 py-1.5 text-xs shadow-xl',
           className
         )}
-        {...props}
+        {...divProps}
       >
         {!hideLabel && labelValue ? (
           <div className="grid gap-1.5 border-b border-border/50 px-2.5 py-1.5">

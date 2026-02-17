@@ -130,12 +130,13 @@ export function ForecastStateSupportChart({ pdfChartId = 'state-support' }: Fore
     if (!pinnedMonthLabel || !chartData.length || !stateKeys.length) return null
     const row = chartData.find((d) => d.month === pinnedMonthLabel)
     if (!row) return null
+    const rowValues = row as unknown as Record<string, number | undefined>
     const payload: TooltipPayloadItem[] = stateKeys
-      .filter((name) => (row[name] ?? 0) > 0)
+      .filter((name) => (rowValues[name] ?? 0) > 0)
       .map((name) => ({
         dataKey: name,
         name,
-        value: row[name],
+        value: rowValues[name],
         color: chartConfig[name]?.color,
       }))
     return { label: pinnedMonthLabel, payload }
@@ -222,7 +223,8 @@ export function ForecastStateSupportChart({ pdfChartId = 'state-support' }: Fore
               margin={{ left: 20, right: 8 }}
               barCategoryGap={4}
               onClick={(data) => {
-                const month = data?.month != null ? String(data.month) : null
+                const payload = data as unknown as { month?: string } | undefined
+                const month = payload?.month != null ? String(payload.month) : null
                 setPinnedMonthLabel((prev) => (prev === month ? null : month))
               }}
             >
@@ -252,7 +254,7 @@ export function ForecastStateSupportChart({ pdfChartId = 'state-support' }: Fore
                   if (key === lastTooltipKeyRef.current) return null
                   lastTooltipKeyRef.current = key
                   const next: TooltipPanelState =
-                    active && payload?.length ? { label: String(label ?? ''), payload } : null
+                    active && payload?.length ? { label: String(label ?? ''), payload: [...payload] } : null
                   queueMicrotask(() => setTooltipPanel(next))
                   return null
                 }}

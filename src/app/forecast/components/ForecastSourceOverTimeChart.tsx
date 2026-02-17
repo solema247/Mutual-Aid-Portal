@@ -193,7 +193,7 @@ export function ForecastSourceOverTimeChart() {
               cursor={false}
               content={
                 <ChartTooltipContent
-                  labelFormatter={(value) => value}
+                  labelFormatter={(value: string) => value}
                   formatter={(v) => (typeof v === 'number' ? v.toLocaleString() : String(v ?? '–'))}
                   indicator="dot"
                 />

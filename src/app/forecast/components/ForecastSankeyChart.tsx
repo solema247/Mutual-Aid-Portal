@@ -97,7 +97,7 @@ function SankeyLinkGradient(props: {
   targetControlX: number
   linkWidth: number
   index: number
-  payload: { source: { color?: string; index?: number }; target: { color?: string; index?: number }; value?: number }
+  payload: { source: unknown; target: unknown; value?: number }
   selectedNodeIndex?: number | null
   downstreamLinkIndices?: Set<number>
   [key: string]: unknown
