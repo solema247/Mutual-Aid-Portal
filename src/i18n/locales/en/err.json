@@ -1,7 +1,7 @@
 {
   "title": "ERR Staff Portal",
   "welcome": "Welcome, {{name}}",
-  "dashboard": "Dashboard",
+  "dashboard": "Mutual Aid Portal - ERR Dashboards",
   "dashboard_desc": "View ERR statistics and reports",
   "navigation": "Navigation",
   "home": "Home",

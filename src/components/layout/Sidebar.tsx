@@ -23,13 +23,16 @@ interface SidebarProps {
     label: string
     icon: string | ReactElement
   }[]
+  /** Optional sidebar header title. When not set, uses err:navigation. */
+  title?: string
 }
 
-export default function Sidebar({ items }: SidebarProps) {
+export default function Sidebar({ items, title }: SidebarProps) {
   const [open, setOpen] = useState(false)
   const [isExpanded, setIsExpanded] = useState(false)
   const pathname = usePathname()
   const { t } = useTranslation(['err', 'common'])
+  const sidebarLabel = title ?? t('err:navigation')
 
   const handleLogout = async () => {
     try {
@@ -66,7 +69,7 @@ export default function Sidebar({ items }: SidebarProps) {
         </SheetTrigger>
         <SheetContent side="left" className="w-64 p-0">
           <SheetHeader className="p-6 border-b">
-            <SheetTitle>{t('err:navigation')}</SheetTitle>
+            <SheetTitle>{sidebarLabel}</SheetTitle>
           </SheetHeader>
           <nav className="flex flex-col gap-2 p-4 h-[calc(100%-80px)] justify-between">
             <div className="flex flex-col gap-2">
@@ -113,7 +116,7 @@ export default function Sidebar({ items }: SidebarProps) {
             'text-lg font-semibold transition-all duration-300',
             !isExpanded && 'opacity-0'
           )}>
-            {t('err:navigation')}
+            {sidebarLabel}
           </h2>
         </div>
         <nav className="flex flex-col gap-2 p-4 h-[calc(100%-80px)] justify-between">

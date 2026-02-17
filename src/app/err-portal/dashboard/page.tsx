@@ -1,22 +1,34 @@
 'use client'
 
 import { useTranslation } from 'react-i18next'
+import Link from 'next/link'
+import { ArrowLeft } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import { CollapsibleRow } from '@/components/ui/collapsible'
 import { GrantsStackedBarChart } from './GrantsStackedBarChart'
 import { ProjectsByDonorChart } from './ProjectsByDonorChart'
 
 export default function DashboardPage() {
-  const { t } = useTranslation(['dashboard', 'err'])
+  const { t } = useTranslation(['dashboard', 'err', 'common'])
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold">
-          {t('err:dashboard')}
-        </h1>
-      </div>
+    <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <div className="space-y-6">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <Button variant="ghost" size="sm" asChild className="w-fit -ml-2">
+            <Link href="/partner-portal" className="flex items-center gap-2 text-muted-foreground hover:text-foreground">
+              <ArrowLeft className="h-4 w-4" />
+              {t('common:back_to_home')}
+            </Link>
+          </Button>
+        </div>
+        <div className="flex items-center justify-between">
+          <h1 className="text-3xl font-bold">
+            {t('err:dashboard')}
+          </h1>
+        </div>
 
-      <div className="space-y-4">
+        <div className="space-y-4">
         <CollapsibleRow
           title="Looker Studio Dashboard"
           defaultOpen={true}
@@ -64,6 +76,7 @@ export default function DashboardPage() {
             />
           </div>
         </CollapsibleRow>
+        </div>
       </div>
     </div>
   )

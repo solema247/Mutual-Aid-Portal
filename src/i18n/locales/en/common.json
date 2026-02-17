@@ -3,6 +3,7 @@
   "logout_desc": "Sign out of your account",
   "loading": "Loading...",
   "back": "Back",
+  "back_to_home": "Back to Home",
   "note": "Note",
   "refresh": "Refresh",
   "error_fetching_data": "Failed to fetch data",

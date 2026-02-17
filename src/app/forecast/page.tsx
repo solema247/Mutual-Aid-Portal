@@ -17,7 +17,8 @@ import { CollapsibleRow } from '@/components/ui/collapsible'
 import Papa from 'papaparse'
 import { FileInput } from '@/components/ui/file-input'
 import { ViewForecasts } from './components/ViewForecasts'
-import { useRouter } from 'next/navigation'
+import Link from 'next/link'
+import { ArrowLeft } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -416,7 +417,6 @@ const EntryFormRow = ({
 
 export default function ForecastPage() {
   const { t } = useTranslation(['forecast', 'common'])
-  const router = useRouter()
   const [donors, setDonors] = useState<{ id: string; name: string }[]>([])
   const [states, setStates] = useState<{ id: string; state_name: string }[]>([])
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -1089,26 +1089,29 @@ export default function ForecastPage() {
   )
 
   return (
-    <div className="max-w-7xl mx-auto p-6 space-y-6">
+    <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
       <LanguageSwitch />
-      <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-semibold">{t('forecast:title')}</h2>
-        <Button 
-          variant="outline" 
-          onClick={() => router.push('/')}
-        >
-          {t('forecast:back')}
-        </Button>
-      </div>
-
-      {error && (
-        <div className="bg-destructive/15 text-destructive px-4 py-3 rounded-md">
-          {error}
+      <div className="space-y-6">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <Button variant="ghost" size="sm" asChild className="w-fit -ml-2">
+            <Link href="/partner-portal" className="flex items-center gap-2 text-muted-foreground hover:text-foreground">
+              <ArrowLeft className="h-4 w-4" />
+              {t('common:back_to_home')}
+            </Link>
+          </Button>
         </div>
-      )}
+        <div className="flex items-center justify-between">
+          <h1 className="text-3xl font-bold">{t('forecast:title')}</h1>
+        </div>
 
-      {/* Donor Display - Always visible */}
-      <div className="space-y-2">
+        {error && (
+          <div className="bg-destructive/15 text-destructive px-4 py-3 rounded-md">
+            {error}
+          </div>
+        )}
+
+          {/* Donor Display - Always visible */}
+        <div className="space-y-2">
         <Label htmlFor="donor">{t('forecast:partner')}</Label>
         <div className="h-9 px-3 py-1 rounded-md border bg-muted/50 flex items-center">
           {donors[0]?.name}
@@ -1362,7 +1365,8 @@ export default function ForecastPage() {
           </CollapsibleContent>
         </Collapsible>
       </div>
-      <DuplicatesDialog />
+        <DuplicatesDialog />
+      </div>
     </div>
   )
 }

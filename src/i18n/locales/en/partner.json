@@ -1,9 +1,11 @@
 {
   "title": "Mutual Aid Partner Portal",
+  "navigation": "Partner Portal",
+  "home": "Home",
   "welcome": "Welcome, {{name}}",
-  "forecast": "Forecasting Tool",
+  "forecast": "Donor Forecasting Tool and Dashboards",
   "forecast_desc": "Plan and manage your forecasts",
-  "dashboard": "Dashboard",
+  "dashboard": "Mutual Aid Portal - ERR Dashboards",
   "dashboard_desc": "View reports and dashboards",
   "grants": {
     "title": "Grant Management",
