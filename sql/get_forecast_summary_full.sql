@@ -4,7 +4,7 @@
 --       or .rpc('get_forecast_summary', { p_chart_type: 'transfer_state' })
 --       or .rpc('get_forecast_summary', { p_chart_type: 'org_transfer_state' }).
 --
--- For org_transfer_state the view must expose org_type (e.g. from the donor/organization).
+-- For org_transfer_state the view must expose source. Returns rows: source, transfer_method, state_name, amount.
 
 create or replace function public.get_forecast_summary(p_chart_type text default 'month_status')
 returns jsonb
@@ -56,12 +56,12 @@ begin
         order by d.transfer_method, d.state_name
       ) sub;
 
-    -- Sankey 3-level: org_type -> transfer_method -> state_name
-    -- View must expose org_type (e.g. from donor). Returns rows: org_type, transfer_method, state_name, amount.
+    -- Sankey 3-level: source -> transfer_method -> state_name
+    -- View must expose source. Returns rows: source, transfer_method, state_name, amount.
     when 'org_transfer_state' then
       select jsonb_agg(
         jsonb_build_object(
-          'org_type',        org_type,
+          'source',          source,
           'transfer_method', transfer_method,
           'state_name',      state_name,
           'amount',          amount
@@ -70,13 +70,13 @@ begin
       into result
       from (
         select
-          coalesce(d.org_type, 'Unknown')::text as org_type,
+          coalesce(d.source, 'Unknown')::text as source,
           coalesce(d.transfer_method, 'Unknown')::text as transfer_method,
           coalesce(d.state_name, 'Unknown')::text as state_name,
           sum(d.amount)::numeric as amount
         from partners.donor_forecasts_summary_view d
-        group by d.org_type, d.transfer_method, d.state_name
-        order by d.org_type, d.transfer_method, d.state_name
+        group by d.source, d.transfer_method, d.state_name
+        order by d.source, d.transfer_method, d.state_name
       ) sub;
 
     else
@@ -96,4 +96,4 @@ end;
 $$;
 
 comment on function public.get_forecast_summary(text) is
-  'Charts from partners.donor_forecasts_summary_view. p_chart_type: month_status (default), transfer_state (2-level Sankey), org_transfer_state (3-level Sankey: org_type -> transfer_method -> state_name).';
+  'Charts from partners.donor_forecasts_summary_view. p_chart_type: month_status (default), transfer_state (2-level Sankey), org_transfer_state (3-level Sankey: source -> transfer_method -> state_name).';

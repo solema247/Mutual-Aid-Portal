@@ -191,9 +191,9 @@ export function ForecastSankeyChart() {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>{t('forecast:charts.sankey_title', 'Org type to transfer method to state')}</CardTitle>
+          <CardTitle>{t('forecast:charts.sankey_title', 'Source to transfer method to state')}</CardTitle>
           <CardDescription>
-          {t('forecast:charts.sankey_desc', 'Flow from org type → transfer method → state by amount')}
+          {t('forecast:charts.sankey_desc', 'Flow from source → transfer method → state by amount')}
           {' · '}
           <span className="text-muted-foreground">
             {t('forecast:charts.sankey_click_hint', 'Click a node to focus; click again or Escape to clear.')}
@@ -211,9 +211,9 @@ export function ForecastSankeyChart() {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>{t('forecast:charts.sankey_title', 'Org type to transfer method to state')}</CardTitle>
+          <CardTitle>{t('forecast:charts.sankey_title', 'Source to transfer method to state')}</CardTitle>
           <CardDescription>
-          {t('forecast:charts.sankey_desc', 'Flow from org type → transfer method → state by amount')}
+          {t('forecast:charts.sankey_desc', 'Flow from source → transfer method → state by amount')}
           {' · '}
           <span className="text-muted-foreground">
             {t('forecast:charts.sankey_click_hint', 'Click a node to focus; click again or Escape to clear.')}
@@ -231,9 +231,9 @@ export function ForecastSankeyChart() {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>{t('forecast:charts.sankey_title', 'Org type to transfer method to state')}</CardTitle>
+          <CardTitle>{t('forecast:charts.sankey_title', 'Source to transfer method to state')}</CardTitle>
           <CardDescription>
-          {t('forecast:charts.sankey_desc', 'Flow from org type → transfer method → state by amount')}
+          {t('forecast:charts.sankey_desc', 'Flow from source → transfer method → state by amount')}
           {' · '}
           <span className="text-muted-foreground">
             {t('forecast:charts.sankey_click_hint', 'Click a node to focus; click again or Escape to clear.')}
@@ -250,9 +250,9 @@ export function ForecastSankeyChart() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>{t('forecast:charts.sankey_title', 'Org type to transfer method to state')}</CardTitle>
+        <CardTitle>{t('forecast:charts.sankey_title', 'Source to transfer method to state')}</CardTitle>
         <CardDescription>
-          {t('forecast:charts.sankey_desc', 'Flow from org type → transfer method → state by amount')}
+          {t('forecast:charts.sankey_desc', 'Flow from source → transfer method → state by amount')}
           {' · '}
           <span className="text-muted-foreground">
             {t('forecast:charts.sankey_click_hint', 'Click a node to focus; click again or Escape to clear.')}
