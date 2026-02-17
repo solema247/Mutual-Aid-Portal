@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ResponsiveContainer, Sankey } from 'recharts'
 import {
@@ -21,7 +21,7 @@ const PASTEL_COLORS = [
 /** Minimum link value used for layout so small flows (e.g. under 250k) stay visible */
 const MIN_LINK_VALUE = 250_000
 
-type NodeTooltipData = { name: string; value?: number; actualValue?: number; x: number; y: number } | null
+type NodeTooltipData = { name: string; value?: number; actualValue?: number; levelTotal?: number; x: number; y: number } | null
 
 /** Custom Sankey node: rect (pastel color) + label inside + hover tooltip + click to focus */
 function SankeyNodeWithLabel(props: {
@@ -29,26 +29,30 @@ function SankeyNodeWithLabel(props: {
   y: number
   width: number
   height: number
-  payload: { name: string; color?: string; depth?: number; value?: number; actualValue?: number; index?: number }
+  payload: { name: string; color?: string; depth?: number; value?: number; actualValue?: number; levelTotal?: number; index?: number }
   fill?: string
   stroke?: string
   selectedNodeIndex?: number | null
+  downstreamNodeIndices?: Set<number>
   onHover?: (data: NodeTooltipData, e?: React.MouseEvent) => void
   onSelect?: (index: number | null) => void
   [key: string]: unknown
 }) {
-  const { x, y, width, height, payload, fill, stroke, selectedNodeIndex, onHover, onSelect } = props
+  const { x, y, width, height, payload, fill, stroke, selectedNodeIndex, downstreamNodeIndices, onHover, onSelect } = props
   const nodeColor = payload.color ?? fill ?? 'var(--chart-1)'
   const actualValue = (payload as { actualValue?: number }).actualValue
+  const levelTotal = (payload as { levelTotal?: number }).levelTotal
   const nodeIndex = (payload as { index?: number }).index ?? -1
   const isSelected = selectedNodeIndex != null && selectedNodeIndex === nodeIndex
-  const isDimmed = selectedNodeIndex != null && !isSelected
+  const isInDownstreamFlow = !downstreamNodeIndices || downstreamNodeIndices.has(nodeIndex)
+  const isDimmed = selectedNodeIndex != null && !isInDownstreamFlow
+  const isLeftColumn = payload.depth === 0
   const isRightColumn = payload.depth === 2
-  const textX = isRightColumn ? x - 4 : x + width / 2
-  const textAnchor = isRightColumn ? 'end' : 'middle'
+  const textX = isLeftColumn ? x + width + 4 : isRightColumn ? x - 4 : x + width / 2
+  const textAnchor = isLeftColumn ? 'start' : isRightColumn ? 'end' : 'middle'
   return (
     <g
-      onMouseEnter={(e) => onHover?.({ name: payload.name, actualValue, x: e.clientX, y: e.clientY }, e)}
+      onMouseEnter={(e) => onHover?.({ name: payload.name, actualValue, levelTotal, x: e.clientX, y: e.clientY }, e)}
       onMouseLeave={() => onHover?.(null)}
       onClick={(e) => {
         e.stopPropagation()
@@ -91,6 +95,7 @@ function SankeyLinkGradient(props: {
   index: number
   payload: { source: { color?: string; index?: number }; target: { color?: string; index?: number }; value?: number }
   selectedNodeIndex?: number | null
+  downstreamLinkIndices?: Set<number>
   [key: string]: unknown
 }) {
   const {
@@ -104,20 +109,17 @@ function SankeyLinkGradient(props: {
     index,
     payload,
     selectedNodeIndex,
+    downstreamLinkIndices,
   } = props
-  const sourceIndex = (payload.source as { index?: number })?.index ?? -1
-  const targetIndex = (payload.target as { index?: number })?.index ?? -1
-  const isConnectedToSelected =
-    selectedNodeIndex == null ||
-    selectedNodeIndex === sourceIndex ||
-    selectedNodeIndex === targetIndex
+  const isInDownstreamFlow =
+    selectedNodeIndex == null || !downstreamLinkIndices || downstreamLinkIndices.has(index)
   const sourceColor = (payload.source as { color?: string })?.color ?? '#b8d4e3'
   const targetColor = (payload.target as { color?: string })?.color ?? '#e3c9b8'
   const gradientId = `sankey-link-${index}`
   const h = linkWidth / 2
   const pathD = `M ${sourceX},${sourceY - h} C ${sourceControlX},${sourceY - h} ${targetControlX},${targetY - h} ${targetX},${targetY - h} L ${targetX},${targetY + h} C ${targetControlX},${targetY + h} ${sourceControlX},${sourceY + h} ${sourceX},${sourceY + h} Z`
   return (
-    <g style={{ opacity: isConnectedToSelected ? 0.9 : 0.2 }}>
+    <g style={{ opacity: isInDownstreamFlow ? 0.9 : 0.2 }}>
       <defs>
         <linearGradient id={gradientId} x1="0%" y1="0%" x2="100%" y2="0%">
           <stop offset="0%" stopColor={sourceColor} />
@@ -141,6 +143,44 @@ export function ForecastSankeyChart() {
   const [nodeTooltip, setNodeTooltip] = useState<NodeTooltipData>(null)
   const [selectedNodeIndex, setSelectedNodeIndex] = useState<number | null>(null)
 
+  const { downstreamNodeIndices, downstreamLinkIndices } = useMemo(() => {
+    if (!data?.links || selectedNodeIndex == null) {
+      return { downstreamNodeIndices: new Set<number>(), downstreamLinkIndices: new Set<number>() }
+    }
+    const links = data.links
+    // Downstream: from selected node, follow links source → target
+    const downNodes = new Set<number>([selectedNodeIndex])
+    const downLinks = new Set<number>()
+    let changed = true
+    while (changed) {
+      changed = false
+      links.forEach((link, i) => {
+        if (downNodes.has(link.source) && !downNodes.has(link.target)) {
+          downNodes.add(link.target)
+          downLinks.add(i)
+          changed = true
+        }
+      })
+    }
+    // Upstream: from selected node, follow links target → source (flows that lead into this node)
+    const upNodes = new Set<number>([selectedNodeIndex])
+    const upLinks = new Set<number>()
+    changed = true
+    while (changed) {
+      changed = false
+      links.forEach((link, i) => {
+        if (upNodes.has(link.target) && !upNodes.has(link.source)) {
+          upNodes.add(link.source)
+          upLinks.add(i)
+          changed = true
+        }
+      })
+    }
+    const downstreamNodeIndices = new Set<number>([...downNodes, ...upNodes])
+    const downstreamLinkIndices = new Set<number>([...downLinks, ...upLinks])
+    return { downstreamNodeIndices, downstreamLinkIndices }
+  }, [data?.links, selectedNodeIndex])
+
   useEffect(() => {
     let cancelled = false
     setLoading(true)
@@ -154,18 +194,29 @@ export function ForecastSankeyChart() {
         if (cancelled) return
         if (body?.nodes && Array.isArray(body.nodes) && body?.links && Array.isArray(body.links)) {
           const n = body.nodes.length
+          const links = body.links
           const outSum = new Array<number>(n).fill(0)
           const inSum = new Array<number>(n).fill(0)
-          for (const l of body.links) {
+          for (const l of links) {
             outSum[l.source] += l.value
             inSum[l.target] += l.value
           }
           const actualTotalByNode = outSum.map((out, i) => (out > 0 ? out : inSum[i]))
+          const depth = new Array<number>(n)
+          for (let i = 0; i < n; i++) {
+            const hasIncoming = links.some((l) => l.target === i)
+            const hasOutgoing = links.some((l) => l.source === i)
+            depth[i] = !hasIncoming ? 0 : !hasOutgoing ? 2 : 1
+          }
+          const levelTotalByDepth = [0, 0, 0]
+          for (let i = 0; i < n; i++) levelTotalByDepth[depth[i]] += actualTotalByNode[i]
           const nodesWithColors = body.nodes.map((node, i) => ({
             ...node,
             index: i,
+            depth: depth[i],
             color: PASTEL_COLORS[i % PASTEL_COLORS.length],
             actualValue: actualTotalByNode[i],
+            levelTotal: levelTotalByDepth[depth[i]],
           }))
           const linksWithMin = body.links.map((l) => ({
             ...l,
@@ -191,14 +242,10 @@ export function ForecastSankeyChart() {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>{t('forecast:charts.sankey_title', 'Source to transfer method to state')}</CardTitle>
+          <CardTitle>{t('forecast:charts.sankey_title', 'Transfer method to state')}</CardTitle>
           <CardDescription>
-          {t('forecast:charts.sankey_desc', 'Flow from source → transfer method → state by amount')}
-          {' · '}
-          <span className="text-muted-foreground">
-            {t('forecast:charts.sankey_click_hint', 'Click a node to focus; click again or Escape to clear.')}
-          </span>
-        </CardDescription>
+            {t('forecast:charts.sankey_desc', 'Flow from transfer method (origin) to state (destination) by amount · Click a node to focus; click again or Escape to clear. Tooltip % is share of total at each node level.')}
+          </CardDescription>
         </CardHeader>
         <CardContent className="flex items-center justify-center min-h-[320px]">
           <p className="text-sm text-muted-foreground">{t('common:loading')}</p>
@@ -211,14 +258,10 @@ export function ForecastSankeyChart() {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>{t('forecast:charts.sankey_title', 'Source to transfer method to state')}</CardTitle>
+          <CardTitle>{t('forecast:charts.sankey_title', 'Transfer method to state')}</CardTitle>
           <CardDescription>
-          {t('forecast:charts.sankey_desc', 'Flow from source → transfer method → state by amount')}
-          {' · '}
-          <span className="text-muted-foreground">
-            {t('forecast:charts.sankey_click_hint', 'Click a node to focus; click again or Escape to clear.')}
-          </span>
-        </CardDescription>
+            {t('forecast:charts.sankey_desc', 'Flow from transfer method (origin) to state (destination) by amount · Click a node to focus; click again or Escape to clear. Tooltip % is share of total at each node level.')}
+          </CardDescription>
         </CardHeader>
         <CardContent className="flex items-center justify-center min-h-[320px]">
           <p className="text-sm text-destructive">{error}</p>
@@ -231,14 +274,10 @@ export function ForecastSankeyChart() {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>{t('forecast:charts.sankey_title', 'Source to transfer method to state')}</CardTitle>
+          <CardTitle>{t('forecast:charts.sankey_title', 'Transfer method to state')}</CardTitle>
           <CardDescription>
-          {t('forecast:charts.sankey_desc', 'Flow from source → transfer method → state by amount')}
-          {' · '}
-          <span className="text-muted-foreground">
-            {t('forecast:charts.sankey_click_hint', 'Click a node to focus; click again or Escape to clear.')}
-          </span>
-        </CardDescription>
+            {t('forecast:charts.sankey_desc', 'Flow from transfer method (origin) to state (destination) by amount · Click a node to focus; click again or Escape to clear. Tooltip % is share of total at each node level.')}
+          </CardDescription>
         </CardHeader>
         <CardContent className="flex items-center justify-center min-h-[320px]">
           <p className="text-sm text-muted-foreground">{t('forecast:charts.no_data', 'No forecast data yet')}</p>
@@ -250,13 +289,9 @@ export function ForecastSankeyChart() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>{t('forecast:charts.sankey_title', 'Source to transfer method to state')}</CardTitle>
+        <CardTitle>{t('forecast:charts.sankey_title', 'Transfer method to state')}</CardTitle>
         <CardDescription>
-          {t('forecast:charts.sankey_desc', 'Flow from source → transfer method → state by amount')}
-          {' · '}
-          <span className="text-muted-foreground">
-            {t('forecast:charts.sankey_click_hint', 'Click a node to focus; click again or Escape to clear.')}
-          </span>
+          {t('forecast:charts.sankey_desc', 'Flow from transfer method (origin) to state (destination) by amount · Click a node to focus; click again or Escape to clear. Tooltip % is share of total at each node level.')}
         </CardDescription>
       </CardHeader>
       <CardContent className="relative">
@@ -274,12 +309,17 @@ export function ForecastSankeyChart() {
                   {...props}
                   stroke="var(--border)"
                   selectedNodeIndex={selectedNodeIndex}
+                  downstreamNodeIndices={downstreamNodeIndices}
                   onHover={setNodeTooltip}
                   onSelect={setSelectedNodeIndex}
                 />
               )}
               link={(props) => (
-                <SankeyLinkGradient {...props} selectedNodeIndex={selectedNodeIndex} />
+                <SankeyLinkGradient
+                  {...props}
+                  selectedNodeIndex={selectedNodeIndex}
+                  downstreamLinkIndices={downstreamLinkIndices}
+                />
               )}
               nodePadding={16}
               nodeWidth={12}
@@ -303,6 +343,20 @@ export function ForecastSankeyChart() {
                   maximumFractionDigits: 0,
                   minimumFractionDigits: 0,
                 }).format(nodeTooltip.actualValue ?? nodeTooltip.value ?? 0)}
+                {nodeTooltip.levelTotal != null &&
+                  nodeTooltip.levelTotal > 0 &&
+                  nodeTooltip.actualValue != null && (
+                    <span className="ml-1.5">
+                      (
+                      {new Intl.NumberFormat(undefined, {
+                        maximumFractionDigits: 1,
+                        minimumFractionDigits: 1,
+                      }).format(
+                        (100 * (nodeTooltip.actualValue / nodeTooltip.levelTotal))
+                      )}
+                      %)
+                    </span>
+                  )}
               </div>
             )}
           </div>
