@@ -18,8 +18,12 @@ const PASTEL_COLORS = [
   '#b8e3d4', '#e3d4b8', '#d4e3b8', '#b8c9e3', '#e3b8c9',
 ]
 
-/** Minimum link value used for layout so small flows (e.g. under 250k) stay visible */
-const MIN_LINK_VALUE = 250_000
+/**
+ * Minimum link value for layout. Use 0 to preserve data proportions so node heights
+ * match the sum of link widths (flow conservation). A positive value inflates small
+ * links and can make middle-layer nodes appear larger than the links feeding them.
+ */
+const MIN_LINK_VALUE = 0
 
 type NodeTooltipData = { name: string; value?: number; actualValue?: number; levelTotal?: number; x: number; y: number } | null
 
@@ -287,16 +291,16 @@ export function ForecastSankeyChart() {
   }
 
   return (
-    <Card>
+    <Card className="flex flex-1 flex-col min-h-0">
       <CardHeader>
         <CardTitle>{t('forecast:charts.sankey_title', 'Transfer method to state')}</CardTitle>
         <CardDescription>
           {t('forecast:charts.sankey_desc', 'Flow from transfer method (origin) to state (destination) by amount · Click a node to focus; click again or Escape to clear. Tooltip % is share of total at each node level.')}
         </CardDescription>
       </CardHeader>
-      <CardContent className="relative">
+      <CardContent className="relative flex flex-1 flex-col min-h-0">
         <div
-          className="w-full h-[400px] cursor-default"
+          className="w-full h-[480px] cursor-default"
           tabIndex={0}
           onClick={() => setSelectedNodeIndex(null)}
           onKeyDown={(e) => e.key === 'Escape' && setSelectedNodeIndex(null)}

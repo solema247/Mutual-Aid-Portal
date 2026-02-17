@@ -14,11 +14,11 @@ export function ViewForecasts() {
     <div className="space-y-4">
       <div className="space-y-4 pt-4">
         <ForecastStatusByMonthChart />
-        <div className="flex gap-4">
-          <div className="w-1/2 min-w-0">
+        <div className="flex gap-4 items-stretch">
+          <div className="w-1/2 min-w-0 flex flex-col">
             <ForecastSankeyChart />
           </div>
-          <div className="w-1/2 min-w-0">
+          <div className="w-1/2 min-w-0 flex flex-col">
             <ForecastStateSupportChart />
           </div>
         </div>

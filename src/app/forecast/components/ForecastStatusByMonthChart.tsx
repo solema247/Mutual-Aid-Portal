@@ -25,8 +25,9 @@ import {
   type ChartConfig,
 } from '@/components/ui/chart'
 
-const COMPLETE_COLOR = 'var(--chart-2)'
-const PLANNED_COLOR = 'var(--chart-1)'
+/** Pastel colors to match Sankey and State-level Support charts */
+const COMPLETE_COLOR = '#9ee6c2'  /* mint green */
+const PLANNED_COLOR = '#7ec8e3'  /* soft blue */
 /** Per-row height: bar (30px) + gap (18px) — readable with clear space between bars */
 const ROW_HEIGHT = 48
 const MIN_CHART_HEIGHT = 280
