@@ -20,9 +20,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Pencil, Trash2, X, Check, ArrowUpDown, Search } from 'lucide-react'
+import { Pencil, Trash2, X, Check, ArrowUpDown, Search, Download } from 'lucide-react'
 import React from 'react'
 import { Label } from '@/components/ui/label'
+import * as XLSX from 'xlsx'
 
 interface Forecast {
   id: string
@@ -316,6 +317,47 @@ export function ViewOwnForecasts() {
     setFilteredForecasts(result)
   }, [forecasts, filters, sortConfig])
 
+  /** Convert month from YYYY-MM-DD or YYYY-MM to MM-YYYY for template Excel */
+  const monthToTemplateFormat = (monthStr: string): string => {
+    if (!monthStr) return ''
+    const s = String(monthStr).trim()
+    const ymd = s.match(/^(\d{4})-(\d{2})(?:-\d{2})?$/)
+    if (ymd) return `${ymd[2]}-${ymd[1]}`
+    return s
+  }
+
+  const handleDownloadExcel = async () => {
+    try {
+      const donorData = JSON.parse(localStorage.getItem('donor') || '{}')
+      const orgName = donorData?.name ?? donorData?.donors?.name ?? ''
+
+      const templateRows = filteredForecasts.map((f) => ({
+        'Month': monthToTemplateFormat(f.month),
+        'State': f.state_name ?? '',
+        'Amount': f.amount,
+        'Localities': f.localities ?? '',
+        'Org Name': orgName,
+        'Intermediary': f.intermediary ?? '',
+        'FSP': f.transfer_method ?? '',
+        'Funding Source': f.source ?? '',
+        'Receiving MAG': f.receiving_mag ?? '',
+        'Status': f.status ?? 'planned'
+      }))
+
+      const res = await fetch('/templates/MAG Finance Forecast Template.xlsx')
+      if (!res.ok) throw new Error('Template not found')
+      const arrayBuffer = await res.arrayBuffer()
+
+      const wb = XLSX.read(arrayBuffer, { type: 'array' })
+      const dataSheet = XLSX.utils.json_to_sheet(templateRows)
+      wb.Sheets['Forecast'] = dataSheet
+      XLSX.writeFile(wb, 'MAG Finance Forecast - My Data.xlsx')
+    } catch (err) {
+      console.error('Download Excel failed:', err)
+      setError(err instanceof Error ? err.message : 'Failed to download Excel')
+    }
+  }
+
   // Get unique values for filter dropdowns
   const getUniqueValues = (key: keyof Forecast) => {
     return Array.from(new Set(forecasts.map(f => f[key])))
@@ -374,31 +416,38 @@ export function ViewOwnForecasts() {
 
   return (
     <div className="space-y-4">
-      {/* Filters */}
-      <div className="flex flex-col gap-4 mb-4">
-        <div className="flex flex-wrap gap-4">
-          <div className="flex-1 min-w-[150px]">
-            <Select
-              value={filters.month}
-              onValueChange={(value) => setFilters(prev => ({ ...prev, month: value }))}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder={t('forecast:filters.all_months')} />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">{t('forecast:filters.all_months')}</SelectItem>
-                {getUniqueValues('month').map((month) => (
-                  <SelectItem key={month} value={month}>{month}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+      {/* Download as Excel (same template format as file upload) */}
+      <div className="flex justify-end mb-2">
+        <Button variant="outline" size="sm" className="gap-2" onClick={handleDownloadExcel}>
+          <Download className="size-4" />
+          {t('forecast:download_as_excel', 'Download as Excel')}
+        </Button>
+      </div>
+      {/* Filters - single row, equal width */}
+      <div className="flex flex-nowrap gap-2 mb-4 overflow-x-auto pb-1">
+        <div className="min-w-0 flex-1 basis-0">
+          <Select
+            value={filters.month}
+            onValueChange={(value) => setFilters(prev => ({ ...prev, month: value }))}
+          >
+            <SelectTrigger className="w-full min-w-0">
+              <SelectValue placeholder={t('forecast:filters.all_months')} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">{t('forecast:filters.all_months')}</SelectItem>
+              {getUniqueValues('month').map((month) => (
+                <SelectItem key={month} value={month}>{month}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
 
+        <div className="min-w-0 flex-1 basis-0">
           <Select
             value={filters.state}
             onValueChange={(value) => setFilters(prev => ({ ...prev, state: value }))}
           >
-            <SelectTrigger className="w-[200px]">
+            <SelectTrigger className="w-full min-w-0">
               <SelectValue placeholder={t('forecast:sections.form.table.state')} />
             </SelectTrigger>
             <SelectContent>
@@ -408,12 +457,14 @@ export function ViewOwnForecasts() {
               ))}
             </SelectContent>
           </Select>
+        </div>
 
+        <div className="min-w-0 flex-1 basis-0">
           <Select
             value={filters.status}
             onValueChange={(value) => setFilters(prev => ({ ...prev, status: value }))}
           >
-            <SelectTrigger className="w-[200px]">
+            <SelectTrigger className="w-full min-w-0">
               <SelectValue placeholder={t('forecast:sections.form.table.status')} />
             </SelectTrigger>
             <SelectContent>
@@ -422,12 +473,14 @@ export function ViewOwnForecasts() {
               <SelectItem value="complete">Complete</SelectItem>
             </SelectContent>
           </Select>
+        </div>
 
+        <div className="min-w-0 flex-1 basis-0">
           <Select
             value={filters.transfer_method}
             onValueChange={(value) => setFilters(prev => ({ ...prev, transfer_method: value }))}
           >
-            <SelectTrigger className="w-[200px]">
+            <SelectTrigger className="w-full min-w-0">
               <SelectValue placeholder={t('forecast:sections.form.table.transfer_method')} />
             </SelectTrigger>
             <SelectContent>
@@ -437,12 +490,14 @@ export function ViewOwnForecasts() {
               ))}
             </SelectContent>
           </Select>
+        </div>
 
+        <div className="min-w-0 flex-1 basis-0">
           <Select
             value={filters.source}
             onValueChange={(value) => setFilters(prev => ({ ...prev, source: value }))}
           >
-            <SelectTrigger className="w-[200px]">
+            <SelectTrigger className="w-full min-w-0">
               <SelectValue placeholder={t('forecast:sections.form.table.source')} />
             </SelectTrigger>
             <SelectContent>
@@ -452,12 +507,14 @@ export function ViewOwnForecasts() {
               ))}
             </SelectContent>
           </Select>
+        </div>
 
+        <div className="min-w-0 flex-1 basis-0">
           <Select
             value={filters.receiving_mag}
             onValueChange={(value) => setFilters(prev => ({ ...prev, receiving_mag: value }))}
           >
-            <SelectTrigger className="w-[200px]">
+            <SelectTrigger className="w-full min-w-0">
               <SelectValue placeholder={t('forecast:sections.form.table.receiving_mag')} />
             </SelectTrigger>
             <SelectContent>

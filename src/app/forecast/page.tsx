@@ -16,6 +16,7 @@ import { Label } from '@/components/ui/label'
 import { CollapsibleRow } from '@/components/ui/collapsible'
 import Papa from 'papaparse'
 import { FileInput } from '@/components/ui/file-input'
+import { usePathname } from 'next/navigation'
 import { ViewForecasts } from './components/ViewForecasts'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
@@ -417,6 +418,8 @@ const EntryFormRow = ({
 
 export default function ForecastPage() {
   const { t } = useTranslation(['forecast', 'common'])
+  const pathname = usePathname()
+  const showLanguageSwitch = pathname == null || !pathname.startsWith('/partner-portal')
   const [donors, setDonors] = useState<{ id: string; name: string }[]>([])
   const [states, setStates] = useState<{ id: string; state_name: string }[]>([])
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -1090,7 +1093,7 @@ export default function ForecastPage() {
 
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-      <LanguageSwitch />
+      {showLanguageSwitch && <LanguageSwitch />}
       <div className="space-y-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <Button variant="ghost" size="sm" asChild className="w-fit -ml-2">
