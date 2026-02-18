@@ -16,6 +16,7 @@ import {
   ChartTooltipContent,
   type ChartConfig,
 } from '@/components/ui/chart'
+import { useForecastChartsRefresh } from './ForecastChartsRefreshContext'
 
 /** 18 distinct colors for 18 states – one color per state, no repeat */
 const STATE_COLORS = [
@@ -61,6 +62,7 @@ type ForecastStateSupportChartProps = { pdfChartId?: string }
 
 export function ForecastStateSupportChart({ pdfChartId = 'state-support' }: ForecastStateSupportChartProps = {}) {
   const { t } = useTranslation(['forecast', 'common'])
+  const { refreshKey } = useForecastChartsRefresh()
   const [rows, setRows] = useState<MonthStateRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -96,7 +98,7 @@ export function ForecastStateSupportChart({ pdfChartId = 'state-support' }: Fore
         if (!cancelled) setLoading(false)
       })
     return () => { cancelled = true }
-  }, [])
+  }, [refreshKey])
 
   const { chartData, chartConfig, stateKeys } = useMemo(() => {
     const stateSet = new Set<string>()

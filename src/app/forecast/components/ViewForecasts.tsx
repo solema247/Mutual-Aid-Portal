@@ -1,19 +1,36 @@
 'use client'
 
+import { useTranslation } from 'react-i18next'
+import { RefreshCw } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import { ForecastStatusByMonthChart } from './ForecastStatusByMonthChart'
 import { ForecastSankeyChart } from './ForecastSankeyChart'
 import { ForecastStateSupportChart } from './ForecastStateSupportChart'
 import { ForecastSourceOverTimeChart } from './ForecastSourceOverTimeChart'
 import { ForecastReceivingMagOverTimeChart } from './ForecastReceivingMagOverTimeChart'
 import { ForecastDownloadModal } from './ForecastDownloadModal'
+import { ForecastChartsRefreshProvider, useForecastChartsRefresh } from './ForecastChartsRefreshContext'
+
+function ViewForecastsActions() {
+  const { t } = useTranslation(['forecast', 'common'])
+  const { refresh } = useForecastChartsRefresh()
+  return (
+    <div className="flex justify-end gap-2">
+      <Button variant="outline" size="sm" className="gap-2" onClick={refresh}>
+        <RefreshCw className="size-4" />
+        {t('forecast:refresh_charts', 'Refresh charts')}
+      </Button>
+      <ForecastDownloadModal />
+    </div>
+  )
+}
 
 export function ViewForecasts() {
   return (
-    <div className="space-y-4">
-      <div className="space-y-4 pt-4">
-        <div className="flex justify-end">
-          <ForecastDownloadModal />
-        </div>
+    <ForecastChartsRefreshProvider>
+      <div className="space-y-4">
+        <div className="space-y-4 pt-4">
+          <ViewForecastsActions />
         <div data-download-chart="status-by-month">
           <ForecastStatusByMonthChart />
         </div>
@@ -35,5 +52,6 @@ export function ViewForecasts() {
         </div>
       </div>
     </div>
+    </ForecastChartsRefreshProvider>
   )
 } 

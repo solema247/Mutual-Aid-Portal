@@ -16,6 +16,7 @@ import {
   ChartTooltipContent,
   type ChartConfig,
 } from '@/components/ui/chart'
+import { useForecastChartsRefresh } from './ForecastChartsRefreshContext'
 
 /** Pastel colors to match other forecast charts (Receiving MAG) */
 const MAG_COLORS = ['#7ec8e3', '#f7c982', '#d4a5d4', '#9ee6c2', '#e89898', '#c9b8e3']
@@ -50,6 +51,7 @@ type MonthReceivingMagRow = { month: string; receiving_mag: string; amount: numb
 
 export function ForecastReceivingMagOverTimeChart() {
   const { t } = useTranslation(['forecast', 'common'])
+  const { refreshKey } = useForecastChartsRefresh()
   const [rows, setRows] = useState<MonthReceivingMagRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -81,7 +83,7 @@ export function ForecastReceivingMagOverTimeChart() {
         if (!cancelled) setLoading(false)
       })
     return () => { cancelled = true }
-  }, [])
+  }, [refreshKey])
 
   const { chartData, chartConfig, magKeys, magKeysDisplay } = useMemo(() => {
     const magSet = new Set<string>()

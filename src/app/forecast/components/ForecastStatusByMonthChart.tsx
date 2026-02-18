@@ -19,6 +19,7 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { ChartContainer, type ChartConfig } from '@/components/ui/chart'
+import { useForecastChartsRefresh } from './ForecastChartsRefreshContext'
 
 /** Pastel colors to match Sankey and State-level Support charts */
 const COMPLETE_COLOR = '#9ee6c2'  /* mint green */
@@ -61,6 +62,7 @@ function valueLabelContent(
 
 export function ForecastStatusByMonthChart() {
   const { t } = useTranslation(['forecast', 'common'])
+  const { refreshKey } = useForecastChartsRefresh()
   const [rows, setRows] = useState<ChartRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -97,7 +99,7 @@ export function ForecastStatusByMonthChart() {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [refreshKey])
 
   const completeData = rows.map((r) => ({ month: r.month, value: r.complete }))
   const plannedData = rows.map((r) => ({ month: r.month, value: r.planned }))

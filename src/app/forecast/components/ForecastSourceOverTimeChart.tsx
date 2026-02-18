@@ -16,6 +16,7 @@ import {
   ChartTooltipContent,
   type ChartConfig,
 } from '@/components/ui/chart'
+import { useForecastChartsRefresh } from './ForecastChartsRefreshContext'
 
 /** Pastel colors to match other forecast charts (Funding Sources) */
 const SOURCE_COLORS = ['#7ec8e3', '#f7c982', '#d4a5d4', '#9ee6c2', '#e89898', '#c9b8e3']
@@ -50,6 +51,7 @@ type MonthSourceRow = { month: string; source: string; amount: number }
 
 export function ForecastSourceOverTimeChart() {
   const { t } = useTranslation(['forecast', 'common'])
+  const { refreshKey } = useForecastChartsRefresh()
   const [rows, setRows] = useState<MonthSourceRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -81,7 +83,7 @@ export function ForecastSourceOverTimeChart() {
         if (!cancelled) setLoading(false)
       })
     return () => { cancelled = true }
-  }, [])
+  }, [refreshKey])
 
   const { chartData, chartConfig, sourceKeys, sourceKeysDisplay } = useMemo(() => {
     const sourceSet = new Set<string>()

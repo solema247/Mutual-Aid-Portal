@@ -10,6 +10,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
+import { useForecastChartsRefresh } from './ForecastChartsRefreshContext'
 
 type SankeyData = { nodes: { name: string; color?: string }[]; links: { source: number; target: number; value: number }[] }
 
@@ -141,6 +142,7 @@ function SankeyLinkGradient(props: {
 
 export function ForecastSankeyChart() {
   const { t } = useTranslation(['forecast', 'common'])
+  const { refreshKey } = useForecastChartsRefresh()
   const [data, setData] = useState<SankeyData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -240,7 +242,7 @@ export function ForecastSankeyChart() {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [refreshKey])
 
   if (loading) {
     return (
