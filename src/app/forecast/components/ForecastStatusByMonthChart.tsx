@@ -245,16 +245,17 @@ export function ForecastStatusByMonthChart() {
           </div>
         </div>
 
-        {/* Grand total */}
-        <div className="flex justify-end gap-8 pt-2 border-t text-sm">
-          <span>
+        {/* Grand total — same grid as chart so each total aligns under its column */}
+        <div className="grid grid-cols-[minmax(5rem,auto)_1fr_1fr] gap-4 pt-2 border-t text-sm min-w-0">
+          <div />
+          <div className="text-right">
             <span className="text-muted-foreground">Complete total: </span>
             <span className="font-mono font-medium">{totalComplete.toLocaleString()}</span>
-          </span>
-          <span>
+          </div>
+          <div className="text-right">
             <span className="text-muted-foreground">Planned total: </span>
             <span className="font-mono font-medium">{totalPlanned.toLocaleString()}</span>
-          </span>
+          </div>
         </div>
       </CardContent>
     </Card>

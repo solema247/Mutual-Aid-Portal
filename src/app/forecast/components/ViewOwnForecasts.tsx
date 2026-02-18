@@ -20,7 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Pencil, Trash2, X, Check, ArrowUpDown, Search, Download } from 'lucide-react'
+import { Pencil, Trash2, X, Check, ArrowUpDown, Search, Download, RefreshCw } from 'lucide-react'
 import React from 'react'
 import { Label } from '@/components/ui/label'
 import * as XLSX from 'xlsx'
@@ -152,6 +152,7 @@ export function ViewOwnForecasts() {
     source: "all",
     receiving_mag: "all"
   })
+  const [refreshing, setRefreshing] = useState(false)
 
   const fetchForecasts = async () => {
     try {
@@ -416,8 +417,25 @@ export function ViewOwnForecasts() {
 
   return (
     <div className="space-y-4">
-      {/* Download as Excel (same template format as file upload) */}
-      <div className="flex justify-end mb-2">
+      {/* Download as Excel + Refresh table */}
+      <div className="flex justify-end gap-2 mb-2">
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-2"
+          onClick={async () => {
+            setRefreshing(true)
+            try {
+              await fetchForecasts()
+            } finally {
+              setRefreshing(false)
+            }
+          }}
+          disabled={refreshing}
+        >
+          <RefreshCw className={`size-4 ${refreshing ? 'animate-spin' : ''}`} />
+          {t('forecast:refresh_table', 'Refresh table')}
+        </Button>
         <Button variant="outline" size="sm" className="gap-2" onClick={handleDownloadExcel}>
           <Download className="size-4" />
           {t('forecast:download_as_excel', 'Download as Excel')}
