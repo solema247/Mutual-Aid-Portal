@@ -220,20 +220,34 @@ export default function ProjectManagement() {
     setRows(filtered)
   }, [selectedGrantId, allRows, grants, grantSerialSearch])
 
+  // Tracker score per project: 0.5 * min(1, actual/plan) + 0.5 if at least one F5
+  const trackerScore = (r: any) => {
+    const plan = Number(r.plan || 0)
+    const actual = Number(r.actual || 0)
+    const burn = plan > 0 ? actual / plan : 0
+    const f4Part = 0.5 * Math.min(1, burn)
+    const f5Part = Number(r.f5_count || 0) > 0 ? 0.5 : 0
+    return f4Part + f5Part
+  }
+
   // Project-level counters for the current filtered slice
   const counters = useMemo(() => {
     const total = (rows || []).length
     const withMou = (rows || []).filter((r:any) => !!r.has_mou).length
     const withF4 = (rows || []).filter((r:any) => Number(r.f4_count || 0) > 0).length
     const withF5 = (rows || []).filter((r:any) => Number(r.f5_count || 0) > 0).length
-    const pctF4 = total > 0 ? (withF4 / total) : 0
+    const plan = (rows || []).reduce((s: number, r: any) => s + (Number(r.plan) || 0), 0)
+    const actual = (rows || []).reduce((s: number, r: any) => s + (Number(r.actual) || 0), 0)
+    const pctF4 = plan > 0 ? actual / plan : 0
     const pctF5 = total > 0 ? (withF5 / total) : 0
-    return { total, withMou, withF4, withF5, pctF4, pctF5 }
+    const trackerSum = (rows || []).reduce((s: number, r: any) => s + trackerScore(r), 0)
+    const pctTracker = total > 0 ? (trackerSum / total) * 100 : 0
+    return { total, withMou, withF4, withF5, pctF4, pctF5, pctTracker }
   }, [rows])
 
   // Grant-level summary rows (aggregate allRows by grant; used for "Summary by Grant" table)
   const grantSummaryRows = useMemo(() => {
-    const out: Array<{ grantLabel: string; plan: number; actual: number; variance: number; burn: number; f4_count: number; f5_count: number; total_projects: number; projects_with_f4: number; projects_with_f5: number }> = []
+    const out: Array<{ grantLabel: string; plan: number; actual: number; variance: number; burn: number; f4_count: number; f5_count: number; total_projects: number; projects_with_f4: number; projects_with_f5: number; tracker_sum: number }> = []
     // Unassigned: current projects with no grant_grid_id
     const unassignedRows = (allRows || []).filter((r: any) => !r.is_historical && !r.grant_grid_id)
     if (unassignedRows.length > 0) {
@@ -249,7 +263,8 @@ export default function ProjectManagement() {
         f5_count: unassignedRows.reduce((s: number, r: any) => s + (Number(r.f5_count) || 0), 0),
         total_projects: unassignedRows.length,
         projects_with_f4: unassignedRows.filter((r: any) => Number(r.f4_count || 0) > 0).length,
-        projects_with_f5: unassignedRows.filter((r: any) => Number(r.f5_count || 0) > 0).length
+        projects_with_f5: unassignedRows.filter((r: any) => Number(r.f5_count || 0) > 0).length,
+        tracker_sum: unassignedRows.reduce((s: number, r: any) => s + trackerScore(r), 0)
       })
     }
     // One row per grant from grants list
@@ -275,7 +290,8 @@ export default function ProjectManagement() {
         f5_count: grantRows.reduce((s: number, r: any) => s + (Number(r.f5_count) || 0), 0),
         total_projects: grantRows.length,
         projects_with_f4: grantRows.filter((r: any) => Number(r.f4_count || 0) > 0).length,
-        projects_with_f5: grantRows.filter((r: any) => Number(r.f5_count || 0) > 0).length
+        projects_with_f5: grantRows.filter((r: any) => Number(r.f5_count || 0) > 0).length,
+        tracker_sum: grantRows.reduce((s: number, r: any) => s + trackerScore(r), 0)
       })
     }
     return out.sort((a, b) => (a.grantLabel === 'Unassigned' ? -1 : b.grantLabel === 'Unassigned' ? 1 : a.grantLabel.localeCompare(b.grantLabel)))
@@ -283,16 +299,17 @@ export default function ProjectManagement() {
 
   // Aggregations for drill-down
   const stateRows = useMemo(() => {
-    const byState = new Map<string, { state: string; plan: number; actual: number; variance: number; burn: number; f4_count: number; f5_count: number; total_projects: number; projects_with_f4: number; projects_with_f5: number; last_report_date: string | null; last_f5_date: string | null }>()
+    const byState = new Map<string, { state: string; plan: number; actual: number; variance: number; burn: number; f4_count: number; f5_count: number; total_projects: number; projects_with_f4: number; projects_with_f5: number; tracker_sum: number; last_report_date: string | null; last_f5_date: string | null }>()
     for (const r of rows) {
       const key = r.state || '—'
-      const curr = byState.get(key) || { state: key, plan: 0, actual: 0, variance: 0, burn: 0, f4_count: 0, f5_count: 0, total_projects: 0, projects_with_f4: 0, projects_with_f5: 0, last_report_date: null as string | null, last_f5_date: null as string | null }
+      const curr = byState.get(key) || { state: key, plan: 0, actual: 0, variance: 0, burn: 0, f4_count: 0, f5_count: 0, total_projects: 0, projects_with_f4: 0, projects_with_f5: 0, tracker_sum: 0, last_report_date: null as string | null, last_f5_date: null as string | null }
       curr.plan += Number(r.plan || 0)
       curr.actual += Number(r.actual || 0)
       curr.variance = curr.plan - curr.actual
       curr.f4_count += Number(r.f4_count || 0)
       curr.f5_count += Number(r.f5_count || 0)
       curr.total_projects += 1
+      curr.tracker_sum += trackerScore(r)
       if (Number(r.f4_count || 0) > 0) curr.projects_with_f4 += 1
       if (Number(r.f5_count || 0) > 0) curr.projects_with_f5 += 1
       const last = curr.last_report_date
@@ -312,16 +329,17 @@ export default function ProjectManagement() {
   const roomRows = useMemo(() => {
     if (!selectedStateName) return [] as any[]
     const filtered = rows.filter((r:any) => r.state === selectedStateName)
-    const byRoom = new Map<string, { err_id: string; state: string; plan: number; actual: number; variance: number; burn: number; f4_count: number; f5_count: number; total_projects: number; projects_with_f4: number; projects_with_f5: number; last_report_date: string | null; last_f5_date: string | null }>()
+    const byRoom = new Map<string, { err_id: string; state: string; plan: number; actual: number; variance: number; burn: number; f4_count: number; f5_count: number; total_projects: number; projects_with_f4: number; projects_with_f5: number; tracker_sum: number; last_report_date: string | null; last_f5_date: string | null }>()
     for (const r of filtered) {
       const key = r.err_id || '—'
-      const curr = byRoom.get(key) || { err_id: key, state: selectedStateName, plan: 0, actual: 0, variance: 0, burn: 0, f4_count: 0, f5_count: 0, total_projects: 0, projects_with_f4: 0, projects_with_f5: 0, last_report_date: null as string | null, last_f5_date: null as string | null }
+      const curr = byRoom.get(key) || { err_id: key, state: selectedStateName, plan: 0, actual: 0, variance: 0, burn: 0, f4_count: 0, f5_count: 0, total_projects: 0, projects_with_f4: 0, projects_with_f5: 0, tracker_sum: 0, last_report_date: null as string | null, last_f5_date: null as string | null }
       curr.plan += Number(r.plan || 0)
       curr.actual += Number(r.actual || 0)
       curr.variance = curr.plan - curr.actual
       curr.f4_count += Number(r.f4_count || 0)
       curr.f5_count += Number(r.f5_count || 0)
       curr.total_projects += 1
+      curr.tracker_sum += trackerScore(r)
       if (Number(r.f4_count || 0) > 0) curr.projects_with_f4 += 1
       if (Number(r.f5_count || 0) > 0) curr.projects_with_f5 += 1
       const last = curr.last_report_date
@@ -443,7 +461,8 @@ export default function ProjectManagement() {
         f5_count: 0,
         total_projects: 0,
         projects_with_f4: 0,
-        projects_with_f5: 0
+        projects_with_f5: 0,
+        pctTracker: 0
       }
     }
     const totalPlan = displayed.reduce((sum, r) => sum + (Number(r.plan || 0)), 0)
@@ -455,6 +474,8 @@ export default function ProjectManagement() {
     const totalProjects = displayed.reduce((sum, r) => sum + (Number(r.total_projects || 1)), 0)
     const projectsWithF4 = displayed.reduce((sum, r) => sum + (Number(r.projects_with_f4 || (Number(r.f4_count || 0) > 0 ? 1 : 0))), 0)
     const projectsWithF5 = displayed.reduce((sum, r) => sum + (Number(r.projects_with_f5 || (Number(r.f5_count || 0) > 0 ? 1 : 0))), 0)
+    const trackerSum = displayed.reduce((sum, r) => sum + (r.tracker_sum ?? trackerScore(r)), 0)
+    const pctTracker = totalProjects > 0 ? (trackerSum / totalProjects) * 100 : 0
     
     return {
       plan: totalPlan,
@@ -465,7 +486,8 @@ export default function ProjectManagement() {
       f5_count: totalF5,
       total_projects: totalProjects,
       projects_with_f4: projectsWithF4,
-      projects_with_f5: projectsWithF5
+      projects_with_f5: projectsWithF5,
+      pctTracker
     }
   }, [displayed])
 
@@ -559,13 +581,6 @@ export default function ProjectManagement() {
           </div>
           <div className="text-xs text-muted-foreground leading-tight">{t('management.kpis.variance_desc')}</div>
         </Card>
-        <Card className="p-1.5 mx-1">
-          <div className="flex items-center justify-between gap-2 mb-0.5">
-            <CardTitle className="text-sm leading-tight font-semibold">{t('management.kpis.burn')}</CardTitle>
-            <span className="text-sm font-semibold">{kpis.burn ? (kpis.burn*100).toFixed(0)+'%' : '0%'}</span>
-          </div>
-          <div className="text-xs text-muted-foreground leading-tight">{t('management.kpis.burn_desc')}</div>
-        </Card>
         {/* Project Counters */}
         <Card className="p-1.5 mx-1">
           <div className="flex items-center justify-between gap-2 mb-0.5">
@@ -609,6 +624,13 @@ export default function ProjectManagement() {
             <span className="text-sm font-semibold">{(counters.pctF5*100).toFixed(0)}%</span>
           </div>
           <div className="text-xs text-muted-foreground leading-tight">{t('management.counters.f5_complete_desc')}</div>
+        </Card>
+        <Card className="p-1.5 mx-1">
+          <div className="flex items-center justify-between gap-2 mb-0.5">
+            <CardTitle className="text-sm leading-tight font-semibold">{t('management.counters.pct_tracker')}</CardTitle>
+            <span className="text-sm font-semibold">{counters.pctTracker.toFixed(0)}%</span>
+          </div>
+          <div className="text-xs text-muted-foreground leading-tight">{t('management.counters.pct_tracker_desc')}</div>
         </Card>
         <Card className="p-1.5 mx-1">
           <div className="flex items-center justify-between gap-2 mb-0.5">
@@ -753,7 +775,6 @@ export default function ProjectManagement() {
                     <>
                       <TableHead>{t('management.table.err')}</TableHead>
                       <TableHead>{t('management.table.state')}</TableHead>
-                      <TableHead>{t('management.table.mou')}</TableHead>
                       <TableHead>Grant Serial</TableHead>
                     </>
                   ) : level === 'state' ? (
@@ -769,17 +790,17 @@ export default function ProjectManagement() {
                   <TableHead className="text-right">{t('management.table.plan')}</TableHead>
                   <TableHead className="text-right">{t('management.table.actuals')}</TableHead>
                   <TableHead className="text-right">{t('management.table.variance')}</TableHead>
-                  <TableHead className="text-right">{t('management.table.burn')}</TableHead>
-                  <TableHead>{t('management.table.f4s')}</TableHead>
-                  <TableHead>{t('management.table.f4_complete')}</TableHead>
-                  <TableHead>{t('management.table.f5s')}</TableHead>
-                  <TableHead>{t('management.table.f5_complete')}</TableHead>
+                  <TableHead className="w-12">{t('management.table.f4s')}</TableHead>
+                  <TableHead className="text-right w-16" title={t('management.table.f4_complete_tooltip')}>{t('management.table.f4_complete')}</TableHead>
+                  <TableHead className="w-12">{t('management.table.f5s')}</TableHead>
+                  <TableHead className="text-right w-16" title={t('management.table.f5_complete_tooltip')}>{t('management.table.f5_complete')}</TableHead>
+                  <TableHead className="text-right w-24 whitespace-nowrap" title={t('management.table.pct_tracker_tooltip')}>{t('management.table.pct_tracker')}</TableHead>
                   {(searchRows || level === 'project') && <TableHead>{t('management.table.actions')}</TableHead>}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                 {(displayed||[]).length===0 ? (
-                  <TableRow><TableCell colSpan={(searchRows || level==='project')?13:(level==='room'?12:11)} className="text-center text-muted-foreground">{t('management.table.no_data')}</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={(searchRows || level==='project')?12:(level==='room'?11:10)} className="text-center text-muted-foreground">{t('management.table.no_data')}</TableCell></TableRow>
                 ) : (
                   <>
                     {/* Total Row */}
@@ -787,7 +808,6 @@ export default function ProjectManagement() {
                       {searchRows || level === 'project' ? (
                         <>
                           <TableCell className="font-semibold">Total</TableCell>
-                          <TableCell></TableCell>
                           <TableCell></TableCell>
                           <TableCell></TableCell>
                         </>
@@ -804,20 +824,19 @@ export default function ProjectManagement() {
                       <TableCell className="text-right font-semibold">{Number(totals.plan || 0).toLocaleString()}</TableCell>
                       <TableCell className="text-right font-semibold">{Number(totals.actual || 0).toLocaleString()}</TableCell>
                       <TableCell className="text-right font-semibold">{Number(totals.variance || 0).toLocaleString()}</TableCell>
-                      <TableCell className="text-right font-semibold">{totals.burn ? (totals.burn * 100).toFixed(0) + '%' : '0%'}</TableCell>
-                      <TableCell className="font-semibold">{totals.f4_count || 0}</TableCell>
-                      <TableCell className="text-right font-semibold">
-                        {(searchRows || level === 'project')
-                          ? (totals.f4_count > 0 ? '100%' : '0%')
-                          : `${totals.total_projects > 0 ? Math.round((totals.projects_with_f4 / totals.total_projects) * 100) : 0}%`
-                        }
+                      <TableCell className="font-semibold w-12">{totals.f4_count || 0}</TableCell>
+                      <TableCell className="text-right font-semibold w-16">
+                        {totals.plan > 0 ? (totals.burn * 100).toFixed(0) + '%' : '0%'}
                       </TableCell>
-                      <TableCell className="font-semibold">{totals.f5_count || 0}</TableCell>
-                      <TableCell className="text-right font-semibold">
+                      <TableCell className="font-semibold w-12">{totals.f5_count || 0}</TableCell>
+                      <TableCell className="text-right font-semibold w-16">
                         {(searchRows || level === 'project')
                           ? (totals.f5_count > 0 ? '100%' : '0%')
                           : `${totals.total_projects > 0 ? Math.round((totals.projects_with_f5 / totals.total_projects) * 100) : 0}%`
                         }
+                      </TableCell>
+                      <TableCell className="text-right font-semibold w-24">
+                        {totals.pctTracker != null ? totals.pctTracker.toFixed(0) + '%' : '0%'}
                       </TableCell>
                       {(searchRows || level === 'project') && <TableCell></TableCell>}
                     </TableRow>
@@ -842,7 +861,6 @@ export default function ProjectManagement() {
                           </div>
                         </TableCell>
                         <TableCell>{r.state || '-'}</TableCell>
-                        <TableCell>{r.has_mou ? (r.mou_code || 'Yes') : '-'}</TableCell>
                         <TableCell>{r.grant_serial_id || '-'}</TableCell>
                       </>
                     ) : level === 'state' ? (
@@ -868,33 +886,36 @@ export default function ProjectManagement() {
                     <TableCell className="text-right">{Number(r.plan||0).toLocaleString()}</TableCell>
                     <TableCell className="text-right">{Number(r.actual||0).toLocaleString()}</TableCell>
                     <TableCell className="text-right">{Number(r.variance||0).toLocaleString()}</TableCell>
-                    <TableCell className="text-right">{r.burn ? (r.burn*100).toFixed(0)+'%' : '0%'}</TableCell>
-                    <TableCell>{r.f4_count||0}</TableCell>
-                    <TableCell className="text-right">
-                      {level === 'project' 
-                        ? (r.f4_count > 0 ? '100%' : '0%')
-                        : `${r.total_projects > 0 ? Math.round((r.projects_with_f4 / r.total_projects) * 100) : 0}%`
-                      }
+                    <TableCell className="w-12">{r.f4_count||0}</TableCell>
+                    <TableCell className="text-right w-16">
+                      {Number(r.plan || 0) > 0 ? (r.burn != null ? (r.burn * 100).toFixed(0) : (Number(r.actual || 0) / Number(r.plan || 0) * 100).toFixed(0)) + '%' : '0%'}
                     </TableCell>
-                    <TableCell>{r.f5_count||0}</TableCell>
-                    <TableCell className="text-right">
+                    <TableCell className="w-12">{r.f5_count||0}</TableCell>
+                    <TableCell className="text-right w-16">
                       {level === 'project' 
                         ? (r.f5_count > 0 ? '100%' : '0%')
                         : `${r.total_projects > 0 ? Math.round((r.projects_with_f5 / r.total_projects) * 100) : 0}%`
                       }
                     </TableCell>
+                    <TableCell className="text-right w-24">
+                      {level === 'project'
+                        ? (trackerScore(r) * 100).toFixed(0) + '%'
+                        : (r.total_projects > 0 && r.tracker_sum != null ? ((r.tracker_sum / r.total_projects) * 100).toFixed(0) : '0') + '%'
+                      }
+                    </TableCell>
                     {(searchRows || level === 'project') && (
-                        <TableCell>
-                          <div className="flex gap-1 flex-wrap">
+                        <TableCell className="whitespace-nowrap">
+                          <div className="flex items-center gap-1 flex-nowrap">
                             <Button
                               variant="outline"
                               size="sm"
+                              className="text-xs px-2 py-1 h-7 shrink-0"
                               onClick={(e)=>{ e.stopPropagation(); setDetailProjectId(r.project_id || null); setDetailOpen(true) }}
                             >{t('management.table.view')}</Button>
                             <Button
                               variant="outline"
                               size="sm"
-                              className="bg-green-50 hover:bg-green-100"
+                              className="bg-green-50 hover:bg-green-100 text-xs px-2 py-1 h-7 shrink-0"
                               onClick={async (e)=>{ 
                                 e.stopPropagation(); 
                                 const projectId = r.project_id || null;
@@ -949,7 +970,7 @@ export default function ProjectManagement() {
                               <Button
                                 variant="outline"
                                 size="sm"
-                                className="bg-blue-50 hover:bg-blue-100"
+                                className="bg-blue-50 hover:bg-blue-100 text-xs px-2 py-1 h-7 shrink-0"
                                 onClick={async (e)=>{ 
                                   e.stopPropagation();
                                   const projectId = r.project_id || null;
@@ -984,9 +1005,10 @@ export default function ProjectManagement() {
                             {!r.is_historical && r.status !== 'completed' && (
                               <Button
                                 variant="outline"
-                                size="sm"
-                                className="bg-purple-50 hover:bg-purple-100"
+                                size="icon"
+                                className="bg-purple-50 hover:bg-purple-100 h-7 w-7 shrink-0"
                                 disabled={completingProjectId === r.project_id}
+                                title={completingProjectId === r.project_id ? undefined : 'Complete'}
                                 onClick={async (e)=>{ 
                                   e.stopPropagation();
                                   if (r.project_id) {
@@ -994,14 +1016,13 @@ export default function ProjectManagement() {
                                   }
                                 }}
                               >
-                                <CheckCircle className="h-4 w-4 mr-1" />
-                                {completingProjectId === r.project_id ? 'Completing...' : 'Complete'}
+                                <CheckCircle className="h-4 w-4" />
                               </Button>
                             )}
                             {!r.is_historical && r.status === 'completed' && (
-                              <div className="flex items-center gap-1 text-sm text-muted-foreground px-2">
-                                <CheckCircle className="h-4 w-4" />
-                                <span>Completed</span>
+                              <div className="flex items-center gap-1 text-xs text-muted-foreground px-1 shrink-0">
+                                <CheckCircle className="h-3 w-3 shrink-0" />
+                                <span>Done</span>
                               </div>
                             )}
                           </div>
@@ -1034,16 +1055,17 @@ export default function ProjectManagement() {
                   <TableHead className="text-right">{t('management.table.actuals')}</TableHead>
                   <TableHead className="text-right">{t('management.table.variance')}</TableHead>
                   <TableHead className="text-right">{t('management.table.burn')}</TableHead>
-                  <TableHead>{t('management.table.f4s')}</TableHead>
-                  <TableHead className="text-right">{t('management.table.f4_complete')}</TableHead>
-                  <TableHead>{t('management.table.f5s')}</TableHead>
-                  <TableHead className="text-right">{t('management.table.f5_complete')}</TableHead>
+                  <TableHead className="w-12">{t('management.table.f4s')}</TableHead>
+                  <TableHead className="text-right w-16" title={t('management.table.f4_complete_tooltip')}>{t('management.table.f4_complete')}</TableHead>
+                  <TableHead className="w-12">{t('management.table.f5s')}</TableHead>
+                  <TableHead className="text-right w-16" title={t('management.table.f5_complete_tooltip')}>{t('management.table.f5_complete')}</TableHead>
+                  <TableHead className="text-right w-24 whitespace-nowrap" title={t('management.table.pct_tracker_tooltip')}>{t('management.table.pct_tracker')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {grantSummaryRows.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-center text-muted-foreground">{t('management.table.no_data')}</TableCell>
+                    <TableCell colSpan={10} className="text-center text-muted-foreground">{t('management.table.no_data')}</TableCell>
                   </TableRow>
                 ) : (
                   <>
@@ -1065,24 +1087,31 @@ export default function ProjectManagement() {
                           return totalPlan > 0 ? (totalActual / totalPlan * 100).toFixed(0) + '%' : '0%'
                         })()}
                       </TableCell>
-                      <TableCell className="font-semibold">
+                      <TableCell className="font-semibold w-12">
                         {grantSummaryRows.reduce((s, r) => s + r.f4_count, 0)}
                       </TableCell>
-                      <TableCell className="text-right font-semibold">
+                      <TableCell className="text-right font-semibold w-16">
                         {(() => {
                           const total = grantSummaryRows.reduce((s, r) => s + r.total_projects, 0)
                           const withF4 = grantSummaryRows.reduce((s, r) => s + r.projects_with_f4, 0)
                           return total > 0 ? Math.round((withF4 / total) * 100) + '%' : '0%'
                         })()}
                       </TableCell>
-                      <TableCell className="font-semibold">
+                      <TableCell className="font-semibold w-12">
                         {grantSummaryRows.reduce((s, r) => s + r.f5_count, 0)}
                       </TableCell>
-                      <TableCell className="text-right font-semibold">
+                      <TableCell className="text-right font-semibold w-16">
                         {(() => {
                           const total = grantSummaryRows.reduce((s, r) => s + r.total_projects, 0)
                           const withF5 = grantSummaryRows.reduce((s, r) => s + r.projects_with_f5, 0)
                           return total > 0 ? Math.round((withF5 / total) * 100) + '%' : '0%'
+                        })()}
+                      </TableCell>
+                      <TableCell className="text-right font-semibold w-24">
+                        {(() => {
+                          const totalProj = grantSummaryRows.reduce((s, r) => s + r.total_projects, 0)
+                          const sumTracker = grantSummaryRows.reduce((s, r) => s + (r.tracker_sum ?? 0), 0)
+                          return totalProj > 0 ? (sumTracker / totalProj * 100).toFixed(0) + '%' : '0%'
                         })()}
                       </TableCell>
                     </TableRow>
@@ -1093,13 +1122,16 @@ export default function ProjectManagement() {
                         <TableCell className="text-right">{Number(r.actual || 0).toLocaleString()}</TableCell>
                         <TableCell className="text-right">{Number(r.variance || 0).toLocaleString()}</TableCell>
                         <TableCell className="text-right">{r.burn ? (r.burn * 100).toFixed(0) + '%' : '0%'}</TableCell>
-                        <TableCell>{r.f4_count || 0}</TableCell>
-                        <TableCell className="text-right">
+                        <TableCell className="w-12">{r.f4_count || 0}</TableCell>
+                        <TableCell className="text-right w-16">
                           {r.total_projects > 0 ? Math.round((r.projects_with_f4 / r.total_projects) * 100) + '%' : '0%'}
                         </TableCell>
-                        <TableCell>{r.f5_count || 0}</TableCell>
-                        <TableCell className="text-right">
+                        <TableCell className="w-12">{r.f5_count || 0}</TableCell>
+                        <TableCell className="text-right w-16">
                           {r.total_projects > 0 ? Math.round((r.projects_with_f5 / r.total_projects) * 100) + '%' : '0%'}
+                        </TableCell>
+                        <TableCell className="text-right w-24">
+                          {r.total_projects > 0 && r.tracker_sum != null ? ((r.tracker_sum / r.total_projects) * 100).toFixed(0) + '%' : '0%'}
                         </TableCell>
                       </TableRow>
                     ))}
