@@ -59,6 +59,8 @@ export default function ProjectManagement() {
   const [portalF4Counts, setPortalF4Counts] = useState<Record<string, number>>({})
   const [portalF5Counts, setPortalF5Counts] = useState<Record<string, number>>({})
   const [completingProjectId, setCompletingProjectId] = useState<string | null>(null)
+  const [statusDialogOpen, setStatusDialogOpen] = useState(false)
+  const [statusDialogRow, setStatusDialogRow] = useState<{ project_id: string; f4_status: string; f5_status: string } | null>(null)
 
   const loadRollup = async () => {
     setLoading(true)
@@ -220,13 +222,33 @@ export default function ProjectManagement() {
     setRows(filtered)
   }, [selectedGrantId, allRows, grants, grantSerialSearch])
 
-  // Tracker score per project: 0.5 * min(1, actual/plan) + 0.5 if at least one F5
+  // Tracker score: F4 half (max 0.5) + F5 half (max 0.5).
+  // Historical F4: Completed+actual>0 → actual/plan; else Completed → 0.5; Partial/Under Review → 0.25; Waiting → 0.
+  // Portal F4: rollup sets f4_status to 'completed' when F4 data exists; else user-set waiting/partial/in review. Completed → 0.5*min(1,burn); partial/in review → 0.25; waiting → 0.
+  // F5 (both): Completed → 0.5; Partial/Under Review → 0.25; Waiting → 0.
   const trackerScore = (r: any) => {
     const plan = Number(r.plan || 0)
-    const actual = Number(r.actual || 0)
+    const actual = Number(r.actual ?? 0)
     const burn = plan > 0 ? actual / plan : 0
-    const f4Part = 0.5 * Math.min(1, burn)
-    const f5Part = Number(r.f5_count || 0) > 0 ? 0.5 : 0
+    const hasActual = (typeof r.actual === 'number' && r.actual > 0) || (r.actual != null && String(r.actual).trim() !== '' && Number(r.actual) > 0)
+    const f5Status = r.f5_status != null ? String(r.f5_status).toLowerCase() : null
+    let f5Part: number
+    if (f5Status === 'completed') f5Part = 0.5
+    else if (f5Status === 'under review' || f5Status === 'in review' || f5Status === 'partial') f5Part = 0.25
+    else if (f5Status === 'waiting') f5Part = 0
+    else if (r.is_historical) f5Part = 0
+    else f5Part = Number(r.f5_count || 0) > 0 ? 0.5 : 0
+
+    const f4Status = r.f4_status != null ? String(r.f4_status).toLowerCase() : null
+    let f4Part: number
+    if (f4Status === 'completed') {
+      if (r.is_historical && hasActual && plan > 0) f4Part = 0.5 * Math.min(1, burn)
+      else if (r.is_historical) f4Part = 0.5
+      else f4Part = 0.5 * Math.min(1, burn)
+    } else if (f4Status === 'under review' || f4Status === 'in review' || f4Status === 'partial') f4Part = 0.25
+    else if (f4Status === 'waiting') f4Part = 0
+    else if (r.is_historical) f4Part = 0
+    else f4Part = 0.5 * Math.min(1, burn)
     return f4Part + f5Part
   }
 
@@ -773,35 +795,36 @@ export default function ProjectManagement() {
           {loading ? (
             <div className="py-8 text-center text-muted-foreground">{t('management.table.loading')}</div>
               ) : (
-                <Table>
+                <div className="overflow-x-auto w-full">
+                <Table className="min-w-[800px] [&_th]:py-2 [&_td]:py-1.5 [&_th]:px-2 [&_td]:px-2">
                   <TableHeader>
                     <TableRow>
                   {searchRows || level === 'project' ? (
                     <>
-                      <TableHead>{t('management.table.err')}</TableHead>
-                      <TableHead>{t('management.table.state')}</TableHead>
-                      <TableHead>Grant Serial</TableHead>
+                      <TableHead className="text-xs whitespace-nowrap">{t('management.table.err')}</TableHead>
+                      <TableHead className="text-xs whitespace-nowrap">{t('management.table.state')}</TableHead>
+                      <TableHead className="text-xs whitespace-nowrap">Grant Serial</TableHead>
                     </>
                   ) : level === 'state' ? (
                     <>
-                      <TableHead>{t('management.table.state')}</TableHead>
+                      <TableHead className="text-xs whitespace-nowrap">{t('management.table.state')}</TableHead>
                     </>
                   ) : (
                     <>
-                      <TableHead>{t('management.table.err')}</TableHead>
-                      <TableHead>{t('management.table.state')}</TableHead>
+                      <TableHead className="text-xs whitespace-nowrap">{t('management.table.err')}</TableHead>
+                      <TableHead className="text-xs whitespace-nowrap">{t('management.table.state')}</TableHead>
                     </>
                   )}
-                  <TableHead className="text-right">{t('management.table.plan')}</TableHead>
-                  <TableHead className="text-right">{t('management.table.actuals')}</TableHead>
-                  <TableHead className="text-right">{t('management.table.variance')}</TableHead>
-                  <TableHead className="text-right">{t('management.table.individuals')}</TableHead>
-                  <TableHead className="w-12">{t('management.table.f4s')}</TableHead>
-                  <TableHead className="text-right w-16" title={t('management.table.f4_complete_tooltip')}>{t('management.table.f4_complete')}</TableHead>
-                  <TableHead className="w-12">{t('management.table.f5s')}</TableHead>
-                  <TableHead className="text-right w-16" title={t('management.table.f5_complete_tooltip')}>{t('management.table.f5_complete')}</TableHead>
-                  <TableHead className="text-right w-24 whitespace-nowrap" title={t('management.table.pct_tracker_tooltip')}>{t('management.table.pct_tracker')}</TableHead>
-                  {(searchRows || level === 'project') && <TableHead>{t('management.table.actions')}</TableHead>}
+                  <TableHead className="text-right text-xs whitespace-nowrap">{t('management.table.plan')}</TableHead>
+                  <TableHead className="text-right text-xs whitespace-nowrap">{t('management.table.actuals')}</TableHead>
+                  <TableHead className="text-right text-xs whitespace-nowrap">{t('management.table.variance')}</TableHead>
+                  <TableHead className="text-right text-xs whitespace-nowrap">{t('management.table.individuals')}</TableHead>
+                  <TableHead className="w-10 text-xs">{t('management.table.f4s')}</TableHead>
+                  <TableHead className="text-right w-12 text-xs" title={t('management.table.f4_complete_tooltip')}>{t('management.table.f4_complete')}</TableHead>
+                  <TableHead className="w-10 text-xs">{t('management.table.f5s')}</TableHead>
+                  <TableHead className="text-right w-12 text-xs" title={t('management.table.f5_complete_tooltip')}>{t('management.table.f5_complete')}</TableHead>
+                  <TableHead className="text-right w-14 text-xs whitespace-nowrap" title={t('management.table.pct_tracker_tooltip')}>{t('management.table.pct_tracker')}</TableHead>
+                  {(searchRows || level === 'project') && <TableHead className="sticky right-0 bg-card text-xs shadow-[-4px_0_6px_rgba(0,0,0,0.04)]">{t('management.table.actions')}</TableHead>}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -845,7 +868,7 @@ export default function ProjectManagement() {
                       <TableCell className="text-right font-semibold w-24">
                         {totals.pctTracker != null ? totals.pctTracker.toFixed(0) + '%' : '0%'}
                       </TableCell>
-                      {(searchRows || level === 'project') && <TableCell></TableCell>}
+                      {(searchRows || level === 'project') && <TableCell className="sticky right-0 bg-muted/50"></TableCell>}
                     </TableRow>
                     {displayed.map((r:any, idx:number)=> (
                   <TableRow 
@@ -894,11 +917,27 @@ export default function ProjectManagement() {
                     <TableCell className="text-right">{Number(r.actual||0).toLocaleString()}</TableCell>
                     <TableCell className="text-right">{Number(r.variance||0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
                     <TableCell className="text-right">{Number(r.individuals || 0).toLocaleString()}</TableCell>
-                    <TableCell className="w-12">{r.f4_count||0}</TableCell>
-                    <TableCell className="text-right w-16">
-                      {Number(r.plan || 0) > 0 ? (r.burn != null ? (r.burn * 100).toFixed(0) : (Number(r.actual || 0) / Number(r.plan || 0) * 100).toFixed(0)) + '%' : '0%'}
+                    <TableCell className="w-12">
+                      {level === 'project' && !r.is_historical && r.f4_status
+                        ? (() => {
+                            const s = String(r.f4_status).toLowerCase()
+                            return s === 'completed' ? 'Completed' : s === 'in review' ? 'In review' : s === 'partial' ? 'Partial' : 'Waiting'
+                          })()
+                        : (r.f4_count ?? 0)}
                     </TableCell>
-                    <TableCell className="w-12">{r.f5_count||0}</TableCell>
+                    <TableCell className="text-right w-16">
+                      {r.is_historical && Number(r.f4_count || 0) >= 1
+                        ? '100%'
+                        : (Number(r.plan || 0) > 0 ? (r.burn != null ? (r.burn * 100).toFixed(0) : (Number(r.actual || 0) / Number(r.plan || 0) * 100).toFixed(0)) + '%' : '0%')}
+                    </TableCell>
+                    <TableCell className="w-12">
+                      {level === 'project' && !r.is_historical && r.f5_status
+                        ? (() => {
+                            const s = String(r.f5_status).toLowerCase()
+                            return s === 'completed' ? 'Completed' : s === 'in review' ? 'In review' : s === 'partial' ? 'Partial' : 'Waiting'
+                          })()
+                        : (r.f5_count ?? 0)}
+                    </TableCell>
                     <TableCell className="text-right w-16">
                       {level === 'project' 
                         ? (r.f5_count > 0 ? '100%' : '0%')
@@ -912,18 +951,26 @@ export default function ProjectManagement() {
                       }
                     </TableCell>
                     {(searchRows || level === 'project') && (
-                        <TableCell className="whitespace-nowrap">
+                        <TableCell className="sticky right-0 bg-card shadow-[-4px_0_6px_rgba(0,0,0,0.04)] whitespace-nowrap px-2">
                           <div className="flex items-center gap-1 flex-nowrap">
                             <Button
                               variant="outline"
                               size="sm"
-                              className="text-xs px-2 py-1 h-7 shrink-0"
+                              className="text-xs px-1.5 py-0.5 h-6 shrink-0 min-w-0"
                               onClick={(e)=>{ e.stopPropagation(); setDetailProjectId(r.project_id || null); setDetailOpen(true) }}
                             >{t('management.table.view')}</Button>
+                            {!r.is_historical && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="text-xs px-1.5 py-0.5 h-6 shrink-0 min-w-0 border-black"
+                                onClick={(e)=>{ e.stopPropagation(); setStatusDialogRow({ project_id: r.project_id, f4_status: r.f4_status || 'waiting', f5_status: r.f5_status || 'waiting' }); setStatusDialogOpen(true) }}
+                              >Status</Button>
+                            )}
                             <Button
                               variant="outline"
                               size="sm"
-                              className="bg-green-50 hover:bg-green-100 text-xs px-2 py-1 h-7 shrink-0"
+                              className="bg-green-50 hover:bg-green-100 text-xs px-1.5 py-0.5 h-6 shrink-0 min-w-0"
                               onClick={async (e)=>{ 
                                 e.stopPropagation(); 
                                 const projectId = r.project_id || null;
@@ -978,7 +1025,7 @@ export default function ProjectManagement() {
                               <Button
                                 variant="outline"
                                 size="sm"
-                                className="bg-blue-50 hover:bg-blue-100 text-xs px-2 py-1 h-7 shrink-0"
+                                className="bg-blue-50 hover:bg-blue-100 text-xs px-1.5 py-0.5 h-6 shrink-0 min-w-0"
                                 onClick={async (e)=>{ 
                                   e.stopPropagation();
                                   const projectId = r.project_id || null;
@@ -1014,7 +1061,7 @@ export default function ProjectManagement() {
                               <Button
                                 variant="outline"
                                 size="icon"
-                                className="bg-purple-50 hover:bg-purple-100 h-7 w-7 shrink-0"
+                                className="bg-purple-50 hover:bg-purple-100 h-6 w-6 shrink-0"
                                 disabled={completingProjectId === r.project_id}
                                 title={completingProjectId === r.project_id ? undefined : 'Complete'}
                                 onClick={async (e)=>{ 
@@ -1028,7 +1075,7 @@ export default function ProjectManagement() {
                               </Button>
                             )}
                             {!r.is_historical && r.status === 'completed' && (
-                              <div className="flex items-center gap-1 text-xs text-muted-foreground px-1 shrink-0">
+                              <div className="flex items-center gap-0.5 text-xs text-muted-foreground shrink-0">
                                 <CheckCircle className="h-3 w-3 shrink-0" />
                                 <span>Done</span>
                               </div>
@@ -1042,6 +1089,7 @@ export default function ProjectManagement() {
                 )}
                   </TableBody>
                 </Table>
+                </div>
               )}
             </CardContent>
           </Card>
@@ -1157,6 +1205,79 @@ export default function ProjectManagement() {
         open={detailOpen}
         onOpenChange={(v)=> setDetailOpen(v)}
       />
+
+      {/* Update F4/F5 status (portal only) */}
+      <Dialog open={statusDialogOpen} onOpenChange={(open) => { if (!open) setStatusDialogRow(null); setStatusDialogOpen(open) }}>
+        <DialogContent className="max-w-md p-4 sm:p-5">
+          <DialogHeader className="space-y-1 pb-2">
+            <DialogTitle className="text-base">Update F4 / F5 status</DialogTitle>
+          </DialogHeader>
+          {statusDialogRow && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label className="text-sm">F4 status</Label>
+                  {statusDialogRow.f4_status === 'completed' ? (
+                    <div className="flex h-9 items-center rounded-md border border-input bg-muted/50 px-3 text-sm text-muted-foreground">Completed</div>
+                  ) : (
+                    <Select
+                      value={statusDialogRow.f4_status}
+                      onValueChange={(v) => setStatusDialogRow(prev => prev ? { ...prev, f4_status: v } : null)}
+                    >
+                      <SelectTrigger className="h-9">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="waiting">Waiting</SelectItem>
+                        <SelectItem value="partial">Partial</SelectItem>
+                        <SelectItem value="in review">In Review</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )}
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-sm">F5 status</Label>
+                  {statusDialogRow.f5_status === 'completed' ? (
+                    <div className="flex h-9 items-center rounded-md border border-input bg-muted/50 px-3 text-sm text-muted-foreground">Completed</div>
+                  ) : (
+                    <Select
+                      value={statusDialogRow.f5_status}
+                      onValueChange={(v) => setStatusDialogRow(prev => prev ? { ...prev, f5_status: v } : null)}
+                    >
+                      <SelectTrigger className="h-9">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="waiting">Waiting</SelectItem>
+                        <SelectItem value="partial">Partial</SelectItem>
+                        <SelectItem value="in review">In Review</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )}
+                </div>
+              </div>
+              <Button
+                className="w-full h-9 bg-green-600 hover:bg-green-700 text-white"
+                onClick={async () => {
+                  if (!statusDialogRow) return
+                  try {
+                    await fetch(`/api/projects/${statusDialogRow.project_id}/reporting-status`, {
+                      method: 'PATCH',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ f4_status: statusDialogRow.f4_status, f5_status: statusDialogRow.f5_status })
+                    })
+                    setStatusDialogOpen(false)
+                    setStatusDialogRow(null)
+                    await loadRollup()
+                  } catch (e) {
+                    console.error(e)
+                  }
+                }}
+              >Save</Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* F4/F5 Modals */}
       <UploadF4Modal 

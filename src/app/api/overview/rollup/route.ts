@@ -97,7 +97,7 @@ export async function GET(request: Request) {
     // Build project filter (include more statuses to catch F5 projects and completed projects)
     let projectQuery = supabase
       .from('err_projects')
-      .select('id, state, grant_call_id, grant_grid_id, grant_id, emergency_rooms (id, name, name_ar, err_code), planned_activities, expenses, source, status, funding_status, mou_id')
+      .select('id, state, grant_call_id, grant_grid_id, grant_id, emergency_rooms (id, name, name_ar, err_code), planned_activities, expenses, source, status, funding_status, mou_id, f4_status, f5_status')
       .in('status', ['approved', 'active', 'pending', 'completed'])
       .in('funding_status', ['committed', 'allocated'])
 
@@ -264,6 +264,10 @@ export async function GET(request: Request) {
       const variance = plan - agg.actual
       const burn = plan > 0 ? agg.actual / plan : 0
       const individuals = individualsByProject.get(p.id) || 0
+      const storedF4 = (p.f4_status != null ? String(p.f4_status).trim().toLowerCase() : null) || 'waiting'
+      const storedF5 = (p.f5_status != null ? String(p.f5_status).trim().toLowerCase() : null) || 'waiting'
+      const f4_status = agg.count > 0 ? 'completed' : storedF4
+      const f5_status = f5Agg.count > 0 ? 'completed' : storedF5
       return {
         project_id: p.id,
         state: p.state,
@@ -283,7 +287,9 @@ export async function GET(request: Request) {
         f5_count: f5Agg.count,
         last_f5_date: f5Agg.last,
         status: p.status || null,
-        is_historical: false
+        is_historical: false,
+        f4_status,
+        f5_status
       }
     })
 
@@ -314,6 +320,11 @@ export async function GET(request: Request) {
       const f4CountFromPortal = f4Agg.count || 0
       const totalF4Count = f4CountFromSheet + f4CountFromPortal
       const individuals = Number(row['Target (Ind.)'] ?? row['target_ind'] ?? row['Target (Ind.)'] ?? 0) || 0
+      // F4/F5 status for % Tracker: Completed | Waiting | Under Review | Partial (from activities_raw_import)
+      const f4StatusRaw = f4Value != null ? String(f4Value).trim() : ''
+      const f4_status = f4StatusRaw.toLowerCase() || null
+      const f5StatusRaw = f5Value != null ? String(f5Value).trim() : ''
+      const f5_status = f5StatusRaw.toLowerCase() || null
 
       return {
         project_id: historicalProjectId, // Use a prefix to distinguish historical projects
@@ -334,7 +345,9 @@ export async function GET(request: Request) {
         last_report_date: f4Agg.last || reportDate || null, // Prefer date from err_summary
         f5_count: f5Completed ? 1 : 0, // F5='Completed' from activities_raw_import
         last_f5_date: reportDate || null, // Use same date if available
-        is_historical: true
+        is_historical: true,
+        f4_status, // For % Tracker: completed | waiting | under review | partial
+        f5_status // For % Tracker: same status values, no actual vs plan
       }
     })
 
