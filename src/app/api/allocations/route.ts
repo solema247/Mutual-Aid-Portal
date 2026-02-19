@@ -31,53 +31,29 @@ function parseDecisionDate(decisionDate: unknown): string | null {
   return null
 }
 
-/** Returns true if the error indicates the table/view is missing or a column is missing (e.g. foreign table schema mismatch). */
-function isRecoverableAllocationsError(error: unknown): boolean {
-  const msg = error instanceof Error ? error.message : String(error)
-  return (
-    /relation ["']?allocations["']? does not exist/i.test(msg) ||
-    /relation ["']?public\.allocations["']? does not exist/i.test(msg) ||
-    /PGRST301/i.test(msg) ||
-    /could not find the table/i.test(msg) ||
-    /column .* does not exist/i.test(msg)
-  )
-}
+// allocations_by_date has same logical data as allocations but does not trigger HV000 "allocation_id data type not match".
+const ALLOCATIONS_BY_DATE_SELECT =
+  '"Allocation_ID", "Decision_ID", "Decision_Date", "State", "Allocation Amount", "%_Decision_Amount", "Restriction"'
 
-// Foreign table may use Airtable-style column names (same as distribution-decisions and allocations_by_date).
-const ALLOCATIONS_SELECT_AIRTABLE =
-  '"Allocation_ID", "State", "Allocation Amount", "%_Decision_Amount", "Restriction", "Decision_Date"'
-// Fallback: lowercase column names (if table/view uses snake_case).
-const ALLOCATIONS_SELECT_LOWERCASE =
-  'allocation_id, state, allocation_amount, percent_decision_amount, restriction, decision_date'
-
-function mapRowToAllocation(row: Record<string, unknown>, useAirtableNames: boolean) {
-  const allocationId = useAirtableNames
-    ? (row['Allocation_ID'] != null ? String(row['Allocation_ID']) : null)
-    : (row.allocation_id != null ? String(row.allocation_id) : null)
-  const amount = useAirtableNames
-    ? (row['Allocation Amount'] != null ? Number(row['Allocation Amount']) : null)
-    : (row.allocation_amount != null ? Number(row.allocation_amount) : null)
-  const state = useAirtableNames ? (row['State'] ?? null) : (row.state ?? null)
-  const percentDecision = useAirtableNames
-    ? (row['%_Decision_Amount'] != null ? Number(row['%_Decision_Amount']) : null)
-    : (row.percent_decision_amount != null ? Number(row.percent_decision_amount) : null)
-  const restriction = useAirtableNames ? (row['Restriction'] ?? null) : (row.restriction ?? null)
-  const decisionDate = useAirtableNames ? row['Decision_Date'] : row.decision_date
+function mapAllocationsByDateRow(row: Record<string, unknown>) {
+  const allocationId = row['Allocation_ID'] != null ? String(row['Allocation_ID']) : null
+  const decisionId = row['Decision_ID'] != null ? String(row['Decision_ID']) : null
+  const amount = row['Allocation Amount'] != null ? Number(row['Allocation Amount']) : null
+  const key = decisionKeyFromAllocationId(allocationId) || decisionId || allocationId || ''
   return {
     allocation_id: allocationId,
-    decision_key: decisionKeyFromAllocationId(allocationId),
-    state,
+    decision_key: key,
+    state: row['State'] ?? null,
     allocation_amount: amount != null && !Number.isNaN(amount) ? amount : null,
-    percent_decision_amount: percentDecision,
-    restriction,
-    decision_date: parseDecisionDate(decisionDate),
+    percent_decision_amount: row['%_Decision_Amount'] != null ? Number(row['%_Decision_Amount']) : null,
+    restriction: row['Restriction'] ?? null,
+    decision_date: parseDecisionDate(row['Decision_Date']),
   }
 }
 
 /**
- * GET /api/allocations - List allocations from foreign table.
- * Uses service role to read public.allocations.
- * Tries Airtable-style column names first (Allocation_ID, State, Allocation Amount, etc.), then falls back to lowercase.
+ * GET /api/allocations - List allocations for the grant-management Allocations table.
+ * Reads from allocations_by_date (same data as allocations; avoids HV000 type mismatch on allocations.allocation_id).
  * Each row includes a computed decision_key (allocation_id prefix before last dot).
  */
 export async function GET() {
@@ -90,43 +66,17 @@ export async function GET() {
   }
 
   try {
-    // Try Airtable-style column names first (match distribution-decisions / allocations_by_date foreign table).
-    let data: Record<string, unknown>[] | null = null
-    let useAirtableNames = true
+    const { data, error } = await supabase
+      .from('allocations_by_date')
+      .select(ALLOCATIONS_BY_DATE_SELECT)
 
-    const res = await supabase
-      .from('allocations')
-      .select(ALLOCATIONS_SELECT_AIRTABLE)
-      .order('Allocation_ID', { ascending: true })
-
-    if (res.error) {
-      const msg = res.error.message || ''
-      if (/column .* does not exist/i.test(msg) || /Allocation_ID/i.test(msg)) {
-        useAirtableNames = false
-        const fallback = await supabase
-          .from('allocations')
-          .select(ALLOCATIONS_SELECT_LOWERCASE)
-          .order('allocation_id', { ascending: true })
-        if (fallback.error) {
-          if (isRecoverableAllocationsError(fallback.error)) {
-            console.warn('Allocations: table/column not available, returning empty list:', fallback.error.message)
-            return NextResponse.json([])
-          }
-          throw fallback.error
-        }
-        data = fallback.data
-      } else {
-        if (isRecoverableAllocationsError(res.error)) {
-          console.warn('Allocations: table/column not available, returning empty list:', res.error.message)
-          return NextResponse.json([])
-        }
-        throw res.error
-      }
-    } else {
-      data = res.data
+    if (error) {
+      console.error('Error fetching allocations from allocations_by_date:', error)
+      return NextResponse.json({ error: 'Failed to fetch allocations' }, { status: 500 })
     }
 
-    const list = (data || []).map((row: Record<string, unknown>) => mapRowToAllocation(row, useAirtableNames))
+    const list = (data || []).map((row: Record<string, unknown>) => mapAllocationsByDateRow(row))
+    list.sort((a, b) => (a.allocation_id ?? '').localeCompare(b.allocation_id ?? '', undefined, { numeric: true }))
     return NextResponse.json(list)
   } catch (error) {
     console.error('Error fetching allocations:', error)
