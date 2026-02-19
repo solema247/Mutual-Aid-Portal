@@ -21,8 +21,15 @@ export async function GET(
         .select('*')
         .eq('id', actualId)
         .single()
-      
-      if (histErr) throw histErr
+
+      if (histErr) {
+        const code = (histErr as { code?: string })?.code
+        const msg = (histErr as Error)?.message ?? ''
+        if (code === 'PGRST116' || /0 rows/i.test(msg) || /no rows/i.test(msg)) {
+          return NextResponse.json({ error: 'Historical project not found' }, { status: 404 })
+        }
+        throw histErr
+      }
       if (!historicalProject) {
         return NextResponse.json({ error: 'Historical project not found' }, { status: 404 })
       }
@@ -310,6 +317,11 @@ export async function GET(
     }
   } catch (e) {
     console.error('overview/project detail error', e)
+    const msg = e instanceof Error ? e.message : String(e)
+    const requestedId = typeof params?.id === 'string' ? params.id : ''
+    if (requestedId.startsWith('historical_') && (/relation .* does not exist/i.test(msg) || /column .* does not exist/i.test(msg))) {
+      return NextResponse.json({ error: 'Historical project not found' }, { status: 404 })
+    }
     return NextResponse.json({ error: 'Failed to load project detail' }, { status: 500 })
   }
 }
