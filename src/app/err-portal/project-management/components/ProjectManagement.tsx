@@ -918,7 +918,7 @@ export default function ProjectManagement() {
                     <TableCell className="text-right">{Number(r.variance||0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
                     <TableCell className="text-right">{Number(r.individuals || 0).toLocaleString()}</TableCell>
                     <TableCell className="w-12">
-                      {level === 'project' && !r.is_historical && r.f4_status
+                      {level === 'project' && r.f4_status != null && String(r.f4_status).trim() !== ''
                         ? (() => {
                             const s = String(r.f4_status).toLowerCase()
                             return s === 'completed' ? 'Completed' : s === 'in review' ? 'In review' : s === 'partial' ? 'Partial' : 'Waiting'
@@ -931,7 +931,7 @@ export default function ProjectManagement() {
                         : (Number(r.plan || 0) > 0 ? (r.burn != null ? (r.burn * 100).toFixed(0) : (Number(r.actual || 0) / Number(r.plan || 0) * 100).toFixed(0)) + '%' : '0%')}
                     </TableCell>
                     <TableCell className="w-12">
-                      {level === 'project' && !r.is_historical && r.f5_status
+                      {level === 'project' && r.f5_status != null && String(r.f5_status).trim() !== ''
                         ? (() => {
                             const s = String(r.f5_status).toLowerCase()
                             return s === 'completed' ? 'Completed' : s === 'in review' ? 'In review' : s === 'partial' ? 'Partial' : 'Waiting'
