@@ -34,15 +34,18 @@ interface UserOption {
 interface PermissionsManagerProps {
   currentUserRole: string
   currentUserErrId: string | null
+  /** When set (e.g. from URL ?userId=), pre-select this user and show only their permissions */
+  initialUserId?: string | null
 }
 
 export default function PermissionsManager({
   currentUserRole,
   currentUserErrId,
+  initialUserId,
 }: PermissionsManagerProps) {
   const [users, setUsers] = useState<UserOption[]>([])
   const [functionsByModule, setFunctionsByModule] = useState<Record<string, FunctionDefinition[]>>({})
-  const [selectedUserId, setSelectedUserId] = useState<string | null>(null)
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(initialUserId ?? null)
   const [allowed, setAllowed] = useState<Set<string>>(new Set())
   const [roleBase, setRoleBase] = useState<Set<string>>(new Set())
   const [add, setAdd] = useState<string[]>([])
@@ -83,6 +86,13 @@ export default function PermissionsManager({
   useEffect(() => {
     fetchUsers()
   }, [fetchUsers])
+
+  // When landing with ?userId=, pre-select that user (after users are loaded)
+  useEffect(() => {
+    if (initialUserId && users.some((u) => u.id === initialUserId)) {
+      setSelectedUserId(initialUserId)
+    }
+  }, [initialUserId, users])
 
   useEffect(() => {
     const f = async () => {

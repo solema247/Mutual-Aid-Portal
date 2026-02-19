@@ -2,6 +2,7 @@
 
 import { useTranslation } from 'react-i18next'
 import { useState, useEffect, useCallback } from 'react'
+import Link from 'next/link'
 import {
   Select,
   SelectContent,
@@ -9,8 +10,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { Button } from '@/components/ui/button'
 import { ActiveUserListItem } from '@/app/api/users/types/users'
 import { getActiveUsers, suspendUser, activateUser } from '@/app/api/users/utils/users'
+import { KeyRound } from 'lucide-react'
 
 interface ActiveUsersListProps {
   isLoading: boolean;
@@ -155,7 +158,7 @@ export default function ActiveUsersList({
       </div>
 
       <div className="rounded-md border">
-        <div className="grid grid-cols-8 gap-4 p-4 font-medium border-b">
+        <div className="grid grid-cols-9 gap-4 p-4 font-medium border-b">
           <div>{t('users:err_name')}</div>
           <div>{t('users:state')}</div>
           <div>{t('users:display_name')}</div>
@@ -163,11 +166,12 @@ export default function ActiveUsersList({
           <div>{t('users:status')}</div>
           <div>{t('users:created_at')}</div>
           <div>{t('users:updated_at')}</div>
+          <div>{t('users:permissions', 'Permissions')}</div>
           <div>{t('users:actions')}</div>
         </div>
         <div className="divide-y">
           {users.map((user) => (
-            <div key={user.id} className="grid grid-cols-8 gap-4 p-4">
+            <div key={user.id} className="grid grid-cols-9 gap-4 p-4">
               <div>{user.err_name || '-'}</div>
               <div>{user.state_name || '-'}</div>
               <div>{user.display_name || '-'}</div>
@@ -175,6 +179,18 @@ export default function ActiveUsersList({
               <div>{t(`users:${user.status}_status`)}</div>
               <div>{user.createdAt}</div>
               <div>{user.updatedAt || '-'}</div>
+              <div>
+                {(currentUserRole === 'admin' || currentUserRole === 'superadmin') ? (
+                  <Button variant="outline" size="sm" asChild className="gap-1.5">
+                    <Link href={`/err-portal/user-management/permissions?userId=${encodeURIComponent(user.id)}`}>
+                      <KeyRound className="h-3.5 w-3.5" />
+                      {t('users:view_permissions', 'Permissions')}
+                    </Link>
+                  </Button>
+                ) : (
+                  <span className="text-xs text-muted-foreground">—</span>
+                )}
+              </div>
               <div>
                 {canChangeStatus(user.role) ? (
                   <button

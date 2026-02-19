@@ -1,11 +1,13 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import PermissionsManager from './components/PermissionsManager'
 
 export default function PermissionsPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const userIdFromUrl = searchParams.get('userId')
   const [currentUser, setCurrentUser] = useState<{ id: string; role: string; err_id: string | null } | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -54,6 +56,7 @@ export default function PermissionsPage() {
       <PermissionsManager
         currentUserRole={currentUser.role}
         currentUserErrId={currentUser.err_id}
+        initialUserId={userIdFromUrl}
       />
     </div>
   )
