@@ -157,6 +157,7 @@
       "plan": "Plan",
       "actuals": "Actuals",
       "variance": "Variance",
+      "individuals": "Individuals",
       "burn": "Utilization",
       "f4s": "F4s",
       "f4_complete": "% F4",

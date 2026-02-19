@@ -218,6 +218,20 @@ export async function GET(request: Request) {
     const totalIndividuals = f5ReachData.reduce((sum, r) => sum + (Number(r.individual_count) || 0), 0)
     const totalFamilies = f5ReachData.reduce((sum, r) => sum + (Number(r.household_count) || 0), 0)
 
+    // Individuals by project (for portal projects: sum of individual_count from F5 reach via report_id)
+    const reportToProject = new Map<number, string>()
+    for (const f5 of (f5Reports || [])) {
+      reportToProject.set((f5 as any).id, (f5 as any).project_id)
+    }
+    const individualsByProject = new Map<string, number>()
+    for (const r of f5ReachData) {
+      const pid = reportToProject.get((r as any).report_id)
+      if (pid != null) {
+        const prev = individualsByProject.get(pid) || 0
+        individualsByProject.set(pid, prev + (Number((r as any).individual_count) || 0))
+      }
+    }
+
     // Index summaries by project (portal) or activities_raw_import_id (historical)
     const sumByProject = new Map<string, { actual: number; count: number; last: string | null }>()
     for (const s of allSummaries) {
@@ -249,6 +263,7 @@ export async function GET(request: Request) {
       const f5Agg = f5ByProject.get(p.id) || { count: 0, last: null }
       const variance = plan - agg.actual
       const burn = plan > 0 ? agg.actual / plan : 0
+      const individuals = individualsByProject.get(p.id) || 0
       return {
         project_id: p.id,
         state: p.state,
@@ -261,6 +276,7 @@ export async function GET(request: Request) {
         plan,
         actual: agg.actual,
         variance,
+        individuals,
         burn,
         f4_count: agg.count,
         last_report_date: agg.last,
@@ -297,7 +313,8 @@ export async function GET(request: Request) {
       const f4CountFromSheet = f4Completed ? 1 : 0
       const f4CountFromPortal = f4Agg.count || 0
       const totalF4Count = f4CountFromSheet + f4CountFromPortal
-      
+      const individuals = Number(row['Target (Ind.)'] ?? row['target_ind'] ?? row['Target (Ind.)'] ?? 0) || 0
+
       return {
         project_id: historicalProjectId, // Use a prefix to distinguish historical projects
         state: normalizeActivitiesStateName(row['State'] || row['state'] || row.State),
@@ -311,6 +328,7 @@ export async function GET(request: Request) {
         plan: usd,
         actual, // From historical_financial_reports.total_errs_expenditure_usd (match budget_items = serial) or err_summary
         variance: usd - actual,
+        individuals, // From activities_raw_import "Target (Ind.)" (same as card)
         burn: usd > 0 ? actual / usd : 0,
         f4_count: totalF4Count, // F4='Completed' from sheet + F4s uploaded through portal
         last_report_date: f4Agg.last || reportDate || null, // Prefer date from err_summary

@@ -299,10 +299,10 @@ export default function ProjectManagement() {
 
   // Aggregations for drill-down
   const stateRows = useMemo(() => {
-    const byState = new Map<string, { state: string; plan: number; actual: number; variance: number; burn: number; f4_count: number; f5_count: number; total_projects: number; projects_with_f4: number; projects_with_f5: number; tracker_sum: number; last_report_date: string | null; last_f5_date: string | null }>()
+    const byState = new Map<string, { state: string; plan: number; actual: number; variance: number; burn: number; f4_count: number; f5_count: number; total_projects: number; projects_with_f4: number; projects_with_f5: number; tracker_sum: number; individuals: number; last_report_date: string | null; last_f5_date: string | null }>()
     for (const r of rows) {
       const key = r.state || '—'
-      const curr = byState.get(key) || { state: key, plan: 0, actual: 0, variance: 0, burn: 0, f4_count: 0, f5_count: 0, total_projects: 0, projects_with_f4: 0, projects_with_f5: 0, tracker_sum: 0, last_report_date: null as string | null, last_f5_date: null as string | null }
+      const curr = byState.get(key) || { state: key, plan: 0, actual: 0, variance: 0, burn: 0, f4_count: 0, f5_count: 0, total_projects: 0, projects_with_f4: 0, projects_with_f5: 0, tracker_sum: 0, individuals: 0, last_report_date: null as string | null, last_f5_date: null as string | null }
       curr.plan += Number(r.plan || 0)
       curr.actual += Number(r.actual || 0)
       curr.variance = curr.plan - curr.actual
@@ -310,6 +310,7 @@ export default function ProjectManagement() {
       curr.f5_count += Number(r.f5_count || 0)
       curr.total_projects += 1
       curr.tracker_sum += trackerScore(r)
+      curr.individuals += Number(r.individuals || 0)
       if (Number(r.f4_count || 0) > 0) curr.projects_with_f4 += 1
       if (Number(r.f5_count || 0) > 0) curr.projects_with_f5 += 1
       const last = curr.last_report_date
@@ -329,10 +330,10 @@ export default function ProjectManagement() {
   const roomRows = useMemo(() => {
     if (!selectedStateName) return [] as any[]
     const filtered = rows.filter((r:any) => r.state === selectedStateName)
-    const byRoom = new Map<string, { err_id: string; state: string; plan: number; actual: number; variance: number; burn: number; f4_count: number; f5_count: number; total_projects: number; projects_with_f4: number; projects_with_f5: number; tracker_sum: number; last_report_date: string | null; last_f5_date: string | null }>()
+    const byRoom = new Map<string, { err_id: string; state: string; plan: number; actual: number; variance: number; burn: number; f4_count: number; f5_count: number; total_projects: number; projects_with_f4: number; projects_with_f5: number; tracker_sum: number; individuals: number; last_report_date: string | null; last_f5_date: string | null }>()
     for (const r of filtered) {
       const key = r.err_id || '—'
-      const curr = byRoom.get(key) || { err_id: key, state: selectedStateName, plan: 0, actual: 0, variance: 0, burn: 0, f4_count: 0, f5_count: 0, total_projects: 0, projects_with_f4: 0, projects_with_f5: 0, tracker_sum: 0, last_report_date: null as string | null, last_f5_date: null as string | null }
+      const curr = byRoom.get(key) || { err_id: key, state: selectedStateName, plan: 0, actual: 0, variance: 0, burn: 0, f4_count: 0, f5_count: 0, total_projects: 0, projects_with_f4: 0, projects_with_f5: 0, tracker_sum: 0, individuals: 0, last_report_date: null as string | null, last_f5_date: null as string | null }
       curr.plan += Number(r.plan || 0)
       curr.actual += Number(r.actual || 0)
       curr.variance = curr.plan - curr.actual
@@ -340,6 +341,7 @@ export default function ProjectManagement() {
       curr.f5_count += Number(r.f5_count || 0)
       curr.total_projects += 1
       curr.tracker_sum += trackerScore(r)
+      curr.individuals += Number(r.individuals || 0)
       if (Number(r.f4_count || 0) > 0) curr.projects_with_f4 += 1
       if (Number(r.f5_count || 0) > 0) curr.projects_with_f5 += 1
       const last = curr.last_report_date
@@ -462,7 +464,8 @@ export default function ProjectManagement() {
         total_projects: 0,
         projects_with_f4: 0,
         projects_with_f5: 0,
-        pctTracker: 0
+        pctTracker: 0,
+        individuals: 0
       }
     }
     const totalPlan = displayed.reduce((sum, r) => sum + (Number(r.plan || 0)), 0)
@@ -476,6 +479,7 @@ export default function ProjectManagement() {
     const projectsWithF5 = displayed.reduce((sum, r) => sum + (Number(r.projects_with_f5 || (Number(r.f5_count || 0) > 0 ? 1 : 0))), 0)
     const trackerSum = displayed.reduce((sum, r) => sum + (r.tracker_sum ?? trackerScore(r)), 0)
     const pctTracker = totalProjects > 0 ? (trackerSum / totalProjects) * 100 : 0
+    const individuals = displayed.reduce((sum, r) => sum + (Number(r.individuals || 0)), 0)
     
     return {
       plan: totalPlan,
@@ -487,7 +491,8 @@ export default function ProjectManagement() {
       total_projects: totalProjects,
       projects_with_f4: projectsWithF4,
       projects_with_f5: projectsWithF5,
-      pctTracker
+      pctTracker,
+      individuals
     }
   }, [displayed])
 
@@ -563,7 +568,7 @@ export default function ProjectManagement() {
         <Card className="p-1.5 mx-1">
           <div className="flex items-center justify-between gap-2 mb-0.5">
             <CardTitle className="text-sm leading-tight font-semibold">{t('management.kpis.plan')}</CardTitle>
-            <span className="text-sm font-semibold">${Number(kpis.plan||0).toLocaleString()}</span>
+            <span className="text-sm font-semibold">${Number(kpis.plan||0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
           </div>
           <div className="text-xs text-muted-foreground leading-tight">{t('management.kpis.plan_desc')}</div>
         </Card>
@@ -577,7 +582,7 @@ export default function ProjectManagement() {
         <Card className="p-1.5 mx-1">
           <div className="flex items-center justify-between gap-2 mb-0.5">
             <CardTitle className="text-sm leading-tight font-semibold">{t('management.kpis.variance')}</CardTitle>
-            <span className="text-sm font-semibold">${Number(kpis.variance||0).toLocaleString()}</span>
+            <span className="text-sm font-semibold">${Number(kpis.variance||0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
           </div>
           <div className="text-xs text-muted-foreground leading-tight">{t('management.kpis.variance_desc')}</div>
         </Card>
@@ -790,6 +795,7 @@ export default function ProjectManagement() {
                   <TableHead className="text-right">{t('management.table.plan')}</TableHead>
                   <TableHead className="text-right">{t('management.table.actuals')}</TableHead>
                   <TableHead className="text-right">{t('management.table.variance')}</TableHead>
+                  <TableHead className="text-right">{t('management.table.individuals')}</TableHead>
                   <TableHead className="w-12">{t('management.table.f4s')}</TableHead>
                   <TableHead className="text-right w-16" title={t('management.table.f4_complete_tooltip')}>{t('management.table.f4_complete')}</TableHead>
                   <TableHead className="w-12">{t('management.table.f5s')}</TableHead>
@@ -800,7 +806,7 @@ export default function ProjectManagement() {
                   </TableHeader>
                   <TableBody>
                 {(displayed||[]).length===0 ? (
-                  <TableRow><TableCell colSpan={(searchRows || level==='project')?12:(level==='room'?11:10)} className="text-center text-muted-foreground">{t('management.table.no_data')}</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={(searchRows || level==='project')?13:(level==='room'?12:11)} className="text-center text-muted-foreground">{t('management.table.no_data')}</TableCell></TableRow>
                 ) : (
                   <>
                     {/* Total Row */}
@@ -821,9 +827,10 @@ export default function ProjectManagement() {
                           <TableCell></TableCell>
                         </>
                       )}
-                      <TableCell className="text-right font-semibold">{Number(totals.plan || 0).toLocaleString()}</TableCell>
+                      <TableCell className="text-right font-semibold">{Number(totals.plan || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
                       <TableCell className="text-right font-semibold">{Number(totals.actual || 0).toLocaleString()}</TableCell>
-                      <TableCell className="text-right font-semibold">{Number(totals.variance || 0).toLocaleString()}</TableCell>
+                      <TableCell className="text-right font-semibold">{Number(totals.variance || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
+                      <TableCell className="text-right font-semibold">{Number(totals.individuals || 0).toLocaleString()}</TableCell>
                       <TableCell className="font-semibold w-12">{totals.f4_count || 0}</TableCell>
                       <TableCell className="text-right font-semibold w-16">
                         {totals.plan > 0 ? (totals.burn * 100).toFixed(0) + '%' : '0%'}
@@ -883,9 +890,10 @@ export default function ProjectManagement() {
                         <TableCell>{r.state || '-'}</TableCell>
                       </>
                     )}
-                    <TableCell className="text-right">{Number(r.plan||0).toLocaleString()}</TableCell>
+                    <TableCell className="text-right">{Number(r.plan||0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
                     <TableCell className="text-right">{Number(r.actual||0).toLocaleString()}</TableCell>
-                    <TableCell className="text-right">{Number(r.variance||0).toLocaleString()}</TableCell>
+                    <TableCell className="text-right">{Number(r.variance||0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
+                    <TableCell className="text-right">{Number(r.individuals || 0).toLocaleString()}</TableCell>
                     <TableCell className="w-12">{r.f4_count||0}</TableCell>
                     <TableCell className="text-right w-16">
                       {Number(r.plan || 0) > 0 ? (r.burn != null ? (r.burn * 100).toFixed(0) : (Number(r.actual || 0) / Number(r.plan || 0) * 100).toFixed(0)) + '%' : '0%'}
@@ -1072,13 +1080,13 @@ export default function ProjectManagement() {
                     <TableRow className="bg-muted/50 font-semibold">
                       <TableCell className="font-semibold">Total</TableCell>
                       <TableCell className="text-right font-semibold">
-                        {grantSummaryRows.reduce((s, r) => s + r.plan, 0).toLocaleString()}
+                        {grantSummaryRows.reduce((s, r) => s + r.plan, 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </TableCell>
                       <TableCell className="text-right font-semibold">
                         {grantSummaryRows.reduce((s, r) => s + r.actual, 0).toLocaleString()}
                       </TableCell>
                       <TableCell className="text-right font-semibold">
-                        {grantSummaryRows.reduce((s, r) => s + r.variance, 0).toLocaleString()}
+                        {grantSummaryRows.reduce((s, r) => s + r.variance, 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </TableCell>
                       <TableCell className="text-right font-semibold">
                         {(() => {
@@ -1118,9 +1126,9 @@ export default function ProjectManagement() {
                     {grantSummaryRows.map((r, idx) => (
                       <TableRow key={`grant-${idx}-${r.grantLabel}`}>
                         <TableCell className="font-medium">{r.grantLabel}</TableCell>
-                        <TableCell className="text-right">{Number(r.plan || 0).toLocaleString()}</TableCell>
+                        <TableCell className="text-right">{Number(r.plan || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
                         <TableCell className="text-right">{Number(r.actual || 0).toLocaleString()}</TableCell>
-                        <TableCell className="text-right">{Number(r.variance || 0).toLocaleString()}</TableCell>
+                        <TableCell className="text-right">{Number(r.variance || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
                         <TableCell className="text-right">{r.burn ? (r.burn * 100).toFixed(0) + '%' : '0%'}</TableCell>
                         <TableCell className="w-12">{r.f4_count || 0}</TableCell>
                         <TableCell className="text-right w-16">
