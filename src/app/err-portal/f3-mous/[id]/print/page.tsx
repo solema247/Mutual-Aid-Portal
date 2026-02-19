@@ -42,6 +42,18 @@ export default function PrintMOUPage() {
   
   // Use projects array if available, otherwise fall back to single project
   const projectList = projects || (project ? [project] : [])
+  const sumExpensesUsd = (expenses: any): number => {
+    try {
+      const arr = typeof expenses === 'string' ? JSON.parse(expenses || '[]') : (Array.isArray(expenses) ? expenses : [])
+      return arr.reduce((s: number, e: any) => s + (e?.total_cost || 0), 0)
+    } catch {
+      return 0
+    }
+  }
+  const totalFromProjects = useMemo(
+    () => projectList.reduce((s: number, p: any) => s + sumExpensesUsd(p.expenses), 0),
+    [projectList]
+  )
   const aggregated = useMemo(() => ({
     objectives: aggregateObjectives(projectList),
     beneficiaries: aggregateBeneficiaries(projectList),
@@ -68,7 +80,7 @@ export default function PrintMOUPage() {
           <div><strong>Partner:</strong> {mou.partner_name}</div>
           <div><strong>ERR:</strong> {mou.err_name}</div>
           <div><strong>State:</strong> {mou.state || ''}</div>
-          <div><strong>Total:</strong> {Number(mou.total_amount || 0).toLocaleString()}</div>
+          <div><strong>Total:</strong> {totalFromProjects.toLocaleString()}</div>
         </div>
 
         <Section title="1. Purpose">
@@ -103,7 +115,7 @@ export default function PrintMOUPage() {
             <Box>
               <div className="font-medium mb-1">{mou.partner_name} shall</div>
               <ul className="list-disc list-inside text-sm">
-                <li>Provide a sum of ${Number(mou.total_amount || 0).toLocaleString()}.</li>
+                <li>Provide a sum of ${totalFromProjects.toLocaleString()}.</li>
                 <li>Accept community applications (protection, WASH, food security, health, shelter/NFIs).</li>
                 <li>Assess needs fairly via F1 method.</li>
                 <li>Provide technical support and follow-up.</li>
@@ -117,7 +129,7 @@ export default function PrintMOUPage() {
 
         <TwoCol title="3. Reports" left="The partner shall present a narrative report (F5) and a financial report (F4) after completion, sharing details of work completed, people supported, and a breakdown of costs. This must follow the F-system templates. ERR undertakes to return any funds for which accounting is not provided." right="يلتزم الشريك بتقديم تقرير سردي (F5) وتقرير مالي (F4) بعد اكتمال التنفيذ، يتضمن تفاصيل الأعمال المنجزة، وعدد الأشخاص المستفيدين، وتفصيلاً للتكاليف. يجب أن يتبع ذلك نماذج نظام الـ F. وتلتزم غرفة الطوارئ بإعادة أي أموال لا يتم تقديم حسابات عنها." />
 
-        <TwoCol title="4. Funding" left={`The ${mou.partner_name} will provide a grant of $${Number(mou.total_amount || 0).toLocaleString()} upon signing this MOU. Disbursement and proof-of-payment requirements apply per policy.`} right={`سيقوم ${mou.partner_name} بتقديم منحة قدرها $${Number(mou.total_amount || 0).toLocaleString()} عند توقيع مذكرة التفاهم هذه. تنطبق متطلبات الصرف وإثبات الدفع وفق السياسات المعمول بها.`} />
+        <TwoCol title="4. Funding" left={`The ${mou.partner_name} will provide a grant of $${totalFromProjects.toLocaleString()} upon signing this MOU. Disbursement and proof-of-payment requirements apply per policy.`} right={`سيقوم ${mou.partner_name} بتقديم منحة قدرها $${totalFromProjects.toLocaleString()} عند توقيع مذكرة التفاهم هذه. تنطبق متطلبات الصرف وإثبات الدفع وفق السياسات المعمول بها.`} />
 
         <TwoCol title="5. Approved Accounts" left={aggregated.banking || 'Account details as shared and approved by ERR will be used for disbursement.'} right={aggregated.banking || 'تُستخدم تفاصيل الحساب المعتمدة من غرفة الطوارئ في عمليات الصرف.'} preWrap />
 

@@ -34,8 +34,25 @@ export async function GET(request: Request) {
         m.partner_name?.toLowerCase().includes(s) ||
         m.err_name?.toLowerCase().includes(s)
       )
-      
-      // Parse signatures JSON for each MOU
+      const filteredIds = filtered.map((m: any) => m.id).filter(Boolean)
+      const totalByMouId: Record<string, number> = {}
+      if (filteredIds.length > 0) {
+        const { data: projects } = await supabase
+          .from('err_projects')
+          .select('mou_id, expenses')
+          .in('mou_id', filteredIds)
+        if (projects && projects.length > 0) {
+          const sumExpenses = (exp: any): number => {
+            const arr = typeof exp === 'string' ? JSON.parse(exp || '[]') : (Array.isArray(exp) ? exp : [])
+            return arr.reduce((s: number, e: any) => s + (e?.total_cost || 0), 0)
+          }
+          for (const p of projects) {
+            const id = p.mou_id
+            if (!id) continue
+            totalByMouId[id] = (totalByMouId[id] || 0) + sumExpenses(p.expenses)
+          }
+        }
+      }
       const parsed = filtered.map((mou: any) => {
         if (mou.signatures && typeof mou.signatures === 'string') {
           try {
@@ -45,9 +62,12 @@ export async function GET(request: Request) {
             mou.signatures = null
           }
         }
-        return mou
+        const totalFromProjects = totalByMouId[mou.id]
+        return {
+          ...mou,
+          total_amount: totalFromProjects !== undefined ? totalFromProjects : (mou.total_amount ?? 0)
+        }
       })
-      
       return NextResponse.json(parsed)
     }
 
@@ -58,9 +78,31 @@ export async function GET(request: Request) {
 
     const { data, error } = await query
     if (error) throw error
+
+    const mous = data || []
+    const mouIds = mous.map((m: any) => m.id).filter(Boolean)
+    const totalByMouId: Record<string, number> = {}
+
+    if (mouIds.length > 0) {
+      const { data: projects, error: projErr } = await supabase
+        .from('err_projects')
+        .select('mou_id, expenses')
+        .in('mou_id', mouIds)
+      if (!projErr && projects && projects.length > 0) {
+        const sumExpenses = (exp: any): number => {
+          const arr = typeof exp === 'string' ? JSON.parse(exp || '[]') : (Array.isArray(exp) ? exp : [])
+          return arr.reduce((s: number, e: any) => s + (e?.total_cost || 0), 0)
+        }
+        for (const p of projects) {
+          const id = p.mou_id
+          if (!id) continue
+          totalByMouId[id] = (totalByMouId[id] || 0) + sumExpenses(p.expenses)
+        }
+      }
+    }
     
-    // Parse signatures JSON for each MOU
-    const parsed = (data || []).map((mou: any) => {
+    // Parse signatures JSON and attach total from err_projects (not mous table)
+    const parsed = mous.map((mou: any) => {
       if (mou.signatures && typeof mou.signatures === 'string') {
         try {
           mou.signatures = JSON.parse(mou.signatures)
@@ -69,7 +111,11 @@ export async function GET(request: Request) {
           mou.signatures = null
         }
       }
-      return mou
+      const totalFromProjects = totalByMouId[mou.id]
+      return {
+        ...mou,
+        total_amount: totalFromProjects !== undefined ? totalFromProjects : (mou.total_amount ?? 0)
+      }
     })
     
     return NextResponse.json(parsed)

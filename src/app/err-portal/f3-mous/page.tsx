@@ -126,6 +126,7 @@ export default function F3MOUsPage() {
   const [paymentProjects, setPaymentProjects] = useState<Array<{ id: string; err_id: string | null; state: string; locality: string | null; emergency_room_name: string | null; grant_id: string | null }>>([])
   const [paymentConfirmations, setPaymentConfirmations] = useState<Record<string, { exchange_rate: string; transfer_date: string; file: File | null; file_path?: string }>>({})
   const [uploadingPayments, setUploadingPayments] = useState<Record<string, boolean>>({})
+  const [uploadingAllPayments, setUploadingAllPayments] = useState(false)
   const [isAssigning, setIsAssigning] = useState(false)
   const [isReassigning, setIsReassigning] = useState(false)
   const [mouAssignmentStatus, setMouAssignmentStatus] = useState<Record<string, { hasUnassigned: boolean; hasAssigned: boolean; projectCount: number }>>({})
@@ -1262,7 +1263,10 @@ export default function F3MOUsPage() {
           <DialogHeader>
             <DialogTitle>{activeMou?.mou_code || 'MOU'}</DialogTitle>
           </DialogHeader>
-          {activeMou && (
+          {activeMou && (() => {
+            const viewMouProjects = detail?.projects || (detail?.project ? [detail.project] : [])
+            const mouTotalFromProjects = viewMouProjects.reduce((s: number, p: any) => s + sumExpensesUsd(p.expenses), 0)
+            return (
             <div id={previewId} className="space-y-4">
               <div className="rounded-lg border p-4" data-mou-section="true">
                 <div className="text-lg font-semibold mb-2">
@@ -1416,7 +1420,7 @@ export default function F3MOUsPage() {
                   <div className="rounded-md border p-3">
                     <div className="font-medium mb-2">{t('f3:shall_partner', { partner: activeMou.partner_name })}</div>
                     <ul className="list-disc pl-5 text-sm space-y-1">
-                      <li>{t('f3:partner_provide_sum', { amount: Number(activeMou.total_amount || 0).toLocaleString() })}</li>
+                      <li>{t('f3:partner_provide_sum', { amount: mouTotalFromProjects.toLocaleString() })}</li>
                       <li>{t('f3:partner_accept_apps')}</li>
                       <li>{t('f3:partner_assess_needs')}</li>
                       <li>{t('f3:partner_support_followup')}</li>
@@ -1527,7 +1531,7 @@ export default function F3MOUsPage() {
                   <div className="rounded-md border p-3" dir="rtl">
                     <div className="font-medium mb-2">تلتزم {activeMou.partner_name}</div>
                     <ul className="list-disc list-inside pr-5 text-sm space-y-1 break-words">
-                      <li>تقديم مبلغ قدره ${Number(activeMou.total_amount || 0).toLocaleString()}.</li>
+                      <li>تقديم مبلغ قدره ${mouTotalFromProjects.toLocaleString()}.</li>
                       <li>قبول الطلبات المقدّمة من المجتمعات والتي تحدد أولويات الاحتياجات (الحماية، المياه والصرف الصحي، الأمن الغذائي، الصحة أو المأوى والمواد غير الغذائية).</li>
                       <li>تقييم الاحتياجات بشكل عادل وفق المنهجية المجتمعية (نموذج F1).</li>
                       <li>تقديم الدعم الفني والمتابعة المستمرة للإجراءات المتفق عليها.</li>
@@ -1556,8 +1560,8 @@ export default function F3MOUsPage() {
               <div className="rounded-lg border p-4" data-mou-section="true">
                 <div className="font-semibold mb-2">4. {t('f3:funding')}</div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="rounded-md border p-3 text-sm">{t('f3:funding_en_desc', { partner: activeMou.partner_name, amount: Number(activeMou.total_amount || 0).toLocaleString() })}</div>
-                  <div className="rounded-md border p-3 text_sm" dir="rtl">{t('f3:funding_ar_desc', { partner: activeMou.partner_name, amount: Number(activeMou.total_amount || 0).toLocaleString() })}</div>
+                  <div className="rounded-md border p-3 text-sm">{t('f3:funding_en_desc', { partner: activeMou.partner_name, amount: mouTotalFromProjects.toLocaleString() })}</div>
+                  <div className="rounded-md border p-3 text_sm" dir="rtl">{t('f3:funding_ar_desc', { partner: activeMou.partner_name, amount: mouTotalFromProjects.toLocaleString() })}</div>
                 </div>
               </div>
 
@@ -2334,7 +2338,7 @@ export default function F3MOUsPage() {
                 )}
               </div>
             </div>
-          )}
+            ) })()}
         </DialogContent>
       </Dialog>
 
@@ -3406,6 +3410,75 @@ export default function F3MOUsPage() {
             </Table>
             
             <div className="flex justify-end gap-2 pt-4 border-t mt-4">
+              <Button
+                variant="default"
+                disabled={uploadingAllPayments || Object.values(uploadingPayments).some(Boolean)}
+                onClick={async () => {
+                  const ready = paymentProjects.filter((p) => {
+                    const c = paymentConfirmations[p.id]
+                    const hasFile = !!(c?.file || c?.file_path)
+                    const hasMeta = !!(c?.exchange_rate?.trim() && c?.transfer_date?.trim())
+                    return hasFile && hasMeta
+                  })
+                  if (ready.length === 0) {
+                    alert('No projects ready to upload. Ensure each has a file (or existing file), exchange rate, and transfer date.')
+                    return
+                  }
+                  setUploadingAllPayments(true)
+                  const uploading: Record<string, boolean> = {}
+                  ready.forEach((p) => { uploading[p.id] = true })
+                  setUploadingPayments((prev) => ({ ...prev, ...uploading }))
+                  try {
+                    for (const project of ready) {
+                      const conf = paymentConfirmations[project.id]!
+                      const formData = new FormData()
+                      if (conf.file) formData.append('file', conf.file)
+                      if (conf.exchange_rate) formData.append('exchange_rate', conf.exchange_rate)
+                      if (conf.transfer_date) formData.append('transfer_date', conf.transfer_date)
+                      formData.append('project_id', project.id)
+                      const response = await fetch(`/api/f3/mous/${selectedMouForPayment?.id}/payment-confirmation`, {
+                        method: 'POST',
+                        body: formData
+                      })
+                      if (!response.ok) {
+                        const err = await response.json().catch(() => ({}))
+                        throw new Error((err as { error?: string }).error || 'Failed to upload payment confirmation')
+                      }
+                    }
+                    const mouResponse = await fetch(`/api/f3/mous?state=${selectedMouForPayment?.state || 'all'}`)
+                    const mouData = await mouResponse.json()
+                    const updatedMou = mouData.find((m: MOU) => m.id === selectedMouForPayment?.id)
+                    if (updatedMou) {
+                      const existing = parsePaymentConfirmations(updatedMou.payment_confirmation_file)
+                      const updatedConfirmations: Record<string, { exchange_rate: string; transfer_date: string; file: File | null; file_path?: string }> = {}
+                      paymentProjects.forEach((p) => {
+                        const existingData = existing[p.id]
+                        updatedConfirmations[p.id] = {
+                          exchange_rate: existingData?.exchange_rate?.toString() ?? '',
+                          transfer_date: existingData?.transfer_date ?? '',
+                          file: null,
+                          file_path: existingData?.file_path
+                        }
+                      })
+                      setPaymentConfirmations(updatedConfirmations)
+                      setSelectedMouForPayment(updatedMou)
+                    }
+                    await fetchMous()
+                    alert(`Saved payment confirmations for ${ready.length} project${ready.length !== 1 ? 's' : ''}.`)
+                  } catch (e) {
+                    console.error(e)
+                    alert(e instanceof Error ? e.message : 'Failed to save one or more payment confirmations.')
+                  } finally {
+                    setUploadingAllPayments(false)
+                    setUploadingPayments({})
+                  }
+                }}
+              >
+                {uploadingAllPayments ? 'Uploading all...' : `Upload all (${paymentProjects.filter((p) => {
+                  const c = paymentConfirmations[p.id]
+                  return !!(c?.file || c?.file_path) && !!(c?.exchange_rate?.trim() && c?.transfer_date?.trim())
+                }).length} ready)`}
+              </Button>
               <Button
                 variant="outline"
                 onClick={() => {
