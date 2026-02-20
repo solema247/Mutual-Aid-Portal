@@ -40,7 +40,8 @@ import { ViewOwnForecasts } from './components/ViewOwnForecasts'
 const MONTH_OPTIONS = (() => {
   const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
   const options: { value: string; label: string }[] = []
-  for (let y = 2020; y <= 2030; y++) {
+  // 2025–2030 first so recent years are at the top; Jan 2026 is second option when opening the dropdown
+  for (const y of [2025, 2026, 2027, 2028, 2029, 2030, 2020, 2021, 2022, 2023, 2024]) {
     for (let m = 1; m <= 12; m++) {
       const value = `${y}-${String(m).padStart(2, '0')}`
       options.push({ value, label: `${months[m - 1]}-${String(y).slice(-2)}` })
