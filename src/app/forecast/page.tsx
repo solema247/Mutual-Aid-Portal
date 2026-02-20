@@ -37,11 +37,17 @@ import LanguageSwitch from '@/components/LanguageSwitch'
 import * as XLSX from 'xlsx'
 import { ViewOwnForecasts } from './components/ViewOwnForecasts'
 
-const MONTHS = [
-  'January', 'February', 'March', 'April', 'May', 'June', 
-  'July', 'August', 'September', 'October', 'November', 'December'
-]
-const YEAR = '2025'
+const MONTH_OPTIONS = (() => {
+  const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
+  const options: { value: string; label: string }[] = []
+  for (let y = 2020; y <= 2030; y++) {
+    for (let m = 1; m <= 12; m++) {
+      const value = `${y}-${String(m).padStart(2, '0')}`
+      options.push({ value, label: `${months[m - 1]} ${y}` })
+    }
+  }
+  return options
+})()
 
 type CSVRow = {
   Month: string
@@ -229,15 +235,13 @@ const EntryFormRow = ({
   onChange, 
   onDelete,
   onAdd,
-  states, 
-  months
+  states
 }: { 
   entry: ForecastEntry
   onChange: (entry: ForecastEntry) => void
   onDelete: () => void
   onAdd: () => void
   states: { id: string; state_name: string }[]
-  months: string[]
 }) => {
   const [localEntry, setLocalEntry] = useState(entry)
 
@@ -266,32 +270,29 @@ const EntryFormRow = ({
 
   return (
     <tr className="border-t">
-      <td className="p-2">
-        <Select 
-          value={localEntry.month} 
+      <td className="p-1.5">
+        <Select
+          value={localEntry.month || ''}
           onValueChange={(value) => handleSelectChange('month', value)}
         >
-          <SelectTrigger className="h-8">
+          <SelectTrigger className="h-7 w-full text-xs">
             <SelectValue placeholder="Month" />
           </SelectTrigger>
           <SelectContent>
-            {months.map((month) => (
-              <SelectItem 
-                key={month} 
-                value={`${YEAR}-${String(months.indexOf(month) + 1).padStart(2, '0')}`}
-              >
-                {month} {YEAR}
+            {MONTH_OPTIONS.map((opt) => (
+              <SelectItem key={opt.value} value={opt.value}>
+                {opt.label}
               </SelectItem>
             ))}
           </SelectContent>
         </Select>
       </td>
-      <td className="p-2">
+      <td className="p-1.5">
         <Select 
           value={localEntry.state}
           onValueChange={(value) => handleSelectChange('state', value)}
         >
-          <SelectTrigger className="h-8">
+          <SelectTrigger className="h-7 w-full text-xs">
             <SelectValue placeholder="State" />
           </SelectTrigger>
           <SelectContent>
@@ -303,38 +304,38 @@ const EntryFormRow = ({
           </SelectContent>
         </Select>
       </td>
-      <td className="p-2">
+      <td className="p-1.5">
         <Input
           type="text"
           inputMode="numeric"
           value={localEntry.amount}
           onChange={(e) => handleTextChange('amount', e.target.value.replace(/[^\d.]/g, ''))}
           onBlur={handleBlur}
-          className="h-8"
+          className="h-7 w-full text-xs"
         />
       </td>
-      <td className="p-2">
+      <td className="p-1.5">
         <Input
           value={localEntry.localities}
           onChange={(e) => handleTextChange('localities', e.target.value)}
           onBlur={handleBlur}
-          className="h-8"
+          className="h-7 w-full text-xs"
         />
       </td>
-      <td className="p-2">
+      <td className="p-1.5">
         <Input
           value={localEntry.intermediary}
           onChange={(e) => handleTextChange('intermediary', e.target.value)}
           onBlur={handleBlur}
-          className="h-8"
+          className="h-7 w-full text-xs"
         />
       </td>
-      <td className="p-2">
+      <td className="p-1.5">
         <Select 
           value={localEntry.transfer_method}
           onValueChange={(value) => handleSelectChange('transfer_method', value)}
         >
-          <SelectTrigger className="h-8">
+          <SelectTrigger className="h-7 w-full text-xs">
             <SelectValue placeholder="Transfer Method" />
           </SelectTrigger>
           <SelectContent>
@@ -348,12 +349,12 @@ const EntryFormRow = ({
           </SelectContent>
         </Select>
       </td>
-      <td className="p-2">
+      <td className="p-1.5">
         <Select 
           value={localEntry.source}
           onValueChange={(value) => handleSelectChange('source', value)}
         >
-          <SelectTrigger className="h-8">
+          <SelectTrigger className="h-7 w-full text-xs">
             <SelectValue placeholder="Source" />
           </SelectTrigger>
           <SelectContent>
@@ -364,12 +365,12 @@ const EntryFormRow = ({
           </SelectContent>
         </Select>
       </td>
-      <td className="p-2">
+      <td className="p-1.5">
         <Select 
           value={localEntry.receiving_mag}
           onValueChange={(value) => handleSelectChange('receiving_mag', value)}
         >
-          <SelectTrigger className="h-8">
+          <SelectTrigger className="h-7 w-full text-xs">
             <SelectValue placeholder="Receiving MAG" />
           </SelectTrigger>
           <SelectContent>
@@ -378,12 +379,12 @@ const EntryFormRow = ({
           </SelectContent>
         </Select>
       </td>
-      <td className="p-2">
+      <td className="p-1.5">
         <Select 
           value={localEntry.status}
           onValueChange={(value: 'planned' | 'complete') => handleSelectChange('status', value)}
         >
-          <SelectTrigger className="h-8">
+          <SelectTrigger className="h-7 w-full text-xs">
             <SelectValue placeholder="Status" />
           </SelectTrigger>
           <SelectContent>
@@ -392,23 +393,23 @@ const EntryFormRow = ({
           </SelectContent>
         </Select>
       </td>
-      <td className="p-2">
+      <td className="p-1.5">
         <div className="flex items-center gap-1 justify-center">
           <Button 
             variant="ghost" 
             size="icon"
             onClick={onDelete}
-            className="h-8 w-8 text-destructive hover:text-destructive/80"
+            className="h-7 w-7 text-destructive hover:text-destructive/80"
           >
-            <Trash2 className="h-4 w-4" />
+            <Trash2 className="h-3.5 w-3.5" />
           </Button>
           <Button 
             variant="ghost" 
             size="icon"
             onClick={onAdd}
-            className="h-8 w-8"
+            className="h-7 w-7"
           >
-            <Plus className="h-4 w-4" />
+            <Plus className="h-3.5 w-3.5" />
           </Button>
         </div>
       </td>
@@ -966,19 +967,19 @@ export default function ForecastPage() {
         <CollapsibleContent className="pt-2 pb-4">
           <div className="space-y-6 pt-4">
             <div className="border rounded-lg overflow-hidden">
-              <table className="w-full text-sm">
-                <thead className="bg-muted">
+              <table className="w-full text-xs table-fixed">
+                <thead className="bg-muted text-xs">
                   <tr>
-                    <th className="p-2 text-left">{t('forecast:sections.form.table.month')} <span className="text-red-500">*</span></th>
-                    <th className="p-2 text-left">{t('forecast:sections.form.table.state')} <span className="text-red-500">*</span></th>
-                    <th className="p-2 text-left">{t('forecast:sections.form.table.amount')} <span className="text-red-500">*</span></th>
-                    <th className="p-2 text-left">{t('forecast:sections.form.table.localities')}</th>
-                    <th className="p-2 text-left">{t('forecast:sections.form.table.intermediary')}</th>
-                    <th className="p-2 text-left">{t('forecast:sections.form.table.transfer_method')} <span className="text-red-500">*</span></th>
-                    <th className="p-2 text-left">{t('forecast:sections.form.table.source')} <span className="text-red-500">*</span></th>
-                    <th className="p-2 text-left">{t('forecast:sections.form.table.receiving_mag')} <span className="text-red-500">*</span></th>
-                    <th className="p-2 text-left">{t('forecast:sections.form.table.status')} <span className="text-red-500">*</span></th>
-                    <th className="p-2 w-20 text-center">{t('forecast:sections.form.table.actions')}</th>
+                    <th className="p-1.5 text-left w-[9%]">{t('forecast:sections.form.table.month')} <span className="text-red-500">*</span></th>
+                    <th className="p-1.5 text-left w-[10%]">{t('forecast:sections.form.table.state')} <span className="text-red-500">*</span></th>
+                    <th className="p-1.5 text-left w-[7%]">{t('forecast:sections.form.table.amount')} <span className="text-red-500">*</span></th>
+                    <th className="p-1.5 text-left w-[9%]">{t('forecast:sections.form.table.localities')}</th>
+                    <th className="p-1.5 text-left w-[9%]">{t('forecast:sections.form.table.intermediary')}</th>
+                    <th className="p-1.5 text-left w-[11%]">{t('forecast:sections.form.table.transfer_method')} <span className="text-red-500">*</span></th>
+                    <th className="p-1.5 text-left w-[10%]">{t('forecast:sections.form.table.source')} <span className="text-red-500">*</span></th>
+                    <th className="p-1.5 text-left w-[9%]">{t('forecast:sections.form.table.receiving_mag')} <span className="text-red-500">*</span></th>
+                    <th className="p-1.5 text-left w-[8%]">{t('forecast:sections.form.table.status')} <span className="text-red-500">*</span></th>
+                    <th className="p-1.5 text-center w-[8%]">{t('forecast:sections.form.table.actions')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -990,7 +991,6 @@ export default function ForecastPage() {
                       onDelete={() => handleDeleteRow(row.id)}
                       onAdd={handleAddRow}
                       states={states}
-                      months={MONTHS}
                     />
                   ))}
                 </tbody>
