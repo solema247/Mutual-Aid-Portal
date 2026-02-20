@@ -38,12 +38,12 @@ import * as XLSX from 'xlsx'
 import { ViewOwnForecasts } from './components/ViewOwnForecasts'
 
 const MONTH_OPTIONS = (() => {
-  const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
   const options: { value: string; label: string }[] = []
   for (let y = 2020; y <= 2030; y++) {
     for (let m = 1; m <= 12; m++) {
       const value = `${y}-${String(m).padStart(2, '0')}`
-      options.push({ value, label: `${months[m - 1]} ${y}` })
+      options.push({ value, label: `${months[m - 1]}-${String(y).slice(-2)}` })
     }
   }
   return options
