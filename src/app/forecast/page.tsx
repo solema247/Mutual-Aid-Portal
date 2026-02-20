@@ -105,20 +105,22 @@ function findDuplicates(data: CSVRow[]): DuplicateGroup[] {
   
   data.forEach(row => {
     const normalizedFields = {
-      state_name: (row.State || '').trim().toLowerCase(),
+      state_name: normalizeUploadStateName(row.State).toLowerCase(),
       month: (row.Month || '').trim(),
       receiving_mag: (row['Receiving MAG'] || '').trim().toLowerCase(),
       source: (row.Source || '').trim().toLowerCase(),
-      transfer_method: (row['Transfer Method'] || '').trim().toLowerCase()
+      transfer_method: (row['Transfer Method'] || '').trim().toLowerCase(),
+      status: (row.Status || '').toString().trim().toLowerCase() || 'planned'
     }
 
-    // Create a key from only the fields in our unique constraint
+    // Key includes Status so e.g. same state/month/source but Complete vs Planned stay separate
     const key = [
       normalizedFields.state_name,
       normalizedFields.month,
       normalizedFields.receiving_mag,
       normalizedFields.source,
-      normalizedFields.transfer_method
+      normalizedFields.transfer_method,
+      normalizedFields.status
     ].join('|')
 
     if (!groups.has(key)) {
@@ -155,12 +157,34 @@ function findDuplicates(data: CSVRow[]): DuplicateGroup[] {
     })
 }
 
+// Normalize state names from uploaded file to match states table
+function normalizeUploadStateName(state: string | undefined): string {
+  const raw = (state ?? '').trim()
+  if (!raw) return raw
+  const mappings: Record<string, string> = {
+    'Sinar': 'Sennar',
+    'Al Jazeera': 'Al Jazirah',
+  }
+  if (mappings[raw]) return mappings[raw]
+  const lower = raw.toLowerCase()
+  for (const [key, value] of Object.entries(mappings)) {
+    if (key.toLowerCase() === lower) return value
+  }
+  return raw
+}
+
 // Add this helper function to convert Excel date numbers to date strings
-const convertExcelDate = (excelDate: number): string => {
-  // Excel dates are number of days since 1900-01-01 (except for the 1900 leap year bug)
-  const date = new Date((excelDate - 25569) * 86400 * 1000)
-  const month = (date.getMonth() + 1).toString().padStart(2, '0')
-  const year = date.getFullYear()
+// Uses UTC so month/year are correct regardless of user timezone (avoids e.g. Apr 1 UTC becoming Mar in PST)
+const convertExcelDate = (excelDate: number | Date): string => {
+  let date: Date
+  if (excelDate instanceof Date) {
+    date = excelDate
+  } else {
+    // Excel dates are number of days since 1900-01-01 (except for the 1900 leap year bug)
+    date = new Date((excelDate - 25569) * 86400 * 1000)
+  }
+  const month = (date.getUTCMonth() + 1).toString().padStart(2, '0')
+  const year = date.getUTCFullYear()
   return `${month}-${year}`
 }
 
@@ -732,7 +756,7 @@ export default function ForecastPage() {
 
         const mappedData: CSVRow[] = jsonData.map((row: any) => {
           let monthValue
-          if (typeof row['Month'] === 'number') {
+          if (typeof row['Month'] === 'number' || row['Month'] instanceof Date) {
             monthValue = convertExcelDate(row['Month'])
           } else if (typeof row['Month'] === 'string') {
             // If it's already a string, just ensure it's in the right format
@@ -850,8 +874,9 @@ export default function ForecastPage() {
               return null
             }
 
-            const matchingState = states.find(s => 
-              s.state_name.toLowerCase() === row.State?.trim().toLowerCase()
+            const normalizedState = normalizeUploadStateName(row.State)
+            const matchingState = states.find(s =>
+              s.state_name.toLowerCase() === normalizedState.toLowerCase()
             )
 
             const amountStr = (row.Amount || '').toString()
