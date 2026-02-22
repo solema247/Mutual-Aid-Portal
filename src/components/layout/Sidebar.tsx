@@ -70,9 +70,9 @@ export default function Sidebar({ items, title, isOpen }: SidebarProps) {
             <Menu className="h-6 w-6" />
           </Button>
         </SheetTrigger>
-        <SheetContent side="left" className="w-64 p-0">
-          <SheetHeader className="p-6 border-b">
-            <SheetTitle>{sidebarLabel}</SheetTitle>
+        <SheetContent side="left" className="w-64 p-0 bg-sidebar text-sidebar-foreground border-sidebar-border">
+          <SheetHeader className="p-6 border-b border-sidebar-border">
+            <SheetTitle className="text-white">{sidebarLabel}</SheetTitle>
           </SheetHeader>
           <nav className="flex flex-col gap-2 p-4 h-[calc(100%-80px)] justify-between">
             <div className="flex flex-col gap-2">
@@ -82,20 +82,20 @@ export default function Sidebar({ items, title, isOpen }: SidebarProps) {
                   href={item.href}
                   onClick={() => setOpen(false)}
                   className={cn(
-                    'flex items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground',
-                    pathname === item.href && 'bg-muted text-foreground'
+                    'flex items-center gap-3 rounded-lg px-3 py-2 text-sidebar-foreground transition-colors hover:bg-brand-orange hover:text-white',
+                    pathname === item.href && 'bg-sidebar-primary text-white border-s-2 border-brand-pink'
                   )}
                 >
-                  <span className="text-xl">{item.icon}</span>
+                  <span className="text-xl text-brand-light-blue">{item.icon}</span>
                   <span>{item.label}</span>
                 </Link>
               ))}
             </div>
             <button
               onClick={handleLogout}
-              className="flex items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground mt-auto"
+              className="flex items-center gap-3 rounded-lg px-3 py-2 text-sidebar-foreground transition-colors hover:bg-brand-orange hover:text-white mt-auto"
             >
-              <LogOut className="h-5 w-5" />
+              <LogOut className="h-5 w-5 text-brand-pink" />
               <span>{t('common:logout')}</span>
             </button>
           </nav>
@@ -105,18 +105,18 @@ export default function Sidebar({ items, title, isOpen }: SidebarProps) {
       {/* Desktop sidebar */}
       <div
         className={cn(
-          'hidden lg:flex h-screen flex-col border-r rtl:border-l bg-background transition-all duration-300 ease-in-out',
+          'hidden lg:flex h-screen flex-col border-r rtl:border-l border-sidebar-border bg-sidebar text-sidebar-foreground transition-all duration-300 ease-in-out',
           isExpanded ? 'w-64' : 'w-16'
         )}
         onMouseEnter={isOpen === undefined ? () => setIsExpandedHover(true) : undefined}
         onMouseLeave={isOpen === undefined ? () => setIsExpandedHover(false) : undefined}
       >
         <div className={cn(
-          'p-6 border-b transition-all duration-300',
+          'p-6 border-b border-sidebar-border transition-all duration-300',
           !isExpanded && 'p-4'
         )}>
           <h2 className={cn(
-            'text-lg font-semibold transition-all duration-300',
+            'text-lg font-semibold text-white transition-all duration-300',
             !isExpanded && 'opacity-0'
           )}>
             {sidebarLabel}
@@ -131,12 +131,13 @@ export default function Sidebar({ items, title, isOpen }: SidebarProps) {
                 className={cn(
                   'flex items-center rounded-lg transition-all duration-300',
                   !isExpanded ? 'justify-center mx-0.5 w-9 h-9' : 'gap-3 px-3',
-                  'py-2 text-muted-foreground hover:bg-muted hover:text-foreground',
-                  pathname === item.href && 'bg-muted text-foreground'
+                  'py-2 text-sidebar-foreground hover:bg-brand-orange hover:text-white',
+                  pathname === item.href && 'bg-sidebar-primary text-white border-s-2 border-brand-pink'
                 )}
               >
                 <span className={cn(
                   "text-xl",
+                  pathname !== item.href && "text-brand-light-blue",
                   !isExpanded && "flex items-center justify-center w-6 h-6"
                 )}>{item.icon}</span>
                 <span className={cn(
@@ -153,11 +154,11 @@ export default function Sidebar({ items, title, isOpen }: SidebarProps) {
             className={cn(
               'flex items-center rounded-lg transition-all duration-300',
               !isExpanded ? 'justify-center mx-0.5 w-9 h-9' : 'gap-3 px-3',
-              'py-2 text-muted-foreground hover:bg-muted hover:text-foreground mt-auto'
+              'py-2 text-sidebar-foreground hover:bg-brand-orange hover:text-white mt-auto'
             )}
           >
             <LogOut className={cn(
-              "h-5 w-5",
+              "h-5 w-5 text-brand-pink",
               !isExpanded && "flex items-center justify-center"
             )} />
             <span className={cn(
