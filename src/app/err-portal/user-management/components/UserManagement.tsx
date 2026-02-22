@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
+import Link from 'next/link'
 import { useTranslation } from 'react-i18next'
 import { CollapsibleRow } from '@/components/ui/collapsible'
 import { PendingUserListItem } from '@/app/api/users/types/users'
@@ -91,17 +92,27 @@ export default function UserManagement() {
   return (
     <div className="space-y-6">
       {isAdmin && (
-        <CollapsibleRow
-          title="Access Rights Management"
-          variant="primary"
-          defaultOpen={true}
-        >
-          <AccessRightsManagement
-            currentUserRole={currentUser.role}
-            currentUserErrId={currentUser.err_id}
-            currentUserId={currentUser.id}
-          />
-        </CollapsibleRow>
+        <>
+          <div className="flex gap-4">
+            <Link
+              href="/err-portal/user-management/permissions"
+              className="text-primary hover:underline text-sm font-medium"
+            >
+              Function Permissions
+            </Link>
+          </div>
+          <CollapsibleRow
+            title="Access Rights Management"
+            variant="primary"
+            defaultOpen={true}
+          >
+            <AccessRightsManagement
+              currentUserRole={currentUser.role}
+              currentUserErrId={currentUser.err_id}
+              currentUserId={currentUser.id}
+            />
+          </CollapsibleRow>
+        </>
       )}
 
       <CollapsibleRow

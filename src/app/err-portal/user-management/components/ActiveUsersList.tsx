@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useTranslation } from 'react-i18next'
 import { useState, useEffect, useCallback } from 'react'
 import {
@@ -155,7 +156,7 @@ export default function ActiveUsersList({
       </div>
 
       <div className="rounded-md border">
-        <div className="grid grid-cols-8 gap-4 p-4 font-medium border-b">
+        <div className="grid grid-cols-9 gap-4 p-4 font-medium border-b">
           <div>{t('users:err_name')}</div>
           <div>{t('users:state')}</div>
           <div>{t('users:display_name')}</div>
@@ -164,10 +165,11 @@ export default function ActiveUsersList({
           <div>{t('users:created_at')}</div>
           <div>{t('users:updated_at')}</div>
           <div>{t('users:actions')}</div>
+          <div>Permissions</div>
         </div>
         <div className="divide-y">
           {users.map((user) => (
-            <div key={user.id} className="grid grid-cols-8 gap-4 p-4">
+            <div key={user.id} className="grid grid-cols-9 gap-4 p-4">
               <div>{user.err_name || '-'}</div>
               <div>{user.state_name || '-'}</div>
               <div>{user.display_name || '-'}</div>
@@ -196,6 +198,16 @@ export default function ActiveUsersList({
                   </button>
                 ) : (
                   <span className="text-xs text-muted-foreground">-</span>
+                )}
+              </div>
+              <div>
+                {(currentUserRole === 'admin' || currentUserRole === 'superadmin') && (
+                  <Link
+                    href={`/err-portal/user-management/permissions?userId=${user.id}`}
+                    className="text-primary hover:underline text-sm"
+                  >
+                    Permissions
+                  </Link>
                 )}
               </div>
             </div>

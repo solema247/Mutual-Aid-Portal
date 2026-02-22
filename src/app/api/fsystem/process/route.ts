@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import vision from '@google-cloud/vision'
 import OpenAI from 'openai'
 import path from 'path'
+import { requirePermission } from '@/lib/requirePermission'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -158,6 +159,8 @@ function detectLanguage(text: string): 'ar' | 'en' {
 }
 
 export async function POST(req: Request) {
+  const auth = await requirePermission('f1_upload')
+  if (auth instanceof NextResponse) return auth
   try {
     const start = Date.now()
     const formData = await req.formData()

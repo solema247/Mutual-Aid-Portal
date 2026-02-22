@@ -5,6 +5,7 @@ import { useState } from 'react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { ChevronDown, ChevronUp, BarChart } from 'lucide-react'
+import { useAllowedFunctions } from '@/hooks/useAllowedFunctions'
 import ERRAppSubmissions from './components/ERRAppSubmissions'
 import DirectUpload from './components/DirectUpload'
 import ManualEntry from './components/ManualEntry'
@@ -12,8 +13,12 @@ import PoolDashboard from './components/PoolDashboard'
 
 export default function F1WorkPlansPage() {
   const { t } = useTranslation(['f1_plans', 'common'])
+  const { can, isLoading: permissionsLoading } = useAllowedFunctions()
+  const canUpload = can('f1_upload')
   const [currentTab, setCurrentTab] = useState<'err_app' | 'direct_upload' | 'manual_entry'>('direct_upload')
   const [isByStateCollapsed, setIsByStateCollapsed] = useState(true)
+
+  const defaultTab = canUpload ? 'direct_upload' : 'err_app'
 
   return (
     <div className="space-y-6">
@@ -37,34 +42,45 @@ export default function F1WorkPlansPage() {
           <CardTitle>{t('f1_plans:description')}</CardTitle>
         </CardHeader>
         <CardContent>
+          {!permissionsLoading && !canUpload && (
+            <p className="text-muted-foreground text-sm mb-4">You do not have permission to upload or create F1 work plans. You can view ERR App submissions and the pool below.</p>
+          )}
           <Tabs 
-            defaultValue="direct_upload" 
+            key={String(canUpload)}
+            defaultValue={defaultTab} 
             className="w-full" 
             onValueChange={(value) => setCurrentTab(value as 'err_app' | 'direct_upload' | 'manual_entry')}
           >
-            <TabsList className="grid w-full grid-cols-3">
+            <TabsList className={`grid w-full ${canUpload ? 'grid-cols-3' : 'grid-cols-1'}`}>
               <TabsTrigger value="err_app">
                 {t('f1_plans:err_app_submissions')}
               </TabsTrigger>
-              <TabsTrigger value="direct_upload">
-                {t('f1_plans:direct_upload.title')}
-              </TabsTrigger>
-              <TabsTrigger value="manual_entry">
-                {t('f1_plans:manual_entry', { defaultValue: 'Manual Entry' })}
-              </TabsTrigger>
+              {canUpload && (
+                <>
+                  <TabsTrigger value="direct_upload">
+                    {t('f1_plans:direct_upload.title')}
+                  </TabsTrigger>
+                  <TabsTrigger value="manual_entry">
+                    {t('f1_plans:manual_entry', { defaultValue: 'Manual Entry' })}
+                  </TabsTrigger>
+                </>
+              )}
             </TabsList>
 
             <TabsContent value="err_app" className="mt-6">
               <ERRAppSubmissions />
             </TabsContent>
 
-            <TabsContent value="direct_upload" className="mt-6">
-              <DirectUpload />
-            </TabsContent>
-
-            <TabsContent value="manual_entry" className="mt-6">
-              <ManualEntry onSuccess={() => setCurrentTab('direct_upload')} />
-            </TabsContent>
+            {canUpload && (
+              <>
+                <TabsContent value="direct_upload" className="mt-6">
+                  <DirectUpload />
+                </TabsContent>
+                <TabsContent value="manual_entry" className="mt-6">
+                  <ManualEntry onSuccess={() => setCurrentTab('direct_upload')} />
+                </TabsContent>
+              </>
+            )}
           </Tabs>
         </CardContent>
       </Card>

@@ -1,0 +1,5 @@
+{
+  "base_err": ["f1_upload", "f1_approve", "f4_upload", "f5_upload"],
+  "state_err": ["f1_upload", "f1_approve", "f2_commit", "f2_approve", "f3_edit_mou", "f3_assign", "f4_upload", "f5_upload"],
+  "admin": []
+}

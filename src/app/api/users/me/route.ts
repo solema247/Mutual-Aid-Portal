@@ -1,13 +1,15 @@
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
 import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
+import { getAllowedFunctions } from '@/lib/permissions'
+import { getOverridesForUser } from '@/lib/userOverridesDb'
 
 export async function GET() {
   try {
     const supabase = createRouteHandlerClient({ cookies })
-    
+
     const { data: { session }, error: sessionError } = await supabase.auth.getSession()
-    
+
     if (sessionError || !session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
@@ -26,6 +28,13 @@ export async function GET() {
     if (!userData) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
+
+    const override = await getOverridesForUser(supabase, userData.id)
+    const overridesMap = { [userData.id]: override }
+    const allowed_functions = getAllowedFunctions(
+      { id: userData.id, role: userData.role },
+      overridesMap
+    )
 
     // Parse visible_states if it's a string (JSON)
     let visibleStates = userData.visible_states
@@ -48,6 +57,7 @@ export async function GET() {
       updated_at: userData.updated_at,
       can_see_all_states: userData.can_see_all_states ?? true,
       visible_states: visibleStates || [],
+      allowed_functions,
     })
   } catch (error) {
     console.error('Unexpected error in /api/users/me:', error)

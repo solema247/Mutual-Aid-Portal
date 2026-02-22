@@ -1,0 +1,15 @@
+[
+  { "code": "f1_upload", "module": "f1", "label_ar": "رفع خطة العمل", "label_en": "Upload work plan" },
+  { "code": "f1_approve", "module": "f1", "label_ar": "الموافقة على المشروع", "label_en": "Approve project" },
+  { "code": "f2_commit", "module": "f2", "label_ar": "التزام التوزيع", "label_en": "Commit distribution" },
+  { "code": "f2_approve", "module": "f2", "label_ar": "الموافقة على التوزيع", "label_en": "Approve distribution" },
+  { "code": "f3_edit_mou", "module": "f3", "label_ar": "تعديل MOU", "label_en": "Edit MOU" },
+  { "code": "f3_assign", "module": "f3", "label_ar": "تعيين MOU", "label_en": "Assign MOU" },
+  { "code": "f4_upload", "module": "f4", "label_ar": "رفع تقرير F4", "label_en": "Upload F4 report" },
+  { "code": "f5_upload", "module": "f5", "label_ar": "رفع تقرير F5", "label_en": "Upload F5 report" },
+  { "code": "users_approve", "module": "users", "label_ar": "الموافقة على المستخدم", "label_en": "Approve user" },
+  { "code": "users_manage_permissions", "module": "users", "label_ar": "إدارة صلاحيات الوظائف", "label_en": "Manage function permissions" },
+  { "code": "users_manage_access", "module": "users", "label_ar": "إدارة حقوق الوصول", "label_en": "Manage access rights" },
+  { "code": "grant_create_cycle", "module": "grants", "label_ar": "إنشاء دورة منح", "label_en": "Create grant cycle" },
+  { "code": "grant_edit_call", "module": "grants", "label_ar": "تعديل دعوة المنح", "label_en": "Edit grant call" }
+]
