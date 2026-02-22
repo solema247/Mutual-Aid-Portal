@@ -1,5 +1,5 @@
 {
   "base_err": ["f1_upload", "f1_approve", "f1_view", "f4_upload", "f5_upload"],
-  "state_err": ["f1_upload", "f1_approve", "f1_view", "f1_stage", "f1_assign_grant", "f2_commit", "f2_create_mou", "f2_upload_approval", "f2_edit_project", "f2_view_mou", "f3_edit_mou", "f3_assign", "f3_reassign_grant", "f4_upload", "f5_upload"],
+  "state_err": ["f1_upload", "f1_approve", "f1_view", "f1_stage", "f1_assign_grant", "f2_commit", "f2_create_mou", "f2_upload_approval", "f2_edit_project", "f2_view_mou", "f3_edit_mou", "f3_assign", "f3_reassign_grant", "f3_view_mou", "f3_manage_projects", "f3_manage_payment", "f3_upload_signed_mou", "f4_upload", "f5_upload"],
   "admin": []
 }

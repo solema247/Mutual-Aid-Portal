@@ -177,7 +177,13 @@ export default function F3MOUsPage() {
   const itemsPerPage = 10
   const [currentUser, setCurrentUser] = useState<{ role: string } | null>(null)
   const { can } = useAllowedFunctions()
+  const canEditMou = can('f3_edit_mou')
+  const canAssign = can('f3_assign')
   const canReassignGrant = can('f3_reassign_grant')
+  const canViewMou = can('f3_view_mou')
+  const canManageProjects = can('f3_manage_projects')
+  const canManagePayment = can('f3_manage_payment')
+  const canUploadSignedMou = can('f3_upload_signed_mou')
 
   const toDisplay = (value: any): string => {
     if (value == null) return ''
@@ -980,6 +986,7 @@ export default function F3MOUsPage() {
                     <TableCell>{new Date(m.created_at).toLocaleDateString()}</TableCell>
                     <TableCell className="align-top whitespace-nowrap">
                       <div className="flex items-start gap-3 flex-nowrap">
+                        {canManageProjects && (
                         <div className="flex flex-col items-center gap-0.5 min-w-[50px] flex-shrink-0">
                           <Button
                             variant="ghost"
@@ -992,7 +999,8 @@ export default function F3MOUsPage() {
                           </Button>
                           <span className="text-[10px] text-muted-foreground text-center leading-tight">List Projects</span>
                         </div>
-                        {mouAssignmentStatus[m.id]?.hasUnassigned && (currentUser?.role === 'admin' || currentUser?.role === 'superadmin') && (
+                        )}
+                        {mouAssignmentStatus[m.id]?.hasUnassigned && canAssign && (
                           <div className="flex flex-col items-center gap-0.5 min-w-[50px]">
                             <Button
                               variant="ghost"
@@ -1020,6 +1028,7 @@ export default function F3MOUsPage() {
                             <span className="text-[10px] text-muted-foreground text-center leading-tight">Reassign</span>
                           </div>
                         )}
+                        {canViewMou && (
                         <div className="flex flex-col items-center gap-0.5 min-w-[50px]">
                           <Button
                             variant="ghost"
@@ -1098,6 +1107,8 @@ export default function F3MOUsPage() {
                       </Button>
                       <span className="text-[10px] text-muted-foreground text-center leading-tight">{t('f3:preview')}</span>
                     </div>
+                        )}
+                        {canManagePayment && (
                         <div className="flex flex-col items-center gap-0.5 min-w-[50px]">
                           <Button
                             variant="ghost"
@@ -1137,6 +1148,9 @@ export default function F3MOUsPage() {
                             })()}
                           </span>
                       </div>
+                        )}
+                        {canUploadSignedMou && (
+                        <>
                         <input
                           type="file"
                           id={`signed-mou-upload-${m.id}`}
@@ -1213,6 +1227,8 @@ export default function F3MOUsPage() {
                         </Button>
                         <span className="text-[10px] text-muted-foreground text-center leading-tight whitespace-nowrap">{m.signed_mou_file_key ? 'View MOU' : 'Upload MOU'}</span>
                       </div>
+                        </>
+                        )}
                       </div>
                     </TableCell>
                       </TableRow>
@@ -1906,6 +1922,7 @@ export default function F3MOUsPage() {
                 ) : (
                   <>
                     <Button variant="outline" onClick={() => setPreviewOpen(false)}>Close</Button>
+                    {canEditMou && (
                     <Button
                       variant="outline"
                       onClick={() => {
@@ -2032,6 +2049,7 @@ export default function F3MOUsPage() {
                     >
                       Edit
                     </Button>
+                    )}
                     <Button
                   onClick={async () => {
                     try {
