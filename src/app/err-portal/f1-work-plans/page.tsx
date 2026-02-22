@@ -15,10 +15,11 @@ export default function F1WorkPlansPage() {
   const { t } = useTranslation(['f1_plans', 'common'])
   const { can, isLoading: permissionsLoading } = useAllowedFunctions()
   const canUpload = can('f1_upload')
+  const canView = can('f1_view') || canUpload
   const [currentTab, setCurrentTab] = useState<'err_app' | 'direct_upload' | 'manual_entry'>('direct_upload')
   const [isByStateCollapsed, setIsByStateCollapsed] = useState(true)
 
-  const defaultTab = canUpload ? 'direct_upload' : 'err_app'
+  const defaultTab = canUpload ? 'direct_upload' : canView ? 'err_app' : 'err_app'
 
   return (
     <div className="space-y-6">
@@ -42,46 +43,55 @@ export default function F1WorkPlansPage() {
           <CardTitle>{t('f1_plans:description')}</CardTitle>
         </CardHeader>
         <CardContent>
-          {!permissionsLoading && !canUpload && (
+          {!permissionsLoading && !canUpload && canView && (
             <p className="text-muted-foreground text-sm mb-4">You do not have permission to upload or create F1 work plans. You can view ERR App submissions and the pool below.</p>
           )}
-          <Tabs 
-            key={String(canUpload)}
-            defaultValue={defaultTab} 
-            className="w-full" 
-            onValueChange={(value) => setCurrentTab(value as 'err_app' | 'direct_upload' | 'manual_entry')}
-          >
-            <TabsList className={`grid w-full ${canUpload ? 'grid-cols-3' : 'grid-cols-1'}`}>
-              <TabsTrigger value="err_app">
-                {t('f1_plans:err_app_submissions')}
-              </TabsTrigger>
+          {!permissionsLoading && !canView && (
+            <p className="text-muted-foreground text-sm mb-4">You do not have permission to view or upload F1 work plans.</p>
+          )}
+          {(canView || canUpload) && (
+            <Tabs 
+              key={`${canUpload}-${canView}`}
+              defaultValue={defaultTab} 
+              className="w-full" 
+              onValueChange={(value) => setCurrentTab(value as 'err_app' | 'direct_upload' | 'manual_entry')}
+            >
+              <TabsList className={`grid w-full ${canUpload && canView ? 'grid-cols-3' : 'grid-cols-1'}`}>
+                {canView && (
+                  <TabsTrigger value="err_app">
+                    {t('f1_plans:err_app_submissions')}
+                  </TabsTrigger>
+                )}
+                {canUpload && (
+                  <>
+                    <TabsTrigger value="direct_upload">
+                      {t('f1_plans:direct_upload.title')}
+                    </TabsTrigger>
+                    <TabsTrigger value="manual_entry">
+                      {t('f1_plans:manual_entry', { defaultValue: 'Manual Entry' })}
+                    </TabsTrigger>
+                  </>
+                )}
+              </TabsList>
+
+              {canView && (
+                <TabsContent value="err_app" className="mt-6">
+                  <ERRAppSubmissions />
+                </TabsContent>
+              )}
+
               {canUpload && (
                 <>
-                  <TabsTrigger value="direct_upload">
-                    {t('f1_plans:direct_upload.title')}
-                  </TabsTrigger>
-                  <TabsTrigger value="manual_entry">
-                    {t('f1_plans:manual_entry', { defaultValue: 'Manual Entry' })}
-                  </TabsTrigger>
+                  <TabsContent value="direct_upload" className="mt-6">
+                    <DirectUpload />
+                  </TabsContent>
+                  <TabsContent value="manual_entry" className="mt-6">
+                    <ManualEntry onSuccess={() => setCurrentTab('direct_upload')} />
+                  </TabsContent>
                 </>
               )}
-            </TabsList>
-
-            <TabsContent value="err_app" className="mt-6">
-              <ERRAppSubmissions />
-            </TabsContent>
-
-            {canUpload && (
-              <>
-                <TabsContent value="direct_upload" className="mt-6">
-                  <DirectUpload />
-                </TabsContent>
-                <TabsContent value="manual_entry" className="mt-6">
-                  <ManualEntry onSuccess={() => setCurrentTab('direct_upload')} />
-                </TabsContent>
-              </>
-            )}
-          </Tabs>
+            </Tabs>
+          )}
         </CardContent>
       </Card>
 

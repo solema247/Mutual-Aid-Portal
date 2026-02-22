@@ -147,9 +147,9 @@ export default function PoolDashboard({ showProposals = true, showByDonor = true
   return (
     <div className="space-y-6">
       {showSummaryCards && summary && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-          <Card>
-            <CardHeader>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-stretch">
+          <Card className="h-full flex flex-col">
+            <CardHeader className="flex-1 min-h-0">
               <CardTitle>{t('err:gm.total_funds_allocated')}</CardTitle>
               <div className="text-xs text-muted-foreground">{t('err:gm.total_funds_allocated_desc')}</div>
             </CardHeader>
@@ -157,8 +157,8 @@ export default function PoolDashboard({ showProposals = true, showByDonor = true
               <div className="text-2xl font-bold">{fmt(summary.total_included)}</div>
             </CardContent>
           </Card>
-          <Card>
-            <CardHeader>
+          <Card className="h-full flex flex-col">
+            <CardHeader className="flex-1 min-h-0">
               <CardTitle>{t('err:gm.total_funds_transferred')}</CardTitle>
               <div className="text-xs text-muted-foreground">{t('err:gm.total_funds_transferred_desc')}</div>
             </CardHeader>
@@ -166,22 +166,22 @@ export default function PoolDashboard({ showProposals = true, showByDonor = true
               <div className="text-2xl font-bold">{fmt(summary.total_grants)}</div>
             </CardContent>
           </Card>
-          <Card>
-            <CardHeader>
+          <Card className="h-full flex flex-col">
+            <CardHeader className="flex-1 min-h-0">
               <CardTitle>{t('err:gm.committed')}</CardTitle>
               <div className="text-xs text-muted-foreground">{t('err:gm.committed_desc')}</div>
             </CardHeader>
             <CardContent className="text-2xl font-bold">{fmt(summary.total_committed)}</CardContent>
           </Card>
-          <Card>
-            <CardHeader>
+          <Card className="h-full flex flex-col">
+            <CardHeader className="flex-1 min-h-0">
               <CardTitle>{t('err:gm.pending')}</CardTitle>
               <div className="text-xs text-muted-foreground">{t('err:gm.pending_desc')}</div>
             </CardHeader>
             <CardContent className="text-2xl font-bold">{fmt(summary.total_pending)}</CardContent>
           </Card>
-          <Card>
-            <CardHeader>
+          <Card className="h-full flex flex-col">
+            <CardHeader className="flex-1 min-h-0">
               <CardTitle>{t('err:gm.remaining')}</CardTitle>
               <div className="text-xs text-muted-foreground">{t('err:gm.remaining_desc')}</div>
             </CardHeader>

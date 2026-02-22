@@ -26,6 +26,7 @@ import FeedbackForm from './FeedbackForm'
 import ProjectDetails from './ProjectDetails'
 import { F1Project } from '../../types'
 import type { FundingCycle } from '@/types/cycles'
+import { useAllowedFunctions } from '@/hooks/useAllowedFunctions'
 
 type ProjectStatus = 'new' | 'feedback' | 'staging' | 'declined' | 'draft' | 'pending' | 'approved'
 
@@ -47,6 +48,10 @@ interface User {
 
 export default function ERRAppSubmissions() {
   const { t } = useTranslation(['f1_plans', 'projects', 'common'])
+  const { can } = useAllowedFunctions()
+  const canApprove = can('f1_approve')
+  const canStage = can('f1_stage')
+  const canAssignGrant = can('f1_assign_grant')
   const [projects, setProjects] = useState<F1Project[]>([])
   const [allProjects, setAllProjects] = useState<F1Project[]>([])
   const [loading, setLoading] = useState(true)
@@ -107,6 +112,13 @@ export default function ERRAppSubmissions() {
       filterProjectsByStatus()
     }
   }, [currentStatus, allProjects, filterProjectsByStatus])
+
+  // Reset staging tab when user loses staging permission
+  useEffect(() => {
+    if (!canStage && currentStatus === 'staging') {
+      setCurrentStatus('new')
+    }
+  }, [canStage, currentStatus])
 
   useEffect(() => {
     if (selectedProject) {
@@ -256,6 +268,7 @@ export default function ERRAppSubmissions() {
   }
 
   const handleCreateSerialForProject = async () => {
+    if (!canAssignGrant) return
     if (!selectedProject?.funding_cycle_id || !selectedProject?.cycle_state_allocation_id) {
       alert('Project is missing cycle information.')
       return
@@ -350,6 +363,7 @@ export default function ERRAppSubmissions() {
   }
 
   const handleGrantAssignment = async (projectId: string, grantSerial: string) => {
+    if (!canAssignGrant) return
     try {
       // First, get the next workplan number for this grant serial
       const { data: seqData, error: seqError } = await supabase
@@ -595,7 +609,7 @@ export default function ERRAppSubmissions() {
           {currentStatus === 'declined' && (
             <span>{t('projects:explainers.declined')}</span>
           )}
-          {currentStatus === 'staging' && (
+          {canStage && currentStatus === 'staging' && (
             <span>{t('projects:explainers.staging')}</span>
           )}
         </div>
@@ -616,7 +630,7 @@ export default function ERRAppSubmissions() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      {currentStatus === 'staging' && <TableHead><input type="checkbox" className="h-4 w-4" onChange={(e) => {
+                      {canStage && currentStatus === 'staging' && <TableHead><input type="checkbox" className="h-4 w-4" onChange={(e) => {
                         const checked = e.target.checked
                         const next: Record<string, boolean> = {}
                         projects.forEach(p => {
@@ -636,7 +650,7 @@ export default function ERRAppSubmissions() {
                   <TableBody>
                     {projects.map((project) => (
                       <TableRow key={project.id}>
-                        {currentStatus === 'staging' && (
+                        {canStage && currentStatus === 'staging' && (
                           <TableCell>
                             <input 
                               type="checkbox" 
@@ -653,7 +667,7 @@ export default function ERRAppSubmissions() {
                         <TableCell>{project.funding_cycles?.name || project.funding_cycle_id || '-'}</TableCell>
                         <TableCell>{t(`projects:status.${project.funding_status}`)}</TableCell>
                         <TableCell>
-                          {currentStatus === 'staging' ? (
+                          {canStage && currentStatus === 'staging' ? (
                             selectedRows[project.id] && (
                               <span className="text-xs text-muted-foreground">{t('projects:staging_selected')}</span>
                             )
@@ -672,7 +686,7 @@ export default function ERRAppSubmissions() {
                 </Table>
               )}
             </CardContent>
-            {currentStatus === 'staging' && (
+            {canStage && currentStatus === 'staging' && (
               <div className="p-4 flex items-center justify-end gap-2">
                 <Button variant="outline" onClick={() => { 
                   setSelectedRows({})
@@ -701,7 +715,11 @@ export default function ERRAppSubmissions() {
                </DialogTitle>
             </DialogHeader>
 
-            <Tabs value={selectedTab} className="w-full" onValueChange={(value) => setSelectedTab(value as 'details' | 'feedback' | 'staging')}>
+            <Tabs
+              value={selectedTab === 'feedback' && !canApprove ? 'details' : selectedTab === 'staging' && !canStage ? 'details' : selectedTab}
+              className="w-full"
+              onValueChange={(value) => setSelectedTab(value as 'details' | 'feedback' | 'staging')}
+            >
               <TabsList className="grid w-full grid-cols-3">
                 <TabsTrigger value="details">
                   {t('projects:details_tab')}
@@ -751,6 +769,7 @@ export default function ERRAppSubmissions() {
                   </div>
                 </div>
               </TabsContent>
+              )}
             </Tabs>
           </DialogContent>
         )}

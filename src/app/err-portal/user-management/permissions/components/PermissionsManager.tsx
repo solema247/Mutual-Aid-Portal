@@ -12,6 +12,20 @@ import {
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow
+} from '@/components/ui/table'
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger
+} from '@/components/ui/collapsible'
+import { ChevronDown } from 'lucide-react'
 import { getActiveUsers } from '@/app/api/users/utils/users'
 import type { FunctionDefinition } from '@/lib/permissions'
 
@@ -54,6 +68,10 @@ export default function PermissionsManager({
   const [loadingUser, setLoadingUser] = useState(false)
   const [loadingFunctions, setLoadingFunctions] = useState(true)
   const [loadingUsers, setLoadingUsers] = useState(true)
+  const moduleOrder = ['f1', 'f2', 'f3', 'f4', 'f5', 'users', 'grants'] as const
+  const [openModules, setOpenModules] = useState<Set<string>>(
+    () => new Set(moduleOrder)
+  )
 
   useEffect(() => {
     fetch('/api/permissions/functions')
@@ -153,8 +171,6 @@ export default function PermissionsManager({
     }
   }
 
-  const moduleOrder = ['f1', 'f2', 'f3', 'f4', 'f5', 'users', 'grants']
-
   if (loadingFunctions || loadingUsers) {
     return <div className="text-muted-foreground">Loading...</div>
   }
@@ -197,31 +213,68 @@ export default function PermissionsManager({
             {loadingUser ? (
               <div className="text-muted-foreground">Loading permissions...</div>
             ) : (
-              <div className="space-y-6">
+              <div className="space-y-2">
                 {moduleOrder.map((moduleKey) => {
-                  const funcs = functionsByModule[moduleKey]
-                  if (!funcs?.length) return null
+                  const rawFuncs = functionsByModule[moduleKey]
+                  if (!rawFuncs?.length) return null
+                  // Hide f1_assign_grant from permissions UI (not adjustable per user)
+                  const funcs =
+                    moduleKey === 'f1'
+                      ? rawFuncs.filter((f) => f.code !== 'f1_assign_grant')
+                      : rawFuncs
+                  if (!funcs.length) return null
                   const label = MODULE_LABELS[moduleKey] ?? moduleKey
+                  const isOpen = openModules.has(moduleKey)
                   return (
-                    <div key={moduleKey}>
-                      <h3 className="font-medium mb-2">{label}</h3>
-                      <div className="flex flex-wrap gap-x-6 gap-y-2">
-                        {funcs.map((f) => (
-                          <label
-                            key={f.code}
-                            className="flex items-center gap-2 cursor-pointer"
-                          >
-                            <Checkbox
-                              checked={allowed.has(f.code)}
-                              onCheckedChange={(checked) =>
-                                handleToggle(f.code, checked === true)
-                              }
-                            />
-                            <span className="text-sm">{f.label_en}</span>
-                          </label>
-                        ))}
-                      </div>
-                    </div>
+                    <Collapsible
+                      key={moduleKey}
+                      open={isOpen}
+                      onOpenChange={(open) =>
+                        setOpenModules((prev) => {
+                          const next = new Set(prev)
+                          if (open) next.add(moduleKey)
+                          else next.delete(moduleKey)
+                          return next
+                        })
+                      }
+                    >
+                      <CollapsibleTrigger className="flex items-center gap-1.5 text-sm font-medium hover:opacity-80 py-0 leading-tight">
+                        <ChevronDown
+                          className={`h-4 w-4 shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`}
+                        />
+                        <span>{label}</span>
+                      </CollapsibleTrigger>
+                      <CollapsibleContent className="pt-2">
+                        <Table>
+                        <TableHeader>
+                          <TableRow className="border-b hover:bg-transparent">
+                            <TableHead className="h-auto w-[200px] py-1 px-2 text-xs font-medium">Action</TableHead>
+                            <TableHead className="h-auto py-1 px-2 text-xs font-medium">Description</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {funcs.map((f) => (
+                            <TableRow key={f.code} className="border-b hover:bg-muted/50">
+                              <TableCell className="py-1 px-2">
+                                <label className="flex items-center gap-1.5 cursor-pointer">
+                                  <Checkbox
+                                    checked={allowed.has(f.code)}
+                                    onCheckedChange={(checked) =>
+                                      handleToggle(f.code, checked === true)
+                                    }
+                                  />
+                                  <span className="text-xs">{f.label_en}</span>
+                                </label>
+                              </TableCell>
+                              <TableCell className="text-muted-foreground text-xs py-1 px-2">
+                                {f.description_en ?? '—'}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                      </CollapsibleContent>
+                    </Collapsible>
                   )
                 })}
               </div>

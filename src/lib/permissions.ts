@@ -11,6 +11,7 @@ export interface FunctionDefinition {
   module: string
   label_ar: string
   label_en: string
+  description_en?: string
 }
 export interface UserOverride {
   add?: string[]
