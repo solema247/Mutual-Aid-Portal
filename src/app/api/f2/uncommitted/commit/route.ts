@@ -1,9 +1,13 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
+import { requirePermission } from '@/lib/requirePermission'
 
 // POST /api/f2/uncommitted/commit - Commit selected F1s (set funding_status to committed and status to approved)
 export async function POST(request: Request) {
   try {
+    const perm = await requirePermission('f2_commit')
+    if (perm instanceof NextResponse) return perm
+
     const supabase = getSupabaseRouteClient()
     const { f1_ids } = await request.json()
 

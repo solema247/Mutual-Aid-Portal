@@ -16,6 +16,7 @@ import { aggregateObjectives, aggregateBeneficiaries, aggregatePlannedActivities
 import HierarchicalBudgetTable from './components/HierarchicalBudgetTable'
 import { supabase } from '@/lib/supabaseClient'
 import PoolByDonor from '@/app/err-portal/f2-approvals/components/PoolByDonor'
+import { useAllowedFunctions } from '@/hooks/useAllowedFunctions'
 
 interface Signature {
   id: string
@@ -175,6 +176,8 @@ export default function F3MOUsPage() {
   const [currentPage, setCurrentPage] = useState(1)
   const itemsPerPage = 10
   const [currentUser, setCurrentUser] = useState<{ role: string } | null>(null)
+  const { can } = useAllowedFunctions()
+  const canReassignGrant = can('f3_reassign_grant')
 
   const toDisplay = (value: any): string => {
     if (value == null) return ''
@@ -1003,7 +1006,7 @@ export default function F3MOUsPage() {
                             <span className="text-[10px] text-muted-foreground text-center leading-tight">Assign</span>
                           </div>
                         )}
-                        {mouAssignmentStatus[m.id]?.hasAssigned && (currentUser?.role === 'admin' || currentUser?.role === 'superadmin') && (
+                        {mouAssignmentStatus[m.id]?.hasAssigned && canReassignGrant && (
                           <div className="flex flex-col items-center gap-0.5 min-w-[50px]">
                             <Button
                               variant="ghost"

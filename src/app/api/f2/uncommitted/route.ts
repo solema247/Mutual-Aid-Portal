@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { getUserStateAccess } from '@/lib/userStateAccess'
+import { requirePermission } from '@/lib/requirePermission'
 
 // GET /api/f2/uncommitted - Get all uncommitted F1s
 export async function GET() {
@@ -75,13 +76,28 @@ export async function GET() {
 // PATCH /api/f2/uncommitted - Update F1 expenses, grant call, or metadata
 export async function PATCH(request: Request) {
   try {
-    const supabase = getSupabaseRouteClient()
-    const { id, expenses, grant_call_id, approval_file_key, donor_id, funding_cycle_id, grant_serial_id, workplan_number, cycle_state_allocation_id, grant_id, file_key } = await request.json()
-    
+    const body = await request.json()
+    const { id, expenses, grant_call_id, approval_file_key, donor_id, funding_cycle_id, grant_serial_id, workplan_number, cycle_state_allocation_id, grant_id, file_key } = body
+
     if (!id) {
       return NextResponse.json({ error: 'F1 ID is required' }, { status: 400 })
     }
 
+    // Require f2_upload_approval when updating approval_file_key
+    if (approval_file_key !== undefined) {
+      const perm = await requirePermission('f2_upload_approval')
+      if (perm instanceof NextResponse) return perm
+    }
+    // Require f2_edit_project when updating expenses or other project fields
+    const isEditUpdate = expenses !== undefined || grant_call_id !== undefined || donor_id !== undefined ||
+      funding_cycle_id !== undefined || grant_serial_id !== undefined || workplan_number !== undefined ||
+      cycle_state_allocation_id !== undefined || grant_id !== undefined || file_key !== undefined
+    if (isEditUpdate) {
+      const perm = await requirePermission('f2_edit_project')
+      if (perm instanceof NextResponse) return perm
+    }
+
+    const supabase = getSupabaseRouteClient()
     const updateData: any = {}
     if (expenses !== undefined) updateData.expenses = expenses
     if (grant_call_id !== undefined) updateData.grant_call_id = grant_call_id
@@ -138,6 +154,9 @@ export async function POST(request: Request) {
 // DELETE /api/f2/uncommitted - Delete an F1 project
 export async function DELETE(request: Request) {
   try {
+    const perm = await requirePermission('f2_commit')
+    if (perm instanceof NextResponse) return perm
+
     const supabase = getSupabaseRouteClient()
     const { id } = await request.json()
     

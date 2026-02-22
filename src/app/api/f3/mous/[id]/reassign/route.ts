@@ -1,11 +1,15 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
+import { requirePermission } from '@/lib/requirePermission'
 
 export async function POST(
   request: Request,
   { params }: { params: { id: string } }
 ) {
   try {
+    const perm = await requirePermission('f3_reassign_grant')
+    if (perm instanceof NextResponse) return perm
+
     const supabase = getSupabaseRouteClient()
     const mouId = params.id
     const { grant_id, donor_name, mmyy } = await request.json()

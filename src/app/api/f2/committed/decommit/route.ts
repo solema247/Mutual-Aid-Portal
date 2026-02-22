@@ -1,9 +1,13 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
+import { requirePermission } from '@/lib/requirePermission'
 
 // POST /api/f2/committed/decommit - Move a committed project back to uncommitted (only if not in an MOU)
 export async function POST(request: Request) {
   try {
+    const perm = await requirePermission('f2_commit')
+    if (perm instanceof NextResponse) return perm
+
     const supabase = getSupabaseRouteClient()
     const { id } = await request.json()
 
