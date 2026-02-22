@@ -5,11 +5,6 @@ import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import {
-  Card,
-  CardContent,
-  CardHeader,
-} from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { supabase } from '@/lib/supabaseClient'
 import Image from 'next/image'
@@ -31,33 +26,20 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
 
   // Clear stale/invalid Supabase sessions on login page load
-  // This prevents automatic token refresh attempts with invalid tokens
-  // while preserving valid concurrent sessions for the same account on other devices
   useEffect(() => {
     const clearStaleSession = async () => {
-      // Skip if we're handling a magic link/recovery flow (needs the session)
       const hash = window.location.hash
       if (hash) {
         const hashParams = new URLSearchParams(hash.substring(1))
         const accessToken = hashParams.get('access_token')
-        if (accessToken) {
-          // Don't clear if we're in the middle of a magic link/recovery flow
-          return
-        }
+        if (accessToken) return
       }
-
       try {
-        // Clear any existing local session to prevent automatic token refresh attempts
-        // This only clears the local browser's session, not server-side sessions
-        // Other users/devices with the same account will keep their sessions (concurrent sessions supported)
-        // This prevents stale/invalid refresh tokens from causing rate limit errors
         await supabase.auth.signOut({ scope: 'local' })
-      } catch (error) {
-        // Ignore errors when clearing - we're just trying to prevent refresh attempts
-        // If clearing fails, the worst case is we might hit rate limits, but we've tried
+      } catch {
+        // Ignore
       }
     }
-
     clearStaleSession()
   }, [])
 
@@ -65,64 +47,33 @@ export default function LoginPage() {
     const handleMagicLinkAuth = async () => {
       const hash = window.location.hash
       if (!hash) return
-      
-      // Parse hash parameters
       const hashParams = new URLSearchParams(hash.substring(1))
       const type = hashParams.get('type')
       const accessToken = hashParams.get('access_token')
-      
-      // Handle recovery type - redirect to reset-password page
       if (accessToken && type === 'recovery') {
-        console.log('Recovery flow detected, redirecting to reset-password...')
-        // Redirect to reset password page with hash
         window.location.href = `/reset-password${hash}`
         return
       }
-      
-      // Handle magic link types
       if (accessToken && (type === 'magiclink' || !type)) {
-        console.log('Magic link flow detected, manually setting session...')
-        
-        // Extract all tokens from hash
         const refreshToken = hashParams.get('refresh_token')
-        
-        if (!refreshToken) {
-          console.error('No refresh token found in hash')
-          return
-        }
-        
-        // Manually set the session using the tokens from hash
+        if (!refreshToken) return
         const { data: { session }, error: setSessionError } = await supabase.auth.setSession({
           access_token: accessToken,
           refresh_token: refreshToken,
         })
-        
-        if (setSessionError) {
-          console.error('Error setting session:', setSessionError)
-          return
-        }
-        
+        if (setSessionError) return
         if (session) {
-          console.log('Session set successfully, redirecting to change-password')
-          // Clean up the hash from URL
           window.history.replaceState(null, '', window.location.pathname)
-          // Redirect to change password page
           window.location.href = '/change-password'
-          return
-        } else {
-          console.error('setSession returned no session')
         }
       }
     }
-    
     handleMagicLinkAuth()
   }, [])
-  
-  // Check for password reset success message
+
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     if (params.get('password_reset') === 'success') {
-      // Show success message (you can add a toast notification here)
       console.log('Password reset successful')
     }
   }, [])
@@ -131,63 +82,44 @@ export default function LoginPage() {
     e.preventDefault()
     setIsLoading(true)
     setError(null)
-
     try {
-      // First authenticate with Supabase Auth
       const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
         email: errEmail,
         password: errPassword
       })
-
       if (authError) {
         setError('Authentication failed')
         return
       }
-
-      // Check if user needs to change password
       const needsPasswordChange = authData.user?.user_metadata?.is_temporary_password === true ||
         authData.user?.user_metadata?.has_changed_password === false
-
       if (needsPasswordChange) {
         window.location.href = '/change-password'
         return
       }
-
-      // Get the user's own record first
       const { data: userData, error: userError } = await supabase
         .from('users')
         .select('*')
         .eq('auth_user_id', authData.user.id)
         .single()
-
       if (userError) {
-        console.error('User data error:', userError)
         setError('Failed to fetch user data')
         return
       }
-
       if (!userData) {
         setError('User not found')
         return
       }
-
       if (userData.status !== 'active') {
         setError('Account is not active')
         return
       }
-
-      // Store user data in localStorage
       localStorage.setItem('user', JSON.stringify(userData))
       localStorage.setItem('isAuthenticated', 'true')
-      
-      // Set cookies
       document.cookie = `isAuthenticated=true; path=/`
       document.cookie = `userType=err; path=/`
-
-      // Redirect to ERR portal
       window.location.href = '/err-portal'
     } catch (err) {
-      console.error('Login error:', err)
       setError(err instanceof Error ? err.message : 'Failed to login')
     } finally {
       setIsLoading(false)
@@ -198,44 +130,34 @@ export default function LoginPage() {
     e.preventDefault()
     setIsLoading(true)
     setError(null)
-
     try {
       const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
         email,
         password
       })
-
       if (authError) {
         setError('Authentication failed')
         return
       }
-
       if (!authData.user?.user_metadata?.has_changed_password) {
         window.location.href = '/change-password'
         return
       }
-
-      // Check donor_users relationship
       const { data: donor, error: donorError } = await supabase
         .from('donor_users')
         .select('*, donors(name)')
         .eq('id', authData.user?.id)
         .single()
-
       if (donorError || !donor) {
         setError('User not found or not authorized')
         return
       }
-
-      // Set authentication state
       localStorage.setItem('donor', JSON.stringify(donor))
       localStorage.setItem('isAuthenticated', 'true')
       document.cookie = `isAuthenticated=true; path=/`
       document.cookie = `userType=partner; path=/`
-
-      await new Promise(resolve => setTimeout(resolve, 1000)) // Delay to see logs
+      await new Promise(resolve => setTimeout(resolve, 1000))
       window.location.href = '/partner-portal'
-
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Login failed')
     } finally {
@@ -243,161 +165,319 @@ export default function LoginPage() {
     }
   }
 
+  const errorBlock = error && (
+    <div className="bg-red-50 text-red-700 text-sm p-3 rounded-lg border border-red-200">
+      {error}
+    </div>
+  )
+
+  const visitLccButton = (
+    <Button
+      variant="outline"
+      type="button"
+      className="rounded-lg border-2 border-gray-300 hover:bg-gray-50 text-gray-700 font-medium"
+      onClick={() => window.open('https://lccsudan.org/', '_blank')}
+    >
+      {t('login:visit_lcc')}
+    </Button>
+  )
+
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4">
-      <LanguageSwitch />
-      <div className="text-center mb-8">
-        <Image
-          src="/logo.jpg"
-          alt="LCC Sudan Logo"
-          width={300}
-          height={350}
-          priority
-          className="mx-auto mb-6"
-        />
-        <h1 className="text-2xl font-bold mb-4">{t('login:title')}</h1>
-        <Button
-          variant="outline"
-          className="mb-8 border-2 rounded-full"
-          onClick={() => window.open('https://lccsudan.org/', '_blank')}
-        >
-          {t('login:visit_lcc')}
-        </Button>
+    <div className="min-h-screen flex items-center justify-center bg-white">
+      <div className="absolute top-6 right-6">
+        <LanguageSwitch />
       </div>
 
-      <Card className="w-full max-w-md border-2 rounded-3xl">
-        <CardHeader>
-          <h2 className="text-xl font-bold">{t('login:login_title')}</h2>
-          <p className="text-sm text-muted-foreground">
-            {t('login:access_text')}
-          </p>
-        </CardHeader>
+      {/* Mobile Layout */}
+      <div className="lg:hidden w-full h-screen flex flex-col p-4">
+        <div className="flex-1 flex flex-col items-center justify-center max-w-md mx-auto w-full">
+          <Tabs defaultValue="err" className="w-full">
+            <TabsList className="grid w-full grid-cols-2 mb-8 h-auto bg-transparent border-b border-gray-200 rounded-none p-0 gap-2">
+              <TabsTrigger
+                value="err"
+                className="rounded-lg whitespace-normal h-auto min-h-[36px] py-2 px-3 data-[state=active]:bg-blue-900 data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-gray-700 font-medium text-sm"
+              >
+                {t('login:err_staff')}
+              </TabsTrigger>
+              <TabsTrigger
+                value="donor"
+                className="rounded-lg whitespace-normal h-auto min-h-[36px] py-2 px-3 data-[state=active]:bg-blue-900 data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-gray-700 font-medium text-xs leading-tight"
+              >
+                {t('login:partner_forecast_access')}
+              </TabsTrigger>
+            </TabsList>
 
-        <Tabs defaultValue="err" className="w-full">
-          <TabsList className="grid w-full grid-cols-2 mb-4 h-auto">
-            <TabsTrigger value="err" className="rounded-full whitespace-normal h-auto min-h-[36px] py-2">
-              {t('login:err_staff')}
-            </TabsTrigger>
-            <TabsTrigger value="donor" className="rounded-full whitespace-normal h-auto min-h-[36px] py-2 text-xs sm:text-sm leading-tight">
-              {t('login:partner_forecast_access')}
-            </TabsTrigger>
-          </TabsList>
+            <TabsContent value="err">
+              <form onSubmit={handleErrLogin}>
+                <div className="space-y-4">
+                  {errorBlock}
+                  <div className="space-y-2">
+                    <Label htmlFor="errEmail" className="text-gray-700 font-medium text-sm">
+                      {t('login:email')}
+                    </Label>
+                    <Input
+                      id="errEmail"
+                      type="email"
+                      placeholder="example@email.com"
+                      value={errEmail}
+                      onChange={(e) => setErrEmail(e.target.value)}
+                      className="rounded-lg border-gray-300 bg-white focus:bg-white"
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="errPassword" className="text-gray-700 font-medium text-sm">
+                        {t('login:password')}
+                      </Label>
+                      <Link
+                        href="/forgot-password"
+                        className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+                      >
+                        {t('login:forgot_password')}
+                      </Link>
+                    </div>
+                    <Input
+                      id="errPassword"
+                      type="password"
+                      placeholder="At least 8 characters"
+                      value={errPassword}
+                      onChange={(e) => setErrPassword(e.target.value)}
+                      className="rounded-lg border-gray-300 bg-white focus:bg-white"
+                      required
+                    />
+                  </div>
+                  <Button
+                    type="submit"
+                    className="w-full rounded-lg mt-4 bg-blue-900 hover:bg-blue-950 text-white font-medium py-2.5"
+                    disabled={isLoading}
+                  >
+                    {isLoading ? t('login:signing_in') : t('login:sign_in')}
+                  </Button>
+                </div>
+              </form>
+            </TabsContent>
 
-          <TabsContent value="err">
-            <form onSubmit={handleErrLogin}>
-              <CardContent className="space-y-4 px-6">
-                {error && (
-                  <div className="bg-destructive/15 text-destructive text-sm p-3 rounded-md">
-                    {error}
+            <TabsContent value="donor">
+              <form onSubmit={handlePartnerLogin}>
+                <div className="space-y-4">
+                  <div className="text-sm text-gray-600 mb-4 pb-2 border-b border-gray-200">
+                    {t('login:partner_forecast_note')}
                   </div>
-                )}
-                <div className="space-y-2">
-                  <Label htmlFor="errEmail">{t('login:email')}</Label>
-                  <Input
-                    id="errEmail"
-                    type="email"
-                    value={errEmail}
-                    onChange={(e) => setErrEmail(e.target.value)}
-                    className="rounded-full"
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <Label htmlFor="errPassword">{t('login:password')}</Label>
-                    <Link 
-                      href="/forgot-password" 
-                      className="text-sm text-muted-foreground hover:underline"
-                    >
-                      {t('login:forgot_password')}
-                    </Link>
+                  {errorBlock}
+                  <div className="space-y-2">
+                    <Label htmlFor="email" className="text-gray-700 font-medium text-sm">
+                      {t('login:email')}
+                    </Label>
+                    <Input
+                      id="email"
+                      type="email"
+                      placeholder="example@email.com"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      className="rounded-lg border-gray-300 bg-white focus:bg-white"
+                      required
+                    />
                   </div>
-                  <Input
-                    id="errPassword"
-                    type="password"
-                    value={errPassword}
-                    onChange={(e) => setErrPassword(e.target.value)}
-                    className="rounded-full"
-                    required
-                  />
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="password" className="text-gray-700 font-medium text-sm">
+                        {t('login:password')}
+                      </Label>
+                      <Link
+                        href="/forgot-password"
+                        className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+                      >
+                        {t('login:forgot_password')}
+                      </Link>
+                    </div>
+                    <Input
+                      id="password"
+                      type="password"
+                      placeholder="At least 8 characters"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      className="rounded-lg border-gray-300 bg-white focus:bg-white"
+                      required
+                    />
+                  </div>
+                  <Button
+                    type="submit"
+                    className="w-full rounded-lg mt-4 bg-blue-900 hover:bg-blue-950 text-white font-medium py-2.5"
+                    disabled={isLoading}
+                  >
+                    {isLoading ? t('login:signing_in') : t('login:sign_in')}
+                  </Button>
                 </div>
-                <Button 
-                  type="submit" 
-                  className="w-full rounded-full mt-4"
-                  disabled={isLoading}
+              </form>
+            </TabsContent>
+          </Tabs>
+
+          <div className="mt-6 w-full flex justify-center">
+            {visitLccButton}
+          </div>
+        </div>
+      </div>
+
+      {/* Desktop Layout */}
+      <div className="hidden lg:flex w-full h-screen items-center justify-center">
+        <div className="w-1/2 h-full flex flex-col items-center justify-center px-16">
+          <div className="w-full max-w-sm">
+            <Tabs defaultValue="err" className="w-full">
+              <TabsList className="grid w-full grid-cols-2 mb-8 h-auto bg-transparent border-b border-gray-300 rounded-none p-0 gap-3">
+                <TabsTrigger
+                  value="err"
+                  className="rounded-lg whitespace-normal h-auto min-h-[40px] py-2.5 px-6 data-[state=active]:bg-blue-900 data-[state=active]:text-white data-[state=inactive]:bg-transparent data-[state=inactive]:text-gray-700 font-medium text-base"
                 >
-                  {isLoading ? t('login:signing_in') : t('login:sign_in')}
-                </Button>
-              </CardContent>
-            </form>
-          </TabsContent>
-
-          <TabsContent value="donor">
-            <form onSubmit={handlePartnerLogin}>
-              <CardContent className="space-y-4 px-6">
-                <div className="text-sm text-muted-foreground mb-4 pb-2 border-b">
-                  {t('login:partner_forecast_note')}
-                </div>
-                {error && (
-                  <div className="bg-destructive/15 text-destructive text-sm p-3 rounded-md">
-                    {error}
-                  </div>
-                )}
-                <div className="space-y-2">
-                  <Label htmlFor="email">{t('login:email')}</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="rounded-full"
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <Label htmlFor="password">{t('login:password')}</Label>
-                    <Link 
-                      href="/forgot-password" 
-                      className="text-sm text-muted-foreground hover:underline"
-                    >
-                      {t('login:forgot_password')}
-                    </Link>
-                  </div>
-                  <Input
-                    id="password"
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="rounded-full"
-                    required
-                  />
-                </div>
-                <Button 
-                  type="submit" 
-                  className="w-full rounded-full mt-4"
-                  disabled={isLoading}
+                  {t('login:err_staff')}
+                </TabsTrigger>
+                <TabsTrigger
+                  value="donor"
+                  className="rounded-lg whitespace-normal h-auto min-h-[40px] py-2.5 px-6 data-[state=active]:bg-blue-900 data-[state=active]:text-white data-[state=inactive]:bg-transparent data-[state=inactive]:text-gray-700 font-medium text-base"
                 >
-                  {isLoading ? t('login:signing_in') : t('login:sign_in')}
-                </Button>
-              </CardContent>
-            </form>
-          </TabsContent>
-        </Tabs>
-      </Card>
+                  {t('login:partner_forecast_access')}
+                </TabsTrigger>
+              </TabsList>
 
-      {/* Localization Hub Logo and Credit */}
-      <div className="mt-8 flex flex-col items-center justify-center gap-2 text-sm text-muted-foreground text-center">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src="/lohub.jpeg"
-          alt="Localization Hub Logo"
-          width={220}
-          height={220}
-          className="object-contain flex-shrink-0"
-        />
-        <span className="hidden sm:inline">{t('login:localization_hub_credit')}</span>
+              <TabsContent value="err">
+                <form onSubmit={handleErrLogin}>
+                  <div className="space-y-5">
+                    {errorBlock}
+                    <div className="space-y-2">
+                      <Label htmlFor="errEmail-desktop" className="text-gray-700 font-medium text-sm">
+                        {t('login:email')}
+                      </Label>
+                      <Input
+                        id="errEmail-desktop"
+                        type="email"
+                        placeholder="example@email.com"
+                        value={errEmail}
+                        onChange={(e) => setErrEmail(e.target.value)}
+                        className="rounded-lg border-gray-300 bg-white focus:bg-white py-2.5 px-4 text-sm"
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <Label htmlFor="errPassword-desktop" className="text-gray-700 font-medium text-sm">
+                          {t('login:password')}
+                        </Label>
+                        <Link
+                          href="/forgot-password"
+                          className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+                        >
+                          {t('login:forgot_password')}
+                        </Link>
+                      </div>
+                      <Input
+                        id="errPassword-desktop"
+                        type="password"
+                        placeholder="At least 8 characters"
+                        value={errPassword}
+                        onChange={(e) => setErrPassword(e.target.value)}
+                        className="rounded-lg border-gray-300 bg-white focus:bg-white py-2.5 px-4 text-sm"
+                        required
+                      />
+                    </div>
+                    <Button
+                      type="submit"
+                      className="w-full rounded-lg mt-6 bg-blue-900 hover:bg-blue-950 text-white font-medium py-2.5 text-base"
+                      disabled={isLoading}
+                    >
+                      {isLoading ? t('login:signing_in') : t('login:sign_in')}
+                    </Button>
+                  </div>
+                </form>
+              </TabsContent>
+
+              <TabsContent value="donor">
+                <form onSubmit={handlePartnerLogin}>
+                  <div className="space-y-5">
+                    <div className="text-sm text-gray-600 mb-4 pb-3 border-b border-gray-300">
+                      {t('login:partner_forecast_note')}
+                    </div>
+                    {errorBlock}
+                    <div className="space-y-2">
+                      <Label htmlFor="email-desktop" className="text-gray-700 font-medium text-sm">
+                        {t('login:email')}
+                      </Label>
+                      <Input
+                        id="email-desktop"
+                        type="email"
+                        placeholder="example@email.com"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        className="rounded-lg border-gray-300 bg-white focus:bg-white py-2.5 px-4 text-sm"
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <Label htmlFor="password-desktop" className="text-gray-700 font-medium text-sm">
+                          {t('login:password')}
+                        </Label>
+                        <Link
+                          href="/forgot-password"
+                          className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+                        >
+                          {t('login:forgot_password')}
+                        </Link>
+                      </div>
+                      <Input
+                        id="password-desktop"
+                        type="password"
+                        placeholder="At least 8 characters"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        className="rounded-lg border-gray-300 bg-white focus:bg-white py-2.5 px-4 text-sm"
+                        required
+                      />
+                    </div>
+                    <Button
+                      type="submit"
+                      className="w-full rounded-lg mt-6 bg-blue-900 hover:bg-blue-950 text-white font-medium py-2.5 text-base"
+                      disabled={isLoading}
+                    >
+                      {isLoading ? t('login:signing_in') : t('login:sign_in')}
+                    </Button>
+                  </div>
+                </form>
+              </TabsContent>
+            </Tabs>
+
+          </div>
+        </div>
+
+        {/* Right Column - Title, logos and Visit LCC */}
+        <div className="w-[48%] max-w-2xl min-h-[620px] flex flex-col items-center justify-center p-8 rounded-3xl overflow-hidden border border-slate-200 bg-slate-100">
+          <h2 className="text-4xl xl:text-5xl font-bold text-slate-800 text-center leading-tight whitespace-nowrap">Mutual Aid Portal</h2>
+          <div className="flex-1 min-h-4" />
+          <div className="w-full flex flex-col items-center gap-6">
+            <div className="flex flex-row items-center justify-center gap-8">
+              <Image
+                src="/logo.jpg"
+                alt="LCC Sudan Logo"
+                width={200}
+                height={230}
+                priority
+                className="w-[200px] h-auto object-contain"
+              />
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/lohub.jpeg"
+                alt="Localization Hub Logo"
+                width={160}
+                height={160}
+                className="object-contain flex-shrink-0 w-[160px] h-[160px]"
+              />
+            </div>
+            <span className="text-sm text-slate-600 text-center">
+              {t('login:localization_hub_credit')}
+            </span>
+            {visitLccButton}
+          </div>
+        </div>
       </div>
     </div>
   )
-} 
+}

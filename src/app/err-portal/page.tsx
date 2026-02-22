@@ -2,10 +2,9 @@
 
 import { useTranslation } from 'react-i18next'
 import { useEffect, useState } from 'react'
-import Image from 'next/image'
 import Link from 'next/link'
 import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
-import { Users, BarChart2, FileText, ClipboardList, PieChart, UserCog, CheckSquare, LogOut, BookOpen, PenTool, Cog } from 'lucide-react'
+import { Users, BarChart2, ClipboardList, PieChart, UserCog, CheckSquare, LogOut, BookOpen, PenTool, Cog } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 import '@/i18n/config'
 
@@ -87,13 +86,6 @@ export default function ErrPortalPage() {
 
   return (
     <div className="max-w-4xl mx-auto">
-      <div className="text-center mb-12">
-        <h1 className="text-4xl font-bold mb-4">{t('err:title')}</h1>
-        <p className="text-xl mb-8">
-          {t('err:welcome', { name: user?.display_name || t('login:err_staff') })}
-        </p>
-      </div>
-
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
         {/* Grant Management */}
         <Link href="/err-portal/grant-management" className="block aspect-square">

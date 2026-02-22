@@ -2,10 +2,9 @@
 
 import { useTranslation } from 'react-i18next'
 import { useState, useEffect } from 'react'
-import Image from 'next/image'
 import MainLayout from '@/components/layout/MainLayout'
 import { useRouter } from 'next/navigation'
-import { Users, FileText, ClipboardList, BarChart2, PieChart, UserCog, Home, CheckSquare, BookOpen, PenTool, Cog } from 'lucide-react'
+import { Users, ClipboardList, BarChart2, PieChart, UserCog, Home, CheckSquare, BookOpen, PenTool, Cog } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 
 interface User {
@@ -117,24 +116,12 @@ export default function ErrPortalLayout({
   ]
 
   return (
-    <MainLayout sidebarItems={sidebarItems}>
-      <div className="flex items-center justify-center gap-6 mb-6 flex-wrap">
-        <Image
-          src="/logo.jpg"
-          alt="LCC Sudan Logo"
-          width={200}
-          height={233}
-          priority
-          className="h-[233px] w-auto object-contain"
-        />
-        <Image
-          src="/new_logo.jpeg"
-          alt="LCC Sudan Logo"
-          width={200}
-          height={233}
-          className="h-[233px] w-auto object-contain"
-        />
-      </div>
+    <MainLayout
+        sidebarItems={sidebarItems}
+        headerTitle="Mutual Aid Portal"
+        userName={user?.display_name ?? undefined}
+        userRole={user?.role}
+      >
       {children}
       {minimizedType && (
         <div className="fixed bottom-4 right-4 z-50 w-80 rounded border bg-background shadow-lg">

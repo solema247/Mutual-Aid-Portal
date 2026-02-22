@@ -25,11 +25,14 @@ interface SidebarProps {
   }[]
   /** Optional sidebar header title. When not set, uses err:navigation. */
   title?: string
+  /** When set, desktop sidebar width is controlled by this (true = expanded, false = collapsed). When undefined, uses hover to expand. */
+  isOpen?: boolean
 }
 
-export default function Sidebar({ items, title }: SidebarProps) {
+export default function Sidebar({ items, title, isOpen }: SidebarProps) {
   const [open, setOpen] = useState(false)
-  const [isExpanded, setIsExpanded] = useState(false)
+  const [isExpandedHover, setIsExpandedHover] = useState(false)
+  const isExpanded = isOpen !== undefined ? isOpen : isExpandedHover
   const pathname = usePathname()
   const { t } = useTranslation(['err', 'common'])
   const sidebarLabel = title ?? t('err:navigation')
@@ -105,8 +108,8 @@ export default function Sidebar({ items, title }: SidebarProps) {
           'hidden lg:flex h-screen flex-col border-r rtl:border-l bg-background transition-all duration-300 ease-in-out',
           isExpanded ? 'w-64' : 'w-16'
         )}
-        onMouseEnter={() => setIsExpanded(true)}
-        onMouseLeave={() => setIsExpanded(false)}
+        onMouseEnter={isOpen === undefined ? () => setIsExpandedHover(true) : undefined}
+        onMouseLeave={isOpen === undefined ? () => setIsExpandedHover(false) : undefined}
       >
         <div className={cn(
           'p-6 border-b transition-all duration-300',
