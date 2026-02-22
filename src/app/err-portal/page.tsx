@@ -85,17 +85,17 @@ export default function ErrPortalPage() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto">
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
+    <div className="max-w-5xl mx-auto">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 mb-12">
         {/* Grant Management */}
-        <Link href="/err-portal/grant-management" className="block aspect-square">
+        <Link href="/err-portal/grant-management" className="block">
           <Card className="h-full hover:bg-muted/50 transition-colors">
-            <CardHeader className="h-full flex flex-col justify-center items-center text-center">
-              <PieChart className="h-8 w-8 mb-4" />
-              <CardTitle className="text-xl">
+            <CardHeader className="h-full flex flex-col justify-center items-center text-center p-4">
+              <PieChart className="h-6 w-6 mb-2" />
+              <CardTitle className="text-base">
                 {t('err:grant_management')}
               </CardTitle>
-              <CardDescription className="mt-2">
+              <CardDescription className="mt-1 text-sm">
                 {t('err:grant_management_desc')}
               </CardDescription>
             </CardHeader>
@@ -103,14 +103,14 @@ export default function ErrPortalPage() {
         </Link>
 
         {/* F1 Work Plans */}
-        <Link href="/err-portal/f1-work-plans" className="block aspect-square">
+        <Link href="/err-portal/f1-work-plans" className="block">
           <Card className="h-full hover:bg-muted/50 transition-colors">
-            <CardHeader className="h-full flex flex-col justify-center items-center text-center">
-              <ClipboardList className="h-8 w-8 mb-4" />
-              <CardTitle className="text-xl">
+            <CardHeader className="h-full flex flex-col justify-center items-center text-center p-4">
+              <ClipboardList className="h-6 w-6 mb-2" />
+              <CardTitle className="text-base">
                 {t('err:f1_work_plans')}
               </CardTitle>
-              <CardDescription className="mt-2">
+              <CardDescription className="mt-1 text-sm">
                 {t('err:f1_work_plans_desc')}
               </CardDescription>
             </CardHeader>
@@ -118,14 +118,14 @@ export default function ErrPortalPage() {
         </Link>
 
         {/* F2 Approvals */}
-        <Link href="/err-portal/f2-approvals" className="block aspect-square">
+        <Link href="/err-portal/f2-approvals" className="block">
           <Card className="h-full hover:bg-muted/50 transition-colors">
-            <CardHeader className="h-full flex flex-col justify-center items-center text-center">
-              <CheckSquare className="h-8 w-8 mb-4" />
-              <CardTitle className="text-xl">
+            <CardHeader className="h-full flex flex-col justify-center items-center text-center p-4">
+              <CheckSquare className="h-6 w-6 mb-2" />
+              <CardTitle className="text-base">
                 {t('err:f2_approvals')}
               </CardTitle>
-              <CardDescription className="mt-2">
+              <CardDescription className="mt-1 text-sm">
                 {t('err:f2_approvals_desc')}
               </CardDescription>
             </CardHeader>
@@ -133,14 +133,14 @@ export default function ErrPortalPage() {
         </Link>
 
         {/* F3 MOUs */}
-        <Link href="/err-portal/f3-mous" className="block aspect-square">
+        <Link href="/err-portal/f3-mous" className="block">
           <Card className="h-full hover:bg-muted/50 transition-colors">
-            <CardHeader className="h-full flex flex-col justify-center items-center text-center">
-              <PenTool className="h-8 w-8 mb-4" />
-              <CardTitle className="text-xl">
+            <CardHeader className="h-full flex flex-col justify-center items-center text-center p-4">
+              <PenTool className="h-6 w-6 mb-2" />
+              <CardTitle className="text-base">
                 {t('err:f3_mous')}
               </CardTitle>
-              <CardDescription className="mt-2">
+              <CardDescription className="mt-1 text-sm">
                 {t('err:f3_mous_desc')}
               </CardDescription>
             </CardHeader>
@@ -148,14 +148,14 @@ export default function ErrPortalPage() {
         </Link>
 
         {/* F4 & F5 Reporting */}
-        <Link href="/err-portal/f4-f5-reporting" className="block aspect-square">
+        <Link href="/err-portal/f4-f5-reporting" className="block">
           <Card className="h-full hover:bg-muted/50 transition-colors">
-            <CardHeader className="h-full flex flex-col justify-center items-center text-center">
-              <BookOpen className="h-8 w-8 mb-4" />
-              <CardTitle className="text-xl">
+            <CardHeader className="h-full flex flex-col justify-center items-center text-center p-4">
+              <BookOpen className="h-6 w-6 mb-2" />
+              <CardTitle className="text-base">
                 {t('err:f4_f5_reporting')}
               </CardTitle>
-              <CardDescription className="mt-2">
+              <CardDescription className="mt-1 text-sm">
                 {t('err:f4_f5_reporting_desc')}
               </CardDescription>
             </CardHeader>
@@ -163,14 +163,14 @@ export default function ErrPortalPage() {
         </Link>
 
         {/* Project Management */}
-        <Link href="/err-portal/project-management" className="block aspect-square">
+        <Link href="/err-portal/project-management" className="block">
           <Card className="h-full hover:bg-muted/50 transition-colors">
-            <CardHeader className="h-full flex flex-col justify-center items-center text-center">
-              <Cog className="h-8 w-8 mb-4" />
-              <CardTitle className="text-xl">
+            <CardHeader className="h-full flex flex-col justify-center items-center text-center p-4">
+              <Cog className="h-6 w-6 mb-2" />
+              <CardTitle className="text-base">
                 {t('err:project_management')}
               </CardTitle>
-              <CardDescription className="mt-2">
+              <CardDescription className="mt-1 text-sm">
                 {t('err:project_management_desc')}
               </CardDescription>
             </CardHeader>
@@ -178,14 +178,14 @@ export default function ErrPortalPage() {
         </Link>
 
         {/* Dashboard */}
-        <Link href="/err-portal/dashboard" className="block aspect-square">
+        <Link href="/err-portal/dashboard" className="block">
           <Card className="h-full hover:bg-muted/50 transition-colors">
-            <CardHeader className="h-full flex flex-col justify-center items-center text-center">
-              <BarChart2 className="h-8 w-8 mb-4" />
-              <CardTitle className="text-xl">
+            <CardHeader className="h-full flex flex-col justify-center items-center text-center p-4">
+              <BarChart2 className="h-6 w-6 mb-2" />
+              <CardTitle className="text-base">
                 {t('err:dashboard')}
               </CardTitle>
-              <CardDescription className="mt-2">
+              <CardDescription className="mt-1 text-sm">
                 {t('err:dashboard_desc')}
               </CardDescription>
             </CardHeader>
@@ -194,14 +194,14 @@ export default function ErrPortalPage() {
 
         {/* Room Management - Conditional */}
         {canManageRooms && (
-          <Link href="/err-portal/room-management" className="block aspect-square">
+          <Link href="/err-portal/room-management" className="block">
             <Card className="h-full hover:bg-muted/50 transition-colors">
-              <CardHeader className="h-full flex flex-col justify-center items-center text-center">
-                <Users className="h-8 w-8 mb-4" />
-                <CardTitle className="text-xl">
+              <CardHeader className="h-full flex flex-col justify-center items-center text-center p-4">
+                <Users className="h-6 w-6 mb-2" />
+                <CardTitle className="text-base">
                   {t('err:room_management')}
                 </CardTitle>
-                <CardDescription className="mt-2">
+                <CardDescription className="mt-1 text-sm">
                   {t('err:room_management_desc')}
                 </CardDescription>
               </CardHeader>
@@ -210,14 +210,14 @@ export default function ErrPortalPage() {
         )}
 
         {/* User Management */}
-        <Link href="/err-portal/user-management" className="block aspect-square">
+        <Link href="/err-portal/user-management" className="block">
           <Card className="h-full hover:bg-muted/50 transition-colors">
-            <CardHeader className="h-full flex flex-col justify-center items-center text-center">
-              <UserCog className="h-8 w-8 mb-4" />
-              <CardTitle className="text-xl">
+            <CardHeader className="h-full flex flex-col justify-center items-center text-center p-4">
+              <UserCog className="h-6 w-6 mb-2" />
+              <CardTitle className="text-base">
                 {t('err:user_management')}
               </CardTitle>
-              <CardDescription className="mt-2">
+              <CardDescription className="mt-1 text-sm">
                 {t('err:user_management_desc')}
               </CardDescription>
             </CardHeader>
@@ -227,15 +227,15 @@ export default function ErrPortalPage() {
         {/* Logout Button */}
         <button 
           onClick={handleLogout}
-          className="block aspect-square"
+          className="block w-full"
         >
           <Card className="h-full hover:bg-muted/50 transition-colors">
-            <CardHeader className="h-full flex flex-col justify-center items-center text-center">
-              <LogOut className="h-8 w-8 mb-4" />
-              <CardTitle className="text-xl">
+            <CardHeader className="h-full flex flex-col justify-center items-center text-center p-4">
+              <LogOut className="h-6 w-6 mb-2" />
+              <CardTitle className="text-base">
                 {t('common:logout')}
               </CardTitle>
-              <CardDescription className="mt-2">
+              <CardDescription className="mt-1 text-sm">
                 {t('common:logout_desc')}
               </CardDescription>
             </CardHeader>
