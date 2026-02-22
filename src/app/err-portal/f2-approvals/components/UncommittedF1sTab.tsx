@@ -253,11 +253,11 @@ export default function UncommittedF1sTab() {
       </div>
 
       <Card>
-        <CardContent className="p-0">
-          <Table dir={i18n.language === 'ar' ? 'rtl' : 'ltr'}>
+        <CardContent className="p-0 overflow-x-auto">
+          <Table dir={i18n.language === 'ar' ? 'rtl' : 'ltr'} className="text-xs min-w-[700px]">
             <TableHeader>
-              <TableRow>
-                <TableHead className="w-12 px-4">
+              <TableRow className="[&>th]:py-2 [&>th]:px-2 [&>th]:text-xs">
+                <TableHead className="w-10 px-2">
                   {canCommit && (
                     <Checkbox
                       checked={selectedF1s.length === f1s.length && f1s.length > 0}
@@ -265,20 +265,20 @@ export default function UncommittedF1sTab() {
                     />
                   )}
                 </TableHead>
-                <TableHead>{t('f2:err_id')}</TableHead>
-                <TableHead>{t('f2:date') || 'Date'}</TableHead>
-                <TableHead>{t('f2:state')}</TableHead>
-                <TableHead>{t('f2:locality')}</TableHead>
-                <TableHead className="text-right">{t('f2:requested_amount')}</TableHead>
-                <TableHead>{t('f2:community_approval')}</TableHead>
-                <TableHead>{t('f2:actions') || 'Actions'}</TableHead>
+                <TableHead className="px-2">{t('f2:err_id')}</TableHead>
+                <TableHead className="px-2">{t('f2:date') || 'Date'}</TableHead>
+                <TableHead className="px-2">{t('f2:state')}</TableHead>
+                <TableHead className="px-2">{t('f2:locality')}</TableHead>
+                <TableHead className="text-right px-2">{t('f2:requested_amount')}</TableHead>
+                <TableHead className="px-2">{t('f2:community_approval')}</TableHead>
+                <TableHead className="px-2">{t('f2:actions') || 'Actions'}</TableHead>
                 {/* Status column removed visually */}
               </TableRow>
             </TableHeader>
             <TableBody>
                 {paginatedF1s.map((f1) => (
-                <TableRow key={f1.id}>
-                  <TableCell className="px-4">
+                <TableRow key={f1.id} className="[&>td]:py-1.5 [&>td]:px-2 [&>td]:text-xs">
+                  <TableCell className="px-2">
                     {canCommit && (
                       <Checkbox
                         checked={selectedF1s.includes(f1.id)}
@@ -286,30 +286,29 @@ export default function UncommittedF1sTab() {
                       />
                     )}
                   </TableCell>
-                  <TableCell>
-                    <div className="font-medium">{f1.err_id}</div>
-                    <div className="text-sm text-muted-foreground">{f1.err_code}</div>
+                  <TableCell className="whitespace-nowrap">
+                    {f1.err_id}
                   </TableCell>
-                  <TableCell>{new Date(f1.date).toLocaleDateString()}</TableCell>
-                  <TableCell>{f1.state}</TableCell>
-                  <TableCell>{f1.locality}</TableCell>
+                  <TableCell className="whitespace-nowrap">{new Date(f1.date).toLocaleDateString()}</TableCell>
+                  <TableCell className="whitespace-nowrap">{f1.state}</TableCell>
+                  <TableCell className="whitespace-nowrap max-w-[100px] truncate" title={f1.locality}>{f1.locality}</TableCell>
                   <TableCell className="text-right">
                     {editingExpenses[f1.id] && canEditProject ? (
-                      <div className="space-y-2">
+                      <div className="space-y-1">
                         {tempExpenses[f1.id]?.map((expense, index) => (
                           <div key={index} className="flex gap-1">
                             <Input
                               value={expense.activity}
                               onChange={(e) => handleExpenseChange(f1.id, index, 'activity', e.target.value)}
                               placeholder={t('projects:activity') as string}
-                              className="w-32"
+                              className="w-28 h-7 text-xs"
                             />
                             <Input
                               type="number"
                               value={expense.total_cost}
                               onChange={(e) => handleExpenseChange(f1.id, index, 'total_cost', parseFloat(e.target.value) || 0)}
                               placeholder={t('projects:amount') as string}
-                              className="w-24"
+                              className="w-20 h-7 text-xs"
                             />
                             <Button
                               size="sm"
@@ -324,12 +323,14 @@ export default function UncommittedF1sTab() {
                           <Button
                             size="sm"
                             variant="outline"
+                            className="h-7 text-xs"
                             onClick={() => handleAddExpense(f1.id)}
                           >
                             {t('projects:add_expense')}
                           </Button>
                           <Button
                             size="sm"
+                            className="h-7 w-7 p-0"
                             onClick={() => handleSaveExpenses(f1.id)}
                           >
                             <Save className="w-3 h-3" />
@@ -337,23 +338,24 @@ export default function UncommittedF1sTab() {
                           <Button
                             size="sm"
                             variant="outline"
+                            className="h-7 w-7 p-0"
                             onClick={() => handleCancelEditExpenses(f1.id)}
                           >
                             <X className="w-3 h-3" />
                           </Button>
                         </div>
-                        <div className="text-sm font-medium">
+                        <div className="text-xs font-medium">
                           {t('projects:total')}: {calculateTotalAmount(tempExpenses[f1.id] || []).toLocaleString()}
                         </div>
                       </div>
                     ) : (
                       <div className="flex items-center gap-1">
-                        <span className="font-medium">{calculateTotalAmount(f1.expenses).toLocaleString()}</span>
+                        <span className="font-medium whitespace-nowrap">{calculateTotalAmount(f1.expenses).toLocaleString()}</span>
                         {canEditProject && (
                           <Button
                             size="sm"
                             variant="ghost"
-                            className="h-6 w-6 p-0"
+                            className="h-6 w-6 p-0 min-w-6"
                             onClick={() => handleEditExpenses(f1.id)}
                             title={t('projects:edit_project') as string}
                           >
@@ -364,12 +366,12 @@ export default function UncommittedF1sTab() {
                     )}
                   </TableCell>
                   {/* Community Approval */}
-                  <TableCell>
+                  <TableCell className="whitespace-nowrap">
                     {f1.approval_file_key ? (
-                      <Badge variant="default">{t('f2:approval_uploaded')}</Badge>
+                      <Badge variant="default" className="text-[10px] px-1.5 py-0">{t('f2:approval_uploaded')}</Badge>
                     ) : canUploadApproval ? (
-                      <div className="flex items-center gap-2">
-                        <Badge variant="secondary" className="text-muted-foreground">{t('f2:approval_required')}</Badge>
+                      <div className="flex items-center gap-1">
+                        <Badge variant="secondary" className="text-muted-foreground text-[10px] px-1.5 py-0">{t('f2:approval_required')}</Badge>
                         <input
                           id={`approval-file-${f1.id}`}
                           type="file"
@@ -399,36 +401,38 @@ export default function UncommittedF1sTab() {
                         <Button
                           size="sm"
                           variant="outline"
+                          className="h-7 text-xs px-2"
                           onClick={() => document.getElementById(`approval-file-${f1.id}`)?.click()}
                         >
                           {t('f2:upload')}
                         </Button>
                       </div>
                     ) : (
-                      <Badge variant="secondary" className="text-muted-foreground">{t('f2:approval_required')}</Badge>
+                      <Badge variant="secondary" className="text-muted-foreground text-[10px] px-1.5 py-0">{t('f2:approval_required')}</Badge>
                     )}
                   </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
+                  <TableCell className="whitespace-nowrap">
+                    <div className="flex items-center gap-1">
                       {canEditProject && (
                         <Button
                           size="sm"
                           variant="outline"
+                          className="h-7 w-7 p-0"
                           onClick={() => { setEditorProjectId(f1.id); setEditorOpen(true) }}
                           title={t('projects:edit_project') as string}
                         >
-                          <Edit2 className="w-4 h-4" />
+                          <Edit2 className="w-3.5 h-3.5" />
                         </Button>
                       )}
                       {canCommit && (
                         <Button
                           size="sm"
                           variant="outline"
+                          className="h-7 w-7 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
                           onClick={() => handleDeleteClick(f1.id)}
                           title={t('f2:delete_project') as string}
-                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
                         >
-                          <Trash2 className="w-4 h-4" />
+                          <Trash2 className="w-3.5 h-3.5" />
                         </Button>
                       )}
                     </div>
@@ -476,7 +480,7 @@ export default function UncommittedF1sTab() {
 
       {/* Delete Confirmation Dialog */}
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-md mx-4">
           <DialogHeader>
             <DialogTitle>{t('f2:delete_project') || 'Delete Project'}</DialogTitle>
           </DialogHeader>

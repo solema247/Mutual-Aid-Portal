@@ -343,72 +343,69 @@ export default function CommittedF1sTab() {
 
       {/* Results Table */}
       <Card>
-        <CardContent className="p-0">
-          <Table dir={i18n.language === 'ar' ? 'rtl' : 'ltr'}>
+        <CardContent className="p-0 overflow-x-auto">
+          <Table dir={i18n.language === 'ar' ? 'rtl' : 'ltr'} className="text-xs min-w-[900px]">
             <TableHeader>
-              <TableRow>
-                <TableHead className="w-12 px-4">
+              <TableRow className="[&>th]:py-2 [&>th]:px-2 [&>th]:text-xs">
+                <TableHead className="w-10 px-2">
                   {canCreateMou && (
                     <Checkbox checked={selected.length > 0 && selected.length === f1s.filter(f => !f.mou_id).length} onCheckedChange={toggleAll} />
                   )}
                 </TableHead>
-                <TableHead>{t('f2:err_id')}</TableHead>
-                <TableHead>{t('f2:date')}</TableHead>
-                <TableHead>{t('f2:state')}</TableHead>
-                <TableHead>{t('f2:locality')}</TableHead>
-                <TableHead>{t('f2:grant_name')}</TableHead>
-                <TableHead className="text-right">{t('f2:requested_amount')}</TableHead>
-                <TableHead>{t('f2:committed')}</TableHead>
-                <TableHead>{t('f2:status')}</TableHead>
-                <TableHead>{t('f2:community_approval')}</TableHead>
-                <TableHead>MOU</TableHead>
-                <TableHead>Actions</TableHead>
+                <TableHead className="px-2">{t('f2:err_id')}</TableHead>
+                <TableHead className="px-2">{t('f2:date')}</TableHead>
+                <TableHead className="px-2">{t('f2:state')}</TableHead>
+                <TableHead className="px-2">{t('f2:locality')}</TableHead>
+                <TableHead className="px-2">{t('f2:grant_name')}</TableHead>
+                <TableHead className="text-right px-2">{t('f2:requested_amount')}</TableHead>
+                <TableHead className="px-2">{t('f2:committed')}</TableHead>
+                <TableHead className="px-2">{t('f2:status')}</TableHead>
+                <TableHead className="px-2">{t('f2:community_approval')}</TableHead>
+                <TableHead className="px-2">MOU</TableHead>
+                <TableHead className="px-2">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {paginatedF1s.map((f1) => (
-                <TableRow key={f1.id}>
-                  <TableCell className="px-4">
+                <TableRow key={f1.id} className="[&>td]:py-1.5 [&>td]:px-2 [&>td]:text-xs">
+                  <TableCell className="px-2">
                     {canCreateMou && (
                       <Checkbox disabled={!!f1.mou_id} checked={selected.includes(f1.id)} onCheckedChange={(c) => toggleOne(f1.id, c as boolean)} />
                     )}
                   </TableCell>
-                  <TableCell>
-                    <div className="font-medium">{f1.err_id}</div>
-                    <div className="text-sm text-muted-foreground">{f1.err_code}</div>
+                  <TableCell className="whitespace-nowrap">
+                    {f1.err_id}
                   </TableCell>
-                  <TableCell>{new Date(f1.date).toLocaleDateString()}</TableCell>
-                  <TableCell>{f1.state}</TableCell>
-                  <TableCell>{f1.locality}</TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <div className="flex-1">
-                        {f1.grant_call_name && f1.donor_name ? (
-                          <div>
-                            <div className="font-medium">{f1.grant_call_name}</div>
-                            <div className="text-sm text-muted-foreground">{f1.donor_name}</div>
-                          </div>
-                        ) : (
-                          <span className="text-muted-foreground">-</span>
-                        )}
-                      </div>
+                  <TableCell className="whitespace-nowrap">{new Date(f1.date).toLocaleDateString()}</TableCell>
+                  <TableCell className="whitespace-nowrap">{f1.state}</TableCell>
+                  <TableCell className="whitespace-nowrap max-w-[100px] truncate" title={f1.locality}>{f1.locality}</TableCell>
+                  <TableCell className="max-w-[120px]">
+                    <div className="flex flex-col gap-0 truncate">
+                      {f1.grant_call_name && f1.donor_name ? (
+                        <>
+                          <span className="truncate font-medium">{f1.grant_call_name}</span>
+                          <span className="text-muted-foreground truncate">{f1.donor_name}</span>
+                        </>
+                      ) : (
+                        <span className="text-muted-foreground">-</span>
+                      )}
                     </div>
                   </TableCell>
-                  <TableCell className="text-right font-medium">
+                  <TableCell className="text-right font-medium whitespace-nowrap">
                     {calculateTotalAmount(f1.expenses).toLocaleString()}
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="whitespace-nowrap">
                     {new Date(f1.committed_at).toLocaleDateString()}
                   </TableCell>
                   <TableCell>
-                    <Badge variant="default">
+                    <Badge variant="default" className="text-[10px] px-1.5 py-0">
                       {t(`f2:${f1.funding_status}`)}
                     </Badge>
                   </TableCell>
                   {/* Community Approval */}
-                  <TableCell>
+                  <TableCell className="whitespace-nowrap">
                     {f1.approval_file_key ? (
-                      <Badge variant="default">{t('f2:approval_uploaded')}</Badge>
+                      <Badge variant="default" className="text-[10px] px-1.5 py-0">{t('f2:approval_uploaded')}</Badge>
                     ) : canUploadApproval ? (
                       <div className="flex items-center gap-2">
                         <input
@@ -440,13 +437,14 @@ export default function CommittedF1sTab() {
                         <Button
                           size="sm"
                           variant="outline"
+                          className="h-7 text-xs px-2"
                           onClick={() => document.getElementById(`approval-file-${f1.id}`)?.click()}
                         >
                           {t('f2:upload')}
                         </Button>
                       </div>
                     ) : (
-                      <Badge variant="secondary" className="text-muted-foreground">{t('f2:approval_required')}</Badge>
+                      <Badge variant="secondary" className="text-muted-foreground text-[10px] px-1.5 py-0">{t('f2:approval_required')}</Badge>
                     )}
                   </TableCell>
                   <TableCell>
@@ -458,17 +456,17 @@ export default function CommittedF1sTab() {
                       )
                     ) : '-'}
                   </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
+                  <TableCell className="whitespace-nowrap">
+                    <div className="flex items-center gap-1">
                       {canEditProject && (
                         <Button
                           size="sm"
                           variant="ghost"
                           onClick={() => { setEditorProjectId(f1.id); setEditorOpen(true) }}
                           title={t('projects:edit_project') as string}
-                          className="h-8 w-8 p-0"
+                          className="h-7 w-7 p-0"
                         >
-                          <Edit2 className="w-4 h-4" />
+                          <Edit2 className="w-3.5 h-3.5" />
                         </Button>
                       )}
                       {!f1.mou_id && canCommit && (
@@ -477,9 +475,9 @@ export default function CommittedF1sTab() {
                           variant="ghost"
                           onClick={() => handleDecommitClick(f1.id)}
                           title={t('f2:decommit_project') as string}
-                          className="h-8 w-8 p-0 text-amber-600 hover:text-amber-700 hover:bg-amber-50"
+                          className="h-7 w-7 p-0 text-amber-600 hover:text-amber-700 hover:bg-amber-50"
                         >
-                          <Undo2 className="w-4 h-4" />
+                          <Undo2 className="w-3.5 h-3.5" />
                         </Button>
                       )}
                     </div>
