@@ -28,6 +28,8 @@ export default function ErrPortalPage() {
   const canViewF4F5 = can('f4_f5_view_page')
   const canViewProjectManagement = can('management_view_page')
   const canViewUserManagement = can('users_view_page')
+  const canViewRooms = can('rooms_view_page')
+  const canViewDashboard = can('dashboard_view_page')
   const [isLoading, setIsLoading] = useState(true)
   const [user, setUser] = useState<User | null>(null)
 
@@ -65,9 +67,6 @@ export default function ErrPortalPage() {
   }, [])
 
   if (isLoading) return <div>Loading...</div>
-
-  // Only show room management for admin, superadmin, and state users
-  const canManageRooms = user?.role === 'admin' || user?.role === 'superadmin' || user?.role === 'state_err'
 
   const handleLogout = async () => {
     try {
@@ -199,22 +198,24 @@ export default function ErrPortalPage() {
         )}
 
         {/* Dashboard */}
-        <Link href="/err-portal/dashboard" className="block">
-          <Card className="h-full hover:bg-muted/50 transition-colors">
-            <CardHeader className="h-full flex flex-col justify-center items-center text-center p-4">
-              <BarChart2 className="h-6 w-6 mb-2" />
-              <CardTitle className="text-base">
-                {t('err:dashboard')}
-              </CardTitle>
-              <CardDescription className="mt-1 text-sm">
-                {t('err:dashboard_desc')}
-              </CardDescription>
-            </CardHeader>
-          </Card>
-        </Link>
+        {canViewDashboard && (
+          <Link href="/err-portal/dashboard" className="block">
+            <Card className="h-full hover:bg-muted/50 transition-colors">
+              <CardHeader className="h-full flex flex-col justify-center items-center text-center p-4">
+                <BarChart2 className="h-6 w-6 mb-2" />
+                <CardTitle className="text-base">
+                  {t('err:dashboard')}
+                </CardTitle>
+                <CardDescription className="mt-1 text-sm">
+                  {t('err:dashboard_desc')}
+                </CardDescription>
+              </CardHeader>
+            </Card>
+          </Link>
+        )}
 
-        {/* Room Management - Conditional */}
-        {canManageRooms && (
+        {/* Room Management */}
+        {canViewRooms && (
           <Link href="/err-portal/room-management" className="block">
             <Card className="h-full hover:bg-muted/50 transition-colors">
               <CardHeader className="h-full flex flex-col justify-center items-center text-center p-4">

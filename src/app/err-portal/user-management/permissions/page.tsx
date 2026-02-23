@@ -52,7 +52,7 @@ export default function PermissionsPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold">Function Permissions</h1>
+      <h1 className="text-2xl font-semibold">Individual User Permissions</h1>
       <PermissionsManager
         currentUserRole={currentUser.role}
         currentUserErrId={currentUser.err_id}

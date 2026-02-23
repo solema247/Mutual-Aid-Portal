@@ -1,8 +1,10 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { useTranslation } from 'react-i18next'
 import { CollapsibleRow } from '@/components/ui/collapsible'
+import { useAllowedFunctions } from '@/hooks/useAllowedFunctions'
 import RoomManagement from './components/RoomManagement'
 import InactiveRoomsList from './components/InactiveRoomsList'
 import { supabase } from '@/lib/supabaseClient'
@@ -18,8 +20,18 @@ interface User {
 
 export default function RoomManagementPage() {
   const { t } = useTranslation(['rooms', 'err'])
+  const router = useRouter()
+  const { can } = useAllowedFunctions()
+  const canViewPage = can('rooms_view_page')
   const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+
+  useEffect(() => {
+    if (!canViewPage) {
+      router.replace('/err-portal')
+      return
+    }
+  }, [canViewPage, router])
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -47,6 +59,7 @@ export default function RoomManagementPage() {
     checkAuth()
   }, [])
 
+  if (!canViewPage) return null
   if (isLoading) return <div>Loading...</div>
 
   // Only show room management for admin, superadmin, and state ERR users

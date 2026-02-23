@@ -61,7 +61,6 @@ export default function ErrPortalLayout({
     return () => window.removeEventListener('storage', onStorage)
   }, [])
 
-  const canManageRooms = user?.role === 'admin' || user?.role === 'superadmin' || user?.role === 'state_err'
   const { can } = useAllowedFunctions()
   const canViewGrantManagement = can('grant_view')
   const canViewF1 = can('f1_view_page')
@@ -70,6 +69,8 @@ export default function ErrPortalLayout({
   const canViewF4F5 = can('f4_f5_view_page')
   const canViewProjectManagement = can('management_view_page')
   const canViewUserManagement = can('users_view_page')
+  const canViewRooms = can('rooms_view_page')
+  const canViewDashboard = can('dashboard_view_page')
 
   const sidebarItems = [
     {
@@ -107,12 +108,12 @@ export default function ErrPortalLayout({
       label: t('err:project_management'),
       icon: <Cog className="h-5 w-5" />
     }] : []),
-    {
+    ...(canViewDashboard ? [{
       href: '/err-portal/dashboard',
       label: t('err:dashboard'),
       icon: <BarChart2 className="h-5 w-5" />
-    },
-    ...(canManageRooms ? [{
+    }] : []),
+    ...(canViewRooms ? [{
       href: '/err-portal/room-management',
       label: t('err:room_management'),
       icon: <Users className="h-5 w-5" />

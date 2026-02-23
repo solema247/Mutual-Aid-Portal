@@ -14,6 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Label } from '@/components/ui/label'
 import { RoomWithState } from '@/app/api/rooms/types/rooms'
 import { getActiveRooms, deactivateRoom, updateRoomStateReference } from '@/app/api/rooms/utils/rooms'
+import { useAllowedFunctions } from '@/hooks/useAllowedFunctions'
 import { supabase } from '@/lib/supabaseClient'
 import { Pencil, X } from 'lucide-react'
 
@@ -31,6 +32,9 @@ export default function ActiveRoomsList({
   userErrId = null
 }: ActiveRoomsListProps) {
   const { t, i18n } = useTranslation(['rooms'])
+  const { can } = useAllowedFunctions()
+  const canModify = can('rooms_modify_room')
+  const canDeactivate = can('rooms_deactivate_room')
   const [rooms, setRooms] = useState<RoomWithState[]>([])
   const [isLoading, setIsLoading] = useState(initialLoading)
   const [error, setError] = useState<string | null>(null)
@@ -244,6 +248,7 @@ export default function ActiveRoomsList({
   }, [modifyStateId, modifyDialogOpen, modifyStates, selectedRoom, i18n.language])
 
   const handleModify = (room: RoomWithState) => {
+    if (!canModify) return
     setSelectedRoom(room)
     setModifyDialogOpen(true)
     
@@ -257,6 +262,7 @@ export default function ActiveRoomsList({
   }
 
   const handleModifySubmit = async () => {
+    if (!canModify) return
     if (!selectedRoom || !modifyLocalityId) {
       alert('Please select both state and locality')
       return
@@ -279,6 +285,7 @@ export default function ActiveRoomsList({
   }
 
   const handleDeactivate = async (roomId: string) => {
+    if (!canDeactivate) return
     if (!confirm('Are you sure you want to deactivate this room?')) {
       return
     }
@@ -361,24 +368,28 @@ export default function ActiveRoomsList({
                   <div>{i18n.language === 'ar' ? room.state?.locality_ar : room.state?.locality}</div>
                   <div>{new Date(room.created_at || '').toLocaleDateString()}</div>
                   <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleModify(room)}
-                      disabled={processingId === room.id}
-                      title={t('rooms:modify')}
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleDeactivate(room.id)}
-                      disabled={processingId === room.id}
-                      title={t('rooms:deactivate')}
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
+                    {canModify && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleModify(room)}
+                        disabled={processingId === room.id}
+                        title={t('rooms:modify')}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                    )}
+                    {canDeactivate && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleDeactivate(room.id)}
+                        disabled={processingId === room.id}
+                        title={t('rooms:deactivate')}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    )}
                   </div>
                 </div>
               ))}

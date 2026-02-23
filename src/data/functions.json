@@ -32,5 +32,10 @@
   { "code": "management_view_page", "module": "management", "label_ar": "عرض صفحة إدارة المشاريع", "label_en": "View Project Management page", "description_en": "View the Project Management page." },
   { "code": "management_view_project", "module": "management", "label_ar": "عرض المشروع", "label_en": "View project", "description_en": "View project details on the Project Management page." },
   { "code": "management_edit_reporting_status", "module": "management", "label_ar": "تغيير حالة F4/F5", "label_en": "Change F4/F5 status", "description_en": "Change F4 and F5 reporting status for a project on the Project Management page." },
-  { "code": "management_complete_project", "module": "management", "label_ar": "إكمال المشروع", "label_en": "Complete project", "description_en": "Mark a project as complete on the Project Management page." }
+  { "code": "management_complete_project", "module": "management", "label_ar": "إكمال المشروع", "label_en": "Complete project", "description_en": "Mark a project as complete on the Project Management page." },
+  { "code": "rooms_view_page", "module": "rooms", "label_ar": "عرض صفحة إدارة الغرف", "label_en": "View Room Management page", "description_en": "View the Room Management page." },
+  { "code": "rooms_accept_room", "module": "rooms", "label_ar": "الموافقة على غرف جديدة", "label_en": "Accept new rooms", "description_en": "Approve or decline pending room submissions on the Room Management page." },
+  { "code": "rooms_modify_room", "module": "rooms", "label_ar": "تعديل الغرف", "label_en": "Modify rooms", "description_en": "Change state or locality for active rooms on the Room Management page." },
+  { "code": "rooms_deactivate_room", "module": "rooms", "label_ar": "إلغاء تفعيل الغرف", "label_en": "Deactivate rooms", "description_en": "Deactivate active rooms on the Room Management page." },
+  { "code": "dashboard_view_page", "module": "dashboard", "label_ar": "عرض لوحة التحكم", "label_en": "View Dashboard page", "description_en": "View the ERR Portal Dashboard page." }
 ]

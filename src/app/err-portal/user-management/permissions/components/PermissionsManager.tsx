@@ -36,7 +36,9 @@ const MODULE_LABELS: Record<string, string> = {
   f4_f5: 'F4 & F5 Reporting',
   management: 'Project Management',
   users: 'User Management',
-  grants: 'Grant Management'
+  grants: 'Grant Management',
+  rooms: 'Room Management',
+  dashboard: 'Dashboard'
 }
 
 interface PermissionsManagerProps {
@@ -68,7 +70,7 @@ export default function PermissionsManager({
   const [loadingUser, setLoadingUser] = useState(false)
   const [loadingFunctions, setLoadingFunctions] = useState(true)
   const [loadingUsers, setLoadingUsers] = useState(true)
-  const moduleOrder = ['grants', 'f1', 'f2', 'f3', 'f4_f5', 'management', 'users'] as const
+  const moduleOrder = ['grants', 'f1', 'f2', 'f3', 'f4_f5', 'management', 'users', 'rooms', 'dashboard'] as const
   const [openModules, setOpenModules] = useState<Set<string>>(
     () => new Set(moduleOrder)
   )
@@ -102,8 +104,6 @@ export default function PermissionsManager({
         const fromUrl = searchParams.get('userId')
         if (fromUrl && list.some((x) => x.id === fromUrl)) {
           setSelectedUserId(fromUrl)
-        } else if (list.length > 0 && !selectedUserId) {
-          setSelectedUserId(list[0].id)
         }
       })
       .finally(() => setLoadingUsers(false))
@@ -183,14 +183,15 @@ export default function PermissionsManager({
         </CardHeader>
         <CardContent>
           <Select
-            value={selectedUserId}
-            onValueChange={setSelectedUserId}
+            value={selectedUserId || '__none__'}
+            onValueChange={(v) => setSelectedUserId(v === '__none__' ? '' : v)}
             disabled={users.length === 0}
           >
             <SelectTrigger className="w-[320px] border-input bg-background">
-              <SelectValue placeholder="Choose user" />
+              <SelectValue placeholder="Select user" />
             </SelectTrigger>
             <SelectContent>
+              <SelectItem value="__none__">Select user</SelectItem>
               {users.map((u) => (
                 <SelectItem key={u.id} value={u.id}>
                   {u.display_name || u.id} ({u.role})

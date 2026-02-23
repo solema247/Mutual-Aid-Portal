@@ -1,15 +1,29 @@
 'use client'
 
+import { useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { useTranslation } from 'react-i18next'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { CollapsibleRow } from '@/components/ui/collapsible'
+import { useAllowedFunctions } from '@/hooks/useAllowedFunctions'
 import { GrantsStackedBarChart } from './GrantsStackedBarChart'
 import { ProjectsByDonorChart } from './ProjectsByDonorChart'
 
 export default function DashboardPage() {
   const { t } = useTranslation(['dashboard', 'err', 'common'])
+  const router = useRouter()
+  const { can } = useAllowedFunctions()
+  const canViewPage = can('dashboard_view_page')
+
+  useEffect(() => {
+    if (!canViewPage) {
+      router.replace('/err-portal')
+    }
+  }, [canViewPage, router])
+
+  if (!canViewPage) return null
 
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6">

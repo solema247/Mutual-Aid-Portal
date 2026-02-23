@@ -108,9 +108,9 @@ export default function UserManagement() {
       {isAdmin && (
         <>
           <div className="flex gap-4">
-            <Button variant="outline" size="sm" asChild>
+            <Button variant="default" size="sm" asChild>
               <Link href="/err-portal/user-management/permissions">
-                Function Permissions
+                Individual User Permissions
               </Link>
             </Button>
           </div>
