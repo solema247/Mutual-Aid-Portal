@@ -879,7 +879,7 @@ export default function DirectUpload() {
       )}
 
       {!isReviewing && (
-        <Button type="button" onClick={handleSubmit} disabled={isLoading || !hasRequiredFields()} className="w-full bg-green-700 hover:bg-green-800 text-white font-bold">
+        <Button type="button" onClick={handleSubmit} disabled={isLoading || !hasRequiredFields()} className="w-full font-bold">
           <FileUp className="w-4 h-4 mr-2" />
           {isLoading ? t('fsystem:f1.uploading') : t('fsystem:f1.upload_button')}
         </Button>
@@ -903,7 +903,7 @@ export default function DirectUpload() {
                     type="button"
                     size="sm"
                     onClick={() => setShowCreateLocality(true)}
-                    className="h-7 text-xs bg-green-700 hover:bg-green-800 text-white font-bold"
+                    className="h-7 text-xs font-bold"
                   >
                     <Plus className="w-3 h-3 mr-1" />
                     Add New Locality
@@ -998,7 +998,7 @@ export default function DirectUpload() {
                         }
                       }}
                       disabled={isCreatingLocality || !newLocalityName.trim()}
-                      className="flex-1 bg-green-700 hover:bg-green-800 text-white font-bold"
+                      className="flex-1 font-bold"
                     >
                       {isCreatingLocality ? 'Creating...' : 'Create Locality'}
                     </Button>

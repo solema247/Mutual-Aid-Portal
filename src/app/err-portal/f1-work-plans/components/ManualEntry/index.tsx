@@ -319,7 +319,7 @@ export default function ManualEntry({ onSuccess }: ManualEntryProps) {
   }
 
   return (
-    <Card>
+    <Card className="shadow-none">
       <CardHeader>
         <CardTitle>{t('fsystem:manual_entry.title', { defaultValue: 'Manual F1 Entry' })}</CardTitle>
         <CardDescription>
@@ -765,7 +765,6 @@ export default function ManualEntry({ onSuccess }: ManualEntryProps) {
           <Button
             onClick={handleSubmit}
             disabled={isSubmitting || !stateId || !emergencyRoomId}
-            className={cn('bg-green-600 hover:bg-green-700')}
           >
             {isSubmitting ? (t('fsystem:review.submitting') || 'Submitting…') : (t('fsystem:review.submit') || 'Submit F1')}
           </Button>

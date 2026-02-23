@@ -1186,7 +1186,6 @@ export default function ExtractedDataReview({
             onClick={handleConfirm} 
             disabled={isSubmitting || isOverBudget}
             className={cn(
-              "bg-green-600 hover:bg-green-700",
               isOverBudget && "bg-destructive hover:bg-destructive/90"
             )}
           >
