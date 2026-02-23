@@ -141,7 +141,7 @@ function F4F5ReportingPageContent() {
           <div className="flex items-center justify-between">
             <div className="text-lg font-semibold">{t('f4.title')}</div>
             {canUploadF4 && (
-            <Button className="bg-green-700 hover:bg-green-800 text-white font-bold" onClick={() => { try { window.localStorage.removeItem('err_minimized_modal'); window.localStorage.removeItem('err_minimized_payload'); window.localStorage.removeItem('err_restore'); window.dispatchEvent(new CustomEvent('err_minimized_modal_change')) } catch {}; setUploadOpen(true) }}>{t('f4.upload')}</Button>
+            <Button onClick={() => { try { window.localStorage.removeItem('err_minimized_modal'); window.localStorage.removeItem('err_minimized_payload'); window.localStorage.removeItem('err_restore'); window.dispatchEvent(new CustomEvent('err_minimized_modal_change')) } catch {}; setUploadOpen(true) }}>{t('f4.upload')}</Button>
             )}
           </div>
 
@@ -251,7 +251,7 @@ function F4F5ReportingPageContent() {
           <div className="flex items-center justify-between">
             <div className="text-lg font-semibold">{t('f5.title')}</div>
             {canUploadF5 && (
-            <Button className="bg-green-700 hover:bg-green-800 text-white font-bold" onClick={() => { try { window.localStorage.removeItem('err_minimized_modal'); window.localStorage.removeItem('err_minimized_payload'); window.localStorage.removeItem('err_restore'); window.dispatchEvent(new CustomEvent('err_minimized_modal_change')) } catch {}; setUploadF5Open(true) }}>{t('f5.upload')}</Button>
+            <Button onClick={() => { try { window.localStorage.removeItem('err_minimized_modal'); window.localStorage.removeItem('err_minimized_payload'); window.localStorage.removeItem('err_restore'); window.dispatchEvent(new CustomEvent('err_minimized_modal_change')) } catch {}; setUploadF5Open(true) }}>{t('f5.upload')}</Button>
             )}
           </div>
 
