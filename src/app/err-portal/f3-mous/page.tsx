@@ -711,7 +711,7 @@ export default function F3MOUsPage() {
     try {
       const { data: projects, error } = await supabase
         .from('err_projects')
-        .select('id, err_id, state, locality, expenses')
+        .select('id, err_id, state, locality, expenses, emergency_rooms (err_code)')
         .eq('mou_id', mouId)
         .eq('funding_status', 'committed')
         .eq('status', 'approved')
@@ -722,7 +722,7 @@ export default function F3MOUsPage() {
         setMouProjects([])
         setMouTotalAmount(0)
       } else {
-        setMouProjects((projects || []).map(p => ({ id: p.id, err_id: p.err_id, state: p.state, locality: p.locality })))
+        setMouProjects((projects || []).map((p: any) => ({ id: p.id, err_id: p.err_id ?? p.emergency_rooms?.err_code ?? null, state: p.state, locality: p.locality })))
         
         // Calculate MOU total amount
         const totalAmount = (projects || []).reduce((sum: number, project: any) => {
@@ -780,7 +780,7 @@ export default function F3MOUsPage() {
           const roomName = room?.name || room?.name_ar || room?.err_code || null
           return { 
             id: p.id, 
-            err_id: p.err_id, 
+            err_id: p.err_id ?? room?.err_code ?? null, 
             state: p.state, 
             locality: p.locality,
             emergency_room_name: roomName,
@@ -799,7 +799,7 @@ export default function F3MOUsPage() {
           const byId = new Map((fallbackProjects || []).map((p: any) => {
             const room = p.emergency_rooms
             const roomName = room?.name || room?.name_ar || room?.err_code || null
-            return [p.id, { id: p.id, err_id: p.err_id, state: p.state, locality: p.locality, emergency_room_name: roomName, grant_id: p.grant_id || null }]
+            return [p.id, { id: p.id, err_id: p.err_id ?? room?.err_code ?? null, state: p.state, locality: p.locality, emergency_room_name: roomName, grant_id: p.grant_id || null }]
           }))
           projectList = projectIds.map(id => byId.get(id)).filter(Boolean) as typeof projectList
         }
@@ -957,16 +957,15 @@ export default function F3MOUsPage() {
             <div className="py-8 text-center text-muted-foreground">{t('common:loading') || 'Loading...'}</div>
           ) : (
             <>
-              <Table dir={i18n.language === 'ar' ? 'rtl' : 'ltr'} className="w-full min-w-[1000px]">
+              <Table dir={i18n.language === 'ar' ? 'rtl' : 'ltr'} className="w-full min-w-[800px] text-xs">
                 <TableHeader>
-                  <TableRow>
-                    <TableHead className="min-w-[120px]">{t('f3:headers.mou_code')}</TableHead>
-                    <TableHead className="min-w-[140px]">Grant ID</TableHead>
-                    <TableHead className="min-w-[140px]">{t('f3:headers.partner')}</TableHead>
-                    <TableHead className="min-w-[180px]">{t('f3:headers.err_state')}</TableHead>
-                    <TableHead className="text-right min-w-[90px]">{t('f3:headers.total')}</TableHead>
-                    <TableHead className="min-w-[100px]">{t('f3:headers.created')}</TableHead>
-                    <TableHead className="min-w-[320px]">{t('f3:headers.actions')}</TableHead>
+                  <TableRow className="[&>th]:py-2 [&>th]:px-2 [&>th]:text-xs">
+                    <TableHead className="min-w-[90px] px-2">{t('f3:headers.mou_code')}</TableHead>
+                    <TableHead className="min-w-[100px] px-2">Grant ID</TableHead>
+                    <TableHead className="min-w-[120px] px-2">{t('f3:headers.err_state')}</TableHead>
+                    <TableHead className="text-right min-w-[70px] px-2">{t('f3:headers.total')}</TableHead>
+                    <TableHead className="min-w-[80px] px-2">{t('f3:headers.created')}</TableHead>
+                    <TableHead className="min-w-[260px] px-2">{t('f3:headers.actions')}</TableHead>
                   </TableRow>
                 </TableHeader>
               <TableBody>
@@ -977,63 +976,62 @@ export default function F3MOUsPage() {
                     const paginatedMous = mous.slice(startIndex, endIndex)
                     
                     return paginatedMous.map(m => (
-                      <TableRow key={m.id}>
-                    <TableCell className="font-medium">{m.mou_code}</TableCell>
-                    <TableCell>{mouGrantIds[m.id] || '-'}</TableCell>
-                    <TableCell>{m.partner_name}</TableCell>
-                    <TableCell>{m.err_name}{m.state ? ` — ${m.state}` : ''}</TableCell>
-                    <TableCell className="text-right">{Number(m.total_amount || 0).toLocaleString()}</TableCell>
-                    <TableCell>{new Date(m.created_at).toLocaleDateString()}</TableCell>
+                      <TableRow key={m.id} className="[&>td]:py-1.5 [&>td]:px-2 [&>td]:text-xs">
+                    <TableCell className="font-medium whitespace-nowrap">{m.mou_code}</TableCell>
+                    <TableCell className="whitespace-nowrap">{mouGrantIds[m.id] || '-'}</TableCell>
+                    <TableCell className="max-w-[140px] truncate" title={`${m.err_name}${m.state ? ` — ${m.state}` : ''}`}>{m.err_name}{m.state ? ` — ${m.state}` : ''}</TableCell>
+                    <TableCell className="text-right whitespace-nowrap">{Number(m.total_amount || 0).toLocaleString()}</TableCell>
+                    <TableCell className="whitespace-nowrap">{new Date(m.created_at).toLocaleDateString()}</TableCell>
                     <TableCell className="align-top whitespace-nowrap">
-                      <div className="flex items-start gap-3 flex-nowrap">
+                      <div className="flex items-start gap-1.5 flex-nowrap">
                         {canManageProjects && (
-                        <div className="flex flex-col items-center gap-0.5 min-w-[50px] flex-shrink-0">
+                        <div className="flex flex-col items-center gap-0.5 min-w-[42px] flex-shrink-0">
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-8 w-8"
+                            className="h-7 w-7"
                             onClick={() => openListProjectsModal(m)}
                             title="List Projects"
                           >
-                            <ListOrdered className="h-4 w-4 text-slate-600" />
+                            <ListOrdered className="h-3.5 w-3.5 text-slate-600" />
                           </Button>
-                          <span className="text-[10px] text-muted-foreground text-center leading-tight">List Projects</span>
+                          <span className="text-[9px] text-muted-foreground text-center leading-tight">List</span>
                         </div>
                         )}
                         {mouAssignmentStatus[m.id]?.hasUnassigned && canAssign && (
-                          <div className="flex flex-col items-center gap-0.5 min-w-[50px]">
+                          <div className="flex flex-col items-center gap-0.5 min-w-[42px]">
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="h-8 w-8"
+                              className="h-7 w-7"
                               onClick={() => openAssignModal(m.id)}
                               title="Assign to Grant"
                             >
-                              <Link2 className="h-4 w-4 text-blue-600" />
+                              <Link2 className="h-3.5 w-3.5 text-blue-600" />
                             </Button>
-                            <span className="text-[10px] text-muted-foreground text-center leading-tight">Assign</span>
+                            <span className="text-[9px] text-muted-foreground text-center leading-tight">Assign</span>
                           </div>
                         )}
                         {mouAssignmentStatus[m.id]?.hasAssigned && canReassignGrant && (
-                          <div className="flex flex-col items-center gap-0.5 min-w-[50px]">
+                          <div className="flex flex-col items-center gap-0.5 min-w-[42px]">
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="h-8 w-8"
+                              className="h-7 w-7"
                               onClick={() => openReassignModal(m.id)}
                               title="Reassign to Grant"
                             >
-                              <RefreshCw className="h-4 w-4 text-orange-600" />
+                              <RefreshCw className="h-3.5 w-3.5 text-orange-600" />
                             </Button>
-                            <span className="text-[10px] text-muted-foreground text-center leading-tight">Reassign</span>
+                            <span className="text-[9px] text-muted-foreground text-center leading-tight">Reassign</span>
                           </div>
                         )}
                         {canViewMou && (
-                        <div className="flex flex-col items-center gap-0.5 min-w-[50px]">
+                        <div className="flex flex-col items-center gap-0.5 min-w-[42px]">
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-8 w-8"
+                            className="h-7 w-7"
                             onClick={async () => {
                           setActiveMou(m)
                           setEditMode(false)
@@ -1103,17 +1101,17 @@ export default function F3MOUsPage() {
                         }}
                         title={t('f3:preview')}
                       >
-                        <Eye className="h-4 w-4" />
+                        <Eye className="h-3.5 w-3.5" />
                       </Button>
-                      <span className="text-[10px] text-muted-foreground text-center leading-tight">{t('f3:preview')}</span>
+                      <span className="text-[9px] text-muted-foreground text-center leading-tight">{t('f3:preview')}</span>
                     </div>
                         )}
                         {canManagePayment && (
-                        <div className="flex flex-col items-center gap-0.5 min-w-[50px]">
+                        <div className="flex flex-col items-center gap-0.5 min-w-[42px]">
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-8 w-8"
+                            className="h-7 w-7"
                             onClick={() => openPaymentModal(m)}
                             title={(() => {
                               const projectCount = mouProjectCounts[m.id] || 0
@@ -1125,15 +1123,15 @@ export default function F3MOUsPage() {
                               const projectCount = mouProjectCounts[m.id] || 0
                               const paymentCount = getPaymentConfirmationCount(m, projectCount)
                               if (paymentCount.confirmed === 0) {
-                                return <Upload className="h-4 w-4 text-amber-600" />
+                                return <Upload className="h-3.5 w-3.5 text-amber-600" />
                               } else if (paymentCount.confirmed === paymentCount.total) {
-                                return <Receipt className="h-4 w-4 text-green-600" />
+                                return <Receipt className="h-3.5 w-3.5 text-green-600" />
                               } else {
-                                return <Receipt className="h-4 w-4 text-yellow-600" />
+                                return <Receipt className="h-3.5 w-3.5 text-yellow-600" />
                               }
                             })()}
                           </Button>
-                          <span className="text-[10px] text-muted-foreground text-center leading-tight whitespace-nowrap">
+                          <span className="text-[9px] text-muted-foreground text-center leading-tight whitespace-nowrap">
                             {(() => {
                               const projectCount = mouProjectCounts[m.id] || 0
                               const paymentCount = getPaymentConfirmationCount(m, projectCount)
@@ -1185,11 +1183,11 @@ export default function F3MOUsPage() {
                             e.target.value = ''
                           }}
                         />
-                        <div className="flex flex-col items-center gap-0.5 min-w-[50px]">
+                        <div className="flex flex-col items-center gap-0.5 min-w-[42px]">
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-8 w-8"
+                            className="h-7 w-7"
                             onClick={m.signed_mou_file_key ? async () => {
                             try {
                               // First get the signed URL
@@ -1220,12 +1218,12 @@ export default function F3MOUsPage() {
                           title={m.signed_mou_file_key ? 'View Signed MOU' : 'Upload Signed MOU'}
                         >
                           {m.signed_mou_file_key ? (
-                            <FileCheck className="h-4 w-4 text-green-600" />
+                            <FileCheck className="h-3.5 w-3.5 text-green-600" />
                           ) : (
-                            <FileSignature className="h-4 w-4 text-amber-600" />
+                            <FileSignature className="h-3.5 w-3.5 text-amber-600" />
                           )}
                         </Button>
-                        <span className="text-[10px] text-muted-foreground text-center leading-tight whitespace-nowrap">{m.signed_mou_file_key ? 'View MOU' : 'Upload MOU'}</span>
+                        <span className="text-[9px] text-muted-foreground text-center leading-tight whitespace-nowrap">{m.signed_mou_file_key ? 'View MOU' : 'Upload MOU'}</span>
                       </div>
                         </>
                         )}
@@ -2382,31 +2380,31 @@ export default function F3MOUsPage() {
               <>
                 <p className="text-sm text-muted-foreground">This MOU is assigned to a grant. Projects are read-only.</p>
                 <div className="border rounded-md overflow-auto max-h-[50vh]">
-                  <Table>
+                  <Table className="text-xs">
                     <TableHeader>
-                      <TableRow>
-                        <TableHead>ERR ID</TableHead>
-                        <TableHead>State</TableHead>
-                        <TableHead>Locality</TableHead>
-                        <TableHead className="text-right">USD</TableHead>
-                        <TableHead>Categories</TableHead>
-                        <TableHead>Grant ID</TableHead>
+                      <TableRow className="[&>th]:py-1.5 [&>th]:px-2 [&>th]:text-xs">
+                        <TableHead className="px-2">ERR ID</TableHead>
+                        <TableHead className="px-2">State</TableHead>
+                        <TableHead className="px-2">Locality</TableHead>
+                        <TableHead className="text-right px-2">USD</TableHead>
+                        <TableHead className="px-2">Categories</TableHead>
+                        <TableHead className="px-2">Grant ID</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {listProjectsList.length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={6} className="text-center text-muted-foreground py-8">No projects linked</TableCell>
+                          <TableCell colSpan={6} className="text-center text-muted-foreground py-6 text-xs">No projects linked</TableCell>
                         </TableRow>
                       ) : (
                         listProjectsList.map((p) => (
-                          <TableRow key={p.id} title={p.project_objectives ?? undefined}>
-                            <TableCell className="font-mono text-sm">{p.err_id ?? '-'}</TableCell>
-                            <TableCell>{p.state || '-'}</TableCell>
-                            <TableCell>{p.locality ?? '-'}</TableCell>
-                            <TableCell className="text-right font-mono text-sm">{p.amount_usd != null ? p.amount_usd.toLocaleString() : '—'}</TableCell>
-                            <TableCell className="text-sm">{p.categories}</TableCell>
-                            <TableCell className="font-mono text-sm">{p.grant_id ?? '-'}</TableCell>
+                          <TableRow key={p.id} title={p.project_objectives ?? undefined} className="[&>td]:py-1.5 [&>td]:px-2 [&>td]:text-xs">
+                            <TableCell className="font-mono whitespace-nowrap">{p.err_id ?? '-'}</TableCell>
+                            <TableCell className="whitespace-nowrap">{p.state || '-'}</TableCell>
+                            <TableCell className="max-w-[100px] truncate" title={p.locality ?? ''}>{p.locality ?? '-'}</TableCell>
+                            <TableCell className="text-right font-mono whitespace-nowrap">{p.amount_usd != null ? p.amount_usd.toLocaleString() : '—'}</TableCell>
+                            <TableCell className="max-w-[120px] truncate" title={p.categories}>{p.categories}</TableCell>
+                            <TableCell className="font-mono whitespace-nowrap">{p.grant_id ?? '-'}</TableCell>
                           </TableRow>
                         ))
                       )}
@@ -2420,35 +2418,35 @@ export default function F3MOUsPage() {
                 {!listProjectsAddMode ? (
                   <>
                     <div className="border rounded-md overflow-auto max-h-[40vh]">
-                      <Table>
+                      <Table className="text-xs">
                         <TableHeader>
-                          <TableRow>
-                            <TableHead>ERR ID</TableHead>
-                            <TableHead>State</TableHead>
-                            <TableHead>Locality</TableHead>
-                            <TableHead className="text-right">USD</TableHead>
-                            <TableHead>Categories</TableHead>
-                            <TableHead className="w-[80px]">Actions</TableHead>
+                          <TableRow className="[&>th]:py-1.5 [&>th]:px-2 [&>th]:text-xs">
+                            <TableHead className="px-2">ERR ID</TableHead>
+                            <TableHead className="px-2">State</TableHead>
+                            <TableHead className="px-2">Locality</TableHead>
+                            <TableHead className="text-right px-2">USD</TableHead>
+                            <TableHead className="px-2">Categories</TableHead>
+                            <TableHead className="w-[70px] px-2">Actions</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
                           {listProjectsList.length === 0 ? (
                             <TableRow>
-                              <TableCell colSpan={6} className="text-center text-muted-foreground py-8">No projects linked</TableCell>
+                              <TableCell colSpan={6} className="text-center text-muted-foreground py-6 text-xs">No projects linked</TableCell>
                             </TableRow>
                           ) : (
                             listProjectsList.map((p) => (
-                              <TableRow key={p.id} title={p.project_objectives ?? undefined}>
-                                <TableCell className="font-mono text-sm">{p.err_id ?? '-'}</TableCell>
-                                <TableCell>{p.state || '-'}</TableCell>
-                                <TableCell>{p.locality ?? '-'}</TableCell>
-                                <TableCell className="text-right font-mono text-sm">{p.amount_usd != null ? p.amount_usd.toLocaleString() : '—'}</TableCell>
-                                <TableCell className="text-sm">{p.categories}</TableCell>
+                              <TableRow key={p.id} title={p.project_objectives ?? undefined} className="[&>td]:py-1.5 [&>td]:px-2 [&>td]:text-xs">
+                                <TableCell className="font-mono whitespace-nowrap">{p.err_id ?? '-'}</TableCell>
+                                <TableCell className="whitespace-nowrap">{p.state || '-'}</TableCell>
+                                <TableCell className="max-w-[100px] truncate" title={p.locality ?? ''}>{p.locality ?? '-'}</TableCell>
+                                <TableCell className="text-right font-mono whitespace-nowrap">{p.amount_usd != null ? p.amount_usd.toLocaleString() : '—'}</TableCell>
+                                <TableCell className="max-w-[120px] truncate" title={p.categories}>{p.categories}</TableCell>
                                 <TableCell>
                                   <Button
                                     variant="ghost"
                                     size="sm"
-                                    className="text-destructive hover:text-destructive"
+                                    className="text-destructive hover:text-destructive h-7 text-xs px-2"
                                     disabled={listProjectsActionLoading}
                                     onClick={async () => {
                                       if (!listProjectsMouId) return
@@ -2517,25 +2515,25 @@ export default function F3MOUsPage() {
                   <>
                     <p className="text-sm">Select committed work plans that are not linked to any MOU:</p>
                     <div className="border rounded-md overflow-auto max-h-[35vh]">
-                      <Table>
+                      <Table className="text-xs">
                         <TableHeader>
-                          <TableRow>
-                            <TableHead className="w-10">Add</TableHead>
-                            <TableHead>ERR ID</TableHead>
-                            <TableHead>State</TableHead>
-                            <TableHead>Locality</TableHead>
-                            <TableHead className="text-right">USD</TableHead>
-                            <TableHead>Categories</TableHead>
+                          <TableRow className="[&>th]:py-1.5 [&>th]:px-2 [&>th]:text-xs">
+                            <TableHead className="w-9 px-2">Add</TableHead>
+                            <TableHead className="px-2">ERR ID</TableHead>
+                            <TableHead className="px-2">State</TableHead>
+                            <TableHead className="px-2">Locality</TableHead>
+                            <TableHead className="text-right px-2">USD</TableHead>
+                            <TableHead className="px-2">Categories</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
                           {candidatesForAdd.length === 0 ? (
                             <TableRow>
-                              <TableCell colSpan={6} className="text-center text-muted-foreground py-6">No unlinked committed projects</TableCell>
+                              <TableCell colSpan={6} className="text-center text-muted-foreground py-4 text-xs">No unlinked committed projects</TableCell>
                             </TableRow>
                           ) : (
                             candidatesForAdd.map((c) => (
-                              <TableRow key={c.id} title={c.project_objectives ?? undefined}>
+                              <TableRow key={c.id} title={c.project_objectives ?? undefined} className="[&>td]:py-1.5 [&>td]:px-2 [&>td]:text-xs">
                                 <TableCell>
                                   <input
                                     type="checkbox"
@@ -2550,11 +2548,11 @@ export default function F3MOUsPage() {
                                     }}
                                   />
                                 </TableCell>
-                                <TableCell className="font-mono text-sm">{c.err_id ?? '-'}</TableCell>
-                                <TableCell>{c.state || '-'}</TableCell>
-                                <TableCell>{c.locality ?? '-'}</TableCell>
-                                <TableCell className="text-right font-mono text-sm">{c.amount_usd != null ? c.amount_usd.toLocaleString() : '—'}</TableCell>
-                                <TableCell className="text-sm">{c.categories}</TableCell>
+                                <TableCell className="font-mono whitespace-nowrap">{c.err_id ?? '-'}</TableCell>
+                                <TableCell className="whitespace-nowrap">{c.state || '-'}</TableCell>
+                                <TableCell className="max-w-[100px] truncate" title={c.locality ?? ''}>{c.locality ?? '-'}</TableCell>
+                                <TableCell className="text-right font-mono whitespace-nowrap">{c.amount_usd != null ? c.amount_usd.toLocaleString() : '—'}</TableCell>
+                                <TableCell className="max-w-[120px] truncate" title={c.categories}>{c.categories}</TableCell>
                               </TableRow>
                             ))
                           )}
@@ -2586,7 +2584,7 @@ export default function F3MOUsPage() {
                             const projects = refetchData.projects || []
                             setListProjectsList(projects.map((p: any) => ({
                               id: p.id,
-                              err_id: p.err_id ?? null,
+                              err_id: p.err_id ?? p.emergency_rooms?.err_code ?? null,
                               state: p.state ?? '',
                               locality: p.locality ?? null,
                               grant_id: p.grant_id ?? null,
@@ -3240,16 +3238,16 @@ export default function F3MOUsPage() {
               {paymentProjects.length} project{paymentProjects.length !== 1 ? 's' : ''} in this MOU
             </p>
           </DialogHeader>
-          <div className="mt-4">
-            <Table>
+          <div className="mt-4 overflow-x-auto">
+            <Table className="text-xs min-w-[700px]">
               <TableHeader>
-                <TableRow>
-                  <TableHead className="w-[120px]">Room</TableHead>
-                  <TableHead className="w-[180px]">Grant Serial ID</TableHead>
-                  <TableHead className="w-[150px]">Exchange Rate</TableHead>
-                  <TableHead className="w-[150px]">Transfer Date</TableHead>
-                  <TableHead className="w-[250px]">Payment File</TableHead>
-                  <TableHead className="w-[100px]">Action</TableHead>
+                <TableRow className="[&>th]:py-1.5 [&>th]:px-2 [&>th]:text-xs">
+                  <TableHead className="w-[100px] px-2">Room</TableHead>
+                  <TableHead className="w-[140px] px-2">Grant Serial ID</TableHead>
+                  <TableHead className="w-[110px] px-2">Exchange Rate</TableHead>
+                  <TableHead className="w-[110px] px-2">Transfer Date</TableHead>
+                  <TableHead className="w-[200px] px-2">Payment File</TableHead>
+                  <TableHead className="w-[80px] px-2">Action</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -3259,7 +3257,7 @@ export default function F3MOUsPage() {
                   const isUploading = uploadingPayments[project.id] || false
                   
                   return (
-                    <TableRow key={project.id}>
+                    <TableRow key={project.id} className="[&>td]:py-1.5 [&>td]:px-2 [&>td]:text-xs">
                       <TableCell className="font-medium">
                         <div className="flex items-center gap-2">
                           {project.emergency_room_name || '-'}
