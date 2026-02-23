@@ -2,6 +2,7 @@
 
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useAllowedFunctions } from '@/hooks/useAllowedFunctions'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
@@ -20,6 +21,16 @@ import ViewF5Modal from '@/app/err-portal/f4-f5-reporting/components/ViewF5Modal
 
 export default function ProjectManagement() {
   const { t } = useTranslation(['projects', 'common'])
+  const { can } = useAllowedFunctions()
+  const canViewProject = can('management_view_project')
+  const canEditReportingStatus = can('management_edit_reporting_status')
+  const canCompleteProject = can('management_complete_project')
+  const canUploadF4 = can('f4_upload')
+  const canUploadF5 = can('f5_upload')
+  const canViewF4 = can('f4_view_report')
+  const canViewF5 = can('f5_view_report')
+  const canAccessF4 = canUploadF4 || canViewF4
+  const canAccessF5 = canUploadF5 || canViewF5
 
   const [loading, setLoading] = useState(false)
   const [kpis, setKpis] = useState<any>({})
@@ -587,89 +598,89 @@ export default function ProjectManagement() {
       {/* All Cards in 2 rows of 6 */}
       <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
         {/* KPIs */}
-        <Card className="p-1.5 mx-1">
-          <div className="flex items-center justify-between gap-2 mb-0.5">
+        <Card className="p-1.5 mx-1 min-w-0 overflow-visible">
+          <div className="flex flex-col gap-0.5 mb-0.5 min-w-0">
             <CardTitle className="text-sm leading-tight font-semibold">{t('management.kpis.plan')}</CardTitle>
-            <span className="text-sm font-semibold">${Number(kpis.plan||0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+            <span className="text-sm font-semibold min-w-0">${Number(kpis.plan||0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
           </div>
           <div className="text-xs text-muted-foreground leading-tight">{t('management.kpis.plan_desc')}</div>
         </Card>
-        <Card className="p-1.5 mx-1">
-          <div className="flex items-center justify-between gap-2 mb-0.5">
+        <Card className="p-1.5 mx-1 min-w-0 overflow-visible">
+          <div className="flex flex-col gap-0.5 mb-0.5 min-w-0">
             <CardTitle className="text-sm leading-tight font-semibold">{t('management.kpis.actuals')}</CardTitle>
-            <span className="text-sm font-semibold">${Number(kpis.actual||0).toLocaleString()}</span>
+            <span className="text-sm font-semibold min-w-0">${Number(kpis.actual||0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
           </div>
           <div className="text-xs text-muted-foreground leading-tight">{t('management.kpis.actuals_desc')}</div>
         </Card>
-        <Card className="p-1.5 mx-1">
-          <div className="flex items-center justify-between gap-2 mb-0.5">
+        <Card className="p-1.5 mx-1 min-w-0 overflow-visible">
+          <div className="flex flex-col gap-0.5 mb-0.5 min-w-0">
             <CardTitle className="text-sm leading-tight font-semibold">{t('management.kpis.variance')}</CardTitle>
-            <span className="text-sm font-semibold">${Number(kpis.variance||0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+            <span className="text-sm font-semibold min-w-0">${Number(kpis.variance||0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
           </div>
           <div className="text-xs text-muted-foreground leading-tight">{t('management.kpis.variance_desc')}</div>
         </Card>
         {/* Project Counters */}
-        <Card className="p-1.5 mx-1">
-          <div className="flex items-center justify-between gap-2 mb-0.5">
+        <Card className="p-1.5 mx-1 min-w-0 overflow-visible">
+          <div className="flex flex-col gap-0.5 mb-0.5 min-w-0">
             <CardTitle className="text-sm leading-tight font-semibold">{t('management.counters.projects')}</CardTitle>
-            <span className="text-sm font-semibold">{Number(counters.total||0).toLocaleString()}</span>
+            <span className="text-sm font-semibold min-w-0">{Number(counters.total||0).toLocaleString()}</span>
           </div>
           <div className="text-xs text-muted-foreground leading-tight">{t('management.counters.projects_desc')}</div>
         </Card>
-        <Card className="p-1.5 mx-1">
-          <div className="flex items-center justify-between gap-2 mb-0.5">
+        <Card className="p-1.5 mx-1 min-w-0 overflow-visible">
+          <div className="flex flex-col gap-0.5 mb-0.5 min-w-0">
             <CardTitle className="text-sm leading-tight font-semibold">{t('management.counters.with_mous')}</CardTitle>
-            <span className="text-sm font-semibold">{Number(counters.withMou||0).toLocaleString()}</span>
+            <span className="text-sm font-semibold min-w-0">{Number(counters.withMou||0).toLocaleString()}</span>
           </div>
           <div className="text-xs text-muted-foreground leading-tight">{t('management.counters.with_mous_desc')}</div>
         </Card>
-        <Card className="p-1.5 mx-1">
-          <div className="flex items-center justify-between gap-2 mb-0.5">
+        <Card className="p-1.5 mx-1 min-w-0 overflow-visible">
+          <div className="flex flex-col gap-0.5 mb-0.5 min-w-0">
             <CardTitle className="text-sm leading-tight font-semibold">{t('management.counters.with_f4s')}</CardTitle>
-            <span className="text-sm font-semibold">{Number(counters.withF4||0).toLocaleString()}</span>
+            <span className="text-sm font-semibold min-w-0">{Number(counters.withF4||0).toLocaleString()}</span>
           </div>
           <div className="text-xs text-muted-foreground leading-tight">{t('management.counters.with_f4s_desc')}</div>
         </Card>
-        <Card className="p-1.5 mx-1">
-          <div className="flex items-center justify-between gap-2 mb-0.5">
+        <Card className="p-1.5 mx-1 min-w-0 overflow-visible">
+          <div className="flex flex-col gap-0.5 mb-0.5 min-w-0">
             <CardTitle className="text-sm leading-tight font-semibold">{t('management.counters.f4_complete')}</CardTitle>
-            <span className="text-sm font-semibold">{(counters.pctF4*100).toFixed(0)}%</span>
+            <span className="text-sm font-semibold min-w-0">{(counters.pctF4*100).toFixed(0)}%</span>
           </div>
           <div className="text-xs text-muted-foreground leading-tight">{t('management.counters.f4_complete_desc')}</div>
         </Card>
         {/* F5 Program Reporting Cards */}
-        <Card className="p-1.5 mx-1">
-          <div className="flex items-center justify-between gap-2 mb-0.5">
+        <Card className="p-1.5 mx-1 min-w-0 overflow-visible">
+          <div className="flex flex-col gap-0.5 mb-0.5 min-w-0">
             <CardTitle className="text-sm leading-tight font-semibold">{t('management.counters.with_f5s')}</CardTitle>
-            <span className="text-sm font-semibold">{Number(counters.withF5||0).toLocaleString()}</span>
+            <span className="text-sm font-semibold min-w-0">{Number(counters.withF5||0).toLocaleString()}</span>
           </div>
           <div className="text-xs text-muted-foreground leading-tight">{t('management.counters.with_f5s_desc')}</div>
         </Card>
-        <Card className="p-1.5 mx-1">
-          <div className="flex items-center justify-between gap-2 mb-0.5">
+        <Card className="p-1.5 mx-1 min-w-0 overflow-visible">
+          <div className="flex flex-col gap-0.5 mb-0.5 min-w-0">
             <CardTitle className="text-sm leading-tight font-semibold">{t('management.counters.f5_complete')}</CardTitle>
-            <span className="text-sm font-semibold">{(counters.pctF5*100).toFixed(0)}%</span>
+            <span className="text-sm font-semibold min-w-0">{(counters.pctF5*100).toFixed(0)}%</span>
           </div>
           <div className="text-xs text-muted-foreground leading-tight">{t('management.counters.f5_complete_desc')}</div>
         </Card>
-        <Card className="p-1.5 mx-1">
-          <div className="flex items-center justify-between gap-2 mb-0.5">
+        <Card className="p-1.5 mx-1 min-w-0 overflow-visible">
+          <div className="flex flex-col gap-0.5 mb-0.5 min-w-0">
             <CardTitle className="text-sm leading-tight font-semibold">{t('management.counters.pct_tracker')}</CardTitle>
-            <span className="text-sm font-semibold">{counters.pctTracker.toFixed(0)}%</span>
+            <span className="text-sm font-semibold min-w-0">{counters.pctTracker.toFixed(0)}%</span>
           </div>
           <div className="text-xs text-muted-foreground leading-tight">{t('management.counters.pct_tracker_desc')}</div>
         </Card>
-        <Card className="p-1.5 mx-1">
-          <div className="flex items-center justify-between gap-2 mb-0.5">
+        <Card className="p-1.5 mx-1 min-w-0 overflow-visible">
+          <div className="flex flex-col gap-0.5 mb-0.5 min-w-0">
             <CardTitle className="text-sm leading-tight font-semibold">{t('management.counters.total_individuals')}</CardTitle>
-            <span className="text-sm font-semibold">{Number(kpis.f5_total_individuals||0).toLocaleString()}</span>
+            <span className="text-sm font-semibold min-w-0">{Number(kpis.f5_total_individuals||0).toLocaleString()}</span>
           </div>
           <div className="text-xs text-muted-foreground leading-tight">{t('management.counters.total_individuals_desc')}</div>
         </Card>
-        <Card className="p-1.5 mx-1">
-          <div className="flex items-center justify-between gap-2 mb-0.5">
+        <Card className="p-1.5 mx-1 min-w-0 overflow-visible">
+          <div className="flex flex-col gap-0.5 mb-0.5 min-w-0">
             <CardTitle className="text-sm leading-tight font-semibold">{t('management.counters.total_families')}</CardTitle>
-            <span className="text-sm font-semibold">{Number(kpis.f5_total_families||0).toLocaleString()}</span>
+            <span className="text-sm font-semibold min-w-0">{Number(kpis.f5_total_families||0).toLocaleString()}</span>
           </div>
           <div className="text-xs text-muted-foreground leading-tight">{t('management.counters.total_families_desc')}</div>
         </Card>
@@ -796,7 +807,7 @@ export default function ProjectManagement() {
             <div className="py-8 text-center text-muted-foreground">{t('management.table.loading')}</div>
               ) : (
                 <div className="overflow-x-auto w-full">
-                <Table className="min-w-[800px] [&_th]:py-2 [&_td]:py-1.5 [&_th]:px-2 [&_td]:px-2">
+                <Table className="min-w-[760px] text-xs [&_th]:py-1.5 [&_td]:py-1 [&_th]:px-2 [&_td]:px-2 [&_td]:text-xs">
                   <TableHeader>
                     <TableRow>
                   {searchRows || level === 'project' ? (
@@ -881,10 +892,10 @@ export default function ProjectManagement() {
                     {searchRows || level === 'project' ? (
                       <>
                         <TableCell>
-                          <div className="flex items-center gap-2">
+                          <div className="flex flex-col items-start gap-0.5">
                             <span>{r.err_id || '-'}</span>
                             {r.is_historical && (
-                              <span className="px-2 py-0.5 text-xs rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border border-amber-200 dark:border-amber-800">
+                              <span className="px-1.5 py-0.5 text-[10px] rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border border-amber-200 dark:border-amber-800">
                                 Historical
                               </span>
                             )}
@@ -898,7 +909,7 @@ export default function ProjectManagement() {
                         <TableCell>
                           <div className="flex items-center gap-2">
                             <span>{r.state || '-'}</span>
-                            <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                            <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                           </div>
                         </TableCell>
                       </>
@@ -907,7 +918,7 @@ export default function ProjectManagement() {
                         <TableCell>
                           <div className="flex items-center gap-2">
                             <span>{r.err_id || '-'}</span>
-                            <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                            <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                           </div>
                         </TableCell>
                         <TableCell>{r.state || '-'}</TableCell>
@@ -953,13 +964,15 @@ export default function ProjectManagement() {
                     {(searchRows || level === 'project') && (
                         <TableCell className="sticky right-0 bg-card shadow-[-4px_0_6px_rgba(0,0,0,0.04)] whitespace-nowrap px-2">
                           <div className="flex items-center gap-1 flex-nowrap">
+                            {canViewProject && (
                             <Button
                               variant="outline"
                               size="sm"
                               className="text-xs px-1.5 py-0.5 h-6 shrink-0 min-w-0"
                               onClick={(e)=>{ e.stopPropagation(); setDetailProjectId(r.project_id || null); setDetailOpen(true) }}
                             >{t('management.table.view')}</Button>
-                            {!r.is_historical && (
+                            )}
+                            {!r.is_historical && canEditReportingStatus && (
                               <Button
                                 variant="outline"
                                 size="sm"
@@ -967,6 +980,7 @@ export default function ProjectManagement() {
                                 onClick={(e)=>{ e.stopPropagation(); setStatusDialogRow({ project_id: r.project_id, f4_status: r.f4_status || 'waiting', f5_status: r.f5_status || 'waiting' }); setStatusDialogOpen(true) }}
                               >Status</Button>
                             )}
+                            {canAccessF4 && (
                             <Button
                               variant="outline"
                               size="sm"
@@ -998,17 +1012,19 @@ export default function ProjectManagement() {
                                     if (projectF4s.length > 0) {
                                       // If reports exist, show list (edit only)
                                       setF4ListOpen(true);
-                                    } else {
-                                      // If no reports, allow upload
+                                    } else if (canUploadF4) {
+                                      // If no reports and can upload, allow upload
                                       setUploadF4Open(true);
+                                    } else {
+                                      setF4ListOpen(true);
                                     }
                                   } catch (err) {
                                     console.error(err);
-                                    setUploadF4Open(true);
+                                    if (canUploadF4) setUploadF4Open(true);
                                   } finally {
                                     setLoadingReports(false);
                                   }
-                                } else {
+                                } else if (canUploadF4) {
                                   setUploadF4Open(true);
                                 }
                               }}
@@ -1021,7 +1037,8 @@ export default function ProjectManagement() {
                               // For portal projects, use the count from rollup
                               return r.f4_count > 0 ? `(${r.f4_count})` : ''
                             })()}</Button>
-                            {!r.is_historical && (
+                            )}
+                            {!r.is_historical && canAccessF5 && (
                               <Button
                                 variant="outline"
                                 size="sm"
@@ -1039,25 +1056,25 @@ export default function ProjectManagement() {
                                       const projectF5s = (data || []).filter((f5: any) => f5.project_id === projectId);
                                       setF5Reports(projectF5s);
                                       if (projectF5s.length > 0) {
-                                        // If reports exist, show list (edit only)
                                         setF5ListOpen(true);
-                                      } else {
-                                        // If no reports, allow upload
+                                      } else if (canUploadF5) {
                                         setUploadF5Open(true);
+                                      } else {
+                                        setF5ListOpen(true);
                                       }
                                     } catch (err) {
                                       console.error(err);
-                                      setUploadF5Open(true);
+                                      if (canUploadF5) setUploadF5Open(true);
                                     } finally {
                                       setLoadingReports(false);
                                     }
-                                  } else {
+                                  } else if (canUploadF5) {
                                     setUploadF5Open(true);
                                   }
                                 }}
                               >F5 {r.f5_count > 0 ? `(${r.f5_count})` : ''}</Button>
                             )}
-                            {!r.is_historical && r.status !== 'completed' && (
+                            {!r.is_historical && r.status !== 'completed' && canCompleteProject && (
                               <Button
                                 variant="outline"
                                 size="icon"
@@ -1103,19 +1120,20 @@ export default function ProjectManagement() {
           {loading ? (
             <div className="py-8 text-center text-muted-foreground">{t('management.table.loading')}</div>
           ) : (
-            <Table>
+            <div className="overflow-x-auto w-full">
+            <Table className="min-w-[700px] text-xs [&_th]:py-1.5 [&_td]:py-1 [&_th]:px-2 [&_td]:px-2 [&_td]:text-xs">
               <TableHeader>
                 <TableRow>
-                  <TableHead>{t('management.table.grant')}</TableHead>
-                  <TableHead className="text-right">{t('management.table.plan')}</TableHead>
-                  <TableHead className="text-right">{t('management.table.actuals')}</TableHead>
-                  <TableHead className="text-right">{t('management.table.variance')}</TableHead>
-                  <TableHead className="text-right">{t('management.table.burn')}</TableHead>
-                  <TableHead className="w-12">{t('management.table.f4s')}</TableHead>
-                  <TableHead className="text-right w-16" title={t('management.table.f4_complete_tooltip')}>{t('management.table.f4_complete')}</TableHead>
-                  <TableHead className="w-12">{t('management.table.f5s')}</TableHead>
-                  <TableHead className="text-right w-16" title={t('management.table.f5_complete_tooltip')}>{t('management.table.f5_complete')}</TableHead>
-                  <TableHead className="text-right w-24 whitespace-nowrap" title={t('management.table.pct_tracker_tooltip')}>{t('management.table.pct_tracker')}</TableHead>
+                  <TableHead className="text-xs">{t('management.table.grant')}</TableHead>
+                  <TableHead className="text-right text-xs">{t('management.table.plan')}</TableHead>
+                  <TableHead className="text-right text-xs">{t('management.table.actuals')}</TableHead>
+                  <TableHead className="text-right text-xs">{t('management.table.variance')}</TableHead>
+                  <TableHead className="text-right text-xs">{t('management.table.burn')}</TableHead>
+                  <TableHead className="w-10 text-xs">{t('management.table.f4s')}</TableHead>
+                  <TableHead className="text-right w-12 text-xs" title={t('management.table.f4_complete_tooltip')}>{t('management.table.f4_complete')}</TableHead>
+                  <TableHead className="w-10 text-xs">{t('management.table.f5s')}</TableHead>
+                  <TableHead className="text-right w-12 text-xs" title={t('management.table.f5_complete_tooltip')}>{t('management.table.f5_complete')}</TableHead>
+                  <TableHead className="text-right w-20 text-xs whitespace-nowrap" title={t('management.table.pct_tracker_tooltip')}>{t('management.table.pct_tracker')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -1195,6 +1213,7 @@ export default function ProjectManagement() {
                 )}
               </TableBody>
             </Table>
+            </div>
           )}
         </CardContent>
       </Card>
@@ -1335,6 +1354,7 @@ export default function ProjectManagement() {
                       Total Expenses: {Number(f4.total_expenses || 0).toLocaleString()} USD
                     </div>
                   </div>
+                  {canViewF4 && (
                   <Button
                     size="sm"
                     onClick={() => {
@@ -1343,6 +1363,7 @@ export default function ProjectManagement() {
                       setViewF4Open(true);
                     }}
                   >View/Edit</Button>
+                  )}
                 </div>
               ))
             )}
@@ -1368,6 +1389,7 @@ export default function ProjectManagement() {
                       Activities: {f5.activities_count || 0}
                     </div>
                   </div>
+                  {canViewF5 && (
                   <Button
                     size="sm"
                     onClick={() => {
@@ -1376,6 +1398,7 @@ export default function ProjectManagement() {
                       setViewF5Open(true);
                     }}
                   >View/Edit</Button>
+                  )}
                 </div>
               ))
             )}

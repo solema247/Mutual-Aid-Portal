@@ -33,8 +33,8 @@ const MODULE_LABELS: Record<string, string> = {
   f1: 'F1 Work Plans',
   f2: 'F2 Approvals',
   f3: 'F3 MOUs',
-  f4: 'F4 Reporting',
-  f5: 'F5 Reporting',
+  f4_f5: 'F4 & F5 Reporting',
+  management: 'Project Management',
   users: 'User Management',
   grants: 'Grant Management'
 }
@@ -68,7 +68,7 @@ export default function PermissionsManager({
   const [loadingUser, setLoadingUser] = useState(false)
   const [loadingFunctions, setLoadingFunctions] = useState(true)
   const [loadingUsers, setLoadingUsers] = useState(true)
-  const moduleOrder = ['f1', 'f2', 'f3', 'f4', 'f5', 'users', 'grants'] as const
+  const moduleOrder = ['f1', 'f2', 'f3', 'f4_f5', 'management', 'users', 'grants'] as const
   const [openModules, setOpenModules] = useState<Set<string>>(
     () => new Set(moduleOrder)
   )
@@ -215,7 +215,11 @@ export default function PermissionsManager({
             ) : (
               <div className="space-y-2">
                 {moduleOrder.map((moduleKey) => {
-                  const rawFuncs = functionsByModule[moduleKey]
+                  // Combine F4 and F5 into one section (same page)
+                  const rawFuncs =
+                    moduleKey === 'f4_f5'
+                      ? [...(functionsByModule['f4'] || []), ...(functionsByModule['f5'] || [])]
+                      : functionsByModule[moduleKey]
                   if (!rawFuncs?.length) return null
                   // Hide f1_assign_grant from permissions UI (not adjustable per user)
                   const funcs =

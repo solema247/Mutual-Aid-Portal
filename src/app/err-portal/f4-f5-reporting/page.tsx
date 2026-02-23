@@ -3,6 +3,7 @@
 import { useEffect, useState, Suspense } from 'react'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
+import { useAllowedFunctions } from '@/hooks/useAllowedFunctions'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Card, CardContent } from '@/components/ui/card'
@@ -46,6 +47,11 @@ function F4F5ReportingPageContent() {
   const { t } = useTranslation(['f4f5'])
   const searchParams = useSearchParams()
   const router = useRouter()
+  const { can } = useAllowedFunctions()
+  const canUploadF4 = can('f4_upload')
+  const canUploadF5 = can('f5_upload')
+  const canViewF4 = can('f4_view_report')
+  const canViewF5 = can('f5_view_report')
   const [tab, setTab] = useState<'f4'|'f5'>('f4')
   const [rows, setRows] = useState<F4Row[]>([])
   const [loading, setLoading] = useState(false)
@@ -134,7 +140,9 @@ function F4F5ReportingPageContent() {
         <TabsContent value="f4" className="mt-4 space-y-4">
           <div className="flex items-center justify-between">
             <div className="text-lg font-semibold">{t('f4.title')}</div>
+            {canUploadF4 && (
             <Button className="bg-green-700 hover:bg-green-800 text-white font-bold" onClick={() => { try { window.localStorage.removeItem('err_minimized_modal'); window.localStorage.removeItem('err_minimized_payload'); window.localStorage.removeItem('err_restore'); window.dispatchEvent(new CustomEvent('err_minimized_modal_change')) } catch {}; setUploadOpen(true) }}>{t('f4.upload')}</Button>
+            )}
           </div>
 
           <div className="flex flex-wrap md:flex-nowrap gap-2 items-center">
@@ -224,7 +232,9 @@ function F4F5ReportingPageContent() {
                       <TableCell>{r.attachments_count}</TableCell>
                       <TableCell>{new Date(r.updated_at).toLocaleDateString()}</TableCell>
                       <TableCell>
+                        {canViewF4 && (
                         <Button variant="outline" size="sm" onClick={()=>{ setViewId(r.id); setViewOpen(true) }}>{t('f4.view')}</Button>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))}
@@ -240,7 +250,9 @@ function F4F5ReportingPageContent() {
         <TabsContent value="f5" className="mt-4 space-y-4">
           <div className="flex items-center justify-between">
             <div className="text-lg font-semibold">{t('f5.title')}</div>
+            {canUploadF5 && (
             <Button className="bg-green-700 hover:bg-green-800 text-white font-bold" onClick={() => { try { window.localStorage.removeItem('err_minimized_modal'); window.localStorage.removeItem('err_minimized_payload'); window.localStorage.removeItem('err_restore'); window.dispatchEvent(new CustomEvent('err_minimized_modal_change')) } catch {}; setUploadF5Open(true) }}>{t('f5.upload')}</Button>
+            )}
           </div>
 
           <div className="flex flex-wrap md:flex-nowrap gap-2 items-center">
@@ -324,7 +336,9 @@ function F4F5ReportingPageContent() {
                       <TableCell className="text-right">{Number(r.activities_count || 0).toLocaleString()}</TableCell>
                       <TableCell>{new Date(r.updated_at).toLocaleDateString()}</TableCell>
                       <TableCell>
+                        {canViewF5 && (
                         <Button variant="outline" size="sm" onClick={()=>{ setViewF5Id(r.id); setViewF5Open(true) }}>{t('f5.view')}</Button>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))}

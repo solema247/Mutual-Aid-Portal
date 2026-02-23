@@ -17,10 +17,15 @@
   { "code": "f3_manage_payment", "module": "f3", "label_ar": "إدارة الدفع", "label_en": "Manage payment", "description_en": "View and add payment confirmations for an MOU on the F3 page." },
   { "code": "f3_upload_signed_mou", "module": "f3", "label_ar": "رفع MOU موقع", "label_en": "Upload signed MOU", "description_en": "Upload or view the signed MOU PDF for an MOU on the F3 page." },
   { "code": "f4_upload", "module": "f4", "label_ar": "رفع تقرير F4", "label_en": "Upload F4 report", "description_en": "Upload F4 financial reports." },
+  { "code": "f4_view_report", "module": "f4", "label_ar": "عرض/تعديل تقرير F4", "label_en": "View/edit F4 report", "description_en": "View and edit F4 financial reports on the F4–F5 Reporting and Project Management pages." },
   { "code": "f5_upload", "module": "f5", "label_ar": "رفع تقرير F5", "label_en": "Upload F5 report", "description_en": "Upload F5 program reports." },
+  { "code": "f5_view_report", "module": "f5", "label_ar": "عرض/تعديل تقرير F5", "label_en": "View/edit F5 report", "description_en": "View and edit F5 program reports on the F4–F5 Reporting and Project Management pages." },
   { "code": "users_approve", "module": "users", "label_ar": "الموافقة على المستخدم", "label_en": "Approve user", "description_en": "Approve pending user registrations." },
   { "code": "users_manage_permissions", "module": "users", "label_ar": "إدارة صلاحيات الوظائف", "label_en": "Manage function permissions", "description_en": "Edit which function permissions each user has (this page)." },
   { "code": "users_manage_access", "module": "users", "label_ar": "إدارة حقوق الوصول", "label_en": "Manage access rights", "description_en": "Edit user roles and state visibility (access rights)." },
   { "code": "grant_create_cycle", "module": "grants", "label_ar": "إنشاء دورة منح", "label_en": "Create grant cycle", "description_en": "Create a new grant cycle." },
-  { "code": "grant_edit_call", "module": "grants", "label_ar": "تعديل دعوة المنح", "label_en": "Edit grant call", "description_en": "Edit grant call details." }
+  { "code": "grant_edit_call", "module": "grants", "label_ar": "تعديل دعوة المنح", "label_en": "Edit grant call", "description_en": "Edit grant call details." },
+  { "code": "management_view_project", "module": "management", "label_ar": "عرض المشروع", "label_en": "View project", "description_en": "View project details on the Project Management page." },
+  { "code": "management_edit_reporting_status", "module": "management", "label_ar": "تغيير حالة F4/F5", "label_en": "Change F4/F5 status", "description_en": "Change F4 and F5 reporting status for a project on the Project Management page." },
+  { "code": "management_complete_project", "module": "management", "label_ar": "إكمال المشروع", "label_en": "Complete project", "description_en": "Mark a project as complete on the Project Management page." }
 ]
