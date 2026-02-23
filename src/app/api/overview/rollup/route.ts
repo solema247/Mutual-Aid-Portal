@@ -97,7 +97,7 @@ export async function GET(request: Request) {
     // Build project filter (include more statuses to catch F5 projects and completed projects)
     let projectQuery = supabase
       .from('err_projects')
-      .select('id, state, grant_call_id, grant_grid_id, grant_id, emergency_rooms (id, name, name_ar, err_code), planned_activities, expenses, source, status, funding_status, mou_id, f4_status, f5_status')
+      .select('id, state, grant_call_id, grant_grid_id, grant_id, emergency_rooms (id, name, name_ar, err_code), planned_activities, expenses, source, status, funding_status, mou_id, f4_status, f5_status, created_at')
       .in('status', ['approved', 'active', 'pending', 'completed'])
       .in('funding_status', ['committed', 'allocated'])
 
@@ -126,7 +126,7 @@ export async function GET(request: Request) {
     const allHistoricalData = await fetchAllRows(
       supabase,
       'activities_raw_import',
-      'id,"ERR CODE","ERR Name","State","Project Donor","USD","MOU Signed","F4","F5","Date Report Completed","Serial Number","Target (Ind.)","Target (Fam.)"'
+      'id,"ERR CODE","ERR Name","State","Project Donor","USD","MOU Signed","F4","F5","Date Report Completed","Date Transfer","Serial Number","Target (Ind.)","Target (Fam.)"'
     )
 
     // Filter historical data by state AFTER normalization (like Pool Overview By State)
@@ -289,7 +289,8 @@ export async function GET(request: Request) {
         status: p.status || null,
         is_historical: false,
         f4_status,
-        f5_status
+        f5_status,
+        filter_date: p.created_at || agg.last || null
       }
     })
 
@@ -305,6 +306,7 @@ export async function GET(request: Request) {
       // Check if F5 column is 'Completed' (case-insensitive)
       const f5Completed = f5Value && String(f5Value).trim().toLowerCase() === 'completed'
       const reportDate = row['Date Report Completed'] || row['date_report_completed'] || row['Date Report Completed']
+      const dateTransfer = row['Date Transfer'] || row['date_transfer'] || null
       const projectDonor = row['Project Donor'] || row['project_donor'] || row['Project Donor'] || null
       
       // Get F4 count from err_summary for this historical project (F4s uploaded through portal)
@@ -347,7 +349,8 @@ export async function GET(request: Request) {
         last_f5_date: reportDate || null, // Use same date if available
         is_historical: true,
         f4_status, // For % Tracker: completed | waiting | under review | partial
-        f5_status // For % Tracker: same status values, no actual vs plan
+        f5_status, // For % Tracker: same status values, no actual vs plan
+        filter_date: dateTransfer || reportDate || null // For date filter: Date Transfer or Date Report Completed
       }
     })
 

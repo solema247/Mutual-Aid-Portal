@@ -46,6 +46,13 @@ export default function ProjectManagement() {
   const grantSerialSearchRef = useRef<HTMLInputElement>(null)
   const shouldSelectAllRef = useRef<boolean>(false)
 
+  // Table filters: Historical/New, State, Month, F4 Status, F5 Status
+  const [filterHistoricalNew, setFilterHistoricalNew] = useState<'all' | 'historical' | 'new'>('all')
+  const [filterState, setFilterState] = useState<string>('all')
+  const [filterMonth, setFilterMonth] = useState<string>('all')
+  const [filterF4Status, setFilterF4Status] = useState<string>('all')
+  const [filterF5Status, setFilterF5Status] = useState<string>('all')
+
   // Drill-down state
   const [level, setLevel] = useState<'state'|'room'|'project'>('state')
   const [selectedStateName, setSelectedStateName] = useState<string>('')
@@ -186,52 +193,104 @@ export default function ProjectManagement() {
     loadRollup()
   }, [])
 
-  // Filter rows by grant and grant serial search
+  const CUTOFF_2026 = new Date('2026-01-01T00:00:00Z').getTime()
+
+  const normalizedF4 = (s: any) => (s != null ? String(s).trim().toLowerCase() : '') || ''
+  const normalizedF5 = (s: any) => (s != null ? String(s).trim().toLowerCase() : '') || ''
+
+  // Filter rows by Historical/New, State, Month, F4 Status, F5 Status, grant, and grant serial search
   useEffect(() => {
     let filtered = allRows
-    
-    // First apply grant filter
+
+    // 1. Historical (before 2026) or New (2026+)
+    if (filterHistoricalNew !== 'all') {
+      filtered = filtered.filter((r: any) => {
+        const d = r.filter_date
+        if (!d) return false
+        const t = new Date(d).getTime()
+        if (filterHistoricalNew === 'historical') return t < CUTOFF_2026
+        return t >= CUTOFF_2026 // new
+      })
+    }
+
+    // 2. State
+    if (filterState !== 'all') {
+      filtered = filtered.filter((r: any) => (r.state || '') === filterState)
+    }
+
+    // 3. Date filter by month (YYYY-MM)
+    if (filterMonth !== 'all') {
+      filtered = filtered.filter((r: any) => {
+        const d = r.filter_date
+        if (!d) return false
+        const dt = new Date(d)
+        const y = dt.getFullYear()
+        const m = String(dt.getMonth() + 1).padStart(2, '0')
+        return `${y}-${m}` === filterMonth
+      })
+    }
+
+    // 4. F4 Status
+    if (filterF4Status !== 'all') {
+      filtered = filtered.filter((r: any) => normalizedF4(r.f4_status) === filterF4Status)
+    }
+
+    // 5. F5 Status
+    if (filterF5Status !== 'all') {
+      filtered = filtered.filter((r: any) => normalizedF5(r.f5_status) === filterF5Status)
+    }
+
+    // 6. Grant filter
     if (selectedGrantId === 'all') {
-      filtered = allRows
+      // no change
     } else if (selectedGrantId === 'unassigned') {
-      // Show only current projects with null grant_grid_id
-      filtered = allRows.filter((r: any) => !r.is_historical && !r.grant_grid_id)
+      filtered = filtered.filter((r: any) => !r.is_historical && !r.grant_grid_id)
     } else {
-      // Filter by selected grant
       const selectedGrant = grants.find(g => g.id === selectedGrantId)
       if (selectedGrant) {
-        filtered = allRows.filter((r: any) => {
+        filtered = filtered.filter((r: any) => {
           if (r.is_historical) {
-            // Historical projects: filter by project_donor matching grant_id (text comparison)
             const projectDonor = r.project_donor ? String(r.project_donor).trim() : null
             const grantId = selectedGrant.grant_id ? String(selectedGrant.grant_id).trim() : null
             return projectDonor === grantId
-          } else {
-            // Current projects: filter by grant_grid_id matching grant's id
-            return r.grant_grid_id === selectedGrant.id
           }
+          return r.grant_grid_id === selectedGrant.id
         })
-      } else {
-        filtered = allRows
       }
     }
-    
-    // Then apply grant serial search filter if provided
+
+    // 7. Grant serial search
     if (grantSerialSearch.trim()) {
       const searchTerm = grantSerialSearch.trim().toLowerCase()
       filtered = filtered.filter((r: any) => {
         const grantSerial = r.grant_serial_id ? String(r.grant_serial_id).toLowerCase().trim() : ''
         if (!grantSerial) return false
-        // Use startsWith for flexible but precise matching
-        // "LCC-P2H-JA-1224-0001-319" will match that exact serial
-        // "LCC-P2H-JA-1224" will match all JA projects starting with that prefix
-        // But "LCC-P2H-JA-1224-0001-319" will NOT match "LCC-P2H-KA-1224-0001-220"
         return grantSerial.startsWith(searchTerm)
       })
     }
-    
+
     setRows(filtered)
-  }, [selectedGrantId, allRows, grants, grantSerialSearch])
+  }, [filterHistoricalNew, filterState, filterMonth, filterF4Status, filterF5Status, selectedGrantId, allRows, grants, grantSerialSearch])
+
+  // Available options for filter dropdowns (from allRows)
+  const filterOptions = useMemo(() => {
+    const states = Array.from(new Set((allRows || []).map((r: any) => r.state || '').filter(Boolean))).sort()
+    const months = Array.from(
+      new Set(
+        (allRows || [])
+          .map((r: any) => {
+            const d = r.filter_date
+            if (!d) return null
+            const dt = new Date(d)
+            return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}`
+          })
+          .filter((m): m is string => Boolean(m))
+      )
+    ).sort()
+    const f4Statuses = Array.from(new Set((allRows || []).map((r: any) => normalizedF4(r.f4_status)).filter(Boolean))).sort()
+    const f5Statuses = Array.from(new Set((allRows || []).map((r: any) => normalizedF5(r.f5_status)).filter(Boolean))).sort()
+    return { states, months, f4Statuses, f5Statuses }
+  }, [allRows])
 
   // Tracker score: F4 half (max 0.5) + F5 half (max 0.5).
   // Historical F4: Completed+actual>0 → actual/plan; else Completed → 0.5; Partial/Under Review → 0.25; Waiting → 0.
@@ -714,15 +773,84 @@ export default function ProjectManagement() {
               </div>
             </CardHeader>
             <CardContent>
-          {/* Grant Filter and Search */}
-          <div className="mb-4 flex items-center gap-4 flex-wrap">
-            <div className="flex items-center gap-2">
-              <Label htmlFor="grant-filter" className="text-sm font-medium">Filter by Grant:</Label>
+          {/* Table filters */}
+          <div className="mb-4 flex items-end gap-2 flex-wrap text-xs">
+            <div className="flex flex-col gap-1 shrink-0">
+              <Label className="text-xs font-medium whitespace-nowrap">Historical / New</Label>
+              <Select value={filterHistoricalNew} onValueChange={(v: 'all' | 'historical' | 'new') => setFilterHistoricalNew(v)}>
+                <SelectTrigger className="w-[120px] h-8 text-xs">
+                  <SelectValue placeholder="Historical / New" />
+                </SelectTrigger>
+                <SelectContent className="text-xs">
+                  <SelectItem value="all">All</SelectItem>
+                  <SelectItem value="historical">Historical (before 2026)</SelectItem>
+                  <SelectItem value="new">New (2026+)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex flex-col gap-1 shrink-0">
+              <Label className="text-xs font-medium whitespace-nowrap">State</Label>
+              <Select value={filterState} onValueChange={setFilterState}>
+                <SelectTrigger className="w-[110px] h-8 text-xs">
+                  <SelectValue placeholder="State" />
+                </SelectTrigger>
+                <SelectContent className="text-xs">
+                  <SelectItem value="all">All States</SelectItem>
+                  {filterOptions.states.map((s) => (
+                    <SelectItem key={s} value={s}>{s}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex flex-col gap-1 shrink-0">
+              <Label className="text-xs font-medium whitespace-nowrap">Month</Label>
+              <Select value={filterMonth} onValueChange={setFilterMonth}>
+                <SelectTrigger className="w-[95px] h-8 text-xs">
+                  <SelectValue placeholder="Month" />
+                </SelectTrigger>
+                <SelectContent className="text-xs">
+                  <SelectItem value="all">All months</SelectItem>
+                  {filterOptions.months.map((m) => (
+                    <SelectItem key={m} value={m}>{m}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex flex-col gap-1 shrink-0">
+              <Label className="text-xs font-medium whitespace-nowrap">F4 Status</Label>
+              <Select value={filterF4Status} onValueChange={setFilterF4Status}>
+                <SelectTrigger className="w-[95px] h-8 text-xs">
+                  <SelectValue placeholder="F4 Status" />
+                </SelectTrigger>
+                <SelectContent className="text-xs">
+                  <SelectItem value="all">All</SelectItem>
+                  {filterOptions.f4Statuses.map((s) => (
+                    <SelectItem key={s} value={s}>{s}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex flex-col gap-1 shrink-0">
+              <Label className="text-xs font-medium whitespace-nowrap">F5 Status</Label>
+              <Select value={filterF5Status} onValueChange={setFilterF5Status}>
+                <SelectTrigger className="w-[95px] h-8 text-xs">
+                  <SelectValue placeholder="F5 Status" />
+                </SelectTrigger>
+                <SelectContent className="text-xs">
+                  <SelectItem value="all">All</SelectItem>
+                  {filterOptions.f5Statuses.map((s) => (
+                    <SelectItem key={s} value={s}>{s}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex flex-col gap-1 shrink-0">
+              <Label htmlFor="grant-filter" className="text-xs font-medium whitespace-nowrap">Grant</Label>
               <Select value={selectedGrantId} onValueChange={setSelectedGrantId}>
-                <SelectTrigger id="grant-filter" className="w-[300px]">
+                <SelectTrigger id="grant-filter" className="w-[200px] h-8 text-xs">
                   <SelectValue placeholder="All Grants" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="text-xs">
                   <SelectItem value="all">All Grants</SelectItem>
                   <SelectItem value="unassigned">Unassigned</SelectItem>
                   {grants.map((grant) => (
@@ -733,13 +861,13 @@ export default function ProjectManagement() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="flex items-center gap-2">
-              <Label htmlFor="grant-serial-search" className="text-sm font-medium">Search by Grant Serial:</Label>
+            <div className="flex flex-col gap-1 shrink-0">
+              <Label htmlFor="grant-serial-search" className="text-xs font-medium whitespace-nowrap">Grant Serial</Label>
               <Input
                 ref={grantSerialSearchRef}
                 id="grant-serial-search"
                 type="text"
-                placeholder="Enter grant serial..."
+                placeholder="Search by Grant Serial"
                 value={grantSerialSearch}
                 onChange={(e) => {
                   setGrantSerialSearch(e.target.value)
@@ -780,7 +908,7 @@ export default function ProjectManagement() {
                   e.currentTarget.select()
                   shouldSelectAllRef.current = false
                 }}
-                className="w-[250px] select-text [&::selection]:!bg-blue-200 [&::selection]:!text-blue-900 dark:[&::selection]:!bg-blue-800 dark:[&::selection]:!text-blue-100"
+                className="w-[180px] h-8 text-xs select-text [&::selection]:!bg-blue-200 [&::selection]:!text-blue-900 dark:[&::selection]:!bg-blue-800 dark:[&::selection]:!text-blue-100"
               />
             </div>
           </div>
