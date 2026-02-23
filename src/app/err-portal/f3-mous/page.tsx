@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Eye, Upload, Receipt, FileSignature, FileCheck, Link2, X, Plus, RefreshCw, ListOrdered } from 'lucide-react'
+import { Eye, Upload, Receipt, FileSignature, FileCheck, Link2, X, Plus, RefreshCw, ListOrdered, ArrowUp, ArrowDown } from 'lucide-react'
 import dynamic from 'next/dynamic'
 import { aggregateObjectives, aggregateBeneficiaries, aggregatePlannedActivities, aggregatePlannedActivitiesDetailed, aggregateLocations, getBankingDetails, getBudgetTable, getBudgetTableData, formatProjectPlannedActivities, formatProjectSummary } from '@/lib/mou-aggregation'
 import HierarchicalBudgetTable from './components/HierarchicalBudgetTable'
@@ -105,6 +105,8 @@ export default function F3MOUsPage() {
   const [mouProjectCounts, setMouProjectCounts] = useState<Record<string, number>>({})
   const [selectedState, setSelectedState] = useState<string>('all')
   const [availableStates, setAvailableStates] = useState<string[]>([])
+  const [selectedGrantId, setSelectedGrantId] = useState<string>('all')
+  const [availableGrants, setAvailableGrants] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
   const [previewOpen, setPreviewOpen] = useState(false)
   const [activeMou, setActiveMou] = useState<MOU | null>(null)
@@ -175,6 +177,7 @@ export default function F3MOUsPage() {
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1)
   const itemsPerPage = 10
+  const [sortCreatedOrder, setSortCreatedOrder] = useState<'asc' | 'desc'>('desc')
   const [currentUser, setCurrentUser] = useState<{ role: string } | null>(null)
   const { can } = useAllowedFunctions()
   const canEditMou = can('f3_edit_mou')
@@ -275,6 +278,7 @@ export default function F3MOUsPage() {
   const fetchMous = async () => {
     try {
       setLoading(true)
+      setAvailableGrants([])
       const params = new URLSearchParams()
       if (selectedState && selectedState !== 'all') params.append('state', selectedState)
       
@@ -362,10 +366,14 @@ export default function F3MOUsPage() {
             })
             
             setMouGrantIds(grantIdMap)
+            setAvailableGrants(Array.from(new Set(Object.values(grantIdMap).filter(Boolean))).sort())
+          } else {
+            setAvailableGrants([])
           }
         }
       } catch (error) {
         console.error('Error fetching grant_ids for MOUs:', error)
+        setAvailableGrants([])
       }
     } catch (e) {
       console.error('Failed to load MOUs', e)
@@ -932,6 +940,21 @@ export default function F3MOUsPage() {
     }
   }, [assignModalOpen, reassignModalOpen, mouProjects])
 
+  const filteredMous = useMemo(() => {
+    if (selectedGrantId === 'all') return mous
+    return mous.filter(m => mouGrantIds[m.id] === selectedGrantId)
+  }, [mous, mouGrantIds, selectedGrantId])
+
+  const sortedMous = useMemo(() => {
+    const list = [...filteredMous]
+    list.sort((a, b) => {
+      const da = new Date(a.created_at).getTime()
+      const db = new Date(b.created_at).getTime()
+      return sortCreatedOrder === 'desc' ? db - da : da - db
+    })
+    return list
+  }, [filteredMous, sortCreatedOrder])
+
   return (
     <div className="max-w-[1600px] w-full mx-auto p-6 space-y-6">
       <Card className="w-full">
@@ -939,7 +962,7 @@ export default function F3MOUsPage() {
           <CardTitle>{t('f3:title')}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4 w-full overflow-x-auto">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <Select value={selectedState} onValueChange={setSelectedState}>
               <SelectTrigger className="w-[180px]">
                 <SelectValue placeholder="Filter by State" />
@@ -948,6 +971,17 @@ export default function F3MOUsPage() {
                 <SelectItem value="all">All States</SelectItem>
                 {availableStates.map(state => (
                   <SelectItem key={state} value={state}>{state}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={selectedGrantId} onValueChange={(v) => { setSelectedGrantId(v); setCurrentPage(1) }}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Filter by Grant ID" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Grants</SelectItem>
+                {availableGrants.map(grantId => (
+                  <SelectItem key={grantId} value={grantId}>{grantId}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -964,16 +998,26 @@ export default function F3MOUsPage() {
                     <TableHead className="min-w-[100px] px-2">Grant ID</TableHead>
                     <TableHead className="min-w-[120px] px-2">{t('f3:headers.err_state')}</TableHead>
                     <TableHead className="text-right min-w-[70px] px-2">{t('f3:headers.total')}</TableHead>
-                    <TableHead className="min-w-[80px] px-2">{t('f3:headers.created')}</TableHead>
+                    <TableHead className="min-w-[80px] px-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-auto py-1 px-1 -ml-1 text-xs font-medium hover:bg-muted/60"
+                        onClick={() => { setSortCreatedOrder(o => o === 'desc' ? 'asc' : 'desc'); setCurrentPage(1) }}
+                      >
+                        {t('f3:headers.created')}
+                        {sortCreatedOrder === 'desc' ? <ArrowDown className="ml-1 h-3.5 w-3.5 inline" /> : <ArrowUp className="ml-1 h-3.5 w-3.5 inline" />}
+                      </Button>
+                    </TableHead>
                     <TableHead className="min-w-[260px] px-2">{t('f3:headers.actions')}</TableHead>
                   </TableRow>
                 </TableHeader>
               <TableBody>
                 {(() => {
-                    const totalPages = Math.ceil(mous.length / itemsPerPage)
+                    const totalPages = Math.ceil(sortedMous.length / itemsPerPage)
                     const startIndex = (currentPage - 1) * itemsPerPage
                     const endIndex = startIndex + itemsPerPage
-                    const paginatedMous = mous.slice(startIndex, endIndex)
+                    const paginatedMous = sortedMous.slice(startIndex, endIndex)
                     
                     return paginatedMous.map(m => (
                       <TableRow key={m.id} className="[&>td]:py-1.5 [&>td]:px-2 [&>td]:text-xs">
@@ -1236,10 +1280,10 @@ export default function F3MOUsPage() {
               </Table>
               
               {/* Pagination Controls */}
-              {mous.length > itemsPerPage && (
+              {sortedMous.length > itemsPerPage && (
                 <div className="flex items-center justify-between mt-4">
                   <div className="text-sm text-muted-foreground">
-                    Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, mous.length)} of {mous.length} MOUs
+                    Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, sortedMous.length)} of {sortedMous.length} MOUs
                   </div>
                   <div className="flex items-center gap-2">
                     <Button
@@ -1253,8 +1297,8 @@ export default function F3MOUsPage() {
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => setCurrentPage(prev => Math.min(Math.ceil(mous.length / itemsPerPage), prev + 1))}
-                      disabled={currentPage >= Math.ceil(mous.length / itemsPerPage)}
+                      onClick={() => setCurrentPage(prev => Math.min(Math.ceil(sortedMous.length / itemsPerPage), prev + 1))}
+                      disabled={currentPage >= Math.ceil(sortedMous.length / itemsPerPage)}
                     >
                       Next
                     </Button>
