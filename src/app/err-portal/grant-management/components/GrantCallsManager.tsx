@@ -576,45 +576,45 @@ export default function GrantCallsManager() {
       {!isCollapsed && (
         <CardContent>
           <div className="overflow-x-auto">
-            <Table>
+            <Table className="min-w-[800px] text-xs [&_th]:py-1.5 [&_th]:px-2 [&_td]:py-1 [&_td]:px-2">
             <TableHeader>
               <TableRow>
-                <TableHead>Grant ID</TableHead>
-                <TableHead>Project Name</TableHead>
-                <TableHead>Start Date</TableHead>
-                <TableHead>End Date</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Total Transferred (USD)</TableHead>
-                <TableHead>Sum Activity Amount (USD)</TableHead>
-                <TableHead>Sum Transfer Fee (USD)</TableHead>
-                {(currentUser?.role === 'admin' || currentUser?.role === 'superadmin') && GRANTS_TABLE_EDIT_ENABLED && isEditMode && <TableHead>Actions</TableHead>}
+                <TableHead className="px-2">Grant ID</TableHead>
+                <TableHead className="px-2">Project Name</TableHead>
+                <TableHead className="px-2">Start Date</TableHead>
+                <TableHead className="px-2">End Date</TableHead>
+                <TableHead className="px-2">Status</TableHead>
+                <TableHead className="px-2">Total Transferred (USD)</TableHead>
+                <TableHead className="px-2">Sum Activity Amount (USD)</TableHead>
+                <TableHead className="px-2">Sum Transfer Fee (USD)</TableHead>
+                {(currentUser?.role === 'admin' || currentUser?.role === 'superadmin') && GRANTS_TABLE_EDIT_ENABLED && isEditMode && <TableHead className="px-2">Actions</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
               {grants.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={(currentUser?.role === 'admin' || currentUser?.role === 'superadmin') && GRANTS_TABLE_EDIT_ENABLED && isEditMode ? 10 : 9} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={(currentUser?.role === 'admin' || currentUser?.role === 'superadmin') && GRANTS_TABLE_EDIT_ENABLED && isEditMode ? 10 : 9} className="text-center py-6 text-muted-foreground text-xs">
                     No grants found
                   </TableCell>
                 </TableRow>
               ) : (
                 grants.map((grant) => (
                   <TableRow key={grant.id}>
-                    <TableCell className="font-medium">{grant.grant_id}</TableCell>
-                    <TableCell>{grant.project_name || '—'}</TableCell>
-                    <TableCell>{formatDate(grant.grant_start_date)}</TableCell>
-                    <TableCell>{formatDate(grant.grant_end_date)}</TableCell>
+                    <TableCell className="font-medium whitespace-nowrap">{grant.grant_id}</TableCell>
+                    <TableCell className="max-w-[140px] truncate" title={grant.project_name || undefined}>{grant.project_name || '—'}</TableCell>
+                    <TableCell className="whitespace-nowrap">{formatDate(grant.grant_start_date)}</TableCell>
+                    <TableCell className="whitespace-nowrap">{formatDate(grant.grant_end_date)}</TableCell>
                     <TableCell>
-                      <Badge variant={grant.status === 'Active' ? 'default' : 'secondary'}>
+                      <Badge variant={grant.status === 'Active' ? 'default' : 'secondary'} className="text-[10px] px-1.5 py-0">
                         {grant.status || '—'}
                       </Badge>
                     </TableCell>
-                    <TableCell>{formatCurrency(grant.total_transferred_amount_usd)}</TableCell>
-                    <TableCell>{formatCurrency(grant.sum_activity_amount)}</TableCell>
-                    <TableCell>{formatCurrency(grant.sum_transfer_fee_amount)}</TableCell>
+                    <TableCell className="text-right whitespace-nowrap">{formatCurrency(grant.total_transferred_amount_usd)}</TableCell>
+                    <TableCell className="text-right whitespace-nowrap">{formatCurrency(grant.sum_activity_amount)}</TableCell>
+                    <TableCell className="text-right whitespace-nowrap">{formatCurrency(grant.sum_transfer_fee_amount)}</TableCell>
                     {(currentUser?.role === 'admin' || currentUser?.role === 'superadmin') && GRANTS_TABLE_EDIT_ENABLED && isEditMode && (
                       <TableCell>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1">
                           <Button
                             variant="ghost"
                             size="icon"
@@ -622,17 +622,17 @@ export default function GrantCallsManager() {
                               handleEdit(grant)
                               setIsFormOpen(true)
                             }}
-                            className="h-8 w-8"
+                            className="h-7 w-7"
                           >
-                            <Pencil className="h-4 w-4" />
+                            <Pencil className="h-3.5 w-3.5" />
                           </Button>
                           <Button
                             variant="ghost"
                             size="icon"
                             onClick={() => handleDeleteClick(grant.id)}
-                            className="h-8 w-8 text-destructive hover:text-destructive/80"
+                            className="h-7 w-7 text-destructive hover:text-destructive/80"
                           >
-                            <Trash2 className="h-4 w-4" />
+                            <Trash2 className="h-3.5 w-3.5" />
                           </Button>
                         </div>
                       </TableCell>

@@ -135,64 +135,64 @@ export default function PoolOverviewByState() {
         </div>
       </CardHeader>
       {!isCollapsed && (
-        <CardContent>
-          <Table>
+        <CardContent className="p-0 overflow-x-auto">
+          <Table className="min-w-[700px] text-xs [&_th]:py-1.5 [&_th]:px-2 [&_td]:py-1 [&_td]:px-2">
             <TableHeader>
               <TableRow>
-                <TableHead>
+                <TableHead className="px-2">
                   <button
                     onClick={() => handleSort('state_name')}
                     className="flex items-center hover:text-primary cursor-pointer"
                   >
-                    <div className="font-semibold">State</div>
+                    <div className="font-semibold text-xs">State</div>
                     {getSortIcon('state_name')}
                   </button>
                 </TableHead>
-                <TableHead className="text-right">
+                <TableHead className="text-right px-2">
                   <button
                     onClick={() => handleSort('allocated')}
                     className="flex items-center justify-end hover:text-primary cursor-pointer w-full"
                   >
-                    <div className="font-semibold">Allocated</div>
+                    <div className="font-semibold text-xs">Allocated</div>
                     {getSortIcon('allocated')}
                   </button>
                 </TableHead>
-                <TableHead className="text-right">
-                  <div className="font-semibold">% of Total Allocated</div>
+                <TableHead className="text-right px-2">
+                  <div className="font-semibold text-xs">% of Total</div>
                 </TableHead>
-                <TableHead className="text-right">
+                <TableHead className="text-right px-2">
                   <button
                     onClick={() => handleSort('historical_commitments')}
                     className="flex items-center justify-end hover:text-primary cursor-pointer w-full"
                   >
-                    <div className="font-semibold">Historical Commitments</div>
+                    <div className="font-semibold text-xs">Historical</div>
                     {getSortIcon('historical_commitments')}
                   </button>
                 </TableHead>
-                <TableHead className="text-right">
+                <TableHead className="text-right px-2">
                   <button
                     onClick={() => handleSort('committed')}
                     className="flex items-center justify-end hover:text-primary cursor-pointer w-full"
                   >
-                    <div className="font-semibold">Committed</div>
+                    <div className="font-semibold text-xs">Committed</div>
                     {getSortIcon('committed')}
                   </button>
                 </TableHead>
-                <TableHead className="text-right">
+                <TableHead className="text-right px-2">
                   <button
                     onClick={() => handleSort('pending')}
                     className="flex items-center justify-end hover:text-primary cursor-pointer w-full"
                   >
-                    <div className="font-semibold">Pending</div>
+                    <div className="font-semibold text-xs">Pending</div>
                     {getSortIcon('pending')}
                   </button>
                 </TableHead>
-                <TableHead className="text-right">
+                <TableHead className="text-right px-2">
                   <button
                     onClick={() => handleSort('remaining')}
                     className="flex items-center justify-end hover:text-primary cursor-pointer w-full"
                   >
-                    <div className="font-semibold">Remaining</div>
+                    <div className="font-semibold text-xs">Remaining</div>
                     {getSortIcon('remaining')}
                   </button>
                 </TableHead>
@@ -206,13 +206,13 @@ export default function PoolOverviewByState() {
                   <>
                     {sortedByState.length > 0 && (
                       <TableRow className="font-semibold">
-                        <TableCell>Total</TableCell>
-                        <TableCell className="text-right">{fmt(totalAllocated)}</TableCell>
+                        <TableCell className="px-2">Total</TableCell>
+                        <TableCell className="text-right whitespace-nowrap">{fmt(totalAllocated)}</TableCell>
                         <TableCell className="text-right">100%</TableCell>
-                        <TableCell className="text-right">{fmt(sortedByState.reduce((s, r) => s + (r.historical_commitments || 0), 0))}</TableCell>
-                        <TableCell className="text-right">{fmt(sortedByState.reduce((s, r) => s + (r.committed || 0), 0))}</TableCell>
-                        <TableCell className="text-right">{fmt(sortedByState.reduce((s, r) => s + (r.pending || 0), 0))}</TableCell>
-                        <TableCell className={`text-right ${sortedByState.reduce((s, r) => s + (r.remaining || 0), 0) >= 0 ? 'text-green-700' : 'text-red-700'}`}>
+                        <TableCell className="text-right whitespace-nowrap">{fmt(sortedByState.reduce((s, r) => s + (r.historical_commitments || 0), 0))}</TableCell>
+                        <TableCell className="text-right whitespace-nowrap">{fmt(sortedByState.reduce((s, r) => s + (r.committed || 0), 0))}</TableCell>
+                        <TableCell className="text-right whitespace-nowrap">{fmt(sortedByState.reduce((s, r) => s + (r.pending || 0), 0))}</TableCell>
+                        <TableCell className={`text-right whitespace-nowrap ${sortedByState.reduce((s, r) => s + (r.remaining || 0), 0) >= 0 ? 'text-green-700' : 'text-red-700'}`}>
                           {fmt(sortedByState.reduce((s, r) => s + (r.remaining || 0), 0))}
                         </TableCell>
                       </TableRow>
@@ -221,13 +221,13 @@ export default function PoolOverviewByState() {
                       const percentOfTotal = totalAllocated > 0 ? ((r.allocated || 0) / totalAllocated * 100) : 0
                       return (
                         <TableRow key={r.state_name}>
-                          <TableCell>{r.state_name}</TableCell>
-                          <TableCell className="text-right">{fmt(r.allocated)}</TableCell>
+                          <TableCell className="px-2">{r.state_name}</TableCell>
+                          <TableCell className="text-right whitespace-nowrap">{fmt(r.allocated)}</TableCell>
                           <TableCell className="text-right">{percentOfTotal.toFixed(1)}%</TableCell>
-                          <TableCell className="text-right">{fmt(r.historical_commitments || 0)}</TableCell>
-                          <TableCell className="text-right">{fmt(r.committed)}</TableCell>
-                          <TableCell className="text-right">{fmt(r.pending)}</TableCell>
-                          <TableCell className={`text-right ${r.remaining >= 0 ? 'text-green-700' : 'text-red-700'}`}>{fmt(r.remaining)}</TableCell>
+                          <TableCell className="text-right whitespace-nowrap">{fmt(r.historical_commitments || 0)}</TableCell>
+                          <TableCell className="text-right whitespace-nowrap">{fmt(r.committed)}</TableCell>
+                          <TableCell className="text-right whitespace-nowrap">{fmt(r.pending)}</TableCell>
+                          <TableCell className={`text-right whitespace-nowrap ${r.remaining >= 0 ? 'text-green-700' : 'text-red-700'}`}>{fmt(r.remaining)}</TableCell>
                         </TableRow>
                       )
                     })}

@@ -6,6 +6,7 @@ import MainLayout from '@/components/layout/MainLayout'
 import { useRouter } from 'next/navigation'
 import { Users, ClipboardList, BarChart2, PieChart, UserCog, Home, CheckSquare, BookOpen, PenTool, Cog } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
+import { useAllowedFunctions } from '@/hooks/useAllowedFunctions'
 
 interface User {
   id: string;
@@ -61,6 +62,8 @@ export default function ErrPortalLayout({
   }, [])
 
   const canManageRooms = user?.role === 'admin' || user?.role === 'superadmin' || user?.role === 'state_err'
+  const { can } = useAllowedFunctions()
+  const canViewGrantManagement = can('grant_view')
 
   const sidebarItems = [
     {
@@ -68,11 +71,11 @@ export default function ErrPortalLayout({
       label: t('err:home'),
       icon: <Home className="h-5 w-5" />
     },
-    {
+    ...(canViewGrantManagement ? [{
       href: '/err-portal/grant-management',
       label: t('err:grant_management'),
       icon: <PieChart className="h-5 w-5" />
-    },
+    }] : []),
     {
       href: '/err-portal/f1-work-plans',
       label: t('err:f1_work_plans'),

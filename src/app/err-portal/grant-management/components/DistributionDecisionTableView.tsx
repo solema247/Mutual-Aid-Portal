@@ -184,32 +184,32 @@ export default function DistributionDecisionTableView() {
       {!isCollapsed && (
       <CardContent>
         <div className="overflow-x-auto">
-          <Table>
+          <Table className="min-w-[600px] text-xs [&_th]:py-1.5 [&_th]:px-2 [&_td]:py-1 [&_td]:px-2">
             <TableHeader>
               <TableRow>
-                <TableHead className="w-10" />
-                <TableHead>Decision</TableHead>
+                <TableHead className="w-8 px-2" />
+                <TableHead className="px-2">Decision</TableHead>
                 <TableHead
-                  className="cursor-pointer select-none hover:bg-muted/50 transition-colors"
+                  className="cursor-pointer select-none hover:bg-muted/50 transition-colors px-2"
                   onClick={() => setDateSortOrder((o) => (o === 'desc' ? 'asc' : 'desc'))}
                 >
                   <span className="inline-flex items-center gap-1">
                     Date
                     {dateSortOrder === 'desc' ? (
-                      <ArrowDown className="h-4 w-4" />
+                      <ArrowDown className="h-3.5 w-3.5" />
                     ) : (
-                      <ArrowUp className="h-4 w-4" />
+                      <ArrowUp className="h-3.5 w-3.5" />
                     )}
                   </span>
                 </TableHead>
-                <TableHead>Sum allocation amount</TableHead>
-                <TableHead>Restriction</TableHead>
+                <TableHead className="px-2">Sum allocation amount</TableHead>
+                <TableHead className="px-2">Restriction</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {decisions.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={5} className="text-center py-6 text-muted-foreground text-xs">
                     No allocations found
                   </TableCell>
                 </TableRow>
@@ -220,33 +220,33 @@ export default function DistributionDecisionTableView() {
                       className="cursor-pointer hover:bg-muted/50"
                       onClick={() => toggleExpand(dec.decisionKey)}
                     >
-                      <TableCell className="w-10">
+                      <TableCell className="w-8">
                         {expandedKey === dec.decisionKey ? (
-                          <ChevronDown className="h-4 w-4" />
+                          <ChevronDown className="h-3.5 w-3.5" />
                         ) : (
-                          <ChevronRight className="h-4 w-4" />
+                          <ChevronRight className="h-3.5 w-3.5" />
                         )}
                       </TableCell>
                       <TableCell>
                         <span className="font-medium">{dec.decisionKey}</span>
                       </TableCell>
-                      <TableCell>{formatDate(dec.decisionDate)}</TableCell>
-                      <TableCell>{formatUsd(dec.sumAllocationAmount)}</TableCell>
-                      <TableCell>{dec.restriction ?? '—'}</TableCell>
+                      <TableCell className="whitespace-nowrap">{formatDate(dec.decisionDate)}</TableCell>
+                      <TableCell className="whitespace-nowrap">{formatUsd(dec.sumAllocationAmount)}</TableCell>
+                      <TableCell className="max-w-[120px] truncate" title={dec.restriction ?? undefined}>{dec.restriction ?? '—'}</TableCell>
                     </TableRow>
                     {expandedKey === dec.decisionKey && (
                       <TableRow>
                         <TableCell colSpan={5} className="bg-muted/30 p-0">
-                          <div className="px-4 py-3">
-                            <p className="text-xs font-medium text-muted-foreground mb-2">
+                          <div className="px-3 py-2">
+                            <p className="text-[10px] font-medium text-muted-foreground mb-1.5">
                               State allocations
                             </p>
-                            <Table>
+                            <Table className="text-xs [&_th]:py-1 [&_th]:px-2 [&_td]:py-1 [&_td]:px-2">
                               <TableHeader>
                                 <TableRow>
-                                  <TableHead>State</TableHead>
-                                  <TableHead>Allocation amount</TableHead>
-                                  <TableHead>% of decision</TableHead>
+                                  <TableHead className="px-2">State</TableHead>
+                                  <TableHead className="px-2">Allocation amount</TableHead>
+                                  <TableHead className="px-2">% of decision</TableHead>
                                 </TableRow>
                               </TableHeader>
                               <TableBody>
@@ -260,8 +260,8 @@ export default function DistributionDecisionTableView() {
                                   return (
                                     <TableRow key={a.allocation_id ?? i}>
                                       <TableCell>{a.state ?? '—'}</TableCell>
-                                      <TableCell>{formatUsd(a.allocation_amount)}</TableCell>
-                                      <TableCell>{formatPercent(percent)}</TableCell>
+                                      <TableCell className="whitespace-nowrap">{formatUsd(a.allocation_amount)}</TableCell>
+                                      <TableCell className="whitespace-nowrap">{formatPercent(percent)}</TableCell>
                                     </TableRow>
                                   )
                                 })}

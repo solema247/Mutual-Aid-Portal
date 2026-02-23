@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Users, BarChart2, ClipboardList, PieChart, UserCog, CheckSquare, LogOut, BookOpen, PenTool, Cog } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
+import { useAllowedFunctions } from '@/hooks/useAllowedFunctions'
 import '@/i18n/config'
 
 interface User {
@@ -19,6 +20,8 @@ interface User {
 
 export default function ErrPortalPage() {
   const { t } = useTranslation(['common', 'err'])
+  const { can } = useAllowedFunctions()
+  const canViewGrantManagement = can('grant_view')
   const [isLoading, setIsLoading] = useState(true)
   const [user, setUser] = useState<User | null>(null)
 
@@ -88,19 +91,21 @@ export default function ErrPortalPage() {
     <div className="max-w-5xl mx-auto">
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 mb-12">
         {/* Grant Management */}
-        <Link href="/err-portal/grant-management" className="block">
-          <Card className="h-full hover:bg-muted/50 transition-colors">
-            <CardHeader className="h-full flex flex-col justify-center items-center text-center p-4">
-              <PieChart className="h-6 w-6 mb-2" />
-              <CardTitle className="text-base">
-                {t('err:grant_management')}
-              </CardTitle>
-              <CardDescription className="mt-1 text-sm">
-                {t('err:grant_management_desc')}
-              </CardDescription>
-            </CardHeader>
-          </Card>
-        </Link>
+        {canViewGrantManagement && (
+          <Link href="/err-portal/grant-management" className="block">
+            <Card className="h-full hover:bg-muted/50 transition-colors">
+              <CardHeader className="h-full flex flex-col justify-center items-center text-center p-4">
+                <PieChart className="h-6 w-6 mb-2" />
+                <CardTitle className="text-base">
+                  {t('err:grant_management')}
+                </CardTitle>
+                <CardDescription className="mt-1 text-sm">
+                  {t('err:grant_management_desc')}
+                </CardDescription>
+              </CardHeader>
+            </Card>
+          </Link>
+        )}
 
         {/* F1 Work Plans */}
         <Link href="/err-portal/f1-work-plans" className="block">

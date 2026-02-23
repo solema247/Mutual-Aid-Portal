@@ -68,7 +68,7 @@ export default function PermissionsManager({
   const [loadingUser, setLoadingUser] = useState(false)
   const [loadingFunctions, setLoadingFunctions] = useState(true)
   const [loadingUsers, setLoadingUsers] = useState(true)
-  const moduleOrder = ['f1', 'f2', 'f3', 'f4_f5', 'management', 'users', 'grants'] as const
+  const moduleOrder = ['grants', 'f1', 'f2', 'f3', 'f4_f5', 'management', 'users'] as const
   const [openModules, setOpenModules] = useState<Set<string>>(
     () => new Set(moduleOrder)
   )

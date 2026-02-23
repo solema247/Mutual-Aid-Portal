@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useEffect, useState } from 'react'
 import { ArrowLeft } from 'lucide-react'
 
+import { useAllowedFunctions } from '@/hooks/useAllowedFunctions'
 import { GrantCallsManager } from './components'
 import DistributionDecisionTableView from './components/DistributionDecisionTableView'
 import PoolOverviewByState from './components/PoolOverviewByState'
@@ -14,6 +15,8 @@ import PoolOverviewByState from './components/PoolOverviewByState'
 export default function GrantManagementPage() {
   const { t } = useTranslation(['err', 'common'])
   const router = useRouter()
+  const { can } = useAllowedFunctions()
+  const canViewGrantManagement = can('grant_view')
   const [loading, setLoading] = useState(true)
   const [summary, setSummary] = useState<{ 
     total_included: number;
@@ -25,6 +28,10 @@ export default function GrantManagementPage() {
   } | null>(null)
 
   useEffect(() => {
+    if (!canViewGrantManagement) {
+      router.replace('/err-portal')
+      return
+    }
     const load = async () => {
       try {
         setLoading(true)
@@ -36,7 +43,11 @@ export default function GrantManagementPage() {
       }
     }
     load()
-  }, [])
+  }, [canViewGrantManagement, router])
+
+  if (!canViewGrantManagement) {
+    return null
+  }
 
   return (
     <div className="max-w-7xl mx-auto p-6 space-y-6">
@@ -56,48 +67,48 @@ export default function GrantManagementPage() {
 
       {/* Overview cards: 1=Allocated, 2=Transferred, 3=Committed, 4=Pending, 5=Remaining (Transferred − Committed − Pending) */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-        <Card>
-          <CardHeader>
-            <CardTitle>{t('err:gm.total_funds_allocated')}</CardTitle>
-            <div className="text-xs text-muted-foreground">{t('err:gm.total_funds_allocated_desc')}</div>
+        <Card className="flex flex-col h-full">
+          <CardHeader className="flex-shrink-0 space-y-1.5 pb-2">
+            <CardTitle className="text-sm leading-tight">{t('err:gm.total_funds_allocated')}</CardTitle>
+            <div className="text-xs text-muted-foreground line-clamp-2">{t('err:gm.total_funds_allocated_desc')}</div>
           </CardHeader>
-          <CardContent>
+          <CardContent className="pt-0 mt-auto">
             <div className="text-2xl font-bold">
               {summary ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(summary.total_included) : '—'}
             </div>
           </CardContent>
         </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>{t('err:gm.total_funds_transferred')}</CardTitle>
-            <div className="text-xs text-muted-foreground">{t('err:gm.total_funds_transferred_desc')}</div>
+        <Card className="flex flex-col h-full">
+          <CardHeader className="flex-shrink-0 space-y-1.5 pb-2">
+            <CardTitle className="text-sm leading-tight">{t('err:gm.total_funds_transferred')}</CardTitle>
+            <div className="text-xs text-muted-foreground line-clamp-2">{t('err:gm.total_funds_transferred_desc')}</div>
           </CardHeader>
-          <CardContent>
+          <CardContent className="pt-0 mt-auto">
             <div className="text-2xl font-bold">
               {summary ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(summary.total_grants) : '—'}
             </div>
           </CardContent>
         </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>{t('err:gm.committed')}</CardTitle>
-            <div className="text-xs text-muted-foreground">{t('err:gm.committed_desc')}</div>
+        <Card className="flex flex-col h-full">
+          <CardHeader className="flex-shrink-0 space-y-1.5 pb-2">
+            <CardTitle className="text-sm leading-tight">{t('err:gm.committed')}</CardTitle>
+            <div className="text-xs text-muted-foreground line-clamp-2">{t('err:gm.committed_desc')}</div>
           </CardHeader>
-          <CardContent className="text-2xl font-bold">{summary ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(summary.total_committed) : '—'}</CardContent>
+          <CardContent className="pt-0 mt-auto text-2xl font-bold">{summary ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(summary.total_committed) : '—'}</CardContent>
         </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>{t('err:gm.pending')}</CardTitle>
-            <div className="text-xs text-muted-foreground">{t('err:gm.pending_desc')}</div>
+        <Card className="flex flex-col h-full">
+          <CardHeader className="flex-shrink-0 space-y-1.5 pb-2">
+            <CardTitle className="text-sm leading-tight">{t('err:gm.pending')}</CardTitle>
+            <div className="text-xs text-muted-foreground line-clamp-2">{t('err:gm.pending_desc')}</div>
           </CardHeader>
-          <CardContent className="text-2xl font-bold">{summary ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(summary.total_pending) : '—'}</CardContent>
+          <CardContent className="pt-0 mt-auto text-2xl font-bold">{summary ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(summary.total_pending) : '—'}</CardContent>
         </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>{t('err:gm.remaining')}</CardTitle>
-            <div className="text-xs text-muted-foreground">{t('err:gm.remaining_desc')}</div>
+        <Card className="flex flex-col h-full">
+          <CardHeader className="flex-shrink-0 space-y-1.5 pb-2">
+            <CardTitle className="text-sm leading-tight">{t('err:gm.remaining')}</CardTitle>
+            <div className="text-xs text-muted-foreground line-clamp-2">{t('err:gm.remaining_desc')}</div>
           </CardHeader>
-          <CardContent className={`text-2xl font-bold ${summary && (summary.total_grants - summary.total_committed - summary.total_pending) >= 0 ? 'text-green-700' : 'text-red-700'}`}>
+          <CardContent className={`pt-0 mt-auto text-2xl font-bold ${summary && (summary.total_grants - summary.total_committed - summary.total_pending) >= 0 ? 'text-green-700' : 'text-red-700'}`}>
             {summary ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(summary.total_grants - summary.total_committed - summary.total_pending) : '—'}
           </CardContent>
         </Card>
