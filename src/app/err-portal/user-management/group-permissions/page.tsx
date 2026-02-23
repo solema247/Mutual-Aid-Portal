@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { ArrowLeft } from 'lucide-react'
-import PermissionsManager from './components/PermissionsManager'
+import BulkPermissionsManager from './components/BulkPermissionsManager'
 
 interface CurrentUser {
   id: string
@@ -13,7 +13,7 @@ interface CurrentUser {
   err_id: string | null
 }
 
-export default function PermissionsPage() {
+export default function GroupPermissionsPage() {
   const router = useRouter()
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null)
   const [checking, setChecking] = useState(true)
@@ -62,9 +62,12 @@ export default function PermissionsPage() {
             Back
           </Link>
         </Button>
-        <h1 className="text-2xl font-semibold">Individual User Permissions</h1>
+        <h1 className="text-2xl font-semibold">Bulk Permissions</h1>
       </div>
-      <PermissionsManager
+      <p className="text-muted-foreground text-sm">
+        Apply the same permission overrides to multiple users at once. Select users, set Grant/Revoke for each action, then click Apply.
+      </p>
+      <BulkPermissionsManager
         currentUserRole={currentUser.role}
         currentUserErrId={currentUser.err_id}
       />

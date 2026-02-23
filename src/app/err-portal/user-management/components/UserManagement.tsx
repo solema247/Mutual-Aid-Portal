@@ -113,6 +113,11 @@ export default function UserManagement() {
                 Individual User Permissions
               </Link>
             </Button>
+            <Button variant="default" size="sm" asChild>
+              <Link href="/err-portal/user-management/group-permissions">
+                Bulk Permissions
+              </Link>
+            </Button>
           </div>
           <CollapsibleRow
             title="Access Rights Management"
