@@ -264,7 +264,6 @@ export default function CommittedF1sTab() {
                 const f1 = f1s.find(f => f.id === id)
                 return !!f1?.mou_id
               })}
-              className="bg-green-600 hover:bg-green-700 text-white"
             >
               Create F3 MOU
             </Button>
@@ -360,7 +359,7 @@ export default function CommittedF1sTab() {
                 <TableHead className="text-right px-2">{t('f2:requested_amount')}</TableHead>
                 <TableHead className="px-2">{t('f2:committed')}</TableHead>
                 <TableHead className="px-2">{t('f2:status')}</TableHead>
-                <TableHead className="px-2">{t('f2:community_approval')}</TableHead>
+                <TableHead className="px-2 whitespace-pre-line text-center leading-tight">{t('f2:community_approval')}</TableHead>
                 <TableHead className="px-2">MOU</TableHead>
                 <TableHead className="px-2">Actions</TableHead>
               </TableRow>
@@ -541,7 +540,7 @@ export default function CommittedF1sTab() {
           </div>
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={() => setPartnerModalOpen(false)}>Cancel</Button>
-            <Button onClick={createMOU} disabled={!selectedPartnerId} className="bg-green-600 hover:bg-green-700 text-white">Create</Button>
+            <Button onClick={createMOU} disabled={!selectedPartnerId} >Create</Button>
           </div>
         </DialogContent>
       </Dialog>

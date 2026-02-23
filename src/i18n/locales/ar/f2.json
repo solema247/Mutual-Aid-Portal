@@ -78,7 +78,7 @@
   "committing": "جارٍ الالتزام...",
   "commit_selected": "الالتزام بالمحدد ({{count}})",
   "approval": "الموافقة",
-  "community_approval": "موافقة المجتمع",
+  "community_approval": "موافقة\nالمجتمع",
   "approval_uploaded": "تم رفع الموافقة",
   "approval_required": "الموافقة مطلوبة",
   "upload": "رفع",

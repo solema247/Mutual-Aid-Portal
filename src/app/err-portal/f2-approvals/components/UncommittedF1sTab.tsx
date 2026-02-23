@@ -244,7 +244,6 @@ export default function UncommittedF1sTab() {
             <Button
               onClick={handleCommitSelected}
               disabled={selectedF1s.length === 0 || isCommitting}
-              className="bg-green-600 hover:bg-green-700"
             >
               {isCommitting ? t('f2:committing') : t('f2:commit_selected', { count: selectedF1s.length })}
             </Button>
