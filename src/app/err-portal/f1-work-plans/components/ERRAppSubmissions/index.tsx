@@ -769,7 +769,6 @@ export default function ERRAppSubmissions() {
                   </div>
                 </div>
               </TabsContent>
-              )}
             </Tabs>
           </DialogContent>
         )}
