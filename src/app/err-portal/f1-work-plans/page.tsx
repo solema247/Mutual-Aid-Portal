@@ -1,7 +1,8 @@
 'use client'
 
 import { useTranslation } from 'react-i18next'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { ChevronDown, ChevronUp, BarChart } from 'lucide-react'
@@ -13,13 +14,25 @@ import PoolDashboard from './components/PoolDashboard'
 
 export default function F1WorkPlansPage() {
   const { t } = useTranslation(['f1_plans', 'common'])
+  const router = useRouter()
   const { can, isLoading: permissionsLoading } = useAllowedFunctions()
+  const canViewPage = can('f1_view_page')
   const canUpload = can('f1_upload')
   const canView = can('f1_view') || canUpload
   const [currentTab, setCurrentTab] = useState<'err_app' | 'direct_upload' | 'manual_entry'>('direct_upload')
   const [isByStateCollapsed, setIsByStateCollapsed] = useState(true)
 
   const defaultTab = canUpload ? 'direct_upload' : canView ? 'err_app' : 'err_app'
+
+  useEffect(() => {
+    if (!permissionsLoading && !canViewPage) {
+      router.replace('/err-portal')
+    }
+  }, [permissionsLoading, canViewPage, router])
+
+  if (!canViewPage) {
+    return null
+  }
 
   return (
     <div className="space-y-6">

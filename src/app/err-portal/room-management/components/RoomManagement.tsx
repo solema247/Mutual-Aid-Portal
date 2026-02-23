@@ -51,7 +51,6 @@ export default function RoomManagement({ userRole = '', userErrId = null }: Room
     <div className="space-y-6">
       <CollapsibleRow
         title={t('rooms:pending_rooms_title')}
-        variant="primary"
         defaultOpen={true}
       >
         <div className="space-y-4">

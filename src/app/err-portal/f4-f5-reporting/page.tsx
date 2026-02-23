@@ -48,6 +48,7 @@ function F4F5ReportingPageContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const { can } = useAllowedFunctions()
+  const canViewPage = can('f4_f5_view_page')
   const canUploadF4 = can('f4_upload')
   const canUploadF5 = can('f5_upload')
   const canViewF4 = can('f4_view_report')
@@ -104,6 +105,12 @@ function F4F5ReportingPageContent() {
     }
   }
 
+  useEffect(() => {
+    if (!canViewPage) {
+      router.replace('/err-portal')
+    }
+  }, [canViewPage, router])
+
   useEffect(() => { load() }, [])
   useEffect(() => { if (tab === 'f5') loadF5() }, [tab])
 
@@ -128,6 +135,8 @@ function F4F5ReportingPageContent() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams])
+
+  if (!canViewPage) return null
 
   return (
     <div className="max-w-7xl mx-auto p-6 space-y-6">

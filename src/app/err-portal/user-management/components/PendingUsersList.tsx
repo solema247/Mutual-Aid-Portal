@@ -70,8 +70,8 @@ export default function PendingUsersList({ users, isLoading, onUpdate, currentUs
       {error && (
         <div className="text-destructive text-sm bg-destructive/10 p-3 rounded-md">{error}</div>
       )}
-      <div className="rounded-md border">
-        <div className="grid grid-cols-7 gap-4 p-4 font-medium border-b">
+      <div className="rounded-md border text-xs">
+        <div className="grid grid-cols-7 gap-2 py-2 px-3 font-medium border-b [&>div]:py-1">
         <div>{t('users:err_name')}</div>
         <div>{t('users:state')}</div>
         <div>{t('users:display_name')}</div>
@@ -82,7 +82,7 @@ export default function PendingUsersList({ users, isLoading, onUpdate, currentUs
       </div>
       <div className="divide-y">
         {users.map((user) => (
-          <div key={user.id} className="grid grid-cols-7 gap-4 p-4">
+          <div key={user.id} className="grid grid-cols-7 gap-2 py-2 px-3 [&>div]:py-1">
             <div>{user.err_name || '-'}</div>
             <div>{user.state_name || '-'}</div>
             <div>{user.display_name || '-'}</div>
@@ -91,7 +91,7 @@ export default function PendingUsersList({ users, isLoading, onUpdate, currentUs
             <div>{user.createdAt}</div>
             <div className="flex gap-2">
               <button 
-                className="text-green-600 hover:text-green-800 disabled:opacity-50"
+                className="text-primary hover:opacity-80 disabled:opacity-50"
                 title={t('users:approve')}
                 onClick={() => handleApprove(user.id, user.role)}
                 disabled={processingId === user.id || !canApprove(user.role)}

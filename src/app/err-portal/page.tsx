@@ -22,6 +22,12 @@ export default function ErrPortalPage() {
   const { t } = useTranslation(['common', 'err'])
   const { can } = useAllowedFunctions()
   const canViewGrantManagement = can('grant_view')
+  const canViewF1 = can('f1_view_page')
+  const canViewF2 = can('f2_view_page')
+  const canViewF3 = can('f3_view_page')
+  const canViewF4F5 = can('f4_f5_view_page')
+  const canViewProjectManagement = can('management_view_page')
+  const canViewUserManagement = can('users_view_page')
   const [isLoading, setIsLoading] = useState(true)
   const [user, setUser] = useState<User | null>(null)
 
@@ -108,79 +114,89 @@ export default function ErrPortalPage() {
         )}
 
         {/* F1 Work Plans */}
-        <Link href="/err-portal/f1-work-plans" className="block">
-          <Card className="h-full hover:bg-muted/50 transition-colors">
-            <CardHeader className="h-full flex flex-col justify-center items-center text-center p-4">
-              <ClipboardList className="h-6 w-6 mb-2" />
-              <CardTitle className="text-base">
-                {t('err:f1_work_plans')}
-              </CardTitle>
-              <CardDescription className="mt-1 text-sm">
-                {t('err:f1_work_plans_desc')}
-              </CardDescription>
-            </CardHeader>
-          </Card>
-        </Link>
+        {canViewF1 && (
+          <Link href="/err-portal/f1-work-plans" className="block">
+            <Card className="h-full hover:bg-muted/50 transition-colors">
+              <CardHeader className="h-full flex flex-col justify-center items-center text-center p-4">
+                <ClipboardList className="h-6 w-6 mb-2" />
+                <CardTitle className="text-base">
+                  {t('err:f1_work_plans')}
+                </CardTitle>
+                <CardDescription className="mt-1 text-sm">
+                  {t('err:f1_work_plans_desc')}
+                </CardDescription>
+              </CardHeader>
+            </Card>
+          </Link>
+        )}
 
         {/* F2 Approvals */}
-        <Link href="/err-portal/f2-approvals" className="block">
-          <Card className="h-full hover:bg-muted/50 transition-colors">
-            <CardHeader className="h-full flex flex-col justify-center items-center text-center p-4">
-              <CheckSquare className="h-6 w-6 mb-2" />
-              <CardTitle className="text-base">
-                {t('err:f2_approvals')}
-              </CardTitle>
-              <CardDescription className="mt-1 text-sm">
-                {t('err:f2_approvals_desc')}
-              </CardDescription>
-            </CardHeader>
-          </Card>
-        </Link>
+        {canViewF2 && (
+          <Link href="/err-portal/f2-approvals" className="block">
+            <Card className="h-full hover:bg-muted/50 transition-colors">
+              <CardHeader className="h-full flex flex-col justify-center items-center text-center p-4">
+                <CheckSquare className="h-6 w-6 mb-2" />
+                <CardTitle className="text-base">
+                  {t('err:f2_approvals')}
+                </CardTitle>
+                <CardDescription className="mt-1 text-sm">
+                  {t('err:f2_approvals_desc')}
+                </CardDescription>
+              </CardHeader>
+            </Card>
+          </Link>
+        )}
 
         {/* F3 MOUs */}
-        <Link href="/err-portal/f3-mous" className="block">
-          <Card className="h-full hover:bg-muted/50 transition-colors">
-            <CardHeader className="h-full flex flex-col justify-center items-center text-center p-4">
-              <PenTool className="h-6 w-6 mb-2" />
-              <CardTitle className="text-base">
-                {t('err:f3_mous')}
-              </CardTitle>
-              <CardDescription className="mt-1 text-sm">
-                {t('err:f3_mous_desc')}
-              </CardDescription>
-            </CardHeader>
-          </Card>
-        </Link>
+        {canViewF3 && (
+          <Link href="/err-portal/f3-mous" className="block">
+            <Card className="h-full hover:bg-muted/50 transition-colors">
+              <CardHeader className="h-full flex flex-col justify-center items-center text-center p-4">
+                <PenTool className="h-6 w-6 mb-2" />
+                <CardTitle className="text-base">
+                  {t('err:f3_mous')}
+                </CardTitle>
+                <CardDescription className="mt-1 text-sm">
+                  {t('err:f3_mous_desc')}
+                </CardDescription>
+              </CardHeader>
+            </Card>
+          </Link>
+        )}
 
         {/* F4 & F5 Reporting */}
-        <Link href="/err-portal/f4-f5-reporting" className="block">
-          <Card className="h-full hover:bg-muted/50 transition-colors">
-            <CardHeader className="h-full flex flex-col justify-center items-center text-center p-4">
-              <BookOpen className="h-6 w-6 mb-2" />
-              <CardTitle className="text-base">
-                {t('err:f4_f5_reporting')}
-              </CardTitle>
-              <CardDescription className="mt-1 text-sm">
-                {t('err:f4_f5_reporting_desc')}
-              </CardDescription>
-            </CardHeader>
-          </Card>
-        </Link>
+        {canViewF4F5 && (
+          <Link href="/err-portal/f4-f5-reporting" className="block">
+            <Card className="h-full hover:bg-muted/50 transition-colors">
+              <CardHeader className="h-full flex flex-col justify-center items-center text-center p-4">
+                <BookOpen className="h-6 w-6 mb-2" />
+                <CardTitle className="text-base">
+                  {t('err:f4_f5_reporting')}
+                </CardTitle>
+                <CardDescription className="mt-1 text-sm">
+                  {t('err:f4_f5_reporting_desc')}
+                </CardDescription>
+              </CardHeader>
+            </Card>
+          </Link>
+        )}
 
         {/* Project Management */}
-        <Link href="/err-portal/project-management" className="block">
-          <Card className="h-full hover:bg-muted/50 transition-colors">
-            <CardHeader className="h-full flex flex-col justify-center items-center text-center p-4">
-              <Cog className="h-6 w-6 mb-2" />
-              <CardTitle className="text-base">
-                {t('err:project_management')}
-              </CardTitle>
-              <CardDescription className="mt-1 text-sm">
-                {t('err:project_management_desc')}
-              </CardDescription>
-            </CardHeader>
-          </Card>
-        </Link>
+        {canViewProjectManagement && (
+          <Link href="/err-portal/project-management" className="block">
+            <Card className="h-full hover:bg-muted/50 transition-colors">
+              <CardHeader className="h-full flex flex-col justify-center items-center text-center p-4">
+                <Cog className="h-6 w-6 mb-2" />
+                <CardTitle className="text-base">
+                  {t('err:project_management')}
+                </CardTitle>
+                <CardDescription className="mt-1 text-sm">
+                  {t('err:project_management_desc')}
+                </CardDescription>
+              </CardHeader>
+            </Card>
+          </Link>
+        )}
 
         {/* Dashboard */}
         <Link href="/err-portal/dashboard" className="block">
@@ -215,19 +231,21 @@ export default function ErrPortalPage() {
         )}
 
         {/* User Management */}
-        <Link href="/err-portal/user-management" className="block">
-          <Card className="h-full hover:bg-muted/50 transition-colors">
-            <CardHeader className="h-full flex flex-col justify-center items-center text-center p-4">
-              <UserCog className="h-6 w-6 mb-2" />
-              <CardTitle className="text-base">
-                {t('err:user_management')}
-              </CardTitle>
-              <CardDescription className="mt-1 text-sm">
-                {t('err:user_management_desc')}
-              </CardDescription>
-            </CardHeader>
-          </Card>
-        </Link>
+        {canViewUserManagement && (
+          <Link href="/err-portal/user-management" className="block">
+            <Card className="h-full hover:bg-muted/50 transition-colors">
+              <CardHeader className="h-full flex flex-col justify-center items-center text-center p-4">
+                <UserCog className="h-6 w-6 mb-2" />
+                <CardTitle className="text-base">
+                  {t('err:user_management')}
+                </CardTitle>
+                <CardDescription className="mt-1 text-sm">
+                  {t('err:user_management_desc')}
+                </CardDescription>
+              </CardHeader>
+            </Card>
+          </Link>
+        )}
 
         {/* Logout Button */}
         <button 

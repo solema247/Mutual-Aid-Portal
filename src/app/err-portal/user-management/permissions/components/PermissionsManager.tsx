@@ -187,7 +187,7 @@ export default function PermissionsManager({
             onValueChange={setSelectedUserId}
             disabled={users.length === 0}
           >
-            <SelectTrigger className="w-[320px]">
+            <SelectTrigger className="w-[320px] border-input bg-background">
               <SelectValue placeholder="Choose user" />
             </SelectTrigger>
             <SelectContent>

@@ -12,6 +12,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Eye, Upload, Receipt, FileSignature, FileCheck, Link2, X, Plus, RefreshCw, ListOrdered, ArrowUp, ArrowDown } from 'lucide-react'
 import dynamic from 'next/dynamic'
+import { useRouter } from 'next/navigation'
 import { aggregateObjectives, aggregateBeneficiaries, aggregatePlannedActivities, aggregatePlannedActivitiesDetailed, aggregateLocations, getBankingDetails, getBudgetTable, getBudgetTableData, formatProjectPlannedActivities, formatProjectSummary } from '@/lib/mou-aggregation'
 import HierarchicalBudgetTable from './components/HierarchicalBudgetTable'
 import { supabase } from '@/lib/supabaseClient'
@@ -179,7 +180,9 @@ export default function F3MOUsPage() {
   const itemsPerPage = 10
   const [sortCreatedOrder, setSortCreatedOrder] = useState<'asc' | 'desc'>('desc')
   const [currentUser, setCurrentUser] = useState<{ role: string } | null>(null)
+  const router = useRouter()
   const { can } = useAllowedFunctions()
+  const canViewPage = can('f3_view_page')
   const canEditMou = can('f3_edit_mou')
   const canAssign = can('f3_assign')
   const canReassignGrant = can('f3_reassign_grant')
@@ -187,6 +190,12 @@ export default function F3MOUsPage() {
   const canManageProjects = can('f3_manage_projects')
   const canManagePayment = can('f3_manage_payment')
   const canUploadSignedMou = can('f3_upload_signed_mou')
+
+  useEffect(() => {
+    if (!canViewPage) {
+      router.replace('/err-portal')
+    }
+  }, [canViewPage, router])
 
   const toDisplay = (value: any): string => {
     if (value == null) return ''
@@ -954,6 +963,8 @@ export default function F3MOUsPage() {
     })
     return list
   }, [filteredMous, sortCreatedOrder])
+
+  if (!canViewPage) return null
 
   return (
     <div className="max-w-[1600px] w-full mx-auto p-6 space-y-6">

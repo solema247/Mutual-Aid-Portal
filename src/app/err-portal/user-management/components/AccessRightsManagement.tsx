@@ -211,7 +211,7 @@ export default function AccessRightsManagement({
           value={selectedRole}
           onValueChange={setSelectedRole}
         >
-          <SelectTrigger className="w-[180px]">
+          <SelectTrigger className="w-[180px] border-input bg-background">
             <SelectValue placeholder={t('users:filter_by_role')} />
           </SelectTrigger>
           <SelectContent>
@@ -226,7 +226,7 @@ export default function AccessRightsManagement({
           value={selectedState}
           onValueChange={setSelectedState}
         >
-          <SelectTrigger className="w-[180px]">
+          <SelectTrigger className="w-[180px] border-input bg-background">
             <SelectValue placeholder="Filter by State" />
           </SelectTrigger>
           <SelectContent>
@@ -271,7 +271,7 @@ export default function AccessRightsManagement({
                       (user.role === 'admin' && currentUserRole !== 'superadmin') // Only superadmin can change admin
                     }
                   >
-                    <SelectTrigger className="w-[140px]">
+                    <SelectTrigger className="w-[120px] border-input bg-background text-xs h-8">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -297,7 +297,7 @@ export default function AccessRightsManagement({
 
                 <div className="relative" ref={openDropdownId === user.id ? dropdownRef : null}>
                   <div
-                    className={`flex flex-wrap gap-1 min-h-[32px] p-1 border rounded-md ${
+                    className={`flex flex-wrap gap-1 min-h-[28px] p-1 border rounded-md ${
                       canChangeStateAccess 
                         ? 'cursor-pointer hover:bg-accent' 
                         : 'cursor-not-allowed opacity-60'

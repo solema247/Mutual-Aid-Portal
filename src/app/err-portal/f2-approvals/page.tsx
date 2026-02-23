@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { supabase } from '@/lib/supabaseClient'
+import { useAllowedFunctions } from '@/hooks/useAllowedFunctions'
 import PoolDashboard from '../f1-work-plans/components/PoolDashboard'
 import PoolByState from './components/PoolByState'
 import PoolByDonor from './components/PoolByDonor'
@@ -25,9 +26,18 @@ interface User {
 export default function F2ApprovalsPage() {
   const { t } = useTranslation(['f2', 'common'])
   const router = useRouter()
+  const { can, isLoading: permissionsLoading } = useAllowedFunctions()
+  const canViewPage = can('f2_view_page')
   const [isLoading, setIsLoading] = useState(true)
   const [user, setUser] = useState<User | null>(null)
   const [currentTab, setCurrentTab] = useState<'uncommitted' | 'committed'>('uncommitted')
+
+  useEffect(() => {
+    if (!permissionsLoading && !canViewPage) {
+      router.replace('/err-portal')
+      return
+    }
+  }, [permissionsLoading, canViewPage, router])
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -62,6 +72,7 @@ export default function F2ApprovalsPage() {
     checkAuth()
   }, [router])
 
+  if (!canViewPage) return null
   if (isLoading) return <div>Loading...</div>
 
   return (

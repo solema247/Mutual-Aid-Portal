@@ -123,7 +123,7 @@ export default function ActiveUsersList({
           value={selectedRole}
           onValueChange={setSelectedRole}
         >
-          <SelectTrigger className="w-[180px]">
+          <SelectTrigger className="w-[180px] border-input bg-background">
             <SelectValue placeholder={t('users:filter_by_role')} />
           </SelectTrigger>
           <SelectContent>
@@ -138,7 +138,7 @@ export default function ActiveUsersList({
           value={selectedStatus}
           onValueChange={(value) => setSelectedStatus(value as 'active' | 'suspended')}
         >
-          <SelectTrigger className="w-[180px]">
+          <SelectTrigger className="w-[180px] border-input bg-background">
             <SelectValue placeholder={t('users:filter_by_status')} />
           </SelectTrigger>
           <SelectContent>
@@ -155,8 +155,8 @@ export default function ActiveUsersList({
         </button>
       </div>
 
-      <div className="rounded-md border">
-        <div className="grid grid-cols-9 gap-4 p-4 font-medium border-b">
+      <div className="rounded-md border text-xs">
+        <div className="grid grid-cols-9 gap-2 py-2 px-3 font-medium border-b [&>div]:py-1">
           <div>{t('users:err_name')}</div>
           <div>{t('users:state')}</div>
           <div>{t('users:display_name')}</div>
@@ -169,7 +169,7 @@ export default function ActiveUsersList({
         </div>
         <div className="divide-y">
           {users.map((user) => (
-            <div key={user.id} className="grid grid-cols-9 gap-4 p-4">
+            <div key={user.id} className="grid grid-cols-9 gap-2 py-2 px-3 [&>div]:py-1">
               <div>{user.err_name || '-'}</div>
               <div>{user.state_name || '-'}</div>
               <div>{user.display_name || '-'}</div>
@@ -181,7 +181,7 @@ export default function ActiveUsersList({
                 {canChangeStatus(user.role) ? (
                   <button
                     className={`${
-                      user.status === 'active' ? 'text-red-600 hover:text-red-800' : 'text-green-600 hover:text-green-800'
+                      user.status === 'active' ? 'text-red-600 hover:text-red-800' : 'text-primary hover:opacity-80'
                     } disabled:opacity-50`}
                     title={
                       user.role === 'admin' && currentUserRole !== 'superadmin'

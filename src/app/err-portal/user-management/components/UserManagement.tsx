@@ -2,10 +2,13 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { useTranslation } from 'react-i18next'
+import { Button } from '@/components/ui/button'
 import { CollapsibleRow } from '@/components/ui/collapsible'
 import { PendingUserListItem } from '@/app/api/users/types/users'
 import { getPendingUsers } from '@/app/api/users/utils/users'
+import { useAllowedFunctions } from '@/hooks/useAllowedFunctions'
 import PendingUsersList from './PendingUsersList'
 import ActiveUsersList from './ActiveUsersList'
 import AccessRightsManagement from './AccessRightsManagement'
@@ -22,10 +25,20 @@ interface User {
 
 export default function UserManagement() {
   const { t } = useTranslation(['users', 'common'])
+  const router = useRouter()
+  const { can } = useAllowedFunctions()
+  const canViewPage = can('users_view_page')
   const [pendingUsers, setPendingUsers] = useState<PendingUserListItem[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [currentUser, setCurrentUser] = useState<User | null>(null)
+
+  useEffect(() => {
+    if (!canViewPage) {
+      router.replace('/err-portal')
+      return
+    }
+  }, [canViewPage, router])
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -86,6 +99,7 @@ export default function UserManagement() {
   }, [currentUser, fetchPendingUsers])
 
   if (!currentUser) return null
+  if (!canViewPage) return null
 
   const isAdmin = currentUser.role === 'admin' || currentUser.role === 'superadmin'
 
@@ -94,16 +108,14 @@ export default function UserManagement() {
       {isAdmin && (
         <>
           <div className="flex gap-4">
-            <Link
-              href="/err-portal/user-management/permissions"
-              className="text-primary hover:underline text-sm font-medium"
-            >
-              Function Permissions
-            </Link>
+            <Button variant="outline" size="sm" asChild>
+              <Link href="/err-portal/user-management/permissions">
+                Function Permissions
+              </Link>
+            </Button>
           </div>
           <CollapsibleRow
             title="Access Rights Management"
-            variant="primary"
             defaultOpen={true}
           >
             <AccessRightsManagement
@@ -117,7 +129,6 @@ export default function UserManagement() {
 
       <CollapsibleRow
         title={t('users:pending_users_title')}
-        variant="primary"
         defaultOpen={!isAdmin}
       >
         <div className="space-y-4">

@@ -64,6 +64,12 @@ export default function ErrPortalLayout({
   const canManageRooms = user?.role === 'admin' || user?.role === 'superadmin' || user?.role === 'state_err'
   const { can } = useAllowedFunctions()
   const canViewGrantManagement = can('grant_view')
+  const canViewF1 = can('f1_view_page')
+  const canViewF2 = can('f2_view_page')
+  const canViewF3 = can('f3_view_page')
+  const canViewF4F5 = can('f4_f5_view_page')
+  const canViewProjectManagement = can('management_view_page')
+  const canViewUserManagement = can('users_view_page')
 
   const sidebarItems = [
     {
@@ -76,31 +82,31 @@ export default function ErrPortalLayout({
       label: t('err:grant_management'),
       icon: <PieChart className="h-5 w-5" />
     }] : []),
-    {
+    ...(canViewF1 ? [{
       href: '/err-portal/f1-work-plans',
       label: t('err:f1_work_plans'),
       icon: <ClipboardList className="h-5 w-5" />
-    },
-    {
+    }] : []),
+    ...(canViewF2 ? [{
       href: '/err-portal/f2-approvals',
       label: t('err:f2_approvals'),
       icon: <CheckSquare className="h-5 w-5" />
-    },
-    {
+    }] : []),
+    ...(canViewF3 ? [{
       href: '/err-portal/f3-mous',
       label: 'F3 MOUs',
       icon: <PenTool className="h-5 w-5" />
-    },
-    {
+    }] : []),
+    ...(canViewF4F5 ? [{
       href: '/err-portal/f4-f5-reporting',
       label: 'F4 & F5 Reporting',
       icon: <BookOpen className="h-5 w-5" />
-    },
-    {
+    }] : []),
+    ...(canViewProjectManagement ? [{
       href: '/err-portal/project-management',
       label: t('err:project_management'),
       icon: <Cog className="h-5 w-5" />
-    },
+    }] : []),
     {
       href: '/err-portal/dashboard',
       label: t('err:dashboard'),
@@ -111,11 +117,11 @@ export default function ErrPortalLayout({
       label: t('err:room_management'),
       icon: <Users className="h-5 w-5" />
     }] : []),
-    {
+    ...(canViewUserManagement ? [{
       href: '/err-portal/user-management',
       label: t('err:user_management'),
       icon: <UserCog className="h-5 w-5" />
-    }
+    }] : [])
   ]
 
   return (
