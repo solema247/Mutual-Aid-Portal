@@ -9,6 +9,10 @@
     "search": "ابحث…",
     "modal": {
       "title": "رفع تقرير مالي F4",
+      "entry_mode_upload": "رفع ومعالجة",
+      "entry_mode_manual": "إدخال يدوي",
+      "attachment_optional": "مرفق (اختياري)",
+      "continue_to_form": "متابعة إلى النموذج",
       "project": "المشروع",
       "project_placeholder": "اختر المشروع حسب الأهداف",
       "err": "غرفة الطوارئ (ذات المشاريع النشطة)",
@@ -91,6 +95,10 @@
     "search": "ابحث…",
     "modal": {
       "title": "رفع تقرير برنامج F5",
+      "entry_mode_upload": "رفع ومعالجة",
+      "entry_mode_manual": "إدخال يدوي",
+      "attachment_optional": "مرفق (اختياري)",
+      "continue_to_form": "متابعة إلى النموذج",
       "project": "المشروع",
       "project_placeholder": "اختر المشروع حسب الأهداف",
       "err": "غرفة الطوارئ (ذات المشاريع)",

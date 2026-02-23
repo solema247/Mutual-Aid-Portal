@@ -9,6 +9,10 @@
     "search": "Search…",
     "modal": {
       "title": "Upload F4 Financial Report",
+      "entry_mode_upload": "Upload & parse",
+      "entry_mode_manual": "Manual entry",
+      "attachment_optional": "Attachment (optional)",
+      "continue_to_form": "Continue to form",
       "project": "Project",
       "project_placeholder": "Select project by objectives",
       "err": "ERR (with active projects)",
@@ -91,6 +95,10 @@
     "search": "Search…",
     "modal": {
       "title": "Upload F5 Program Report",
+      "entry_mode_upload": "Upload & parse",
+      "entry_mode_manual": "Manual entry",
+      "attachment_optional": "Attachment (optional)",
+      "continue_to_form": "Continue to form",
       "project": "Project",
       "project_placeholder": "Select project by objectives",
       "err": "ERR (with projects)",

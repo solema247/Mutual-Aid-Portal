@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { supabase } from '@/lib/supabaseClient'
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '@/components/ui/table'
@@ -108,6 +109,8 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved, initialProj
   const isMinimizingRef = useRef(false)
   const isRestoringRef = useRef(false)
   const [isRestoring, setIsRestoring] = useState(false)
+  const [entryMode, setEntryMode] = useState<'upload' | 'manual'>('upload')
+  const [attachmentFile, setAttachmentFile] = useState<File | null>(null)
 
   const keyToOriginal = (row: any, key: string): number => {
     switch (key) {
@@ -253,6 +256,8 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved, initialProj
         setTempKey('')
         setFileUrl('')
         setRawOcr('')
+        setEntryMode('upload')
+        setAttachmentFile(null)
         return
       }
     } catch {}
@@ -483,6 +488,56 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved, initialProj
     }
   }
 
+  const handleContinueToForm = async () => {
+    const actualProjectId = projectId || initialProjectId
+    if (!actualProjectId) return
+    setIsLoading(true)
+    try {
+      if (attachmentFile) {
+        const ext = (attachmentFile.name.split('.').pop() || 'pdf').toLowerCase()
+        const initRes = await fetch('/api/f4/upload/init', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ project_id: actualProjectId, ext }) })
+        const initJson = await initRes.json()
+        if (!initRes.ok) throw new Error(initJson.error || 'Init failed')
+        const key = initJson.file_key_temp as string
+        const { error: upErr } = await supabase.storage.from('images').upload(key, attachmentFile, { upsert: true })
+        if (upErr) throw upErr
+        setTempKey(key)
+      } else {
+        setTempKey('')
+      }
+      setSummaryDraft({
+        report_date: reportDate || '',
+        reporting_person: '',
+        positive_changes: '',
+        negative_results: '',
+        unexpected_results: '',
+        lessons_learned: '',
+        suggestions: ''
+      })
+      setReachDraft([{
+        activity_name: '',
+        activity_goal: '',
+        location: '',
+        start_date: '',
+        end_date: '',
+        individual_count: null,
+        household_count: null,
+        male_count: null,
+        female_count: null,
+        under18_male: null,
+        under18_female: null,
+        people_with_disabilities: null,
+        is_draft: true
+      }])
+      setStep('preview')
+    } catch (e) {
+      console.error(e)
+      alert('Failed to continue')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   const handleSave = async () => {
     if (isRestoring || isRestoringRef.current) {
       console.warn('Cannot save while restoring state')
@@ -522,6 +577,8 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved, initialProj
     setTempKey('')
     setFileUrl('')
     setRawOcr('')
+    setEntryMode('upload')
+    setAttachmentFile(null)
   }
 
   return (
@@ -551,6 +608,8 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved, initialProj
           setTempKey('')
           setFileUrl('')
           setRawOcr('')
+          setEntryMode('upload')
+          setAttachmentFile(null)
         }
       }
     }}>
@@ -575,6 +634,10 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved, initialProj
         </DialogHeader>
         {step === 'select' && !initialProjectId ? (
           <div className="space-y-4">
+            <div className="flex gap-2 p-1 rounded-lg border bg-muted/30 w-fit">
+              <Button type="button" variant={entryMode === 'upload' ? 'default' : 'ghost'} size="sm" onClick={() => setEntryMode('upload')}>{t('f5.modal.entry_mode_upload')}</Button>
+              <Button type="button" variant={entryMode === 'manual' ? 'default' : 'ghost'} size="sm" onClick={() => setEntryMode('manual')}>{t('f5.modal.entry_mode_manual')}</Button>
+            </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <div className="space-y-1">
                 <Label>{t('f5.modal.state')}</Label>
@@ -614,33 +677,69 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved, initialProj
               <Label>{t('f5.modal.report_date')}</Label>
               <Input type="date" value={reportDate} onChange={(e) => setReportDate(e.target.value)} />
             </div>
-            <div className="space-y-1">
-              <Label>{t('f5.modal.report_file')}</Label>
-              <Input type="file" accept=".pdf,image/*" onChange={(e) => setFile(e.target.files?.[0] || null)} />
-              <div className="text-xs text-muted-foreground">{t('f5.modal.choose_file_hint')}</div>
-            </div>
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => onOpenChange(false)}>{t('f5.modal.cancel')}</Button>
-              <Button onClick={handleUploadAndParse} disabled={!projectId || !file || isLoading}>{isLoading ? 'Processing…' : t('f5.modal.process')}</Button>
-            </div>
+            {entryMode === 'upload' ? (
+              <>
+                <div className="space-y-1">
+                  <Label>{t('f5.modal.report_file')}</Label>
+                  <Input type="file" accept=".pdf,image/*" onChange={(e) => setFile(e.target.files?.[0] || null)} />
+                  <div className="text-xs text-muted-foreground">{t('f5.modal.choose_file_hint')}</div>
+                </div>
+                <div className="flex justify-end gap-2">
+                  <Button variant="outline" onClick={() => onOpenChange(false)}>{t('f5.modal.cancel')}</Button>
+                  <Button onClick={handleUploadAndParse} disabled={!projectId || !file || isLoading}>{isLoading ? 'Processing…' : t('f5.modal.process')}</Button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="space-y-1">
+                  <Label>{t('f5.modal.attachment_optional')}</Label>
+                  <Input type="file" accept=".pdf,image/*" onChange={(e) => setAttachmentFile(e.target.files?.[0] || null)} />
+                  {attachmentFile && <span className="text-xs text-muted-foreground">{attachmentFile.name}</span>}
+                </div>
+                <div className="flex justify-end gap-2">
+                  <Button variant="outline" onClick={() => onOpenChange(false)}>{t('f5.modal.cancel')}</Button>
+                  <Button onClick={handleContinueToForm} disabled={!projectId || isLoading}>{isLoading ? '…' : t('f5.modal.continue_to_form')}</Button>
+                </div>
+              </>
+            )}
           </div>
         ) : (
           // When project is pre-selected (from project management), show simplified file upload form
           step === 'select' && initialProjectId ? (
             <div className="space-y-4">
+              <div className="flex gap-2 p-1 rounded-lg border bg-muted/30 w-fit">
+                <Button type="button" variant={entryMode === 'upload' ? 'default' : 'ghost'} size="sm" onClick={() => setEntryMode('upload')}>{t('f5.modal.entry_mode_upload')}</Button>
+                <Button type="button" variant={entryMode === 'manual' ? 'default' : 'ghost'} size="sm" onClick={() => setEntryMode('manual')}>{t('f5.modal.entry_mode_manual')}</Button>
+              </div>
               <div className="space-y-1">
                 <Label>{t('f5.modal.report_date')}</Label>
                 <Input type="date" value={reportDate} onChange={(e) => setReportDate(e.target.value)} />
               </div>
-              <div className="space-y-1">
-                <Label>{t('f5.modal.report_file')}</Label>
-                <Input type="file" accept=".pdf,image/*" onChange={(e) => setFile(e.target.files?.[0] || null)} />
-                <div className="text-xs text-muted-foreground">{t('f5.modal.choose_file_hint')}</div>
-              </div>
-              <div className="flex justify-end gap-2">
-                <Button variant="outline" onClick={() => onOpenChange(false)}>{t('f5.modal.cancel')}</Button>
-                <Button onClick={handleUploadAndParse} disabled={(!projectId && !initialProjectId) || !file || isLoading}>{isLoading ? 'Processing…' : t('f5.modal.process')}</Button>
-              </div>
+              {entryMode === 'upload' ? (
+                <>
+                  <div className="space-y-1">
+                    <Label>{t('f5.modal.report_file')}</Label>
+                    <Input type="file" accept=".pdf,image/*" onChange={(e) => setFile(e.target.files?.[0] || null)} />
+                    <div className="text-xs text-muted-foreground">{t('f5.modal.choose_file_hint')}</div>
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <Button variant="outline" onClick={() => onOpenChange(false)}>{t('f5.modal.cancel')}</Button>
+                    <Button onClick={handleUploadAndParse} disabled={(!projectId && !initialProjectId) || !file || isLoading}>{isLoading ? 'Processing…' : t('f5.modal.process')}</Button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="space-y-1">
+                    <Label>{t('f5.modal.attachment_optional')}</Label>
+                    <Input type="file" accept=".pdf,image/*" onChange={(e) => setAttachmentFile(e.target.files?.[0] || null)} />
+                    {attachmentFile && <span className="text-xs text-muted-foreground">{attachmentFile.name}</span>}
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <Button variant="outline" onClick={() => onOpenChange(false)}>{t('f5.modal.cancel')}</Button>
+                    <Button onClick={handleContinueToForm} disabled={(!projectId && !initialProjectId) || isLoading}>{isLoading ? '…' : t('f5.modal.continue_to_form')}</Button>
+                  </div>
+                </>
+              )}
             </div>
           ) : step === 'preview' ? (
             <div className="space-y-4">
@@ -664,50 +763,55 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved, initialProj
                   />
                 </div>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4">
                 <div>
                   <Label className="select-text" style={{ userSelect: 'text' }}>{t('f5.preview.summary.positive_changes')}</Label>
-                  <Input 
-                    className="select-text selection:bg-blue-200 selection:text-blue-900 dark:selection:bg-blue-800 dark:selection:text-blue-100" 
+                  <Textarea
+                    className="min-h-[100px] select-text selection:bg-blue-200 selection:text-blue-900 dark:selection:bg-blue-800 dark:selection:text-blue-100 resize-y"
                     style={selectableInputStyle}
-                    value={summaryDraft?.positive_changes ?? ''} 
-                    onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), positive_changes: e.target.value }))} 
+                    rows={4}
+                    value={summaryDraft?.positive_changes ?? ''}
+                    onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), positive_changes: e.target.value }))}
                   />
                 </div>
                 <div>
                   <Label className="select-text" style={{ userSelect: 'text' }}>{t('f5.preview.summary.negative_results')}</Label>
-                  <Input 
-                    className="select-text selection:bg-blue-200 selection:text-blue-900 dark:selection:bg-blue-800 dark:selection:text-blue-100" 
+                  <Textarea
+                    className="min-h-[100px] select-text selection:bg-blue-200 selection:text-blue-900 dark:selection:bg-blue-800 dark:selection:text-blue-100 resize-y"
                     style={selectableInputStyle}
-                    value={summaryDraft?.negative_results ?? ''} 
-                    onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), negative_results: e.target.value }))} 
+                    rows={4}
+                    value={summaryDraft?.negative_results ?? ''}
+                    onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), negative_results: e.target.value }))}
                   />
                 </div>
                 <div>
                   <Label className="select-text" style={{ userSelect: 'text' }}>{t('f5.preview.summary.unexpected_results')}</Label>
-                  <Input 
-                    className="select-text selection:bg-blue-200 selection:text-blue-900 dark:selection:bg-blue-800 dark:selection:text-blue-100" 
+                  <Textarea
+                    className="min-h-[100px] select-text selection:bg-blue-200 selection:text-blue-900 dark:selection:bg-blue-800 dark:selection:text-blue-100 resize-y"
                     style={selectableInputStyle}
-                    value={summaryDraft?.unexpected_results ?? ''} 
-                    onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), unexpected_results: e.target.value }))} 
+                    rows={4}
+                    value={summaryDraft?.unexpected_results ?? ''}
+                    onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), unexpected_results: e.target.value }))}
                   />
                 </div>
                 <div>
                   <Label className="select-text" style={{ userSelect: 'text' }}>{t('f5.preview.summary.lessons_learned')}</Label>
-                  <Input 
-                    className="select-text selection:bg-blue-200 selection:text-blue-900 dark:selection:bg-blue-800 dark:selection:text-blue-100" 
+                  <Textarea
+                    className="min-h-[100px] select-text selection:bg-blue-200 selection:text-blue-900 dark:selection:bg-blue-800 dark:selection:text-blue-100 resize-y"
                     style={selectableInputStyle}
-                    value={summaryDraft?.lessons_learned ?? ''} 
-                    onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), lessons_learned: e.target.value }))} 
+                    rows={4}
+                    value={summaryDraft?.lessons_learned ?? ''}
+                    onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), lessons_learned: e.target.value }))}
                   />
                 </div>
-                <div className="md:col-span-2">
+                <div>
                   <Label className="select-text" style={{ userSelect: 'text' }}>{t('f5.preview.summary.suggestions')}</Label>
-                  <Input 
-                    className="select-text selection:bg-blue-200 selection:text-blue-900 dark:selection:bg-blue-800 dark:selection:text-blue-100" 
+                  <Textarea
+                    className="min-h-[100px] select-text selection:bg-blue-200 selection:text-blue-900 dark:selection:bg-blue-800 dark:selection:text-blue-100 resize-y"
                     style={selectableInputStyle}
-                    value={summaryDraft?.suggestions ?? ''} 
-                    onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), suggestions: e.target.value }))} 
+                    rows={4}
+                    value={summaryDraft?.suggestions ?? ''}
+                    onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), suggestions: e.target.value }))}
                   />
                 </div>
               </div>

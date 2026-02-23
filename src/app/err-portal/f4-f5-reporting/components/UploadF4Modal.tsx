@@ -56,6 +56,8 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
   const isMinimizingRef = useRef(false)
   const isRestoringRef = useRef(false)
   const [isRestoring, setIsRestoring] = useState(false)
+  const [entryMode, setEntryMode] = useState<'upload' | 'manual'>('upload')
+  const [attachmentFile, setAttachmentFile] = useState<File | null>(null)
 
   useEffect(() => {
     if (!open) return
@@ -93,6 +95,8 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
         setFileUrl('')
         setRawOcr('')
         setAiOutput(null)
+        setEntryMode('upload')
+        setAttachmentFile(null)
         return
       }
     } catch {}
@@ -523,6 +527,50 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
     }
   }
 
+  const handleContinueToForm = async () => {
+    const actualProjectId = projectId || initialProjectId
+    if (!actualProjectId) return
+    setIsLoading(true)
+    try {
+      if (attachmentFile) {
+        const ext = (attachmentFile.name.split('.').pop() || 'pdf').toLowerCase()
+        const initRes = await fetch('/api/f4/upload/init', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ project_id: actualProjectId, ext }) })
+        const initJson = await initRes.json()
+        if (!initRes.ok) throw new Error(initJson.error || 'Init failed')
+        const key = initJson.file_key_temp as string
+        const { error: upErr } = await supabase.storage.from('images').upload(key, attachmentFile, { upsert: true })
+        if (upErr) throw upErr
+        setTempKey(key)
+      } else {
+        setTempKey('')
+      }
+      setSummaryDraft({
+        report_date: reportDate || '',
+        beneficiaries: projectMeta?.beneficiaries || '',
+        lessons: '',
+        training: '',
+        project_objectives: projectMeta?.project_objectives || ''
+      })
+      setExpensesDraft([{
+        expense_activity: '',
+        expense_description: '',
+        expense_amount_sdg: null,
+        expense_amount: null,
+        payment_date: '',
+        payment_method: 'Bank Transfer',
+        receipt_no: '',
+        seller: '',
+        is_draft: true
+      } as any])
+      setStep('preview')
+    } catch (e) {
+      console.error(e)
+      alert('Failed to continue')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   const handleSave = async () => {
     if (isRestoring || isRestoringRef.current) {
       console.warn('Cannot save while restoring state')
@@ -570,11 +618,13 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
     setSummaryDraft(null)
     setExpensesDraft([])
     setStep('select')
-        setTempKey('')
-        setFileUrl('')
-        setRawOcr('')
-        setAiOutput(null)
+    setTempKey('')
+    setFileUrl('')
+    setRawOcr('')
+    setAiOutput(null)
     setFxRate(null)
+    setEntryMode('upload')
+    setAttachmentFile(null)
   }
 
   return (
@@ -599,6 +649,8 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
           setFileUrl('')
           setRawOcr('')
           setAiOutput(null)
+          setEntryMode('upload')
+          setAttachmentFile(null)
         }
       }
     }}>
@@ -621,6 +673,10 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
         </DialogHeader>
         {step === 'select' && !initialProjectId ? (
           <div className="space-y-4">
+            <div className="flex gap-2 p-1 rounded-lg border bg-muted/30 w-fit">
+              <Button type="button" variant={entryMode === 'upload' ? 'default' : 'ghost'} size="sm" onClick={() => setEntryMode('upload')}>{t('f4.modal.entry_mode_upload')}</Button>
+              <Button type="button" variant={entryMode === 'manual' ? 'default' : 'ghost'} size="sm" onClick={() => setEntryMode('manual')}>{t('f4.modal.entry_mode_manual')}</Button>
+            </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <div className="space-y-1">
                 <Label>{t('f4.modal.state')}</Label>
@@ -660,33 +716,69 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
               <Label>{t('f4.modal.report_date')}</Label>
               <Input type="date" value={reportDate} onChange={(e) => setReportDate(e.target.value)} />
             </div>
-            <div className="space-y-1">
-              <Label>{t('f4.modal.summary_file')}</Label>
-              <Input type="file" accept=".pdf,image/*" onChange={(e) => setFile(e.target.files?.[0] || null)} />
-              <div className="text-xs text-muted-foreground">{t('f4.modal.choose_file_hint')}</div>
-            </div>
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => onOpenChange(false)}>{t('f4.modal.cancel')}</Button>
-              <Button onClick={handleUploadAndParse} disabled={!projectId || !file || isLoading}>{isLoading ? 'Processing…' : t('f4.modal.process')}</Button>
-            </div>
+            {entryMode === 'upload' ? (
+              <>
+                <div className="space-y-1">
+                  <Label>{t('f4.modal.summary_file')}</Label>
+                  <Input type="file" accept=".pdf,image/*" onChange={(e) => setFile(e.target.files?.[0] || null)} />
+                  <div className="text-xs text-muted-foreground">{t('f4.modal.choose_file_hint')}</div>
+                </div>
+                <div className="flex justify-end gap-2">
+                  <Button variant="outline" onClick={() => onOpenChange(false)}>{t('f4.modal.cancel')}</Button>
+                  <Button onClick={handleUploadAndParse} disabled={!projectId || !file || isLoading}>{isLoading ? 'Processing…' : t('f4.modal.process')}</Button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="space-y-1">
+                  <Label>{t('f4.modal.attachment_optional')}</Label>
+                  <Input type="file" accept=".pdf,image/*" onChange={(e) => setAttachmentFile(e.target.files?.[0] || null)} />
+                  {attachmentFile && <span className="text-xs text-muted-foreground">{attachmentFile.name}</span>}
+                </div>
+                <div className="flex justify-end gap-2">
+                  <Button variant="outline" onClick={() => onOpenChange(false)}>{t('f4.modal.cancel')}</Button>
+                  <Button onClick={handleContinueToForm} disabled={!projectId || isLoading}>{isLoading ? '…' : t('f4.modal.continue_to_form')}</Button>
+                </div>
+              </>
+            )}
           </div>
         ) : (
           // When project is pre-selected (from project management), show simplified file upload form
           step === 'select' && initialProjectId ? (
             <div className="space-y-4">
+              <div className="flex gap-2 p-1 rounded-lg border bg-muted/30 w-fit">
+                <Button type="button" variant={entryMode === 'upload' ? 'default' : 'ghost'} size="sm" onClick={() => setEntryMode('upload')}>{t('f4.modal.entry_mode_upload')}</Button>
+                <Button type="button" variant={entryMode === 'manual' ? 'default' : 'ghost'} size="sm" onClick={() => setEntryMode('manual')}>{t('f4.modal.entry_mode_manual')}</Button>
+              </div>
               <div className="space-y-1">
                 <Label>{t('f4.modal.report_date')}</Label>
                 <Input type="date" value={reportDate} onChange={(e) => setReportDate(e.target.value)} />
               </div>
-              <div className="space-y-1">
-                <Label>{t('f4.modal.summary_file')}</Label>
-                <Input type="file" accept=".pdf,image/*" onChange={(e) => setFile(e.target.files?.[0] || null)} />
-                <div className="text-xs text-muted-foreground">{t('f4.modal.choose_file_hint')}</div>
-              </div>
-              <div className="flex justify-end gap-2">
-                <Button variant="outline" onClick={() => onOpenChange(false)}>{t('f4.modal.cancel')}</Button>
-                <Button onClick={handleUploadAndParse} disabled={(!projectId && !initialProjectId) || !file || isLoading}>{isLoading ? 'Processing…' : t('f4.modal.process')}</Button>
-              </div>
+              {entryMode === 'upload' ? (
+                <>
+                  <div className="space-y-1">
+                    <Label>{t('f4.modal.summary_file')}</Label>
+                    <Input type="file" accept=".pdf,image/*" onChange={(e) => setFile(e.target.files?.[0] || null)} />
+                    <div className="text-xs text-muted-foreground">{t('f4.modal.choose_file_hint')}</div>
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <Button variant="outline" onClick={() => onOpenChange(false)}>{t('f4.modal.cancel')}</Button>
+                    <Button onClick={handleUploadAndParse} disabled={(!projectId && !initialProjectId) || !file || isLoading}>{isLoading ? 'Processing…' : t('f4.modal.process')}</Button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="space-y-1">
+                    <Label>{t('f4.modal.attachment_optional')}</Label>
+                    <Input type="file" accept=".pdf,image/*" onChange={(e) => setAttachmentFile(e.target.files?.[0] || null)} />
+                    {attachmentFile && <span className="text-xs text-muted-foreground">{attachmentFile.name}</span>}
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <Button variant="outline" onClick={() => onOpenChange(false)}>{t('f4.modal.cancel')}</Button>
+                    <Button onClick={handleContinueToForm} disabled={(!projectId && !initialProjectId) || isLoading}>{isLoading ? '…' : t('f4.modal.continue_to_form')}</Button>
+                  </div>
+                </>
+              )}
             </div>
           ) : step === 'preview' ? (
           <div className="space-y-6 select-text">
