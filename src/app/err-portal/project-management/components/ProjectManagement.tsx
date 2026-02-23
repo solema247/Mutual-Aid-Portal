@@ -202,11 +202,11 @@ export default function ProjectManagement() {
   useEffect(() => {
     let filtered = allRows
 
-    // 1. Historical (before 2026) or New (2026+)
+    // 1. Historical (before 2026) or New (2026+) — include rows with no filter_date so portal projects are not hidden
     if (filterHistoricalNew !== 'all') {
       filtered = filtered.filter((r: any) => {
         const d = r.filter_date
-        if (!d) return false
+        if (!d) return true // include rows with no date (e.g. portal projects with no reports yet)
         const t = new Date(d).getTime()
         if (filterHistoricalNew === 'historical') return t < CUTOFF_2026
         return t >= CUTOFF_2026 // new
