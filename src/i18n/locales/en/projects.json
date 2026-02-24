@@ -168,6 +168,8 @@
       "f5_complete_tooltip": "Share of projects with at least one F5",
       "pct_tracker": "% Tracker",
       "pct_tracker_tooltip": "Per project: 50% from F4 (actual/plan, capped at 100%) plus 50% if at least one F5. Shown as average across projects.",
+      "overdue": "Overdue",
+      "overdue_tooltip": "State/ERR: count of projects overdue (transfer + 32 days passed, F4 and F5 not both complete). Project: days overdue.",
       "last_f4": "Last F4",
       "last_f5": "Last F5",
       "actions": "Actions",
@@ -184,6 +186,9 @@
       "title": "Project Detail",
       "loading": "Loading…",
       "no_data": "No data",
+      "overdue_banner_title": "Overdue: {{days}} days",
+      "overdue_calc": "Due date = Transfer date + 32 days. Project is overdue until both F4 and F5 reports are complete.",
+      "overdue_calc_formula": "Transfer date: {{transferDate}} → Due date: {{dueDate}}. This project is {{days}} days overdue.",
       "labels": {
         "err": "ERR",
         "state": "State",

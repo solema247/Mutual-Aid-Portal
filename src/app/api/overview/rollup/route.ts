@@ -59,6 +59,49 @@ function normalizeActivitiesStateName(state: any): string {
   return normalized
 }
 
+const OVERDUE_DAYS_AFTER_TRANSFER = 32
+
+/** Compute days overdue for portal projects: due = transfer_date + 32 days; overdue only when past due and not (F4 and F5 complete). */
+function computeOverdue(
+  transferDate: string | null,
+  f4Complete: boolean,
+  f5Complete: boolean
+): { is_overdue: boolean; days_overdue: number | null } {
+  if (!transferDate) return { is_overdue: false, days_overdue: null }
+  const due = new Date(transferDate)
+  due.setDate(due.getDate() + OVERDUE_DAYS_AFTER_TRANSFER)
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  due.setHours(0, 0, 0, 0)
+  if (due >= today) return { is_overdue: false, days_overdue: null }
+  const bothComplete = f4Complete && f5Complete
+  if (bothComplete) return { is_overdue: false, days_overdue: null }
+  const diffMs = today.getTime() - due.getTime()
+  const days = Math.floor(diffMs / (24 * 60 * 60 * 1000))
+  return { is_overdue: true, days_overdue: days }
+}
+
+/** Parse MOU payment_confirmation_file JSON and return map of project_id -> transfer_date. */
+function getTransferDateByProjectFromMous(mousRows: any[]): Record<string, string> {
+  const out: Record<string, string> = {}
+  for (const mou of mousRows || []) {
+    const raw = mou?.payment_confirmation_file
+    if (!raw || typeof raw !== 'string') continue
+    try {
+      const parsed = JSON.parse(raw)
+      if (parsed && typeof parsed === 'object') {
+        for (const [projectId, data] of Object.entries(parsed)) {
+          const d = (data as any)?.transfer_date
+          if (d && typeof d === 'string') out[projectId] = d
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }
+  return out
+}
+
 // Helper function to fetch all rows using pagination
 const fetchAllRows = async (supabase: any, table: string, select: string) => {
   let allData: any[] = []
@@ -97,7 +140,7 @@ export async function GET(request: Request) {
     // Build project filter (include more statuses to catch F5 projects and completed projects)
     let projectQuery = supabase
       .from('err_projects')
-      .select('id, state, grant_call_id, grant_grid_id, grant_id, emergency_rooms (id, name, name_ar, err_code), planned_activities, expenses, source, status, funding_status, mou_id, f4_status, f5_status, date')
+      .select('id, state, grant_call_id, grant_grid_id, grant_id, emergency_rooms (id, name, name_ar, err_code), planned_activities, expenses, source, status, funding_status, mou_id, f4_status, f5_status, date, date_transfer')
       .in('status', ['approved', 'active', 'pending', 'completed'])
       .in('funding_status', ['committed', 'allocated'])
 
@@ -108,15 +151,17 @@ export async function GET(request: Request) {
 
     const { data: projects } = await projectQuery
 
-    // Resolve MOU codes for projects that have mou_id
+    // Resolve MOU codes and per-project transfer dates from payment confirmations
     const mouIds = Array.from(new Set(((projects || []).map((p:any)=> p.mou_id).filter(Boolean)))) as string[]
     let mouCodeById: Record<string, string> = {}
+    let transferDateByProject: Record<string, string> = {}
     if (mouIds.length) {
       const { data: mousRows } = await supabase
         .from('mous')
-        .select('id, mou_code')
+        .select('id, mou_code, payment_confirmation_file')
         .in('id', mouIds)
       for (const m of (mousRows || [])) mouCodeById[(m as any).id] = (m as any).mou_code
+      transferDateByProject = getTransferDateByProjectFromMous(mousRows || [])
     }
 
     const projectIds = (projects || []).map((p:any)=> p.id)
@@ -126,7 +171,7 @@ export async function GET(request: Request) {
     const allHistoricalData = await fetchAllRows(
       supabase,
       'activities_raw_import',
-      'id,"ERR CODE","ERR Name","State","Project Donor","USD","MOU Signed","F4","F5","Date Report Completed","Date Transfer","Serial Number","Target (Ind.)","Target (Fam.)"'
+      'id,"ERR CODE","ERR Name","State","Project Donor","USD","MOU Signed","F4","F5","Date Report Completed","Date Transfer","Serial Number","Target (Ind.)","Target (Fam.)","Overdue"'
     )
 
     // Filter historical data by state AFTER normalization (like Pool Overview By State)
@@ -268,6 +313,10 @@ export async function GET(request: Request) {
       const storedF5 = (p.f5_status != null ? String(p.f5_status).trim().toLowerCase() : null) || 'waiting'
       const f4_status = agg.count > 0 ? 'completed' : storedF4
       const f5_status = f5Agg.count > 0 ? 'completed' : storedF5
+      const f4Complete = f4_status === 'completed'
+      const f5Complete = f5_status === 'completed'
+      const effectiveTransferDate = p.date_transfer || transferDateByProject[p.id] || null
+      const { is_overdue, days_overdue } = computeOverdue(effectiveTransferDate, f4Complete, f5Complete)
       return {
         project_id: p.id,
         state: p.state,
@@ -291,7 +340,10 @@ export async function GET(request: Request) {
         is_historical: false,
         f4_status,
         f5_status,
-        filter_date: p.date || agg.last || null
+        filter_date: p.date || agg.last || null,
+        is_overdue,
+        days_overdue,
+        overdue: days_overdue != null ? String(days_overdue) : null
       }
     })
 
@@ -329,6 +381,13 @@ export async function GET(request: Request) {
       const f5StatusRaw = f5Value != null ? String(f5Value).trim() : ''
       const f5_status = f5StatusRaw.toLowerCase() || null
 
+      // Historical: use stored Overdue from sheet (text); is_overdue for counting
+      const overdueRaw = row['Overdue'] ?? row['overdue'] ?? null
+      const overdueStr = overdueRaw != null ? String(overdueRaw).trim() : ''
+      const overdueNum = overdueStr !== '' ? parseInt(overdueStr, 10) : NaN
+      const is_overdue_historical = !Number.isNaN(overdueNum) && overdueNum >= 0
+      const overdueDisplay = overdueStr !== '' ? overdueStr : null
+
       return {
         project_id: historicalProjectId, // Use a prefix to distinguish historical projects
         state: normalizeActivitiesStateName(row['State'] || row['state'] || row.State),
@@ -352,7 +411,10 @@ export async function GET(request: Request) {
         is_historical: true,
         f4_status, // For % Tracker: completed | waiting | under review | partial
         f5_status, // For % Tracker: same status values, no actual vs plan
-        filter_date: dateTransfer || reportDate || null // For date filter: Date Transfer or Date Report Completed
+        filter_date: dateTransfer || reportDate || null, // For date filter: Date Transfer or Date Report Completed
+        is_overdue: is_overdue_historical,
+        days_overdue: !Number.isNaN(overdueNum) ? overdueNum : null,
+        overdue: overdueDisplay
       }
     })
 

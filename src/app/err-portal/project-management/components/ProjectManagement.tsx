@@ -340,7 +340,7 @@ export default function ProjectManagement() {
 
   // Grant-level summary rows (aggregate allRows by grant; used for "Summary by Grant" table)
   const grantSummaryRows = useMemo(() => {
-    const out: Array<{ grantLabel: string; plan: number; actual: number; variance: number; burn: number; f4_count: number; f5_count: number; total_projects: number; projects_with_f4: number; projects_with_f5: number; tracker_sum: number }> = []
+    const out: Array<{ grantLabel: string; plan: number; actual: number; variance: number; burn: number; f4_count: number; f5_count: number; total_projects: number; projects_with_f4: number; projects_with_f5: number; tracker_sum: number; overdue_count: number }> = []
     // Unassigned: current projects with no grant_grid_id
     const unassignedRows = (allRows || []).filter((r: any) => !r.is_historical && !r.grant_grid_id)
     if (unassignedRows.length > 0) {
@@ -357,7 +357,8 @@ export default function ProjectManagement() {
         total_projects: unassignedRows.length,
         projects_with_f4: unassignedRows.filter((r: any) => Number(r.f4_count || 0) > 0).length,
         projects_with_f5: unassignedRows.filter((r: any) => Number(r.f5_count || 0) > 0).length,
-        tracker_sum: unassignedRows.reduce((s: number, r: any) => s + trackerScore(r), 0)
+        tracker_sum: unassignedRows.reduce((s: number, r: any) => s + trackerScore(r), 0),
+        overdue_count: unassignedRows.filter((r: any) => r.is_overdue).length
       })
     }
     // One row per grant from grants list
@@ -384,7 +385,8 @@ export default function ProjectManagement() {
         total_projects: grantRows.length,
         projects_with_f4: grantRows.filter((r: any) => Number(r.f4_count || 0) > 0).length,
         projects_with_f5: grantRows.filter((r: any) => Number(r.f5_count || 0) > 0).length,
-        tracker_sum: grantRows.reduce((s: number, r: any) => s + trackerScore(r), 0)
+        tracker_sum: grantRows.reduce((s: number, r: any) => s + trackerScore(r), 0),
+        overdue_count: grantRows.filter((r: any) => r.is_overdue).length
       })
     }
     return out.sort((a, b) => (a.grantLabel === 'Unassigned' ? -1 : b.grantLabel === 'Unassigned' ? 1 : a.grantLabel.localeCompare(b.grantLabel)))
@@ -392,10 +394,10 @@ export default function ProjectManagement() {
 
   // Aggregations for drill-down
   const stateRows = useMemo(() => {
-    const byState = new Map<string, { state: string; plan: number; actual: number; variance: number; burn: number; f4_count: number; f5_count: number; total_projects: number; projects_with_f4: number; projects_with_f5: number; tracker_sum: number; individuals: number; last_report_date: string | null; last_f5_date: string | null }>()
+    const byState = new Map<string, { state: string; plan: number; actual: number; variance: number; burn: number; f4_count: number; f5_count: number; total_projects: number; projects_with_f4: number; projects_with_f5: number; tracker_sum: number; individuals: number; last_report_date: string | null; last_f5_date: string | null; overdue_count: number }>()
     for (const r of rows) {
       const key = r.state || '—'
-      const curr = byState.get(key) || { state: key, plan: 0, actual: 0, variance: 0, burn: 0, f4_count: 0, f5_count: 0, total_projects: 0, projects_with_f4: 0, projects_with_f5: 0, tracker_sum: 0, individuals: 0, last_report_date: null as string | null, last_f5_date: null as string | null }
+      const curr = byState.get(key) || { state: key, plan: 0, actual: 0, variance: 0, burn: 0, f4_count: 0, f5_count: 0, total_projects: 0, projects_with_f4: 0, projects_with_f5: 0, tracker_sum: 0, individuals: 0, last_report_date: null as string | null, last_f5_date: null as string | null, overdue_count: 0 }
       curr.plan += Number(r.plan || 0)
       curr.actual += Number(r.actual || 0)
       curr.variance = curr.plan - curr.actual
@@ -406,6 +408,7 @@ export default function ProjectManagement() {
       curr.individuals += Number(r.individuals || 0)
       if (Number(r.f4_count || 0) > 0) curr.projects_with_f4 += 1
       if (Number(r.f5_count || 0) > 0) curr.projects_with_f5 += 1
+      if (r.is_overdue) curr.overdue_count += 1
       const last = curr.last_report_date
       const cand = r.last_report_date || null
       curr.last_report_date = !last ? cand : (!cand ? last : (new Date(last) > new Date(cand) ? last : cand))
@@ -423,10 +426,10 @@ export default function ProjectManagement() {
   const roomRows = useMemo(() => {
     if (!selectedStateName) return [] as any[]
     const filtered = rows.filter((r:any) => r.state === selectedStateName)
-    const byRoom = new Map<string, { err_id: string; err_name: string | null; state: string; plan: number; actual: number; variance: number; burn: number; f4_count: number; f5_count: number; total_projects: number; projects_with_f4: number; projects_with_f5: number; tracker_sum: number; individuals: number; last_report_date: string | null; last_f5_date: string | null }>()
+    const byRoom = new Map<string, { err_id: string; err_name: string | null; state: string; plan: number; actual: number; variance: number; burn: number; f4_count: number; f5_count: number; total_projects: number; projects_with_f4: number; projects_with_f5: number; tracker_sum: number; individuals: number; last_report_date: string | null; last_f5_date: string | null; overdue_count: number }>()
     for (const r of filtered) {
       const key = r.err_id || '—'
-      const curr = byRoom.get(key) || { err_id: key, err_name: null as string | null, state: selectedStateName, plan: 0, actual: 0, variance: 0, burn: 0, f4_count: 0, f5_count: 0, total_projects: 0, projects_with_f4: 0, projects_with_f5: 0, tracker_sum: 0, individuals: 0, last_report_date: null as string | null, last_f5_date: null as string | null }
+      const curr = byRoom.get(key) || { err_id: key, err_name: null as string | null, state: selectedStateName, plan: 0, actual: 0, variance: 0, burn: 0, f4_count: 0, f5_count: 0, total_projects: 0, projects_with_f4: 0, projects_with_f5: 0, tracker_sum: 0, individuals: 0, last_report_date: null as string | null, last_f5_date: null as string | null, overdue_count: 0 }
       if (curr.err_name == null && r.err_name != null) curr.err_name = r.err_name
       curr.plan += Number(r.plan || 0)
       curr.actual += Number(r.actual || 0)
@@ -438,6 +441,7 @@ export default function ProjectManagement() {
       curr.individuals += Number(r.individuals || 0)
       if (Number(r.f4_count || 0) > 0) curr.projects_with_f4 += 1
       if (Number(r.f5_count || 0) > 0) curr.projects_with_f5 += 1
+      if (r.is_overdue) curr.overdue_count += 1
       const last = curr.last_report_date
       const cand = r.last_report_date || null
       curr.last_report_date = !last ? cand : (!cand ? last : (new Date(last) > new Date(cand) ? last : cand))
@@ -559,7 +563,8 @@ export default function ProjectManagement() {
         projects_with_f4: 0,
         projects_with_f5: 0,
         pctTracker: 0,
-        individuals: 0
+        individuals: 0,
+        overdue_count: 0
       }
     }
     const totalPlan = displayed.reduce((sum, r) => sum + (Number(r.plan || 0)), 0)
@@ -574,7 +579,7 @@ export default function ProjectManagement() {
     const trackerSum = displayed.reduce((sum, r) => sum + (r.tracker_sum ?? trackerScore(r)), 0)
     const pctTracker = totalProjects > 0 ? (trackerSum / totalProjects) * 100 : 0
     const individuals = displayed.reduce((sum, r) => sum + (Number(r.individuals || 0)), 0)
-    
+    const overdue_count = displayed.reduce((sum, r) => sum + (Number(r.overdue_count ?? (r.is_overdue ? 1 : 0))), 0)
     return {
       plan: totalPlan,
       actual: totalActual,
@@ -586,7 +591,8 @@ export default function ProjectManagement() {
       projects_with_f4: projectsWithF4,
       projects_with_f5: projectsWithF5,
       pctTracker,
-      individuals
+      individuals,
+      overdue_count
     }
   }, [displayed])
 
@@ -654,7 +660,7 @@ export default function ProjectManagement() {
     } finally {
       setCompletingProjectId(null)
     }
-  }
+  };
 
   return (
     <div className="space-y-6">
@@ -945,7 +951,7 @@ export default function ProjectManagement() {
                   {searchRows || level === 'project' ? (
                     <>
                       <TableHead className="text-xs whitespace-nowrap">{t('management.table.err')}</TableHead>
-                      <TableHead className="text-xs whitespace-nowrap">{t('management.table.state')}</TableHead>
+                      {searchRows ? <TableHead className="text-xs whitespace-nowrap">{t('management.table.state')}</TableHead> : null}
                       <TableHead className="text-xs whitespace-nowrap">Grant Serial</TableHead>
                     </>
                   ) : level === 'state' ? (
@@ -955,25 +961,25 @@ export default function ProjectManagement() {
                   ) : (
                     <>
                       <TableHead className="text-xs whitespace-nowrap">{t('management.table.err')}</TableHead>
-                      {level === 'room' && <TableHead className="text-xs whitespace-nowrap">{t('management.table.err_name')}</TableHead>}
-                      <TableHead className="text-xs whitespace-nowrap">{t('management.table.state')}</TableHead>
+                      <TableHead className="text-xs whitespace-nowrap">{t('management.table.err_name')}</TableHead>
                     </>
                   )}
                   <TableHead className="text-right text-xs whitespace-nowrap">{t('management.table.plan')}</TableHead>
                   <TableHead className="text-right text-xs whitespace-nowrap">{t('management.table.actuals')}</TableHead>
                   <TableHead className="text-right text-xs whitespace-nowrap">{t('management.table.variance')}</TableHead>
                   <TableHead className="text-right text-xs whitespace-nowrap">{t('management.table.individuals')}</TableHead>
+                  <TableHead className="text-right w-14 text-xs whitespace-nowrap" title={t('management.table.overdue_tooltip')}>{t('management.table.overdue')}</TableHead>
                   <TableHead className="w-10 text-xs">{t('management.table.f4s')}</TableHead>
                   <TableHead className="text-right w-12 text-xs" title={t('management.table.f4_complete_tooltip')}>{t('management.table.f4_complete')}</TableHead>
                   <TableHead className="w-10 text-xs">{t('management.table.f5s')}</TableHead>
                   <TableHead className="text-right w-12 text-xs" title={t('management.table.f5_complete_tooltip')}>{t('management.table.f5_complete')}</TableHead>
-                  <TableHead className="text-right w-14 text-xs whitespace-nowrap" title={t('management.table.pct_tracker_tooltip')}>{t('management.table.pct_tracker')}</TableHead>
+                  <TableHead className="text-right w-12 text-xs whitespace-nowrap" title={t('management.table.pct_tracker_tooltip')}>{t('management.table.pct_tracker')}</TableHead>
                   {(searchRows || level === 'project') && <TableHead className="sticky right-0 bg-card text-xs shadow-[-4px_0_6px_rgba(0,0,0,0.04)]">{t('management.table.actions')}</TableHead>}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                 {(displayed||[]).length===0 ? (
-                  <TableRow><TableCell colSpan={(searchRows || level==='project')?13:(level==='room'?12:11)} className="text-center text-muted-foreground">{t('management.table.no_data')}</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={searchRows ? 14 : (level==='project' ? 13 : (level==='room'?11:12))} className="text-center text-muted-foreground">{t('management.table.no_data')}</TableCell></TableRow>
                 ) : (
                   <>
                     {/* Total Row */}
@@ -981,7 +987,7 @@ export default function ProjectManagement() {
                       {searchRows || level === 'project' ? (
                         <>
                           <TableCell className="font-semibold">Total</TableCell>
-                          <TableCell></TableCell>
+                          {searchRows ? <TableCell></TableCell> : null}
                           <TableCell></TableCell>
                         </>
                       ) : level === 'state' ? (
@@ -991,7 +997,6 @@ export default function ProjectManagement() {
                       ) : (
                         <>
                           <TableCell className="font-semibold">Total</TableCell>
-                          {level === 'room' && <TableCell></TableCell>}
                           <TableCell></TableCell>
                         </>
                       )}
@@ -999,6 +1004,7 @@ export default function ProjectManagement() {
                       <TableCell className="text-right font-semibold">{Number(totals.actual || 0).toLocaleString()}</TableCell>
                       <TableCell className="text-right font-semibold">{Number(totals.variance || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
                       <TableCell className="text-right font-semibold">{Number(totals.individuals || 0).toLocaleString()}</TableCell>
+                      <TableCell className="text-right font-semibold w-14">{totals.overdue_count ?? 0}</TableCell>
                       <TableCell className="font-semibold w-12">{totals.f4_count || 0}</TableCell>
                       <TableCell className="text-right font-semibold w-16">
                         {totals.plan > 0 ? (totals.burn * 100).toFixed(0) + '%' : '0%'}
@@ -1010,7 +1016,7 @@ export default function ProjectManagement() {
                           : `${totals.total_projects > 0 ? Math.round((totals.projects_with_f5 / totals.total_projects) * 100) : 0}%`
                         }
                       </TableCell>
-                      <TableCell className="text-right font-semibold w-24">
+                      <TableCell className="text-right font-semibold w-12">
                         {totals.pctTracker != null ? totals.pctTracker.toFixed(0) + '%' : '0%'}
                       </TableCell>
                       {(searchRows || level === 'project') && <TableCell className="sticky right-0 bg-muted/50"></TableCell>}
@@ -1035,7 +1041,7 @@ export default function ProjectManagement() {
                             )}
                           </div>
                         </TableCell>
-                        <TableCell>{r.state || '-'}</TableCell>
+                        {searchRows ? <TableCell>{r.state || '-'}</TableCell> : null}
                         <TableCell>{r.grant_serial_id || '-'}</TableCell>
                       </>
                     ) : level === 'state' ? (
@@ -1055,14 +1061,18 @@ export default function ProjectManagement() {
                             <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                           </div>
                         </TableCell>
-                        {level === 'room' && <TableCell>{r.err_name || '—'}</TableCell>}
-                        <TableCell>{r.state || '-'}</TableCell>
+                        <TableCell>{r.err_name || '—'}</TableCell>
                       </>
                     )}
                     <TableCell className="text-right">{Number(r.plan||0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
                     <TableCell className="text-right">{Number(r.actual||0).toLocaleString()}</TableCell>
                     <TableCell className="text-right">{Number(r.variance||0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
                     <TableCell className="text-right">{Number(r.individuals || 0).toLocaleString()}</TableCell>
+                    <TableCell className="text-right w-14">
+                      {(searchRows || level === 'project')
+                        ? (r.overdue != null ? r.overdue : (r.days_overdue != null ? String(r.days_overdue) : '—'))
+                        : (r.overdue_count ?? 0)}
+                    </TableCell>
                     <TableCell className="w-12">
                       {level === 'project' && r.f4_status != null && String(r.f4_status).trim() !== ''
                         ? (() => {
@@ -1090,7 +1100,7 @@ export default function ProjectManagement() {
                         : `${r.total_projects > 0 ? Math.round((r.projects_with_f5 / r.total_projects) * 100) : 0}%`
                       }
                     </TableCell>
-                    <TableCell className="text-right w-24">
+                    <TableCell className="text-right w-12">
                       {level === 'project'
                         ? (trackerScore(r) * 100).toFixed(0) + '%'
                         : (r.total_projects > 0 && r.tracker_sum != null ? ((r.tracker_sum / r.total_projects) * 100).toFixed(0) : '0') + '%'
@@ -1264,17 +1274,18 @@ export default function ProjectManagement() {
                   <TableHead className="text-right text-xs">{t('management.table.actuals')}</TableHead>
                   <TableHead className="text-right text-xs">{t('management.table.variance')}</TableHead>
                   <TableHead className="text-right text-xs">{t('management.table.burn')}</TableHead>
+                  <TableHead className="text-right w-14 text-xs whitespace-nowrap" title={t('management.table.overdue_tooltip')}>{t('management.table.overdue')}</TableHead>
                   <TableHead className="w-10 text-xs">{t('management.table.f4s')}</TableHead>
                   <TableHead className="text-right w-12 text-xs" title={t('management.table.f4_complete_tooltip')}>{t('management.table.f4_complete')}</TableHead>
                   <TableHead className="w-10 text-xs">{t('management.table.f5s')}</TableHead>
                   <TableHead className="text-right w-12 text-xs" title={t('management.table.f5_complete_tooltip')}>{t('management.table.f5_complete')}</TableHead>
-                  <TableHead className="text-right w-20 text-xs whitespace-nowrap" title={t('management.table.pct_tracker_tooltip')}>{t('management.table.pct_tracker')}</TableHead>
+                  <TableHead className="text-right w-12 text-xs whitespace-nowrap" title={t('management.table.pct_tracker_tooltip')}>{t('management.table.pct_tracker')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {grantSummaryRows.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={10} className="text-center text-muted-foreground">{t('management.table.no_data')}</TableCell>
+                    <TableCell colSpan={11} className="text-center text-muted-foreground">{t('management.table.no_data')}</TableCell>
                   </TableRow>
                 ) : (
                   <>
@@ -1296,6 +1307,9 @@ export default function ProjectManagement() {
                           return totalPlan > 0 ? (totalActual / totalPlan * 100).toFixed(0) + '%' : '0%'
                         })()}
                       </TableCell>
+                      <TableCell className="text-right font-semibold w-14">
+                        {grantSummaryRows.reduce((s, r) => s + (r.overdue_count ?? 0), 0)}
+                      </TableCell>
                       <TableCell className="font-semibold w-12">
                         {grantSummaryRows.reduce((s, r) => s + r.f4_count, 0)}
                       </TableCell>
@@ -1316,7 +1330,7 @@ export default function ProjectManagement() {
                           return total > 0 ? Math.round((withF5 / total) * 100) + '%' : '0%'
                         })()}
                       </TableCell>
-                      <TableCell className="text-right font-semibold w-24">
+                      <TableCell className="text-right font-semibold w-12">
                         {(() => {
                           const totalProj = grantSummaryRows.reduce((s, r) => s + r.total_projects, 0)
                           const sumTracker = grantSummaryRows.reduce((s, r) => s + (r.tracker_sum ?? 0), 0)
@@ -1331,6 +1345,7 @@ export default function ProjectManagement() {
                         <TableCell className="text-right">{Number(r.actual || 0).toLocaleString()}</TableCell>
                         <TableCell className="text-right">{Number(r.variance || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
                         <TableCell className="text-right">{r.burn ? (r.burn * 100).toFixed(0) + '%' : '0%'}</TableCell>
+                        <TableCell className="text-right w-14">{r.overdue_count ?? 0}</TableCell>
                         <TableCell className="w-12">{r.f4_count || 0}</TableCell>
                         <TableCell className="text-right w-16">
                           {r.total_projects > 0 ? Math.round((r.projects_with_f4 / r.total_projects) * 100) + '%' : '0%'}
@@ -1339,7 +1354,7 @@ export default function ProjectManagement() {
                         <TableCell className="text-right w-16">
                           {r.total_projects > 0 ? Math.round((r.projects_with_f5 / r.total_projects) * 100) + '%' : '0%'}
                         </TableCell>
-                        <TableCell className="text-right w-24">
+                        <TableCell className="text-right w-12">
                           {r.total_projects > 0 && r.tracker_sum != null ? ((r.tracker_sum / r.total_projects) * 100).toFixed(0) + '%' : '0%'}
                         </TableCell>
                       </TableRow>

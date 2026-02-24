@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Label } from '@/components/ui/label'
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
-import { FileText, FileCheck, Receipt, FileSignature, CheckCircle } from 'lucide-react'
+import { FileText, FileCheck, Receipt, FileSignature, CheckCircle, AlertCircle } from 'lucide-react'
 
 interface ProjectDetailModalProps {
   projectId: string | null
@@ -142,6 +142,29 @@ export default function ProjectDetailModal({ projectId, open, onOpenChange }: Pr
           <div className="py-8 text-center text-muted-foreground">{t('management.detail_modal.no_data')}</div>
         ) : (
           <div className="space-y-6">
+            {/* Overdue banner: show when overdue > 0 */}
+            {(() => {
+              const overdueDays = project?.days_overdue ?? (project?.overdue != null ? parseInt(String(project.overdue), 10) : null)
+              if (overdueDays == null || Number.isNaN(overdueDays) || overdueDays <= 0) return null
+              const transferDate = project?.date_transfer ? new Date(project.date_transfer).toLocaleDateString() : '—'
+              const dueDate = project?.date_transfer
+                ? new Date(new Date(project.date_transfer).getTime() + 32 * 24 * 60 * 60 * 1000).toLocaleDateString()
+                : '—'
+              return (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/40 p-4 flex flex-col gap-2">
+                  <div className="flex items-center gap-2 font-semibold text-amber-800 dark:text-amber-200">
+                    <AlertCircle className="h-5 w-5 shrink-0" />
+                    {t('management.detail_modal.overdue_banner_title', { days: overdueDays })}
+                  </div>
+                  <p className="text-sm text-amber-700 dark:text-amber-300">
+                    {t('management.detail_modal.overdue_calc')}
+                  </p>
+                  <p className="text-xs text-amber-600 dark:text-amber-400">
+                    {t('management.detail_modal.overdue_calc_formula', { transferDate, dueDate, days: overdueDays })}
+                  </p>
+                </div>
+              )
+            })()}
             {isHistorical ? (
               <>
                 {/* Historical Project Fields */}
