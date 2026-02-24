@@ -10,6 +10,8 @@
   "created_at": "Created",
   "updated_at": "Last Updated",
   "actions": "Actions",
+  "support_role": "Support",
+  "superadmin_role": "Superadmin",
   "state_err_role": "State ERR",
   "base_err_role": "Base ERR",
   "admin_role": "Admin",

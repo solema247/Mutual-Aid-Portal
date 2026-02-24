@@ -1,7 +1,7 @@
 import functionsList from '@/data/functions.json'
 import rolePermissions from '@/data/rolePermissions.json'
 
-export type Role = 'superadmin' | 'admin' | 'state_err' | 'base_err'
+export type Role = 'support' | 'superadmin' | 'admin' | 'state_err' | 'base_err'
 export interface PermissionUser {
   id: string
   role: Role
@@ -23,7 +23,7 @@ const allCodes = (functionsList as FunctionDefinition[]).map((f) => f.code)
 const roleDefaults = rolePermissions as Record<string, string[]>
 
 function getBaseAllowedForRole(role: string): Set<string> {
-  if (role === 'superadmin') return new Set(allCodes)
+  if (role === 'support' || role === 'superadmin') return new Set(allCodes)
   const list = roleDefaults[role]
   if (role === 'admin' && (!list || list.length === 0)) return new Set(allCodes)
   return new Set(list || [])
@@ -37,7 +37,7 @@ export function getAllowedSetFromOverrides(
   user: PermissionUser,
   overridesMap: UserOverridesMap
 ): Set<string> {
-  if (user.role === 'superadmin') return new Set(allCodes)
+  if (user.role === 'support' || user.role === 'superadmin') return new Set(allCodes)
   const base = getBaseAllowedForRole(user.role)
   const override = overridesMap[user.id]
   if (!override) return base

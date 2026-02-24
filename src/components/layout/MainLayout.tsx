@@ -28,6 +28,7 @@ interface MainLayoutProps {
 function formatRole(role: string | undefined): string {
   if (!role) return ''
   const map: Record<string, string> = {
+    support: 'Support',
     superadmin: 'Super Admin',
     admin: 'Admin',
     state_err: 'State ERR',

@@ -328,7 +328,7 @@ export default function GrantCallsManager() {
                 <SelectItem value="Complete">Complete</SelectItem>
               </SelectContent>
             </Select>
-            {(currentUser?.role === 'admin' || currentUser?.role === 'superadmin') && GRANTS_TABLE_EDIT_ENABLED && (
+            {(currentUser?.role === 'support' || currentUser?.role === 'admin' || currentUser?.role === 'superadmin') && GRANTS_TABLE_EDIT_ENABLED && (
               <>
                 {!isEditMode ? (
                   <Button 
@@ -587,13 +587,13 @@ export default function GrantCallsManager() {
                 <TableHead className="px-2">Total Transferred (USD)</TableHead>
                 <TableHead className="px-2">Sum Activity Amount (USD)</TableHead>
                 <TableHead className="px-2">Sum Transfer Fee (USD)</TableHead>
-                {(currentUser?.role === 'admin' || currentUser?.role === 'superadmin') && GRANTS_TABLE_EDIT_ENABLED && isEditMode && <TableHead className="px-2">Actions</TableHead>}
+                {(currentUser?.role === 'support' || currentUser?.role === 'admin' || currentUser?.role === 'superadmin') && GRANTS_TABLE_EDIT_ENABLED && isEditMode && <TableHead className="px-2">Actions</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
               {grants.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={(currentUser?.role === 'admin' || currentUser?.role === 'superadmin') && GRANTS_TABLE_EDIT_ENABLED && isEditMode ? 10 : 9} className="text-center py-6 text-muted-foreground text-xs">
+                  <TableCell colSpan={(currentUser?.role === 'support' || currentUser?.role === 'admin' || currentUser?.role === 'superadmin') && GRANTS_TABLE_EDIT_ENABLED && isEditMode ? 10 : 9} className="text-center py-6 text-muted-foreground text-xs">
                     No grants found
                   </TableCell>
                 </TableRow>
@@ -612,7 +612,7 @@ export default function GrantCallsManager() {
                     <TableCell className="text-right whitespace-nowrap">{formatCurrency(grant.total_transferred_amount_usd)}</TableCell>
                     <TableCell className="text-right whitespace-nowrap">{formatCurrency(grant.sum_activity_amount)}</TableCell>
                     <TableCell className="text-right whitespace-nowrap">{formatCurrency(grant.sum_transfer_fee_amount)}</TableCell>
-                    {(currentUser?.role === 'admin' || currentUser?.role === 'superadmin') && GRANTS_TABLE_EDIT_ENABLED && isEditMode && (
+                    {(currentUser?.role === 'support' || currentUser?.role === 'admin' || currentUser?.role === 'superadmin') && GRANTS_TABLE_EDIT_ENABLED && isEditMode && (
                       <TableCell>
                         <div className="flex items-center gap-1">
                           <Button

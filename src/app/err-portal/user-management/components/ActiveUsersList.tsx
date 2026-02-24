@@ -39,7 +39,7 @@ export default function ActiveUsersList({
       const { users: fetchedUsers } = await getActiveUsers({
         page: 1,
         pageSize: 20,
-        role: selectedRole === 'all' ? undefined : selectedRole as 'superadmin' | 'admin' | 'state_err' | 'base_err',
+        role: selectedRole === 'all' ? undefined : selectedRole as 'support' | 'superadmin' | 'admin' | 'state_err' | 'base_err',
         status: selectedStatus,
         sortOrder,
         currentUserRole,
@@ -47,12 +47,12 @@ export default function ActiveUsersList({
       })
 
       const formattedUsers: ActiveUserListItem[] = fetchedUsers
-        .filter(user => user.role !== 'superadmin') // Exclude superadmin from display
+        .filter(user => currentUserRole === 'support' || user.role !== 'support')
         .map(user => ({
           id: user.id,
           err_id: user.err_id,
           display_name: user.display_name,
-          role: user.role as 'superadmin' | 'admin' | 'state_err' | 'base_err',
+          role: user.role as 'support' | 'superadmin' | 'admin' | 'state_err' | 'base_err',
           status: user.status as 'active' | 'suspended',
           createdAt: new Date(user.created_at || '').toLocaleDateString(),
           updatedAt: user.updated_at ? new Date(user.updated_at).toLocaleDateString() : null,
@@ -64,7 +64,6 @@ export default function ActiveUsersList({
         }))
 
       setUsers(formattedUsers)
-      // Note: total count from API includes superadmins, but we filter them out in display
     } catch (err) {
       setError(t('common:error_fetching_data'))
       console.error(err)
@@ -78,8 +77,9 @@ export default function ActiveUsersList({
   }, [selectedRole, selectedStatus, sortOrder, fetchUsers])
 
   const canChangeStatus = (userRole: string) => {
-    // Only superadmin and admin can change status
-    return currentUserRole === 'superadmin' || currentUserRole === 'admin'
+    if (userRole === 'superadmin') return currentUserRole === 'support'
+    if (userRole === 'admin') return currentUserRole === 'support' || currentUserRole === 'superadmin'
+    return currentUserRole === 'support' || currentUserRole === 'superadmin' || currentUserRole === 'admin'
   }
 
   const handleStatusChange = async (userId: string, newStatus: 'active' | 'suspended', userRole: string) => {
@@ -128,6 +128,8 @@ export default function ActiveUsersList({
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">{t('users:all_roles')}</SelectItem>
+            {currentUserRole === 'support' && <SelectItem value="support">Support</SelectItem>}
+            <SelectItem value="superadmin">Superadmin</SelectItem>
             <SelectItem value="admin">{t('users:admin_role')}</SelectItem>
             <SelectItem value="state_err">{t('users:state_err_role')}</SelectItem>
             <SelectItem value="base_err">{t('users:base_err_role')}</SelectItem>
@@ -184,14 +186,17 @@ export default function ActiveUsersList({
                       user.status === 'active' ? 'text-red-600 hover:text-red-800' : 'text-primary hover:opacity-80'
                     } disabled:opacity-50`}
                     title={
-                      user.role === 'admin' && currentUserRole !== 'superadmin'
-                        ? 'Only superadmin can change admin status'
+                      user.role === 'superadmin' && currentUserRole !== 'support'
+                        ? 'Only support can change superadmin status'
+                        : user.role === 'admin' && currentUserRole !== 'superadmin' && currentUserRole !== 'support'
+                        ? 'Only superadmin or support can change admin status'
                         : t(user.status === 'active' ? 'users:suspend' : 'users:activate')
                     }
                     onClick={() => handleStatusChange(user.id, user.status === 'active' ? 'suspended' : 'active', user.role)}
                     disabled={
                       processingId === user.id ||
-                      (user.role === 'admin' && currentUserRole !== 'superadmin')
+                      (user.role === 'superadmin' && currentUserRole !== 'support') ||
+                      (user.role === 'admin' && currentUserRole !== 'superadmin' && currentUserRole !== 'support')
                     }
                   >
                     {processingId === user.id ? '...' : user.status === 'active' ? '⊘' : '✓'}
@@ -201,7 +206,7 @@ export default function ActiveUsersList({
                 )}
               </div>
               <div>
-                {(currentUserRole === 'admin' || currentUserRole === 'superadmin') && (
+                {(currentUserRole === 'support' || currentUserRole === 'admin' || currentUserRole === 'superadmin') && (
                   <Link
                     href={`/err-portal/user-management/permissions?userId=${user.id}`}
                     className="text-primary hover:underline text-sm"

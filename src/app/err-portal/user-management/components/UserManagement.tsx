@@ -71,12 +71,12 @@ export default function UserManagement() {
       setIsLoading(true)
       const users = await getPendingUsers(currentUser.role, currentUser.err_id)
       const formattedUsers: PendingUserListItem[] = users
-        .filter(user => user.role !== 'superadmin') // Exclude superadmin from display
+        .filter(user => currentUser.role === 'support' || user.role !== 'support')
         .map(user => ({
           id: user.id,
           err_id: user.err_id,
           display_name: user.display_name,
-          role: user.role as 'superadmin' | 'admin' | 'state_err' | 'base_err',
+          role: user.role as 'support' | 'superadmin' | 'admin' | 'state_err' | 'base_err',
           createdAt: new Date(user.created_at || '').toLocaleDateString(),
           status: user.status as 'pending' | 'active' | 'suspended',
           err_name: user.emergency_rooms?.name || '-',
@@ -101,7 +101,7 @@ export default function UserManagement() {
   if (!currentUser) return null
   if (!canViewPage) return null
 
-  const isAdmin = currentUser.role === 'admin' || currentUser.role === 'superadmin'
+  const isAdmin = currentUser.role === 'support' || currentUser.role === 'admin' || currentUser.role === 'superadmin'
 
   return (
     <div className="space-y-6">

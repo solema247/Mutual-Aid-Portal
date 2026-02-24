@@ -83,7 +83,7 @@ export default function AccessRightsManagement({
       const { users: fetchedUsers, total } = await getActiveUsers({
         page: currentPage,
         pageSize: PAGE_SIZE,
-        role: selectedRole === 'all' ? undefined : selectedRole as 'superadmin' | 'admin' | 'state_err' | 'base_err',
+        role: selectedRole === 'all' ? undefined : selectedRole as 'support' | 'superadmin' | 'admin' | 'state_err' | 'base_err',
         status: 'active',
         sortOrder: 'desc',
         currentUserRole,
@@ -92,12 +92,12 @@ export default function AccessRightsManagement({
       })
 
       const formattedUsers: ActiveUserListItem[] = fetchedUsers
-        .filter(user => user.role !== 'superadmin') // Exclude superadmin from display
+        .filter(user => currentUserRole === 'support' || user.role !== 'support')
         .map(user => ({
           id: user.id,
           err_id: user.err_id,
           display_name: user.display_name,
-          role: user.role as 'superadmin' | 'admin' | 'state_err' | 'base_err',
+          role: user.role as 'support' | 'superadmin' | 'admin' | 'state_err' | 'base_err',
           status: user.status as 'active' | 'suspended',
           createdAt: new Date(user.created_at || '').toLocaleDateString(),
           updatedAt: user.updated_at ? new Date(user.updated_at).toLocaleDateString() : null,
@@ -109,9 +109,8 @@ export default function AccessRightsManagement({
         }))
 
       setUsers(formattedUsers)
-      // Adjust total count to exclude superadmins
-      const superadminCount = fetchedUsers.filter(u => u.role === 'superadmin').length
-      setTotalUsers(total - superadminCount)
+      const supportCount = currentUserRole === 'support' ? 0 : fetchedUsers.filter(u => u.role === 'support').length
+      setTotalUsers(total - supportCount)
     } catch (err) {
       setError(t('common:error_fetching_data'))
       console.error(err)
@@ -129,7 +128,7 @@ export default function AccessRightsManagement({
     setCurrentPage(1)
   }, [selectedRole, selectedState])
 
-  const handleRoleChange = async (userId: string, newRole: 'superadmin' | 'admin' | 'state_err' | 'base_err') => {
+  const handleRoleChange = async (userId: string, newRole: 'support' | 'superadmin' | 'admin' | 'state_err' | 'base_err') => {
     try {
       setSavingUserId(userId)
       const res = await fetch(`/api/users/${userId}/access-rights`, {
@@ -158,9 +157,8 @@ export default function AccessRightsManagement({
     visibleStates: string[],
     userRole: string
   ) => {
-    // Only superadmin can change state access for admin users
-    if (userRole === 'admin' && currentUserRole !== 'superadmin') {
-      setError('Only superadmin can change state access for admin users')
+    if (userRole === 'admin' && currentUserRole !== 'superadmin' && currentUserRole !== 'support') {
+      setError('Only superadmin or support can change state access for admin users')
       setTimeout(() => setError(null), 5000)
       setOpenDropdownId(null)
       return
@@ -216,6 +214,8 @@ export default function AccessRightsManagement({
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">{t('users:all_roles')}</SelectItem>
+            {currentUserRole === 'support' && <SelectItem value="support">Support</SelectItem>}
+            <SelectItem value="superadmin">Superadmin</SelectItem>
             <SelectItem value="admin">{t('users:admin_role')}</SelectItem>
             <SelectItem value="state_err">{t('users:state_err_role')}</SelectItem>
             <SelectItem value="base_err">{t('users:base_err_role')}</SelectItem>
@@ -255,7 +255,7 @@ export default function AccessRightsManagement({
             const isDropdownOpen = openDropdownId === user.id
             const userStates = user.visible_states || []
             const canSeeAll = user.can_see_all_states ?? true
-            const canChangeStateAccess = currentUserRole === 'superadmin' || user.role !== 'admin'
+            const canChangeStateAccess = currentUserRole === 'support' || currentUserRole === 'superadmin' || user.role !== 'admin'
 
             return (
               <div key={user.id} className="grid grid-cols-6 gap-4 p-4 hover:bg-muted/50">
@@ -264,21 +264,23 @@ export default function AccessRightsManagement({
                 <div className="flex items-center">
                   <Select
                     value={user.role}
-                    onValueChange={(value) => handleRoleChange(user.id, value as 'superadmin' | 'admin' | 'state_err' | 'base_err')}
+                    onValueChange={(value) => handleRoleChange(user.id, value as 'support' | 'superadmin' | 'admin' | 'state_err' | 'base_err')}
                     disabled={
                       savingUserId === user.id ||
-                      user.role === 'superadmin' || // Cannot change superadmin role
-                      (user.role === 'admin' && currentUserRole !== 'superadmin') // Only superadmin can change admin
+                      (user.role === 'support') ||
+                      (user.role === 'superadmin' && currentUserRole !== 'support') ||
+                      (user.role === 'admin' && currentUserRole !== 'superadmin' && currentUserRole !== 'support')
                     }
                   >
                     <SelectTrigger className="w-[120px] border-input bg-background text-xs h-8">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {currentUserRole === 'superadmin' && (
-                        <SelectItem value="superadmin">Superadmin</SelectItem>
+                      {currentUserRole === 'support' && (
+                        <SelectItem value="support">Support</SelectItem>
                       )}
-                      {currentUserRole === 'superadmin' && (
+                      <SelectItem value="superadmin">Superadmin</SelectItem>
+                      {(currentUserRole === 'support' || currentUserRole === 'superadmin') && (
                         <SelectItem value="admin">{t('users:admin_role')}</SelectItem>
                       )}
                       <SelectItem value="state_err">{t('users:state_err_role')}</SelectItem>
@@ -287,9 +289,6 @@ export default function AccessRightsManagement({
                   </Select>
                   {savingUserId === user.id && (
                     <span className="ml-2 text-xs text-muted-foreground">Saving...</span>
-                  )}
-                  {user.role === 'superadmin' && (
-                    <span className="ml-2 text-xs text-muted-foreground">(Protected)</span>
                   )}
                 </div>
 
@@ -307,7 +306,7 @@ export default function AccessRightsManagement({
                         setOpenDropdownId(isDropdownOpen ? null : user.id)
                       }
                     }}
-                    title={!canChangeStateAccess ? 'Only superadmin can change state access for admin users' : ''}
+                    title={!canChangeStateAccess ? 'Only superadmin or support can change state access for admin users' : ''}
                   >
                     {canSeeAll ? (
                       <Badge variant="default" className="bg-blue-200 hover:bg-blue-300 text-blue-800 border-blue-300">

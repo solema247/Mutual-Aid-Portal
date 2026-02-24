@@ -17,7 +17,7 @@ export async function GET() {
     .eq('auth_user_id', session.user.id)
     .single()
   const role = userRow?.role
-  if (role !== 'admin' && role !== 'superadmin') {
+  if (role !== 'admin' && role !== 'superadmin' && role !== 'support') {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
   const byModule = getFunctionsByModule()

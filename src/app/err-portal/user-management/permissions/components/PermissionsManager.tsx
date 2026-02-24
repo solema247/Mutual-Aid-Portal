@@ -94,7 +94,7 @@ export default function PermissionsManager({
     })
       .then(({ users: u }) => {
         const list = u
-          .filter((x) => x.role !== 'superadmin')
+          .filter((x) => currentUserRole === 'support' || x.role !== 'support')
           .map((x) => ({
             id: x.id,
             display_name: x.display_name,

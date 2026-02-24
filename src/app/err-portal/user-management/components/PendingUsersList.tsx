@@ -18,13 +18,12 @@ export default function PendingUsersList({ users, isLoading, onUpdate, currentUs
   const [error, setError] = useState<string | null>(null)
 
   const canApprove = (userRole: string) => {
-    // Everyone can approve (except superadmin which is filtered out)
+    if (userRole === 'superadmin') return currentUserRole === 'support'
     return true
   }
 
   const canDecline = (userRole: string) => {
-    // Only superadmin and admin can decline
-    return currentUserRole === 'superadmin' || currentUserRole === 'admin'
+    return currentUserRole === 'support' || currentUserRole === 'superadmin' || currentUserRole === 'admin'
   }
 
   const handleApprove = async (userId: string, userRole: string) => {
@@ -101,9 +100,9 @@ export default function PendingUsersList({ users, isLoading, onUpdate, currentUs
               {canDecline(user.role) && (
                 <button 
                   className="text-red-600 hover:text-red-800 disabled:opacity-50"
-                  title={t('users:decline')}
+                  title={user.role === 'superadmin' && currentUserRole !== 'support' ? 'Only support can decline superadmin' : t('users:decline')}
                   onClick={() => handleDecline(user.id, user.role)}
-                  disabled={processingId === user.id}
+                  disabled={processingId === user.id || !canApprove(user.role)}
                 >
                   {processingId === user.id ? '...' : '✕'}
                 </button>

@@ -44,6 +44,7 @@ function getStateName(user: { emergency_rooms?: unknown }): string {
 
 function roleLabel(role: string): string {
   const labels: Record<string, string> = {
+    support: 'Support',
     admin: 'Admin',
     superadmin: 'Superadmin',
     state_err: 'State ERR',
@@ -124,7 +125,7 @@ export default function BulkPermissionsManager({
     })
       .then(({ users: u }) => {
         const list = (u || [])
-          .filter((x: { role: string }) => x.role !== 'superadmin')
+          .filter((x: { role: string }) => currentUserRole === 'support' || x.role !== 'support')
           .map((x: { id: string; display_name: string | null; role: string; emergency_rooms?: unknown }) => ({
             id: x.id,
             display_name: x.display_name,

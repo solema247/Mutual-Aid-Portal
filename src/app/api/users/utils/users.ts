@@ -75,7 +75,7 @@ export async function getPendingUsers(currentUserRole: string, currentUserErrId:
 interface GetActiveUsersParams {
   page: number
   pageSize: number
-  role?: 'superadmin' | 'admin' | 'state_err' | 'base_err'
+  role?: 'support' | 'superadmin' | 'admin' | 'state_err' | 'base_err'
   status?: 'active' | 'suspended'
   sortBy?: string
   sortOrder?: 'asc' | 'desc'
@@ -222,7 +222,6 @@ export async function getActiveUsers({
 }
 
 export async function approveUser(userId: string, currentUserRole?: string): Promise<void> {
-  // Check if target user is superadmin - only superadmin can approve superadmin
   const { data: targetUser, error: targetError } = await supabase
     .from('users')
     .select('role')
@@ -234,8 +233,8 @@ export async function approveUser(userId: string, currentUserRole?: string): Pro
     throw targetError
   }
 
-  if (targetUser?.role === 'superadmin' && currentUserRole !== 'superadmin') {
-    throw new Error('Only superadmin can approve superadmin users')
+  if (targetUser?.role === 'superadmin' && currentUserRole !== 'superadmin' && currentUserRole !== 'support') {
+    throw new Error('Only superadmin or support can approve superadmin users')
   }
 
   const { error } = await supabase
@@ -250,7 +249,6 @@ export async function approveUser(userId: string, currentUserRole?: string): Pro
 }
 
 export async function declineUser(userId: string, currentUserRole?: string): Promise<void> {
-  // Check if target user is superadmin - only superadmin can decline superadmin
   const { data: targetUser, error: targetError } = await supabase
     .from('users')
     .select('role')
@@ -262,8 +260,8 @@ export async function declineUser(userId: string, currentUserRole?: string): Pro
     throw targetError
   }
 
-  if (targetUser?.role === 'superadmin' && currentUserRole !== 'superadmin') {
-    throw new Error('Only superadmin can decline superadmin users')
+  if (targetUser?.role === 'superadmin' && currentUserRole !== 'superadmin' && currentUserRole !== 'support') {
+    throw new Error('Only superadmin or support can decline superadmin users')
   }
 
   const { error } = await supabase
@@ -278,7 +276,6 @@ export async function declineUser(userId: string, currentUserRole?: string): Pro
 }
 
 export async function suspendUser(userId: string, currentUserRole?: string): Promise<void> {
-  // Check if target user is admin - only superadmin can suspend admin
   const { data: targetUser, error: targetError } = await supabase
     .from('users')
     .select('role')
@@ -290,8 +287,11 @@ export async function suspendUser(userId: string, currentUserRole?: string): Pro
     throw targetError
   }
 
-  if (targetUser?.role === 'admin' && currentUserRole !== 'superadmin') {
-    throw new Error('Only superadmin can suspend admin users')
+  if (targetUser?.role === 'superadmin' && currentUserRole !== 'support') {
+    throw new Error('Only support can suspend superadmin users')
+  }
+  if (targetUser?.role === 'admin' && currentUserRole !== 'superadmin' && currentUserRole !== 'support') {
+    throw new Error('Only superadmin or support can suspend admin users')
   }
 
   const { error } = await supabase
@@ -309,7 +309,6 @@ export async function suspendUser(userId: string, currentUserRole?: string): Pro
 }
 
 export async function activateUser(userId: string, currentUserRole?: string): Promise<void> {
-  // Check if target user is admin - only superadmin can activate admin
   const { data: targetUser, error: targetError } = await supabase
     .from('users')
     .select('role')
@@ -321,8 +320,11 @@ export async function activateUser(userId: string, currentUserRole?: string): Pr
     throw targetError
   }
 
-  if (targetUser?.role === 'admin' && currentUserRole !== 'superadmin') {
-    throw new Error('Only superadmin can activate admin users')
+  if (targetUser?.role === 'superadmin' && currentUserRole !== 'support') {
+    throw new Error('Only support can activate superadmin users')
+  }
+  if (targetUser?.role === 'admin' && currentUserRole !== 'superadmin' && currentUserRole !== 'support') {
+    throw new Error('Only superadmin or support can activate admin users')
   }
 
   const { error } = await supabase

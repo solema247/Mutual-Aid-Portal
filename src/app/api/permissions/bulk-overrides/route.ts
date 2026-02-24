@@ -16,7 +16,7 @@ export async function POST(request: Request) {
     .select('role')
     .eq('auth_user_id', session.user.id)
     .single()
-  if (currentUser?.role !== 'admin' && currentUser?.role !== 'superadmin') {
+  if (currentUser?.role !== 'admin' && currentUser?.role !== 'superadmin' && currentUser?.role !== 'support') {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 

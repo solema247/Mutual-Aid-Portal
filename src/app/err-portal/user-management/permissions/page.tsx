@@ -28,7 +28,7 @@ export default function PermissionsPage() {
       .then((data) => {
         if (cancelled) return
         const role = data.role
-        if (role !== 'admin' && role !== 'superadmin') {
+        if (role !== 'admin' && role !== 'superadmin' && role !== 'support') {
           router.replace('/err-portal/user-management')
           return
         }

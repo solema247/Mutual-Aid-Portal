@@ -10,6 +10,8 @@
   "created_at": "تاريخ الإنشاء",
   "updated_at": "آخر تحديث",
   "actions": "الإجراءات",
+  "support_role": "الدعم",
+  "superadmin_role": "مشرف أعلى",
   "state_err_role": "غرفة طوارئ ولائية",
   "base_err_role": "غرفة طوارئ قاعدية",
   "admin_role": "مسؤول",
