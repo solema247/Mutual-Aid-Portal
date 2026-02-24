@@ -226,7 +226,7 @@ export default function ViewF4Modal({ summaryId, open, onOpenChange, onSaved }: 
               </div>
               <div className="mt-3">
                 <Label>Project Objectives</Label>
-                <div className="min-h-[40px] px-3 py-2 rounded border bg-muted/50 text-sm whitespace-pre-wrap">{project?.project_objectives || '-'}</div>
+                <div className="min-h-[40px] max-h-[14rem] overflow-y-auto px-3 py-2 rounded border bg-muted/50 text-sm whitespace-pre-wrap break-words">{project?.project_objectives || '-'}</div>
               </div>
             </div>
 
@@ -240,12 +240,12 @@ export default function ViewF4Modal({ summaryId, open, onOpenChange, onSaved }: 
                   <div className="h-10 flex items-center px-3 rounded border bg-muted/50">{summary?.report_date ? new Date(summary.report_date).toLocaleDateString() : '-'}</div>
                 )}
               </div>
-              <div>
+              <div className={!isEditing ? 'col-span-2' : ''}>
                 <Label>Beneficiaries</Label>
                 {isEditing ? (
                   <Input value={summaryDraft?.beneficiaries || ''} onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), beneficiaries: e.target.value }))} />
                 ) : (
-                  <div className="h-10 flex items-center px-3 rounded border bg-muted/50">{summary?.beneficiaries || '-'}</div>
+                  <div className="min-h-[2.5rem] max-h-[14rem] overflow-y-auto px-3 py-2 rounded border bg-muted/50 text-sm whitespace-pre-wrap break-words">{summary?.beneficiaries || '-'}</div>
                 )}
               </div>
             </div>
@@ -310,7 +310,7 @@ export default function ViewF4Modal({ summaryId, open, onOpenChange, onSaved }: 
                 {isEditing ? (
                   <Input value={summaryDraft?.excess_expenses || ''} onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), excess_expenses: e.target.value }))} />
                 ) : (
-                  <div className="min-h-[40px] px-3 py-2 rounded border bg-muted/50 text-sm whitespace-pre-wrap">{summary?.excess_expenses || '-'}</div>
+                  <div className="min-h-[40px] max-h-[10rem] overflow-y-auto px-3 py-2 rounded border bg-muted/50 text-sm whitespace-pre-wrap break-words">{summary?.excess_expenses || '-'}</div>
                 )}
               </div>
               <div>
@@ -318,7 +318,7 @@ export default function ViewF4Modal({ summaryId, open, onOpenChange, onSaved }: 
                 {isEditing ? (
                   <Input value={summaryDraft?.surplus_use || ''} onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), surplus_use: e.target.value }))} />
                 ) : (
-                  <div className="min-h-[40px] px-3 py-2 rounded border bg-muted/50 text-sm whitespace-pre-wrap">{summary?.surplus_use || '-'}</div>
+                  <div className="min-h-[40px] max-h-[10rem] overflow-y-auto px-3 py-2 rounded border bg-muted/50 text-sm whitespace-pre-wrap break-words">{summary?.surplus_use || '-'}</div>
                 )}
               </div>
               <div>
@@ -326,7 +326,7 @@ export default function ViewF4Modal({ summaryId, open, onOpenChange, onSaved }: 
                 {isEditing ? (
                   <Input value={summaryDraft?.lessons || ''} onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), lessons: e.target.value }))} />
                 ) : (
-                  <div className="min-h-[40px] px-3 py-2 rounded border bg-muted/50 text-sm whitespace-pre-wrap">{summary?.lessons || '-'}</div>
+                  <div className="min-h-[40px] max-h-[10rem] overflow-y-auto px-3 py-2 rounded border bg-muted/50 text-sm whitespace-pre-wrap break-words">{summary?.lessons || '-'}</div>
                 )}
               </div>
               <div>
@@ -334,7 +334,7 @@ export default function ViewF4Modal({ summaryId, open, onOpenChange, onSaved }: 
                 {isEditing ? (
                   <Input value={summaryDraft?.training || ''} onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), training: e.target.value }))} />
                 ) : (
-                  <div className="min-h-[40px] px-3 py-2 rounded border bg-muted/50 text-sm whitespace-pre-wrap">{summary?.training || '-'}</div>
+                  <div className="min-h-[40px] max-h-[10rem] overflow-y-auto px-3 py-2 rounded border bg-muted/50 text-sm whitespace-pre-wrap break-words">{summary?.training || '-'}</div>
                 )}
               </div>
             </div>
