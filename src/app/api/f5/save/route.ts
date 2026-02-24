@@ -108,6 +108,12 @@ export async function POST(req: Request) {
     if (insErr) throw insErr
     const report_id = inserted.id
 
+    // Set f5_status to completed on err_projects for this project
+    await supabase
+      .from('err_projects')
+      .update({ f5_status: 'completed' })
+      .eq('id', project_id)
+
     // If a summary file exists, move it from tmp to a clear final path and record attachment
     if (file_key_temp) {
       try {

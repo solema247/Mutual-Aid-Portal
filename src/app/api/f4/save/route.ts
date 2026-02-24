@@ -127,6 +127,14 @@ export async function POST(req: Request) {
     if (insErr) throw insErr
     const summary_id = inserted.id
 
+    // For portal projects, set f4_status to completed on err_projects
+    if (actual_project_id) {
+      await supabase
+        .from('err_projects')
+        .update({ f4_status: 'completed' })
+        .eq('id', actual_project_id)
+    }
+
     // If a summary file exists, move it from tmp to a clear final path and record attachment
     if (file_key_temp) {
       try {

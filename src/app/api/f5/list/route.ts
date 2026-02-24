@@ -33,7 +33,7 @@ export async function GET() {
         err_projects (
           state,
           emergency_rooms ( name, name_ar, err_code ),
-          grant_calls ( name, shortname, donors ( name, short_name ) )
+          donors ( name, short_name )
         )
       `)
       .order('created_at', { ascending: false })
@@ -62,16 +62,14 @@ export async function GET() {
     const rows = (reports || []).map((r:any)=>{
       const prj = r.err_projects || {}
       const room = prj.emergency_rooms || {}
-      const gc = prj.grant_calls || {}
-      const donor = gc.donors || {}
+      const donorRow = prj.donors || {}
       const errName = room.name || room.name_ar || null
       return {
         id: r.id,
         project_id: r.project_id,
         err_name: errName,
         state: prj.state || null,
-        grant_call: gc?.name || gc?.shortname || null,
-        donor: donor?.short_name || donor?.name || null,
+        donor: donorRow?.short_name || donorRow?.name || null,
         report_date: r.report_date,
         activities_count: reachCounts[r.id] || 0,
         updated_at: r.created_at
