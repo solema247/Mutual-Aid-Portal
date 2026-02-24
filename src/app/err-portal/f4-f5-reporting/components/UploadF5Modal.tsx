@@ -404,6 +404,7 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved, initialProj
         .select('id, project_name, submitted_at, locality, planned_activities, expenses')
         .eq('status', 'active')
         .eq('emergency_room_id', selectedRoomId)
+        .or('f5_status.is.null,f5_status.neq.completed')
         .order('submitted_at', { ascending: false })
       setProjects(((data as any[]) || []).map((p:any)=> {
         // Extract category from first planned activity
