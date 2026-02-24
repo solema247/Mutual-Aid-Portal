@@ -33,7 +33,12 @@ export async function POST(request: Request) {
     fd.append('metadata', JSON.stringify({ ocr_max_pages: 3, form_type: 'F5' }))
 
     const baseUrl = new URL(request.url).origin
-    const ocrResp = await fetch(`${baseUrl}/api/fsystem/process`, { method: 'POST', body: fd })
+    const headers: Record<string, string> = {}
+    const cookie = request.headers.get('cookie')
+    if (cookie) headers['cookie'] = cookie
+    const auth = request.headers.get('authorization')
+    if (auth) headers['authorization'] = auth
+    const ocrResp = await fetch(`${baseUrl}/api/fsystem/process`, { method: 'POST', headers, body: fd })
     if (!ocrResp.ok) {
       try { const j = await ocrResp.json(); return NextResponse.json({ error: j?.details || 'OCR failed' }, { status: 500 }) } catch {}
       throw new Error('OCR failed')
