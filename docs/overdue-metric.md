@@ -10,7 +10,7 @@ A project is **overdue** when:
 
 1. A **transfer date** is known (funds were transferred to the ERR).
 2. The **due date** has passed. The due date is **Transfer date + 32 days**.
-3. The project is **not complete**. A project is complete only when **both F4 (financial report) and F5 (program report) are complete**.
+3. The project is **not complete**. A project is complete for overdue purposes when **both F4 and F5** have a status of **completed**, **in review**, **under review**, or **partial** (or when at least one F4 summary / F5 report exists).
 
 If all three conditions hold, the project is overdue and we report **days overdue** = (today − due date) in whole days.
 
@@ -20,15 +20,19 @@ If all three conditions hold, the project is overdue and we report **days overdu
 
 ```
 Due date     = Transfer date + 32 days
-Is complete  = (F4 is complete) AND (F5 is complete)
+Is complete  = (F4 status is complete) AND (F5 status is complete)
 Is overdue   = (Transfer date is set) AND (Due date < today) AND (NOT Is complete)
 Days overdue = When overdue: (today − Due date) in whole days; otherwise empty/null
 ```
 
+**Complete for overdue:** F4 (and F5) is considered complete when:
+- There is at least one F4 summary / F5 report for the project, **or**
+- Status is one of: **completed**, **in review**, **under review**, **partial** (case-insensitive).
+
 **Notes:**
 
 - If there is no transfer date, the project is never considered overdue.
-- If the project has both F4 and F5 complete, it is not overdue even if the due date has passed.
+- If both F4 and F5 are complete (by the above rule), the project is not overdue even if the due date has passed.
 - The 32-day window matches the logic used in the legacy Google tracker (P2H Tracker).
 
 ---

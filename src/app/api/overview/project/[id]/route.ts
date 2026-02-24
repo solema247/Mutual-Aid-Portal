@@ -3,6 +3,14 @@ import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 
 const OVERDUE_DAYS_AFTER_TRANSFER = 32
 
+/** Statuses that count as "complete" for overdue: project is not overdue when both F4 and F5 are in this set. */
+const OVERDUE_COMPLETE_STATUSES = ['completed', 'in review', 'under review', 'partial']
+
+function isStatusCompleteForOverdue(status: string | null | undefined): boolean {
+  const s = (status ?? '').toString().trim().toLowerCase()
+  return OVERDUE_COMPLETE_STATUSES.some((allowed) => s === allowed || s === allowed.replace(' ', '_'))
+}
+
 function computeOverdue(
   transferDate: string | null,
   f4Complete: boolean,
@@ -337,8 +345,8 @@ export async function GET(
 
       // Compute overdue for portal project: due = transfer + 32 days; overdue when past due and not (F4 and F5 complete)
       const effectiveTransferDate = project.date_transfer || transferDateFromMou || null
-      const f4Complete = (summariesWithExpenses?.length ?? 0) > 0 || (project.f4_status?.toLowerCase?.() === 'completed')
-      const f5Complete = (f5ReportsWithReach?.length ?? 0) > 0 || (project.f5_status?.toLowerCase?.() === 'completed')
+      const f4Complete = (summariesWithExpenses?.length ?? 0) > 0 || isStatusCompleteForOverdue(project.f4_status)
+      const f5Complete = (f5ReportsWithReach?.length ?? 0) > 0 || isStatusCompleteForOverdue(project.f5_status)
       const { days_overdue } = computeOverdue(effectiveTransferDate, f4Complete, f5Complete)
       const projectWithOverdue = {
         ...project,

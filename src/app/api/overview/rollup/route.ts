@@ -61,6 +61,14 @@ function normalizeActivitiesStateName(state: any): string {
 
 const OVERDUE_DAYS_AFTER_TRANSFER = 32
 
+/** Statuses that count as "complete" for overdue: project is not overdue when both F4 and F5 are in this set. */
+const OVERDUE_COMPLETE_STATUSES = ['completed', 'in review', 'under review', 'partial']
+
+function isStatusCompleteForOverdue(status: string | null | undefined): boolean {
+  const s = (status ?? '').toString().trim().toLowerCase()
+  return OVERDUE_COMPLETE_STATUSES.some((allowed) => s === allowed || s === allowed.replace(' ', '_'))
+}
+
 /** Compute days overdue for portal projects: due = transfer_date + 32 days; overdue only when past due and not (F4 and F5 complete). */
 function computeOverdue(
   transferDate: string | null,
@@ -313,8 +321,8 @@ export async function GET(request: Request) {
       const storedF5 = (p.f5_status != null ? String(p.f5_status).trim().toLowerCase() : null) || 'waiting'
       const f4_status = agg.count > 0 ? 'completed' : storedF4
       const f5_status = f5Agg.count > 0 ? 'completed' : storedF5
-      const f4Complete = f4_status === 'completed'
-      const f5Complete = f5_status === 'completed'
+      const f4Complete = isStatusCompleteForOverdue(f4_status)
+      const f5Complete = isStatusCompleteForOverdue(f5_status)
       const effectiveTransferDate = p.date_transfer || transferDateByProject[p.id] || null
       const { is_overdue, days_overdue } = computeOverdue(effectiveTransferDate, f4Complete, f5Complete)
       return {
