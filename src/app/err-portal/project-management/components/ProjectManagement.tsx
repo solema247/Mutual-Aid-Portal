@@ -57,6 +57,7 @@ export default function ProjectManagement() {
   const [level, setLevel] = useState<'state'|'room'|'project'>('state')
   const [selectedStateName, setSelectedStateName] = useState<string>('')
   const [selectedErrId, setSelectedErrId] = useState<string>('')
+  const [selectedErrName, setSelectedErrName] = useState<string>('')
   const [detailOpen, setDetailOpen] = useState(false)
   const [detailProjectId, setDetailProjectId] = useState<string | null>(null)
   
@@ -422,10 +423,11 @@ export default function ProjectManagement() {
   const roomRows = useMemo(() => {
     if (!selectedStateName) return [] as any[]
     const filtered = rows.filter((r:any) => r.state === selectedStateName)
-    const byRoom = new Map<string, { err_id: string; state: string; plan: number; actual: number; variance: number; burn: number; f4_count: number; f5_count: number; total_projects: number; projects_with_f4: number; projects_with_f5: number; tracker_sum: number; individuals: number; last_report_date: string | null; last_f5_date: string | null }>()
+    const byRoom = new Map<string, { err_id: string; err_name: string | null; state: string; plan: number; actual: number; variance: number; burn: number; f4_count: number; f5_count: number; total_projects: number; projects_with_f4: number; projects_with_f5: number; tracker_sum: number; individuals: number; last_report_date: string | null; last_f5_date: string | null }>()
     for (const r of filtered) {
       const key = r.err_id || '—'
-      const curr = byRoom.get(key) || { err_id: key, state: selectedStateName, plan: 0, actual: 0, variance: 0, burn: 0, f4_count: 0, f5_count: 0, total_projects: 0, projects_with_f4: 0, projects_with_f5: 0, tracker_sum: 0, individuals: 0, last_report_date: null as string | null, last_f5_date: null as string | null }
+      const curr = byRoom.get(key) || { err_id: key, err_name: null as string | null, state: selectedStateName, plan: 0, actual: 0, variance: 0, burn: 0, f4_count: 0, f5_count: 0, total_projects: 0, projects_with_f4: 0, projects_with_f5: 0, tracker_sum: 0, individuals: 0, last_report_date: null as string | null, last_f5_date: null as string | null }
+      if (curr.err_name == null && r.err_name != null) curr.err_name = r.err_name
       curr.plan += Number(r.plan || 0)
       curr.actual += Number(r.actual || 0)
       curr.variance = curr.plan - curr.actual
@@ -603,6 +605,7 @@ export default function ProjectManagement() {
     } else if (level === 'room') {
       const newErrId = r.err_id || '—'
       setSelectedErrId(newErrId)
+      setSelectedErrName(r.err_name || '')
       setLevel('project')
     } else if (level === 'project') {
       setDetailProjectId(r.project_id || null)
@@ -614,6 +617,7 @@ export default function ProjectManagement() {
     if (level === 'project') {
       setLevel('room')
       setSelectedErrId('')
+      setSelectedErrName('')
     } else if (level === 'room') {
       setLevel('state')
       setSelectedStateName('')
@@ -758,7 +762,7 @@ export default function ProjectManagement() {
                     <span className="ml-2 text-sm text-muted-foreground">{t('management.table.state')}: {selectedStateName}</span>
                   ) : null}
                   {level === 'project' && selectedErrId ? (
-                    <span className="ml-2 text-sm text-muted-foreground">{t('management.table.state')}: {selectedStateName} · {t('management.table.err')}: {selectedErrId}</span>
+                    <span className="ml-2 text-sm text-muted-foreground">{t('management.table.state')}: {selectedStateName} · {t('management.table.err')}: {selectedErrId}{selectedErrName ? ` (${selectedErrName})` : ''}</span>
                   ) : null}
                 </CardTitle>
                 <Button
@@ -951,6 +955,7 @@ export default function ProjectManagement() {
                   ) : (
                     <>
                       <TableHead className="text-xs whitespace-nowrap">{t('management.table.err')}</TableHead>
+                      {level === 'room' && <TableHead className="text-xs whitespace-nowrap">{t('management.table.err_name')}</TableHead>}
                       <TableHead className="text-xs whitespace-nowrap">{t('management.table.state')}</TableHead>
                     </>
                   )}
@@ -986,6 +991,7 @@ export default function ProjectManagement() {
                       ) : (
                         <>
                           <TableCell className="font-semibold">Total</TableCell>
+                          {level === 'room' && <TableCell></TableCell>}
                           <TableCell></TableCell>
                         </>
                       )}
@@ -1049,6 +1055,7 @@ export default function ProjectManagement() {
                             <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                           </div>
                         </TableCell>
+                        {level === 'room' && <TableCell>{r.err_name || '—'}</TableCell>}
                         <TableCell>{r.state || '-'}</TableCell>
                       </>
                     )}

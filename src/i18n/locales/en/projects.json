@@ -153,6 +153,7 @@
       "back": "Back",
       "state": "State",
       "err": "ERR",
+      "err_name": "ERR name",
       "mou": "MOU",
       "plan": "Plan",
       "actuals": "Actuals",
