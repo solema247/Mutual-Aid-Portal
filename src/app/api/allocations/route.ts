@@ -31,29 +31,29 @@ function parseDecisionDate(decisionDate: unknown): string | null {
   return null
 }
 
-// allocations_by_date has same logical data as allocations but does not trigger HV000 "allocation_id data type not match".
-const ALLOCATIONS_BY_DATE_SELECT =
-  '"Allocation_ID", "Decision_ID", "Decision_Date", "State", "Allocation Amount", "%_Decision_Amount", "Restriction"'
+// public.allocations foreign table (Airtable distribution tracking)
+const ALLOCATIONS_SELECT =
+  'allocation_id, decision_date, state, allocation_amount, percent_decision_amount, restriction'
 
-function mapAllocationsByDateRow(row: Record<string, unknown>) {
-  const allocationId = row['Allocation_ID'] != null ? String(row['Allocation_ID']) : null
-  const decisionId = row['Decision_ID'] != null ? String(row['Decision_ID']) : null
-  const amount = row['Allocation Amount'] != null ? Number(row['Allocation Amount']) : null
-  const key = decisionKeyFromAllocationId(allocationId) || decisionId || allocationId || ''
+function mapAllocationsRow(row: Record<string, unknown>) {
+  const allocationId = row['allocation_id'] != null ? String(row['allocation_id']) : null
+  const decisionId = row['decision_id']
+  const amount = row['allocation_amount'] != null ? Number(row['allocation_amount']) : null
+  const key = decisionKeyFromAllocationId(allocationId) || (decisionId != null ? String(decisionId) : '') || allocationId || ''
   return {
     allocation_id: allocationId,
     decision_key: key,
-    state: row['State'] ?? null,
+    state: row['state'] ?? null,
     allocation_amount: amount != null && !Number.isNaN(amount) ? amount : null,
-    percent_decision_amount: row['%_Decision_Amount'] != null ? Number(row['%_Decision_Amount']) : null,
-    restriction: row['Restriction'] ?? null,
-    decision_date: parseDecisionDate(row['Decision_Date']),
+    percent_decision_amount: row['percent_decision_amount'] != null ? Number(row['percent_decision_amount']) : null,
+    restriction: row['restriction'] ?? null,
+    decision_date: parseDecisionDate(row['decision_date']),
   }
 }
 
 /**
  * GET /api/allocations - List allocations for the grant-management Allocations table.
- * Reads from allocations_by_date (same data as allocations; avoids HV000 type mismatch on allocations.allocation_id).
+ * Reads from public.allocations (foreign table to Airtable distribution tracking).
  * Each row includes a computed decision_key (allocation_id prefix before last dot).
  */
 export async function GET() {
@@ -67,15 +67,15 @@ export async function GET() {
 
   try {
     const { data, error } = await supabase
-      .from('allocations_by_date')
-      .select(ALLOCATIONS_BY_DATE_SELECT)
+      .from('allocations')
+      .select(ALLOCATIONS_SELECT)
 
     if (error) {
-      console.error('Error fetching allocations from allocations_by_date:', error)
+      console.error('Error fetching allocations from allocations:', error)
       return NextResponse.json({ error: 'Failed to fetch allocations' }, { status: 500 })
     }
 
-    const list = (data || []).map((row: Record<string, unknown>) => mapAllocationsByDateRow(row))
+    const list = (data || []).map((row: Record<string, unknown>) => mapAllocationsRow(row))
     list.sort((a, b) => (a.allocation_id ?? '').localeCompare(b.allocation_id ?? '', undefined, { numeric: true }))
     return NextResponse.json(list)
   } catch (error) {
