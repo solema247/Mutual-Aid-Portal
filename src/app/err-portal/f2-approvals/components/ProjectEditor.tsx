@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
@@ -48,6 +48,7 @@ export default function ProjectEditor({ open, onOpenChange, projectId, onSaved }
   const [availableRooms, setAvailableRooms] = useState<Array<{id: string, name: string, name_ar: string | null, err_code: string | null, state_name: string, locality: string | null}>>([])
   const [selectedStateFilter, setSelectedStateFilter] = useState<string>('')
   const [availableStates, setAvailableStates] = useState<Array<{id: string, name: string, name_ar: string | null}>>([])
+  const dateInputRef = useRef<HTMLInputElement>(null)
   const [availablePlannedActivities, setAvailablePlannedActivities] = useState<Array<{ id: string; activity_name: string; activity_name_ar: string | null; language: string | null }>>([])
   const [sectors, setSectors] = useState<Array<{ id: string; sector_name_en: string; sector_name_ar: string | null }>>([])
 
@@ -592,20 +593,28 @@ export default function ProjectEditor({ open, onOpenChange, projectId, onSaved }
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <Label>{t('projects:date')}</Label>
-                <div className="relative w-full">
+                <div
+                  className="relative w-full cursor-pointer"
+                  onClick={() => dateInputRef.current?.showPicker?.()}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') dateInputRef.current?.showPicker?.() }}
+                  aria-label={t('projects:date') || 'Choose date'}
+                >
                   <input
+                    ref={dateInputRef}
                     type="date"
                     value={form.date || ''}
                     onChange={(e) => updateField('date', e.target.value || null)}
-                    className="absolute inset-0 opacity-0 cursor-pointer w-full min-h-[2.5rem]"
-                    aria-label={t('projects:date') || 'Choose date'}
+                    className="absolute inset-0 opacity-0 w-full min-h-[2.5rem] pointer-events-none"
+                    aria-hidden
                   />
                   <Input
                     type="text"
                     readOnly
                     value={formatDateDisplay(form.date)}
                     placeholder={t('projects:choose_date') || 'Choose date'}
-                    className="w-full pr-10 pointer-events-none"
+                    className="w-full pr-10 pointer-events-none bg-transparent"
                   />
                   <CalendarIcon className="h-4 w-4 absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
                 </div>
