@@ -293,7 +293,7 @@ export default function CommittedF1sTab() {
         </CardHeader>
         <CardContent className="px-3 pb-2 pt-0">
           <div className="flex flex-wrap items-end gap-2">
-            <div className="space-y-0.5 w-full sm:w-[130px] min-w-0">
+            <div className="space-y-0.5 w-full sm:w-[8rem] min-w-[8rem]">
               <Label className="text-[11px] font-normal text-muted-foreground">{t('f2:search')}</Label>
               <div className="relative">
                 <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 text-muted-foreground w-3 h-3" />
@@ -301,11 +301,11 @@ export default function CommittedF1sTab() {
                   placeholder={t('f2:search_placeholder') as string}
                   value={filters.search}
                   onChange={(e) => setFilters(prev => ({ ...prev, search: e.target.value }))}
-                  className="pl-7 h-7 text-[11px] w-full"
+                  className="pl-7 h-7 text-[11px] placeholder:text-[10px] placeholder:text-muted-foreground w-full"
                 />
               </div>
             </div>
-            <div className="space-y-0.5 w-full sm:w-[11rem] min-w-[11rem]">
+            <div className="space-y-0.5 w-full sm:w-[8rem] min-w-[8rem]">
               <Label className="text-[11px] font-normal text-muted-foreground">{t('f2:date') || 'Date'} (from)</Label>
               <Input
                 type="month"
@@ -314,7 +314,7 @@ export default function CommittedF1sTab() {
                 className="w-full h-7 text-[11px] pr-8"
               />
             </div>
-            <div className="space-y-0.5 w-full sm:w-[11rem] min-w-[11rem]">
+            <div className="space-y-0.5 w-full sm:w-[8rem] min-w-[8rem]">
               <Label className="text-[11px] font-normal text-muted-foreground">{t('f2:date') || 'Date'} (to)</Label>
               <Input
                 type="month"
@@ -323,13 +323,13 @@ export default function CommittedF1sTab() {
                 className="w-full h-7 text-[11px] pr-8"
               />
             </div>
-            <div className="space-y-0.5 w-full sm:w-[110px] min-w-0">
+            <div className="space-y-0.5 w-full sm:w-[8rem] min-w-[8rem]">
               <Label className="text-[11px] font-normal text-muted-foreground">{t('f2:state_label')}</Label>
               <Select
                 value={filters.state}
                 onValueChange={(value) => setFilters(prev => ({ ...prev, state: value }))}
               >
-                <SelectTrigger className="w-full h-7 text-[11px]">
+                <SelectTrigger className="w-full !h-7 min-h-7 py-0 text-[11px] [&>svg]:size-3">
                   <SelectValue placeholder={t('f2:all_states') as string} />
                 </SelectTrigger>
                 <SelectContent>
@@ -340,13 +340,13 @@ export default function CommittedF1sTab() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-0.5 w-full sm:w-[150px] min-w-0">
+            <div className="space-y-0.5 w-full sm:w-[8rem] min-w-[8rem]">
               <Label className="text-[11px] font-normal text-muted-foreground">Grant</Label>
               <Select
                 value={filters.grant}
                 onValueChange={(value) => setFilters(prev => ({ ...prev, grant: value }))}
               >
-                <SelectTrigger className="w-full h-7 text-[11px]">
+                <SelectTrigger className="w-full !h-7 min-h-7 py-0 text-[11px] [&>svg]:size-3">
                   <SelectValue placeholder="All Grants" />
                 </SelectTrigger>
                 <SelectContent>
