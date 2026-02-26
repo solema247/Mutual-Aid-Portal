@@ -301,7 +301,7 @@ export default function UncommittedF1sTab() {
         </CardHeader>
         <CardContent className="px-3 pb-2 pt-0">
           <div className="flex flex-wrap items-end gap-2">
-            <div className="space-y-0.5 w-full sm:w-[8rem] min-w-[8rem]">
+            <div className="space-y-0.5 w-full sm:w-[10.5rem] min-w-[10.5rem]">
               <Label className="text-[11px] font-normal text-muted-foreground">{t('f2:date') || 'Date'} (from)</Label>
               <Input
                 type="month"
@@ -310,7 +310,7 @@ export default function UncommittedF1sTab() {
                 className="w-full h-7 text-[11px] pr-8"
               />
             </div>
-            <div className="space-y-0.5 w-full sm:w-[8rem] min-w-[8rem]">
+            <div className="space-y-0.5 w-full sm:w-[10.5rem] min-w-[10.5rem]">
               <Label className="text-[11px] font-normal text-muted-foreground">{t('f2:date') || 'Date'} (to)</Label>
               <Input
                 type="month"

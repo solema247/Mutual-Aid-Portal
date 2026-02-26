@@ -173,6 +173,13 @@ export default function CommittedF1sTab() {
       if (filters.search) params.append('search', filters.search)
       if (filters.monthYearFrom) params.append('month_year_from', filters.monthYearFrom)
       if (filters.monthYearTo) params.append('month_year_to', filters.monthYearTo)
+      if (filters.grant && filters.grant !== 'all') {
+        const pipeIdx = filters.grant.indexOf('|')
+        const grantId = pipeIdx >= 0 ? filters.grant.slice(0, pipeIdx) : filters.grant
+        const donorName = pipeIdx >= 0 ? filters.grant.slice(pipeIdx + 1) : ''
+        if (grantId) params.append('grant_id', grantId)
+        if (donorName) params.append('donor_name', donorName)
+      }
 
       const response = await fetch(`/api/f2/committed?${params.toString()}`)
       if (!response.ok) throw new Error('Failed to fetch committed F1s')
@@ -305,7 +312,7 @@ export default function CommittedF1sTab() {
                 />
               </div>
             </div>
-            <div className="space-y-0.5 w-full sm:w-[8rem] min-w-[8rem]">
+            <div className="space-y-0.5 w-full sm:w-[10.5rem] min-w-[10.5rem]">
               <Label className="text-[11px] font-normal text-muted-foreground">{t('f2:date') || 'Date'} (from)</Label>
               <Input
                 type="month"
@@ -314,7 +321,7 @@ export default function CommittedF1sTab() {
                 className="w-full h-7 text-[11px] pr-8"
               />
             </div>
-            <div className="space-y-0.5 w-full sm:w-[8rem] min-w-[8rem]">
+            <div className="space-y-0.5 w-full sm:w-[10.5rem] min-w-[10.5rem]">
               <Label className="text-[11px] font-normal text-muted-foreground">{t('f2:date') || 'Date'} (to)</Label>
               <Input
                 type="month"
