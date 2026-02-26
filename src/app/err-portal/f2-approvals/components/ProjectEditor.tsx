@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Calendar as CalendarIcon } from 'lucide-react'
+import { Calendar as CalendarIcon, FileText } from 'lucide-react'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -210,6 +210,7 @@ export default function ProjectEditor({ open, onOpenChange, projectId, onSaved }
             reporting_officer_name, reporting_officer_phone,
             finance_officer_name, finance_officer_phone,
             planned_activities, expenses,
+            file_key, temp_file_key,
             emergency_rooms(
               id,
               state:states!emergency_rooms_state_reference_fkey(
@@ -362,6 +363,21 @@ export default function ProjectEditor({ open, onOpenChange, projectId, onSaved }
 
   const updateField = (key: string, value: any) => {
     setForm((prev: any) => ({ ...prev, [key]: value }))
+  }
+
+  const f1FileKey = form?.file_key || form?.temp_file_key
+  const handleOpenF1File = async () => {
+    if (!f1FileKey) return
+    try {
+      const response = await fetch(`/api/storage/signed-url?path=${encodeURIComponent(f1FileKey)}`)
+      if (!response.ok) throw new Error('Failed to get link')
+      const { url, error } = await response.json()
+      if (error || !url) throw new Error(error || 'No URL returned')
+      window.open(url, '_blank', 'noopener,noreferrer')
+    } catch (e) {
+      console.error(e)
+      alert(t('projects:open_file_failed') || 'Failed to open file')
+    }
   }
 
   const handleRoomChange = async (roomId: string) => {
@@ -590,6 +606,23 @@ export default function ProjectEditor({ open, onOpenChange, projectId, onSaved }
           <div className="py-10 text-center text-muted-foreground">{t('common:loading')}</div>
         ) : (
           <div className="space-y-6">
+            {f1FileKey && (
+              <div>
+                <Label className="text-sm font-medium">{t('projects:related_documents') || 'Related documents'}</Label>
+                <div className="mt-1">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleOpenF1File}
+                    className="flex items-center gap-2"
+                  >
+                    <FileText className="h-4 w-4" />
+                    {t('projects:view_original_f1') || 'View original F1 form'}
+                  </Button>
+                </div>
+              </div>
+            )}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <Label>{t('projects:date')}</Label>
