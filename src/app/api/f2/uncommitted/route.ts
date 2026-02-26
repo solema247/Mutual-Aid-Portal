@@ -3,11 +3,26 @@ import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { getUserStateAccess } from '@/lib/userStateAccess'
 import { requirePermission } from '@/lib/requirePermission'
 
-// GET /api/f2/uncommitted - Get all uncommitted F1s
-export async function GET() {
+// GET /api/f2/uncommitted - Get all uncommitted F1s (optional: state, month_year_from, month_year_to as YYYY-MM)
+export async function GET(request: Request) {
   try {
     const supabase = getSupabaseRouteClient()
-    
+    const { searchParams } = new URL(request.url)
+    const state = searchParams.get('state')
+    const monthYearFrom = searchParams.get('month_year_from')
+    const monthYearTo = searchParams.get('month_year_to')
+    let dateFrom: string | null = null
+    let dateTo: string | null = null
+    if (monthYearFrom && /^\d{4}-\d{2}$/.test(monthYearFrom)) {
+      const [y, m] = monthYearFrom.split('-').map(Number)
+      dateFrom = `${y}-${String(m).padStart(2, '0')}-01`
+    }
+    if (monthYearTo && /^\d{4}-\d{2}$/.test(monthYearTo)) {
+      const [y, m] = monthYearTo.split('-').map(Number)
+      const lastDay = new Date(y, m, 0).getDate()
+      dateTo = `${y}-${String(m).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
+    }
+
     // Get user's state access rights
     const { allowedStateNames } = await getUserStateAccess()
 
@@ -38,6 +53,17 @@ export async function GET() {
     // Apply state filter from user access rights (if not seeing all states)
     if (allowedStateNames !== null && allowedStateNames.length > 0) {
       query = query.in('state', allowedStateNames)
+    }
+
+    // Apply explicit state filter if provided
+    if (state) {
+      query = query.eq('state', state)
+    }
+    if (dateFrom) {
+      query = query.gte('date', dateFrom)
+    }
+    if (dateTo) {
+      query = query.lte('date', dateTo)
     }
 
     const { data, error } = await query

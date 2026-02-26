@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
 import { supabase } from '@/lib/supabaseClient'
-import { Search, Filter, Edit2, Undo2 } from 'lucide-react'
+import { Search, Filter, Edit2, Undo2, ArrowUp, ArrowDown } from 'lucide-react'
 import type { CommittedF1, FilterOptions } from '../types'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -38,7 +38,9 @@ export default function CommittedF1sTab() {
   const [filters, setFilters] = useState({
     search: '',
     grant: 'all',
-    state: 'all'
+    state: 'all',
+    monthYearFrom: '',
+    monthYearTo: ''
   })
   const [isLoading, setIsLoading] = useState(true)
   const [selected, setSelected] = useState<string[]>([])
@@ -53,6 +55,7 @@ export default function CommittedF1sTab() {
   const [decommitDialogOpen, setDecommitDialogOpen] = useState(false)
   const [decommittingF1Id, setDecommittingF1Id] = useState<string | null>(null)
   const [isDecommitting, setIsDecommitting] = useState(false)
+  const [dateSort, setDateSort] = useState<'asc' | 'desc'>('desc')
 
   const toggleAll = (checked: boolean) => {
     if (!checked) return setSelected([])
@@ -168,6 +171,8 @@ export default function CommittedF1sTab() {
       const params = new URLSearchParams()
       if (filters.state && filters.state !== 'all') params.append('state', filters.state)
       if (filters.search) params.append('search', filters.search)
+      if (filters.monthYearFrom) params.append('month_year_from', filters.monthYearFrom)
+      if (filters.monthYearTo) params.append('month_year_to', filters.monthYearTo)
 
       const response = await fetch(`/api/f2/committed?${params.toString()}`)
       if (!response.ok) throw new Error('Failed to fetch committed F1s')
@@ -236,7 +241,9 @@ export default function CommittedF1sTab() {
     setFilters({
       search: '',
       grant: 'all',
-      state: 'all'
+      state: 'all',
+      monthYearFrom: '',
+      monthYearTo: ''
     })
   }
 
@@ -244,10 +251,15 @@ export default function CommittedF1sTab() {
     return <div className="text-center py-8">{t('common:loading')}</div>
   }
 
-  const totalPages = Math.ceil(f1s.length / itemsPerPage)
+  const sortedF1s = [...f1s].sort((a, b) => {
+    const dA = new Date(a.date).getTime()
+    const dB = new Date(b.date).getTime()
+    return dateSort === 'desc' ? dB - dA : dA - dB
+  })
+  const totalPages = Math.ceil(sortedF1s.length / itemsPerPage)
   const startIndex = (currentPage - 1) * itemsPerPage
   const endIndex = startIndex + itemsPerPage
-  const paginatedF1s = f1s.slice(startIndex, endIndex)
+  const paginatedF1s = sortedF1s.slice(startIndex, endIndex)
 
   return (
     <div className="space-y-4">
@@ -272,70 +284,84 @@ export default function CommittedF1sTab() {
       </div>
 
       {/* Filters */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base flex items-center gap-2">
-            <Filter className="w-4 h-4" />
+      <Card className="text-[11px]">
+        <CardHeader className="py-1.5 px-3">
+          <CardTitle className="text-[11px] flex items-center gap-1 font-medium">
+            <Filter className="w-3 h-3" />
             {t('f2:filters')}
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <Label>{t('f2:search')}</Label>
+        <CardContent className="px-3 pb-2 pt-0">
+          <div className="flex flex-wrap items-end gap-2">
+            <div className="space-y-0.5 w-full sm:w-[130px] min-w-0">
+              <Label className="text-[11px] font-normal text-muted-foreground">{t('f2:search')}</Label>
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
+                <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 text-muted-foreground w-3 h-3" />
                 <Input
                   placeholder={t('f2:search_placeholder') as string}
                   value={filters.search}
                   onChange={(e) => setFilters(prev => ({ ...prev, search: e.target.value }))}
-                  className="pl-10"
+                  className="pl-7 h-7 text-[11px] w-full"
                 />
               </div>
             </div>
-            <div>
-              <Label>Grant</Label>
+            <div className="space-y-0.5 w-full sm:w-[11rem] min-w-[11rem]">
+              <Label className="text-[11px] font-normal text-muted-foreground">{t('f2:date') || 'Date'} (from)</Label>
+              <Input
+                type="month"
+                value={filters.monthYearFrom}
+                onChange={(e) => setFilters(prev => ({ ...prev, monthYearFrom: e.target.value }))}
+                className="w-full h-7 text-[11px] pr-8"
+              />
+            </div>
+            <div className="space-y-0.5 w-full sm:w-[11rem] min-w-[11rem]">
+              <Label className="text-[11px] font-normal text-muted-foreground">{t('f2:date') || 'Date'} (to)</Label>
+              <Input
+                type="month"
+                value={filters.monthYearTo}
+                onChange={(e) => setFilters(prev => ({ ...prev, monthYearTo: e.target.value }))}
+                className="w-full h-7 text-[11px] pr-8"
+              />
+            </div>
+            <div className="space-y-0.5 w-full sm:w-[110px] min-w-0">
+              <Label className="text-[11px] font-normal text-muted-foreground">{t('f2:state_label')}</Label>
+              <Select
+                value={filters.state}
+                onValueChange={(value) => setFilters(prev => ({ ...prev, state: value }))}
+              >
+                <SelectTrigger className="w-full h-7 text-[11px]">
+                  <SelectValue placeholder={t('f2:all_states') as string} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all" className="text-[11px]">{t('f2:all_states')}</SelectItem>
+                  {filterOptions.states.map(state => (
+                    <SelectItem key={state.name} value={state.name} className="text-[11px]">{state.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-0.5 w-full sm:w-[150px] min-w-0">
+              <Label className="text-[11px] font-normal text-muted-foreground">Grant</Label>
               <Select
                 value={filters.grant}
                 onValueChange={(value) => setFilters(prev => ({ ...prev, grant: value }))}
               >
-                <SelectTrigger className="w-full">
+                <SelectTrigger className="w-full h-7 text-[11px]">
                   <SelectValue placeholder="All Grants" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Grants</SelectItem>
+                  <SelectItem value="all" className="text-[11px]">All Grants</SelectItem>
                   {filterOptions.grants.map((grant: any) => (
-                    <SelectItem key={`${grant.grant_id}|${grant.donor_name}`} value={`${grant.grant_id}|${grant.donor_name}`}>
+                    <SelectItem key={`${grant.grant_id}|${grant.donor_name}`} value={`${grant.grant_id}|${grant.donor_name}`} className="text-[11px]">
                       {grant.grant_id} - {grant.donor_name}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
-            <div>
-              <Label>{t('f2:state_label')}</Label>
-              <Select
-                value={filters.state}
-                onValueChange={(value) => setFilters(prev => ({ ...prev, state: value }))}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder={t('f2:all_states') as string} />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">{t('f2:all_states')}</SelectItem>
-                  {filterOptions.states.map(state => (
-                    <SelectItem key={state.name} value={state.name}>
-                      {state.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex items-end">
-              <Button variant="outline" onClick={clearFilters} className="w-full">
-                {t('f2:clear_filters')}
-              </Button>
-            </div>
+            <Button variant="outline" size="sm" onClick={clearFilters} className="h-7 text-[11px] shrink-0 px-2">
+              {t('f2:clear_filters')}
+            </Button>
           </div>
         </CardContent>
       </Card>
@@ -352,7 +378,16 @@ export default function CommittedF1sTab() {
                   )}
                 </TableHead>
                 <TableHead className="px-2">{t('f2:err_id')}</TableHead>
-                <TableHead className="px-2">{t('f2:date')}</TableHead>
+                <TableHead className="px-2">
+                  <button
+                    type="button"
+                    onClick={() => setDateSort(prev => prev === 'desc' ? 'asc' : 'desc')}
+                    className="flex items-center gap-1 hover:text-foreground focus:outline-none focus:ring-2 focus:ring-ring rounded"
+                  >
+                    {t('f2:date')}
+                    {dateSort === 'desc' ? <ArrowDown className="w-3 h-3" /> : <ArrowUp className="w-3 h-3" />}
+                  </button>
+                </TableHead>
                 <TableHead className="px-2">{t('f2:state')}</TableHead>
                 <TableHead className="px-2">{t('f2:locality')}</TableHead>
                 <TableHead className="px-2">{t('f2:grant_name')}</TableHead>

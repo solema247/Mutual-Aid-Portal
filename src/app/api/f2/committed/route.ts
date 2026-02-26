@@ -11,6 +11,19 @@ export async function GET(request: Request) {
     const grantId = searchParams.get('grant_id')
     const donorName = searchParams.get('donor_name')
     const state = searchParams.get('state')
+    const monthYearFrom = searchParams.get('month_year_from')
+    const monthYearTo = searchParams.get('month_year_to')
+    let dateFrom: string | null = null
+    let dateTo: string | null = null
+    if (monthYearFrom && /^\d{4}-\d{2}$/.test(monthYearFrom)) {
+      const [y, m] = monthYearFrom.split('-').map(Number)
+      dateFrom = `${y}-${String(m).padStart(2, '0')}-01`
+    }
+    if (monthYearTo && /^\d{4}-\d{2}$/.test(monthYearTo)) {
+      const [y, m] = monthYearTo.split('-').map(Number)
+      const lastDay = new Date(y, m, 0).getDate()
+      dateTo = `${y}-${String(m).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
+    }
 
     // Get user's state access rights
     const { allowedStateNames } = await getUserStateAccess()
@@ -55,6 +68,12 @@ export async function GET(request: Request) {
     // Apply explicit state filter if provided (further restricts)
     if (state) {
       query = query.eq('state', state)
+    }
+    if (dateFrom) {
+      query = query.gte('date', dateFrom)
+    }
+    if (dateTo) {
+      query = query.lte('date', dateTo)
     }
 
     const { data, error } = await query
