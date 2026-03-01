@@ -137,17 +137,17 @@ export function StatsDonutCard({
   return (
     <div
       className={cn(
-        'flex flex-col rounded-xl border-0 bg-white p-5 shadow-md',
+        'flex min-w-0 flex-col rounded-xl border-0 bg-white p-5 shadow-md overflow-hidden',
         className
       )}
     >
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          {icon && <span className="text-primary">{icon}</span>}
-          <span className="font-semibold text-foreground">{title}</span>
+      <div className="flex min-w-0 items-center justify-between gap-2">
+        <div className="flex min-w-0 flex-1 items-center gap-2">
+          {icon && <span className="shrink-0 text-primary">{icon}</span>}
+          <span className="min-w-0 truncate font-semibold text-foreground">{title}</span>
           <button
             type="button"
-            className="rounded-full p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+            className="shrink-0 rounded-full p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
             aria-label="More info"
           >
             <Info className="h-4 w-4" />
@@ -155,14 +155,14 @@ export function StatsDonutCard({
         </div>
         <button
           type="button"
-          className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+          className="shrink-0 rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
           aria-label="Options"
         >
           <MoreHorizontal className="h-4 w-4" />
         </button>
       </div>
 
-      <div className="mt-4 flex flex-1 items-center gap-4">
+      <div className="mt-4 flex min-w-0 flex-1 flex-wrap items-center gap-4">
         <div className="min-w-0 flex-1">
           <div className="text-2xl font-bold tabular-nums text-foreground">
             {mainValue}
@@ -184,7 +184,7 @@ export function StatsDonutCard({
       </div>
 
       {!singleSegmentMode && segments.length > 0 && (
-        <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+        <div className="mt-3 flex min-w-0 flex-wrap gap-x-3 gap-y-1.5 text-xs text-muted-foreground">
           {segments.map((seg, i) => {
             const total = segments.reduce((s, x) => s + x.value, 0)
             const pct = total > 0 ? ((seg.value / total) * 100).toFixed(1) : '0'

@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next'
 import Sidebar from './Sidebar'
 import LanguageSwitch from '@/components/LanguageSwitch'
 import { Button } from '@/components/ui/button'
-import { PanelLeftClose, PanelLeftOpen, Globe, Menu } from 'lucide-react'
+import { Globe, Menu } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface MainLayoutProps {
@@ -69,20 +69,20 @@ export default function MainLayout({ children, sidebarItems, sidebarTitle, userN
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="lg:hidden flex size-9 shrink-0 text-white hover:text-brand-orange hover:bg-white/10"
+                  className="lg:hidden flex size-9 shrink-0 rounded-md bg-brand-header text-white hover:bg-brand-header/90 hover:brightness-110 border-0 shadow-none"
                   aria-label="Open menu"
                   onClick={() => setMobileSheetOpen(true)}
                 >
-                  <Menu className="h-5 w-5" />
+                  <Menu className="h-5 w-5" strokeWidth={2} />
                 </Button>
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="hidden lg:flex size-9 shrink-0 text-white hover:text-brand-orange hover:bg-white/10"
+                  className="hidden lg:flex size-9 shrink-0 rounded-md text-white hover:text-white/90 border-0 shadow-none bg-transparent hover:bg-white/10"
                   aria-label={sidebarOpen ? 'Hide sidebar' : 'Show sidebar'}
                   onClick={() => setSidebarOpen(!sidebarOpen)}
                 >
-                  {sidebarOpen ? <PanelLeftClose className="h-5 w-5" /> : <PanelLeftOpen className="h-5 w-5" />}
+                  <Menu className="h-5 w-5" strokeWidth={2} />
                 </Button>
                 <div className="truncate text-lg font-semibold text-white">{headerTitle}</div>
               </div>

@@ -265,7 +265,7 @@ export default function ReportTrackerPage() {
   return (
     <div className="p-6">
       {!loading && (
-        <div className="mb-6 grid gap-4 grid-cols-1 sm:grid-cols-3 lg:grid-cols-[1fr_1fr_1fr_minmax(200px,280px)]">
+        <div className="mb-6 grid gap-4 grid-cols-1 sm:grid-cols-3 lg:grid-cols-[minmax(200px,1fr)_minmax(200px,1fr)_minmax(200px,1fr)_minmax(200px,280px)]">
           <StatsDonutCard
             className="min-w-0"
             title="F4 Status"
