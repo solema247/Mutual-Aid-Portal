@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next'
 import Sidebar from './Sidebar'
 import LanguageSwitch from '@/components/LanguageSwitch'
 import { Button } from '@/components/ui/button'
-import { PanelLeftClose, PanelLeftOpen, Globe } from 'lucide-react'
+import { PanelLeftClose, PanelLeftOpen, Globe, Menu } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface MainLayoutProps {
@@ -39,6 +39,7 @@ function formatRole(role: string | undefined): string {
 
 export default function MainLayout({ children, sidebarItems, sidebarTitle, userName, userRole, headerTitle }: MainLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [mobileSheetOpen, setMobileSheetOpen] = useState(false)
   const { i18n } = useTranslation()
   const showHeader = !!headerTitle
   const isControlledSidebar = showHeader
@@ -57,12 +58,23 @@ export default function MainLayout({ children, sidebarItems, sidebarTitle, userN
         items={sidebarItems}
         title={sidebarTitle}
         isOpen={isControlledSidebar ? sidebarOpen : undefined}
+        mobileSheetOpen={showHeader ? mobileSheetOpen : undefined}
+        onMobileSheetOpenChange={showHeader ? setMobileSheetOpen : undefined}
       />
       <div className="flex flex-1 flex-col min-w-0 min-h-0">
         {showHeader && (
           <nav className="sticky top-0 z-40 shrink-0 w-full text-white backdrop-blur bg-gradient-to-r from-brand-header to-brand-purple">
             <div className="mx-auto flex h-14 max-w-full items-center justify-between px-4 sm:px-6 lg:px-8">
               <div className="flex min-w-0 flex-1 items-center gap-4">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="lg:hidden flex size-9 shrink-0 text-white hover:text-brand-orange hover:bg-white/10"
+                  aria-label="Open menu"
+                  onClick={() => setMobileSheetOpen(true)}
+                >
+                  <Menu className="h-5 w-5" />
+                </Button>
                 <Button
                   variant="ghost"
                   size="icon"

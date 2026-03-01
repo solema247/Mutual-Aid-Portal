@@ -140,6 +140,7 @@
   }
   html {
     overflow-x: hidden;
+    text-align: left;
   }
   body {
     @apply bg-background text-foreground;
@@ -169,6 +170,91 @@
     background-color: rgb(30 64 175); /* blue-800 */
     color: rgb(219 234 254); /* blue-100 */
   }
+}
+
+.table-container {
+  overflow-x: auto;
+}
+.table-container td {
+  white-space: nowrap;
+}
+.table-container th {
+  white-space: nowrap;
+  text-align: left;
+}
+
+/* Report Tracker table: site header/sidebar colors, alternating rows */
+.table-container.report-tracker-table {
+  border-radius: 8px 8px 0 0;
+  overflow: auto;
+  border: 1px solid var(--color-table-border);
+  max-height: min(70vh, 600px);
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.table-container.report-tracker-table::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+.table-container.report-tracker-table table {
+  border-collapse: collapse;
+  border-spacing: 0;
+}
+.table-container.report-tracker-table thead tr {
+  background: var(--sidebar);
+  color: #ffffff;
+}
+.table-container.report-tracker-table thead th {
+  color: #ffffff;
+  padding: 10px 16px;
+  font-weight: 700;
+  border: none;
+  border-bottom: none;
+  white-space: nowrap;
+}
+.table-container.report-tracker-table tbody tr {
+  border-bottom: 1px solid var(--color-table-border);
+  transition: background-color 0.15s ease;
+}
+.table-container.report-tracker-table tbody tr:nth-child(even) {
+  background: var(--color-table-zebra);
+}
+.table-container.report-tracker-table tbody tr:nth-child(odd) {
+  background: #ffffff;
+}
+.table-container.report-tracker-table tbody tr:hover {
+  background: var(--color-table-hover);
+}
+.table-container.report-tracker-table tbody td {
+  padding: 8px 16px;
+  border: none;
+  vertical-align: middle;
+}
+
+.table-container.report-tracker-table-sm table {
+  font-size: 0.8125rem;
+}
+.table-container.report-tracker-table-sm thead th {
+  font-size: 0.8125rem;
+}
+.table-container.report-tracker-table-sm tbody td {
+  font-size: 0.8125rem;
+}
+
+/* Status dropdown: hide scrollbar (all possible scroll containers) */
+.report-tracker-status-select,
+.report-tracker-status-select [data-radix-select-viewport],
+[data-slot="select-content"].report-tracker-status-select {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
+.report-tracker-status-select::-webkit-scrollbar,
+.report-tracker-status-select [data-radix-select-viewport]::-webkit-scrollbar,
+[data-slot="select-content"].report-tracker-status-select::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
 }
 
 @tailwind base;

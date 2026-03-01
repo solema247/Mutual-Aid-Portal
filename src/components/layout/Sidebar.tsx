@@ -27,12 +27,19 @@ interface SidebarProps {
   title?: string
   /** When set, desktop sidebar width is controlled by this (true = expanded, false = collapsed). When undefined, uses hover to expand. */
   isOpen?: boolean
+  /** When set with onMobileSheetOpenChange, mobile sheet is controlled by parent (e.g. trigger is in header). */
+  mobileSheetOpen?: boolean
+  /** Called when mobile sheet open state should change. */
+  onMobileSheetOpenChange?: (open: boolean) => void
 }
 
-export default function Sidebar({ items, title, isOpen }: SidebarProps) {
-  const [open, setOpen] = useState(false)
+export default function Sidebar({ items, title, isOpen, mobileSheetOpen, onMobileSheetOpenChange }: SidebarProps) {
+  const [openLocal, setOpenLocal] = useState(false)
+  const open = onMobileSheetOpenChange ? (mobileSheetOpen ?? false) : openLocal
+  const setOpen = onMobileSheetOpenChange ? onMobileSheetOpenChange : setOpenLocal
   const [isExpandedHover, setIsExpandedHover] = useState(false)
   const isExpanded = isOpen !== undefined ? isOpen : isExpandedHover
+  const triggerInHeader = mobileSheetOpen !== undefined && onMobileSheetOpenChange
   const pathname = usePathname()
   const { t } = useTranslation(['err', 'common'])
   const sidebarLabel = title ?? t('err:navigation')
@@ -65,11 +72,13 @@ export default function Sidebar({ items, title, isOpen }: SidebarProps) {
     <>
       {/* Mobile sidebar */}
       <Sheet open={open} onOpenChange={setOpen}>
-        <SheetTrigger asChild>
-          <Button variant="outline" size="icon" className="lg:hidden fixed top-4 left-4 z-50">
-            <Menu className="h-6 w-6" />
-          </Button>
-        </SheetTrigger>
+        {!triggerInHeader && (
+          <SheetTrigger asChild>
+            <Button variant="outline" size="icon" className="lg:hidden fixed top-4 left-4 z-50">
+              <Menu className="h-6 w-6" />
+            </Button>
+          </SheetTrigger>
+        )}
         <SheetContent side="left" className="w-64 p-0 bg-sidebar text-sidebar-foreground border-sidebar-border">
           <SheetHeader className="p-6 border-b border-sidebar-border">
             <SheetTitle className="text-white">{sidebarLabel}</SheetTitle>
