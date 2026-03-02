@@ -9,7 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { supabase } from '@/lib/supabaseClient'
 import Image from 'next/image'
 import Link from 'next/link'
-import LanguageSwitch from '@/components/LanguageSwitch'
+import LoginLanguageSwitch from '@/components/LoginLanguageSwitch'
 import '@/i18n/config'
 
 export default function LoginPage() {
@@ -184,13 +184,12 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-white">
-      <div className="absolute top-6 right-6">
-        <LanguageSwitch />
-      </div>
-
       {/* Mobile Layout */}
       <div className="lg:hidden w-full h-screen flex flex-col p-4">
         <div className="flex-1 flex flex-col items-center justify-center max-w-md mx-auto w-full">
+          <div className="w-full flex justify-start mb-6">
+            <LoginLanguageSwitch />
+          </div>
           <Tabs defaultValue="err" className="w-full">
             <TabsList className="grid w-full grid-cols-2 mb-8 h-auto bg-transparent border-b border-gray-200 rounded-none p-0 gap-2">
               <TabsTrigger
@@ -323,6 +322,9 @@ export default function LoginPage() {
       <div className="hidden lg:flex w-full h-screen items-center justify-center">
         <div className="w-1/2 h-full flex flex-col items-center justify-center px-16">
           <div className="w-full max-w-sm">
+            <div className="w-full flex justify-start mb-6">
+              <LoginLanguageSwitch />
+            </div>
             <Tabs defaultValue="err" className="w-full">
               <TabsList className="grid w-full grid-cols-2 mb-8 h-auto bg-transparent border-b border-gray-300 rounded-none p-0 gap-3">
                 <TabsTrigger
