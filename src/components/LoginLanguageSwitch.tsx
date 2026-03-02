@@ -9,7 +9,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
-import { Globe } from 'lucide-react'
+import { Languages } from 'lucide-react'
 
 const LANGUAGES = [
   { value: 'en', label: 'English', neutral: true },
@@ -33,7 +33,7 @@ export default function LoginLanguageSwitch({
 
   const renderIcon = (opt: (typeof LANGUAGES)[number], sizeClass = 'text-[18px]') =>
     'neutral' in opt && opt.neutral ? (
-      <Globe className={cn('shrink-0 text-gray-500', sizeClass)} aria-hidden />
+      <Languages className={cn('shrink-0 text-gray-500', sizeClass)} aria-hidden />
     ) : (
       <span
         className={cn('fi fi-' + ('flagCode' in opt ? opt.flagCode : 'sd'), 'shrink-0 rounded-sm overflow-hidden', sizeClass)}
