@@ -310,6 +310,11 @@ export default function ReportTrackerPage() {
           </div>
         </div>
       )}
+      {!loading && (
+        <p className="text-sm text-muted-foreground mb-4">
+          Only projects uploaded directly to the Mutual Aid Portal are tracked on this page.
+        </p>
+      )}
       <Card className="bg-transparent shadow-none">
         <CardHeader className="pb-4">
           {!loading && (
@@ -357,6 +362,10 @@ export default function ReportTrackerPage() {
             </div>
           ) : (
             <>
+            <p className="text-xs text-muted-foreground mb-2 flex items-center gap-1.5" dir="ltr">
+              <span>Scroll horizontally to view all columns</span>
+              <ChevronRight className="h-3.5 w-3.5 shrink-0 opacity-70" aria-hidden />
+            </p>
             <div className="table-container report-tracker-table report-tracker-table-sm" dir="ltr">
               <Table>
                 <TableHeader>

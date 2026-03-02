@@ -53,7 +53,7 @@ export default function MainLayout({ children, sidebarItems, sidebarTitle, userN
   const userDisplay = (userName ?? (userRole ? formatRole(userRole) : '')) || null
 
   return (
-    <div className="flex h-screen overflow-x-hidden">
+    <div className="flex h-screen max-h-[100dvh] overflow-hidden">
       <Sidebar
         items={sidebarItems}
         title={sidebarTitle}

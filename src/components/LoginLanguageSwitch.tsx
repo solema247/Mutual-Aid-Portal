@@ -9,9 +9,10 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
+import { Globe } from 'lucide-react'
 
 const LANGUAGES = [
-  { value: 'en', label: 'English (US)', flagCode: 'us' },
+  { value: 'en', label: 'English', neutral: true },
   { value: 'ar', label: 'العربية', flagCode: 'sd' },
 ] as const
 
@@ -30,6 +31,16 @@ export default function LoginLanguageSwitch({
     document.documentElement.dir = newLang === 'ar' ? 'rtl' : 'ltr'
   }
 
+  const renderIcon = (opt: (typeof LANGUAGES)[number], sizeClass = 'text-[18px]') =>
+    'neutral' in opt && opt.neutral ? (
+      <Globe className={cn('shrink-0 text-gray-500', sizeClass)} aria-hidden />
+    ) : (
+      <span
+        className={cn('fi fi-' + ('flagCode' in opt ? opt.flagCode : 'sd'), 'shrink-0 rounded-sm overflow-hidden', sizeClass)}
+        aria-hidden
+      />
+    )
+
   return (
     <Select value={current} onValueChange={handleChange}>
       <SelectTrigger
@@ -38,19 +49,13 @@ export default function LoginLanguageSwitch({
           className
         )}
       >
-        <span
-          className={cn('fi fi-' + currentOption.flagCode, 'shrink-0 rounded-sm overflow-hidden text-[18px]')}
-          aria-hidden
-        />
+        {renderIcon(currentOption)}
         <SelectValue>{currentOption.label}</SelectValue>
       </SelectTrigger>
       <SelectContent>
         {LANGUAGES.map((opt) => (
           <SelectItem key={opt.value} value={opt.value}>
-            <span
-              className={cn('fi fi-' + opt.flagCode, 'mr-2 inline-block rounded-sm overflow-hidden text-[16px]')}
-              aria-hidden
-            />
+            {renderIcon(opt, 'text-[16px] mr-2')}
             {opt.label}
           </SelectItem>
         ))}
