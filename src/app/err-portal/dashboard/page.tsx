@@ -30,7 +30,7 @@ export default function DashboardPage() {
       <div className="space-y-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <Button variant="ghost" size="sm" asChild className="w-fit -ml-2">
-            <Link href="/partner-portal" className="flex items-center gap-2 text-muted-foreground hover:text-foreground">
+            <Link href="/err-portal" className="flex items-center gap-2 text-muted-foreground hover:text-foreground">
               <ArrowLeft className="h-4 w-4" />
               {t('common:back_to_home')}
             </Link>
