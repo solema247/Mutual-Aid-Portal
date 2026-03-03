@@ -86,6 +86,7 @@ export async function GET() {
         source,
         expenses,
         planned_activities,
+        grant_segment,
         emergency_rooms ( err_code ),
         donors ( name, short_name )
       `)
@@ -249,6 +250,7 @@ export async function GET() {
         f4_pct,
         f5_pct,
         tracker,
+        grant_segment: p.grant_segment ?? null,
       }
     })
 

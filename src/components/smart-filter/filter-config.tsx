@@ -12,7 +12,14 @@ export const STATUS_OPTIONS = [
   { value: 'completed', label: 'Completed' },
 ] as const
 
-/** Report Tracker filter fields: Donor, F4 Status, F5 Status, State, Date Range */
+const GRANT_SEGMENT_OPTIONS = [
+  { value: 'Flexible', label: 'Flexible' },
+  { value: 'Sustainability', label: 'Sustainability' },
+  { value: 'WRR', label: 'WRR' },
+  { value: 'Capacity Building', label: 'Capacity Building' },
+] as const
+
+/** Report Tracker filter fields: Donor, Grant Segment, F4 Status, F5 Status, State, Date Range */
 export function getReportTrackerFilterFields(options?: {
   stateOptions?: string[]
   donorOptions?: string[]
@@ -28,6 +35,14 @@ export function getReportTrackerFilterFields(options?: {
       options: donorOptions,
       placeholder: 'All donors',
       accessorKey: 'donor',
+    },
+    {
+      id: 'grant_segment',
+      label: 'Grant Segment',
+      type: 'select',
+      options: [...GRANT_SEGMENT_OPTIONS],
+      placeholder: 'All segments',
+      accessorKey: 'grant_segment',
     },
     {
       id: 'f4_status',

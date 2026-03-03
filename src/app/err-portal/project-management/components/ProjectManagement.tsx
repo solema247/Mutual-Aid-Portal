@@ -46,12 +46,13 @@ export default function ProjectManagement() {
   const grantSerialSearchRef = useRef<HTMLInputElement>(null)
   const shouldSelectAllRef = useRef<boolean>(false)
 
-  // Table filters: Historical/New, State, Month, F4 Status, F5 Status
+  // Table filters: Historical/New, State, Month, F4 Status, F5 Status, Grant Segment
   const [filterHistoricalNew, setFilterHistoricalNew] = useState<'all' | 'historical' | 'new'>('all')
   const [filterState, setFilterState] = useState<string>('all')
   const [filterMonth, setFilterMonth] = useState<string>('all')
   const [filterF4Status, setFilterF4Status] = useState<string>('all')
   const [filterF5Status, setFilterF5Status] = useState<string>('all')
+  const [filterGrantSegment, setFilterGrantSegment] = useState<string>('all')
 
   // Drill-down state
   const [level, setLevel] = useState<'state'|'room'|'project'>('state')
@@ -241,6 +242,15 @@ export default function ProjectManagement() {
       filtered = filtered.filter((r: any) => normalizedF5(r.f5_status) === filterF5Status)
     }
 
+    // 5b. Grant Segment (portal projects only; historical rows have no grant_segment)
+    if (filterGrantSegment !== 'all') {
+      filtered = filtered.filter((r: any) => {
+        if (r.is_historical) return false
+        const seg = r.grant_segment != null ? String(r.grant_segment).trim() : ''
+        return seg === filterGrantSegment
+      })
+    }
+
     // 6. Grant filter
     if (selectedGrantId === 'all') {
       // no change
@@ -271,7 +281,7 @@ export default function ProjectManagement() {
     }
 
     setRows(filtered)
-  }, [filterHistoricalNew, filterState, filterMonth, filterF4Status, filterF5Status, selectedGrantId, allRows, grants, grantSerialSearch])
+  }, [filterHistoricalNew, filterState, filterMonth, filterF4Status, filterF5Status, filterGrantSegment, selectedGrantId, allRows, grants, grantSerialSearch])
 
   // Available options for filter dropdowns (from allRows)
   const filterOptions = useMemo(() => {
@@ -290,7 +300,8 @@ export default function ProjectManagement() {
     ).sort()
     const f4Statuses = Array.from(new Set((allRows || []).map((r: any) => normalizedF4(r.f4_status)).filter(Boolean))).sort()
     const f5Statuses = Array.from(new Set((allRows || []).map((r: any) => normalizedF5(r.f5_status)).filter(Boolean))).sort()
-    return { states, months, f4Statuses, f5Statuses }
+    const grantSegments = Array.from(new Set((allRows || []).map((r: any) => r.grant_segment).filter((s): s is string => s != null && String(s).trim() !== ''))).sort()
+    return { states, months, f4Statuses, f5Statuses, grantSegments }
   }, [allRows])
 
   // Tracker score: F4 half (max 0.5) + F5 half (max 0.5).
@@ -849,6 +860,20 @@ export default function ProjectManagement() {
                 <SelectContent className="text-xs">
                   <SelectItem value="all">All</SelectItem>
                   {filterOptions.f5Statuses.map((s) => (
+                    <SelectItem key={s} value={s}>{s}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex flex-col gap-1 shrink-0">
+              <Label className="text-xs font-medium whitespace-nowrap">Grant Segment</Label>
+              <Select value={filterGrantSegment} onValueChange={setFilterGrantSegment}>
+                <SelectTrigger className="w-[130px] h-8 text-xs">
+                  <SelectValue placeholder="All segments" />
+                </SelectTrigger>
+                <SelectContent className="text-xs">
+                  <SelectItem value="all">All segments</SelectItem>
+                  {filterOptions.grantSegments.map((s) => (
                     <SelectItem key={s} value={s}>{s}</SelectItem>
                   ))}
                 </SelectContent>

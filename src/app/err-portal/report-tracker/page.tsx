@@ -40,6 +40,7 @@ interface ReportTrackerRow {
   f4_pct: number
   f5_pct: number
   tracker: number
+  grant_segment: string | null
 }
 
 function formatDate(d: string | null | undefined): string {
@@ -119,6 +120,7 @@ export default function ReportTrackerPage() {
               f4_pct: Number(r.f4_pct) || 0,
               f5_pct: Number(r.f5_pct) || 0,
               tracker: Number(r.tracker) || 0,
+              grant_segment: r.grant_segment ?? null,
             }))
           : []
       )
