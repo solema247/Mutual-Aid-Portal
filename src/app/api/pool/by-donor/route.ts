@@ -32,11 +32,9 @@ async function fetchAllRows<T>(
   return allRows
 }
 
-// Display key for By Grant table: group FCDO-HELP-S, FCDO-SHPR etc. as one row "FCDO"
+// Display key for By Grant table: use grant_id as-is (no aggregation)
 function toDisplayKey(grantId: string): string {
-  const id = grantId.trim()
-  if (id.startsWith('FCDO-')) return 'FCDO'
-  return id
+  return grantId.trim()
 }
 
 // Extract activity serials from grants.activities jsonb (array of strings or objects with id/serial)
@@ -78,7 +76,7 @@ export async function GET() {
       (q) => q.order('grant_id', { ascending: true })
     )
 
-    // Group by display key (e.g. FCDO-HELP-S + FCDO-SHPR → one row "FCDO"); Included = total_transferred - transfer_fee
+    // Group by grant_id (one row per grant); Included = total_transferred - transfer_fee
     const uniqueGrants = new Map<string, {
       grant_id: string;
       project_name: string | null;
@@ -108,9 +106,7 @@ export async function GET() {
         existing.included += Math.max(0, included)
         const newSerials = activitySerials.filter((s) => !existing.activitySerials.includes(s))
         existing.activitySerials.push(...newSerials)
-        // For FCDO row, prefer project_name from FCDO-SHPR over FCDO-HELP-S
-        if (key === 'FCDO' && rawId === 'FCDO-SHPR') existing.project_name = grant.project_name || rawId
-        else if (!existing.project_name && (grant.project_name || rawId)) existing.project_name = grant.project_name || rawId
+        if (!existing.project_name && (grant.project_name || rawId)) existing.project_name = grant.project_name || rawId
       }
     }
 
@@ -126,7 +122,7 @@ export async function GET() {
       '"Project Donor",USD'
     )
 
-    // Historical by display key (e.g. FCDO-HELP-S and FCDO both contribute to "FCDO")
+    // Historical by grant_id (from activities_raw_import "Project Donor")
     const byGrantHistorical = new Map<string, number>()
     for (const row of historicalData || []) {
       const rawDonor = row['Project Donor'] || row['project_donor'] || row['Project Donor']
@@ -147,7 +143,7 @@ export async function GET() {
     const { getUserStateAccess } = await import('@/lib/userStateAccess')
     const { allowedStateNames } = await getUserStateAccess()
 
-    // grants_grid_view: map grant_grid_id (UUID) → grant_id (e.g. "FCDO") for assigned projects
+    // grants_grid_view: map grant_grid_id (UUID) → grant_id for assigned projects
     const gridViewRows = await fetchAllRows<{ id: string; grant_id: string | null }>(
       supabase,
       'grants_grid_view',
