@@ -360,9 +360,16 @@ export default function DirectUpload() {
         return
       }
 
-      // Process the file first
+      // Process the file via storage key (avoids 4.5MB request body limit on Vercel)
+      const tempKey = (window as any).__f1_temp_key__ as string
+      if (!tempKey) {
+        alert('Upload failed. Please select the file again and try again.')
+        setIsLoading(false)
+        return
+      }
+
       const processFormData = new FormData()
-      processFormData.append('file', selectedFile)
+      processFormData.append('file_key', tempKey)
 
       // Add minimal metadata for initial processing
       const selectedState = states.find(s => s.id === formData.state_id)
