@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
+import { getActivityAndCategoryLists } from '@/lib/plannedActivitiesExpenses'
 
 function sumPlanFromPlannedActivities(planned: any): number {
   try {
@@ -325,6 +326,7 @@ export async function GET(request: Request) {
       const f5Complete = isStatusCompleteForOverdue(f5_status)
       const effectiveTransferDate = p.date_transfer || transferDateByProject[p.id] || null
       const { is_overdue, days_overdue } = computeOverdue(effectiveTransferDate, f4Complete, f5Complete)
+      const { activity_list, expense_category_list } = getActivityAndCategoryLists(p.planned_activities, p.expenses)
       return {
         project_id: p.id,
         state: p.state,
@@ -352,7 +354,9 @@ export async function GET(request: Request) {
         filter_date: p.date || agg.last || null,
         is_overdue,
         days_overdue,
-        overdue: days_overdue != null ? String(days_overdue) : null
+        overdue: days_overdue != null ? String(days_overdue) : null,
+        activity_list,
+        expense_category_list,
       }
     })
 
@@ -423,7 +427,9 @@ export async function GET(request: Request) {
         filter_date: dateTransfer || reportDate || null, // For date filter: Date Transfer or Date Report Completed
         is_overdue: is_overdue_historical,
         days_overdue: !Number.isNaN(overdueNum) ? overdueNum : null,
-        overdue: overdueDisplay
+        overdue: overdueDisplay,
+        activity_list: [], // Historical projects from activities_raw_import do not have planned_activities
+        expense_category_list: [],
       }
     })
 

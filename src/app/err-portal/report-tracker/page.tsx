@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
-import { ChevronLeft, ChevronRight, BarChart3, DollarSign, FolderOpen } from 'lucide-react'
+import { ChevronLeft, ChevronRight, BarChart3, DollarSign, FolderOpen, Download } from 'lucide-react'
 import { useAllowedFunctions } from '@/hooks/useAllowedFunctions'
 import {
   SmartFilter,
@@ -16,6 +16,7 @@ import {
 } from '@/components/smart-filter'
 import { STATUS_DISPLAY } from '@/components/smart-filter'
 import { StatsDonutCard, CompactStatCard, type DonutSegment } from '@/components/report-tracker-stats'
+import { downloadCsv } from '@/lib/csvDownload'
 
 const PAGE_SIZE_OPTIONS = [10, 25, 50, 100] as const
 
@@ -41,6 +42,10 @@ interface ReportTrackerRow {
   f5_pct: number
   tracker: number
   grant_segment: string | null
+  activity_list?: string[]
+  expense_category_list?: string[]
+  estimated_beneficiaries: number | null
+  f5_reported_individuals: number
 }
 
 function formatDate(d: string | null | undefined): string {
@@ -121,6 +126,10 @@ export default function ReportTrackerPage() {
               f5_pct: Number(r.f5_pct) || 0,
               tracker: Number(r.tracker) || 0,
               grant_segment: r.grant_segment ?? null,
+              activity_list: r.activity_list ?? [],
+              expense_category_list: r.expense_category_list ?? [],
+              estimated_beneficiaries: r.estimated_beneficiaries != null ? Number(r.estimated_beneficiaries) : null,
+              f5_reported_individuals: Number(r.f5_reported_individuals) || 0,
             }))
           : []
       )
@@ -137,9 +146,14 @@ export default function ReportTrackerPage() {
 
   const stateOptions = Array.from(new Set(rows.map((r) => r.state).filter(Boolean))).sort()
   const donorOptions = Array.from(new Set(rows.map((r) => r.donor).filter((d): d is string => d != null && d !== ''))).sort()
+  const expenseCategoryOptions = useMemo(() => {
+    const set = new Set<string>()
+    rows.forEach((r) => (r.expense_category_list ?? []).forEach((c) => set.add(c)))
+    return Array.from(set).sort()
+  }, [rows])
   const filterFields = useMemo(
-    () => getReportTrackerFilterFields({ stateOptions, donorOptions }),
-    [stateOptions, donorOptions]
+    () => getReportTrackerFilterFields({ stateOptions, donorOptions, expenseCategoryOptions }),
+    [stateOptions, donorOptions, expenseCategoryOptions]
   )
   const getFieldValue = useCallback((row: ReportTrackerRow, fieldId: string): string | null | undefined => {
     if (fieldId === 'date_range') return row.date
@@ -147,10 +161,16 @@ export default function ReportTrackerPage() {
     const v = row[key]
     return v != null ? String(v) : null
   }, [])
-  const filteredRows = useMemo(
-    () => applyFilters({ data: rows, filters, fields: filterFields, getFieldValue }),
-    [rows, filters, filterFields, getFieldValue]
-  )
+  const filteredRows = useMemo(() => {
+    const filtersForApply = filters.filter((f) => f.fieldId !== 'expense_category')
+    let result = applyFilters({ data: rows, filters: filtersForApply, fields: filterFields, getFieldValue })
+    const expenseCategoryFilter = filters.find((f) => f.fieldId === 'expense_category')
+    if (expenseCategoryFilter?.value && String(expenseCategoryFilter.value).trim()) {
+      const val = String(expenseCategoryFilter.value).trim()
+      result = result.filter((r) => (r.expense_category_list ?? []).includes(val))
+    }
+    return result
+  }, [rows, filters, filterFields, getFieldValue])
 
   useEffect(() => {
     setPage(1)
@@ -334,6 +354,42 @@ export default function ReportTrackerPage() {
           )}
         </CardHeader>
         <CardContent>
+          {!loading && filteredRows.length > 0 && (
+            <div className="flex justify-end mb-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  downloadCsv(
+                    [
+                      { key: 'grant_id', header: 'Serial Number' },
+                      { key: 'err_code', header: 'ERR Code' },
+                      { key: 'project_name', header: 'ERR Name' },
+                      { key: 'donor', header: 'Donor' },
+                      { key: 'date', header: 'Date', format: (v) => formatDate(v) },
+                      { key: 'overdue', header: 'Overdue' },
+                      { key: 'state', header: 'State' },
+                      { key: 'locality', header: 'Locality' },
+                      { key: 'transfer_date', header: 'Transfer Date', format: (v) => formatDate(v) },
+                      { key: 'amount_usd', header: 'USD', format: (v) => formatAmount(v) },
+                      { key: 'rate', header: 'Rate', format: (v) => formatAmount(v) },
+                    { key: 'amount_sdg', header: 'SDG', format: (v) => formatAmount(v) },
+                    { key: 'estimated_beneficiaries', header: 'Planned Individuals', format: (v) => (v != null && v !== '' ? Number(v).toLocaleString() : '') },
+                    { key: 'f5_reported_individuals', header: 'F5 Reported Individuals', format: (v) => (v != null ? Number(v).toLocaleString() : '0') },
+                    { key: 'f4_status', header: 'F4 Status' },
+                      { key: 'f5_status', header: 'F5 Status' },
+                      { key: 'tracker', header: 'Tracker', format: (v) => (v != null ? Number(v).toFixed(0) : '') },
+                    ],
+                    filteredRows,
+                    `report-tracker-${new Date().toISOString().slice(0, 10)}.csv`
+                  )
+                }}
+              >
+                <Download className="h-4 w-4 mr-2" />
+                Download CSV
+              </Button>
+            </div>
+          )}
           {error && (
             <p className="text-destructive text-sm mb-4">{error}</p>
           )}
@@ -342,7 +398,7 @@ export default function ReportTrackerPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    {Array.from({ length: 15 }).map((_, i) => (
+                    {Array.from({ length: 17 }).map((_, i) => (
                       <TableHead key={i}>
                         <div className="h-4 w-16 rounded bg-white/20 animate-pulse" />
                       </TableHead>
@@ -352,7 +408,7 @@ export default function ReportTrackerPage() {
                 <TableBody>
                   {Array.from({ length: 10 }).map((_, r) => (
                     <TableRow key={r}>
-                      {Array.from({ length: 15 }).map((_, c) => (
+                      {Array.from({ length: 17 }).map((_, c) => (
                         <TableCell key={c}>
                           <div className="h-5 w-full max-w-[70%] rounded bg-muted animate-pulse" />
                         </TableCell>
@@ -384,6 +440,8 @@ export default function ReportTrackerPage() {
                     <TableHead className="text-center tabular-nums" dir="ltr">USD</TableHead>
                     <TableHead className="text-center tabular-nums" dir="ltr">Rate</TableHead>
                     <TableHead className="text-center tabular-nums" dir="ltr">SDG</TableHead>
+                    <TableHead className="text-center tabular-nums" dir="ltr">Planned Individuals</TableHead>
+                    <TableHead className="text-center tabular-nums" dir="ltr">F5 Reported Individuals</TableHead>
                     <TableHead className="text-left" dir="ltr">F4 Status</TableHead>
                     <TableHead className="text-left" dir="ltr">F5 Status</TableHead>
                     <TableHead className="text-center" dir="ltr">Tracker</TableHead>
@@ -392,7 +450,7 @@ export default function ReportTrackerPage() {
                 <TableBody>
                   {paginatedRows.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={15} className="text-muted-foreground text-center py-8">
+                      <TableCell colSpan={17} className="text-muted-foreground text-center py-8">
                         {rows.length === 0 ? 'No projects found.' : 'No rows match the selected filters.'}
                       </TableCell>
                     </TableRow>
@@ -431,6 +489,8 @@ export default function ReportTrackerPage() {
                         <TableCell className="text-center tabular-nums" dir="ltr">${formatAmount(row.amount_usd)}</TableCell>
                         <TableCell className="text-center tabular-nums" dir="ltr">{row.rate != null ? formatAmount(row.rate) : '—'}</TableCell>
                         <TableCell className="text-center tabular-nums" dir="ltr">{formatAmount(row.amount_sdg)}</TableCell>
+                        <TableCell className="text-center tabular-nums" dir="ltr">{row.estimated_beneficiaries != null ? Number(row.estimated_beneficiaries).toLocaleString() : '—'}</TableCell>
+                        <TableCell className="text-center tabular-nums" dir="ltr">{row.f5_reported_individuals != null ? Number(row.f5_reported_individuals).toLocaleString() : '0'}</TableCell>
                         <TableCell>
                           <Select
                             value={row.f4_status}

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { getUserStateAccess } from '@/lib/userStateAccess'
+import { getActivityAndCategoryLists } from '@/lib/plannedActivitiesExpenses'
 
 function sumPlanFromPlannedActivities(planned: any): number {
   try {
@@ -87,6 +88,7 @@ export async function GET() {
         expenses,
         planned_activities,
         grant_segment,
+        estimated_beneficiaries,
         emergency_rooms ( err_code ),
         donors ( name, short_name )
       `)
@@ -105,6 +107,8 @@ export async function GET() {
 
     const projectIds = (rows || []).map((p: any) => p.id).filter(Boolean)
     const mouIds = Array.from(new Set((rows || []).map((p: any) => p.mou_id).filter(Boolean))) as string[]
+    const f5ReportedIndividualsByProject: Record<string, number> = {}
+    for (const id of projectIds) f5ReportedIndividualsByProject[id] = 0
     let transferDateByProject: Record<string, string> = {}
     let rateByProject: Record<string, number> = {}
     if (mouIds.length > 0) {
@@ -165,11 +169,32 @@ export async function GET() {
 
       const { data: f5Reports } = await supabase
         .from('err_program_report')
-        .select('project_id')
+        .select('id, project_id')
         .in('project_id', projectIds)
+      const f5ReportIds: string[] = []
+      const reportToProject = new Map<string, string>()
       for (const f5 of f5Reports || []) {
         const pid = (f5 as any).project_id
+        const rid = (f5 as any).id
         if (pid) f5CountByProject[pid] = (f5CountByProject[pid] || 0) + 1
+        if (rid) {
+          f5ReportIds.push(rid)
+          reportToProject.set(rid, pid)
+        }
+      }
+      if (f5ReportIds.length > 0) {
+        const { data: reachRows } = await supabase
+          .from('err_program_reach')
+          .select('report_id, individual_count')
+          .in('report_id', f5ReportIds)
+        for (const r of reachRows || []) {
+          const reportId = (r as any).report_id
+          const pid = reportId ? reportToProject.get(reportId) : null
+          const count = Number((r as any).individual_count) || 0
+          if (pid && !Number.isNaN(count)) {
+            f5ReportedIndividualsByProject[pid] = (f5ReportedIndividualsByProject[pid] ?? 0) + count
+          }
+        }
       }
 
       if (summaryIds.length > 0) {
@@ -231,6 +256,7 @@ export async function GET() {
         Array.isArray(p.donors) ? p.donors[0] : p.donors ??
         (Array.isArray((p as any).donor) ? (p as any).donor[0] : (p as any).donor)
       const donor = donorRow?.name ?? donorRow?.short_name ?? null
+      const { activity_list, expense_category_list } = getActivityAndCategoryLists(p.planned_activities, p.expenses)
       return {
         id: p.id,
         grant_id: p.grant_id ?? '',
@@ -251,6 +277,10 @@ export async function GET() {
         f5_pct,
         tracker,
         grant_segment: p.grant_segment ?? null,
+        activity_list,
+        expense_category_list,
+        estimated_beneficiaries: p.estimated_beneficiaries != null ? Number(p.estimated_beneficiaries) : null,
+        f5_reported_individuals: f5ReportedIndividualsByProject[p.id] ?? 0,
       }
     })
 

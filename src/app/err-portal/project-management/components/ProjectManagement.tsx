@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAllowedFunctions } from '@/hooks/useAllowedFunctions'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -9,10 +9,16 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Label } from '@/components/ui/label'
-import { Input } from '@/components/ui/input'
-import { RefreshCw, ChevronRight, CheckCircle } from 'lucide-react'
+import { RefreshCw, ChevronRight, CheckCircle, Download } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { supabase } from '@/lib/supabaseClient'
+import {
+  SmartFilter,
+  getProjectManagementFilterFields,
+  applyFilters,
+  type ActiveFilter,
+} from '@/components/smart-filter'
+import { downloadCsv } from '@/lib/csvDownload'
 import ProjectDetailModal from './ProjectDetailModal'
 import UploadF4Modal from '@/app/err-portal/f4-f5-reporting/components/UploadF4Modal'
 import UploadF5Modal from '@/app/err-portal/f4-f5-reporting/components/UploadF5Modal'
@@ -34,25 +40,9 @@ export default function ProjectManagement() {
 
   const [loading, setLoading] = useState(false)
   const [kpis, setKpis] = useState<any>({})
-  const [rows, setRows] = useState<any[]>([])
-  const [allRows, setAllRows] = useState<any[]>([]) // Store all rows before filtering
-
-  // Grant filter state
-  const [selectedGrantId, setSelectedGrantId] = useState<string>('all')
+  const [allRows, setAllRows] = useState<any[]>([])
+  const [filters, setFilters] = useState<ActiveFilter[]>([])
   const [grants, setGrants] = useState<Array<{ id: string; grant_id: string; donor_name: string; project_name: string | null }>>([])
-  
-  // Grant Serial search state
-  const [grantSerialSearch, setGrantSerialSearch] = useState<string>('')
-  const grantSerialSearchRef = useRef<HTMLInputElement>(null)
-  const shouldSelectAllRef = useRef<boolean>(false)
-
-  // Table filters: Historical/New, State, Month, F4 Status, F5 Status, Grant Segment
-  const [filterHistoricalNew, setFilterHistoricalNew] = useState<'all' | 'historical' | 'new'>('all')
-  const [filterState, setFilterState] = useState<string>('all')
-  const [filterMonth, setFilterMonth] = useState<string>('all')
-  const [filterF4Status, setFilterF4Status] = useState<string>('all')
-  const [filterF5Status, setFilterF5Status] = useState<string>('all')
-  const [filterGrantSegment, setFilterGrantSegment] = useState<string>('all')
 
   // Drill-down state
   const [level, setLevel] = useState<'state'|'room'|'project'>('state')
@@ -89,7 +79,6 @@ export default function ProjectManagement() {
       const j = await res.json()
       setKpis(j.kpis || {})
       setAllRows(j.rows || [])
-      setRows(j.rows || [])
       
       // Load portal F4 and F5 counts for all projects
       await loadPortalReportCounts()
@@ -196,113 +185,97 @@ export default function ProjectManagement() {
   }, [])
 
   const CUTOFF_2026 = new Date('2026-01-01T00:00:00Z').getTime()
-
   const normalizedF4 = (s: any) => (s != null ? String(s).trim().toLowerCase() : '') || ''
   const normalizedF5 = (s: any) => (s != null ? String(s).trim().toLowerCase() : '') || ''
 
-  // Filter rows by Historical/New, State, Month, F4 Status, F5 Status, grant, and grant serial search
-  useEffect(() => {
-    let filtered = allRows
-
-    // 1. Historical (before 2026) or New (2026+) — include rows with no filter_date so portal projects are not hidden
-    if (filterHistoricalNew !== 'all') {
-      filtered = filtered.filter((r: any) => {
-        const d = r.filter_date
-        if (!d) return true // include rows with no date (e.g. portal projects with no reports yet)
-        const t = new Date(d).getTime()
-        if (filterHistoricalNew === 'historical') return t < CUTOFF_2026
-        return t >= CUTOFF_2026 // new
-      })
-    }
-
-    // 2. State
-    if (filterState !== 'all') {
-      filtered = filtered.filter((r: any) => (r.state || '') === filterState)
-    }
-
-    // 3. Date filter by month (YYYY-MM)
-    if (filterMonth !== 'all') {
-      filtered = filtered.filter((r: any) => {
-        const d = r.filter_date
-        if (!d) return false
-        const dt = new Date(d)
-        const y = dt.getFullYear()
-        const m = String(dt.getMonth() + 1).padStart(2, '0')
-        return `${y}-${m}` === filterMonth
-      })
-    }
-
-    // 4. F4 Status
-    if (filterF4Status !== 'all') {
-      filtered = filtered.filter((r: any) => normalizedF4(r.f4_status) === filterF4Status)
-    }
-
-    // 5. F5 Status
-    if (filterF5Status !== 'all') {
-      filtered = filtered.filter((r: any) => normalizedF5(r.f5_status) === filterF5Status)
-    }
-
-    // 5b. Grant Segment (portal projects only; historical rows have no grant_segment)
-    if (filterGrantSegment !== 'all') {
-      filtered = filtered.filter((r: any) => {
-        if (r.is_historical) return false
-        const seg = r.grant_segment != null ? String(r.grant_segment).trim() : ''
-        return seg === filterGrantSegment
-      })
-    }
-
-    // 6. Grant filter
-    if (selectedGrantId === 'all') {
-      // no change
-    } else if (selectedGrantId === 'unassigned') {
-      filtered = filtered.filter((r: any) => !r.is_historical && !r.grant_grid_id)
-    } else {
-      const selectedGrant = grants.find(g => g.id === selectedGrantId)
-      if (selectedGrant) {
-        filtered = filtered.filter((r: any) => {
-          if (r.is_historical) {
-            const projectDonor = r.project_donor ? String(r.project_donor).trim() : null
-            const grantId = selectedGrant.grant_id ? String(selectedGrant.grant_id).trim() : null
-            return projectDonor === grantId
-          }
-          return r.grant_grid_id === selectedGrant.id
-        })
-      }
-    }
-
-    // 7. Grant serial search
-    if (grantSerialSearch.trim()) {
-      const searchTerm = grantSerialSearch.trim().toLowerCase()
-      filtered = filtered.filter((r: any) => {
-        const grantSerial = r.grant_serial_id ? String(r.grant_serial_id).toLowerCase().trim() : ''
-        if (!grantSerial) return false
-        return grantSerial.startsWith(searchTerm)
-      })
-    }
-
-    setRows(filtered)
-  }, [filterHistoricalNew, filterState, filterMonth, filterF4Status, filterF5Status, filterGrantSegment, selectedGrantId, allRows, grants, grantSerialSearch])
-
-  // Available options for filter dropdowns (from allRows)
-  const filterOptions = useMemo(() => {
-    const states = Array.from(new Set((allRows || []).map((r: any) => r.state || '').filter(Boolean))).sort()
-    const months = Array.from(
-      new Set(
-        (allRows || [])
-          .map((r: any) => {
-            const d = r.filter_date
-            if (!d) return null
-            const dt = new Date(d)
-            return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}`
-          })
-          .filter((m): m is string => Boolean(m))
-      )
+  // Filter field config and options (from allRows + grants)
+  const filterFields = useMemo(() => {
+    const stateOptions = Array.from(new Set((allRows || []).map((r: any) => r.state || '').filter(Boolean))).sort()
+    const f4StatusOptions = Array.from(new Set((allRows || []).map((r: any) => normalizedF4(r.f4_status)).filter(Boolean))).sort()
+    const f5StatusOptions = Array.from(new Set((allRows || []).map((r: any) => normalizedF5(r.f5_status)).filter(Boolean))).sort()
+    const grantSegmentOptions = Array.from(new Set((allRows || []).map((r: any) => r.grant_segment).filter((s): s is string => s != null && String(s).trim() !== ''))).sort()
+    const expenseCategoryOptions = Array.from(
+      new Set((allRows || []).flatMap((r: any) => r.expense_category_list || []).filter(Boolean))
     ).sort()
-    const f4Statuses = Array.from(new Set((allRows || []).map((r: any) => normalizedF4(r.f4_status)).filter(Boolean))).sort()
-    const f5Statuses = Array.from(new Set((allRows || []).map((r: any) => normalizedF5(r.f5_status)).filter(Boolean))).sort()
-    const grantSegments = Array.from(new Set((allRows || []).map((r: any) => r.grant_segment).filter((s): s is string => s != null && String(s).trim() !== ''))).sort()
-    return { states, months, f4Statuses, f5Statuses, grantSegments }
-  }, [allRows])
+    return getProjectManagementFilterFields({
+      stateOptions,
+      f4StatusOptions,
+      f5StatusOptions,
+      grantSegmentOptions,
+      expenseCategoryOptions,
+      grants,
+    })
+  }, [allRows, grants])
+
+  const getFieldValue = useCallback(
+    (row: any, fieldId: string): string | null | undefined => {
+      if (fieldId === 'historical_new') {
+        const d = row.filter_date
+        if (!d) return ''
+        const t = new Date(d).getTime()
+        return t < CUTOFF_2026 ? 'historical' : 'new'
+      }
+      if (fieldId === 'date_range') return row.filter_date ?? null
+      if (fieldId === 'grant') {
+        if (row.is_historical) {
+          const donor = row.project_donor != null ? String(row.project_donor).trim() : ''
+          const g = grants.find((gr) => (gr.grant_id || '').trim() === donor)
+          return g ? g.id : ''
+        }
+        if (row.grant_grid_id) return row.grant_grid_id
+        return '__unassigned__'
+      }
+      if (fieldId === 'grant_serial') return row.grant_serial_id ?? null
+      if (fieldId === 'grant_segment') return row.grant_segment ?? null
+      if (fieldId === 'f4_status') return normalizedF4(row.f4_status) || null
+      if (fieldId === 'f5_status') return normalizedF5(row.f5_status) || null
+      if (fieldId === 'state') return row.state ?? null
+      return null
+    },
+    [grants]
+  )
+
+  // Apply SmartFilter (excluding historical_new, grant_serial, activity, expense_category which we handle separately)
+  const rows = useMemo(() => {
+    const filtersForApply = filters.filter(
+      (f) =>
+        f.fieldId !== 'historical_new' &&
+        f.fieldId !== 'grant_serial' &&
+        f.fieldId !== 'expense_category'
+    )
+    let result = applyFilters({
+      data: allRows,
+      filters: filtersForApply,
+      fields: filterFields,
+      getFieldValue,
+    })
+    const historicalNewFilter = filters.find((f) => f.fieldId === 'historical_new')
+    if (historicalNewFilter && historicalNewFilter.value && String(historicalNewFilter.value).trim()) {
+      const v = String(historicalNewFilter.value).trim().toLowerCase()
+      result = result.filter((r: any) => {
+        const d = r.filter_date
+        if (!d) return true
+        const t = new Date(d).getTime()
+        if (v === 'historical') return t < CUTOFF_2026
+        if (v === 'new') return t >= CUTOFF_2026
+        return true
+      })
+    }
+    const expenseCategoryFilter = filters.find((f) => f.fieldId === 'expense_category')
+    if (expenseCategoryFilter?.value && String(expenseCategoryFilter.value).trim()) {
+      const val = String(expenseCategoryFilter.value).trim()
+      result = result.filter((r: any) => (r.expense_category_list || []).includes(val))
+    }
+    const grantSerialFilter = filters.find((f) => f.fieldId === 'grant_serial')
+    if (grantSerialFilter && grantSerialFilter.value && String(grantSerialFilter.value).trim()) {
+      const term = String(grantSerialFilter.value).trim().toLowerCase()
+      result = result.filter((r: any) => {
+        const serial = (r.grant_serial_id != null ? String(r.grant_serial_id) : '').toLowerCase().trim()
+        return serial.startsWith(term)
+      })
+    }
+    return result
+  }, [allRows, filters, filterFields, getFieldValue])
 
   // Tracker score: F4 half (max 0.5) + F5 half (max 0.5).
   // Historical F4: Completed+actual>0 → actual/plan; else Completed → 0.5; Partial/Under Review → 0.25; Waiting → 0.
@@ -469,11 +442,10 @@ export default function ProjectManagement() {
     return rows.filter((r:any)=> r.state === selectedStateName && (r.err_id || '—') === selectedErrId)
   }, [rows, selectedStateName, selectedErrId])
 
-  // When searching by Grant Serial, show all matching projects directly
+  // When Grant Serial filter is active, show matching projects directly (project-level view)
   const searchRows = useMemo(() => {
-    if (!grantSerialSearch.trim()) return null
-    // Return all rows that match the search (already filtered in the useEffect)
-    // Deduplicate by project_id to avoid showing the same project twice
+    const hasGrantSerial = filters.some((f) => f.fieldId === 'grant_serial' && String(f.value).trim() !== '')
+    if (!hasGrantSerial) return null
     const seen = new Set<string>()
     return rows.filter((r: any) => {
       const key = r.project_id || `${r.err_id}-${r.state}-${r.grant_serial_id}`
@@ -481,82 +453,7 @@ export default function ProjectManagement() {
       seen.add(key)
       return true
     })
-  }, [rows, grantSerialSearch])
-
-  // Auto-switch to project level when searching, reset to state level when search is cleared
-  useEffect(() => {
-    if (grantSerialSearch.trim()) {
-      // When searching, switch to project level
-      if (level !== 'project') {
-        setLevel('project')
-        setSelectedStateName('')
-        setSelectedErrId('')
-      }
-    } else {
-      // When search is cleared, only reset if we're currently in search mode (project level due to search)
-      // Don't reset if user is drilling down normally
-      // We can detect this by checking if we're at project level but have no selectedStateName/selectedErrId
-      // This means we got here via search, not via drill-down
-      if (level === 'project' && !selectedStateName && !selectedErrId) {
-        setLevel('state')
-        setSelectedStateName('')
-        setSelectedErrId('')
-      }
-    }
-  }, [grantSerialSearch]) // Removed 'level' from dependencies to prevent interference with drill-down
-
-  // Inject styles to make text selection visible in the search input
-  useEffect(() => {
-    const styleId = 'grant-serial-search-selection-styles'
-    // Remove existing style if present
-    const existingStyle = document.getElementById(styleId)
-    if (existingStyle) {
-      existingStyle.remove()
-    }
-
-    const style = document.createElement('style')
-    style.id = styleId
-    style.textContent = `
-      /* Override Input component's selection styles with maximum specificity */
-      input[data-slot="input"]#grant-serial-search::selection,
-      input[data-slot="input"]#grant-serial-search::-moz-selection {
-        background: rgb(191 219 254) !important;
-        background-color: rgb(191 219 254) !important;
-        color: rgb(30 58 138) !important;
-        -webkit-text-fill-color: rgb(30 58 138) !important;
-      }
-      .dark input[data-slot="input"]#grant-serial-search::selection,
-      .dark input[data-slot="input"]#grant-serial-search::-moz-selection {
-        background: rgb(30 64 175) !important;
-        background-color: rgb(30 64 175) !important;
-        color: rgb(219 234 254) !important;
-        -webkit-text-fill-color: rgb(219 234 254) !important;
-      }
-      /* Fallback for browsers that don't support data-slot selector */
-      input#grant-serial-search::selection,
-      input#grant-serial-search::-moz-selection {
-        background: rgb(191 219 254) !important;
-        background-color: rgb(191 219 254) !important;
-        color: rgb(30 58 138) !important;
-        -webkit-text-fill-color: rgb(30 58 138) !important;
-      }
-      .dark input#grant-serial-search::selection,
-      .dark input#grant-serial-search::-moz-selection {
-        background: rgb(30 64 175) !important;
-        background-color: rgb(30 64 175) !important;
-        color: rgb(219 234 254) !important;
-        -webkit-text-fill-color: rgb(219 234 254) !important;
-      }
-    `
-    document.head.appendChild(style)
-
-    return () => {
-      const styleToRemove = document.getElementById(styleId)
-      if (styleToRemove) {
-        styleToRemove.remove()
-      }
-    }
-  }, [])
+  }, [rows, filters])
 
   const displayed = searchRows ? searchRows : (level === 'state' ? stateRows : (level === 'room' ? roomRows : projectRows))
 
@@ -608,8 +505,7 @@ export default function ProjectManagement() {
   }, [displayed])
 
   const onRowClick = (r: any) => {
-    // If searching, always open detail modal (projects are shown directly)
-    if (grantSerialSearch.trim()) {
+    if (searchRows) {
       setDetailProjectId(r.project_id || null)
       setDetailOpen(true)
       return
@@ -768,189 +664,86 @@ export default function ProjectManagement() {
 
       {/* Table */}
           <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle className="flex items-center gap-2">
-                  {t('management.table.title')}
-                  {level !== 'state' && (
-                    <Button variant="outline" size="sm" onClick={goBack}>{t('management.table.back')}</Button>
-                  )}
-                  {level === 'room' && selectedStateName ? (
-                    <span className="ml-2 text-sm text-muted-foreground">{t('management.table.state')}: {selectedStateName}</span>
-                  ) : null}
-                  {level === 'project' && selectedErrId ? (
-                    <span className="ml-2 text-sm text-muted-foreground">{t('management.table.state')}: {selectedStateName} · {t('management.table.err')}: {selectedErrId}{selectedErrName ? ` (${selectedErrName})` : ''}</span>
-                  ) : null}
-                </CardTitle>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleRefresh}
-                  disabled={loading}
-                >
-                  <RefreshCw className={cn("h-4 w-4 mr-2", loading && "animate-spin")} />
-                  {t('common:refresh')}
-                </Button>
+            <CardHeader className="pb-4">
+              <div className="flex flex-col gap-3">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="flex items-center gap-2">
+                    {t('management.table.title')}
+                    {level !== 'state' && (
+                      <Button variant="outline" size="sm" onClick={goBack}>{t('management.table.back')}</Button>
+                    )}
+                    {level === 'room' && selectedStateName ? (
+                      <span className="ml-2 text-sm text-muted-foreground">{t('management.table.state')}: {selectedStateName}</span>
+                    ) : null}
+                    {level === 'project' && selectedErrId ? (
+                      <span className="ml-2 text-sm text-muted-foreground">{t('management.table.state')}: {selectedStateName} · {t('management.table.err')}: {selectedErrId}{selectedErrName ? ` (${selectedErrName})` : ''}</span>
+                    ) : null}
+                  </CardTitle>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        const isSearchOrProject = !!(searchRows || level === 'project')
+                        const isState = level === 'state'
+                        const isRoom = level === 'room'
+                        const cols: { key: string; header: string; format?: (v: any, r: any) => string | number }[] = []
+                        if (isSearchOrProject) {
+                          cols.push({ key: 'err_id', header: t('management.table.err') })
+                          if (searchRows) cols.push({ key: 'state', header: t('management.table.state') })
+                          cols.push({ key: 'grant_serial_id', header: 'Grant Serial' })
+                        } else if (isState) {
+                          cols.push({ key: 'state', header: t('management.table.state') })
+                        } else {
+                          cols.push({ key: 'err_id', header: t('management.table.err') })
+                          cols.push({ key: 'err_name', header: t('management.table.err_name') })
+                        }
+                        cols.push(
+                          { key: 'plan', header: t('management.table.plan'), format: (v) => Number(v || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) },
+                          { key: 'actual', header: t('management.table.actuals'), format: (v) => Number(v || 0).toLocaleString() },
+                          { key: 'variance', header: t('management.table.variance'), format: (v) => Number(v || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) },
+                          { key: 'individuals', header: t('management.table.individuals'), format: (v) => Number(v || 0).toLocaleString() },
+                          { key: 'overdue_count', header: t('management.table.overdue'), format: (v, r) => r.overdue_count ?? (r.is_overdue ? 1 : 0) },
+                          { key: 'f4_count', header: t('management.table.f4s'), format: (v, r) => r.f4_count ?? 0 },
+                          { key: 'burn', header: t('management.table.f4_complete'), format: (v, r) => (r.plan > 0 ? ((r.burn ?? 0) * 100).toFixed(0) + '%' : '0%') },
+                          { key: 'f5_count', header: t('management.table.f5s'), format: (v, r) => r.f5_count ?? 0 },
+                          { key: 'tracker_sum', header: t('management.table.pct_tracker'), format: (v, r) => { const pct = r.total_projects > 0 && r.tracker_sum != null ? (r.tracker_sum / r.total_projects) * 100 : trackerScore(r) * 100; return pct.toFixed(0) + '%'; } }
+                        )
+                        downloadCsv(cols, displayed || [], `project-management-${new Date().toISOString().slice(0, 10)}.csv`)
+                      }}
+                      disabled={loading || !displayed?.length}
+                    >
+                      <Download className="h-4 w-4 mr-2" />
+                      Download CSV
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleRefresh}
+                      disabled={loading}
+                    >
+                      <RefreshCw className={cn("h-4 w-4 mr-2", loading && "animate-spin")} />
+                      {t('common:refresh')}
+                    </Button>
+                  </div>
+                </div>
+                {!loading && (
+                  <SmartFilter
+                    fields={filterFields}
+                    filters={filters}
+                    onFiltersChange={setFilters}
+                    urlParamPrefix="f_"
+                    title="Projects"
+                    count={rows.length}
+                  />
+                )}
               </div>
             </CardHeader>
             <CardContent>
-          {/* Table filters */}
-          <div className="mb-4 flex items-end gap-2 flex-wrap text-xs">
-            <div className="flex flex-col gap-1 shrink-0">
-              <Label className="text-xs font-medium whitespace-nowrap">Historical / New</Label>
-              <Select value={filterHistoricalNew} onValueChange={(v: 'all' | 'historical' | 'new') => setFilterHistoricalNew(v)}>
-                <SelectTrigger className="w-[120px] h-8 text-xs">
-                  <SelectValue placeholder="Historical / New" />
-                </SelectTrigger>
-                <SelectContent className="text-xs">
-                  <SelectItem value="all">All</SelectItem>
-                  <SelectItem value="historical">Historical (before 2026)</SelectItem>
-                  <SelectItem value="new">New (2026+)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex flex-col gap-1 shrink-0">
-              <Label className="text-xs font-medium whitespace-nowrap">State</Label>
-              <Select value={filterState} onValueChange={setFilterState}>
-                <SelectTrigger className="w-[110px] h-8 text-xs">
-                  <SelectValue placeholder="State" />
-                </SelectTrigger>
-                <SelectContent className="text-xs">
-                  <SelectItem value="all">All States</SelectItem>
-                  {filterOptions.states.map((s) => (
-                    <SelectItem key={s} value={s}>{s}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex flex-col gap-1 shrink-0">
-              <Label className="text-xs font-medium whitespace-nowrap">Month</Label>
-              <Select value={filterMonth} onValueChange={setFilterMonth}>
-                <SelectTrigger className="w-[95px] h-8 text-xs">
-                  <SelectValue placeholder="Month" />
-                </SelectTrigger>
-                <SelectContent className="text-xs">
-                  <SelectItem value="all">All months</SelectItem>
-                  {filterOptions.months.map((m) => (
-                    <SelectItem key={m} value={m}>{m}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex flex-col gap-1 shrink-0">
-              <Label className="text-xs font-medium whitespace-nowrap">F4 Status</Label>
-              <Select value={filterF4Status} onValueChange={setFilterF4Status}>
-                <SelectTrigger className="w-[95px] h-8 text-xs">
-                  <SelectValue placeholder="F4 Status" />
-                </SelectTrigger>
-                <SelectContent className="text-xs">
-                  <SelectItem value="all">All</SelectItem>
-                  {filterOptions.f4Statuses.map((s) => (
-                    <SelectItem key={s} value={s}>{s}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex flex-col gap-1 shrink-0">
-              <Label className="text-xs font-medium whitespace-nowrap">F5 Status</Label>
-              <Select value={filterF5Status} onValueChange={setFilterF5Status}>
-                <SelectTrigger className="w-[95px] h-8 text-xs">
-                  <SelectValue placeholder="F5 Status" />
-                </SelectTrigger>
-                <SelectContent className="text-xs">
-                  <SelectItem value="all">All</SelectItem>
-                  {filterOptions.f5Statuses.map((s) => (
-                    <SelectItem key={s} value={s}>{s}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex flex-col gap-1 shrink-0">
-              <Label className="text-xs font-medium whitespace-nowrap">Grant Segment</Label>
-              <Select value={filterGrantSegment} onValueChange={setFilterGrantSegment}>
-                <SelectTrigger className="w-[130px] h-8 text-xs">
-                  <SelectValue placeholder="All segments" />
-                </SelectTrigger>
-                <SelectContent className="text-xs">
-                  <SelectItem value="all">All segments</SelectItem>
-                  {filterOptions.grantSegments.map((s) => (
-                    <SelectItem key={s} value={s}>{s}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex flex-col gap-1 shrink-0">
-              <Label htmlFor="grant-filter" className="text-xs font-medium whitespace-nowrap">Grant</Label>
-              <Select value={selectedGrantId} onValueChange={setSelectedGrantId}>
-                <SelectTrigger id="grant-filter" className="w-[200px] h-8 text-xs">
-                  <SelectValue placeholder="All Grants" />
-                </SelectTrigger>
-                <SelectContent className="text-xs">
-                  <SelectItem value="all">All Grants</SelectItem>
-                  <SelectItem value="unassigned">Unassigned</SelectItem>
-                  {grants.map((grant) => (
-                    <SelectItem key={grant.id} value={grant.id}>
-                      {grant.grant_id} - {grant.project_name || grant.grant_id} ({grant.donor_name})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex flex-col gap-1 shrink-0">
-              <Label htmlFor="grant-serial-search" className="text-xs font-medium whitespace-nowrap">Grant Serial</Label>
-              <Input
-                ref={grantSerialSearchRef}
-                id="grant-serial-search"
-                type="text"
-                placeholder="Search by Grant Serial"
-                value={grantSerialSearch}
-                onChange={(e) => {
-                  setGrantSerialSearch(e.target.value)
-                  shouldSelectAllRef.current = false
-                }}
-                onFocus={(e) => {
-                  shouldSelectAllRef.current = true
-                  // Use requestAnimationFrame to ensure selection happens after all events
-                  requestAnimationFrame(() => {
-                    if (shouldSelectAllRef.current && grantSerialSearchRef.current) {
-                      grantSerialSearchRef.current.select()
-                    }
-                  })
-                }}
-                onMouseDown={(e) => {
-                  // If we're about to select all, prevent default to keep selection
-                  if (shouldSelectAllRef.current && e.currentTarget === document.activeElement) {
-                    e.preventDefault()
-                    requestAnimationFrame(() => {
-                      if (grantSerialSearchRef.current) {
-                        grantSerialSearchRef.current.select()
-                      }
-                    })
-                  }
-                }}
-                onClick={(e) => {
-                  // If input is focused and we want to select all, do it
-                  if (shouldSelectAllRef.current && e.currentTarget === document.activeElement) {
-                    requestAnimationFrame(() => {
-                      if (grantSerialSearchRef.current) {
-                        grantSerialSearchRef.current.select()
-                      }
-                    })
-                  }
-                }}
-                onDoubleClick={(e) => {
-                  // Double click should select all
-                  e.currentTarget.select()
-                  shouldSelectAllRef.current = false
-                }}
-                className="w-[180px] h-8 text-xs select-text [&::selection]:!bg-blue-200 [&::selection]:!text-blue-900 dark:[&::selection]:!bg-blue-800 dark:[&::selection]:!text-blue-100"
-              />
-            </div>
-          </div>
           <div className="text-xs text-muted-foreground mb-2">
             {searchRows ? (
               <span>
-                Showing projects matching Grant Serial search. {grantSerialSearch && <span className="font-medium text-foreground">Search: "{grantSerialSearch}"</span>}
+                Showing projects matching Grant Serial filter.
               </span>
             ) : level === 'state' ? (
               <span>

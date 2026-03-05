@@ -14,6 +14,11 @@ const CHIP_COLORS: Record<string, string> = {
   f5_status: 'bg-emerald-500/10 border-emerald-500/30 [&_.chip-dot]:bg-emerald-500',
   state: 'bg-primary/10 border-primary/30 [&_.chip-dot]:bg-primary',
   date_range: 'bg-violet-500/10 border-violet-500/30 [&_.chip-dot]:bg-violet-500',
+  historical_new: 'bg-slate-500/10 border-slate-500/30 [&_.chip-dot]:bg-slate-500',
+  grant_segment: 'bg-cyan-500/10 border-cyan-500/30 [&_.chip-dot]:bg-cyan-500',
+  grant: 'bg-indigo-500/10 border-indigo-500/30 [&_.chip-dot]:bg-indigo-500',
+  grant_serial: 'bg-teal-500/10 border-teal-500/30 [&_.chip-dot]:bg-teal-500',
+  expense_category: 'bg-rose-500/10 border-rose-500/30 [&_.chip-dot]:bg-rose-500',
 }
 
 export interface FilterChipProps {
@@ -52,7 +57,10 @@ export function FilterChip({
           value={(filter.value as string) ?? ''}
           onChange={(e) => onValueChange(e.target.value)}
           placeholder={field.placeholder}
-          className="h-7 w-24 rounded-sm border-0 bg-transparent px-2 text-xs shadow-none"
+          className={cn(
+            'h-7 rounded-sm border-0 bg-transparent px-2 text-xs shadow-none',
+            field.id === 'grant_serial' ? 'min-w-[200px] w-[200px]' : 'w-24'
+          )}
         />
       )}
 
