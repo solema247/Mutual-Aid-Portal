@@ -1,11 +1,12 @@
 ## Dashboard charts – data & filtering
 
-This document explains how the two **Dashboard (Work‑in‑progress)** charts on `/err-portal/dashboard` are wired up:
+This document explains how the three **Dashboard (Work‑in‑progress)** charts on `/err-portal/dashboard` are wired up:
 
 - **USD by Donor over Time**
-- **Grants by amount**
+- **Grants by Amount**
+- **F1 Work Plans by Sector**
 
-It covers their data sources, how the server APIs aggregate data, and how the shared date range filter works.
+It covers their data sources, how the server APIs aggregate data, and how the shared date range filter works. Each chart also has a **Download CSV** button in the header.
 
 ---
 
@@ -14,21 +15,26 @@ It covers their data sources, how the server APIs aggregate data, and how the sh
 - **Page component**: `src/app/err-portal/dashboard/page.tsx`
   - Renders the “Dashboard (Work‑in‑progress)” section inside a `CollapsibleRow`.
   - Hosts a **SmartFilter** instance for the **Date range** filter.
-  - Passes the selected date range down as props to both charts:
+  - Passes the selected date range down as props to all three charts:
     - `ProjectsByDonorChart dateFrom={...} dateTo={...}`
     - `GrantsStackedBarChart dateFrom={...} dateTo={...}`
+    - `PlannedCategoriesRingChart dateFrom={...} dateTo={...}`
 
 - **Chart components**:
   - `src/app/err-portal/dashboard/ProjectsByDonorChart.tsx`
     - Renders the **USD by Donor over Time** area chart using Recharts.
   - `src/app/err-portal/dashboard/GrantsStackedBarChart.tsx`
-    - Renders the **Grants by amount** stacked bar chart using Recharts.
+    - Renders the **Grants by Amount** stacked bar chart using Recharts.
+  - `src/app/err-portal/dashboard/PlannedCategoriesRingChart.tsx`
+    - Renders the **F1 Work Plans by Sector** donut/ring chart using Recharts (metric dropdown: USD Amount, Individuals, Families).
 
 - **APIs backing the charts**:
   - `GET /api/dashboard/projects-activities`
     - File: `src/app/api/dashboard/projects-activities/route.ts`
   - `GET /api/dashboard/grants-chart`
     - File: `src/app/api/dashboard/grants-chart/route.ts`
+  - `GET /api/dashboard/planned-categories`
+    - File: `src/app/api/dashboard/planned-categories/route.ts`
 
 Both APIs are marked `dynamic = 'force-dynamic'` and `fetchCache = 'force-no-store'`, so they always run on the server and are never statically cached.
 
@@ -93,7 +99,7 @@ On the client:
 
 ---
 
-### 3. Grants by amount
+### 3. Grants by Amount
 
 #### 3.1 Data source
 
@@ -158,11 +164,46 @@ On the client:
 
 ---
 
-### 4. Shared date range filter (cross‑filtering)
+### 4. F1 Work Plans by Sector
+
+#### 4.1 Data source
+
+API: `GET /api/dashboard/planned-categories`
+
+- Supabase source: **`err_projects`** (portal projects only: `source = 'mutual_aid_portal'`).
+- Fields used: `date`, `state`, `planned_activities` (JSONB).
+
+The API:
+
+1. Fetches rows filtered by status (`approved`, `active`, `pending`, `completed`), optional date range (`from` / `to` on `err_projects.date`), and state access.
+2. Parses each row’s `planned_activities` JSON array (each item has `category`, `planned_activity_cost`, `families`, `individuals`).
+3. Aggregates per category:
+   - **total**: sum of `planned_activity_cost` (null/invalid → 0).
+   - **families**: sum of `families` (null → 0).
+   - **individuals**: sum of `individuals` (null → 0).
+4. Counts **projectCount**: number of projects that contributed at least one activity with valid cost.
+5. Returns: `{ projectCount, categories: [ { category, total, families, individuals }, ... ] }` sorted by `total` descending.
+
+The chart (`PlannedCategoriesRingChart`) renders:
+
+- A **donut/ring** (Recharts `PieChart` with `innerRadius`), one segment per category (only categories with value > 0 for the selected metric).
+- A **metric dropdown** (pill-style) in the header: **USD Amount**, **Individuals**, **Families**. One metric per view; the pie and centre label show that metric’s totals.
+- Centre label: sum for the selected metric plus “Total planned” / “Total individuals” / “Total families”, and project count.
+- External labels per segment (with connector lines for small segments). Tooltip: value and % of total.
+- **Download CSV**: exports Category, Total (USD), Individuals, Families.
+
+#### 4.2 Date range filtering
+
+- Query params `from` / `to` (ISO date, inclusive) filter on **`err_projects.date`**.
+- The chart receives `dateFrom` / `dateTo` from the dashboard page and refetches when they change.
+
+---
+
+### 5. Shared date range filter (cross‑filtering)
 
 The **cross‑filtering** behaviour comes from the shared **SmartFilter date_range chip** on the dashboard page.
 
-#### 4.1 SmartFilter configuration
+#### 5.1 SmartFilter configuration
 
 In `dashboard/page.tsx`:
 
@@ -183,27 +224,29 @@ The currently selected dates are derived from the filter value:
   - `dateFrom = from || ''`
   - `dateTo = to || ''`
 
-#### 4.2 How it cross‑filters both charts
+#### 5.2 How it cross‑filters all charts
 
-- The **same date range** is applied to both chart APIs:
+- The **same date range** is applied to all three chart APIs:
   - `ProjectsByDonorChart` → `/api/dashboard/projects-activities?from=&to=`
   - `GrantsStackedBarChart` → `/api/dashboard/grants-chart?from=&to=`
-- Because both APIs:
+  - `PlannedCategoriesRingChart` → `/api/dashboard/planned-categories?from=&to=`
+- Because all APIs:
   - Respect the same `from` / `to` semantics.
   - Filter on date fields before aggregating.
 - The result is a **consistent cross‑filter**:
   - The donor‑over‑time area chart only includes activity rows inside the selected date range.
   - The grants‑by‑amount bar chart only includes grants whose `grant_start_date`/`grant_end_date` fall inside the same window.
+  - The F1 work plans ring chart only includes portal projects whose `date` falls inside the selected range.
 
 If you change or clear the date‑range chip:
 
 - The SmartFilter updates `filters` and the URL.
 - The dashboard page recomputes `dateFrom` / `dateTo` props.
-- Both charts refetch and update together.
+- All three charts refetch and update together.
 
 ---
 
-### 5. Extending or reusing this setup
+### 6. Extending or reusing this setup
 
 - **Adding more filters**:
   - You can extend `dateFilterFields` in `dashboard/page.tsx` with additional `FilterFieldConfig` items (e.g. donor, grant segment) and propagate their values as query params to one or both APIs.
@@ -213,6 +256,6 @@ If you change or clear the date‑range chip:
   - If you want both charts to use the **same underlying date field** (e.g. always `date_transfer`), ensure the APIs align on which DB column they use in their `gte` / `lte` filters.
 
 - **Reusing the charts elsewhere**:
-  - Both chart components are self‑contained and accept `dateFrom` / `dateTo` props.
+  - All three chart components are self‑contained and accept `dateFrom` / `dateTo` props (and `PlannedCategoriesRingChart` has no extra props).
   - You can render them in other pages and drive them with any date UI (another SmartFilter instance, simple inputs, etc.), as long as you pass the same ISO `YYYY-MM-DD` strings into their props.
 
