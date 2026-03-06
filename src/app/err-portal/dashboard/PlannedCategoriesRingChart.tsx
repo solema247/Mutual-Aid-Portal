@@ -265,23 +265,14 @@ export function PlannedCategoriesRingChart({
               innerRadius={100}
               strokeWidth={5}
               paddingAngle={1}
-              label={({
-                cx,
-                cy,
-                midAngle,
-                outerRadius,
-                percent,
-                name,
-                fill,
-              }: {
-                cx: number
-                cy: number
-                midAngle: number
-                outerRadius: number
-                percent: number
-                name: string
-                fill: string
-              }) => {
+              label={(props) => {
+                const cx = props.cx ?? 0
+                const cy = props.cy ?? 0
+                const midAngle = props.midAngle ?? 0
+                const outerRadius = props.outerRadius ?? 0
+                const percent = props.percent ?? 0
+                const name = String(props.name ?? '')
+                const fill = String(props.fill ?? '')
                 const sin = Math.sin(-RADIAN * midAngle)
                 const cos = Math.cos(-RADIAN * midAngle)
                 const outerX = cx + outerRadius * cos

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { Suspense, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useTranslation } from 'react-i18next'
 import Link from 'next/link'
@@ -53,6 +53,7 @@ export default function DashboardPage() {
   if (!canViewPage) return null
 
   return (
+    <Suspense fallback={<div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex min-h-[200px] items-center justify-center text-muted-foreground">Loading…</div>}>
     <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
       <div className="space-y-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -137,5 +138,6 @@ export default function DashboardPage() {
         </div>
       </div>
     </div>
+    </Suspense>
   )
 } 
