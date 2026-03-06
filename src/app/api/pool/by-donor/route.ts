@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin'
+import { normalizeProjectDonorToGrantId } from '@/lib/normalizeGrantId'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -123,6 +124,7 @@ export async function GET() {
     )
 
     // Historical by grant_id (from activities_raw_import "Project Donor")
+    // Normalize donor string (e.g. "FCDO SHPR" -> "FCDO-SHPR") so it matches grants.grant_id
     const byGrantHistorical = new Map<string, number>()
     for (const row of historicalData || []) {
       const rawDonor = row['Project Donor'] || row['project_donor'] || row['Project Donor']
@@ -135,7 +137,7 @@ export async function GET() {
         usd = Number(rawUSD)
         if (isNaN(usd) || usd === 0) continue
       } else continue
-      const displayKey = toDisplayKey(grantId)
+      const displayKey = toDisplayKey(normalizeProjectDonorToGrantId(grantId))
       byGrantHistorical.set(displayKey, (byGrantHistorical.get(displayKey) || 0) + usd)
     }
 
@@ -208,7 +210,7 @@ export async function GET() {
     const rows = Array.from(uniqueGrants.entries())
       .map(([grantId, grant]) => {
         const assigned = byGrantAssigned.get(grantId) || 0
-        const historical = byGrantHistorical.get(grantId) || 0
+        const historical = byGrantHistorical.get(normalizeProjectDonorToGrantId(grantId) || grantId) || 0
         const remaining = grant.included - historical - assigned
         return {
           donor_id: null,

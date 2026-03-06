@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Label } from '@/components/ui/label'
 import { RefreshCw, ChevronRight, CheckCircle, Download } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { normalizeProjectDonorToGrantId } from '@/lib/normalizeGrantId'
 import { supabase } from '@/lib/supabaseClient'
 import {
   SmartFilter,
@@ -219,7 +220,7 @@ export default function ProjectManagement() {
       if (fieldId === 'grant') {
         if (row.is_historical) {
           const donor = row.project_donor != null ? String(row.project_donor).trim() : ''
-          const g = grants.find((gr) => (gr.grant_id || '').trim() === donor)
+          const g = grants.find((gr) => normalizeProjectDonorToGrantId(gr.grant_id || '') === normalizeProjectDonorToGrantId(donor))
           return g ? g.id : ''
         }
         if (row.grant_grid_id) return row.grant_grid_id
@@ -351,7 +352,7 @@ export default function ProjectManagement() {
         if (r.is_historical) {
           const projectDonor = (r.project_donor != null ? String(r.project_donor).trim() : '') || ''
           const grantId = (grant.grant_id != null ? String(grant.grant_id).trim() : '') || ''
-          return projectDonor === grantId
+          return normalizeProjectDonorToGrantId(projectDonor) === normalizeProjectDonorToGrantId(grantId)
         }
         return r.grant_grid_id === grant.id
       })
