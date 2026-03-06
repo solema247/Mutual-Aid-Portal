@@ -3,5 +3,12 @@
   "map_title": "Emergency Response Room Mapping (Work-in-progress)",
   "statistics_title": "Statistics",
   "reports_title": "Reports",
-  "coming_soon": "This feature is coming soon..."
+  "coming_soon": "This feature is coming soon...",
+  "f1_by_state_title": "F1 uploads by state",
+  "f1_by_state_description": "F1 work plans uploaded in MAP by Sudan state",
+  "state": "State",
+  "f1_count": "F1 count",
+  "total": "Total",
+  "ocr_acceptance_title": "F1 OCR acceptance",
+  "ocr_acceptance_description": "Share of F1 uploads accepted with no or minimal edits after OCR"
 } 

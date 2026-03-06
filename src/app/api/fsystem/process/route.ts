@@ -210,11 +210,22 @@ export async function POST(req: Request) {
         pageInfo = result[0]
       } catch (visionError: any) {
         console.error('Vision API error:', visionError)
-        // Handle Vision API errors gracefully
-        if (visionError.code === 13 || visionError.message?.includes('INTERNAL')) {
+        const msg = visionError?.message ?? ''
+        const isQuotaOrRate = visionError?.code === 8 || /quota|resource exhausted|rate limit/i.test(msg)
+        if (isQuotaOrRate) {
+          return NextResponse.json(
+            {
+              error: 'Google Vision API quota or rate limit exceeded. Please try again later or check your Google Cloud quotas.',
+              service: 'google_vision',
+              code: 'QUOTA_EXCEEDED'
+            },
+            { status: 429 }
+          )
+        }
+        if (visionError.code === 13 || msg.includes('INTERNAL')) {
           throw new Error('Google Vision API encountered an internal error. Please try uploading the file again. If the problem persists, the file may be corrupted or too large.')
         }
-        throw new Error(`Vision API error: ${visionError.message || 'Unknown error occurred'}`)
+        throw new Error(`Vision API error: ${msg || 'Unknown error occurred'}`)
       }
 
       // Get initial text and count of first batch
@@ -313,8 +324,10 @@ export async function POST(req: Request) {
 
     // Process with OpenAI
     const aiStart = Date.now()
-    const openai = getOpenAIClient()
-    const completion = await openai.chat.completions.create({
+    let completion: Awaited<ReturnType<OpenAI['chat']['completions']['create']>>
+    try {
+      const openai = getOpenAIClient()
+      completion = await openai.chat.completions.create({
       model: "gpt-3.5-turbo",
       max_tokens: 3000,
       response_format: (isF4 || isF5) ? { type: 'json_object' } as any : undefined,
@@ -536,8 +549,23 @@ Return all fields in this format:
       ],
       temperature: 0.1
     })
+    } catch (openaiError: unknown) {
+      const err = openaiError as { status?: number; message?: string }
+      const is429 = err?.status === 429 || /quota|rate limit|rate_limit/i.test(String(err?.message ?? ''))
+      if (is429) {
+        return NextResponse.json(
+          {
+            error: 'OpenAI quota or rate limit exceeded. Please try again later or check your OpenAI plan and billing.',
+            service: 'openai',
+            code: 'QUOTA_EXCEEDED'
+          },
+          { status: 429 }
+        )
+      }
+      throw openaiError
+    }
 
-    const content = completion.choices[0]?.message?.content
+    const content = completion!.choices[0]?.message?.content
     if (!content) {
       throw new Error('No content in OpenAI response')
     }

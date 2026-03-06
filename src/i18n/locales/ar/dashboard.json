@@ -3,5 +3,12 @@
   "map_title": "خرائط غرف الاستجابة للطوارئ (قيد العمل)",
   "statistics_title": "الإحصائيات",
   "reports_title": "التقارير",
-  "coming_soon": "هذه الميزة قادمة قريباً..."
+  "coming_soon": "هذه الميزة قادمة قريباً...",
+  "f1_by_state_title": "تحميلات F1 حسب الولاية",
+  "f1_by_state_description": "خطط عمل F1 المرفوعة في البوابة حسب ولايات السودان",
+  "state": "الولاية",
+  "f1_count": "عدد F1",
+  "total": "المجموع",
+  "ocr_acceptance_title": "قبول OCR لـ F1",
+  "ocr_acceptance_description": "نسبة تحميلات F1 المقبولة بدون تعديل أو بتعديلات بسيطة بعد OCR"
 } 

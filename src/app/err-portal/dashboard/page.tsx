@@ -10,6 +10,8 @@ import { CollapsibleRow } from '@/components/ui/collapsible'
 import { useAllowedFunctions } from '@/hooks/useAllowedFunctions'
 import { GrantsStackedBarChart } from './GrantsStackedBarChart'
 import { ProjectsByDonorChart } from './ProjectsByDonorChart'
+import { F1ByStateWidget } from './F1ByStateWidget'
+import { OcrAcceptanceCard } from './OcrAcceptanceCard'
 
 export default function DashboardPage() {
   const { t } = useTranslation(['dashboard', 'err', 'common'])
@@ -70,6 +72,10 @@ export default function DashboardPage() {
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
               <ProjectsByDonorChart />
               <GrantsStackedBarChart />
+            </div>
+            <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
+              <F1ByStateWidget />
+              <OcrAcceptanceCard />
             </div>
           </div>
         </CollapsibleRow>
