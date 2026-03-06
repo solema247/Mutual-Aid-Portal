@@ -79,7 +79,7 @@ export function getReportTrackerFilterFields(options?: {
     },
     {
       id: 'expense_category',
-      label: 'Sector',
+      label: 'Sectors Covered',
       type: 'select',
       options: expenseCategoryOptions,
       placeholder: 'All sectors',
@@ -173,7 +173,7 @@ export function getProjectManagementFilterFields(options?: {
     },
     {
       id: 'expense_category',
-      label: 'Sector',
+      label: 'Sectors Covered',
       type: 'select',
       options: expenseCategoryOptions,
       placeholder: 'All sectors',

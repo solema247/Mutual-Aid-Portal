@@ -47,3 +47,46 @@ export function getActivityAndCategoryLists(
     expense_category_list: Array.from(categories).sort(),
   }
 }
+
+/**
+ * Return the single sector (category) that has the highest total amount for this project.
+ * Sums planned_activity_cost per category from planned_activities and total_cost per category from expenses.
+ * Returns null if there are no amounts or categories.
+ */
+export function getSectorWithHighestAmount(
+  plannedActivities: any,
+  expenses: any
+): string | null {
+  const byCategory = new Map<string, number>()
+
+  const planned = parseJsonArray(plannedActivities)
+  for (const item of planned) {
+    const c = item?.category ?? item?.Category
+    const name = c != null && String(c).trim() !== '' ? String(c).trim() : null
+    if (!name) continue
+    const cost = item?.planned_activity_cost != null ? Number(item.planned_activity_cost) : 0
+    if (!Number.isFinite(cost)) continue
+    byCategory.set(name, (byCategory.get(name) ?? 0) + cost)
+  }
+
+  const exp = parseJsonArray(expenses)
+  for (const item of exp) {
+    const c = item?.category ?? item?.Category
+    const name = c != null && String(c).trim() !== '' ? String(c).trim() : null
+    if (!name) continue
+    const cost = item?.total_cost != null ? Number(item.total_cost) : 0
+    if (!Number.isFinite(cost)) continue
+    byCategory.set(name, (byCategory.get(name) ?? 0) + cost)
+  }
+
+  if (byCategory.size === 0) return null
+  let maxName: string | null = null
+  let maxSum = -Infinity
+  for (const [name, sum] of byCategory) {
+    if (sum > maxSum) {
+      maxSum = sum
+      maxName = name
+    }
+  }
+  return maxName
+}

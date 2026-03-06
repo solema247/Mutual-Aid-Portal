@@ -44,6 +44,7 @@ interface ReportTrackerRow {
   grant_segment: string | null
   activity_list?: string[]
   expense_category_list?: string[]
+  sector_highest_amount?: string | null
   estimated_beneficiaries: number | null
   f5_reported_individuals: number
 }
@@ -128,6 +129,7 @@ export default function ReportTrackerPage() {
               grant_segment: r.grant_segment ?? null,
               activity_list: r.activity_list ?? [],
               expense_category_list: r.expense_category_list ?? [],
+              sector_highest_amount: r.sector_highest_amount ?? null,
               estimated_beneficiaries: r.estimated_beneficiaries != null ? Number(r.estimated_beneficiaries) : null,
               f5_reported_individuals: Number(r.f5_reported_individuals) || 0,
             }))
@@ -370,6 +372,7 @@ export default function ReportTrackerPage() {
                       { key: 'overdue', header: 'Overdue' },
                       { key: 'state', header: 'State' },
                       { key: 'locality', header: 'Locality' },
+                      { key: 'sector_highest_amount', header: 'Main Activity', format: (v) => (v != null && v !== '' ? String(v) : '') },
                       { key: 'transfer_date', header: 'Transfer Date', format: (v) => formatDate(v) },
                       { key: 'amount_usd', header: 'USD', format: (v) => formatAmount(v) },
                       { key: 'rate', header: 'Rate', format: (v) => formatAmount(v) },
@@ -398,7 +401,7 @@ export default function ReportTrackerPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    {Array.from({ length: 17 }).map((_, i) => (
+                    {Array.from({ length: 18 }).map((_, i) => (
                       <TableHead key={i}>
                         <div className="h-4 w-16 rounded bg-white/20 animate-pulse" />
                       </TableHead>
@@ -436,6 +439,7 @@ export default function ReportTrackerPage() {
                     <TableHead className="text-center" dir="ltr">Overdue</TableHead>
                     <TableHead className="text-left" dir="ltr">State</TableHead>
                     <TableHead className="text-left" dir="ltr">Locality</TableHead>
+                    <TableHead className="text-left" dir="ltr">Main Activity</TableHead>
                     <TableHead className="text-left" dir="ltr">Transfer Date</TableHead>
                     <TableHead className="text-center tabular-nums" dir="ltr">USD</TableHead>
                     <TableHead className="text-center tabular-nums" dir="ltr">Rate</TableHead>
@@ -450,7 +454,7 @@ export default function ReportTrackerPage() {
                 <TableBody>
                   {paginatedRows.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={17} className="text-muted-foreground text-center py-8">
+                      <TableCell colSpan={18} className="text-muted-foreground text-center py-8">
                         {rows.length === 0 ? 'No projects found.' : 'No rows match the selected filters.'}
                       </TableCell>
                     </TableRow>
@@ -485,6 +489,15 @@ export default function ReportTrackerPage() {
                         </TableCell>
                         <TableCell>{row.state}</TableCell>
                         <TableCell>{row.locality}</TableCell>
+                        <TableCell className="max-w-[180px]">
+                          {row.sector_highest_amount ? (
+                            <span className="inline-flex items-center rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground border border-border/60">
+                              {row.sector_highest_amount}
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground text-sm">—</span>
+                          )}
+                        </TableCell>
                         <TableCell>{formatDate(row.transfer_date)}</TableCell>
                         <TableCell className="text-center tabular-nums" dir="ltr">${formatAmount(row.amount_usd)}</TableCell>
                         <TableCell className="text-center tabular-nums" dir="ltr">{row.rate != null ? formatAmount(row.rate) : '—'}</TableCell>

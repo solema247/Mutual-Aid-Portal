@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { getUserStateAccess } from '@/lib/userStateAccess'
-import { getActivityAndCategoryLists } from '@/lib/plannedActivitiesExpenses'
+import { getActivityAndCategoryLists, getSectorWithHighestAmount } from '@/lib/plannedActivitiesExpenses'
 
 function sumPlanFromPlannedActivities(planned: any): number {
   try {
@@ -257,6 +257,7 @@ export async function GET() {
         (Array.isArray((p as any).donor) ? (p as any).donor[0] : (p as any).donor)
       const donor = donorRow?.name ?? donorRow?.short_name ?? null
       const { activity_list, expense_category_list } = getActivityAndCategoryLists(p.planned_activities, p.expenses)
+      const sector_highest_amount = getSectorWithHighestAmount(p.planned_activities, p.expenses)
       return {
         id: p.id,
         grant_id: p.grant_id ?? '',
@@ -279,6 +280,7 @@ export async function GET() {
         grant_segment: p.grant_segment ?? null,
         activity_list,
         expense_category_list,
+        sector_highest_amount,
         estimated_beneficiaries: p.estimated_beneficiaries != null ? Number(p.estimated_beneficiaries) : null,
         f5_reported_individuals: f5ReportedIndividualsByProject[p.id] ?? 0,
       }
