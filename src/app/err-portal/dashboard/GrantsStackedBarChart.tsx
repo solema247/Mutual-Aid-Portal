@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useState, useMemo } from 'react'
+import { useCallback, useEffect, useState, useMemo } from 'react'
+import { Download } from 'lucide-react'
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from 'recharts'
 import {
   Card,
@@ -10,6 +11,8 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { buildCsv, downloadCsv } from '@/lib/downloadCsv'
 import {
   ChartContainer,
   ChartTooltip,
@@ -58,6 +61,18 @@ export function GrantsStackedBarChart({ dateFrom, dateTo }: GrantsStackedBarChar
 
   const config = useMemo(() => chartConfig, [])
 
+  const handleDownloadCsv = useCallback(() => {
+    const headers: [keyof GrantsChartRow, string][] = [
+      ['grant_id', 'Grant ID'],
+      ['total_transferred_amount_usd', 'Total transferred (USD)'],
+      ['sum_transfer_fee_amount', 'Transfer fee'],
+      ['sum_activity_amount', 'Activity'],
+      ['balance', 'Balance'],
+    ]
+    const csv = buildCsv(data, { headers })
+    downloadCsv(csv, 'grants-by-amount.csv')
+  }, [data])
+
   useEffect(() => {
     let cancelled = false
     async function fetchData() {
@@ -85,7 +100,7 @@ export function GrantsStackedBarChart({ dateFrom, dateTo }: GrantsStackedBarChar
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Grants by amount</CardTitle>
+          <CardTitle>Grants by Amount</CardTitle>
           <CardDescription>Loading…</CardDescription>
         </CardHeader>
         <CardContent className="min-h-[200px] flex items-center justify-center text-muted-foreground">
@@ -99,7 +114,7 @@ export function GrantsStackedBarChart({ dateFrom, dateTo }: GrantsStackedBarChar
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Grants by amount</CardTitle>
+          <CardTitle>Grants by Amount</CardTitle>
           <CardDescription>From grants table</CardDescription>
         </CardHeader>
         <CardContent className="min-h-[200px] flex items-center justify-center text-destructive">
@@ -113,7 +128,7 @@ export function GrantsStackedBarChart({ dateFrom, dateTo }: GrantsStackedBarChar
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Grants by amount</CardTitle>
+          <CardTitle>Grants by Amount</CardTitle>
           <CardDescription>From grants table</CardDescription>
         </CardHeader>
         <CardContent className="min-h-[200px] flex items-center justify-center text-muted-foreground">
@@ -127,11 +142,23 @@ export function GrantsStackedBarChart({ dateFrom, dateTo }: GrantsStackedBarChar
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle>Grants by amount</CardTitle>
-        <CardDescription>
-          Stacked: transfer fee, activity, balance (total transferred − fee − activity).
-        </CardDescription>
+      <CardHeader className="flex flex-row items-start justify-between gap-2 space-y-0">
+        <div className="space-y-1.5">
+          <CardTitle>Grants by Amount</CardTitle>
+          <CardDescription>
+            Stacked: transfer fee, activity, balance (total transferred − fee − activity).
+          </CardDescription>
+        </div>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-8 shrink-0"
+          onClick={handleDownloadCsv}
+          title="Download CSV"
+          aria-label="Download chart data as CSV"
+        >
+          <Download className="size-4" />
+        </Button>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="flex flex-wrap items-center gap-x-6 gap-y-2">

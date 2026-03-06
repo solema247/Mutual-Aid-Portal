@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Download } from 'lucide-react'
 import { Label, Pie, PieChart } from 'recharts'
 import {
   Card,
@@ -9,6 +10,15 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { buildCsv, downloadCsv } from '@/lib/downloadCsv'
 import {
   ChartContainer,
   ChartTooltip,
@@ -30,7 +40,17 @@ const RING_COLORS = [
 type CategoryRow = {
   category: string
   total: number
+  families: number
+  individuals: number
 }
+
+type PieMetric = 'total' | 'families' | 'individuals'
+
+const METRIC_OPTIONS: { value: PieMetric; label: string }[] = [
+  { value: 'total', label: 'USD Amount' },
+  { value: 'individuals', label: 'Individuals' },
+  { value: 'families', label: 'Families' },
+]
 
 interface PlannedCategoriesRingChartProps {
   dateFrom?: string
@@ -54,6 +74,7 @@ export function PlannedCategoriesRingChart({
 }: PlannedCategoriesRingChartProps) {
   const [rows, setRows] = useState<CategoryRow[]>([])
   const [projectCount, setProjectCount] = useState(0)
+  const [metric, setMetric] = useState<PieMetric>('total')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -73,7 +94,14 @@ export function PlannedCategoriesRingChart({
         const json = await res.json()
         if (!cancelled) {
           const list = Array.isArray(json?.categories) ? json.categories : []
-          setRows(list)
+          setRows(
+            list.map((r: Record<string, unknown>) => ({
+              category: String(r.category ?? ''),
+              total: Number(r.total) || 0,
+              families: Number(r.families) || 0,
+              individuals: Number(r.individuals) || 0,
+            }))
+          )
           setProjectCount(typeof json?.projectCount === 'number' ? json.projectCount : 0)
         }
       } catch (e) {
@@ -88,25 +116,54 @@ export function PlannedCategoriesRingChart({
     }
   }, [dateFrom, dateTo])
 
-  const dataWithColors = useMemo(
-    () =>
-      rows.map((row, idx) => ({
+  const dataWithColors = useMemo(() => {
+    const withValue = rows
+      .map((row, idx) => ({
         ...row,
+        value: row[metric] as number,
         fill: RING_COLORS[idx % RING_COLORS.length],
-      })),
-    [rows]
-  )
+      }))
+      .filter((r) => r.value > 0)
+    return withValue.sort((a, b) => b.value - a.value)
+  }, [rows, metric])
 
   const total = useMemo(
-    () => rows.reduce((sum, r) => sum + (Number(r.total) || 0), 0),
-    [rows]
+    () => dataWithColors.reduce((sum, r) => sum + r.value, 0),
+    [dataWithColors]
   )
+
+  const handleDownloadCsv = useCallback(() => {
+    const headers: [keyof CategoryRow, string][] = [
+      ['category', 'Category'],
+      ['total', 'Total (USD)'],
+      ['individuals', 'Individuals'],
+      ['families', 'Families'],
+    ]
+    const csv = buildCsv(rows, { headers })
+    downloadCsv(csv, 'planned-budget-by-sector.csv')
+  }, [rows])
+
+  const formatCenterValue = (val: number) =>
+    metric === 'total'
+      ? val.toLocaleString('en-US', {
+          style: 'currency',
+          currency: 'USD',
+          maximumFractionDigits: 0,
+        })
+      : val.toLocaleString('en-US', { maximumFractionDigits: 0 })
+
+  const centerSubtitle =
+    metric === 'total'
+      ? 'Total planned'
+      : metric === 'individuals'
+        ? 'Total individuals'
+        : 'Total families'
 
   if (loading) {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Planned budget by sector</CardTitle>
+          <CardTitle>F1 Work Plans by Sector</CardTitle>
           <CardDescription>Loading…</CardDescription>
         </CardHeader>
         <CardContent className="min-h-[200px] flex items-center justify-center text-muted-foreground">
@@ -120,7 +177,7 @@ export function PlannedCategoriesRingChart({
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Planned budget by sector</CardTitle>
+          <CardTitle>F1 Work Plans by Sector</CardTitle>
           <CardDescription>From err_projects.planned_activities</CardDescription>
         </CardHeader>
         <CardContent className="min-h-[200px] flex items-center justify-center text-destructive">
@@ -130,11 +187,11 @@ export function PlannedCategoriesRingChart({
     )
   }
 
-  if (!dataWithColors.length) {
+  if (!rows.length) {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Planned budget by sector</CardTitle>
+          <CardTitle>F1 Work Plans by Sector</CardTitle>
           <CardDescription>From err_projects.planned_activities</CardDescription>
         </CardHeader>
         <CardContent className="min-h-[200px] flex items-center justify-center text-muted-foreground">
@@ -146,11 +203,42 @@ export function PlannedCategoriesRingChart({
 
   return (
     <Card>
-      <CardHeader className="pb-0">
-        <CardTitle>Planned budget by sector</CardTitle>
-        <CardDescription>Planned costs (USD). Only projects that categorize activities by sector.</CardDescription>
+      <CardHeader className="flex flex-row items-start justify-between gap-2 space-y-0 pb-0">
+        <div className="space-y-1.5">
+          <CardTitle>F1 Work Plans by Sector</CardTitle>
+          <CardDescription>View by USD amount, individuals, or families. Only projects that categorize activities by sector.</CardDescription>
+        </div>
+        <div className="flex items-center gap-2">
+          <Select value={metric} onValueChange={(v) => setMetric(v as PieMetric)}>
+            <SelectTrigger className="h-7 w-auto min-w-0 rounded-full px-3 text-xs" size="sm">
+              <SelectValue placeholder="View by…" />
+            </SelectTrigger>
+            <SelectContent>
+              {METRIC_OPTIONS.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value}>
+                  {opt.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-8 shrink-0"
+            onClick={handleDownloadCsv}
+            title="Download CSV"
+            aria-label="Download chart data as CSV"
+          >
+            <Download className="size-4" />
+          </Button>
+        </div>
       </CardHeader>
       <CardContent className="flex-1 pb-0">
+        {dataWithColors.length === 0 ? (
+          <div className="flex min-h-[280px] items-center justify-center text-muted-foreground text-sm">
+            No data for this metric. Try another option.
+          </div>
+        ) : (
         <ChartContainer
           config={chartConfig}
           className="mx-auto aspect-square max-h-[380px] text-foreground"
@@ -165,19 +253,14 @@ export function PlannedCategoriesRingChart({
                   formatter={(value) => {
                     const num = Number(value)
                     const pct = total > 0 ? ((num / total) * 100).toFixed(1) : '0'
-                    const currency = num.toLocaleString('en-US', {
-                      style: 'currency',
-                      currency: 'USD',
-                      maximumFractionDigits: 0,
-                    })
-                    return `${currency} (${pct}%)`
+                    return `${formatCenterValue(num)} (${pct}%)`
                   }}
                 />
               }
             />
             <Pie
               data={dataWithColors}
-              dataKey="total"
+              dataKey="value"
               nameKey="category"
               innerRadius={100}
               strokeWidth={5}
@@ -254,18 +337,14 @@ export function PlannedCategoriesRingChart({
                           y={cy}
                           className="text-xl font-bold"
                         >
-                          {total.toLocaleString('en-US', {
-                            style: 'currency',
-                            currency: 'USD',
-                            maximumFractionDigits: 0,
-                          })}
+                          {formatCenterValue(total)}
                         </tspan>
                         <tspan
                           x={cx}
                           y={cy + 20}
                           className="text-xs opacity-80"
                         >
-                          Total planned
+                          {centerSubtitle}
                         </tspan>
                         <tspan
                           x={cx}
@@ -282,6 +361,7 @@ export function PlannedCategoriesRingChart({
             </Pie>
           </PieChart>
         </ChartContainer>
+        )}
       </CardContent>
     </Card>
   )

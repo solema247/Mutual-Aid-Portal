@@ -40,7 +40,7 @@ function parseJsonArray(raw: unknown): any[] {
  * Response:
  * {
  *   projectCount: number,
- *   categories: [ { category: string, total: number }, ... ]
+ *   categories: [ { category: string, total: number, families: number, individuals: number }, ... ]
  * }
  */
 export async function GET(request: Request) {
@@ -78,7 +78,10 @@ export async function GET(request: Request) {
       )
     }
 
-    const totals = new Map<string, number>()
+    const byCategory = new Map<
+      string,
+      { total: number; families: number; individuals: number }
+    >()
     let projectCount = 0
 
     for (const row of (data || []) as PlannedCategoriesRow[]) {
@@ -99,13 +102,32 @@ export async function GET(request: Request) {
             ? category.trim()
             : 'Uncategorized'
 
-        totals.set(categoryName, (totals.get(categoryName) ?? 0) + cost)
+        const familiesRaw = (item as any).families
+        const individualsRaw = (item as any).individuals
+        const families = familiesRaw != null && Number.isFinite(Number(familiesRaw)) ? Number(familiesRaw) : 0
+        const individuals = individualsRaw != null && Number.isFinite(Number(individualsRaw)) ? Number(individualsRaw) : 0
+
+        const prev = byCategory.get(categoryName) ?? {
+          total: 0,
+          families: 0,
+          individuals: 0,
+        }
+        byCategory.set(categoryName, {
+          total: prev.total + cost,
+          families: prev.families + families,
+          individuals: prev.individuals + individuals,
+        })
       }
       if (contributed) projectCount += 1
     }
 
-    const result = Array.from(totals.entries())
-      .map(([category, total]) => ({ category, total }))
+    const result = Array.from(byCategory.entries())
+      .map(([category, agg]) => ({
+        category,
+        total: agg.total,
+        families: agg.families,
+        individuals: agg.individuals,
+      }))
       .sort((a, b) => b.total - a.total)
 
     return NextResponse.json({ projectCount, categories: result }, {

@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useState, useMemo } from 'react'
-import { TrendingUp } from 'lucide-react'
+import { useCallback, useEffect, useState, useMemo } from 'react'
+import { Download, TrendingUp } from 'lucide-react'
 import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from 'recharts'
 import {
   Card,
@@ -11,6 +11,8 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { buildCsv, downloadCsv } from '@/lib/downloadCsv'
 import {
   ChartContainer,
   ChartTooltip,
@@ -82,6 +84,15 @@ export function ProjectsByDonorChart({ dateFrom, dateTo }: ProjectsByDonorChartP
 
   const chartConfig = useMemo(() => buildChartConfig(series), [series])
 
+  const handleDownloadCsv = useCallback(() => {
+    const headers: [string, string][] = [
+      ['date_transfer', 'Date'],
+      ...series.map((s) => [s, s] as [string, string]),
+    ]
+    const csv = buildCsv(chartData as Record<string, unknown>[], { headers })
+    downloadCsv(csv, 'usd-by-donor-over-time.csv')
+  }, [chartData, series])
+
   if (loading) {
     return (
       <Card>
@@ -132,11 +143,23 @@ export function ProjectsByDonorChart({ dateFrom, dateTo }: ProjectsByDonorChartP
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle>USD by Donor over Time</CardTitle>
-        <CardDescription>
-          Each line is the amount accumulated up to that date (overlapping by donor). Top 10 donors.
-        </CardDescription>
+      <CardHeader className="flex flex-row items-start justify-between gap-2 space-y-0">
+        <div className="space-y-1.5">
+          <CardTitle>USD by Donor over Time</CardTitle>
+          <CardDescription>
+            Each line is the amount accumulated up to that date (overlapping by donor). Top 10 donors.
+          </CardDescription>
+        </div>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-8 shrink-0"
+          onClick={handleDownloadCsv}
+          title="Download CSV"
+          aria-label="Download chart data as CSV"
+        >
+          <Download className="size-4" />
+        </Button>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
