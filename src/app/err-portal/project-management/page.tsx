@@ -1,10 +1,14 @@
 'use client'
 
-import { useEffect } from 'react'
+import { Suspense, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useTranslation } from 'react-i18next'
 import { useAllowedFunctions } from '@/hooks/useAllowedFunctions'
 import ProjectManagement from './components/ProjectManagement'
+
+function ProjectManagementFallback() {
+  return <div className="py-12 text-center text-muted-foreground">Loading…</div>
+}
 
 export default function ProjectManagementPage() {
   const { t } = useTranslation(['projects', 'err'])
@@ -27,7 +31,9 @@ export default function ProjectManagementPage() {
           {t('err:project_management')}
         </h1>
       </div>
-      <ProjectManagement />
+      <Suspense fallback={<ProjectManagementFallback />}>
+        <ProjectManagement />
+      </Suspense>
     </div>
   )
 } 
