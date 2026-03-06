@@ -31,6 +31,11 @@ type GrantsChartRow = {
   balance: number
 }
 
+interface GrantsStackedBarChartProps {
+  dateFrom?: string
+  dateTo?: string
+}
+
 const chartConfig = {
   sum_transfer_fee_amount: {
     label: 'Transfer fee',
@@ -46,7 +51,7 @@ const chartConfig = {
   },
 } satisfies ChartConfig
 
-export function GrantsStackedBarChart() {
+export function GrantsStackedBarChart({ dateFrom, dateTo }: GrantsStackedBarChartProps) {
   const [data, setData] = useState<GrantsChartRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -57,7 +62,12 @@ export function GrantsStackedBarChart() {
     let cancelled = false
     async function fetchData() {
       try {
-        const res = await fetch('/api/dashboard/grants-chart')
+        const params = new URLSearchParams()
+        if (dateFrom) params.set('from', dateFrom)
+        if (dateTo) params.set('to', dateTo)
+        const qs = params.toString()
+        const url = qs ? `/api/dashboard/grants-chart?${qs}` : '/api/dashboard/grants-chart'
+        const res = await fetch(url)
         if (!res.ok) throw new Error('Failed to load data')
         const json = await res.json()
         if (!cancelled) setData(Array.isArray(json) ? json : [])
@@ -69,7 +79,7 @@ export function GrantsStackedBarChart() {
     }
     fetchData()
     return () => { cancelled = true }
-  }, [])
+  }, [dateFrom, dateTo])
 
   if (loading) {
     return (

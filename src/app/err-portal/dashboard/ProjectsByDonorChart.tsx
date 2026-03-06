@@ -32,6 +32,11 @@ type ApiResponse = {
   series: string[]
 }
 
+interface ProjectsByDonorChartProps {
+  dateFrom?: string
+  dateTo?: string
+}
+
 function buildChartConfig(series: string[]): ChartConfig {
   const config: ChartConfig = {}
   series.forEach((donor, i) => {
@@ -43,7 +48,7 @@ function buildChartConfig(series: string[]): ChartConfig {
   return config
 }
 
-export function ProjectsByDonorChart() {
+export function ProjectsByDonorChart({ dateFrom, dateTo }: ProjectsByDonorChartProps) {
   const [chartData, setChartData] = useState<Record<string, string | number>[]>([])
   const [series, setSeries] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
@@ -53,7 +58,12 @@ export function ProjectsByDonorChart() {
     let cancelled = false
     async function fetchData() {
       try {
-        const res = await fetch('/api/dashboard/projects-activities')
+        const params = new URLSearchParams()
+        if (dateFrom) params.set('from', dateFrom)
+        if (dateTo) params.set('to', dateTo)
+        const qs = params.toString()
+        const url = qs ? `/api/dashboard/projects-activities?${qs}` : '/api/dashboard/projects-activities'
+        const res = await fetch(url)
         if (!res.ok) throw new Error('Failed to load data')
         const json: ApiResponse = await res.json()
         if (!cancelled) {
@@ -68,7 +78,7 @@ export function ProjectsByDonorChart() {
     }
     fetchData()
     return () => { cancelled = true }
-  }, [])
+  }, [dateFrom, dateTo])
 
   const chartConfig = useMemo(() => buildChartConfig(series), [series])
 

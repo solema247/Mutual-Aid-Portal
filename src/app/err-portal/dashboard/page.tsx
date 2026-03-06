@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useTranslation } from 'react-i18next'
 import Link from 'next/link'
@@ -8,14 +8,41 @@ import { ArrowLeft } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { CollapsibleRow } from '@/components/ui/collapsible'
 import { useAllowedFunctions } from '@/hooks/useAllowedFunctions'
+import {
+  SmartFilter,
+  type ActiveFilter,
+  type FilterFieldConfig,
+} from '@/components/smart-filter'
 import { GrantsStackedBarChart } from './GrantsStackedBarChart'
 import { ProjectsByDonorChart } from './ProjectsByDonorChart'
+import { PlannedCategoriesRingChart } from './PlannedCategoriesRingChart'
 
 export default function DashboardPage() {
   const { t } = useTranslation(['dashboard', 'err', 'common'])
   const router = useRouter()
   const { can } = useAllowedFunctions()
   const canViewPage = can('dashboard_view_page')
+  const [filters, setFilters] = useState<ActiveFilter[]>([])
+
+  const dateFilterFields: FilterFieldConfig[] = useMemo(
+    () => [
+      {
+        id: 'date_range',
+        label: 'Date range',
+        type: 'date_range',
+        placeholder: 'From – To',
+        accessorKey: 'date',
+      },
+    ],
+    []
+  )
+
+  const [dateFrom, dateTo] = useMemo(() => {
+    const f = filters.find((fl) => fl.fieldId === 'date_range')
+    if (!f || !Array.isArray(f.value)) return ['', '']
+    const [from, to] = f.value
+    return [from ?? '', to ?? '']
+  }, [filters])
 
   useEffect(() => {
     if (!canViewPage) {
@@ -66,10 +93,27 @@ export default function DashboardPage() {
           title="Dashboard (Work-in-progress)"
           defaultOpen={true}
         >
-          <div className="p-4">
+          <div className="p-4 space-y-4">
+            <SmartFilter
+              fields={dateFilterFields}
+              filters={filters}
+              onFiltersChange={setFilters}
+              urlParamPrefix="d_"
+              title="Filters"
+            />
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-              <ProjectsByDonorChart />
-              <GrantsStackedBarChart />
+              <ProjectsByDonorChart
+                dateFrom={dateFrom || undefined}
+                dateTo={dateTo || undefined}
+              />
+              <GrantsStackedBarChart
+                dateFrom={dateFrom || undefined}
+                dateTo={dateTo || undefined}
+              />
+              <PlannedCategoriesRingChart
+                dateFrom={dateFrom || undefined}
+                dateTo={dateTo || undefined}
+              />
             </div>
           </div>
         </CollapsibleRow>

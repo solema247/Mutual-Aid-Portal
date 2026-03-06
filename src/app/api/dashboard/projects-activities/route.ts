@@ -48,17 +48,30 @@ function toDateKey(d: string | null): string | null {
 /**
  * GET /api/dashboard/projects-activities
  * Fetches from projects_all_activities_view (date_transfer, project_donor, usd).
+ * Optional query params:
+ * - from: ISO date (inclusive)
+ * - to: ISO date (inclusive)
  * Returns data for stacked cumulative area chart: X = time (date_transfer), Y = usd,
  * one series per project_donor (top 10 by total usd). Values are cumulative over time.
  */
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const supabase = getSupabaseRouteClient()
+
+    const { searchParams } = new URL(request.url)
+    const from = searchParams.get('from')
+    const to = searchParams.get('to')
 
     const rows = await fetchAllRows<ProjectsActivitiesRow>(
       supabase,
       'projects_all_activities_view',
-      'date_transfer, project_donor, usd'
+      'date_transfer, project_donor, usd',
+      (query) => {
+        let q = query
+        if (from) q = q.gte('date_transfer', from)
+        if (to) q = q.lte('date_transfer', to)
+        return q
+      }
     )
 
     // Aggregate by (date, donor) -> sum(usd)
