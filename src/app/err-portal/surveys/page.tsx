@@ -9,7 +9,10 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { useAllowedFunctions } from '@/hooks/useAllowedFunctions'
 
-const LOHUB_SURVEY_URL = process.env.NEXT_PUBLIC_SURVEY_LOHUB_URL || ''
+// Fallback URL from docs/SURVEYS.md; override with NEXT_PUBLIC_SURVEY_LOHUB_URL if set
+const LOHUB_SURVEY_URL =
+  process.env.NEXT_PUBLIC_SURVEY_LOHUB_URL ||
+  'https://docs.google.com/forms/d/e/1FAIpQLSeQ_ko7-NVnkILrKsB7Uc91R_OLdwt9jGRtWQvZMAOSvjPjKg/viewform?usp=header'
 const ERR_VOLUNTEER_SURVEY_URL = process.env.NEXT_PUBLIC_SURVEY_ERR_VOLUNTEER_URL || ''
 
 export default function SurveysPage() {
@@ -52,7 +55,7 @@ export default function SurveysPage() {
             </CardHeader>
             <CardContent>
               {LOHUB_SURVEY_URL ? (
-                <Button asChild>
+                <Button asChild className="bg-amber-500 hover:bg-amber-600 text-white shadow-sm">
                   <a href={LOHUB_SURVEY_URL} target="_blank" rel="noopener noreferrer">
                     {t('err:surveys_open_form', 'Open survey')}
                   </a>
