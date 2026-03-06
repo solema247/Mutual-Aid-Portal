@@ -160,6 +160,7 @@ export default function F3MOUsPage() {
   // Remaining amounts state
   const [grantRemaining, setGrantRemaining] = useState<{
     total: number;
+    historical: number;
     committed: number;
     allocated: number;
     remaining: number;
@@ -685,6 +686,8 @@ export default function F3MOUsPage() {
     }
   }
 
+  const fmtUsd = (n: number) => (n ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+
   const openListProjectsModal = async (mou: MOU) => {
     setListProjectsMouId(mou.id)
     setListProjectsMouCode(mou.mou_code)
@@ -862,7 +865,7 @@ export default function F3MOUsPage() {
       return
     }
     try {
-      setGrantRemaining(prev => prev ? { ...prev, loading: true } : { total: 0, committed: 0, allocated: 0, remaining: 0, loading: true })
+      setGrantRemaining(prev => prev ? { ...prev, loading: true } : { total: 0, historical: 0, committed: 0, allocated: 0, remaining: 0, loading: true })
       const res = await fetch(`/api/pool/grant-remaining?grantId=${encodeURIComponent(grantId)}`, { cache: 'no-store' })
       if (!res.ok) {
         setGrantRemaining(null)
@@ -871,6 +874,7 @@ export default function F3MOUsPage() {
       const data = await res.json()
       setGrantRemaining({
         total: data.total ?? 0,
+        historical: data.historical ?? 0,
         committed: data.committed ?? 0,
         allocated: data.allocated ?? 0,
         remaining: data.remaining ?? 0,
@@ -2801,15 +2805,19 @@ export default function F3MOUsPage() {
                         <div className="space-y-1 text-sm">
                           <div className="flex justify-between">
                             <span className="text-muted-foreground">Total:</span>
-                            <span className="font-medium">${grantRemaining.total.toLocaleString()}</span>
+                            <span className="font-medium">${fmtUsd(grantRemaining.total)}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Historical:</span>
+                            <span>${fmtUsd(grantRemaining.historical ?? 0)}</span>
                           </div>
                           <div className="flex justify-between">
                             <span className="text-muted-foreground">Committed:</span>
-                            <span>${grantRemaining.committed.toLocaleString()}</span>
+                            <span>${fmtUsd(grantRemaining.committed)}</span>
                           </div>
                           <div className="flex justify-between">
                             <span className="text-muted-foreground">Allocated:</span>
-                            <span>${grantRemaining.allocated.toLocaleString()}</span>
+                            <span>${fmtUsd(grantRemaining.allocated)}</span>
                           </div>
                           <div className="pt-2 border-t flex justify-between items-center">
                             <span className="font-semibold">Remaining:</span>
@@ -2818,7 +2826,7 @@ export default function F3MOUsPage() {
                               grantRemaining.remaining < mouTotalAmount ? 'text-yellow-600' :
                               'text-green-600'
                             }`}>
-                              ${grantRemaining.remaining.toLocaleString()}
+                              ${fmtUsd(grantRemaining.remaining)}
                             </span>
                           </div>
                           {mouTotalAmount > 0 && (
@@ -2830,7 +2838,7 @@ export default function F3MOUsPage() {
                                   (grantRemaining.remaining - mouTotalAmount) < mouTotalAmount ? 'text-yellow-600' :
                                   'text-green-600'
                                 }`}>
-                                  ${(grantRemaining.remaining - mouTotalAmount).toLocaleString()}
+                                  ${fmtUsd(grantRemaining.remaining - mouTotalAmount)}
                                 </span>
                               </div>
                             </div>
@@ -2857,19 +2865,19 @@ export default function F3MOUsPage() {
                         <div className="space-y-1 text-sm">
                           <div className="flex justify-between">
                             <span className="text-muted-foreground">Total:</span>
-                            <span className="font-medium">${stateAllocationRemaining.total.toLocaleString()}</span>
+                            <span className="font-medium">${fmtUsd(stateAllocationRemaining.total)}</span>
                           </div>
                           <div className="flex justify-between">
                             <span className="text-muted-foreground">Historical:</span>
-                            <span>${(stateAllocationRemaining.historical ?? 0).toLocaleString()}</span>
+                            <span>${fmtUsd(stateAllocationRemaining.historical ?? 0)}</span>
                           </div>
                           <div className="flex justify-between">
                             <span className="text-muted-foreground">Committed:</span>
-                            <span>${stateAllocationRemaining.committed.toLocaleString()}</span>
+                            <span>${fmtUsd(stateAllocationRemaining.committed)}</span>
                           </div>
                           <div className="flex justify-between">
                             <span className="text-muted-foreground">Allocated:</span>
-                            <span>${stateAllocationRemaining.allocated.toLocaleString()}</span>
+                            <span>${fmtUsd(stateAllocationRemaining.allocated)}</span>
                           </div>
                           <div className="pt-2 border-t flex justify-between items-center">
                             <span className="font-semibold">Remaining:</span>
@@ -2878,7 +2886,7 @@ export default function F3MOUsPage() {
                               stateAllocationRemaining.remaining < mouTotalAmount ? 'text-yellow-600' :
                               'text-green-600'
                             }`}>
-                              ${stateAllocationRemaining.remaining.toLocaleString()}
+                              ${fmtUsd(stateAllocationRemaining.remaining)}
                             </span>
                           </div>
                           <p className="text-xs text-muted-foreground pt-0.5">Remaining = Total − Historical − Committed − Allocated</p>
@@ -2891,7 +2899,7 @@ export default function F3MOUsPage() {
                                   (stateAllocationRemaining.remaining - mouTotalAmount) < mouTotalAmount ? 'text-yellow-600' :
                                   'text-green-600'
                                 }`}>
-                                  ${(stateAllocationRemaining.remaining - mouTotalAmount).toLocaleString()}
+                                  ${fmtUsd(stateAllocationRemaining.remaining - mouTotalAmount)}
                                 </span>
                               </div>
                             </div>
@@ -2909,7 +2917,7 @@ export default function F3MOUsPage() {
               <div className="p-3 bg-blue-50 border border-blue-200 rounded-md">
                 <p className="text-sm">
                   <span className="font-semibold">MOU Total Amount:</span>{' '}
-                  <span className="font-mono">${mouTotalAmount.toLocaleString()}</span>
+                  <span className="font-mono">${fmtUsd(mouTotalAmount)}</span>
                 </p>
               </div>
             )}
@@ -3115,15 +3123,19 @@ export default function F3MOUsPage() {
                         <div className="space-y-1 text-sm">
                           <div className="flex justify-between">
                             <span className="text-muted-foreground">Total:</span>
-                            <span className="font-medium">${grantRemaining.total.toLocaleString()}</span>
+                            <span className="font-medium">${fmtUsd(grantRemaining.total)}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Historical:</span>
+                            <span>${fmtUsd(grantRemaining.historical ?? 0)}</span>
                           </div>
                           <div className="flex justify-between">
                             <span className="text-muted-foreground">Committed:</span>
-                            <span>${grantRemaining.committed.toLocaleString()}</span>
+                            <span>${fmtUsd(grantRemaining.committed)}</span>
                           </div>
                           <div className="flex justify-between">
                             <span className="text-muted-foreground">Allocated:</span>
-                            <span>${grantRemaining.allocated.toLocaleString()}</span>
+                            <span>${fmtUsd(grantRemaining.allocated)}</span>
                           </div>
                           <div className="pt-2 border-t flex justify-between items-center">
                             <span className="font-semibold">Remaining:</span>
@@ -3132,7 +3144,7 @@ export default function F3MOUsPage() {
                               grantRemaining.remaining < mouTotalAmount ? 'text-yellow-600' :
                               'text-green-600'
                             }`}>
-                              ${grantRemaining.remaining.toLocaleString()}
+                              ${fmtUsd(grantRemaining.remaining)}
                             </span>
                           </div>
                           {mouTotalAmount > 0 && (
@@ -3144,7 +3156,7 @@ export default function F3MOUsPage() {
                                   (grantRemaining.remaining - mouTotalAmount) < mouTotalAmount ? 'text-yellow-600' :
                                   'text-green-600'
                                 }`}>
-                                  ${(grantRemaining.remaining - mouTotalAmount).toLocaleString()}
+                                  ${fmtUsd(grantRemaining.remaining - mouTotalAmount)}
                                 </span>
                               </div>
                             </div>
@@ -3171,19 +3183,19 @@ export default function F3MOUsPage() {
                         <div className="space-y-1 text-sm">
                           <div className="flex justify-between">
                             <span className="text-muted-foreground">Total:</span>
-                            <span className="font-medium">${stateAllocationRemaining.total.toLocaleString()}</span>
+                            <span className="font-medium">${fmtUsd(stateAllocationRemaining.total)}</span>
                           </div>
                           <div className="flex justify-between">
                             <span className="text-muted-foreground">Historical:</span>
-                            <span>${(stateAllocationRemaining.historical ?? 0).toLocaleString()}</span>
+                            <span>${fmtUsd(stateAllocationRemaining.historical ?? 0)}</span>
                           </div>
                           <div className="flex justify-between">
                             <span className="text-muted-foreground">Committed:</span>
-                            <span>${stateAllocationRemaining.committed.toLocaleString()}</span>
+                            <span>${fmtUsd(stateAllocationRemaining.committed)}</span>
                           </div>
                           <div className="flex justify-between">
                             <span className="text-muted-foreground">Allocated:</span>
-                            <span>${stateAllocationRemaining.allocated.toLocaleString()}</span>
+                            <span>${fmtUsd(stateAllocationRemaining.allocated)}</span>
                           </div>
                           <div className="pt-2 border-t flex justify-between items-center">
                             <span className="font-semibold">Remaining:</span>
@@ -3192,7 +3204,7 @@ export default function F3MOUsPage() {
                               stateAllocationRemaining.remaining < mouTotalAmount ? 'text-yellow-600' :
                               'text-green-600'
                             }`}>
-                              ${stateAllocationRemaining.remaining.toLocaleString()}
+                              ${fmtUsd(stateAllocationRemaining.remaining)}
                             </span>
                           </div>
                           <p className="text-xs text-muted-foreground pt-0.5">Remaining = Total − Historical − Committed − Allocated</p>
@@ -3205,7 +3217,7 @@ export default function F3MOUsPage() {
                                   (stateAllocationRemaining.remaining - mouTotalAmount) < mouTotalAmount ? 'text-yellow-600' :
                                   'text-green-600'
                                 }`}>
-                                  ${(stateAllocationRemaining.remaining - mouTotalAmount).toLocaleString()}
+                                  ${fmtUsd(stateAllocationRemaining.remaining - mouTotalAmount)}
                                 </span>
                               </div>
                             </div>
@@ -3223,7 +3235,7 @@ export default function F3MOUsPage() {
               <div className="p-3 bg-orange-50 border border-orange-200 rounded-md">
                 <p className="text-sm">
                   <span className="font-semibold">MOU Total Amount:</span>{' '}
-                  <span className="font-mono">${mouTotalAmount.toLocaleString()}</span>
+                  <span className="font-mono">${fmtUsd(mouTotalAmount)}</span>
                 </p>
               </div>
             )}
