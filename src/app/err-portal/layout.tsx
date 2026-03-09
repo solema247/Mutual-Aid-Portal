@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { useState, useEffect } from 'react'
 import MainLayout from '@/components/layout/MainLayout'
 import { useRouter } from 'next/navigation'
-import { Users, ClipboardList, BarChart2, PieChart, UserCog, Home, CheckSquare, BookOpen, PenTool, Cog, FileBarChart } from 'lucide-react'
+import { Users, ClipboardList, BarChart2, PieChart, UserCog, Home, CheckSquare, BookOpen, PenTool, Cog, FileText } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 import { useAllowedFunctions } from '@/hooks/useAllowedFunctions'
 
@@ -103,11 +103,6 @@ export default function ErrPortalLayout({
       label: 'F4 & F5 Reporting',
       icon: <BookOpen className="h-5 w-5" />
     }] : []),
-    ...(canViewF4F5 ? [{
-      href: '/err-portal/report-tracker',
-      label: 'Report Tracker',
-      icon: <FileBarChart className="h-5 w-5" />
-    }] : []),
     ...(canViewProjectManagement ? [{
       href: '/err-portal/project-management',
       label: t('err:project_management'),
@@ -117,6 +112,11 @@ export default function ErrPortalLayout({
       href: '/err-portal/dashboard',
       label: t('err:dashboard'),
       icon: <BarChart2 className="h-5 w-5" />
+    }] : []),
+    ...(canViewDashboard ? [{
+      href: '/err-portal/surveys',
+      label: t('err:surveys', 'Surveys'),
+      icon: <FileText className="h-5 w-5" />
     }] : []),
     ...(canViewRooms ? [{
       href: '/err-portal/room-management',
