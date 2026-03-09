@@ -71,6 +71,7 @@ export default function ErrPortalLayout({
   const canViewUserManagement = can('users_view_page')
   const canViewRooms = can('rooms_view_page')
   const canViewDashboard = can('dashboard_view_page')
+  const canViewSurveys = can('surveys_view_page')
 
   const sidebarItems = [
     {
@@ -113,11 +114,6 @@ export default function ErrPortalLayout({
       label: t('err:dashboard'),
       icon: <BarChart2 className="h-5 w-5" />
     }] : []),
-    ...(canViewDashboard ? [{
-      href: '/err-portal/surveys',
-      label: t('err:surveys', 'Surveys'),
-      icon: <FileText className="h-5 w-5" />
-    }] : []),
     ...(canViewRooms ? [{
       href: '/err-portal/room-management',
       label: t('err:room_management'),
@@ -127,6 +123,11 @@ export default function ErrPortalLayout({
       href: '/err-portal/user-management',
       label: t('err:user_management'),
       icon: <UserCog className="h-5 w-5" />
+    }] : []),
+    ...(canViewSurveys ? [{
+      href: '/err-portal/surveys',
+      label: t('err:surveys', 'Surveys'),
+      icon: <FileText className="h-5 w-5" />
     }] : [])
   ]
 

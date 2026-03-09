@@ -37,5 +37,6 @@
   { "code": "rooms_accept_room", "module": "rooms", "label_ar": "الموافقة على غرف جديدة", "label_en": "Accept new rooms", "description_en": "Approve or decline pending room submissions on the Room Management page." },
   { "code": "rooms_modify_room", "module": "rooms", "label_ar": "تعديل الغرف", "label_en": "Modify rooms", "description_en": "Change state or locality for active rooms on the Room Management page." },
   { "code": "rooms_deactivate_room", "module": "rooms", "label_ar": "إلغاء تفعيل الغرف", "label_en": "Deactivate rooms", "description_en": "Deactivate active rooms on the Room Management page." },
-  { "code": "dashboard_view_page", "module": "dashboard", "label_ar": "عرض لوحة التحكم", "label_en": "View Dashboard page", "description_en": "View the ERR Portal Dashboard page." }
+  { "code": "dashboard_view_page", "module": "dashboard", "label_ar": "عرض لوحة التحكم", "label_en": "View Dashboard page", "description_en": "View the ERR Portal Dashboard page." },
+  { "code": "surveys_view_page", "module": "surveys", "label_ar": "عرض صفحة الاستبيانات", "label_en": "View Surveys page", "description_en": "View the Surveys page for user feedback surveys." }
 ]
