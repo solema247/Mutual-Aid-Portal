@@ -30,12 +30,14 @@ with
       m.payment_confirmation_file,
       p.date_transfer,
       p.f4_status,
-      p.f5_status
+      p.f5_status,
+      ggv.grant_id as grid_grant_id
     from
       err_projects p
       left join emergency_rooms er on p.emergency_room_id = er.id
       left join donors d on p.donor_id = d.id
       left join mous m on p.mou_id = m.id
+      left join grants_grid_view ggv on p.grant_grid_id = ggv.id
   ),
   current_projects_plan as (
     select
@@ -216,17 +218,32 @@ with
       end as overdue,
       null::text as f1,
       null::numeric as num_base_err,
-      COALESCE(
-        NULLIF(
-          TRIM(
-            both
-            from
-              cpb.donor_name
+      case
+        when lower(
+          COALESCE(
+            NULLIF(
+              TRIM(
+                both
+                from
+                  cpb.grid_grant_id
+              ),
+              ''::text
+            ),
+            'Unassigned'::text
+          )
+        ) = 'fcdo-shpr' then 'FCDO SHPR'::text
+        else COALESCE(
+          NULLIF(
+            TRIM(
+              both
+              from
+                cpb.grid_grant_id
+            ),
+            ''::text
           ),
-          ''::text
-        ),
-        'Unknown'::text
-      ) as project_donor,
+          'Unassigned'::text
+        )
+      end as project_donor,
       null::text as partner,
       cpb.state,
       null::text as responsible,
@@ -416,7 +433,10 @@ select
     when ari."# of Base ERR" ~ '^[0-9]+\.?[0-9]*$'::text then ari."# of Base ERR"::numeric
     else null::numeric
   end as num_base_err,
-  ari."Project Donor" as project_donor,
+  case
+    when lower(TRIM(both from ari."Project Donor")) = 'fcdo-shpr' then 'FCDO SHPR'::text
+    else ari."Project Donor"
+  end as project_donor,
   ari."Partner" as partner,
   ari."State" as state,
   ari."Responsible" as responsible,
