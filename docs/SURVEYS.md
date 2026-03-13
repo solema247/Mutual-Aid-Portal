@@ -8,16 +8,12 @@ Surveys are used to collect user feedback for the Evaluation Indicator Plan (Loh
 
 | Survey | Audience | Purpose (indicator) | Link |
 |--------|----------|---------------------|------|
-| **Lohub feedback (Feb–March 2026)** | Localization Hub staff | Indicators #2, #3, #6, #11 – more time for analysis, data/tools for planning, tracking, digital literacy (target 4/5) | [Add your Google Form link here] |
-| **ERR volunteer feedback (Feb–March 2026)** | ERR frontline volunteers | Indicators #4, #5 – improved UX for work plans and reporting; visibility and communications (target 4/5) | [Add your Google Form link here] |
-
+| **Lohub feedback (Feb–March 2026)** | Localization Hub staff | Indicators #2, #3, #6, #11 – more time for analysis, data/tools for planning, tracking, digital literacy (target 4/5) | [https://docs.google.com/forms/d/e/1FAIpQLSeQ_ko7-NVnkILrKsB7Uc91R_OLdwt9jGRtWQvZMAOSvjPjKg/viewform?usp=header] |
 ---
 
 ## Suggested questions (align with indicators)
 
 - **Lohub:** Rate 1–5: “I have more time for analysis and storytelling instead of organizing files and data.” / “Data and tools support local planning and resource allocation.” / “I can track grants and funding flows in MAP.” / “I feel confident using and maintaining the system.”
-- **ERR volunteers:** Rate 1–5: “Submitting work plans and reports is easy.” / “I can see how my work connects to dashboards and project management.”
-
 ---
 
 ## Distribution

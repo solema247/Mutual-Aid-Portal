@@ -108,6 +108,19 @@ export async function POST(request: Request) {
     if (!grantSerialId) {
       return NextResponse.json({ error: 'Failed to get or create grant serial' }, { status: 500 })
     }
+
+    // Prevent duplicate grant_serial_id: no other project (outside this batch) may have this serial
+    const { data: existingWithSerial } = await supabase
+      .from('err_projects')
+      .select('id')
+      .eq('grant_serial_id', grantSerialId)
+    const otherProject = (existingWithSerial || []).find((r: any) => !f1_ids.includes(r.id))
+    if (otherProject) {
+      return NextResponse.json({
+        error: 'This grant serial is already assigned to another project. Choose a different serial or resolve the conflict.',
+        code: 'DUPLICATE_GRANT_SERIAL'
+      }, { status: 400 })
+    }
     
     // Get cycle_state_allocation_id
     const { data: cycleAllocationData } = await supabase

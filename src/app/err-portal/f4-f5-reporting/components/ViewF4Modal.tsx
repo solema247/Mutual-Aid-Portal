@@ -124,6 +124,7 @@ export default function ViewF4Modal({ summaryId, open, onOpenChange, onSaved }: 
   const project = summary?.err_projects
   const room = project?.emergency_rooms
   const attachments = data?.attachments || []
+  const completion = data?.completion
 
   const handleSave = async () => {
     if (!summaryId || !summaryDraft) return
@@ -212,6 +213,22 @@ export default function ViewF4Modal({ summaryId, open, onOpenChange, onSaved }: 
           <div className="py-10 text-center text-muted-foreground">No data</div>
         ) : (
           <div className="space-y-6">
+            {/* F4 completion % and planned vs reported */}
+            {completion && (completion.completion_percent != null || completion.planned_total != null) && (
+              <div className={`rounded-lg border p-3 ${completion.totals_match ? 'border-green-200 bg-green-50 dark:bg-green-950/20' : 'border-amber-200 bg-amber-50 dark:bg-amber-950/20'}`}>
+                <div className="text-sm font-medium mb-1">F4 completion</div>
+                <div className="flex flex-wrap gap-4 text-sm">
+                  {completion.completion_percent != null && (
+                    <span>Completion: <strong>{completion.completion_percent}%</strong></span>
+                  )}
+                  {completion.planned_total != null && (
+                    <span>Planned total: {Number(completion.planned_total).toLocaleString()}</span>
+                  )}
+                  <span>Reported total: {Number(completion.reported_total || 0).toLocaleString()}</span>
+                  <span>{completion.totals_match ? 'Match' : 'Mismatch'}</span>
+                </div>
+              </div>
+            )}
             {/* Project / F1 context */}
             <div>
               <div className="grid grid-cols-2 gap-4">

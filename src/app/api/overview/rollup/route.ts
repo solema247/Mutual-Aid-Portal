@@ -325,6 +325,7 @@ export async function GET(request: Request) {
       const f5Complete = isStatusCompleteForOverdue(f5_status)
       const effectiveTransferDate = p.date_transfer || transferDateByProject[p.id] || null
       const { is_overdue, days_overdue } = computeOverdue(effectiveTransferDate, f4Complete, f5Complete)
+      const project_status = f4Complete && f5Complete ? 'completed' : (agg.count === 0 && f5Agg.count === 0 ? 'not_started' : 'in_progress')
       return {
         project_id: p.id,
         state: p.state,
@@ -351,7 +352,8 @@ export async function GET(request: Request) {
         filter_date: p.date || agg.last || null,
         is_overdue,
         days_overdue,
-        overdue: days_overdue != null ? String(days_overdue) : null
+        overdue: days_overdue != null ? String(days_overdue) : null,
+        project_status
       }
     })
 
@@ -422,7 +424,8 @@ export async function GET(request: Request) {
         filter_date: dateTransfer || reportDate || null, // For date filter: Date Transfer or Date Report Completed
         is_overdue: is_overdue_historical,
         days_overdue: !Number.isNaN(overdueNum) ? overdueNum : null,
-        overdue: overdueDisplay
+        overdue: overdueDisplay,
+        project_status: (f4Completed && f5Completed) ? 'completed' : (totalF4Count === 0 && !f5Completed ? 'not_started' : 'in_progress')
       }
     })
 

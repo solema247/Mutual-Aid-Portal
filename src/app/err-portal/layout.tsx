@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react'
 import MainLayout from '@/components/layout/MainLayout'
 import { useRouter } from 'next/navigation'
 import { Users, ClipboardList, BarChart2, PieChart, UserCog, Home, CheckSquare, BookOpen, PenTool, Cog, FileText } from 'lucide-react'
+import NotificationBell from '@/components/NotificationBell'
 import { supabase } from '@/lib/supabaseClient'
 import { useAllowedFunctions } from '@/hooks/useAllowedFunctions'
 
@@ -136,6 +137,7 @@ export default function ErrPortalLayout({
         headerTitle="Mutual Aid Portal"
         userName={user?.display_name ?? undefined}
         userRole={user?.role}
+        headerActions={<NotificationBell variant="header" />}
       >
       {children}
       {minimizedType && (

@@ -49,6 +49,21 @@
     "view": "عرض",
     "loading": "جارٍ التحميل…",
     "empty": "لا توجد تقارير F4 بعد",
+    "serial_lookup": "الرقم التسلسلي F4 (LoHub)",
+    "serial_placeholder": "أدخل الرقم التسلسلي",
+    "fetch": "استعلام",
+    "by_serial_loading": "جارٍ الاستعلام…",
+    "by_serial_error": "لم يتم العثور على مشروع بهذا الرقم التسلسلي",
+    "by_serial_f1_serial": "الرقم التسلسلي F1",
+    "by_serial_mou": "مذكرة التفاهم",
+    "by_serial_payment_confirmation": "إثبات الدفع",
+    "by_serial_exchange_rate": "سعر الصرف",
+    "by_serial_transfer_date": "تاريخ التحويل",
+    "by_serial_download_payment": "تحميل",
+    "row": {
+      "receipt": "إيصال",
+      "proof_of_payment": "إثبات الدفع"
+    },
     "preview": {
       "tabs": { "edit_form": "تحرير النموذج", "view_file": "عرض الملف" },
       "labels": {

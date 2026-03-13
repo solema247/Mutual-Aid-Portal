@@ -23,6 +23,8 @@ interface MainLayoutProps {
   userRole?: string
   /** When set, shows the sticky header bar with title, sidebar toggle, language, and user. */
   headerTitle?: string
+  /** Optional node rendered in the header (e.g. notifications bell). */
+  headerActions?: ReactNode
 }
 
 function formatRole(role: string | undefined): string {
@@ -37,7 +39,7 @@ function formatRole(role: string | undefined): string {
   return map[role.toLowerCase()] ?? role
 }
 
-export default function MainLayout({ children, sidebarItems, sidebarTitle, userName, userRole, headerTitle }: MainLayoutProps) {
+export default function MainLayout({ children, sidebarItems, sidebarTitle, userName, userRole, headerTitle, headerActions }: MainLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const { i18n } = useTranslation()
   const showHeader = !!headerTitle
@@ -75,6 +77,7 @@ export default function MainLayout({ children, sidebarItems, sidebarTitle, userN
                 <div className="truncate text-lg font-semibold text-white">{headerTitle}</div>
               </div>
               <div className="flex shrink-0 items-center gap-3">
+                {headerActions}
                 <Button
                   variant="ghost"
                   size="sm"

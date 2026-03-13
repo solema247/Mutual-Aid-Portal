@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ERD Schema Validation - Interactive Visualization</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 1.1em;
+        }
+
+        .stats-bar {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            padding: 30px;
+            background: #f8f9fa;
+            border-bottom: 2px solid #e9ecef;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+
+        .stat-card h3 {
+            font-size: 2.5em;
+            margin-bottom: 5px;
+        }
+
+        .stat-card p {
+            color: #6c757d;
+            font-size: 0.9em;
+        }
+
+        .stat-card.implemented h3 { color: #28a745; }
+        .stat-card.partial h3 { color: #ffc107; }
+        .stat-card.missing h3 { color: #dc3545; }
+
+        .controls {
+            padding: 20px 30px;
+            background: #f8f9fa;
+            border-bottom: 2px solid #e9ecef;
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .search-box {
+            flex: 1;
+            min-width: 250px;
+            padding: 12px 20px;
+            border: 2px solid #dee2e6;
+            border-radius: 8px;
+            font-size: 1em;
+        }
+
+        .filter-buttons {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .filter-btn {
+            padding: 10px 20px;
+            border: 2px solid #dee2e6;
+            background: white;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.9em;
+            transition: all 0.3s;
+        }
+
+        .filter-btn:hover {
+            background: #f8f9fa;
+        }
+
+        .filter-btn.active {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+
+        .entities-container {
+            padding: 30px;
+        }
+
+        .entity-card {
+            background: white;
+            border: 2px solid #e9ecef;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            overflow: hidden;
+            transition: all 0.3s;
+        }
+
+        .entity-card:hover {
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+
+        .entity-header {
+            padding: 20px 25px;
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            user-select: none;
+        }
+
+        .entity-header:hover {
+            background: linear-gradient(135deg, #e9ecef 0%, #dee2e6 100%);
+        }
+
+        .entity-title {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .entity-title h2 {
+            font-size: 1.5em;
+            color: #212529;
+        }
+
+        .entity-stats {
+            display: flex;
+            gap: 15px;
+            font-size: 0.9em;
+        }
+
+        .stat-badge {
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-weight: 600;
+        }
+
+        .stat-badge.implemented {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .stat-badge.partial {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .stat-badge.missing {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .expand-icon {
+            font-size: 1.5em;
+            transition: transform 0.3s;
+            color: #667eea;
+        }
+
+        .expand-icon.expanded {
+            transform: rotate(180deg);
+        }
+
+        .entity-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.5s ease-out;
+        }
+
+        .entity-content.expanded {
+            max-height: 5000px;
+            transition: max-height 0.5s ease-in;
+        }
+
+        .fields-container {
+            padding: 25px;
+            background: #f8f9fa;
+        }
+
+        .field-section {
+            margin-bottom: 25px;
+        }
+
+        .field-section-title {
+            font-size: 1.2em;
+            font-weight: 600;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #dee2e6;
+        }
+
+        .field-item {
+            background: white;
+            padding: 15px 20px;
+            margin-bottom: 10px;
+            border-radius: 8px;
+            border-left: 4px solid;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: all 0.2s;
+        }
+
+        .field-item:hover {
+            transform: translateX(5px);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .field-item.implemented {
+            border-left-color: #28a745;
+        }
+
+        .field-item.partial {
+            border-left-color: #ffc107;
+        }
+
+        .field-item.missing {
+            border-left-color: #dc3545;
+        }
+
+        .field-info {
+            flex: 1;
+        }
+
+        .field-name {
+            font-weight: 600;
+            font-size: 1.1em;
+            color: #212529;
+            margin-bottom: 5px;
+        }
+
+        .field-mapping {
+            font-size: 0.9em;
+            color: #6c757d;
+            font-family: 'Courier New', monospace;
+        }
+
+        .field-status {
+            padding: 8px 15px;
+            border-radius: 20px;
+            font-size: 0.85em;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
+        .field-status.implemented {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .field-status.partial {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .field-status.missing {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .no-results {
+            text-align: center;
+            padding: 60px 20px;
+            color: #6c757d;
+            font-size: 1.2em;
+        }
+
+        .legend {
+            padding: 20px 30px;
+            background: #f8f9fa;
+            border-top: 2px solid #e9ecef;
+            display: flex;
+            gap: 30px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            border-radius: 4px;
+        }
+
+        .legend-color.implemented { background: #28a745; }
+        .legend-color.partial { background: #ffc107; }
+        .legend-color.missing { background: #dc3545; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔍 ERD Schema Validation</h1>
+            <p>Interactive Drill-Down Visualization - Portal vs ERD Field Comparison</p>
+        </div>
+
+        <div class="stats-bar">
+            <div class="stat-card implemented">
+                <h3 id="total-implemented">0</h3>
+                <p>✅ Implemented Fields</p>
+            </div>
+            <div class="stat-card partial">
+                <h3 id="total-partial">0</h3>
+                <p>⚠️ Partially Implemented</p>
+            </div>
+            <div class="stat-card missing">
+                <h3 id="total-missing">0</h3>
+                <p>❌ Missing Fields</p>
+            </div>
+            <div class="stat-card">
+                <h3 id="coverage-percent">0%</h3>
+                <p>📊 Overall Coverage</p>
+            </div>
+        </div>
+
+        <div class="controls">
+            <input type="text" class="search-box" id="search-input" placeholder="🔍 Search entities or fields...">
+            <div class="filter-buttons">
+                <button class="filter-btn active" data-filter="all">All</button>
+                <button class="filter-btn" data-filter="implemented">✅ Implemented</button>
+                <button class="filter-btn" data-filter="partial">⚠️ Partial</button>
+                <button class="filter-btn" data-filter="missing">❌ Missing</button>
+            </div>
+        </div>
+
+        <div class="entities-container" id="entities-container">
+            <!-- Entities will be dynamically inserted here -->
+        </div>
+
+        <div class="legend">
+            <div class="legend-item">
+                <div class="legend-color implemented"></div>
+                <span><strong>Implemented:</strong> Field exists and is actively used</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color partial"></div>
+                <span><strong>Partial:</strong> Field exists but may need calculation or mapping</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color missing"></div>
+                <span><strong>Missing:</strong> Field not found in portal implementation</span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const erdData = {
+            "Grants/Donor/Partner": {
+                fields: [
+                    { name: "Grant_ID", status: "implemented", mapping: "grant_calls.id, err_projects.grant_serial_id" },
+                    { name: "Project_name", status: "implemented", mapping: "err_projects (generated: Primary Sector - Secondary Sector - Locality)" },
+                    { name: "Donor_Name", status: "implemented", mapping: "donors.name" },
+                    { name: "Grant_Name", status: "implemented", mapping: "grant_calls.name" },
+                    { name: "Grant_Amount", status: "implemented", mapping: "grant_calls.amount, cycle_grant_inclusions.amount_included" },
+                    { name: "Grant_Start_Date", status: "implemented", mapping: "grant_calls.start_date" },
+                    { name: "Grant_End_Date", status: "implemented", mapping: "grant_calls.end_date" },
+                    { name: "Partner_name", status: "implemented", mapping: "emergency_rooms.name" },
+                    { name: "Grant_Status", status: "implemented", mapping: "grant_calls.status" },
+                    { name: "Allocation_ID", status: "implemented", mapping: "cycle_state_allocations.id, err_projects.grant_call_state_allocation_id" },
+                    { name: "sum_activity_amount", status: "partial", mapping: "Calculated from err_projects.expenses array" },
+                    { name: "Total_Disbursed_Amount_USD", status: "partial", mapping: "Would need calculation from transfers" },
+                    { name: "Total_Transferred_Amount_USD", status: "partial", mapping: "Would need calculation from transfers" },
+                    { name: "Partner_20016", status: "missing", mapping: "Not found in portal schema" },
+                    { name: "Total_Transfer_Fee_USD", status: "missing", mapping: "No dedicated field for transfer fees" },
+                    { name: "Transfer_segment", status: "missing", mapping: "No dedicated table/field for transfer segments" }
+                ]
+            },
+            "Distribution Decision": {
+                fields: [
+                    { name: "Allocation_Amount", status: "implemented", mapping: "cycle_state_allocations.amount, grant_call_state_allocations.amount" },
+                    { name: "Partner_name", status: "implemented", mapping: "emergency_rooms.name" },
+                    { name: "Grant_name", status: "implemented", mapping: "grant_calls.name" },
+                    { name: "Partner_ID", status: "implemented", mapping: "emergency_rooms.id (via err_projects.err_id)" },
+                    { name: "Decision_ID", status: "partial", mapping: "cycle_state_allocations.id, grant_call_state_allocation_id (similar purpose)" },
+                    { name: "Decision_Date", status: "partial", mapping: "funding_cycles.created_at (might serve this purpose)" },
+                    { name: "Decision_Amount", status: "partial", mapping: "Similar to Allocation_Amount but not explicitly named" },
+                    { name: "Allocation_4874", status: "missing", mapping: "Not found in portal schema" },
+                    { name: "Fund_request", status: "missing", mapping: "No dedicated funds request table/field" },
+                    { name: "Transfer_segment", status: "missing", mapping: "No dedicated transfer segment table" },
+                    { name: "Restriction", status: "missing", mapping: "No field for restrictions on allocations" },
+                    { name: "Transfer_ID", status: "missing", mapping: "No dedicated transfer table" }
+                ]
+            },
+            "Funds Request": {
+                fields: [
+                    { name: "Partner_id", status: "implemented", mapping: "emergency_rooms.id" },
+                    { name: "Partner_name", status: "implemented", mapping: "emergency_rooms.name" },
+                    { name: "Requested Amount", status: "partial", mapping: "err_projects.expenses (calculated)" },
+                    { name: "Date Submitted", status: "partial", mapping: "err_projects.submitted_at" },
+                    { name: "Request_ID", status: "missing", mapping: "No dedicated Funds Request table exists" },
+                    { name: "Decision_4874", status: "missing", mapping: "Not found in portal schema" },
+                    { name: "Transfer ID", status: "missing", mapping: "Not tracked" },
+                    { name: "Transfer Amount", status: "missing", mapping: "Not tracked" }
+                ]
+            },
+            "Transfer Segment": {
+                fields: [
+                    { name: "Grant_ID", status: "implemented", mapping: "grant_calls.id" },
+                    { name: "Decision_ID", status: "partial", mapping: "cycle_state_allocations.id" },
+                    { name: "Request_date_submitted", status: "partial", mapping: "err_projects.submitted_at" },
+                    { name: "Activity_Amount", status: "partial", mapping: "err_projects.expenses (calculated)" },
+                    { name: "Transfer_Amount", status: "partial", mapping: "grant_project_commitment_ledger.delta_amount" },
+                    { name: "Status", status: "partial", mapping: "err_projects.funding_status" },
+                    { name: "Transfer ID", status: "missing", mapping: "No dedicated Transfer Segment table exists" },
+                    { name: "Request_ID", status: "missing", mapping: "Not implemented" },
+                    { name: "Transfer_Fee_Amount", status: "missing", mapping: "Not tracked" },
+                    { name: "Transfer_received_date", status: "missing", mapping: "Not tracked" }
+                ]
+            },
+            "Activities/FTs": {
+                fields: [
+                    { name: "Activity_Serial_Number", status: "implemented", mapping: "err_projects.id, err_projects.workplan_number" },
+                    { name: "ERR_Code", status: "implemented", mapping: "emergency_rooms.err_code" },
+                    { name: "ERR_Name", status: "implemented", mapping: "emergency_rooms.name" },
+                    { name: "FT_Date_Submitted", status: "implemented", mapping: "err_projects.submitted_at" },
+                    { name: "FT_Status", status: "implemented", mapping: "err_projects.status" },
+                    { name: "Grant_Name", status: "implemented", mapping: "grant_calls.name (via err_projects.grant_call_id)" },
+                    { name: "Partner", status: "implemented", mapping: "emergency_rooms.name (via err_projects.err_id)" },
+                    { name: "State_ID", status: "implemented", mapping: "err_projects.state, emergency_rooms.state_id" },
+                    { name: "Activity_Start_Date", status: "implemented", mapping: "err_program_reach.start_date" },
+                    { name: "Activity_End_Date", status: "implemented", mapping: "err_program_reach.end_date" },
+                    { name: "Activity_Duration", status: "implemented", mapping: "err_projects.estimated_timeframe" },
+                    { name: "FT_Primary_Sector", status: "implemented", mapping: "err_projects.primary_sectors" },
+                    { name: "FT_Secondary_Sector", status: "implemented", mapping: "err_projects.secondary_sectors" },
+                    { name: "FT_SDG_Amount", status: "partial", mapping: "err_expense.expense_amount (when SDG)" },
+                    { name: "FT_Fanxv_Rate", status: "partial", mapping: "err_projects exchange rate metadata" },
+                    { name: "Date_FT_Transfer", status: "missing", mapping: "Not explicitly tracked" },
+                    { name: "FT_LOD_Amount", status: "missing", mapping: "Not found; no LOD currency support" }
+                ]
+            },
+            "External Reports": {
+                fields: [
+                    { name: "ERR_Code", status: "implemented", mapping: "emergency_rooms.err_code" },
+                    { name: "ERR_Name", status: "implemented", mapping: "emergency_rooms.name" },
+                    { name: "State_ID", status: "implemented", mapping: "emergency_rooms.state_id, states.id" },
+                    { name: "GPS_Lat", status: "missing", mapping: "No GPS coordinates stored for ERR rooms" },
+                    { name: "GPS_Long", status: "missing", mapping: "No GPS coordinates stored for ERR rooms" }
+                ]
+            },
+            "Expenses": {
+                fields: [
+                    { name: "Expense_ID", status: "implemented", mapping: "err_expense.expense_id" },
+                    { name: "FA_report_ID", status: "implemented", mapping: "err_summary.id" },
+                    { name: "Expense_Date", status: "implemented", mapping: "err_expense.payment_date" },
+                    { name: "Expense_Amount_USD", status: "implemented", mapping: "err_expense.expense_amount (when USD)" },
+                    { name: "Expense_Sector", status: "partial", mapping: "err_projects.primary_sectors, err_projects.secondary_sectors" },
+                    { name: "Expense_Amount_5DS", status: "missing", mapping: "Not supported; portal uses USD/SDG only" }
+                ]
+            },
+            "Narrative Reports/FS": {
+                fields: [
+                    { name: "FS_Report_ID", status: "implemented", mapping: "err_program_report.id (F5), err_summary.id (F4)" },
+                    { name: "Activity_ID", status: "implemented", mapping: "err_projects.id" },
+                    { name: "FS_Report_Status", status: "implemented", mapping: "err_program_report.is_draft" },
+                    { name: "Total_Individual_Reported", status: "implemented", mapping: "err_program_reach.individual_count (sum)" },
+                    { name: "Total_Family_Reported", status: "implemented", mapping: "err_program_reach.household_count (sum)" },
+                    { name: "Individual_Sector", status: "partial", mapping: "err_projects.primary_sectors, err_projects.secondary_sectors (not per individual)" }
+                ]
+            },
+            "Beneficiary, Sector, Report": {
+                fields: [
+                    { name: "FS_Report_ID", status: "implemented", mapping: "err_program_report.id" },
+                    { name: "Sector_name", status: "implemented", mapping: "sectors.sector_name_en, sectors.sector_name_ar" },
+                    { name: "Total_Individual_Reached", status: "implemented", mapping: "err_program_reach.individual_count" },
+                    { name: "Total_Family_Reached", status: "implemented", mapping: "err_program_reach.household_count" },
+                    { name: "Female", status: "implemented", mapping: "err_program_reach.female_count" },
+                    { name: "Male", status: "implemented", mapping: "err_program_reach.male_count" },
+                    { name: "People_with_special_needs", status: "missing", mapping: "Not explicitly tracked" },
+                    { name: "Ben_Req_id", status: "missing", mapping: "No beneficiary request ID field" }
+                ]
+            }
+        };
+
+        function calculateStats() {
+            let implemented = 0, partial = 0, missing = 0, total = 0;
+            
+            Object.values(erdData).forEach(entity => {
+                entity.fields.forEach(field => {
+                    total++;
+                    if (field.status === "implemented") implemented++;
+                    else if (field.status === "partial") partial++;
+                    else if (field.status === "missing") missing++;
+                });
+            });
+
+            const coverage = total > 0 ? Math.round(((implemented + partial * 0.5) / total) * 100) : 0;
+
+            document.getElementById('total-implemented').textContent = implemented;
+            document.getElementById('total-partial').textContent = partial;
+            document.getElementById('total-missing').textContent = missing;
+            document.getElementById('coverage-percent').textContent = coverage + '%';
+        }
+
+        function getFieldStats(fields) {
+            const stats = { implemented: 0, partial: 0, missing: 0 };
+            fields.forEach(field => {
+                if (field.status === "implemented") stats.implemented++;
+                else if (field.status === "partial") stats.partial++;
+                else if (field.status === "missing") stats.missing++;
+            });
+            return stats;
+        }
+
+        function renderEntities(filter = "all", search = "") {
+            const container = document.getElementById('entities-container');
+            container.innerHTML = '';
+
+            const searchLower = search.toLowerCase();
+            let hasResults = false;
+
+            Object.entries(erdData).forEach(([entityName, entityData]) => {
+                // Filter fields based on search and filter
+                let filteredFields = entityData.fields.filter(field => {
+                    const matchesSearch = search === "" || 
+                        entityName.toLowerCase().includes(searchLower) ||
+                        field.name.toLowerCase().includes(searchLower) ||
+                        field.mapping.toLowerCase().includes(searchLower);
+                    
+                    const matchesFilter = filter === "all" || field.status === filter;
+                    
+                    return matchesSearch && matchesFilter;
+                });
+
+                if (filteredFields.length === 0) return;
+                hasResults = true;
+
+                const stats = getFieldStats(entityData.fields);
+                const entityCard = document.createElement('div');
+                entityCard.className = 'entity-card';
+                entityCard.dataset.entity = entityName;
+
+                entityCard.innerHTML = `
+                    <div class="entity-header" onclick="toggleEntity('${entityName}')">
+                        <div class="entity-title">
+                            <span class="expand-icon" id="icon-${entityName}">▼</span>
+                            <h2>${entityName}</h2>
+                        </div>
+                        <div class="entity-stats">
+                            <span class="stat-badge implemented">✅ ${stats.implemented}</span>
+                            <span class="stat-badge partial">⚠️ ${stats.partial}</span>
+                            <span class="stat-badge missing">❌ ${stats.missing}</span>
+                        </div>
+                    </div>
+                    <div class="entity-content" id="content-${entityName}">
+                        <div class="fields-container">
+                            ${renderFieldSections(filteredFields)}
+                        </div>
+                    </div>
+                `;
+
+                container.appendChild(entityCard);
+            });
+
+            if (!hasResults) {
+                container.innerHTML = '<div class="no-results">No results found matching your search criteria.</div>';
+            }
+        }
+
+        function renderFieldSections(fields) {
+            const sections = {
+                implemented: fields.filter(f => f.status === "implemented"),
+                partial: fields.filter(f => f.status === "partial"),
+                missing: fields.filter(f => f.status === "missing")
+            };
+
+            let html = '';
+
+            if (sections.implemented.length > 0) {
+                html += `
+                    <div class="field-section">
+                        <div class="field-section-title" style="color: #28a745;">✅ Implemented Fields (${sections.implemented.length})</div>
+                        ${sections.implemented.map(field => renderField(field)).join('')}
+                    </div>
+                `;
+            }
+
+            if (sections.partial.length > 0) {
+                html += `
+                    <div class="field-section">
+                        <div class="field-section-title" style="color: #ffc107;">⚠️ Partially Implemented (${sections.partial.length})</div>
+                        ${sections.partial.map(field => renderField(field)).join('')}
+                    </div>
+                `;
+            }
+
+            if (sections.missing.length > 0) {
+                html += `
+                    <div class="field-section">
+                        <div class="field-section-title" style="color: #dc3545;">❌ Missing Fields (${sections.missing.length})</div>
+                        ${sections.missing.map(field => renderField(field)).join('')}
+                    </div>
+                `;
+            }
+
+            return html;
+        }
+
+        function renderField(field) {
+            return `
+                <div class="field-item ${field.status}">
+                    <div class="field-info">
+                        <div class="field-name">${field.name}</div>
+                        <div class="field-mapping">${field.mapping}</div>
+                    </div>
+                    <div class="field-status ${field.status}">
+                        ${field.status === "implemented" ? "✅ Implemented" : 
+                          field.status === "partial" ? "⚠️ Partial" : "❌ Missing"}
+                    </div>
+                </div>
+            `;
+        }
+
+        function toggleEntity(entityName) {
+            const content = document.getElementById(`content-${entityName}`);
+            const icon = document.getElementById(`icon-${entityName}`);
+            
+            if (content.classList.contains('expanded')) {
+                content.classList.remove('expanded');
+                icon.classList.remove('expanded');
+            } else {
+                content.classList.add('expanded');
+                icon.classList.add('expanded');
+            }
+        }
+
+        // Make toggleEntity available globally
+        window.toggleEntity = toggleEntity;
+
+        // Event listeners
+        document.getElementById('search-input').addEventListener('input', (e) => {
+            const filter = document.querySelector('.filter-btn.active')?.dataset.filter || 'all';
+            renderEntities(filter, e.target.value);
+        });
+
+        document.querySelectorAll('.filter-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                const filter = btn.dataset.filter;
+                const search = document.getElementById('search-input').value;
+                renderEntities(filter, search);
+            });
+        });
+
+        // Initial render
+        calculateStats();
+        renderEntities('all', '');
+    </script>
+</body>
+</html>
+

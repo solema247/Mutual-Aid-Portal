@@ -721,7 +721,7 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
               <>
                 <div className="space-y-1">
                   <Label>{t('f4.modal.summary_file')}</Label>
-                  <Input type="file" accept=".pdf,image/*" onChange={(e) => setFile(e.target.files?.[0] || null)} />
+                  <Input type="file" accept=".pdf,.docx,image/*" onChange={(e) => setFile(e.target.files?.[0] || null)} />
                   <div className="text-xs text-muted-foreground">{t('f4.modal.choose_file_hint')}</div>
                 </div>
                 <div className="flex justify-end gap-2">
@@ -733,7 +733,7 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
               <>
                 <div className="space-y-1">
                   <Label>{t('f4.modal.attachment_optional')}</Label>
-                  <Input type="file" accept=".pdf,image/*" onChange={(e) => setAttachmentFile(e.target.files?.[0] || null)} />
+                  <Input type="file" accept=".pdf,.docx,image/*" onChange={(e) => setAttachmentFile(e.target.files?.[0] || null)} />
                   {attachmentFile && <span className="text-xs text-muted-foreground">{attachmentFile.name}</span>}
                 </div>
                 <div className="flex justify-end gap-2">
@@ -759,7 +759,7 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
                 <>
                   <div className="space-y-1">
                     <Label>{t('f4.modal.summary_file')}</Label>
-                    <Input type="file" accept=".pdf,image/*" onChange={(e) => setFile(e.target.files?.[0] || null)} />
+                    <Input type="file" accept=".pdf,.docx,image/*" onChange={(e) => setFile(e.target.files?.[0] || null)} />
                     <div className="text-xs text-muted-foreground">{t('f4.modal.choose_file_hint')}</div>
                   </div>
                   <div className="flex justify-end gap-2">
@@ -771,7 +771,7 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
                 <>
                   <div className="space-y-1">
                     <Label>{t('f4.modal.attachment_optional')}</Label>
-                    <Input type="file" accept=".pdf,image/*" onChange={(e) => setAttachmentFile(e.target.files?.[0] || null)} />
+                    <Input type="file" accept=".pdf,.docx,image/*" onChange={(e) => setAttachmentFile(e.target.files?.[0] || null)} />
                     {attachmentFile && <span className="text-xs text-muted-foreground">{attachmentFile.name}</span>}
                   </div>
                   <div className="flex justify-end gap-2">

@@ -52,6 +52,7 @@ export default function ProjectManagement() {
   const [filterMonth, setFilterMonth] = useState<string>('all')
   const [filterF4Status, setFilterF4Status] = useState<string>('all')
   const [filterF5Status, setFilterF5Status] = useState<string>('all')
+  const [filterProjectStatus, setFilterProjectStatus] = useState<string>('all')
 
   // Drill-down state
   const [level, setLevel] = useState<'state'|'room'|'project'>('state')
@@ -241,6 +242,11 @@ export default function ProjectManagement() {
       filtered = filtered.filter((r: any) => normalizedF5(r.f5_status) === filterF5Status)
     }
 
+    // 5b. Project status (not_started | in_progress | completed)
+    if (filterProjectStatus !== 'all') {
+      filtered = filtered.filter((r: any) => (r.project_status || '') === filterProjectStatus)
+    }
+
     // 6. Grant filter
     if (selectedGrantId === 'all') {
       // no change
@@ -271,7 +277,7 @@ export default function ProjectManagement() {
     }
 
     setRows(filtered)
-  }, [filterHistoricalNew, filterState, filterMonth, filterF4Status, filterF5Status, selectedGrantId, allRows, grants, grantSerialSearch])
+  }, [filterHistoricalNew, filterState, filterMonth, filterF4Status, filterF5Status, filterProjectStatus, selectedGrantId, allRows, grants, grantSerialSearch])
 
   // Available options for filter dropdowns (from allRows)
   const filterOptions = useMemo(() => {
@@ -851,6 +857,20 @@ export default function ProjectManagement() {
                   {filterOptions.f5Statuses.map((s) => (
                     <SelectItem key={s} value={s}>{s}</SelectItem>
                   ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex flex-col gap-1 shrink-0">
+              <Label className="text-xs font-medium whitespace-nowrap">Status</Label>
+              <Select value={filterProjectStatus} onValueChange={setFilterProjectStatus}>
+                <SelectTrigger className="w-[110px] h-8 text-xs">
+                  <SelectValue placeholder="Status" />
+                </SelectTrigger>
+                <SelectContent className="text-xs">
+                  <SelectItem value="all">All</SelectItem>
+                  <SelectItem value="not_started">Not started</SelectItem>
+                  <SelectItem value="in_progress">In progress</SelectItem>
+                  <SelectItem value="completed">Completed</SelectItem>
                 </SelectContent>
               </Select>
             </div>

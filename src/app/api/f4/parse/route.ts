@@ -13,6 +13,36 @@ export async function POST(request: Request) {
     const { project_id, file_key_temp } = await request.json()
     if (!project_id || !file_key_temp) return NextResponse.json({ error: 'project_id and file_key_temp required' }, { status: 400 })
 
+    const lowerKey = String(file_key_temp || '').toLowerCase()
+    const ext = lowerKey.split('.').pop() || 'pdf'
+
+    // Word (.docx): store and allow manual entry; auto-parse when Word→F4 converter is added (format TBD)
+    if (ext === 'docx') {
+      const summaryDraft = {
+        report_date: null,
+        total_expenses: null,
+        total_grant: null,
+        excess_expenses: null,
+        surplus_use: null,
+        lessons: null,
+        training: null,
+        total_other_sources: null,
+        language: null,
+        remainder: null,
+        raw_ocr: null,
+        beneficiaries: null,
+        project_name: null,
+        project_objectives: null,
+        is_draft: true
+      }
+      return NextResponse.json({
+        summaryDraft,
+        expensesDraft: [],
+        word_upload_not_parsed: true,
+        aiOutput: { message: 'Word uploads are stored but not auto-parsed yet. Enter data manually or attach for reference.' }
+      })
+    }
+
     // Get a signed URL to download the file content (public bucket not guaranteed)
     const { data: signed, error: signedErr } = await (supabase as any).storage.from('images').createSignedUrl(file_key_temp, 60)
     if (signedErr || !signed?.signedUrl) throw new Error('Failed to sign temp file')
@@ -24,7 +54,6 @@ export async function POST(request: Request) {
 
     // Create a File object preserving type and filename for OCR
     const respContentType = fileResp.headers.get('content-type') || ''
-    const lowerKey = String(file_key_temp || '').toLowerCase()
     let filename = 'f4-upload'
     let mime = respContentType
     if (!mime || mime === 'application/octet-stream') {
@@ -357,6 +386,35 @@ export async function POST(request: Request) {
       }
     } catch (e) {
       // Error handling
+    }
+
+    // Auto-populate empty expense activity/description from F1 planned_activities (portal projects only)
+    const isHistorical = String(project_id).startsWith('historical_')
+    if (!isHistorical && project_id) {
+      try {
+        const { data: proj } = await supabase
+          .from('err_projects')
+          .select('planned_activities')
+          .eq('id', project_id)
+          .single()
+        if (proj?.planned_activities) {
+          const raw = typeof proj.planned_activities === 'string' ? JSON.parse(proj.planned_activities || '[]') : proj.planned_activities
+          const plannedArr = Array.isArray(raw) ? raw : []
+          const flatActivities: { activity: string; description: string }[] = []
+          for (const pa of plannedArr) {
+            const activity = pa?.activity ?? pa?.activity_name ?? (Array.isArray(pa?.expenses)?.[0]?.description) ?? ''
+            const description = pa?.description ?? (Array.isArray(pa?.expenses)?.[0] ? (pa.expenses[0].description || pa.expenses[0].item) : null) ?? ''
+            flatActivities.push({ activity: String(activity || '').trim(), description: String(description || '').trim() })
+          }
+          expensesDraft = expensesDraft.map((row: any, idx: number) => {
+            const fill = flatActivities[idx]
+            if (!fill) return row
+            if (!(row.expense_activity || '').trim() && fill.activity) row.expense_activity = fill.activity
+            if (!(row.expense_description || '').trim() && fill.description) row.expense_description = fill.description
+            return row
+          })
+        }
+      } catch (_) { /* ignore */ }
     }
 
     // Include a compact AI output echo for debugging (whitelisted keys)

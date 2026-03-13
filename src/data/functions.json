@@ -22,6 +22,8 @@
   { "code": "f4_f5_view_page", "module": "f4", "label_ar": "عرض صفحة التقارير F4 و F5", "label_en": "View F4 & F5 Reporting page", "description_en": "View the F4 & F5 Reporting page." },
   { "code": "f4_upload", "module": "f4", "label_ar": "رفع تقرير F4", "label_en": "Upload F4 report", "description_en": "Upload F4 financial reports." },
   { "code": "f4_view_report", "module": "f4", "label_ar": "عرض/تعديل تقرير F4", "label_en": "View/edit F4 report", "description_en": "View and edit F4 financial reports on the F4–F5 Reporting and Project Management pages." },
+  { "code": "f4_fetch_by_serial", "module": "f4", "label_ar": "إدخال الرقم التسلسلي واستعلام F4", "label_en": "Enter serial and fetch F4", "description_en": "Financial team only: enter F4 serial number to fetch F4 information from the portal." },
+  { "code": "f4_review", "module": "f4", "label_ar": "قبول/رفض تقرير F4", "label_en": "Accept or reject F4 report", "description_en": "Set F4 review status to accepted or rejected (with comment); upload receipt and proof of payment per F4." },
   { "code": "f5_upload", "module": "f5", "label_ar": "رفع تقرير F5", "label_en": "Upload F5 report", "description_en": "Upload F5 program reports." },
   { "code": "f5_view_report", "module": "f5", "label_ar": "عرض/تعديل تقرير F5", "label_en": "View/edit F5 report", "description_en": "View and edit F5 program reports on the F4–F5 Reporting and Project Management pages." },
   { "code": "users_view_page", "module": "users", "label_ar": "عرض صفحة إدارة المستخدمين", "label_en": "View User Management page", "description_en": "View the User Management page." },
