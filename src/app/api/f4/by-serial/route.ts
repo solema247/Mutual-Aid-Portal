@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { requirePermission } from '@/lib/requirePermission'
 
+export const dynamic = 'force-dynamic'
+
 /**
  * GET /api/f4/by-serial?serial=XXX
  * Resolves F4 serial (grant_serial_id) to project(s), F4 summaries, expenses, attachments,

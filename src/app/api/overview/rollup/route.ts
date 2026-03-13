@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 
+export const dynamic = 'force-dynamic'
+
 function sumPlanFromPlannedActivities(planned: any): number {
   try {
     const arr = Array.isArray(planned) ? planned : (typeof planned === 'string' ? JSON.parse(planned || '[]') : [])

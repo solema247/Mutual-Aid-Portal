@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 
+export const dynamic = 'force-dynamic'
+
 // Helper function to normalize state names consistently
 function normalizeStateName(state: any): string {
   if (!state) return 'Unknown'

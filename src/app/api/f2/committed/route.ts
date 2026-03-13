@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { getUserStateAccess } from '@/lib/userStateAccess'
 
+export const dynamic = 'force-dynamic'
+
 // GET /api/f2/committed - Get all committed F1s with optional filtering
 export async function GET(request: Request) {
   try {
