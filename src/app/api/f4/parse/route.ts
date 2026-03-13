@@ -402,8 +402,8 @@ export async function POST(request: Request) {
           const plannedArr = Array.isArray(raw) ? raw : []
           const flatActivities: { activity: string; description: string }[] = []
           for (const pa of plannedArr) {
-            const activity = pa?.activity ?? pa?.activity_name ?? (Array.isArray(pa?.expenses)?.[0]?.description) ?? ''
-            const description = pa?.description ?? (Array.isArray(pa?.expenses)?.[0] ? (pa.expenses[0].description || pa.expenses[0].item) : null) ?? ''
+            const activity = pa?.activity ?? pa?.activity_name ?? (Array.isArray(pa?.expenses) ? pa.expenses[0]?.description : undefined) ?? ''
+            const description = pa?.description ?? (Array.isArray(pa?.expenses) && pa.expenses[0] ? (pa.expenses[0].description || pa.expenses[0].item) : null) ?? ''
             flatActivities.push({ activity: String(activity || '').trim(), description: String(description || '').trim() })
           }
           expensesDraft = expensesDraft.map((row: any, idx: number) => {
