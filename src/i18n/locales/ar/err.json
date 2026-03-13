@@ -26,6 +26,8 @@
   "f3_mous_desc": "إنشاء وعرض MOUs",
   "f4_f5_reporting": "تقارير F4 و F5",
   "f4_f5_reporting_desc": "رفع ومراجعة التقارير المالية/البرنامجية",
+  "report_tracker": "متتبع التقارير",
+  "report_tracker_desc": "تتبع حالة تقارير F4 و F5",
   "grant_management": "إدارة المنح",
   "grant_management_desc": "إدارة وتخصيص أموال المنح للولايات",
   "surveys": "استبيانات",

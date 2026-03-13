@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
-import { Users, BarChart2, ClipboardList, PieChart, UserCog, CheckSquare, LogOut, BookOpen, PenTool, Cog } from 'lucide-react'
+import { Users, BarChart2, BarChart3, ClipboardList, PieChart, UserCog, CheckSquare, LogOut, BookOpen, PenTool, Cog } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 import { useAllowedFunctions } from '@/hooks/useAllowedFunctions'
 import '@/i18n/config'
@@ -174,6 +174,23 @@ export default function ErrPortalPage() {
                 </CardTitle>
                 <CardDescription className="mt-1 text-sm">
                   {t('err:f4_f5_reporting_desc')}
+                </CardDescription>
+              </CardHeader>
+            </Card>
+          </Link>
+        )}
+
+        {/* Report Tracker */}
+        {canViewF4F5 && (
+          <Link href="/err-portal/report-tracker" className="block">
+            <Card className="h-full hover:bg-muted/50 transition-colors">
+              <CardHeader className="h-full flex flex-col justify-center items-center text-center p-4">
+                <BarChart3 className="h-6 w-6 mb-2" />
+                <CardTitle className="text-base">
+                  {t('err:report_tracker')}
+                </CardTitle>
+                <CardDescription className="mt-1 text-sm">
+                  {t('err:report_tracker_desc')}
                 </CardDescription>
               </CardHeader>
             </Card>
