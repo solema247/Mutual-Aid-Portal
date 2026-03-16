@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { useState, useEffect } from 'react'
 import MainLayout from '@/components/layout/MainLayout'
 import { useRouter } from 'next/navigation'
-import { Users, ClipboardList, BarChart2, BarChart3, PieChart, UserCog, Home, CheckSquare, BookOpen, PenTool, Cog, FileText } from 'lucide-react'
+import { Users, ClipboardList, BarChart2, BarChart3, PieChart, UserCog, Home, CheckSquare, BookOpen, PenTool, Cog, FileText, BookMarked } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 import { useAllowedFunctions } from '@/hooks/useAllowedFunctions'
 
@@ -108,6 +108,11 @@ export default function ErrPortalLayout({
       href: '/err-portal/report-tracker',
       label: 'Report Tracker',
       icon: <BarChart3 className="h-5 w-5" />
+    }] : []),
+    ...(canViewF4F5 ? [{
+      href: '/err-portal/stories',
+      label: 'Mutual Aid Stories',
+      icon: <BookMarked className="h-5 w-5" />
     }] : []),
     ...(canViewProjectManagement ? [{
       href: '/err-portal/project-management',

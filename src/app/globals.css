@@ -170,6 +170,12 @@
     background-color: rgb(30 64 175); /* blue-800 */
     color: rgb(219 234 254); /* blue-100 */
   }
+  .maplibregl-popup-content {
+    @apply bg-transparent! shadow-none! p-0! rounded-none!;
+  }
+  .maplibregl-popup-tip {
+    @apply hidden!;
+  }
 }
 
 .table-container {
