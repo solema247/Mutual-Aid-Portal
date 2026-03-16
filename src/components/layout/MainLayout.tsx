@@ -2,7 +2,7 @@
 
 import { ReactNode, ReactElement, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import Sidebar from './Sidebar'
+import Sidebar, { type SidebarItem } from './Sidebar'
 import LanguageSwitch from '@/components/LanguageSwitch'
 import { Button } from '@/components/ui/button'
 import { Globe, Menu } from 'lucide-react'
@@ -10,11 +10,7 @@ import { cn } from '@/lib/utils'
 
 interface MainLayoutProps {
   children: ReactNode
-  sidebarItems: {
-    href: string
-    label: string
-    icon: string | ReactElement
-  }[]
+  sidebarItems: SidebarItem[]
   /** Optional sidebar header title (e.g. for partner portal). When not set, uses err:navigation. */
   sidebarTitle?: string
   /** Optional user display name shown in the header. */

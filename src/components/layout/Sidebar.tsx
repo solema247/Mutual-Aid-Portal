@@ -17,12 +17,26 @@ import { Menu, LogOut } from 'lucide-react'
 import { ReactElement } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 
+export interface SidebarLinkItem {
+  href: string
+  label: string
+  icon: string | ReactElement
+}
+
+export interface SidebarGroupItem {
+  type: 'group'
+  label: string
+  children: SidebarLinkItem[]
+}
+
+export type SidebarItem = SidebarLinkItem | SidebarGroupItem
+
+function isSidebarGroup(item: SidebarItem): item is SidebarGroupItem {
+  return 'type' in item && item.type === 'group' && 'children' in item && Array.isArray((item as SidebarGroupItem).children)
+}
+
 interface SidebarProps {
-  items: {
-    href: string
-    label: string
-    icon: string | ReactElement
-  }[]
+  items: SidebarItem[]
   /** Optional sidebar header title. When not set, uses err:navigation. */
   title?: string
   /** When set, desktop sidebar width is controlled by this (true = expanded, false = collapsed). When undefined, uses hover to expand. */
@@ -85,20 +99,42 @@ export default function Sidebar({ items, title, isOpen, mobileSheetOpen, onMobil
           </SheetHeader>
           <nav className="flex flex-col flex-1 min-h-0 p-4">
             <div className="sidebar-nav-scroll flex flex-col gap-2 flex-1 min-h-0 overflow-y-auto">
-              {items.map((item) => (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  onClick={() => setOpen(false)}
-                  className={cn(
-                    'flex items-center gap-3 rounded-lg px-3 py-2 text-sidebar-foreground transition-colors hover:bg-brand-orange hover:text-white',
-                    pathname === item.href && 'bg-sidebar-primary text-white border-s-2 border-brand-pink'
-                  )}
-                >
-                  <span className="text-xl text-brand-light-blue">{item.icon}</span>
-                  <span>{item.label}</span>
-                </Link>
-              ))}
+              {items.map((item, idx) =>
+                isSidebarGroup(item) ? (
+                  <div key={`group-${idx}-${item.label}`} className="flex flex-col gap-1">
+                    <div className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-sidebar-foreground/70">
+                      {item.label}
+                    </div>
+                    {item.children.map((child) => (
+                      <Link
+                        key={child.href}
+                        href={child.href}
+                        onClick={() => setOpen(false)}
+                        className={cn(
+                          'flex items-center gap-3 rounded-lg px-3 py-2 pl-5 text-sidebar-foreground transition-colors hover:bg-brand-orange hover:text-white',
+                          pathname === child.href && 'bg-sidebar-primary text-white border-s-2 border-brand-pink'
+                        )}
+                      >
+                        <span className="text-xl text-brand-light-blue">{child.icon}</span>
+                        <span>{child.label}</span>
+                      </Link>
+                    ))}
+                  </div>
+                ) : (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    onClick={() => setOpen(false)}
+                    className={cn(
+                      'flex items-center gap-3 rounded-lg px-3 py-2 text-sidebar-foreground transition-colors hover:bg-brand-orange hover:text-white',
+                      pathname === item.href && 'bg-sidebar-primary text-white border-s-2 border-brand-pink'
+                    )}
+                  >
+                    <span className="text-xl text-brand-light-blue">{item.icon}</span>
+                    <span>{item.label}</span>
+                  </Link>
+                )
+              )}
             </div>
             <button
               onClick={handleLogout}
@@ -133,30 +169,64 @@ export default function Sidebar({ items, title, isOpen, mobileSheetOpen, onMobil
         </div>
         <nav className="flex flex-col flex-1 min-h-0 p-4">
           <div className="sidebar-nav-scroll flex flex-col gap-2 flex-1 min-h-0 overflow-y-auto">
-            {items.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={cn(
-                  'flex items-center rounded-lg transition-all duration-300',
-                  !isExpanded ? 'justify-center mx-0.5 w-9 h-9' : 'gap-3 px-3',
-                  'py-2 text-sidebar-foreground hover:bg-brand-orange hover:text-white',
-                  pathname === item.href && 'bg-sidebar-primary text-white border-s-2 border-brand-pink'
-                )}
-              >
-                <span className={cn(
-                  "text-xl",
-                  pathname !== item.href && "text-brand-light-blue",
-                  !isExpanded && "flex items-center justify-center w-6 h-6"
-                )}>{item.icon}</span>
-                <span className={cn(
-                  'transition-all duration-300',
-                  !isExpanded && 'w-0 overflow-hidden opacity-0'
-                )}>
-                  {item.label}
-                </span>
-              </Link>
-            ))}
+            {items.map((item, idx) =>
+              isSidebarGroup(item) ? (
+                <div key={`group-${idx}-${item.label}`} className="flex flex-col gap-1">
+                  {isExpanded && (
+                    <div className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-sidebar-foreground/70">
+                      {item.label}
+                    </div>
+                  )}
+                  {item.children.map((child) => (
+                    <Link
+                      key={child.href}
+                      href={child.href}
+                      className={cn(
+                        'flex items-center rounded-lg transition-all duration-300',
+                        !isExpanded ? 'justify-center mx-0.5 w-9 h-9' : 'gap-3 px-3 pl-5',
+                        'py-2 text-sidebar-foreground hover:bg-brand-orange hover:text-white',
+                        pathname === child.href && 'bg-sidebar-primary text-white border-s-2 border-brand-pink'
+                      )}
+                    >
+                      <span className={cn(
+                        "text-xl",
+                        pathname !== child.href && "text-brand-light-blue",
+                        !isExpanded && "flex items-center justify-center w-6 h-6"
+                      )}>{child.icon}</span>
+                      <span className={cn(
+                        'transition-all duration-300',
+                        !isExpanded && 'w-0 overflow-hidden opacity-0'
+                      )}>
+                        {child.label}
+                      </span>
+                    </Link>
+                  ))}
+                </div>
+              ) : (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={cn(
+                    'flex items-center rounded-lg transition-all duration-300',
+                    !isExpanded ? 'justify-center mx-0.5 w-9 h-9' : 'gap-3 px-3',
+                    'py-2 text-sidebar-foreground hover:bg-brand-orange hover:text-white',
+                    pathname === item.href && 'bg-sidebar-primary text-white border-s-2 border-brand-pink'
+                  )}
+                >
+                  <span className={cn(
+                    "text-xl",
+                    pathname !== item.href && "text-brand-light-blue",
+                    !isExpanded && "flex items-center justify-center w-6 h-6"
+                  )}>{item.icon}</span>
+                  <span className={cn(
+                    'transition-all duration-300',
+                    !isExpanded && 'w-0 overflow-hidden opacity-0'
+                  )}>
+                    {item.label}
+                  </span>
+                </Link>
+              )
+            )}
           </div>
           <button
             onClick={handleLogout}
