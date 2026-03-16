@@ -100,9 +100,12 @@ function getPrimaryCategoryAndUsd(
  * Coordinates use state centroids (from sudan-states.json) with small jitter so clusters render.
  */
 export async function GET() {
+  const t0 = Date.now()
+  console.log('[stories/geojson] start')
   try {
     const supabase = getSupabaseRouteClient()
     const { allowedStateNames } = await getUserStateAccess()
+    console.log('[stories/geojson] getUserStateAccess', Date.now() - t0, 'ms')
 
     const geoPath = join(process.cwd(), 'public', 'geo', 'sudan-states.json')
     const geo = JSON.parse(readFileSync(geoPath, 'utf-8')) as {
@@ -134,8 +137,9 @@ export async function GET() {
     }
 
     const { data: projects, error: projectsError } = await projectsQuery
+    console.log('[stories/geojson] projects query', Date.now() - t0, 'ms', (projects?.length ?? 0), 'rows')
     if (projectsError) {
-      console.error('Stories geojson projects error:', projectsError)
+      console.error('[stories/geojson] projects error:', projectsError)
       return NextResponse.json(
         { error: 'Failed to load projects' },
         { status: 500, headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } }
@@ -154,6 +158,7 @@ export async function GET() {
       .from('err_program_report')
       .select('project_id')
       .in('project_id', projectIds)
+    console.log('[stories/geojson] report rows', Date.now() - t0, 'ms', (reportRows?.length ?? 0), 'rows')
     const projectIdsWithF5 = new Set<string>()
     for (const r of reportRows || []) {
       const pid = (r as any).project_id
@@ -217,11 +222,12 @@ export async function GET() {
       features,
     }
 
+    console.log('[stories/geojson] total', Date.now() - t0, 'ms', 'features:', features.length)
     return NextResponse.json(featureCollection, {
       headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' },
     })
   } catch (e) {
-    console.error('Stories geojson error', e)
+    console.error('[stories/geojson] error', Date.now() - t0, 'ms', e)
     return NextResponse.json(
       { error: 'Failed to build GeoJSON' },
       { status: 500, headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } }

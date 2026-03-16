@@ -34,6 +34,8 @@ export async function GET(
   req: Request,
   { params }: { params: { id: string } }
 ) {
+  const t0 = Date.now()
+  console.log('[overview/project] start', params?.id)
   try {
     const supabase = getSupabaseRouteClient()
     const id = params.id
@@ -239,6 +241,7 @@ export async function GET(
         .eq('id', id)
         .single()
       if (projErr) throw projErr
+      console.log('[overview/project] project load', Date.now() - t0, 'ms')
 
       // Load MOU file keys and per-project transfer date from payment confirmation
       let mouFileKeys: { payment_confirmation_file: string | null; signed_mou_file_key: string | null } | null = null
@@ -275,6 +278,7 @@ export async function GET(
         .eq('project_id', id)
         .order('created_at', { ascending: false })
       if (sumErr) throw sumErr
+      console.log('[overview/project] summaries', Date.now() - t0, 'ms', (summaries?.length ?? 0), 'rows')
 
       const summaryIds = (summaries || []).map((s: any) => s.id)
       let expensesBySummary: Record<number, any[]> = {}
@@ -302,11 +306,14 @@ export async function GET(
         .eq('project_id', id)
         .order('created_at', { ascending: false })
       if (f5Err) throw f5Err
+      console.log('[overview/project] f5 reports', Date.now() - t0, 'ms', (f5Reports?.length ?? 0), 'rows')
 
       const reportIds = (f5Reports || []).map((r: any) => r.id)
       if (useEnCache && reportIds.length > 0) {
+        const tTranslate = Date.now()
         try {
           await ensureReportsTranslated(supabase, reportIds)
+          console.log('[overview/project] ensureReportsTranslated', Date.now() - tTranslate, 'ms')
         } catch (e) {
           console.error('[overview/project] ensureReportsTranslated failed', e)
         }
@@ -331,10 +338,12 @@ export async function GET(
 
       let reachByReport: Record<string, any[]> = {}
       if (reportIds.length) {
+        const tReach = Date.now()
         const { data: reach } = await supabase
           .from('err_program_reach')
           .select('*')
           .in('report_id', reportIds)
+        console.log('[overview/project] reach', Date.now() - tReach, 'ms', (reach?.length ?? 0), 'rows')
         for (const r of (reach || [])) {
           const rid = (r as any).report_id
           reachByReport[rid] = reachByReport[rid] || []
@@ -403,6 +412,7 @@ export async function GET(
         days_overdue: days_overdue ?? null
       }
 
+      console.log('[overview/project] total', Date.now() - t0, 'ms')
       return NextResponse.json({ 
         project: projectWithOverdue, 
         summaries: summariesWithExpenses,
@@ -419,7 +429,7 @@ export async function GET(
       })
     }
   } catch (e) {
-    console.error('overview/project detail error', e)
+    console.error('[overview/project] error', Date.now() - t0, 'ms', e)
     const msg = e instanceof Error ? e.message : String(e)
     const requestedId = typeof params?.id === 'string' ? params.id : ''
     if (requestedId.startsWith('historical_') && (/relation .* does not exist/i.test(msg) || /column .* does not exist/i.test(msg))) {

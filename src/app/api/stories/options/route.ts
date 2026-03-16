@@ -25,9 +25,12 @@ function slugify(label: string): string {
  * Only MAP projects; respects getUserStateAccess.
  */
 export async function GET() {
+  const t0 = Date.now()
+  console.log('[stories/options] start')
   try {
     const supabase = getSupabaseRouteClient()
     const { allowedStateNames } = await getUserStateAccess()
+    console.log('[stories/options] getUserStateAccess', Date.now() - t0, 'ms')
 
     let projectsQuery = supabase
       .from('err_projects')
@@ -40,6 +43,7 @@ export async function GET() {
     }
 
     const { data: projects, error: projectsError } = await projectsQuery
+    console.log('[stories/options] projects query', Date.now() - t0, 'ms', (projects?.length ?? 0), 'rows')
     if (projectsError) {
       console.error('Stories options projects error:', projectsError)
       return NextResponse.json(
@@ -116,12 +120,13 @@ export async function GET() {
       .filter((t) => t.label)
       .sort((a, b) => a.label.localeCompare(b.label))
 
+    console.log('[stories/options] total', Date.now() - t0, 'ms', 'states:', states.length, 'themes:', themes.length)
     return NextResponse.json(
       { states, themes },
       { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } }
     )
   } catch (e) {
-    console.error('Stories options error', e)
+    console.error('[stories/options] error', Date.now() - t0, 'ms', e)
     return NextResponse.json(
       { error: 'Failed to load stories options' },
       { status: 500, headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } }

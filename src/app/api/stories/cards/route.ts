@@ -131,9 +131,12 @@ function getOtherLabels(
  * Returns story cards. No params = all Sudan (respects getUserStateAccess).
  */
 export async function GET(request: Request) {
+  const t0 = Date.now()
+  console.log('[stories/cards] start')
   try {
     const supabase = getSupabaseRouteClient()
     const { allowedStateNames } = await getUserStateAccess()
+    console.log('[stories/cards] getUserStateAccess', Date.now() - t0, 'ms')
     const { searchParams } = new URL(request.url)
     const stateParam = searchParams.get('state')?.trim() || null
     const themeParams = searchParams.getAll('theme').map((t) => t?.trim()).filter(Boolean)
@@ -154,6 +157,7 @@ export async function GET(request: Request) {
     }
 
     const { data: projects, error: projectsError } = await projectsQuery
+    console.log('[stories/cards] projects query', Date.now() - t0, 'ms', (projects?.length ?? 0), 'rows')
     if (projectsError) {
       console.error('Stories cards projects error', projectsError)
       return NextResponse.json(
@@ -192,6 +196,7 @@ export async function GET(request: Request) {
       .select(reportSelect)
       .in('project_id', projectIds)
       .order('created_at', { ascending: false })
+    console.log('[stories/cards] reports query', Date.now() - t0, 'ms', (reports?.length ?? 0), 'rows')
 
     if (reportsError) {
       console.error('Stories cards reports error', reportsError)
@@ -209,8 +214,10 @@ export async function GET(request: Request) {
 
     const reportIds = Array.from(latestReportByProject.values()).map((r: any) => r.id)
     if (useEnCache && reportIds.length > 0) {
+      const tTranslate = Date.now()
       try {
         await ensureReportsTranslated(supabase, reportIds)
+        console.log('[stories/cards] ensureReportsTranslated', Date.now() - tTranslate, 'ms')
       } catch (e) {
         console.error('[stories/cards] ensureReportsTranslated failed', e)
       }
@@ -230,10 +237,12 @@ export async function GET(request: Request) {
 
     let reachByReport: Record<string, { individuals: number; households: number }> = {}
     if (reportIds.length > 0) {
+      const tReach = Date.now()
       const { data: reachRows } = await supabase
         .from('err_program_reach')
         .select('report_id, individual_count, household_count')
         .in('report_id', reportIds)
+      console.log('[stories/cards] reach query', Date.now() - tReach, 'ms', (reachRows?.length ?? 0), 'rows')
       for (const row of reachRows || []) {
         const rid = (row as any).report_id
         const ind = (row as any).individual_count
@@ -338,12 +347,13 @@ export async function GET(request: Request) {
       top_categories,
     }
 
+    console.log('[stories/cards] total', Date.now() - t0, 'ms', 'cards:', cards.length)
     return NextResponse.json(
       { summary, cards },
       { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } }
     )
   } catch (e) {
-    console.error('Stories cards error', e)
+    console.error('[stories/cards] error', Date.now() - t0, 'ms', e)
     return NextResponse.json(
       { error: 'Failed to load story cards' },
       { status: 500, headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } }

@@ -141,19 +141,42 @@ export async function ensureReportTranslated(
   }
 }
 
+const TRANSLATE_CONCURRENCY = 8
+
 /**
- * Ensure multiple reports have cached EN. Processes in sequence to avoid rate limits; can be optimized with limited concurrency later.
+ * Run tasks in parallel with a concurrency limit.
+ */
+async function runWithConcurrency<T>(
+  items: T[],
+  concurrency: number,
+  fn: (item: T) => Promise<void>
+): Promise<void> {
+  let index = 0
+  async function worker(): Promise<void> {
+    while (index < items.length) {
+      const i = index++
+      try {
+        await fn(items[i])
+      } catch (e) {
+        console.error('[translateReportCache] worker error for item', i, e)
+      }
+    }
+  }
+  const workers = Array.from({ length: Math.min(concurrency, items.length) }, () => worker())
+  await Promise.all(workers)
+}
+
+/**
+ * Ensure multiple reports have cached EN. Processes with limited concurrency to reduce total time while respecting rate limits.
  */
 export async function ensureReportsTranslated(
   supabase: SupabaseClient,
   reportIds: string[]
 ): Promise<void> {
   const unique = [...new Set(reportIds)].filter(Boolean)
-  for (const id of unique) {
-    try {
-      await ensureReportTranslated(supabase, id)
-    } catch (e) {
-      console.error('[translateReportCache] ensureReportTranslated failed for', id, e)
-    }
-  }
+  if (unique.length === 0) return
+  const t0 = Date.now()
+  console.log('[translateReportCache] ensureReportsTranslated start', unique.length, 'report(s), concurrency', TRANSLATE_CONCURRENCY)
+  await runWithConcurrency(unique, TRANSLATE_CONCURRENCY, (id) => ensureReportTranslated(supabase, id))
+  console.log('[translateReportCache] ensureReportsTranslated done', Date.now() - t0, 'ms')
 }

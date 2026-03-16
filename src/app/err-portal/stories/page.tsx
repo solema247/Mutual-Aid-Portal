@@ -534,7 +534,8 @@ function StoriesContent() {
   /** Cards with snippets translated AR→EN when locale is EN; otherwise same as cards */
   const [displayCards, setDisplayCards] = useState<StoryCard[]>([])
   const [loadingOptions, setLoadingOptions] = useState(true)
-  const [loadingCards, setLoadingCards] = useState(false)
+  /** Start true so we show "Loading stories…" on first paint when hasSelection; effect clears when fetch runs or bails */
+  const [loadingCards, setLoadingCards] = useState(true)
   const [projectsGeoJson, setProjectsGeoJson] = useState<GeoJSON.FeatureCollection<GeoJSON.Point> | null>(null)
   const [statesGeoJson, setStatesGeoJson] = useState<GeoJSON.FeatureCollection<GeoJSON.Polygon> | null>(null)
   type MapPointProperties = {
@@ -699,7 +700,8 @@ function StoriesContent() {
       setCards([])
       setSummary(null)
       setDisplayCards([])
-      return
+      setLoadingCards(false)
+      return undefined
     }
     setLoadingCards(true)
     setSummary(null)
@@ -708,7 +710,9 @@ function StoriesContent() {
     themeParams.forEach((id) => p.append('theme', id))
     if (isEnLocale) p.set('locale', 'en')
     const query = p.toString()
-    fetch(`/api/stories/cards${query ? `?${query}` : ''}`)
+    const controller = new AbortController()
+    let aborted = false
+    fetch(`/api/stories/cards${query ? `?${query}` : ''}`, { signal: controller.signal })
       .then((res) => res.json())
       .then((data) => {
         const cardList = data?.cards ?? (Array.isArray(data) ? data : [])
@@ -716,16 +720,27 @@ function StoriesContent() {
         setDisplayCards(cardList)
         setSummary(data?.summary ?? null)
       })
-      .catch(() => {
+      .catch((err) => {
+        if (err?.name === 'AbortError') {
+          aborted = true
+          return
+        }
         setCards([])
         setDisplayCards([])
         setSummary(null)
       })
-      .finally(() => setLoadingCards(false))
+      .finally(() => {
+        if (aborted) return
+        setTimeout(() => setLoadingCards(false), 0)
+      })
+    return controller
   }, [stateParam, themeParams, mode, isEnLocale])
 
   useEffect(() => {
-    fetchCards()
+    const controller = fetchCards()
+    return () => {
+      controller?.abort()
+    }
   }, [fetchCards])
 
   useEffect(() => {
@@ -1404,8 +1419,8 @@ function StoriesContent() {
                 </p>
               ) : (
                 <>
-                  <div className="h-[120px] w-full">
-                    <ResponsiveContainer width="100%" height="100%">
+                  <div className="h-[120px] min-h-[120px] w-full min-w-0">
+                    <ResponsiveContainer width="100%" height={120} minHeight={120}>
                       <ScatterChart
                         margin={{ top: 8, right: 16, bottom: 24, left: 16 }}
                       >
