@@ -10,6 +10,8 @@ export const fetchCache = 'force-no-store'
 
 const MAP_STATUSES = ['approved', 'active', 'pending', 'completed'] as const
 const SNIPPET_LENGTH = 150
+/** Only translate this many reports per request (initial carousel + highlight). Rest get EN when user opens full story. */
+const MAX_REPORTS_TO_TRANSLATE_PER_REQUEST = 4
 
 function slugify(label: string): string {
   return label
@@ -215,9 +217,14 @@ export async function GET(request: Request) {
     const reportIds = Array.from(latestReportByProject.values()).map((r: any) => r.id)
     if (useEnCache && reportIds.length > 0) {
       const tTranslate = Date.now()
+      const filteredWithF5Order = filtered.filter((p) => latestReportByProject.has(p.id))
+      const reportIdsToTranslate = filteredWithF5Order
+        .slice(0, MAX_REPORTS_TO_TRANSLATE_PER_REQUEST)
+        .map((p) => latestReportByProject.get(p.id)?.id)
+        .filter(Boolean) as string[]
       try {
-        await ensureReportsTranslated(supabase, reportIds)
-        console.log('[stories/cards] ensureReportsTranslated', Date.now() - tTranslate, 'ms')
+        await ensureReportsTranslated(supabase, reportIdsToTranslate)
+        console.log('[stories/cards] ensureReportsTranslated', Date.now() - tTranslate, 'ms', reportIdsToTranslate.length, 'of', reportIds.length, 'reports')
       } catch (e) {
         console.error('[stories/cards] ensureReportsTranslated failed', e)
       }
