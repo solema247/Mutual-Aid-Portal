@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { ArrowLeft } from 'lucide-react'
+import { useAllowedFunctions } from '@/hooks/useAllowedFunctions'
 import PermissionsManager from './components/PermissionsManager'
 
 interface CurrentUser {
@@ -15,8 +16,17 @@ interface CurrentUser {
 
 export default function PermissionsPage() {
   const router = useRouter()
+  const { can } = useAllowedFunctions()
+  const canViewPage = can('users_view_permissions_page')
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null)
   const [checking, setChecking] = useState(true)
+
+  useEffect(() => {
+    if (!canViewPage) {
+      router.replace('/err-portal/user-management')
+      return
+    }
+  }, [canViewPage, router])
 
   useEffect(() => {
     let cancelled = false
@@ -27,11 +37,6 @@ export default function PermissionsPage() {
       })
       .then((data) => {
         if (cancelled) return
-        const role = data.role
-        if (role !== 'admin' && role !== 'superadmin' && role !== 'support') {
-          router.replace('/err-portal/user-management')
-          return
-        }
         setCurrentUser({
           id: data.id,
           role: data.role,
@@ -49,6 +54,7 @@ export default function PermissionsPage() {
     }
   }, [router])
 
+  if (!canViewPage) return null
   if (checking || !currentUser) {
     return <div className="p-6 text-muted-foreground">Loading...</div>
   }

@@ -31,6 +31,7 @@ const MODULE_LABELS: Record<string, string> = {
   grants: 'Grant Management',
   rooms: 'Room Management',
   dashboard: 'Dashboard',
+  learnings: 'Mutual Aid Learnings',
   surveys: 'Surveys'
 }
 
@@ -81,7 +82,7 @@ export default function BulkPermissionsManager({
   const [loadingFunctions, setLoadingFunctions] = useState(true)
   const [loadingUsers, setLoadingUsers] = useState(true)
   const [availablePage, setAvailablePage] = useState(1)
-  const moduleOrder = ['grants', 'f1', 'f2', 'f3', 'f4_f5', 'management', 'users', 'rooms', 'dashboard', 'surveys'] as const
+  const moduleOrder = ['grants', 'f1', 'f2', 'f3', 'f4_f5', 'management', 'users', 'rooms', 'dashboard', 'learnings', 'surveys'] as const
   const [openModules, setOpenModules] = useState<Set<string>>(
     () => new Set(moduleOrder)
   )
@@ -370,7 +371,12 @@ export default function BulkPermissionsManager({
             Grant: add this permission for selected users. Revoke: remove this permission for selected users. Leave both unchecked to leave unchanged.
           </p>
           <div className="space-y-2">
-            {moduleOrder.map((moduleKey) => {
+            {[
+              ...moduleOrder,
+              ...Object.keys(functionsByModule).filter(
+                (k) => !(moduleOrder as readonly string[]).includes(k) && k !== 'f4' && k !== 'f5'
+              ),
+            ].map((moduleKey) => {
               const rawFuncs =
                 moduleKey === 'f4_f5'
                   ? [...(functionsByModule['f4'] || []), ...(functionsByModule['f5'] || [])]

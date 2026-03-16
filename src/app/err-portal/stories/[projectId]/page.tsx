@@ -92,7 +92,7 @@ export default function StoryDetailPage() {
   const fromTheme = searchParams.get('fromTheme')
   const { can } = useAllowedFunctions()
   const { i18n } = useTranslation()
-  const canViewPage = can('f4_f5_view_page')
+  const canViewPage = can('learnings_view_page')
 
   const [data, setData] = useState<ProjectDetail | null>(null)
   const [loading, setLoading] = useState(true)

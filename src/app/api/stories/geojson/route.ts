@@ -118,7 +118,8 @@ export async function GET() {
     for (const f of geo.features || []) {
       const name = f.properties?.name
       if (!name || f.geometry?.type !== 'Polygon' || !f.geometry.coordinates?.[0]) continue
-      const centroid = polygonCentroid(f.geometry.coordinates[0])
+      const ring = f.geometry.coordinates[0] as [number, number][]
+      const centroid = polygonCentroid(ring)
       stateCentroids.set(name, centroid)
     }
 

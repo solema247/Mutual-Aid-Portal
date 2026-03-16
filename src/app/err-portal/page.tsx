@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
-import { Users, BarChart2, BarChart3, ClipboardList, PieChart, UserCog, CheckSquare, LogOut, BookOpen, PenTool, Cog } from 'lucide-react'
+import { Users, BarChart2, BarChart3, ClipboardList, PieChart, UserCog, CheckSquare, LogOut, BookOpen, BookMarked, PenTool, Cog } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 import { useAllowedFunctions } from '@/hooks/useAllowedFunctions'
 import '@/i18n/config'
@@ -30,6 +30,7 @@ export default function ErrPortalPage() {
   const canViewUserManagement = can('users_view_page')
   const canViewRooms = can('rooms_view_page')
   const canViewDashboard = can('dashboard_view_page')
+  const canViewLearnings = can('learnings_view_page')
   const [isLoading, setIsLoading] = useState(true)
   const [user, setUser] = useState<User | null>(null)
 
@@ -225,6 +226,23 @@ export default function ErrPortalPage() {
                 </CardTitle>
                 <CardDescription className="mt-1 text-sm">
                   {t('err:dashboard_desc')}
+                </CardDescription>
+              </CardHeader>
+            </Card>
+          </Link>
+        )}
+
+        {/* Mutual Aid Learnings */}
+        {canViewLearnings && (
+          <Link href="/err-portal/stories" className="block">
+            <Card className="h-full hover:bg-muted/50 transition-colors">
+              <CardHeader className="h-full flex flex-col justify-center items-center text-center p-4">
+                <BookMarked className="h-6 w-6 mb-2" />
+                <CardTitle className="text-base">
+                  {t('err:learnings')}
+                </CardTitle>
+                <CardDescription className="mt-1 text-sm">
+                  {t('err:learnings_desc')}
                 </CardDescription>
               </CardHeader>
             </Card>

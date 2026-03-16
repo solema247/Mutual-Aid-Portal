@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import {
@@ -14,6 +14,7 @@ import {
   ChevronRight,
   ChevronUp,
   Droplets,
+  FileDown,
   GraduationCap,
   HandCoins,
   Heart,
@@ -55,8 +56,72 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import html2canvas from 'html2canvas'
+import { jsPDF } from 'jspdf'
 
 type Mode = 'state' | 'theme'
+
+/** Replace oklab/oklch/var() with rgb so html2canvas can parse (it doesn't support oklab). */
+const PDF_SAFE_FALLBACK_COLOR = 'rgb(0,0,0)'
+const PDF_SAFE_FALLBACK_BG = '#ffffff'
+function safeColorForPdf(value: string | null, prop?: string): string | null {
+  if (value == null || value === '') return value
+  if (!value.includes('oklch') && !value.includes('oklab') && !value.includes('var(')) return value
+  const isBg =
+    prop === 'background' ||
+    prop === 'background-color' ||
+    prop === 'backgroundColor' ||
+    (prop?.toLowerCase().includes('background') ?? false)
+  return isBg ? PDF_SAFE_FALLBACK_BG : PDF_SAFE_FALLBACK_COLOR
+}
+
+/** Strip every style attribute in the subtree so html2canvas never sees oklab in inline styles. */
+function stripAllStyleAttributes(el: HTMLElement): void {
+  el.removeAttribute('style')
+  for (const child of Array.from(el.children) as HTMLElement[]) {
+    stripAllStyleAttributes(child)
+  }
+}
+
+const COLOR_ATTRS = new Set(['fill', 'stroke', 'stop-color', 'color', 'background', 'background-color', 'border-color', 'outline-color'])
+/** Replace oklab/oklch/var in any attribute value in the subtree (e.g. SVG or inline style leftovers). */
+function sanitizeOklabInClone(el: HTMLElement): void {
+  for (const name of el.getAttributeNames()) {
+    const val = el.getAttribute(name)
+    if (val && (val.includes('oklab') || val.includes('oklch') || val.includes('var('))) {
+      const isColor = COLOR_ATTRS.has(name.toLowerCase()) || name.toLowerCase().includes('color') || name.toLowerCase().includes('fill') || name.toLowerCase().includes('stroke')
+      el.setAttribute(name, isColor ? PDF_SAFE_FALLBACK_COLOR : val.replace(/oklab\([^)]*\)|oklch\([^)]*\)|var\([^)]*\)/g, '').trim() || '')
+    }
+  }
+  for (const child of Array.from(el.children) as HTMLElement[]) {
+    sanitizeOklabInClone(child)
+  }
+}
+
+function copyComputedStylesForPdf(orig: HTMLElement, clone: HTMLElement): void {
+  const cs = getComputedStyle(orig)
+  clone.style.backgroundColor = PDF_SAFE_FALLBACK_BG
+  const style = clone.style
+  for (let i = 0; i < cs.length; i++) {
+    const prop = cs[i]
+    const value = cs.getPropertyValue(prop)
+    const safe = value ? safeColorForPdf(value, prop) : null
+    if (safe != null) style.setProperty(prop, safe)
+  }
+  const colorAttrs = ['fill', 'stroke', 'stop-color', 'color']
+  for (const attr of colorAttrs) {
+    const cloneVal = clone.getAttribute(attr)
+    if (cloneVal != null && (cloneVal.includes('oklch') || cloneVal.includes('oklab') || cloneVal.includes('var('))) {
+      const computed = cs.getPropertyValue(attr)
+      clone.setAttribute(attr, safeColorForPdf(computed) ?? PDF_SAFE_FALLBACK_COLOR)
+    }
+  }
+  const origChildren = Array.from(orig.children) as HTMLElement[]
+  const cloneChildren = Array.from(clone.children) as HTMLElement[]
+  for (let i = 0; i < Math.min(origChildren.length, cloneChildren.length); i++) {
+    copyComputedStylesForPdf(origChildren[i], cloneChildren[i])
+  }
+}
 
 /** Base map style options (mapcn Map styles prop: light/dark URLs). No 3D. */
 const BASE_MAP_STYLES = {
@@ -447,11 +512,11 @@ function SudanFitBounds() {
   return null
 }
 
-export default function StoriesPage() {
+function StoriesContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { can } = useAllowedFunctions()
-  const canViewPage = can('f4_f5_view_page')
+  const canViewPage = can('learnings_view_page')
 
   const mode = (searchParams.get('mode') === 'theme' ? 'theme' : 'state') as Mode
   const stateParam = searchParams.get('state')?.trim() || null
@@ -498,6 +563,8 @@ export default function StoriesPage() {
   const [highlightedStoryExpanded, setHighlightedStoryExpanded] = useState(true)
   const [pendingHighlightProjectId, setPendingHighlightProjectId] = useState<string | null>(null)
   const carouselRef = useRef<HTMLDivElement>(null)
+  const printRef = useRef<HTMLDivElement>(null)
+  const [generatingPdf, setGeneratingPdf] = useState(false)
 
   // Fetch full story detail when highlighted card changes (server returns EN when locale=en)
   const isEnLocale = i18n.language === 'en' || i18n.language.startsWith('en-')
@@ -793,6 +860,90 @@ export default function StoriesPage() {
     }
   }, [cards])
 
+  const handlePrintPdf = useCallback(async () => {
+    const el = printRef.current
+    if (!el) return
+    setGeneratingPdf(true)
+    setHighlightedStoryExpanded(true)
+    try {
+      await new Promise((r) => setTimeout(r, 1200))
+      if (carouselRef.current) carouselRef.current.scrollLeft = 0
+      await new Promise((r) => setTimeout(r, 200))
+      const clone = el.cloneNode(true) as HTMLElement
+      clone.querySelectorAll('iframe').forEach((iframe) => iframe.remove())
+      clone.querySelectorAll('style').forEach((s) => s.remove())
+      clone.querySelectorAll('link').forEach((s) => s.remove())
+      stripAllStyleAttributes(clone)
+      copyComputedStylesForPdf(el, clone)
+      sanitizeOklabInClone(clone)
+      const mapPlaceholder = clone.querySelector('[data-pdf-map-placeholder]') as HTMLElement | null
+      if (mapPlaceholder) {
+        const mapLabel = mode === 'state' && stateParam ? stateParam : 'Total Sudan'
+        mapPlaceholder.innerHTML = ''
+        const placeholderDiv = document.createElement('div')
+        placeholderDiv.setAttribute('style', 'display:flex;align-items:center;justify-content:center;height:100%;width:100%;background:#f1f5f9;color:#64748b;font-size:1rem;border-radius:0.375rem;')
+        placeholderDiv.textContent = `Map: ${mapLabel}`
+        mapPlaceholder.appendChild(placeholderDiv)
+      }
+      const highlightContent = clone.querySelector('[data-pdf-highlight-content]') as HTMLElement | null
+      if (highlightContent) {
+        highlightContent.setAttribute('style', (highlightContent.getAttribute('style') || '') + ';max-height:none;overflow:visible;')
+      }
+      const wrapper = document.createElement('div')
+      wrapper.style.position = 'fixed'
+      wrapper.style.left = '-99999px'
+      wrapper.style.top = '0'
+      wrapper.style.width = `${el.scrollWidth}px`
+      wrapper.style.height = `${el.scrollHeight}px`
+      wrapper.style.overflow = 'auto'
+      wrapper.style.backgroundColor = '#ffffff'
+      wrapper.appendChild(clone)
+      document.body.appendChild(wrapper)
+      const canvas = await html2canvas(wrapper, {
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        backgroundColor: '#ffffff',
+        windowWidth: el.scrollWidth,
+        windowHeight: el.scrollHeight,
+      })
+      document.body.removeChild(wrapper)
+      const pdf = new jsPDF('p', 'mm', 'a4')
+      const pageW = pdf.internal.pageSize.getWidth()
+      const pageH = pdf.internal.pageSize.getHeight()
+      const margin = 10
+      const contentW = pageW - 2 * margin
+      const contentH = pageH - 2 * margin
+      const imgW = canvas.width
+      const imgH = canvas.height
+      const ratio = contentW / imgW
+      const scaledH = imgH * ratio
+      const totalPages = Math.ceil(scaledH / contentH) || 1
+      for (let page = 0; page < totalPages; page++) {
+        if (page > 0) pdf.addPage()
+        const srcY = (page * contentH / ratio)
+        const srcH = Math.min(contentH / ratio, imgH - srcY)
+        const sliceCanvas = document.createElement('canvas')
+        sliceCanvas.width = imgW
+        sliceCanvas.height = srcH
+        const ctx = sliceCanvas.getContext('2d')
+        if (ctx) {
+          ctx.fillStyle = '#ffffff'
+          ctx.fillRect(0, 0, imgW, srcH)
+          ctx.drawImage(canvas, 0, srcY, imgW, srcH, 0, 0, imgW, srcH)
+        }
+        const sliceData = sliceCanvas.toDataURL('image/png')
+        const drawH = Math.min(srcH * ratio, contentH)
+        pdf.addImage(sliceData, 'PNG', margin, margin, contentW, drawH)
+      }
+      pdf.save('mutual-aid-learnings.pdf')
+    } catch (e) {
+      console.error('PDF generation failed', e)
+    } finally {
+      setGeneratingPdf(false)
+    }
+  }, [])
+
   if (!canViewPage) return null
 
   return (
@@ -807,7 +958,19 @@ export default function StoriesPage() {
             Back to home
           </Link>
         </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="flex items-center gap-2"
+          onClick={handlePrintPdf}
+          disabled={generatingPdf}
+        >
+          <FileDown className="h-4 w-4" />
+          {generatingPdf ? 'Generating…' : 'Print / Save as PDF'}
+        </Button>
       </div>
+      <div ref={printRef} className="print-area bg-background rounded-lg">
       <h1 className="text-3xl font-bold mb-6 text-accent-foreground">Mutual Aid Learnings</h1>
 
       <div className="flex flex-col gap-6">
@@ -818,7 +981,7 @@ export default function StoriesPage() {
           <p className="text-xs text-muted-foreground">
             Use the controls on the map to view Total Sudan or filter by theme. Click a cluster or point to see stories for that state. Narrative, timeline, and story cards update below.
           </p>
-          <div className="relative h-[420px] w-full rounded-lg border overflow-hidden">
+          <div className="relative h-[420px] w-full rounded-lg border overflow-hidden" data-pdf-map-placeholder>
             <MapView
               center={[30, 14]}
               zoom={5}
@@ -828,7 +991,7 @@ export default function StoriesPage() {
               <SudanFitBounds />
               {mapGeoJson && (
                 <MapClusterLayer<MapPointProperties>
-                  data={mapGeoJson}
+                  data={mapGeoJson as GeoJSON.FeatureCollection<GeoJSON.Point, MapPointProperties>}
                   clusterRadius={50}
                   clusterMaxZoom={14}
                   clusterZoomMax={9}
@@ -1469,7 +1632,7 @@ export default function StoriesPage() {
                     Highlight Learning
                   </h2>
                   {/* When collapsed: show At a glance only. When expanded: show full content. */}
-                  <div className={`text-accent-foreground ${highlightedStoryExpanded ? 'p-6 max-h-[70vh] overflow-y-auto' : 'p-4'}`}>
+                  <div className={`text-accent-foreground ${highlightedStoryExpanded ? 'p-6 max-h-[70vh] overflow-y-auto' : 'p-4'}`} data-pdf-highlight-content>
                     {loadingHighlighted ? (
                       <p className="text-muted-foreground py-4 text-center text-sm">
                         Loading…
@@ -1521,6 +1684,15 @@ export default function StoriesPage() {
           </div>
         )}
       </div>
+      </div>
     </div>
+  )
+}
+
+export default function StoriesPage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center min-h-[400px] text-muted-foreground">Loading…</div>}>
+      <StoriesContent />
+    </Suspense>
   )
 }

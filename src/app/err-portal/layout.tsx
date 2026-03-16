@@ -67,6 +67,7 @@ export default function ErrPortalLayout({
   const canViewF2 = can('f2_view_page')
   const canViewF3 = can('f3_view_page')
   const canViewF4F5 = can('f4_f5_view_page')
+  const canViewLearnings = can('learnings_view_page')
   const canViewProjectManagement = can('management_view_page')
   const canViewUserManagement = can('users_view_page')
   const canViewRooms = can('rooms_view_page')
@@ -119,7 +120,7 @@ export default function ErrPortalLayout({
       label: t('err:dashboard'),
       icon: <BarChart2 className="h-5 w-5" />
     }] : []),
-    ...(canViewF4F5 ? [{
+    ...(canViewLearnings ? [{
       href: '/err-portal/stories',
       label: 'Mutual Aid Learnings',
       icon: <BookMarked className="h-5 w-5" />
