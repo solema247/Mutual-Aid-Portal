@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
+import { ensureReportsTranslated } from '@/lib/translateReportCache'
 
 const OVERDUE_DAYS_AFTER_TRANSFER = 32
 
@@ -30,13 +31,15 @@ function computeOverdue(
 }
 
 export async function GET(
-  _req: Request,
+  req: Request,
   { params }: { params: { id: string } }
 ) {
   try {
     const supabase = getSupabaseRouteClient()
     const id = params.id
     if (!id) return NextResponse.json({ error: 'Invalid id' }, { status: 400 })
+    const locale = new URL(req.url).searchParams.get('locale')?.toLowerCase() ?? ''
+    const useEnCache = locale === 'en'
 
     // Check if this is a historical project
     const isHistorical = id.startsWith('historical_')
@@ -292,15 +295,40 @@ export async function GET(
         expenses: expensesBySummary[s.id] || []
       }))
 
-      // Load F5 reports for this project
+      // Load F5 reports for this project (include _en cache columns when present)
       const { data: f5Reports, error: f5Err } = await supabase
         .from('err_program_report')
-        .select('id, report_date, positive_changes, negative_results, unexpected_results, lessons_learned, suggestions, reporting_person, created_at, is_draft')
+        .select('id, report_date, positive_changes, negative_results, unexpected_results, lessons_learned, suggestions, reporting_person, created_at, is_draft, language, positive_changes_en, negative_results_en, unexpected_results_en, lessons_learned_en, suggestions_en')
         .eq('project_id', id)
         .order('created_at', { ascending: false })
       if (f5Err) throw f5Err
 
       const reportIds = (f5Reports || []).map((r: any) => r.id)
+      if (useEnCache && reportIds.length > 0) {
+        try {
+          await ensureReportsTranslated(supabase, reportIds)
+        } catch (e) {
+          console.error('[overview/project] ensureReportsTranslated failed', e)
+        }
+        if (reportIds.length > 0) {
+          const { data: refetched } = await supabase
+            .from('err_program_report')
+            .select('id, positive_changes_en, negative_results_en, unexpected_results_en, lessons_learned_en, suggestions_en')
+            .in('id', reportIds)
+          const enByReport = new Map((refetched ?? []).map((x: any) => [x.id, x]))
+          for (const r of f5Reports || []) {
+            const en = enByReport.get(r.id)
+            if (en) {
+              r.positive_changes_en = en.positive_changes_en
+              r.negative_results_en = en.negative_results_en
+              r.unexpected_results_en = en.unexpected_results_en
+              r.lessons_learned_en = en.lessons_learned_en
+              r.suggestions_en = en.suggestions_en
+            }
+          }
+        }
+      }
+
       let reachByReport: Record<string, any[]> = {}
       if (reportIds.length) {
         const { data: reach } = await supabase
@@ -314,10 +342,30 @@ export async function GET(
         }
       }
 
-      const f5ReportsWithReach = (f5Reports || []).map((r: any) => ({
-        ...r,
-        reach: reachByReport[r.id] || []
-      }))
+      const f5ReportsWithReach = (f5Reports || []).map((r: any) => {
+        const reach = reachByReport[r.id] || []
+        const isAr = (r.language ?? '').toLowerCase() === 'ar'
+        const useEn = useEnCache && isAr
+        return {
+          id: r.id,
+          report_date: r.report_date,
+          reporting_person: r.reporting_person,
+          created_at: r.created_at,
+          is_draft: r.is_draft,
+          language: r.language,
+          positive_changes: useEn && r.positive_changes_en != null ? r.positive_changes_en : r.positive_changes,
+          negative_results: useEn && r.negative_results_en != null ? r.negative_results_en : r.negative_results,
+          unexpected_results: useEn && r.unexpected_results_en != null ? r.unexpected_results_en : r.unexpected_results,
+          lessons_learned: useEn && r.lessons_learned_en != null ? r.lessons_learned_en : r.lessons_learned,
+          suggestions: useEn && r.suggestions_en != null ? r.suggestions_en : r.suggestions,
+          reach: reach.map((re: any) => ({
+            ...re,
+            location: useEn && re.location_en != null ? re.location_en : re.location,
+            activity_name: useEn && re.activity_name_en != null ? re.activity_name_en : re.activity_name,
+            activity_goal: useEn && re.activity_goal_en != null ? re.activity_goal_en : re.activity_goal,
+          })),
+        }
+      })
 
       // Load F4 file attachments
       const f4FileAttachments: any[] = []

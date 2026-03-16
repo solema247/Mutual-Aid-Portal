@@ -15,6 +15,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { useAllowedFunctions } from '@/hooks/useAllowedFunctions'
+import { useTranslation } from 'react-i18next'
 
 interface ReachRow {
   id?: string
@@ -35,6 +36,7 @@ interface F5Report {
   lessons_learned: string | null
   suggestions: string | null
   reach?: ReachRow[]
+  language?: string
 }
 
 interface Project {
@@ -89,6 +91,7 @@ export default function StoryDetailPage() {
   const fromState = searchParams.get('fromState')
   const fromTheme = searchParams.get('fromTheme')
   const { can } = useAllowedFunctions()
+  const { i18n } = useTranslation()
   const canViewPage = can('f4_f5_view_page')
 
   const [data, setData] = useState<ProjectDetail | null>(null)
@@ -109,8 +112,10 @@ export default function StoryDetailPage() {
     if (!projectId) return
     setLoading(true)
     setNotFound(false)
+    const isEn = i18n.language === 'en' || i18n.language.startsWith('en-')
+    const localeQ = isEn ? '?locale=en' : ''
     try {
-      const res = await fetch(`/api/overview/project/${projectId}`)
+      const res = await fetch(`/api/overview/project/${projectId}${localeQ}`)
       if (res.status === 404) {
         setNotFound(true)
         setData(null)
@@ -136,7 +141,7 @@ export default function StoryDetailPage() {
     } finally {
       setLoading(false)
     }
-  }, [projectId])
+  }, [projectId, i18n.language])
 
   useEffect(() => {
     if (!canViewPage) {
@@ -165,10 +170,11 @@ export default function StoryDetailPage() {
     )
   }
 
-  const project = data.project
+  const detail = data
+  const project = detail.project
   const room = project.emergency_rooms
   const errName = room?.name || room?.name_ar || room?.err_code || null
-  const latestReport = data.f5Reports[0] ?? null
+  const latestReport = detail.f5Reports[0] ?? null
   const title = project.locality || project.state || 'Story'
 
   const atGlanceItems = [
@@ -267,30 +273,30 @@ export default function StoryDetailPage() {
 
       {latestReport?.reach && latestReport.reach.length > 0 && (
         <Card className="mt-8">
-          <CardHeader>
+          <CardHeader className="py-2 px-4">
             <CardTitle className="text-base">Where we worked</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="pt-0 pb-3 px-4 overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Location</TableHead>
-                  <TableHead>Activity</TableHead>
-                  <TableHead>Goal</TableHead>
-                  <TableHead className="text-right">Individuals</TableHead>
-                  <TableHead className="text-right">Households</TableHead>
+                  <TableHead className="h-8 py-1.5 px-2 text-xs">Location</TableHead>
+                  <TableHead className="h-8 py-1.5 px-2 text-xs">Activity</TableHead>
+                  <TableHead className="h-8 py-1.5 px-2 text-xs">Goal</TableHead>
+                  <TableHead className="h-8 py-1.5 px-2 text-right text-xs">Individuals</TableHead>
+                  <TableHead className="h-8 py-1.5 px-2 text-right text-xs">Households</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {latestReport.reach.map((r, i) => (
                   <TableRow key={r.id ?? i}>
-                    <TableCell>{r.location ?? '—'}</TableCell>
-                    <TableCell>{r.activity_name ?? '—'}</TableCell>
-                    <TableCell>{r.activity_goal ?? '—'}</TableCell>
-                    <TableCell className="text-right">
+                    <TableCell className="p-2 text-xs">{r.location ?? '—'}</TableCell>
+                    <TableCell className="p-2 text-xs">{r.activity_name ?? '—'}</TableCell>
+                    <TableCell className="p-2 text-xs">{r.activity_goal ?? '—'}</TableCell>
+                    <TableCell className="p-2 text-right text-xs">
                       {r.individual_count != null ? r.individual_count.toLocaleString() : '—'}
                     </TableCell>
-                    <TableCell className="text-right">
+                    <TableCell className="p-2 text-right text-xs">
                       {r.household_count != null ? r.household_count.toLocaleString() : '—'}
                     </TableCell>
                   </TableRow>

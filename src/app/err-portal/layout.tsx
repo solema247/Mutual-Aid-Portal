@@ -109,11 +109,6 @@ export default function ErrPortalLayout({
       label: 'Report Tracker',
       icon: <BarChart3 className="h-5 w-5" />
     }] : []),
-    ...(canViewF4F5 ? [{
-      href: '/err-portal/stories',
-      label: 'Mutual Aid Stories',
-      icon: <BookMarked className="h-5 w-5" />
-    }] : []),
     ...(canViewProjectManagement ? [{
       href: '/err-portal/project-management',
       label: t('err:project_management'),
@@ -123,6 +118,11 @@ export default function ErrPortalLayout({
       href: '/err-portal/dashboard',
       label: t('err:dashboard'),
       icon: <BarChart2 className="h-5 w-5" />
+    }] : []),
+    ...(canViewF4F5 ? [{
+      href: '/err-portal/stories',
+      label: 'Mutual Aid Learnings',
+      icon: <BookMarked className="h-5 w-5" />
     }] : []),
     ...(canViewRooms ? [{
       href: '/err-portal/room-management',

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { getUserStateAccess } from '@/lib/userStateAccess'
 import { getActivityAndCategoryLists } from '@/lib/plannedActivitiesExpenses'
+import { ensureReportsTranslated } from '@/lib/translateReportCache'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -126,8 +127,8 @@ function getOtherLabels(
 }
 
 /**
- * GET /api/stories/cards?state=Kassala | ?theme=community-kitchen
- * Returns story cards for Level 1. Requires state or theme; respects getUserStateAccess.
+ * GET /api/stories/cards?state=Kassala | ?theme=community-kitchen | (no params = Total Sudan)
+ * Returns story cards. No params = all Sudan (respects getUserStateAccess).
  */
 export async function GET(request: Request) {
   try {
@@ -135,14 +136,9 @@ export async function GET(request: Request) {
     const { allowedStateNames } = await getUserStateAccess()
     const { searchParams } = new URL(request.url)
     const stateParam = searchParams.get('state')?.trim() || null
-    const themeParam = searchParams.get('theme')?.trim() || null
-
-    if (!stateParam && !themeParam) {
-      return NextResponse.json(
-        { summary: null, cards: [] },
-        { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } }
-      )
-    }
+    const themeParams = searchParams.getAll('theme').map((t) => t?.trim()).filter(Boolean)
+    const locale = searchParams.get('locale')?.toLowerCase() ?? ''
+    const useEnCache = locale === 'en'
 
     let projectsQuery = supabase
       .from('err_projects')
@@ -167,13 +163,14 @@ export async function GET(request: Request) {
     }
 
     let filtered = (projects || []) as any[]
-    if (themeParam) {
+    if (themeParams.length > 0) {
+      const themeSlugs = new Set(themeParams.map((t) => slugify(t)))
       filtered = filtered.filter((p) => {
         const { expense_category_list } = getActivityAndCategoryLists(
           p.planned_activities,
           null
         )
-        return expense_category_list.some((label) => slugify(String(label).trim()) === themeParam)
+        return expense_category_list.some((label) => themeSlugs.has(slugify(String(label).trim())))
       })
     }
 
@@ -186,10 +183,13 @@ export async function GET(request: Request) {
 
     const projectIds = filtered.map((p) => p.id)
 
-    // Latest F5 report per project (by created_at desc)
+    // Latest F5 report per project (by created_at desc); include _en for cache when needed
+    const reportSelect = useEnCache
+      ? 'id, project_id, report_date, reporting_person, positive_changes, positive_changes_en, created_at, language'
+      : 'id, project_id, report_date, reporting_person, positive_changes, created_at, language'
     const { data: reports, error: reportsError } = await supabase
       .from('err_program_report')
-      .select('id, project_id, report_date, reporting_person, positive_changes, created_at')
+      .select(reportSelect)
       .in('project_id', projectIds)
       .order('created_at', { ascending: false })
 
@@ -207,10 +207,27 @@ export async function GET(request: Request) {
       if (pid && !latestReportByProject.has(pid)) latestReportByProject.set(pid, r)
     }
 
+    const reportIds = Array.from(latestReportByProject.values()).map((r: any) => r.id)
+    if (useEnCache && reportIds.length > 0) {
+      try {
+        await ensureReportsTranslated(supabase, reportIds)
+      } catch (e) {
+        console.error('[stories/cards] ensureReportsTranslated failed', e)
+      }
+      const { data: refetched } = await supabase
+        .from('err_program_report')
+        .select('id, positive_changes_en')
+        .in('id', reportIds)
+      const enByReport = new Map((refetched ?? []).map((x: any) => [x.id, x]))
+      for (const r of Array.from(latestReportByProject.values())) {
+        const en = enByReport.get(r.id)
+        if (en?.positive_changes_en != null) r.positive_changes_en = en.positive_changes_en
+      }
+    }
+
     // Only show story cards for projects that have F5 (F1 + F5 available)
     const filteredWithF5 = filtered.filter((p) => latestReportByProject.has(p.id))
 
-    const reportIds = Array.from(latestReportByProject.values()).map((r: any) => r.id)
     let reachByReport: Record<string, { individuals: number; households: number }> = {}
     if (reportIds.length > 0) {
       const { data: reachRows } = await supabase
@@ -257,13 +274,16 @@ export async function GET(request: Request) {
         state: p.state ?? null,
         locality: p.locality ?? null,
         objectives_snippet: snippet(p.project_objectives),
-        positive_changes_snippet: report ? snippet(report.positive_changes) : '',
-        report_date: report?.report_date ?? null, // err_program_report.report_date (used for scatter X axis)
+        positive_changes_snippet: report
+          ? snippet(useEnCache && report.positive_changes_en != null ? report.positive_changes_en : report.positive_changes)
+          : '',
+        report_date: report?.report_date ?? null,
         reporting_person: report?.reporting_person ?? null,
         beneficiaries_count,
         theme_labels,
         primary_category,
         spend_diversity,
+        language: report?.language ?? undefined,
       }
     })
 

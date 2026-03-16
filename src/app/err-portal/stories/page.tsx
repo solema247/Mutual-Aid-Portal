@@ -9,14 +9,16 @@ import {
   BookOpen,
   Brain,
   Briefcase,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  ChevronUp,
   Droplets,
   GraduationCap,
   HandCoins,
   Heart,
   Home,
-  LayoutGrid,
   Layers,
-  ScatterChart as ScatterChartIcon,
   ShoppingBasket,
   Sprout,
   Truck,
@@ -35,7 +37,17 @@ import {
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Map as MapView, MapControls, MapClusterLayer, MapPopup, useMap } from '@/components/ui/map'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
 import { useAllowedFunctions } from '@/hooks/useAllowedFunctions'
+import { useTranslation } from 'react-i18next'
+import { Checkbox } from '@/components/ui/checkbox'
 import {
   Select,
   SelectContent,
@@ -81,6 +93,7 @@ interface StoryCard {
   theme_labels: string[]
   primary_category?: string
   spend_diversity?: number
+  language?: string
 }
 
 interface TopCategory {
@@ -100,6 +113,44 @@ interface StoriesSummary {
   top_categories?: TopCategory[]
 }
 
+/** Full story detail from /api/overview/project/[id] */
+interface ReachRow {
+  id?: string
+  location?: string | null
+  activity_name?: string | null
+  activity_goal?: string | null
+  individual_count?: number | null
+  household_count?: number | null
+}
+interface F5ReportDetail {
+  id: string
+  report_date: string | null
+  reporting_person: string | null
+  positive_changes: string | null
+  negative_results: string | null
+  unexpected_results: string | null
+  lessons_learned: string | null
+  suggestions: string | null
+  reach?: ReachRow[]
+  /** When 'ar', UI may translate to EN when locale is en */
+  language?: string
+}
+interface ProjectDetailProject {
+  id: string
+  state?: string | null
+  locality?: string | null
+  project_objectives?: string | null
+  intended_beneficiaries?: string | null
+  estimated_beneficiaries?: number | null
+  estimated_timeframe?: string | null
+  emergency_rooms?: { name?: string; name_ar?: string; err_code?: string } | null
+}
+interface ProjectDetailData {
+  project: ProjectDetailProject
+  f5Reports: F5ReportDetail[]
+  is_historical: boolean
+}
+
 function formatDate(d: string | null | undefined): string {
   if (d == null || d === '') return ''
   try {
@@ -110,18 +161,18 @@ function formatDate(d: string | null | undefined): string {
   }
 }
 
-/** Fixed palette for scatter by primary category (distinct, accessible). */
+/** Pastel palette for timeline dots by primary category. */
 const CATEGORY_COLORS = [
-  '#0ea5e9', // sky
-  '#8b5cf6', // violet
-  '#059669', // emerald
-  '#dc2626', // red
-  '#d97706', // amber
-  '#0891b2', // cyan
-  '#7c3aed', // purple
-  '#2563eb', // blue
-  '#ca8a04', // yellow
-  '#4f46e5', // indigo
+  '#93c5fd', // pastel blue
+  '#c4b5fd', // pastel violet
+  '#86efac', // pastel green
+  '#fca5a5', // pastel red
+  '#fcd34d', // pastel amber
+  '#67e8f9', // pastel cyan
+  '#d8b4fe', // pastel purple
+  '#93c5fd', // pastel blue alt
+  '#fde047', // pastel yellow
+  '#a5b4fc', // pastel indigo
 ]
 
 function getCategoryColor(category: string, indexByCategory: Map<string, number>): string {
@@ -131,6 +182,166 @@ function getCategoryColor(category: string, indexByCategory: Map<string, number>
     indexByCategory.set(category, idx)
   }
   return CATEGORY_COLORS[idx % CATEGORY_COLORS.length]
+}
+
+function StorySection({
+  title,
+  content,
+}: {
+  title: string
+  content: string | null | undefined
+}) {
+  const text = content?.trim()
+  if (!text) return null
+  return (
+    <section className="mb-6">
+      <h3 className="text-lg font-semibold mb-2 text-accent-foreground">{title}</h3>
+      <p className="text-muted-foreground whitespace-pre-wrap text-sm leading-relaxed">{text}</p>
+    </section>
+  )
+}
+
+function HighlightedStoryContent({
+  data,
+  formatDate: fmt,
+  showOnlyAtGlance = false,
+}: {
+  data: ProjectDetailData
+  formatDate: (d: string | null | undefined) => string
+  showOnlyAtGlance?: boolean
+}) {
+  const project = data.project
+  const room = project.emergency_rooms
+  const errName = room?.name || room?.name_ar || room?.err_code || null
+  const latestReport = data.f5Reports[0] ?? null
+  const title = project.locality || project.state || 'Story'
+
+  const atGlanceItems: { label: string; value: string }[] = []
+  if (project.estimated_beneficiaries != null) {
+    atGlanceItems.push({
+      label: 'Beneficiaries',
+      value: project.estimated_beneficiaries.toLocaleString(),
+    })
+  }
+  if (project.estimated_timeframe) {
+    atGlanceItems.push({ label: 'Timeframe', value: project.estimated_timeframe })
+  }
+  if (latestReport?.reach?.length) {
+    const totalIndividuals = latestReport.reach.reduce(
+      (s, r) => s + (r.individual_count ?? 0),
+      0
+    )
+    const totalHouseholds = latestReport.reach.reduce(
+      (s, r) => s + (r.household_count ?? 0),
+      0
+    )
+    if (totalIndividuals > 0) {
+      atGlanceItems.push({
+        label: 'Reach (individuals)',
+        value: totalIndividuals.toLocaleString(),
+      })
+    }
+    if (totalHouseholds > 0) {
+      atGlanceItems.push({
+        label: 'Households',
+        value: totalHouseholds.toLocaleString(),
+      })
+    }
+    atGlanceItems.push({
+      label: 'Locations',
+      value: String(new Set(latestReport.reach.map((r) => r.location).filter(Boolean)).size),
+    })
+  }
+
+  return (
+    <div className="space-y-6">
+      <header>
+        <h3 className="text-xl font-bold text-accent-foreground">{title}</h3>
+        <p className="text-sm text-muted-foreground mt-1">
+          {[project.state, project.locality].filter(Boolean).join(' · ')}
+          {errName ? ` · ${errName}` : ''}
+        </p>
+        {latestReport && (
+          <p className="text-sm text-muted-foreground mt-1">
+            Report: {fmt(latestReport.report_date)}
+            {latestReport.reporting_person ? ` · ${latestReport.reporting_person}` : ''}
+          </p>
+        )}
+      </header>
+
+      {atGlanceItems.length > 0 && (
+        <Card className="rounded-none border-0 shadow-md bg-sidebar text-sidebar-foreground py-0 gap-0">
+          <CardHeader className="py-2 px-4">
+            <CardTitle className="text-base text-white">At a glance</CardTitle>
+          </CardHeader>
+          <CardContent className="pt-0 px-4 pb-3">
+            <div className="flex flex-wrap gap-x-4 gap-y-1 text-white text-sm">
+              {atGlanceItems.map(({ label, value }) => (
+                <div key={label}>
+                  <span className="text-white/80">{label}: </span>
+                  <span className="font-medium">{value}</span>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {!showOnlyAtGlance && (
+        <>
+      <StorySection
+        title="What we set out to do"
+        content={project.project_objectives || project.intended_beneficiaries}
+      />
+      {latestReport && (
+        <>
+          <StorySection title="What changed" content={latestReport.positive_changes} />
+          <StorySection title="Challenges" content={latestReport.negative_results} />
+          <StorySection title="Unexpected results" content={latestReport.unexpected_results} />
+          <StorySection title="Lessons learned" content={latestReport.lessons_learned} />
+          <StorySection title="Suggestions" content={latestReport.suggestions} />
+        </>
+      )}
+
+      {latestReport?.reach && latestReport.reach.length > 0 && (
+        <Card className="rounded-none border-0 shadow-md bg-sidebar text-sidebar-foreground">
+          <CardHeader className="py-2 px-4">
+            <CardTitle className="text-base text-white">Where we worked</CardTitle>
+          </CardHeader>
+          <CardContent className="pt-0 pb-3 px-4 overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow className="border-sidebar-foreground/20 hover:bg-transparent">
+                  <TableHead className="h-8 py-1.5 px-2 text-white font-semibold text-xs">Location</TableHead>
+                  <TableHead className="h-8 py-1.5 px-2 text-white font-semibold text-xs">Activity</TableHead>
+                  <TableHead className="h-8 py-1.5 px-2 text-white font-semibold text-xs">Goal</TableHead>
+                  <TableHead className="h-8 py-1.5 px-2 text-right text-white font-semibold text-xs">Individuals</TableHead>
+                  <TableHead className="h-8 py-1.5 px-2 text-right text-white font-semibold text-xs">Households</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {latestReport.reach.map((r, i) => (
+                  <TableRow key={r.id ?? i} className="border-white/20 text-white hover:bg-white/10">
+                    <TableCell className="p-2 text-xs text-white">{r.location ?? '—'}</TableCell>
+                    <TableCell className="p-2 text-xs text-white">{r.activity_name ?? '—'}</TableCell>
+                    <TableCell className="p-2 text-xs text-white">{r.activity_goal ?? '—'}</TableCell>
+                    <TableCell className="p-2 text-right text-xs text-white">
+                      {r.individual_count != null ? r.individual_count.toLocaleString() : '—'}
+                    </TableCell>
+                    <TableCell className="p-2 text-right text-xs text-white">
+                      {r.household_count != null ? r.household_count.toLocaleString() : '—'}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
+        </>
+      )}
+    </div>
+  )
 }
 
 /** Icons for narrative "Where support went" by sector name (sector_name_en). */
@@ -162,7 +373,32 @@ function getSectorIcon(category: string): LucideIcon {
   return SECTOR_ICONS[key] ?? Layers
 }
 
-type ViewMode = 'cards' | 'scatter'
+/**
+ * Spend diversity: 1 - Herfindahl index.
+ * 0 = all spend in one category (concentrated), 1 = perfectly even across categories.
+ */
+function getSpendDiversityFromCategories(
+  topCategories: { total_usd: number }[],
+  totalUsd?: number
+): number | null {
+  if (topCategories.length === 0) return null
+  const total = totalUsd ?? topCategories.reduce((s, tc) => s + tc.total_usd, 0)
+  if (total <= 0) return null
+  let herfindahl = 0
+  for (const tc of topCategories) {
+    const share = tc.total_usd / total
+    herfindahl += share * share
+  }
+  return Math.min(1, Math.max(0, 1 - herfindahl))
+}
+
+/** Plain-English sentence describing how evenly spend was spread across sectors (diversity 0–1). */
+function spendDiversityInWords(diversity: number): string {
+  if (diversity >= 0.85) return 'Spend was spread fairly evenly across the sectors above.'
+  if (diversity >= 0.6) return 'Spend was relatively well spread across several sectors.'
+  if (diversity >= 0.35) return 'Spend was somewhat concentrated in a few main sectors.'
+  return 'Spend was highly concentrated in one or two sectors.'
+}
 
 /** Ray-casting point-in-polygon: ring is array of [lng, lat]. */
 function pointInPolygon(px: number, py: number, ring: [number, number][]): boolean {
@@ -219,7 +455,10 @@ export default function StoriesPage() {
 
   const mode = (searchParams.get('mode') === 'theme' ? 'theme' : 'state') as Mode
   const stateParam = searchParams.get('state')?.trim() || null
-  const themeParam = searchParams.get('theme')?.trim() || null
+  const themeParams = useMemo(
+    () => searchParams.getAll('theme').map((t) => t?.trim()).filter(Boolean),
+    [searchParams]
+  )
 
   const [options, setOptions] = useState<{
     states: StateOption[]
@@ -227,10 +466,10 @@ export default function StoriesPage() {
   } | null>(null)
   const [summary, setSummary] = useState<StoriesSummary | null>(null)
   const [cards, setCards] = useState<StoryCard[]>([])
+  /** Cards with snippets translated AR→EN when locale is EN; otherwise same as cards */
+  const [displayCards, setDisplayCards] = useState<StoryCard[]>([])
   const [loadingOptions, setLoadingOptions] = useState(true)
   const [loadingCards, setLoadingCards] = useState(false)
-  const [viewMode, setViewMode] = useState<ViewMode>('scatter')
-
   const [projectsGeoJson, setProjectsGeoJson] = useState<GeoJSON.FeatureCollection<GeoJSON.Point> | null>(null)
   const [statesGeoJson, setStatesGeoJson] = useState<GeoJSON.FeatureCollection<GeoJSON.Polygon> | null>(null)
   type MapPointProperties = {
@@ -250,6 +489,98 @@ export default function StoriesPage() {
     features: Array<GeoJSON.Feature<GeoJSON.Point, MapPointProperties>>
   } | null>(null)
   const [baseMapStyle, setBaseMapStyle] = useState<BaseMapStyleKey>('carto')
+  const [highlightedCard, setHighlightedCard] = useState<StoryCard | null>(null)
+  const [highlightedDetail, setHighlightedDetail] = useState<ProjectDetailData | null>(null)
+  /** When locale is EN and report is AR, we translate and show this; otherwise same as highlightedDetail */
+  const [displayDetail, setDisplayDetail] = useState<ProjectDetailData | null>(null)
+  const [loadingHighlighted, setLoadingHighlighted] = useState(false)
+  const { i18n } = useTranslation()
+  const [highlightedStoryExpanded, setHighlightedStoryExpanded] = useState(true)
+  const [pendingHighlightProjectId, setPendingHighlightProjectId] = useState<string | null>(null)
+  const carouselRef = useRef<HTMLDivElement>(null)
+
+  // Fetch full story detail when highlighted card changes (server returns EN when locale=en)
+  const isEnLocale = i18n.language === 'en' || i18n.language.startsWith('en-')
+  useEffect(() => {
+    if (!highlightedCard?.project_id) {
+      setHighlightedDetail(null)
+      setDisplayDetail(null)
+      return
+    }
+    let cancelled = false
+    setLoadingHighlighted(true)
+    setHighlightedDetail(null)
+    const localeQ = isEnLocale ? '?locale=en' : ''
+    fetch(`/api/overview/project/${highlightedCard.project_id}${localeQ}`)
+      .then((res) => {
+        if (cancelled) return res
+        if (res.status === 404) return null
+        return res.json()
+      })
+      .then((json) => {
+        if (cancelled) return
+        if (json == null || json.is_historical) {
+          setHighlightedDetail(null)
+          return
+        }
+        const payload = {
+          project: json.project ?? {},
+          f5Reports: json.f5Reports ?? [],
+          is_historical: false,
+        }
+        setHighlightedDetail(payload)
+        setDisplayDetail(payload)
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setHighlightedDetail(null)
+          setDisplayDetail(null)
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingHighlighted(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [highlightedCard?.project_id, isEnLocale])
+
+  // When cards load or change: honor pending highlight (map/cluster click), else keep or random
+  useEffect(() => {
+    if (cards.length === 0) {
+      setHighlightedCard(null)
+      setPendingHighlightProjectId(null)
+      return
+    }
+    if (pendingHighlightProjectId) {
+      const card = cards.find((c) => c.project_id === pendingHighlightProjectId)
+      if (card) {
+        setHighlightedCard(card)
+        setHighlightedStoryExpanded(true)
+      } else {
+        setHighlightedCard(cards[Math.floor(Math.random() * cards.length)])
+      }
+      setPendingHighlightProjectId(null)
+      return
+    }
+    setHighlightedCard((prev) =>
+      prev && cards.some((c) => c.project_id === prev.project_id)
+        ? prev
+        : cards[Math.floor(Math.random() * cards.length)]
+    )
+  }, [cards])
+
+  const CAROUSEL_CARD_WIDTH = 280
+  const CAROUSEL_GAP = 16
+  const carouselScroll = (direction: 'left' | 'right') => {
+    const el = carouselRef.current
+    if (!el) return
+    const step = CAROUSEL_CARD_WIDTH + CAROUSEL_GAP
+    el.scrollBy({
+      left: direction === 'left' ? -step : step,
+      behavior: 'smooth',
+    })
+  }
 
   useEffect(() => {
     if (!canViewPage) {
@@ -278,60 +609,53 @@ export default function StoriesPage() {
     }
   }, [canViewPage, router])
 
-  // Set default selection when options load and nothing is selected
+  // Fix invalid state/theme in URL only; no state = Total Sudan (default view)
   useEffect(() => {
     if (loadingOptions || !options) return
     const hasState = stateParam && options.states.some((s) => s.state === stateParam)
-    const hasTheme = themeParam && options.themes.some((t) => t.id === themeParam)
-    if (mode === 'state' && !hasState && options.states.length > 0) {
-      const first = options.states[0].state
-      router.replace(`/err-portal/stories?mode=state&state=${encodeURIComponent(first)}`)
+    if (mode === 'state' && stateParam && !hasState && options.states.length > 0) {
+      router.replace(`/err-portal/stories?mode=state&state=${encodeURIComponent(options.states[0].state)}`)
       return
     }
-    if (mode === 'theme' && themeParam && !hasTheme && options.themes.length > 0) {
-      const first = options.themes[0].id
-      router.replace(`/err-portal/stories?mode=theme&theme=${encodeURIComponent(first)}`)
+    const validThemes = themeParams.filter((id) => options.themes.some((t) => t.id === id))
+    if (themeParams.length !== validThemes.length) {
+      const p = new URLSearchParams()
+      p.set('mode', mode)
+      if (stateParam) p.set('state', stateParam)
+      validThemes.forEach((id) => p.append('theme', id))
+      router.replace(`/err-portal/stories?${p.toString()}`)
     }
-  }, [loadingOptions, options, mode, stateParam, themeParam, router])
+  }, [loadingOptions, options, mode, stateParam, themeParams, router])
 
   const fetchCards = useCallback(() => {
-    if (stateParam) {
-      setLoadingCards(true)
+    if (mode !== 'state' && themeParams.length === 0) {
+      setCards([])
       setSummary(null)
-      fetch(`/api/stories/cards?state=${encodeURIComponent(stateParam)}`)
-        .then((res) => res.json())
-        .then((data) => {
-          const cardList = data?.cards ?? (Array.isArray(data) ? data : [])
-          setCards(cardList)
-          setSummary(data?.summary ?? null)
-        })
-        .catch(() => {
-          setCards([])
-          setSummary(null)
-        })
-        .finally(() => setLoadingCards(false))
+      setDisplayCards([])
       return
     }
-    if (themeParam) {
-      setLoadingCards(true)
-      setSummary(null)
-      fetch(`/api/stories/cards?theme=${encodeURIComponent(themeParam)}`)
-        .then((res) => res.json())
-        .then((data) => {
-          const cardList = data?.cards ?? (Array.isArray(data) ? data : [])
-          setCards(cardList)
-          setSummary(data?.summary ?? null)
-        })
-        .catch(() => {
-          setCards([])
-          setSummary(null)
-        })
-        .finally(() => setLoadingCards(false))
-      return
-    }
-    setCards([])
+    setLoadingCards(true)
     setSummary(null)
-  }, [stateParam, themeParam])
+    const p = new URLSearchParams()
+    if (stateParam) p.set('state', stateParam)
+    themeParams.forEach((id) => p.append('theme', id))
+    if (isEnLocale) p.set('locale', 'en')
+    const query = p.toString()
+    fetch(`/api/stories/cards${query ? `?${query}` : ''}`)
+      .then((res) => res.json())
+      .then((data) => {
+        const cardList = data?.cards ?? (Array.isArray(data) ? data : [])
+        setCards(cardList)
+        setDisplayCards(cardList)
+        setSummary(data?.summary ?? null)
+      })
+      .catch(() => {
+        setCards([])
+        setDisplayCards([])
+        setSummary(null)
+      })
+      .finally(() => setLoadingCards(false))
+  }, [stateParam, themeParams, mode, isEnLocale])
 
   useEffect(() => {
     fetchCards()
@@ -362,10 +686,8 @@ export default function StoriesPage() {
   }, [])
 
   const setMode = (m: Mode) => {
-    if (m === 'state' && (options?.states.length ?? 0) > 0) {
-      router.replace(
-        `/err-portal/stories?mode=state&state=${encodeURIComponent(options!.states[0].state)}`
-      )
+    if (m === 'state') {
+      router.replace('/err-portal/stories?mode=state')
       return
     }
     if (m === 'theme' && (options?.themes.length ?? 0) > 0) {
@@ -378,45 +700,97 @@ export default function StoriesPage() {
   }
 
   const selectState = (state: string) => {
-    router.replace(
-      `/err-portal/stories?mode=state&state=${encodeURIComponent(state)}`
-    )
+    const p = new URLSearchParams()
+    p.set('mode', 'state')
+    p.set('state', state)
+    themeParams.forEach((id) => p.append('theme', id))
+    router.replace(`/err-portal/stories?${p.toString()}`)
   }
 
-  const selectTheme = (themeId: string) => {
-    router.replace(
-      `/err-portal/stories?mode=theme&theme=${encodeURIComponent(themeId)}`
-    )
+  const setThemeFilter = (themeIds: string[]) => {
+    const p = new URLSearchParams()
+    p.set('mode', 'state')
+    if (stateParam) p.set('state', stateParam)
+    themeIds.forEach((id) => p.append('theme', id))
+    router.replace(`/err-portal/stories?${p.toString()}`)
   }
 
-  const hasSelection = !!stateParam || !!themeParam
+  const [themeDropdownOpen, setThemeDropdownOpen] = useState(false)
+  const themeDropdownRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!themeDropdownOpen) return
+    const handle = (e: MouseEvent) => {
+      if (themeDropdownRef.current?.contains(e.target as Node)) return
+      setThemeDropdownOpen(false)
+    }
+    document.addEventListener('click', handle)
+    return () => document.removeEventListener('click', handle)
+  }, [themeDropdownOpen])
+
+  const hasSelection = mode === 'state' || themeParams.length > 0
   const fromQuery =
     (stateParam && `fromState=${encodeURIComponent(stateParam)}`) ||
-    (themeParam && `fromTheme=${encodeURIComponent(themeParam)}`) ||
+    (themeParams.length > 0 && `fromTheme=${encodeURIComponent(themeParams[0]!)}`) ||
     ''
 
-  const { scatterPoints, categoryColorIndex } = useMemo(() => {
+  const mapGeoJson = useMemo(() => {
+    if (!projectsGeoJson?.features?.length) return projectsGeoJson
+    if (cards.length === 0) return projectsGeoJson
+    const ids = new Set(cards.map((c) => c.project_id))
+    return {
+      ...projectsGeoJson,
+      features: projectsGeoJson.features.filter((f) =>
+        ids.has((f.properties as MapPointProperties)?.project_id ?? '')
+      ),
+    }
+  }, [projectsGeoJson, cards])
+
+  const { timelinePoints, categoryColorIndex, timelineYMax } = useMemo(() => {
     const indexByCategory = new Map<string, number>()
-    const points = cards
-      .filter((c) => c.report_date != null && c.report_date !== '')
-      .map((c) => {
-        const date = new Date(c.report_date!)
-        const ts = Number.isNaN(date.getTime()) ? 0 : date.getTime()
-        const spend_diversity = c.spend_diversity ?? 0
-        const primary_category = c.primary_category ?? c.theme_labels?.[0] ?? 'Other'
+    const withDate = cards.filter(
+      (c) => c.report_date != null && c.report_date !== ''
+    )
+    const byDate = new Map<number, StoryCard[]>()
+    for (const c of withDate) {
+      const date = new Date(c.report_date!)
+      const ts = Number.isNaN(date.getTime()) ? 0 : date.getTime()
+      if (!byDate.has(ts)) byDate.set(ts, [])
+      byDate.get(ts)!.push(c)
+    }
+    const points: Array<{
+      x: number
+      y: number
+      project_id: string
+      primary_category: string
+      name: string
+      report_date: string
+      locality: string
+    }> = []
+    for (const [ts, list] of [...byDate.entries()].sort((a, b) => a[0] - b[0])) {
+      list.forEach((c, i) => {
+        const primary_category =
+          c.primary_category ?? c.theme_labels?.[0] ?? 'Other'
         getCategoryColor(primary_category, indexByCategory)
-        return {
+        points.push({
           x: ts,
-          y: spend_diversity,
-          name: c.project_name || 'Unnamed project',
+          y: i,
           project_id: c.project_id,
           primary_category,
+          name: c.project_name || 'Unnamed project',
           report_date: formatDate(c.report_date),
           locality: [c.state, c.locality].filter(Boolean).join(' · ') || '—',
-          spend_diversity,
-        }
+        })
       })
-    return { scatterPoints: points, categoryColorIndex: indexByCategory }
+    }
+    const maxStack =
+      byDate.size > 0
+        ? Math.max(...[...byDate.values()].map((arr) => arr.length)) - 1
+        : 0
+    return {
+      timelinePoints: points,
+      categoryColorIndex: indexByCategory,
+      timelineYMax: Math.max(0, maxStack),
+    }
   }, [cards])
 
   if (!canViewPage) return null
@@ -434,7 +808,7 @@ export default function StoriesPage() {
           </Link>
         </Button>
       </div>
-      <h1 className="text-3xl font-bold mb-6 text-accent-foreground">Mutual Aid Stories</h1>
+      <h1 className="text-3xl font-bold mb-6 text-accent-foreground">Mutual Aid Learnings</h1>
 
       <div className="flex flex-col gap-6">
         {/* Row 1: map + narrative (or placeholders) */}
@@ -442,7 +816,7 @@ export default function StoriesPage() {
           {/* Map: half width on large screens */}
           <aside className="lg:w-1/2 shrink-0 space-y-3">
           <p className="text-xs text-muted-foreground">
-            Click a cluster or a point to see stories for that state. Narrative, scatter, and cards update below.
+            Use the controls on the map to view Total Sudan or filter by theme. Click a cluster or point to see stories for that state. Narrative, timeline, and story cards update below.
           </p>
           <div className="relative h-[420px] w-full rounded-lg border overflow-hidden">
             <MapView
@@ -452,9 +826,9 @@ export default function StoriesPage() {
               styles={BASE_MAP_STYLES[baseMapStyle]}
             >
               <SudanFitBounds />
-              {projectsGeoJson && (
+              {mapGeoJson && (
                 <MapClusterLayer<MapPointProperties>
-                  data={projectsGeoJson}
+                  data={mapGeoJson}
                   clusterRadius={50}
                   clusterMaxZoom={14}
                   clusterZoomMax={9}
@@ -482,10 +856,11 @@ export default function StoriesPage() {
                     setClusterPopup(null)
                     const props = feature.properties
                     if (props) {
+                      const projectId = props.project_id ?? ''
                       setSelectedClusterPoint({
                         coordinates,
                         properties: {
-                          project_id: props.project_id ?? '',
+                          project_id: projectId,
                           project_name: props.project_name ?? null,
                           state: props.state ?? null,
                           locality: props.locality ?? null,
@@ -493,6 +868,7 @@ export default function StoriesPage() {
                           total_usd: props.total_usd,
                         },
                       })
+                      setPendingHighlightProjectId(projectId)
                       if (props.state) {
                         const resolved =
                           options?.states?.some((s) => s.state === props.state)
@@ -531,12 +907,23 @@ export default function StoriesPage() {
                           : null].filter(Boolean).join(' · ')}
                       </p>
                     )}
-                    <Link
-                      href={`/err-portal/stories/${selectedClusterPoint.properties.project_id}${fromQuery ? `?${fromQuery}` : ''}`}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const id = selectedClusterPoint.properties.project_id
+                        const card = cards.find((c) => c.project_id === id)
+                        if (card) {
+                          setHighlightedCard(card)
+                          setHighlightedStoryExpanded(true)
+                        } else {
+                          setPendingHighlightProjectId(id)
+                          setHighlightedStoryExpanded(true)
+                        }
+                      }}
                       className="text-xs text-amber-200 hover:text-amber-100 hover:underline"
                     >
                       View story →
-                    </Link>
+                    </button>
                   </div>
                 </MapPopup>
               )}
@@ -567,12 +954,22 @@ export default function StoriesPage() {
                           parts.push(`$${usd.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`)
                         return (
                           <li key={id} className="text-xs">
-                            <Link
-                              href={`/err-portal/stories/${id}${fromQuery ? `?${fromQuery}` : ''}`}
-                              className="text-amber-200 hover:text-amber-100 hover:underline block"
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const card = cards.find((c) => c.project_id === id)
+                                if (card) {
+                                  setHighlightedCard(card)
+                                  setHighlightedStoryExpanded(true)
+                                } else {
+                                  setPendingHighlightProjectId(id)
+                                  setHighlightedStoryExpanded(true)
+                                }
+                              }}
+                              className="text-amber-200 hover:text-amber-100 hover:underline block w-full text-left"
                             >
                               {parts.join(' · ')} →
-                            </Link>
+                            </button>
                           </li>
                         )
                       })}
@@ -582,51 +979,93 @@ export default function StoriesPage() {
               )}
               <MapControls />
             </MapView>
+            <div className="absolute top-2 right-2 z-10 flex flex-col gap-1.5 items-end">
+              {mode === 'state' && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const p = new URLSearchParams()
+                    p.set('mode', 'state')
+                    themeParams.forEach((id) => p.append('theme', id))
+                    router.replace(`/err-portal/stories?${p.toString()}`)
+                  }}
+                  className={`flex h-7 w-[140px] items-center justify-center rounded-md border border-gray-600/50 bg-gray-900/90 px-2 text-xs text-gray-100 shadow-lg hover:bg-gray-800/90 ${!stateParam ? 'font-medium' : ''}`}
+                >
+                  Total Sudan
+                </button>
+              )}
+              <div className="relative" ref={themeDropdownRef}>
+                <button
+                  type="button"
+                  onClick={() => setThemeDropdownOpen((o) => !o)}
+                  className="flex h-7 w-[140px] items-center justify-between gap-1 rounded-md border border-gray-600/50 bg-gray-900/90 px-2 py-1 text-xs text-gray-100 shadow-lg hover:bg-gray-800/90"
+                >
+                  <span className="truncate">
+                    {themeParams.length === 0
+                      ? 'Themes: All'
+                      : themeParams.length === 1
+                        ? `Themes: ${options?.themes.find((t) => t.id === themeParams[0])?.label ?? themeParams[0]}`
+                        : `Themes: ${themeParams.length} selected`}
+                  </span>
+                  <ChevronDown className="h-3.5 w-3.5 shrink-0 text-gray-400" />
+                </button>
+                {themeDropdownOpen && (options?.themes.length ?? 0) > 0 && (
+                  <div className="absolute right-0 top-full z-50 mt-1 w-[140px] rounded-md border border-gray-600/50 bg-gray-900/95 p-1.5 shadow-lg">
+                    <div className="max-h-[200px] space-y-0.5 overflow-y-auto">
+                      <label className="flex cursor-pointer items-center gap-1.5 rounded px-1.5 py-1 text-xs text-gray-100 hover:bg-white/10 border-b border-gray-600/50 mb-0.5">
+                        <Checkbox
+                          checked={themeParams.length === options!.themes.length}
+                          onCheckedChange={(checked) => {
+                            setThemeFilter(checked ? options!.themes.map((t) => t.id) : [])
+                          }}
+                          className="border-gray-400 data-[state=checked]:bg-gray-100 data-[state=checked]:text-gray-900"
+                        />
+                        <span className="truncate font-medium">Select all</span>
+                      </label>
+                      {options!.themes.map((t) => (
+                        <label
+                          key={t.id}
+                          className="flex cursor-pointer items-center gap-1.5 rounded px-1.5 py-1 text-xs text-gray-100 hover:bg-white/10"
+                        >
+                          <Checkbox
+                            checked={themeParams.includes(t.id)}
+                            onCheckedChange={(checked) => {
+                              const next = checked
+                                ? [...themeParams, t.id]
+                                : themeParams.filter((id) => id !== t.id)
+                              setThemeFilter(next)
+                            }}
+                            className="border-gray-400 data-[state=checked]:bg-gray-100 data-[state=checked]:text-gray-900"
+                          />
+                          <span className="truncate">
+                            {t.label} ({t.project_count})
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
             <div className="absolute top-2 left-2 z-10">
               <Select value={baseMapStyle} onValueChange={(v) => setBaseMapStyle(v as BaseMapStyleKey)}>
-                <SelectTrigger className="w-[160px] h-8 text-xs bg-background/95 shadow-sm border">
+                <SelectTrigger className="h-7 w-[140px] text-xs bg-gray-900/90 text-gray-100 border-gray-600/50 shadow-lg hover:bg-gray-800/90 [&>svg]:text-gray-400">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="carto">Carto</SelectItem>
-                  <SelectItem value="openstreetmap">OpenStreetMap</SelectItem>
+                <SelectContent className="border-gray-600/50 bg-gray-900/95 text-gray-100">
+                  <SelectItem value="carto" className="text-xs focus:bg-white/10 focus:text-gray-100">Carto</SelectItem>
+                  <SelectItem value="openstreetmap" className="text-xs focus:bg-white/10 focus:text-gray-100">OpenStreetMap</SelectItem>
                 </SelectContent>
               </Select>
             </div>
           </div>
-          <p className="text-xs text-muted-foreground">
-            <button
-              type="button"
-              onClick={() => router.replace('/err-portal/stories?mode=theme')}
-              className="text-primary hover:underline"
-            >
-              Browse by theme
-            </button>
-          </p>
         </aside>
 
         {/* Main: narrative card or placeholders only (row 1) */}
         <main className="flex-1 min-w-0">
-          {mode === 'theme' && !themeParam && (options?.themes.length ?? 0) > 0 && (
-            <div className="mb-4">
-              <p className="text-sm text-muted-foreground mb-2">Select a theme:</p>
-              <div className="flex flex-wrap gap-2">
-                {options!.themes.map((t) => (
-                  <button
-                    key={t.id}
-                    type="button"
-                    onClick={() => selectTheme(t.id)}
-                    className="px-3 py-1.5 rounded-md text-sm bg-muted hover:bg-muted/80 transition-colors"
-                  >
-                    {t.label} ({t.project_count})
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
           {!hasSelection ? (
             <p className="text-muted-foreground">
-              {mode === 'theme' ? 'Select a theme above to see stories.' : 'Click a point on the map to see stories for that state.'}
+              Use the controls on the map to filter by theme, or click a cluster or point to see stories for that state.
             </p>
           ) : loadingCards ? (
             <p className="text-muted-foreground">Loading stories…</p>
@@ -635,10 +1074,58 @@ export default function StoriesPage() {
           ) : (
             <div className="space-y-6">
               {summary && summary.total_projects > 0 && (
-                <Card className="bg-muted/50">
-                  <CardContent className="pt-6 text-accent-foreground">
+                <Card className="bg-muted/50 min-h-[520px] flex flex-col">
+                  <CardContent className="pt-6 text-accent-foreground flex-1 min-h-0 overflow-y-auto">
                     <p className="text-base leading-relaxed">
-                      {mode === 'state' && stateParam && (
+                      {(mode === 'state' && !stateParam) || (mode === 'theme' && themeParams.length > 0) ? (
+                        <>
+                          Across <strong>Sudan</strong>,{' '}
+                          <strong>{summary.total_projects}</strong> project
+                          {summary.total_projects !== 1 ? 's are' : ' is'} sharing stories of support
+                          {summary.total_beneficiaries > 0 && (
+                            <>
+                              —reaching an estimated{' '}
+                              <strong>
+                                {summary.total_beneficiaries.toLocaleString()}
+                              </strong>{' '}
+                              people
+                            </>
+                          )}
+                          {summary.total_households > 0 && (
+                            <>
+                              {' '}
+                              across{' '}
+                              <strong>
+                                {summary.total_households.toLocaleString()}
+                              </strong>{' '}
+                              households
+                            </>
+                          )}
+                          {summary.locality_count > 0 && (
+                            <>
+                              {' '}
+                              in{' '}
+                              <strong>{summary.locality_count}</strong> localit
+                              {summary.locality_count !== 1 ? 'ies' : 'y'}
+                              {summary.localities.length > 0 && (
+                                <> ({summary.localities.slice(0, 8).join(', ')}
+                                  {summary.localities.length > 8 ? '…' : ''})</>
+                              )}
+                            </>
+                          )}
+                          {(summary.total_usd ?? 0) > 0 && (
+                            <>
+                              {' '}
+                              with{' '}
+                              <strong>
+                                ${summary.total_usd!.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                              </strong>{' '}
+                              in project value
+                            </>
+                          )}
+                          {(summary.top_categories?.length ?? 0) > 0 ? '.' : '.'}
+                        </>
+                      ) : mode === 'state' && stateParam ? (
                         <>
                           In <strong>{stateParam}</strong>,{' '}
                           <strong>{summary.total_projects}</strong> project
@@ -686,52 +1173,16 @@ export default function StoriesPage() {
                           )}
                           {(summary.top_categories?.length ?? 0) > 0 ? '.' : '.'}
                         </>
-                      )}
-                      {mode === 'theme' && themeParam && options?.themes.find((t) => t.id === themeParam) && (
+                      ) : null}
+                      {themeParams.length > 0 && options?.themes && (
                         <>
-                          In the{' '}
-                          <strong>
-                            {options.themes.find((t) => t.id === themeParam)!.label}
-                          </strong>{' '}
-                          theme, <strong>{summary.total_projects}</strong> project
-                          {summary.total_projects !== 1 ? 's are' : ' is'} sharing stories of support
-                          {summary.total_beneficiaries > 0 && (
-                            <>
-                              —reaching an estimated{' '}
-                              <strong>
-                                {summary.total_beneficiaries.toLocaleString()}
-                              </strong>{' '}
-                              people
-                            </>
-                          )}
-                          {summary.total_households > 0 && (
-                            <>
-                              {' '}
-                              across{' '}
-                              <strong>
-                                {summary.total_households.toLocaleString()}
-                              </strong>{' '}
-                              households
-                            </>
-                          )}
-                          {summary.locality_count > 0 && (
-                            <>
-                              {' '}
-                              across <strong>{summary.locality_count}</strong> localit
-                              {summary.locality_count !== 1 ? 'ies' : 'y'}
-                            </>
-                          )}
-                          {(summary.total_usd ?? 0) > 0 && (
-                            <>
-                              {' '}
-                              with{' '}
-                              <strong>
-                                ${summary.total_usd!.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
-                              </strong>{' '}
-                              in project value
-                            </>
-                          )}
-                          {(summary.top_categories?.length ?? 0) > 0 ? '.' : '.'}
+                          {' '}
+                          Filtered by:{' '}
+                          {themeParams
+                            .map((id) => options!.themes.find((t) => t.id === id)?.label ?? id)
+                            .filter(Boolean)
+                            .join(', ')}
+                          .
                         </>
                       )}
                     </p>
@@ -756,6 +1207,16 @@ export default function StoriesPage() {
                             )
                           })}
                         </ul>
+                        {(() => {
+                          const diversity = getSpendDiversityFromCategories(summary.top_categories!, summary.total_usd)
+                          return diversity != null ? (
+                            <p className="text-base text-muted-foreground mt-3">
+                              <strong className="text-accent-foreground">Spend diversity: {(diversity * 100).toFixed(0)}%.</strong>{' '}
+                              {spendDiversityInWords(diversity)}{' '}
+                              (0% means all spend in one sector; 100% means perfectly even spread.)
+                            </p>
+                          ) : null
+                        })()}
                       </>
                     )}
                   </CardContent>
@@ -766,67 +1227,45 @@ export default function StoriesPage() {
         </main>
         </div>
 
-        {/* Row 2: full-width scatter and cards (same width as map + narrative) */}
+        {/* Row 2: timeline + card carousel */}
         {hasSelection && !loadingCards && cards.length > 0 && (
-          <div className="w-full space-y-4">
-            <div className="flex items-center gap-2">
-              <Button
-                variant={viewMode === 'scatter' ? 'secondary' : 'ghost'}
-                size="sm"
-                onClick={() => setViewMode('scatter')}
-                className="gap-1.5"
-              >
-                <ScatterChartIcon className="h-4 w-4" />
-                Scatter
-              </Button>
-              <Button
-                variant={viewMode === 'cards' ? 'secondary' : 'ghost'}
-                size="sm"
-                onClick={() => setViewMode('cards')}
-                className="gap-1.5"
-              >
-                <LayoutGrid className="h-4 w-4" />
-                Cards
-              </Button>
-            </div>
-            {viewMode === 'scatter' ? (
-              <div className="rounded-lg border bg-card p-4">
-                {scatterPoints.length === 0 ? (
-                  <p className="text-muted-foreground py-8 text-center text-sm">
-                    No projects with report dates to show in the scatter view.
-                  </p>
-                ) : (
-                  <div className="h-[420px] w-full">
+          <div className="w-full space-y-6">
+            {/* Timeline: projects as dots by report date, colored by sector; same date = stacked */}
+            <div className="rounded-none border-0 bg-card shadow-md p-4">
+              <h2 className="text-xl font-semibold text-accent-foreground text-center mb-4">
+                Project Timeline
+              </h2>
+              {timelinePoints.length === 0 ? (
+                <p className="text-muted-foreground py-8 text-center text-sm">
+                  No projects with report dates to show on the timeline.
+                </p>
+              ) : (
+                <>
+                  <div className="h-[120px] w-full">
                     <ResponsiveContainer width="100%" height="100%">
-                      <ScatterChart margin={{ top: 16, right: 16, bottom: 24, left: 16 }}>
+                      <ScatterChart
+                        margin={{ top: 8, right: 16, bottom: 24, left: 16 }}
+                      >
                         <XAxis
                           type="number"
                           dataKey="x"
                           domain={['dataMin', 'dataMax']}
                           tickFormatter={(ts) => {
                             const d = new Date(ts)
-                            return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+                            return d.toLocaleDateString('en-GB', {
+                              day: 'numeric',
+                              month: 'short',
+                              year: 'numeric',
+                            })
                           }}
                           name="Report date"
-                          tick={{ fontSize: 11 }}
+                          tick={{ fontSize: 10 }}
                         />
                         <YAxis
                           type="number"
                           dataKey="y"
-                          name="Spend diversity"
-                          allowDecimals={true}
-                          axisLine={false}
-                          tick={{ fontSize: 11 }}
-                          domain={[0, 0.4]}
-                          tickCount={5}
-                          tickFormatter={(v) => {
-                            const n = Number(v)
-                            if (n <= 0.05) return 'Focused'
-                            if (n <= 0.15) return 'Mostly focused'
-                            if (n <= 0.25) return 'Mixed'
-                            if (n <= 0.35) return 'Spread out'
-                            return 'Very spread out'
-                          }}
+                          domain={[-0.5, timelineYMax + 0.5]}
+                          hide
                         />
                         <Tooltip
                           cursor={{ strokeDasharray: '3 3' }}
@@ -835,24 +1274,14 @@ export default function StoriesPage() {
                             const p = payload[0].payload as {
                               name: string
                               report_date: string
-                              y: number
-                              spend_diversity: number
                               primary_category: string
                               locality: string
                             }
-                            const d = p.spend_diversity ?? p.y
-                            const diversityLabel =
-                              d <= 0.2 ? 'focused' : d >= 0.7 ? 'spread out' : 'mixed'
                             return (
                               <div className="rounded-md border bg-background px-3 py-2 text-sm shadow-sm">
                                 <div className="font-medium">{p.name}</div>
                                 <div className="text-muted-foreground">{p.locality}</div>
-                                <div>
-                                  Report: {p.report_date}
-                                </div>
-                                <div className="text-muted-foreground">
-                                  Spend diversity: {d.toFixed(2)} ({diversityLabel})
-                                </div>
+                                <div>Report: {p.report_date}</div>
                                 <div className="text-muted-foreground">{p.primary_category}</div>
                                 <div className="mt-1 text-xs text-muted-foreground">
                                   Click to read full story
@@ -862,9 +1291,13 @@ export default function StoriesPage() {
                           }}
                         />
                         <Scatter
-                          data={scatterPoints}
+                          data={timelinePoints}
                           name="Projects"
-                          shape={(props: { cx?: number; cy?: number; payload?: { primary_category?: string } }) => {
+                          shape={(props: {
+                            cx?: number
+                            cy?: number
+                            payload?: { primary_category?: string }
+                          }) => {
                             const cx = props.cx ?? 0
                             const cy = props.cy ?? 0
                             const fill = props.payload
@@ -888,92 +1321,203 @@ export default function StoriesPage() {
                           cursor="pointer"
                           onClick={(e: { payload?: { project_id?: string } }) => {
                             const id = e?.payload?.project_id
-                            if (id)
-                              router.push(
-                                `/err-portal/stories/${id}${fromQuery ? `?${fromQuery}` : ''}`
-                              )
+                            if (!id) return
+                            const card = cards.find((c) => c.project_id === id)
+                            if (card) {
+                              setHighlightedCard(card)
+                              setHighlightedStoryExpanded(true)
+                            }
                           }}
                         />
                       </ScatterChart>
                     </ResponsiveContainer>
                   </div>
-                )}
-                <p className="mt-2 text-xs text-muted-foreground">
-                  Y axis: from focused (one theme) to very spread out (across many themes).
-                </p>
-                <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-                  {[...categoryColorIndex.entries()]
-                    .sort((a, b) => a[1] - b[1])
-                    .map(([cat, idx]) => (
-                      <span key={cat} className="flex items-center gap-1.5">
-                        <span
-                          className="h-2.5 w-2.5 rounded-full"
-                          style={{
-                            backgroundColor: CATEGORY_COLORS[idx % CATEGORY_COLORS.length],
-                          }}
-                        />
-                        {cat}
-                      </span>
-                    ))}
+                  <div className="mt-2 flex flex-wrap items-center justify-center gap-3 text-xs text-muted-foreground">
+                    {[...categoryColorIndex.entries()]
+                      .sort((a, b) => a[1] - b[1])
+                      .map(([cat, idx]) => (
+                        <span key={cat} className="flex items-center gap-1.5">
+                          <span
+                            className="h-2.5 w-2.5 rounded-full"
+                            style={{
+                              backgroundColor:
+                                CATEGORY_COLORS[idx % CATEGORY_COLORS.length],
+                            }}
+                          />
+                          {cat}
+                        </span>
+                      ))}
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Card carousel: Rolodex style — 3 cards visible, roll left/right */}
+            <div>
+              <h2 className="text-xl font-semibold text-accent-foreground text-center mb-4">
+                Project Learnings
+              </h2>
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="shrink-0 h-10 w-10"
+                  onClick={() => carouselScroll('left')}
+                  aria-label="Previous cards"
+                >
+                  <ChevronLeft className="h-5 w-5" />
+                </Button>
+                <div
+                  className="overflow-hidden min-w-0 flex-1"
+                  style={{
+                    maxWidth: CAROUSEL_CARD_WIDTH * 3 + CAROUSEL_GAP * 2,
+                  }}
+                >
+                  <div
+                    ref={carouselRef}
+                    className="flex gap-4 overflow-x-auto overflow-y-hidden pb-2 scroll-smooth snap-x snap-mandatory sidebar-nav-scroll"
+                  >
+                    {(displayCards.length === cards.length ? displayCards : cards).map((c) => (
+                      <Card
+                        key={c.project_id}
+                        role="button"
+                        tabIndex={0}
+                        className={`flex flex-col shrink-0 snap-center rounded-none border-0 shadow-md cursor-pointer transition-shadow hover:shadow-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                          highlightedCard?.project_id === c.project_id
+                            ? 'ring-2 ring-accent-foreground shadow-lg'
+                            : ''
+                        }`}
+                        style={{ width: CAROUSEL_CARD_WIDTH }}
+                        onClick={() => {
+                          setHighlightedCard(c)
+                          setHighlightedStoryExpanded(true)
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault()
+                            setHighlightedCard(c)
+                            setHighlightedStoryExpanded(true)
+                          }
+                        }}
+                      >
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-lg">
+                          {c.project_name || 'Unnamed project'}
+                        </CardTitle>
+                        <p className="text-sm text-muted-foreground">
+                          {[c.state, c.locality]
+                            .filter(Boolean)
+                            .join(' · ') || '—'}
+                        </p>
+                        {c.theme_labels.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {c.theme_labels.slice(0, 3).map((l) => (
+                              <span
+                                key={l}
+                                className="text-xs px-2 py-0.5 rounded bg-muted"
+                              >
+                                {l}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </CardHeader>
+                      <CardContent className="flex-1">
+                        {c.positive_changes_snippet ? (
+                          <p className="text-sm line-clamp-3">
+                            {c.positive_changes_snippet}
+                          </p>
+                        ) : c.objectives_snippet ? (
+                          <p className="text-sm line-clamp-3">
+                            {c.objectives_snippet}
+                          </p>
+                        ) : (
+                          <p className="text-sm text-muted-foreground italic">
+                            No narrative yet.
+                          </p>
+                        )}
+                        {c.beneficiaries_count != null && (
+                          <p className="text-sm text-muted-foreground mt-2">
+                            ~{c.beneficiaries_count.toLocaleString()} beneficiaries
+                          </p>
+                        )}
+                      </CardContent>
+                      <CardFooter className="text-xs text-muted-foreground">
+                        Full story shown below when selected
+                      </CardFooter>
+                    </Card>
+                  ))}
+                  </div>
                 </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="shrink-0 h-10 w-10"
+                  onClick={() => carouselScroll('right')}
+                  aria-label="Next cards"
+                >
+                  <ChevronRight className="h-5 w-5" />
+                </Button>
               </div>
-            ) : (
-              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                {cards.map((c) => (
-                  <Card key={c.project_id} className="flex flex-col">
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-lg">
-                        {c.project_name || 'Unnamed project'}
-                      </CardTitle>
-                      <p className="text-sm text-muted-foreground">
-                        {[c.state, c.locality].filter(Boolean).join(' · ') || '—'}
+
+              {/* Highlight Learning: full story content; collapsed = title + At a glance + chevron; expanded = full content */}
+              {highlightedCard && (
+                <div className="mt-6 rounded-none border-0 bg-card shadow-md overflow-hidden">
+                  <h2 className="text-xl font-semibold text-accent-foreground text-center py-4 border-b">
+                    Highlight Learning
+                  </h2>
+                  {/* When collapsed: show At a glance only. When expanded: show full content. */}
+                  <div className={`text-accent-foreground ${highlightedStoryExpanded ? 'p-6 max-h-[70vh] overflow-y-auto' : 'p-4'}`}>
+                    {loadingHighlighted ? (
+                      <p className="text-muted-foreground py-4 text-center text-sm">
+                        Loading…
                       </p>
-                      {c.theme_labels.length > 0 && (
-                        <div className="flex flex-wrap gap-1 mt-1">
-                          {c.theme_labels.slice(0, 3).map((l) => (
-                            <span
-                              key={l}
-                              className="text-xs px-2 py-0.5 rounded bg-muted"
-                            >
-                              {l}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                    </CardHeader>
-                    <CardContent className="flex-1">
-                      {c.positive_changes_snippet ? (
-                        <p className="text-sm line-clamp-3">
-                          {c.positive_changes_snippet}
+                    ) : (displayDetail ?? highlightedDetail) ? (
+                      <HighlightedStoryContent
+                        data={(displayDetail ?? highlightedDetail)!}
+                        formatDate={formatDate}
+                        showOnlyAtGlance={!highlightedStoryExpanded}
+                      />
+                    ) : !highlightedStoryExpanded ? null : (
+                      <div className="space-y-3">
+                        <h3 className="text-lg font-semibold">
+                          {highlightedCard.project_name || 'Unnamed project'}
+                        </h3>
+                        <p className="text-sm text-muted-foreground">
+                          {[highlightedCard.state, highlightedCard.locality]
+                            .filter(Boolean)
+                            .join(' · ') || '—'}
                         </p>
-                      ) : c.objectives_snippet ? (
-                        <p className="text-sm line-clamp-3">
-                          {c.objectives_snippet}
-                        </p>
-                      ) : (
                         <p className="text-sm text-muted-foreground italic">
-                          No narrative yet.
+                          Story details could not be loaded.
                         </p>
-                      )}
-                      {c.beneficiaries_count != null && (
-                        <p className="text-sm text-muted-foreground mt-2">
-                          ~{c.beneficiaries_count.toLocaleString()} beneficiaries
-                        </p>
-                      )}
-                    </CardContent>
-                    <CardFooter>
-                      <Button variant="outline" size="sm" asChild>
-                        <Link
-                          href={`/err-portal/stories/${c.project_id}${fromQuery ? `?${fromQuery}` : ''}`}
-                        >
-                          Read full story
-                        </Link>
-                      </Button>
-                    </CardFooter>
-                  </Card>
-                ))}
-              </div>
-            )}
+                      </div>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setHighlightedStoryExpanded((e) => !e)}
+                    className="w-full flex items-center justify-center gap-2 py-3 text-sm text-muted-foreground hover:text-accent-foreground hover:bg-muted/50 transition-colors border-t"
+                    aria-expanded={highlightedStoryExpanded}
+                    aria-label={highlightedStoryExpanded ? 'Collapse highlight learning' : 'Expand highlight learning'}
+                  >
+                    {highlightedStoryExpanded ? (
+                      <>
+                        <ChevronUp className="h-4 w-4" />
+                        Minimize
+                      </>
+                    ) : (
+                      <>
+                        <ChevronDown className="h-4 w-4" />
+                        Expand
+                      </>
+                    )}
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>
