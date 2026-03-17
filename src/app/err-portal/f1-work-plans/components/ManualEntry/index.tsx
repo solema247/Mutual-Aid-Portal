@@ -165,9 +165,17 @@ export default function ManualEntry({ onSuccess }: ManualEntryProps) {
     setForm(prev => ({ ...prev, [key]: value }))
   }
 
+  /** Normalize date for date picker: YYYY-MM-DD as-is, legacy MMYY → first of month. */
+  const datePickerValue = useMemo(() => {
+    const d = form.date
+    if (!d) return ''
+    if (/^\d{4}-\d{2}-\d{2}$/.test(d)) return d
+    if (/^\d{4}$/.test(d)) return `20${d.slice(2, 4)}-${d.slice(0, 2)}-01`
+    return ''
+  }, [form.date])
+
   const handleDateChange = (value: string) => {
-    const cleaned = value.replace(/\D/g, '').slice(0, 4)
-    updateField('date', cleaned || null)
+    updateField('date', value && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : null)
   }
 
   const handleExpenseChange = (index: number, field: keyof Expense, value: any) => {
@@ -448,12 +456,11 @@ export default function ManualEntry({ onSuccess }: ManualEntryProps) {
         {/* Form - same layout as ExtractedDataReview */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
-            <Label>{t('fsystem:review.fields.date')} (MMYY)</Label>
+            <Label>{t('fsystem:review.fields.date')}</Label>
             <Input
-              value={form.date || ''}
+              type="date"
+              value={datePickerValue}
               onChange={(e) => handleDateChange(e.target.value)}
-              placeholder="0825"
-              maxLength={4}
             />
           </div>
           <div>

@@ -15,9 +15,11 @@ import dynamic from 'next/dynamic'
 import { useRouter } from 'next/navigation'
 import { aggregateObjectives, aggregateBeneficiaries, aggregatePlannedActivities, aggregatePlannedActivitiesDetailed, aggregateLocations, getBankingDetails, getBudgetTable, getBudgetTableData, formatProjectPlannedActivities, formatProjectSummary } from '@/lib/mou-aggregation'
 import HierarchicalBudgetTable from './components/HierarchicalBudgetTable'
+import MoUsNeedingPaymentAlert from './components/MoUsNeedingPaymentAlert'
 import { supabase } from '@/lib/supabaseClient'
 import PoolByDonor from '@/app/err-portal/f2-approvals/components/PoolByDonor'
 import { useAllowedFunctions } from '@/hooks/useAllowedFunctions'
+import { cn } from '@/lib/utils'
 
 interface Signature {
   id: string
@@ -104,6 +106,8 @@ export default function F3MOUsPage() {
   const [mous, setMous] = useState<MOU[]>([])
   const [mouGrantIds, setMouGrantIds] = useState<Record<string, string>>({})
   const [mouProjectCounts, setMouProjectCounts] = useState<Record<string, number>>({})
+  /** Count of all projects per MOU (no status filter) – used for payment confirmation total so partial flag is correct */
+  const [mouPaymentProjectCounts, setMouPaymentProjectCounts] = useState<Record<string, number>>({})
   const [selectedState, setSelectedState] = useState<string>('all')
   const [availableStates, setAvailableStates] = useState<string[]>([])
   const [selectedGrantId, setSelectedGrantId] = useState<string>('all')
@@ -244,17 +248,26 @@ export default function F3MOUsPage() {
     }
     try {
       const parsed = JSON.parse(mou.payment_confirmation_file)
-      if (typeof parsed === 'object' && parsed !== null) {
-        const confirmed = Object.keys(parsed).length
-        // Use max so we show correct icon when projectCount is 0 (e.g. status filter) but payment data exists
-        const total = Math.max(projectCount, confirmed)
-        return { confirmed, total }
+      if (typeof parsed !== 'object' || parsed === null) {
+        return { confirmed: 0, total: projectCount }
       }
+      // Count only entries that have actual transfer info (same logic as modal checkmark)
+      let confirmed = 0
+      for (const projectId of Object.keys(parsed)) {
+        const entry = parsed[projectId]
+        if (!entry || typeof entry !== 'object') continue
+        const hasFile = !!(entry.file_path && String(entry.file_path).trim())
+        const rate = entry.exchange_rate
+        const date = entry.transfer_date
+        const hasMeta = !!(rate != null && String(rate).trim() !== '' && date != null && String(date).trim() !== '')
+        if (hasFile || hasMeta) confirmed += 1
+      }
+      const total = Math.max(projectCount, confirmed)
+      return { confirmed, total }
     } catch {
-      // Old format - single confirmation
+      // Old format - single file path string (not JSON)
       return { confirmed: 1, total: projectCount }
     }
-    return { confirmed: 0, total: projectCount }
   }
 
   // Aggregate data from all projects
@@ -304,7 +317,7 @@ export default function F3MOUsPage() {
       // Check assignment status for each MOU
       await checkMouAssignmentStatus(data.map((m: MOU) => m.id))
       
-      // Fetch project counts for all MOUs
+      // Fetch project counts for all MOUs (committed + approved/completed, for table display)
       try {
         const mouIds = data.map((m: MOU) => m.id)
         if (mouIds.length > 0) {
@@ -324,6 +337,21 @@ export default function F3MOUsPage() {
             })
           }
           setMouProjectCounts(counts)
+
+          // Count all projects per MOU (no status filter) for payment confirmation total
+          const { data: allProjectCounts } = await supabase
+            .from('err_projects')
+            .select('mou_id')
+            .in('mou_id', mouIds)
+          const paymentCounts: Record<string, number> = {}
+          if (allProjectCounts) {
+            allProjectCounts.forEach((p: any) => {
+              if (p.mou_id) {
+                paymentCounts[p.mou_id] = (paymentCounts[p.mou_id] || 0) + 1
+              }
+            })
+          }
+          setMouPaymentProjectCounts(paymentCounts)
         }
       } catch (error) {
         console.error('Error fetching project counts:', error)
@@ -968,10 +996,38 @@ export default function F3MOUsPage() {
     return list
   }, [filteredMous, sortCreatedOrder])
 
+  const moUsNeedingPayment = useMemo(() => {
+    return mous
+      .filter((m) => {
+        const grantId = mouGrantIds[m.id]
+        if (!grantId) return false
+        const total = mouPaymentProjectCounts[m.id] ?? mouProjectCounts[m.id] ?? 0
+        const { confirmed } = getPaymentConfirmationCount(m, total)
+        return confirmed < total
+      })
+      .map((m) => {
+        const total = mouPaymentProjectCounts[m.id] ?? mouProjectCounts[m.id] ?? 0
+        const pc = getPaymentConfirmationCount(m, total)
+        return {
+          mou: m,
+          confirmed: pc.confirmed,
+          total: pc.total,
+          missing: pc.total - pc.confirmed
+        }
+      })
+  }, [mous, mouGrantIds, mouPaymentProjectCounts, mouProjectCounts])
+
   if (!canViewPage) return null
 
   return (
     <div className="max-w-[1600px] w-full mx-auto p-6 space-y-6">
+      {canManagePayment && (
+        <MoUsNeedingPaymentAlert
+          items={moUsNeedingPayment}
+          grantIdByMouId={mouGrantIds}
+          onOpenPayment={openPaymentModal}
+        />
+      )}
       <Card className="w-full">
         <CardHeader>
           <CardTitle>{t('f3:title')}</CardTitle>
@@ -1167,43 +1223,61 @@ export default function F3MOUsPage() {
                         )}
                         {canManagePayment && (
                         <div className="flex flex-col items-center gap-0.5 min-w-[42px]">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7"
-                            onClick={() => openPaymentModal(m)}
-                            title={(() => {
-                              const projectCount = mouProjectCounts[m.id] || 0
-                              const paymentCount = getPaymentConfirmationCount(m, projectCount)
-                              return paymentCount.confirmed > 0 ? t('f3:view_payment') : t('f3:add_payment')
-                            })()}
-                          >
-                            {(() => {
-                              const projectCount = mouProjectCounts[m.id] || 0
-                              const paymentCount = getPaymentConfirmationCount(m, projectCount)
-                              if (paymentCount.confirmed === 0) {
-                                return <Upload className="h-3.5 w-3.5 text-amber-600" />
-                              } else if (paymentCount.confirmed === paymentCount.total) {
-                                return <Receipt className="h-3.5 w-3.5 text-green-600" />
-                              } else {
-                                return <Receipt className="h-3.5 w-3.5 text-yellow-600" />
-                              }
-                            })()}
-                          </Button>
-                          <span className="text-[9px] text-muted-foreground text-center leading-tight whitespace-nowrap">
-                            {(() => {
-                              const projectCount = mouProjectCounts[m.id] || 0
-                              const paymentCount = getPaymentConfirmationCount(m, projectCount)
-                              // When payment data exists, show short label so action row stays on one line
-                              if (paymentCount.confirmed > 0) {
-                                return t('f3:view_payment_short')
-                              }
-                              if (paymentCount.total === 0) {
-                                return t('f3:add_payment')
-                              }
-                              return `${paymentCount.confirmed}/${paymentCount.total}`
-                            })()}
-                          </span>
+                          {(() => {
+                            const projectCount = mouPaymentProjectCounts[m.id] ?? mouProjectCounts[m.id] ?? 0
+                            const paymentCount = getPaymentConfirmationCount(m, projectCount)
+                            const isPartial = paymentCount.confirmed > 0 && paymentCount.confirmed < paymentCount.total
+                            const missing = paymentCount.total - paymentCount.confirmed
+                            return (
+                              <>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7"
+                                  onClick={() => openPaymentModal(m)}
+                                  title={
+                                    paymentCount.confirmed === 0
+                                      ? t('f3:add_payment')
+                                      : isPartial
+                                        ? t('f3:view_payment_partial', {
+                                            confirmed: paymentCount.confirmed,
+                                            total: paymentCount.total,
+                                            missing
+                                          })
+                                        : t('f3:view_payment')
+                                  }
+                                >
+                                  {paymentCount.confirmed === 0 ? (
+                                    <Upload className="h-3.5 w-3.5 text-amber-600" />
+                                  ) : paymentCount.confirmed === paymentCount.total ? (
+                                    <Receipt className="h-3.5 w-3.5 text-green-600" />
+                                  ) : (
+                                    <Receipt className="h-3.5 w-3.5 text-amber-600" />
+                                  )}
+                                </Button>
+                                <span
+                                  className={cn(
+                                    'text-[9px] text-center leading-tight whitespace-nowrap',
+                                    isPartial
+                                      ? 'font-medium text-amber-600'
+                                      : 'text-muted-foreground'
+                                  )}
+                                  title={isPartial ? t('f3:view_payment_partial', { confirmed: paymentCount.confirmed, total: paymentCount.total, missing }) : undefined}
+                                >
+                                  {paymentCount.confirmed === 0
+                                    ? (paymentCount.total > 0 ? `0/${paymentCount.total}` : t('f3:add_payment'))
+                                    : isPartial
+                                      ? `${paymentCount.confirmed}/${paymentCount.total}`
+                                      : t('f3:view_payment_short')}
+                                </span>
+                                {isPartial && (
+                                  <span className="text-[8px] text-amber-600 font-medium" title={t('f3:view_payment_partial', { confirmed: paymentCount.confirmed, total: paymentCount.total, missing })}>
+                                    {t('f3:payment_missing_count', { count: missing })}
+                                  </span>
+                                )}
+                              </>
+                            )
+                          })()}
                       </div>
                         )}
                         {canUploadSignedMou && (

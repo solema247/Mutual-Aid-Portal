@@ -173,21 +173,26 @@ export default function ExtractedDataReview({
 
   const [grantOptions, setGrantOptions] = useState<{ grant_call_id: string; grant_call_name: string; donor_name: string; remaining: number }[]>([])
   const [grantCallId, setGrantCallId] = useState<string>('')
-  const deriveMMYY = (value?: string | null) => {
+  /** Convert OCR/initial date (MMYY or YYYY-MM-DD) to YYYY-MM-DD for the date picker. */
+  const deriveDateForPicker = (value?: string | null): string => {
     try {
       if (!value) return ''
-      // From full date YYYY-MM-DD → MMYY
-      if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-        const mm = value.slice(5, 7)
+      if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value
+      if (/^\d{4}$/.test(value)) {
+        const mm = value.slice(0, 2)
         const yy = value.slice(2, 4)
-        return `${mm}${yy}`
+        return `20${yy}-${mm}-01`
       }
-      // Already MMYY
-      if (/^\d{4}$/.test(value)) return value
       return ''
     } catch { return '' }
   }
-  const [yymm, setYymm] = useState<string>(deriveMMYY(data.date))
+  /** From full date (YYYY-MM-DD) or legacy MMYY, derive MMYY for grant_serials lookup. */
+  const dateToMMYY = (dateVal: string | null | undefined): string => {
+    if (!dateVal) return ''
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateVal)) return dateVal.slice(5, 7) + dateVal.slice(2, 4)
+    if (/^\d{4}$/.test(dateVal)) return dateVal
+    return ''
+  }
   const [stateRemaining, setStateRemaining] = useState<number>(0)
   const [grantRemainingForState, setGrantRemainingForState] = useState<number>(0)
   const [donorShort, setDonorShort] = useState<string>('')
@@ -359,6 +364,44 @@ export default function ExtractedDataReview({
     loadGrants()
   }, [stateName, selectedFundingCycleId])
 
+  // Convert old format (string[]) to new format (PlannedActivity[])
+  const normalizePlannedActivities = (activities: PlannedActivity[] | string[]): PlannedActivity[] => {
+    if (!Array.isArray(activities)) return []
+    if (activities.length === 0) return []
+    if (typeof activities[0] === 'object' && activities[0] !== null && 'activity' in activities[0]) {
+      return (activities as any[]).map((activity: any) => {
+        const { category_id, ...rest } = activity
+        if (category_id && !rest.category) rest.category = null
+        return rest as PlannedActivity
+      })
+    }
+    return (activities as string[]).map(activity => ({
+      activity: activity || '',
+      category: null,
+      individuals: null,
+      families: null,
+      planned_activity_cost: null
+    }))
+  }
+
+  const [editedData, setEditedData] = useState<ExtractedData>({
+    ...data,
+    date: deriveDateForPicker(data.date) || null,
+    planned_activities: normalizePlannedActivities(Array.isArray(data.planned_activities) ? data.planned_activities : []),
+    expenses: Array.isArray(data.expenses) ? data.expenses.map(exp => ({
+      activity: exp.activity || '',
+      total_cost_usd: typeof exp.total_cost_usd === 'number' ? exp.total_cost_usd : 0,
+      total_cost_sdg: typeof exp.total_cost_sdg === 'number' ? exp.total_cost_sdg : null,
+      currency: exp.currency || 'USD',
+      category: (exp as any).category || null,
+      planned_activity: (exp as any).planned_activity || null,
+      planned_activity_other: (exp as any).planned_activity_other || null
+    })) : []
+  })
+
+  /** MMYY derived from edited date for grant_serials lookup. */
+  const yymm = useMemo(() => dateToMMYY(editedData.date), [editedData.date])
+
   // Load remaining caps and preview parts (donorShort/stateShort)
   useEffect(() => {
     const loadCapsAndPreview = async () => {
@@ -454,50 +497,6 @@ export default function ExtractedDataReview({
     }
     loadNextWorkplan()
   }, [selectedSerial])
-
-  // Convert old format (string[]) to new format (PlannedActivity[])
-  const normalizePlannedActivities = (activities: PlannedActivity[] | string[]): PlannedActivity[] => {
-    if (!Array.isArray(activities)) return []
-    if (activities.length === 0) return []
-    
-    // Check if it's already in new format (objects with activity property)
-    if (typeof activities[0] === 'object' && activities[0] !== null && 'activity' in activities[0]) {
-      // Convert category_id to category if needed (backward compatibility)
-      return (activities as any[]).map((activity: any) => {
-        // Remove category_id if it exists (we'll convert it in useEffect if needed)
-        const { category_id, ...rest } = activity
-        // If category_id exists but category doesn't, we'll need to look it up
-        if (category_id && !rest.category) {
-          rest.category = null // Will be populated in useEffect
-        }
-        return rest as PlannedActivity
-      })
-    }
-    
-    // Convert old format (string[]) to new format
-    return (activities as string[]).map(activity => ({
-      activity: activity || '',
-      category: null,
-      individuals: null,
-      families: null,
-      planned_activity_cost: null
-    }))
-  }
-
-  const [editedData, setEditedData] = useState<ExtractedData>({
-    ...data,
-    date: deriveMMYY(data.date),
-    planned_activities: normalizePlannedActivities(Array.isArray(data.planned_activities) ? data.planned_activities : []),
-    expenses: Array.isArray(data.expenses) ? data.expenses.map(exp => ({
-      activity: exp.activity || '',
-      total_cost_usd: typeof exp.total_cost_usd === 'number' ? exp.total_cost_usd : 0,
-      total_cost_sdg: typeof exp.total_cost_sdg === 'number' ? exp.total_cost_sdg : null,
-      currency: exp.currency || 'USD',
-      category: (exp as any).category || null,
-      planned_activity: (exp as any).planned_activity || null,
-      planned_activity_other: (exp as any).planned_activity_other || null
-    })) : []
-  })
 
   // Convert category_id to category name for backward compatibility
   useEffect(() => {
@@ -635,7 +634,7 @@ export default function ExtractedDataReview({
   const handleInputChange = (field: keyof ExtractedData, value: any) => {
     setEditedData(prev => ({
       ...prev,
-      [field]: field === 'date' ? String(value).replace(/[^0-9]/g, '').slice(0, 4) : value
+      [field]: value
     }))
   }
 
@@ -743,12 +742,11 @@ export default function ExtractedDataReview({
         {/* Basic Information */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
-            <Label>{t('fsystem:review.fields.date')} (MMYY)</Label>
+            <Label>{t('fsystem:review.fields.date')}</Label>
             <Input
-              value={editedData.date || ''}
-              onChange={(e) => handleInputChange('date', e.target.value)}
-              placeholder="0825"
-              maxLength={4}
+              type="date"
+              value={editedData.date && /^\d{4}-\d{2}-\d{2}$/.test(editedData.date) ? editedData.date : ''}
+              onChange={(e) => handleInputChange('date', e.target.value || null)}
             />
           </div>
 
