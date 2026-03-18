@@ -567,7 +567,7 @@ function StoriesContent() {
   const printRef = useRef<HTMLDivElement>(null)
   const [generatingPdf, setGeneratingPdf] = useState(false)
 
-  // Fetch full story detail when highlighted card changes (server returns EN when locale=en)
+  // Fetch full story detail when highlighted card changes (server picks EN vs _en by report language when locale=en)
   const isEnLocale = i18n.language === 'en' || i18n.language.startsWith('en-')
   useEffect(() => {
     if (!highlightedCard?.project_id) {

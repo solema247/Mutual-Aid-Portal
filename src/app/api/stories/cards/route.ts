@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { getUserStateAccess } from '@/lib/userStateAccess'
 import { getActivityAndCategoryLists } from '@/lib/plannedActivitiesExpenses'
-import { ensureReportsTranslated } from '@/lib/translateReportCache'
+import { pickF5TextForEnUi } from '@/lib/storiesEnDisplay'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -10,8 +10,6 @@ export const fetchCache = 'force-no-store'
 
 const MAP_STATUSES = ['approved', 'active', 'pending', 'completed'] as const
 const SNIPPET_LENGTH = 150
-/** Only translate this many reports per request (initial carousel + highlight). Rest get EN when user opens full story. */
-const MAX_REPORTS_TO_TRANSLATE_PER_REQUEST = 4
 
 function slugify(label: string): string {
   return label
@@ -189,7 +187,7 @@ export async function GET(request: Request) {
 
     const projectIds = filtered.map((p) => p.id)
 
-    // Latest F5 report per project (by created_at desc); include _en for cache when needed
+    // Latest F5 per project; when English UI, need _en for AR-authored reports
     const reportSelect = useEnCache
       ? 'id, project_id, report_date, reporting_person, positive_changes, positive_changes_en, created_at, language'
       : 'id, project_id, report_date, reporting_person, positive_changes, created_at, language'
@@ -215,29 +213,6 @@ export async function GET(request: Request) {
     }
 
     const reportIds = Array.from(latestReportByProject.values()).map((r: any) => r.id)
-    if (useEnCache && reportIds.length > 0) {
-      const tTranslate = Date.now()
-      const filteredWithF5Order = filtered.filter((p) => latestReportByProject.has(p.id))
-      const reportIdsToTranslate = filteredWithF5Order
-        .slice(0, MAX_REPORTS_TO_TRANSLATE_PER_REQUEST)
-        .map((p) => latestReportByProject.get(p.id)?.id)
-        .filter(Boolean) as string[]
-      try {
-        await ensureReportsTranslated(supabase, reportIdsToTranslate)
-        console.log('[stories/cards] ensureReportsTranslated', Date.now() - tTranslate, 'ms', reportIdsToTranslate.length, 'of', reportIds.length, 'reports')
-      } catch (e) {
-        console.error('[stories/cards] ensureReportsTranslated failed', e)
-      }
-      const { data: refetched } = await supabase
-        .from('err_program_report')
-        .select('id, positive_changes_en')
-        .in('id', reportIds)
-      const enByReport = new Map((refetched ?? []).map((x: any) => [x.id, x]))
-      for (const r of Array.from(latestReportByProject.values())) {
-        const en = enByReport.get(r.id)
-        if (en?.positive_changes_en != null) r.positive_changes_en = en.positive_changes_en
-      }
-    }
 
     // Only show story cards for projects that have F5 (F1 + F5 available)
     const filteredWithF5 = filtered.filter((p) => latestReportByProject.has(p.id))
@@ -291,7 +266,15 @@ export async function GET(request: Request) {
         locality: p.locality ?? null,
         objectives_snippet: snippet(p.project_objectives),
         positive_changes_snippet: report
-          ? snippet(useEnCache && report.positive_changes_en != null ? report.positive_changes_en : report.positive_changes)
+          ? snippet(
+              useEnCache
+                ? pickF5TextForEnUi(
+                    report.language,
+                    report.positive_changes,
+                    report.positive_changes_en
+                  ) ?? ''
+                : report.positive_changes
+            )
           : '',
         report_date: report?.report_date ?? null,
         reporting_person: report?.reporting_person ?? null,

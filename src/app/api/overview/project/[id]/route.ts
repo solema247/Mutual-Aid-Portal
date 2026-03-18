@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
-import { ensureReportsTranslated } from '@/lib/translateReportCache'
+import { pickF5TextForEnUi, pickReachTextForEnUi } from '@/lib/storiesEnDisplay'
 
 const OVERDUE_DAYS_AFTER_TRANSFER = 32
 
@@ -309,32 +309,6 @@ export async function GET(
       console.log('[overview/project] f5 reports', Date.now() - t0, 'ms', (f5Reports?.length ?? 0), 'rows')
 
       const reportIds = (f5Reports || []).map((r: any) => r.id)
-      if (useEnCache && reportIds.length > 0) {
-        const tTranslate = Date.now()
-        try {
-          await ensureReportsTranslated(supabase, reportIds)
-          console.log('[overview/project] ensureReportsTranslated', Date.now() - tTranslate, 'ms')
-        } catch (e) {
-          console.error('[overview/project] ensureReportsTranslated failed', e)
-        }
-        if (reportIds.length > 0) {
-          const { data: refetched } = await supabase
-            .from('err_program_report')
-            .select('id, positive_changes_en, negative_results_en, unexpected_results_en, lessons_learned_en, suggestions_en')
-            .in('id', reportIds)
-          const enByReport = new Map((refetched ?? []).map((x: any) => [x.id, x]))
-          for (const r of f5Reports || []) {
-            const en = enByReport.get(r.id)
-            if (en) {
-              r.positive_changes_en = en.positive_changes_en
-              r.negative_results_en = en.negative_results_en
-              r.unexpected_results_en = en.unexpected_results_en
-              r.lessons_learned_en = en.lessons_learned_en
-              r.suggestions_en = en.suggestions_en
-            }
-          }
-        }
-      }
 
       let reachByReport: Record<string, any[]> = {}
       if (reportIds.length) {
@@ -353,8 +327,7 @@ export async function GET(
 
       const f5ReportsWithReach = (f5Reports || []).map((r: any) => {
         const reach = reachByReport[r.id] || []
-        const isAr = (r.language ?? '').toLowerCase() === 'ar'
-        const useEn = useEnCache && isAr
+        const enUi = useEnCache
         return {
           id: r.id,
           report_date: r.report_date,
@@ -362,16 +335,32 @@ export async function GET(
           created_at: r.created_at,
           is_draft: r.is_draft,
           language: r.language,
-          positive_changes: useEn && r.positive_changes_en != null ? r.positive_changes_en : r.positive_changes,
-          negative_results: useEn && r.negative_results_en != null ? r.negative_results_en : r.negative_results,
-          unexpected_results: useEn && r.unexpected_results_en != null ? r.unexpected_results_en : r.unexpected_results,
-          lessons_learned: useEn && r.lessons_learned_en != null ? r.lessons_learned_en : r.lessons_learned,
-          suggestions: useEn && r.suggestions_en != null ? r.suggestions_en : r.suggestions,
+          positive_changes: enUi
+            ? pickF5TextForEnUi(r.language, r.positive_changes, r.positive_changes_en)
+            : r.positive_changes,
+          negative_results: enUi
+            ? pickF5TextForEnUi(r.language, r.negative_results, r.negative_results_en)
+            : r.negative_results,
+          unexpected_results: enUi
+            ? pickF5TextForEnUi(r.language, r.unexpected_results, r.unexpected_results_en)
+            : r.unexpected_results,
+          lessons_learned: enUi
+            ? pickF5TextForEnUi(r.language, r.lessons_learned, r.lessons_learned_en)
+            : r.lessons_learned,
+          suggestions: enUi
+            ? pickF5TextForEnUi(r.language, r.suggestions, r.suggestions_en)
+            : r.suggestions,
           reach: reach.map((re: any) => ({
             ...re,
-            location: useEn && re.location_en != null ? re.location_en : re.location,
-            activity_name: useEn && re.activity_name_en != null ? re.activity_name_en : re.activity_name,
-            activity_goal: useEn && re.activity_goal_en != null ? re.activity_goal_en : re.activity_goal,
+            location: enUi
+              ? pickReachTextForEnUi(r.language, re.location, re.location_en)
+              : re.location,
+            activity_name: enUi
+              ? pickReachTextForEnUi(r.language, re.activity_name, re.activity_name_en)
+              : re.activity_name,
+            activity_goal: enUi
+              ? pickReachTextForEnUi(r.language, re.activity_goal, re.activity_goal_en)
+              : re.activity_goal,
           })),
         }
       })
