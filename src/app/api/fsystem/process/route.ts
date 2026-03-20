@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import vision from '@google-cloud/vision'
+import { ImageAnnotatorClient } from '@google-cloud/vision'
 import OpenAI from 'openai'
 import path from 'path'
 import fs from 'fs'
@@ -11,8 +11,8 @@ export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
 // Lazy Vision client: credentials from GOOGLE_VISION_FILE (path to JSON) or GOOGLE_VISION (inline JSON)
-let visionClientInstance: vision.ImageAnnotatorClient | null = null
-function getVisionClient(): vision.ImageAnnotatorClient {
+let visionClientInstance: ImageAnnotatorClient | null = null
+function getVisionClient(): ImageAnnotatorClient {
   if (visionClientInstance) return visionClientInstance
   const filePath = process.env.GOOGLE_VISION_FILE
   let raw: string
@@ -43,7 +43,7 @@ function getVisionClient(): vision.ImageAnnotatorClient {
   if (typeof creds.private_key === 'string') {
     (creds as any).private_key = (creds.private_key as string).replace(/\\n/g, '\n')
   }
-  visionClientInstance = new vision.ImageAnnotatorClient({ credentials: creds as any })
+  visionClientInstance = new ImageAnnotatorClient({ credentials: creds as any })
   return visionClientInstance
 }
 

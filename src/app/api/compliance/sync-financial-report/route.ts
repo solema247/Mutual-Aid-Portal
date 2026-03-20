@@ -25,7 +25,10 @@
 
 import { NextResponse } from 'next/server'
 import { google } from 'googleapis'
-import { createClient } from '@supabase/supabase-js'
+import { createClient, type SupabaseClient } from '@supabase/supabase-js'
+
+/** Service client without generated DB types — matches `createClient(url, key)`. */
+type ServiceSupabase = SupabaseClient<any, 'public', any>
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
@@ -117,14 +120,17 @@ const SECTOR_COLS = [
 ]
 
 async function syncSpendingSummary(
-  supabase: ReturnType<typeof createClient>,
+  supabase: ServiceSupabase,
   rows: string[][]
 ): Promise<{ created: number; skipped: number; errors: number }> {
   // Load lookup maps
   const { data: imports } = await supabase.from('activities_raw_import').select('id, "Serial Number"')
   const serialToImportId = new Map<string, string>()
   for (const r of imports || []) {
-    if (r['Serial Number']) serialToImportId.set(String(r['Serial Number']).trim(), r.id)
+    const serial = r['Serial Number']
+    const id = r.id
+    if (serial != null && serial !== '' && id != null)
+      serialToImportId.set(String(serial).trim(), String(id))
   }
 
   const { data: existingSummaries } = await supabase
@@ -163,6 +169,8 @@ async function syncSpendingSummary(
 
       existingImportIds.add(importId)
 
+      const newSummaryId = String(inserted!.id)
+
       const sectorExpenses = SECTOR_COLS
         .map(({ idx, name }) => ({ name, amount: toNum(row[idx]) }))
         .filter(({ amount }) => amount !== null && amount > 0)
@@ -171,7 +179,7 @@ async function syncSpendingSummary(
         const { error: expErr } = await supabase.from('err_expense').insert(
           sectorExpenses.map(({ name, amount }) => ({
             activities_raw_import_id: importId,
-            summary_id: inserted.id,
+            summary_id: newSummaryId,
             expense_activity: name,
             expense_amount: amount,
             language: 'en',
@@ -193,7 +201,7 @@ async function syncSpendingSummary(
 // ── Disbursement Overview ─────────────────────────────────────────────────────
 
 async function syncDisbursementOverview(
-  supabase: ReturnType<typeof createClient>,
+  supabase: ServiceSupabase,
   rows: string[][]
 ): Promise<{ updated: number; inserted: number; errors: number }> {
   const stats = { updated: 0, inserted: 0, errors: 0 }
@@ -232,7 +240,10 @@ async function syncDisbursementOverview(
           .maybeSingle()
 
         if (existing) {
-          await supabase.from('activities_raw_import').update(clean).eq('id', existing.id)
+          await supabase
+            .from('activities_raw_import')
+            .update(clean as Record<string, unknown>)
+            .eq('id', String(existing.id))
           stats.updated++
         } else {
           await supabase.from('activities_raw_import').insert({ 'Serial Number': serial, ...clean })
@@ -251,22 +262,28 @@ async function syncDisbursementOverview(
 // ── F4s Report ────────────────────────────────────────────────────────────────
 
 async function syncF4sReport(
-  supabase: ReturnType<typeof createClient>,
+  supabase: ServiceSupabase,
   rows: string[][]
 ): Promise<{ inserted: number; skipped: number; errors: number }> {
   const { data: imports } = await supabase.from('activities_raw_import').select('id, "Serial Number"')
   const serialToImportId = new Map<string, string>()
   for (const r of imports || []) {
-    if (r['Serial Number']) serialToImportId.set(String(r['Serial Number']).trim(), r.id)
+    const serial = r['Serial Number']
+    const id = r.id
+    if (serial != null && serial !== '' && id != null)
+      serialToImportId.set(String(serial).trim(), String(id))
   }
 
   const { data: summaries } = await supabase
     .from('err_summary')
     .select('id, activities_raw_import_id')
     .not('activities_raw_import_id', 'is', null)
-  const importIdToSummaryId = new Map<string, number>()
+  const importIdToSummaryId = new Map<string, string>()
   for (const s of summaries || []) {
-    if (s.activities_raw_import_id) importIdToSummaryId.set(s.activities_raw_import_id, s.id)
+    const aid = s.activities_raw_import_id
+    const sid = s.id
+    if (aid != null && sid != null)
+      importIdToSummaryId.set(String(aid), String(sid))
   }
 
   // Find which summaries already have detailed expenses
@@ -274,7 +291,9 @@ async function syncF4sReport(
     .from('err_expense')
     .select('summary_id')
     .not('expense_description', 'is', null)
-  const summaryIdsWithDetail = new Set<number>((detailed || []).map((r: any) => r.summary_id).filter(Boolean))
+  const summaryIdsWithDetail = new Set<string>(
+    (detailed || []).map((r) => (r.summary_id != null ? String(r.summary_id) : '')).filter(Boolean)
+  )
 
   // Group by serial
   const bySerial = new Map<string, string[][]>()

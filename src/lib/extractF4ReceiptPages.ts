@@ -27,7 +27,9 @@ export async function extractF4ReceiptPages(pdfBuffer: ArrayBuffer): Promise<Arr
       const [copiedPage] = await newDoc.copyPages(srcDoc, [pageIndex])
       newDoc.addPage(copiedPage)
       const bytes = await newDoc.save()
-      results.push(bytes.buffer)
+      const ab = new ArrayBuffer(bytes.byteLength)
+      new Uint8Array(ab).set(bytes)
+      results.push(ab)
     }
   } catch (e) {
     console.warn('F4 receipt extraction failed:', e)
