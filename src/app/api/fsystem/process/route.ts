@@ -4,7 +4,7 @@ import OpenAI from 'openai'
 import path from 'path'
 import fs from 'fs'
 import { requirePermission } from '@/lib/requirePermission'
-import { getOpenAIApiKey } from '@/lib/getOpenAIApiKey'
+import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -181,32 +181,65 @@ function detectLanguage(text: string): 'ar' | 'en' {
   return arabicCount > englishCount ? 'ar' : 'en';
 }
 
+// Infer MIME type from storage key (extension)
+function mimeFromKey(fileKey: string): string {
+  const lower = String(fileKey || '').toLowerCase()
+  if (lower.endsWith('.pdf')) return 'application/pdf'
+  if (lower.endsWith('.doc')) return 'application/msword'
+  if (lower.endsWith('.docx')) return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+  if (lower.match(/\.(png|jpg|jpeg|webp|gif)$/)) {
+    const ext = lower.split('.').pop() || 'png'
+    return `image/${ext === 'jpg' ? 'jpeg' : ext}`
+  }
+  return 'application/octet-stream'
+}
+
 export async function POST(req: Request) {
   const auth = await requirePermission('f1_upload')
   if (auth instanceof NextResponse) return auth
   try {
     const start = Date.now()
     const formData = await req.formData()
-    const file = formData.get('file') as File
+    const file = formData.get('file') as File | null
+    const fileKey = formData.get('file_key') as string | null
     const metadataStr = formData.get('metadata') as string
     console.log('Received metadata string:', metadataStr)
-    
+
+    if (!metadataStr) {
+      return NextResponse.json({ error: 'metadata required', details: 'Missing metadata' }, { status: 400 })
+    }
     const formMetadata = JSON.parse(metadataStr)
     console.log('Parsed form metadata:', formMetadata)
 
-    if (!file) {
-      throw new Error('No file provided')
+    let buffer: Buffer
+    let mimeType: string
+
+    if (fileKey && fileKey.trim()) {
+      // Fetch file from Supabase (avoids 4.5MB request body limit)
+      const supabase = getSupabaseRouteClient()
+      const { data: blob, error: downloadError } = await supabase.storage.from('images').download(fileKey.trim())
+      if (downloadError || !blob) {
+        console.error('Supabase download error:', downloadError)
+        return NextResponse.json(
+          { error: 'File not found', details: downloadError?.message || 'Failed to download file from storage. Please upload again.' },
+          { status: 400 }
+        )
+      }
+      buffer = Buffer.from(await blob.arrayBuffer())
+      mimeType = mimeFromKey(fileKey)
+      console.log('Processing file from storage:', fileKey, 'Type:', mimeType, 'Size:', buffer.length)
+    } else if (file && file.size > 0) {
+      buffer = Buffer.from(await file.arrayBuffer())
+      mimeType = file.type || mimeFromKey(file.name)
+      console.log('Processing file from request:', file.name, 'Type:', mimeType, 'Size:', file.size)
+    } else {
+      return NextResponse.json({ error: 'No file provided', details: 'Provide either file (formData) or file_key (Supabase storage path).' }, { status: 400 })
     }
 
-    console.log('Processing file:', file.name, 'Type:', file.type, 'Size:', file.size)
-
-    // Convert file to base64
-    const buffer = Buffer.from(await file.arrayBuffer())
     const base64 = buffer.toString('base64')
-
     let text = ''
-    
-    if (file.type === 'application/pdf') {
+
+    if (mimeType === 'application/pdf') {
       console.log('Processing PDF file...')
 
       // Respect max pages hint (default 5, capped 20)
@@ -233,22 +266,11 @@ export async function POST(req: Request) {
         pageInfo = result[0]
       } catch (visionError: any) {
         console.error('Vision API error:', visionError)
-        const msg = visionError?.message ?? ''
-        const isQuotaOrRate = visionError?.code === 8 || /quota|resource exhausted|rate limit/i.test(msg)
-        if (isQuotaOrRate) {
-          return NextResponse.json(
-            {
-              error: 'Google Vision API quota or rate limit exceeded. Please try again later or check your Google Cloud quotas.',
-              service: 'google_vision',
-              code: 'QUOTA_EXCEEDED'
-            },
-            { status: 429 }
-          )
-        }
-        if (visionError.code === 13 || msg.includes('INTERNAL')) {
+        // Handle Vision API errors gracefully
+        if (visionError.code === 13 || visionError.message?.includes('INTERNAL')) {
           throw new Error('Google Vision API encountered an internal error. Please try uploading the file again. If the problem persists, the file may be corrupted or too large.')
         }
-        throw new Error(`Vision API error: ${msg || 'Unknown error occurred'}`)
+        throw new Error(`Vision API error: ${visionError.message || 'Unknown error occurred'}`)
       }
 
       // Get initial text and count of first batch
@@ -347,10 +369,8 @@ export async function POST(req: Request) {
 
     // Process with OpenAI
     const aiStart = Date.now()
-    let completion: Awaited<ReturnType<OpenAI['chat']['completions']['create']>>
-    try {
-      const openai = getOpenAIClient()
-      completion = await openai.chat.completions.create({
+    const openai = getOpenAIClient()
+    const completion = await openai.chat.completions.create({
       model: "gpt-3.5-turbo",
       max_tokens: 3000,
       response_format: (isF4 || isF5) ? { type: 'json_object' } as any : undefined,
@@ -572,23 +592,8 @@ Return all fields in this format:
       ],
       temperature: 0.1
     })
-    } catch (openaiError: unknown) {
-      const err = openaiError as { status?: number; message?: string }
-      const is429 = err?.status === 429 || /quota|rate limit|rate_limit/i.test(String(err?.message ?? ''))
-      if (is429) {
-        return NextResponse.json(
-          {
-            error: 'OpenAI quota or rate limit exceeded. Please try again later or check your OpenAI plan and billing.',
-            service: 'openai',
-            code: 'QUOTA_EXCEEDED'
-          },
-          { status: 429 }
-        )
-      }
-      throw openaiError
-    }
 
-    const content = completion!.choices[0]?.message?.content
+    const content = completion.choices[0]?.message?.content
     if (!content) {
       throw new Error('No content in OpenAI response')
     }

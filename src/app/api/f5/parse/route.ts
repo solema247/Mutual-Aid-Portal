@@ -1,35 +1,13 @@
 import { NextResponse } from 'next/server'
-import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 
 export async function POST(request: Request) {
   try {
-    const supabase = getSupabaseRouteClient()
     const { project_id, file_key_temp } = await request.json()
     if (!project_id || !file_key_temp) return NextResponse.json({ error: 'project_id and file_key_temp required' }, { status: 400 })
 
-    // Signed URL to read the temp file
-    const { data: signed, error: signErr } = await (supabase as any).storage.from('images').createSignedUrl(file_key_temp, 60)
-    if (signErr || !signed?.signedUrl) throw new Error('Failed to sign temp file')
-    const fileResp = await fetch(signed.signedUrl)
-    if (!fileResp.ok) throw new Error('Failed to fetch temp file')
-    const blob = await fileResp.blob()
-
-    // Prepare multipart for OCR pipeline with F5 form_type
+    // Pass file_key to process API so it fetches from Supabase (avoids 4.5MB request body limit)
     const fd = new FormData()
-    const respContentType = fileResp.headers.get('content-type') || ''
-    const lowerKey = String(file_key_temp || '').toLowerCase()
-    let filename = 'f5-upload'
-    let mime = respContentType
-    if (!mime || mime === 'application/octet-stream') {
-      if (lowerKey.endsWith('.pdf')) mime = 'application/pdf'
-      else if (lowerKey.match(/\.(png|jpg|jpeg|webp|gif)$/)) {
-        const ext = lowerKey.split('.').pop() as string
-        mime = `image/${ext === 'jpg' ? 'jpeg' : ext}`
-      }
-    }
-    if (mime.includes('pdf') || lowerKey.endsWith('.pdf')) filename += '.pdf'
-    else if (mime.startsWith('image/')) filename += `.${mime.split('/')[1] || 'png'}`
-    fd.append('file', new File([blob], filename, mime ? { type: mime } : undefined))
+    fd.append('file_key', file_key_temp.trim())
     fd.append('metadata', JSON.stringify({ ocr_max_pages: 3, form_type: 'F5' }))
 
     const baseUrl = new URL(request.url).origin

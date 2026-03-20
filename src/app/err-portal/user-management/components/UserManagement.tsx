@@ -28,6 +28,8 @@ export default function UserManagement() {
   const router = useRouter()
   const { can } = useAllowedFunctions()
   const canViewPage = can('users_view_page')
+  const canViewPermissionsPage = can('users_view_permissions_page')
+  const canViewGroupPermissionsPage = can('users_view_group_permissions_page')
   const [pendingUsers, setPendingUsers] = useState<PendingUserListItem[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -105,19 +107,23 @@ export default function UserManagement() {
 
   return (
     <div className="space-y-6">
-      {isAdmin && (
+      {(canViewPermissionsPage || canViewGroupPermissionsPage) && (
         <>
           <div className="flex gap-4">
-            <Button variant="default" size="sm" asChild>
-              <Link href="/err-portal/user-management/permissions">
-                Individual User Permissions
-              </Link>
-            </Button>
-            <Button variant="default" size="sm" asChild>
-              <Link href="/err-portal/user-management/group-permissions">
-                Bulk Permissions
-              </Link>
-            </Button>
+            {canViewPermissionsPage && (
+              <Button variant="default" size="sm" asChild>
+                <Link href="/err-portal/user-management/permissions">
+                  Individual User Permissions
+                </Link>
+              </Button>
+            )}
+            {canViewGroupPermissionsPage && (
+              <Button variant="default" size="sm" asChild>
+                <Link href="/err-portal/user-management/group-permissions">
+                  Bulk Permissions
+                </Link>
+              </Button>
+            )}
           </div>
           <CollapsibleRow
             title="Access Rights Management"

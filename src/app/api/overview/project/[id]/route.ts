@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
+import { pickF5TextForEnUi, pickReachTextForEnUi } from '@/lib/storiesEnDisplay'
 
 const OVERDUE_DAYS_AFTER_TRANSFER = 32
 
@@ -30,13 +31,17 @@ function computeOverdue(
 }
 
 export async function GET(
-  _req: Request,
+  req: Request,
   { params }: { params: { id: string } }
 ) {
+  const t0 = Date.now()
+  console.log('[overview/project] start', params?.id)
   try {
     const supabase = getSupabaseRouteClient()
     const id = params.id
     if (!id) return NextResponse.json({ error: 'Invalid id' }, { status: 400 })
+    const locale = new URL(req.url).searchParams.get('locale')?.toLowerCase() ?? ''
+    const useEnCache = locale === 'en'
 
     // Check if this is a historical project
     const isHistorical = id.startsWith('historical_')
@@ -236,6 +241,7 @@ export async function GET(
         .eq('id', id)
         .single()
       if (projErr) throw projErr
+      console.log('[overview/project] project load', Date.now() - t0, 'ms')
 
       // Load MOU file keys and per-project transfer date from payment confirmation
       let mouFileKeys: { payment_confirmation_file: string | null; signed_mou_file_key: string | null } | null = null
@@ -272,6 +278,7 @@ export async function GET(
         .eq('project_id', id)
         .order('created_at', { ascending: false })
       if (sumErr) throw sumErr
+      console.log('[overview/project] summaries', Date.now() - t0, 'ms', (summaries?.length ?? 0), 'rows')
 
       const summaryIds = (summaries || []).map((s: any) => s.id)
       let expensesBySummary: Record<number, any[]> = {}
@@ -292,21 +299,25 @@ export async function GET(
         expenses: expensesBySummary[s.id] || []
       }))
 
-      // Load F5 reports for this project
+      // Load F5 reports for this project (include _en cache columns when present)
       const { data: f5Reports, error: f5Err } = await supabase
         .from('err_program_report')
-        .select('id, report_date, positive_changes, negative_results, unexpected_results, lessons_learned, suggestions, reporting_person, created_at, is_draft')
+        .select('id, report_date, positive_changes, negative_results, unexpected_results, lessons_learned, suggestions, reporting_person, created_at, is_draft, language, positive_changes_en, negative_results_en, unexpected_results_en, lessons_learned_en, suggestions_en')
         .eq('project_id', id)
         .order('created_at', { ascending: false })
       if (f5Err) throw f5Err
+      console.log('[overview/project] f5 reports', Date.now() - t0, 'ms', (f5Reports?.length ?? 0), 'rows')
 
       const reportIds = (f5Reports || []).map((r: any) => r.id)
+
       let reachByReport: Record<string, any[]> = {}
       if (reportIds.length) {
+        const tReach = Date.now()
         const { data: reach } = await supabase
           .from('err_program_reach')
           .select('*')
           .in('report_id', reportIds)
+        console.log('[overview/project] reach', Date.now() - tReach, 'ms', (reach?.length ?? 0), 'rows')
         for (const r of (reach || [])) {
           const rid = (r as any).report_id
           reachByReport[rid] = reachByReport[rid] || []
@@ -314,10 +325,45 @@ export async function GET(
         }
       }
 
-      const f5ReportsWithReach = (f5Reports || []).map((r: any) => ({
-        ...r,
-        reach: reachByReport[r.id] || []
-      }))
+      const f5ReportsWithReach = (f5Reports || []).map((r: any) => {
+        const reach = reachByReport[r.id] || []
+        const enUi = useEnCache
+        return {
+          id: r.id,
+          report_date: r.report_date,
+          reporting_person: r.reporting_person,
+          created_at: r.created_at,
+          is_draft: r.is_draft,
+          language: r.language,
+          positive_changes: enUi
+            ? pickF5TextForEnUi(r.language, r.positive_changes, r.positive_changes_en)
+            : r.positive_changes,
+          negative_results: enUi
+            ? pickF5TextForEnUi(r.language, r.negative_results, r.negative_results_en)
+            : r.negative_results,
+          unexpected_results: enUi
+            ? pickF5TextForEnUi(r.language, r.unexpected_results, r.unexpected_results_en)
+            : r.unexpected_results,
+          lessons_learned: enUi
+            ? pickF5TextForEnUi(r.language, r.lessons_learned, r.lessons_learned_en)
+            : r.lessons_learned,
+          suggestions: enUi
+            ? pickF5TextForEnUi(r.language, r.suggestions, r.suggestions_en)
+            : r.suggestions,
+          reach: reach.map((re: any) => ({
+            ...re,
+            location: enUi
+              ? pickReachTextForEnUi(r.language, re.location, re.location_en)
+              : re.location,
+            activity_name: enUi
+              ? pickReachTextForEnUi(r.language, re.activity_name, re.activity_name_en)
+              : re.activity_name,
+            activity_goal: enUi
+              ? pickReachTextForEnUi(r.language, re.activity_goal, re.activity_goal_en)
+              : re.activity_goal,
+          })),
+        }
+      })
 
       // Load F4 file attachments
       const f4FileAttachments: any[] = []
@@ -355,6 +401,7 @@ export async function GET(
         days_overdue: days_overdue ?? null
       }
 
+      console.log('[overview/project] total', Date.now() - t0, 'ms')
       return NextResponse.json({ 
         project: projectWithOverdue, 
         summaries: summariesWithExpenses,
@@ -371,7 +418,7 @@ export async function GET(
       })
     }
   } catch (e) {
-    console.error('overview/project detail error', e)
+    console.error('[overview/project] error', Date.now() - t0, 'ms', e)
     const msg = e instanceof Error ? e.message : String(e)
     const requestedId = typeof params?.id === 'string' ? params.id : ''
     if (requestedId.startsWith('historical_') && (/relation .* does not exist/i.test(msg) || /column .* does not exist/i.test(msg))) {

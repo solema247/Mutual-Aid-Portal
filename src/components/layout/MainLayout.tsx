@@ -2,19 +2,15 @@
 
 import { ReactNode, ReactElement, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import Sidebar from './Sidebar'
+import Sidebar, { type SidebarItem } from './Sidebar'
 import LanguageSwitch from '@/components/LanguageSwitch'
 import { Button } from '@/components/ui/button'
-import { PanelLeftClose, PanelLeftOpen, Globe } from 'lucide-react'
+import { Globe, Menu } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface MainLayoutProps {
   children: ReactNode
-  sidebarItems: {
-    href: string
-    label: string
-    icon: string | ReactElement
-  }[]
+  sidebarItems: SidebarItem[]
   /** Optional sidebar header title (e.g. for partner portal). When not set, uses err:navigation. */
   sidebarTitle?: string
   /** Optional user display name shown in the header. */
@@ -41,6 +37,7 @@ function formatRole(role: string | undefined): string {
 
 export default function MainLayout({ children, sidebarItems, sidebarTitle, userName, userRole, headerTitle, headerActions }: MainLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [mobileSheetOpen, setMobileSheetOpen] = useState(false)
   const { i18n } = useTranslation()
   const showHeader = !!headerTitle
   const isControlledSidebar = showHeader
@@ -54,11 +51,13 @@ export default function MainLayout({ children, sidebarItems, sidebarTitle, userN
   const userDisplay = (userName ?? (userRole ? formatRole(userRole) : '')) || null
 
   return (
-    <div className="flex h-screen overflow-x-hidden">
+    <div className="flex h-screen max-h-[100dvh] overflow-hidden">
       <Sidebar
         items={sidebarItems}
         title={sidebarTitle}
         isOpen={isControlledSidebar ? sidebarOpen : undefined}
+        mobileSheetOpen={showHeader ? mobileSheetOpen : undefined}
+        onMobileSheetOpenChange={showHeader ? setMobileSheetOpen : undefined}
       />
       <div className="flex flex-1 flex-col min-w-0 min-h-0">
         {showHeader && (
@@ -68,11 +67,20 @@ export default function MainLayout({ children, sidebarItems, sidebarTitle, userN
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="hidden lg:flex size-9 shrink-0 text-white hover:text-brand-orange hover:bg-white/10"
+                  className="lg:hidden flex size-9 shrink-0 rounded-md bg-brand-header text-white hover:bg-brand-header/90 hover:brightness-110 border-0 shadow-none"
+                  aria-label="Open menu"
+                  onClick={() => setMobileSheetOpen(true)}
+                >
+                  <Menu className="h-5 w-5" strokeWidth={2} />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="hidden lg:flex size-9 shrink-0 rounded-md text-white hover:text-white/90 border-0 shadow-none bg-transparent hover:bg-white/10"
                   aria-label={sidebarOpen ? 'Hide sidebar' : 'Show sidebar'}
                   onClick={() => setSidebarOpen(!sidebarOpen)}
                 >
-                  {sidebarOpen ? <PanelLeftClose className="h-5 w-5" /> : <PanelLeftOpen className="h-5 w-5" />}
+                  <Menu className="h-5 w-5" strokeWidth={2} />
                 </Button>
                 <div className="truncate text-lg font-semibold text-white">{headerTitle}</div>
               </div>

@@ -1,15 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin'
+import { normalizeProjectDonorToGrantId } from '@/lib/normalizeGrantId'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 export const fetchCache = 'force-no-store'
-
-function toDisplayKey(grantId: string): string {
-  const id = String(grantId || '').trim()
-  if (id.startsWith('FCDO-')) return 'FCDO'
-  return id
-}
 
 function activitySerialsFromJsonb(activities: unknown): string[] {
   if (activities == null) return []
@@ -48,8 +43,10 @@ async function fetchAllRows<T>(supabase: any, table: string, select: string, fil
 
 /**
  * GET /api/pool/grant-remaining?grantId=xxx
- * Returns { total, committed, allocated, remaining } for the selected grant using the grants table.
- * When grantId is FCDO-HELP-S or FCDO-SHPR (or any FCDO-*), aggregates both under display key "FCDO".
+ * Returns { total, historical, committed, allocated, remaining } for the selected grant only.
+ * Total = from grants table (included) for this grant_id. Historical = from activities_raw_import "Project Donor" for this grant.
+ * Remaining = total - historical - committed - allocated.
+ * All figures are for the exact grantId (e.g. FCDO-HELP-S shows only that grant's $650k, not aggregated FCDO).
  */
 export async function GET(request: NextRequest) {
   try {
@@ -59,11 +56,9 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'grantId is required' }, { status: 400 })
     }
 
-    const displayKey = toDisplayKey(grantId)
     const adminSupabase = getSupabaseAdmin()
 
-    // Use admin so we see all grants, grid rows, and projects (no RLS) for accurate totals
-    // Grants table: all rows whose grant_id maps to displayKey (e.g. FCDO-HELP-S + FCDO-SHPR → FCDO)
+    // Grants table: only rows for this exact grant_id (e.g. FCDO-HELP-S → only that grant's total)
     const grants = await fetchAllRows<{
       grant_id: string | null
       total_transferred_amount_usd: number | null
@@ -73,13 +68,11 @@ export async function GET(request: NextRequest) {
 
     let totalIncluded = 0
     const activitySerials: string[] = []
-    const rawGrantIds = new Set<string>()
 
     for (const g of grants) {
       if (!g.grant_id || g.grant_id.trim() === '') continue
       const rawId = g.grant_id.trim()
-      if (toDisplayKey(rawId) !== displayKey) continue
-      rawGrantIds.add(rawId)
+      if (rawId !== grantId) continue
       const transferred = g.total_transferred_amount_usd != null ? Number(g.total_transferred_amount_usd) : 0
       const fee = g.sum_transfer_fee_amount != null ? Number(g.sum_transfer_fee_amount) : 0
       totalIncluded += Math.max(0, (Number.isNaN(transferred) ? 0 : transferred) - (Number.isNaN(fee) ? 0 : fee))
@@ -87,18 +80,44 @@ export async function GET(request: NextRequest) {
       serials.forEach((s) => { if (s && !activitySerials.includes(s)) activitySerials.push(s) })
     }
 
-    // grants_grid_view: grid ids that map to this display key (for grant_grid_id assignment).
-    // View may use grant_id "FCDO" or "FCDO-HELP-S"/"FCDO-SHPR"; include displayKey so we match all.
-    const grantIdsToMatch = new Set<string>([displayKey, ...rawGrantIds])
+    // grants_grid_view: grid ids that map to this exact grant_id only (for grant_grid_id assignment).
     const gridRows = await fetchAllRows<{ id: string; grant_id: string | null }>(
       adminSupabase,
       'grants_grid_view',
       'id, grant_id',
-      (q: any) => q.in('grant_id', [...grantIdsToMatch])
+      (q: any) => q.eq('grant_id', grantId)
     )
     const gridIdsForDisplayKey = new Set<string>()
     for (const row of gridRows || []) {
-      if (row.id && row.grant_id && toDisplayKey(String(row.grant_id).trim()) === displayKey) gridIdsForDisplayKey.add(row.id)
+      if (row.id && row.grant_id && String(row.grant_id).trim() === grantId) gridIdsForDisplayKey.add(row.id)
+    }
+
+    // Historical: sum USD from activities_raw_import where "Project Donor" (normalized) matches the selected grant only.
+    // Use the requested grantId only (not displayKey/aggregate) so FCDO-HELP-S shows $0 historical when sheet has only "FCDO SHPR".
+    const grantIdsForHistorical = new Set<string>()
+    const addForHistorical = (id: string) => {
+      if (!id) return
+      grantIdsForHistorical.add(id.trim())
+      const norm = normalizeProjectDonorToGrantId(id)
+      if (norm) grantIdsForHistorical.add(norm)
+    }
+    addForHistorical(grantId)
+
+    const historicalData = await fetchAllRows<{ 'Project Donor'?: string | null; project_donor?: string | null; USD?: number | null; usd?: number | null }>(
+      adminSupabase,
+      'activities_raw_import',
+      '"Project Donor",USD'
+    )
+    let historical = 0
+    for (const row of historicalData || []) {
+      const rawDonor = row['Project Donor'] ?? row['project_donor']
+      if (rawDonor == null) continue
+      const normalized = normalizeProjectDonorToGrantId(String(rawDonor).trim())
+      if (!normalized || !grantIdsForHistorical.has(normalized)) continue
+      const rawUSD = row['USD'] ?? row['usd']
+      if (rawUSD == null || rawUSD === undefined) continue
+      const usd = Number(rawUSD)
+      if (!Number.isNaN(usd) && usd > 0) historical += usd
     }
 
     // Projects assigned to this grant: by grant_grid_id (in gridIdsForDisplayKey) or by serial in activitySerials
@@ -133,10 +152,10 @@ export async function GET(request: NextRequest) {
       else if (fs(p.funding_status) === 'allocated' || (fs(p.funding_status) === 'unassigned' && (p.status || '').toLowerCase() === 'pending')) allocated += amt
     }
 
-    const remaining = totalIncluded - committed - allocated
+    const remaining = totalIncluded - historical - committed - allocated
 
     return NextResponse.json(
-      { total: totalIncluded, committed, allocated, remaining },
+      { total: totalIncluded, historical, committed, allocated, remaining },
       { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } }
     )
   } catch (error) {

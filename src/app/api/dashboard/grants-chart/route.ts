@@ -44,20 +44,36 @@ export type GrantsChartRow = {
 
 /**
  * GET /api/dashboard/grants-chart
- * Fetches from grants (foreign table). Returns one row per grant_id with:
+ * Fetches from grants (foreign table). Optional query params:
+ * - from: ISO date (inclusive) – compared to grant_start_date
+ * - to: ISO date (inclusive) – compared to grant_end_date
+ * Returns one row per grant_id with:
  * - total_transferred_amount_usd, sum_transfer_fee_amount, sum_activity_amount
  * - balance = total_transferred_amount_usd - sum_transfer_fee_amount - sum_activity_amount
  * For stacked bar: x = grant_id, y = transfer_fee + activity + balance (stacked).
  */
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const supabase = getSupabaseAdmin()
+
+    const { searchParams } = new URL(request.url)
+    const from = searchParams.get('from')
+    const to = searchParams.get('to')
 
     const rows = await fetchAllRows<GrantRow>(
       supabase,
       'grants',
       'grant_id, total_transferred_amount_usd, sum_transfer_fee_amount, sum_activity_amount',
-      (q) => q.order('grant_id', { ascending: true })
+      (q) => {
+        let query = q
+        if (from) {
+          query = query.gte('grant_start_date', from)
+        }
+        if (to) {
+          query = query.lte('grant_end_date', to)
+        }
+        return query.order('grant_id', { ascending: true })
+      }
     )
 
     const chartData: GrantsChartRow[] = (rows ?? [])

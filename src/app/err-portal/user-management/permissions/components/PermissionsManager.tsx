@@ -38,7 +38,9 @@ const MODULE_LABELS: Record<string, string> = {
   users: 'User Management',
   grants: 'Grant Management',
   rooms: 'Room Management',
-  dashboard: 'Dashboard'
+  dashboard: 'Dashboard',
+  learnings: 'Mutual Aid Learnings',
+  surveys: 'Surveys'
 }
 
 interface PermissionsManagerProps {
@@ -70,7 +72,7 @@ export default function PermissionsManager({
   const [loadingUser, setLoadingUser] = useState(false)
   const [loadingFunctions, setLoadingFunctions] = useState(true)
   const [loadingUsers, setLoadingUsers] = useState(true)
-  const moduleOrder = ['grants', 'f1', 'f2', 'f3', 'f4_f5', 'management', 'users', 'rooms', 'dashboard'] as const
+  const moduleOrder = ['grants', 'f1', 'f2', 'f3', 'f4_f5', 'management', 'users', 'rooms', 'dashboard', 'learnings', 'surveys'] as const
   const [openModules, setOpenModules] = useState<Set<string>>(
     () => new Set(moduleOrder)
   )
@@ -215,7 +217,12 @@ export default function PermissionsManager({
               <div className="text-muted-foreground">Loading permissions...</div>
             ) : (
               <div className="space-y-2">
-                {moduleOrder.map((moduleKey) => {
+                {[
+                  ...moduleOrder,
+                  ...Object.keys(functionsByModule).filter(
+                    (k) => !(moduleOrder as readonly string[]).includes(k) && k !== 'f4' && k !== 'f5'
+                  ),
+                ].map((moduleKey) => {
                   // Combine F4 and F5 into one section (same page)
                   const rawFuncs =
                     moduleKey === 'f4_f5'

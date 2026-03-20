@@ -22,10 +22,6 @@
     {
       "path": "/api/sheets/sync-activities",
       "schedule": "*/5 * * * *"
-    },
-    {
-      "path": "/api/airtable/sync",
-      "schedule": "*/5 * * * *"
     }
   ]
 }

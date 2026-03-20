@@ -33,6 +33,14 @@ type DecisionGroup = {
   allocations: AllocationRow[]
 }
 
+type DecisionMeta = {
+  id: string
+  decision_id: string | null
+  decision_id_proposed: string | null
+  decision_date: string | null
+  restriction: string | null
+}
+
 function formatUsd(value: number | null): string {
   if (value == null) return '—'
   return new Intl.NumberFormat('en-US', {
@@ -65,8 +73,19 @@ function dateToSortKey(dateStr: string | null): number {
   return Number.isNaN(t) ? Number.NaN : t
 }
 
+/** Display label for a decision: prefer decision_id (e.g. LCC.AD.DKH.08-03-25-08), then decision_id_proposed, then raw key. */
+function decisionDisplayLabel(decisionKey: string, decisionsMeta: DecisionMeta[]): string {
+  const meta = decisionsMeta.find((d) => d.id === decisionKey)
+  if (meta) {
+    if (meta.decision_id) return meta.decision_id
+    if (meta.decision_id_proposed) return meta.decision_id_proposed
+  }
+  return decisionKey
+}
+
 export default function DistributionDecisionTableView() {
   const [allocations, setAllocations] = useState<AllocationRow[]>([])
+  const [decisionsMeta, setDecisionsMeta] = useState<DecisionMeta[]>([])
   const [loading, setLoading] = useState(true)
   const [expandedKey, setExpandedKey] = useState<string | null>(null)
   const [page, setPage] = useState(1)
@@ -82,12 +101,13 @@ export default function DistributionDecisionTableView() {
     }
     const result: DecisionGroup[] = []
     for (const [decisionKey, rows] of byKey.entries()) {
+      const meta = decisionsMeta.find((d) => d.id === decisionKey)
       const sumAllocationAmount = rows.reduce(
         (sum, r) => sum + (r.allocation_amount ?? 0),
         0
       )
-      const restriction = rows.map((r) => r.restriction).find(Boolean) ?? null
-      const decisionDate = rows.map((r) => r.decision_date).find(Boolean) ?? null
+      const restriction = meta?.restriction ?? rows.map((r) => r.restriction).find(Boolean) ?? null
+      const decisionDate = meta?.decision_date ?? rows.map((r) => r.decision_date).find(Boolean) ?? null
       result.push({
         decisionKey,
         sumAllocationAmount,
@@ -108,7 +128,7 @@ export default function DistributionDecisionTableView() {
       return ta - tb
     })
     return result
-  }, [allocations, dateSortOrder])
+  }, [allocations, decisionsMeta, dateSortOrder])
 
   const totalPages = Math.max(1, Math.ceil(decisions.length / PER_PAGE))
   const from = (page - 1) * PER_PAGE
@@ -126,10 +146,16 @@ export default function DistributionDecisionTableView() {
         const res = await fetch('/api/allocations', { cache: 'no-store' })
         if (!res.ok) throw new Error(res.statusText)
         const data = await res.json()
-        if (!cancelled) setAllocations(data)
+        if (!cancelled) {
+          setAllocations(Array.isArray(data.allocations) ? data.allocations : [])
+          setDecisionsMeta(Array.isArray(data.decisions) ? data.decisions : [])
+        }
       } catch (e) {
         console.error('Failed to fetch allocations', e)
-        if (!cancelled) setAllocations([])
+        if (!cancelled) {
+          setAllocations([])
+          setDecisionsMeta([])
+        }
       } finally {
         if (!cancelled) setLoading(false)
       }
@@ -228,7 +254,7 @@ export default function DistributionDecisionTableView() {
                         )}
                       </TableCell>
                       <TableCell>
-                        <span className="font-medium">{dec.decisionKey}</span>
+                        <span className="font-medium">{decisionDisplayLabel(dec.decisionKey, decisionsMeta)}</span>
                       </TableCell>
                       <TableCell className="whitespace-nowrap">{formatDate(dec.decisionDate)}</TableCell>
                       <TableCell className="whitespace-nowrap">{formatUsd(dec.sumAllocationAmount)}</TableCell>

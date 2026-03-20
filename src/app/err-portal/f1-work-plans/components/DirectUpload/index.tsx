@@ -19,31 +19,6 @@ type EmergencyRoomWithState = RoomWithState & {
 }
 import ExtractedDataReview from './ExtractedDataReview'
 import { cn } from '@/lib/utils'
-
-const F1_OCR_COMPARE_KEYS = [
-  'date', 'state', 'locality', 'project_objectives', 'intended_beneficiaries',
-  'estimated_beneficiaries', 'estimated_timeframe', 'additional_support', 'banking_details',
-  'program_officer_name', 'program_officer_phone', 'reporting_officer_name', 'reporting_officer_phone',
-  'finance_officer_name', 'finance_officer_phone', 'planned_activities', 'expenses'
-]
-
-function normVal (v: unknown): string {
-  if (v == null) return ''
-  if (typeof v === 'string') return v.trim()
-  if (typeof v === 'number') return String(v)
-  return JSON.stringify(v)
-}
-
-function countOcrEditedFields (initial: any, final: any): number {
-  if (!initial || typeof initial !== 'object') return 0
-  let count = 0
-  for (const key of F1_OCR_COMPARE_KEYS) {
-    const a = normVal(initial[key])
-    const b = normVal(final[key])
-    if (a !== b) count += 1
-  }
-  return count
-}
 import { X, Plus } from 'lucide-react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 
@@ -385,9 +360,16 @@ export default function DirectUpload() {
         return
       }
 
-      // Process the file first
+      // Process the file via storage key (avoids 4.5MB request body limit on Vercel)
+      const tempKey = (window as any).__f1_temp_key__ as string
+      if (!tempKey) {
+        alert('Upload failed. Please select the file again and try again.')
+        setIsLoading(false)
+        return
+      }
+
       const processFormData = new FormData()
-      processFormData.append('file', selectedFile)
+      processFormData.append('file_key', tempKey)
 
       // Add minimal metadata for initial processing
       const selectedState = states.find(s => s.id === formData.state_id)
@@ -512,12 +494,6 @@ export default function DirectUpload() {
         }
       }
 
-      // OCR acceptance metric: count of key fields user edited after extraction (for FCDO indicator)
-      const ocrEditedFieldsCount =
-        processedData != null
-          ? countOcrEditedFields(processedData, editedData)
-          : null
-
       // Insert into database with temp file path - NO FINAL FILE MOVE
       const { error: insertError } = await supabase
         .from('err_projects')
@@ -537,7 +513,6 @@ export default function DirectUpload() {
           original_text: originalText,
           language: sourceLanguage,
           grant_segment: formData.grant_segment ? String(formData.grant_segment) : null,
-          ocr_edited_fields_count: ocrEditedFieldsCount,
           // Remove these fields - will be set in F2:
           // donor_id: null,
           // grant_call_id: null,

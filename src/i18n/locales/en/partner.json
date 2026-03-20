@@ -5,7 +5,7 @@
   "welcome": "Welcome, {{name}}",
   "forecast": "Donor Forecasting Tool and Dashboards",
   "forecast_desc": "Plan and manage your forecasts",
-  "dashboard": "Mutual Aid Portal - ERR Dashboards",
+  "dashboard": "Mutual Aid Dashboards",
   "dashboard_desc": "View reports and dashboards",
   "grants": {
     "title": "Grant Management",

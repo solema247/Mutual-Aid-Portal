@@ -3,9 +3,9 @@
 import { useTranslation } from 'react-i18next'
 import { useState, useEffect } from 'react'
 import MainLayout from '@/components/layout/MainLayout'
+import type { SidebarItem, SidebarLinkItem } from '@/components/layout/Sidebar'
 import { useRouter } from 'next/navigation'
-import { Users, ClipboardList, BarChart2, PieChart, UserCog, Home, CheckSquare, BookOpen, PenTool, Cog, FileText } from 'lucide-react'
-import NotificationBell from '@/components/NotificationBell'
+import { Users, ClipboardList, BarChart2, BarChart3, PieChart, UserCog, Home, CheckSquare, BookOpen, PenTool, Cog, FileText, BookMarked } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 import { useAllowedFunctions } from '@/hooks/useAllowedFunctions'
 
@@ -68,12 +68,67 @@ export default function ErrPortalLayout({
   const canViewF2 = can('f2_view_page')
   const canViewF3 = can('f3_view_page')
   const canViewF4F5 = can('f4_f5_view_page')
+  const canViewLearnings = can('learnings_view_page')
   const canViewProjectManagement = can('management_view_page')
   const canViewUserManagement = can('users_view_page')
   const canViewRooms = can('rooms_view_page')
   const canViewDashboard = can('dashboard_view_page')
+  const canViewSurveys = can('surveys_view_page')
 
-  const sidebarItems = [
+  const reportingGroupChildren: SidebarLinkItem[] = []
+  if (canViewF4F5) {
+    reportingGroupChildren.push({
+      href: '/err-portal/report-tracker',
+      label: 'Report Tracker',
+      icon: <BarChart3 className="h-5 w-5" />
+    })
+  }
+  if (canViewProjectManagement) {
+    reportingGroupChildren.push({
+      href: '/err-portal/project-management',
+      label: t('err:project_management'),
+      icon: <Cog className="h-5 w-5" />
+    })
+  }
+  if (canViewDashboard) {
+    reportingGroupChildren.push({
+      href: '/err-portal/dashboard',
+      label: t('err:dashboard'),
+      icon: <BarChart2 className="h-5 w-5" />
+    })
+  }
+  if (canViewLearnings) {
+    reportingGroupChildren.push({
+      href: '/err-portal/stories',
+      label: 'Mutual Aid Learnings',
+      icon: <BookMarked className="h-5 w-5" />
+    })
+  }
+
+  const adminGroupChildren: SidebarLinkItem[] = []
+  if (canViewRooms) {
+    adminGroupChildren.push({
+      href: '/err-portal/room-management',
+      label: t('err:room_management'),
+      icon: <Users className="h-5 w-5" />
+    })
+  }
+  if (canViewUserManagement) {
+    adminGroupChildren.push({
+      href: '/err-portal/user-management',
+      label: t('err:user_management'),
+      icon: <UserCog className="h-5 w-5" />
+    })
+  }
+  if (canViewSurveys) {
+    adminGroupChildren.push({
+      href: '/err-portal/surveys',
+      label: t('err:surveys', 'Surveys'),
+      icon: <FileText className="h-5 w-5" />
+    })
+  }
+
+  const sidebarItems: SidebarItem[] = [
     {
       href: '/err-portal',
       label: t('err:home'),
@@ -104,30 +159,15 @@ export default function ErrPortalLayout({
       label: 'F4 & F5 Reporting',
       icon: <BookOpen className="h-5 w-5" />
     }] : []),
-    ...(canViewProjectManagement ? [{
-      href: '/err-portal/project-management',
-      label: t('err:project_management'),
-      icon: <Cog className="h-5 w-5" />
+    ...(reportingGroupChildren.length > 0 ? [{
+      type: 'group' as const,
+      label: 'Reporting & learnings',
+      children: reportingGroupChildren
     }] : []),
-    ...(canViewDashboard ? [{
-      href: '/err-portal/dashboard',
-      label: t('err:dashboard'),
-      icon: <BarChart2 className="h-5 w-5" />
-    }] : []),
-    ...(canViewDashboard ? [{
-      href: '/err-portal/surveys',
-      label: t('err:surveys', 'Surveys'),
-      icon: <FileText className="h-5 w-5" />
-    }] : []),
-    ...(canViewRooms ? [{
-      href: '/err-portal/room-management',
-      label: t('err:room_management'),
-      icon: <Users className="h-5 w-5" />
-    }] : []),
-    ...(canViewUserManagement ? [{
-      href: '/err-portal/user-management',
-      label: t('err:user_management'),
-      icon: <UserCog className="h-5 w-5" />
+    ...(adminGroupChildren.length > 0 ? [{
+      type: 'group' as const,
+      label: 'Admin',
+      children: adminGroupChildren
     }] : [])
   ]
 
