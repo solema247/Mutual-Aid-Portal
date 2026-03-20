@@ -460,7 +460,7 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
       setTempKey(key)
       // upload file to storage
       const { error: upErr } = await supabase.storage.from('images').upload(key, file, { upsert: true })
-      if (upErr) throw upErr
+      if (upErr) throw new Error(upErr.message || 'File upload failed')
       // parse
       // Get signed URL for file viewing
       const { data: signedUrl } = await supabase.storage.from('images').createSignedUrl(key, 3600)
@@ -522,7 +522,8 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
       setStep('preview')
     } catch (e) {
       console.error(e)
-      alert('Failed to process file')
+      const message = e instanceof Error ? e.message : 'Failed to process file'
+      alert(message)
     } finally {
       setIsLoading(false)
     }

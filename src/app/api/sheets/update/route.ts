@@ -3,6 +3,7 @@ import { google } from 'googleapis'
 import path from 'path'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import OpenAI from 'openai'
+import { getOpenAIApiKey } from '@/lib/getOpenAIApiKey'
 
 // Initialize Google Sheets
 const auth = new google.auth.GoogleAuth({
@@ -14,9 +15,9 @@ const sheets = google.sheets({ version: 'v4', auth })
 
 // Initialize OpenAI client lazily (only when needed)
 function getOpenAIClient(): OpenAI {
-  const apiKey = process.env.OPENAI_API_KEY
+  const apiKey = getOpenAIApiKey()
   if (!apiKey) {
-    throw new Error('OPENAI_API_KEY environment variable is required')
+    throw new Error('OpenAI API key missing. Set OPENAI_API_KEY in .env.local or run npm run sync:openai-key.')
   }
   return new OpenAI({ apiKey })
 }

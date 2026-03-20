@@ -1,27 +1,63 @@
-import vision from '@google-cloud/vision'
+import vision, { ImageAnnotatorClient } from '@google-cloud/vision'
 import OpenAI from 'openai'
+import fs from 'fs'
+import path from 'path'
+import { getOpenAIApiKey } from '@/lib/getOpenAIApiKey'
 
-// Initialize Google Vision client with proper private_key newline handling
-const visionClient = new vision.ImageAnnotatorClient({
-  credentials: (() => {
+// Lazy Vision client so we only validate credentials when F4/F5 OCR is used
+let visionClientInstance: ImageAnnotatorClient | null = null
+
+function loadVisionCredentials(): Record<string, unknown> {
+  const filePath = process.env.GOOGLE_VISION_FILE
+  let raw: string
+  if (filePath && filePath.trim()) {
+    const resolved = path.resolve(filePath.trim())
     try {
-      const raw = process.env.GOOGLE_VISION || '{}'
-      const creds = JSON.parse(raw)
-      if (creds && typeof creds.private_key === 'string') {
-        creds.private_key = creds.private_key.replace(/\\n/g, '\n')
-      }
-      return creds
-    } catch {
-      return {}
+      raw = fs.readFileSync(resolved, 'utf8')
+    } catch (e) {
+      throw new Error(`GOOGLE_VISION_FILE could not be read (${resolved}). Check the path and file permissions.`)
     }
-  })()
-})
+  } else {
+    raw = process.env.GOOGLE_VISION || ''
+  }
+  if (!raw || raw.trim() === '' || raw === '{}') {
+    throw new Error(
+      'Vision credentials not set. In .env.local (project root) set either: ' +
+      'GOOGLE_VISION_FILE=/absolute/path/to/your-service-account.json or ' +
+      'GOOGLE_VISION={"type":"service_account",...} on one line. Then restart the dev server.'
+    )
+  }
+  let creds: Record<string, unknown>
+  try {
+    creds = JSON.parse(raw) as Record<string, unknown>
+  } catch {
+    throw new Error('Vision credentials are invalid JSON. Check GOOGLE_VISION or the file at GOOGLE_VISION_FILE.')
+  }
+  if (!creds || typeof creds.client_email !== 'string' || typeof creds.private_key !== 'string') {
+    throw new Error(
+      'Vision credentials must be a service account JSON with client_email and private_key.'
+    )
+  }
+  if (typeof creds.private_key === 'string') {
+    (creds as any).private_key = (creds.private_key as string).replace(/\\n/g, '\n')
+  }
+  return creds
+}
+
+function getVisionClient(): ImageAnnotatorClient {
+  if (visionClientInstance) return visionClientInstance
+  const creds = loadVisionCredentials()
+  visionClientInstance = new vision.ImageAnnotatorClient({ credentials: creds as any })
+  return visionClientInstance
+}
 
 // Initialize OpenAI client lazily (only when needed)
 function getOpenAIClient(): OpenAI {
-  const apiKey = process.env.OPENAI_API_KEY
+  const apiKey = getOpenAIApiKey()
   if (!apiKey) {
-    throw new Error('OPENAI_API_KEY environment variable is required')
+    throw new Error(
+      'OpenAI API key missing. Set OPENAI_API_KEY in project root .env.local, run npm run sync:openai-key, or add openai-key.txt. Then restart the dev server.'
+    )
   }
   return new OpenAI({ apiKey })
 }
@@ -32,6 +68,79 @@ function detectLanguage(text: string): 'ar' | 'en' {
   const arabicCount = (text.match(arabicPattern) || []).length
   const englishCount = (text.match(englishPattern) || []).length
   return arabicCount > englishCount ? 'ar' : 'en'
+}
+
+/** Normalize one F4 expense object from model output (handles alternate key names). */
+function normalizeF4ExpenseRow(e: any): any {
+  if (!e || typeof e !== 'object') return e
+  const numLoose = (v: any): number | null => {
+    if (v == null || v === '') return null
+    const x = Number(String(v).replace(/[،,\s]/g, ''))
+    return Number.isFinite(x) ? x : null
+  }
+  return {
+    activity: String(e.activity ?? e.activity_name ?? e.activity_label ?? e.name ?? '').trim(),
+    description: String(
+      e.description ?? e.details ?? e.notes ?? e.item ?? e.detail ?? e.bayan ?? e.statement ?? e.text ?? ''
+    ).trim(),
+    amount_value: numLoose(e.amount_value ?? e.amount ?? e.value ?? e.expense_amount ?? e.total),
+    amount_usd: numLoose(e.amount_usd ?? e.usd ?? e.usd_amount ?? e.amountUSD ?? e.amount_usd_value),
+    currency: e.currency === 'USD' || e.currency === 'SDG' ? e.currency : null,
+    payment_date: String(e.payment_date ?? e.date_paid ?? e.paymentDate ?? e.date ?? '').trim(),
+    payment_method: String(
+      e.payment_method ?? e.method ?? e.pay_method ?? e.payment_type ?? e.way_of_payment ?? ''
+    ).trim(),
+    receipt_no: String(
+      e.receipt_no ??
+        e.receipt_number ??
+        e.invoice_no ??
+        e.invoice ??
+        e.receipt ??
+        e.reference_number ??
+        e.ref_no ??
+        e.transaction_id ??
+        e.bank_reference ??
+        e.receiptNumber ??
+        ''
+    ).trim(),
+    seller: String(
+      e.seller ??
+        e.vendor ??
+        e.payee ??
+        e.supplier ??
+        e.merchant ??
+        e.beneficiary ??
+        e.recipient ??
+        e.party ??
+        ''
+    ).trim()
+  }
+}
+
+/** Lines in early OCR that look like F4 table headers (Arabic + English) */
+function extractLikelyF4HeaderLines(ocrText: string): string {
+  const lines = ocrText.split(/\r?\n/)
+  const headerRe =
+    /النشاط|قيمة|المصروف|المرصوف|المبلغ|تاريخ|الدفع|إيصال|ايصال|اليصال|اىصال|اإليصال|بائع|مورد|مستلم|نوع|وسيلة|طريقة|كاش|تطبيق|وصف|موجز|البيان|تفاصيل|دولار|جنيه|سدج|SDG|USD|Receipt|Payment|Seller|Vendor|Invoice|Amount|Description|Date|Method|Payee|Supplier|Reference|Transaction/i
+  const picked: string[] = []
+  const limit = Math.min(lines.length, 150)
+  for (let i = 0; i < limit; i++) {
+    const L = lines[i].trim()
+    if (!L || L.length > 220) continue
+    if (headerRe.test(L)) picked.push(L)
+  }
+  return [...new Set(picked)].slice(0, 45).join('\n')
+}
+
+function buildF4UserMessage(ocrText: string): string {
+  const headerBlock = extractLikelyF4HeaderLines(ocrText)
+  if (!headerBlock.trim()) return ocrText
+  return (
+    'DETECTED TABLE HEADER / COLUMN LABELS IN THIS OCR (read carefully; Arabic RTL; labels may be broken across lines — merge fragments like "تاري" + "خ" + "الدفع" into تاريخ الدفع):\n' +
+    headerBlock +
+    '\n\nUse these labels to locate each COLUMN. For every expense row, copy the cell under "تاريخ الدفع" → payment_date, "نوع الدفع" / كاش|تطبيق بنك → payment_method, "رقم الإيصال" / variants → receipt_no, "البائع/المستلم" / المورد → seller, SDG amount column → amount_value+currency SDG, USD/دولار column if present → amount_usd.\n\n--- FULL OCR TEXT ---\n\n' +
+    ocrText
+  )
 }
 
 function getLongestArabicParagraph(sourceText: string): string | null {
@@ -60,18 +169,19 @@ export interface ProcessMetadata {
 export async function processFForm(file: File, metadata: ProcessMetadata): Promise<any> {
   const overallStart = Date.now()
   // start
-  // Timeout helpers
+  // Timeout: race the promise against a timer; only throw "timed out" when the timer wins
   const withTimeout = async <T>(p: Promise<T>, ms: number, label: string): Promise<T> => {
-    const controller = new AbortController()
-    const t = setTimeout(() => controller.abort(), ms)
+    let timerId: ReturnType<typeof setTimeout>
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timerId = setTimeout(() => reject(new Error(`${label} timed out`)), ms)
+    })
     try {
-      // @ts-ignore signal optional depending on promise
-      const res: T = await (p as any)
+      const res = await Promise.race([p, timeoutPromise])
+      clearTimeout(timerId!)
       return res
     } catch (e) {
-      throw new Error(`${label} timed out`)
-    } finally {
-      clearTimeout(t)
+      clearTimeout(timerId!)
+      throw e
     }
   }
 
@@ -87,7 +197,7 @@ export async function processFForm(file: File, metadata: ProcessMetadata): Promi
     const visionStart = Date.now()
     const pages = Array.from({ length: Math.min(5, maxPagesHint) }, (_, i) => i + 1)
     const [pageInfo] = await withTimeout(
-      visionClient.batchAnnotateFiles({
+      getVisionClient().batchAnnotateFiles({
         requests: [{
           inputConfig: { mimeType: 'application/pdf', content: base64 },
           features: [{ type: 'DOCUMENT_TEXT_DETECTION' }],
@@ -95,7 +205,7 @@ export async function processFForm(file: File, metadata: ProcessMetadata): Promi
           pages
         }]
       }),
-      55000,
+      90000,
       'Vision PDF OCR'
     )
     const responses = pageInfo.responses?.[0]?.responses || []
@@ -106,7 +216,7 @@ export async function processFForm(file: File, metadata: ProcessMetadata): Promi
   } else {
     const visionStart = Date.now()
     const [result] = await withTimeout(
-      visionClient.documentTextDetection({
+      getVisionClient().documentTextDetection({
         image: { content: base64 },
         imageContext: { languageHints: ['ar', 'en'] }
       }),
@@ -138,15 +248,39 @@ export async function processFForm(file: File, metadata: ProcessMetadata): Promi
   const isF5 = formType === 'F5'
 
   const openai = getOpenAIClient()
+  const jsonModel =
+    (isF4 && process.env.OPENAI_F4_MODEL) ||
+    (isF5 && process.env.OPENAI_F5_MODEL) ||
+    (isF4 || isF5 ? process.env.OPENAI_JSON_MODEL : '') ||
+    (isF4 || isF5 ? 'gpt-4o-mini' : 'gpt-3.5-turbo')
+  const openAiTimeoutMs = (() => {
+    const fromEnv = Number(process.env.OPENAI_COMPLETION_TIMEOUT_MS)
+    if (Number.isFinite(fromEnv) && fromEnv >= 10000) return fromEnv
+    return isF4 || isF5 ? 90000 : 30000
+  })()
   const completion = await withTimeout(
     openai.chat.completions.create({
-      model: 'gpt-3.5-turbo',
-      max_tokens: 3000,
+      model: jsonModel,
+      max_tokens: isF4 || isF5 ? 4096 : 3000,
       response_format: (isF4 || isF5) ? { type: 'json_object' } as any : undefined,
       messages: [
         {
           role: 'system',
           content: isF4 ? `Extract ONLY F4 Financial Report data from the text (Arabic or English). Do not infer or convert amounts. Keep raw amounts and detected currency.
+
+YES, YOU CAN READ ARABIC HEADERS: The user message includes OCR text from the PDF. Arabic column titles ARE in that text (often garbled or split across lines by OCR). You MUST locate them and map every data row to columns.
+
+ARABIC F4 COLUMN HEADERS (match flexibly — OCR typos common). Map labels to JSON:
+- activity ← النشاط
+- description ← وصف موجز للمصروفات OR وصف موجز للمرصوفات (OCR typo مرصوفات) OR البيان OR الوصف OR تفاصيل (when not seller column)
+- payment_date ← تاريخ الدفع OR التاريخ (OCR may split: تاري + خ + الدفع on separate lines — merge mentally)
+- payment_method ← نوع الدفع OR وسيلة الدفع OR طريقة الدفع OR cell text كاش OR تطبيق بنك OR تحويل بنكي OR حوالة
+- receipt_no ← رقم الإيصال OR رقم الايصال OR رقم اإليصال OR اإليصال OR lines with مرفق بالتقرير near numbers
+- seller ← البائع OR المورد OR المستلم OR البائع/المستلم OR تفاصيل البائع OR الجهة OR الاسم التجاري
+- amount_value + currency SDG ← قيمة المصروفات OR قيمة المرصوفات OR المبلغ OR قيمة النفقات
+- amount_usd ← only if a دولار OR USD OR $ column exists with a number in that row
+
+RTL COLUMN ORDER: On many forms the RIGHT side is activity/description and the LEFT side is amount — read each logical ROW left-to-right as a row, not only visual order.
 
 CRITICAL EXPENSE TABLE EXTRACTION RULES:
 
@@ -196,14 +330,35 @@ BASIC INFORMATION:
 - locality: ERR room or locality name as seen or null
 
 EXPENSES TABLE (actual expenses):
-- For each listed expense row with an amount, return an object:
-  { activity: string, amount_value: number, currency: "USD" | "SDG" | null }
-- activity: Clean activity name only (from activity column, not merged with description). If two activities share a row, use the primary one or combine appropriately.
-- amount_value: The actual expense amount from the expense amount column (numeric, no commas). Use amounts in the order they appear - do not swap or reorder.
-- currency: Detect from context/symbols/labels (e.g., SDG, جنيه, $, USD). If the form is in Arabic and currency is unclear, default to "SDG". If form is in English and currency is unclear, default to "USD". Only use null if truly ambiguous.
-- Do NOT convert any amounts. Keep the number as it appears (strip commas and symbols).
-- Include ALL expense rows - do not skip any
-- Ignore receipt pages, bank slips, or pages without an expense row with amount
+- For each listed expense row with an amount, return an object with ALL of these keys (use empty string "" for missing text; use null only for numbers when truly absent):
+  { activity: string, description: string, amount_value: number, amount_usd: number | null, currency: "USD" | "SDG" | null, payment_date: string, payment_method: string, receipt_no: string, seller: string }
+- activity: Clean activity name from the activity column. If two activities share a row, use the primary one or combine. Use "" if missing.
+- description: Full description or details for this expense line (e.g. narrative, notes, item description). Extract from description column or adjacent text. Use "" if not present.
+- amount_value: The expense amount from the amount column (numeric, no commas). Use amounts in order - do not swap. Use null only if no amount in the row.
+- amount_usd: USD amount if the row shows USD or if a USD column exists; otherwise null. Do not convert; only use if explicitly in the document.
+- currency: "SDG" or "USD" from labels/symbols (e.g. SDG, جنيه, $, USD). If Arabic and unclear, default "SDG". If English and unclear, default "USD".
+- payment_date: Per-row payment date in YYYY-MM-DD from the expense table (تاريخ الدفع / Payment date). Use "" if that cell is empty — do not substitute the report header date here; the server uses header date only as fallback when row date is missing.
+- payment_method: Method of payment (e.g. "Bank Transfer", "Cash", "Cheque", "تحويل بنكي", "نقدي"). Use "" if not found; do not leave null.
+- receipt_no: Receipt or invoice number if visible in the row or table. Use "" if not found.
+- seller: Vendor/seller/payee name if visible. Use "" if not found.
+- Do NOT convert amounts. Include ALL expense rows. Ignore receipt-only pages without an expense row.
+
+ENGLISH / TRANSLATED FORMS (same rules; map headers to JSON keys):
+- "Payment date" / "Date of payment" / "Date paid" → payment_date (YYYY-MM-DD)
+- "Payment method" / "Type of payment" / "Cash/Bank/App" → payment_method (Bank Transfer, Cash, Cheque, or exact label in English)
+- "Receipt No." / "Receipt #" / "Invoice" / "Reference" / "Transaction ID" → receipt_no (digits only as printed)
+- "Seller" / "Vendor" / "Supplier" / "Payee" / "Beneficiary" / "Recipient" → seller
+- "Description" / "Details" / "Brief description" → description
+Each expense ROW must copy values from THAT row's cells. If the table is English, use English text in string fields.
+
+ROW-LEVEL TEXT COLUMNS (many F4 tables have these on the SAME line as the activity — you MUST copy them into each expense object):
+- Headings like "البيان" / "الوصف" / "Description" / "تفاصيل" → put that cell text in "description" (not empty if OCR shows text there).
+- "تاريخ الدفع" / "التاريخ" / "Date" → payment_date as YYYY-MM-DD when a date appears on that row.
+- "وسيلة الدفع" / "طريقة الدفع" / "Method" / "الدفع" → payment_method; map Arabic to English: تحويل بنكي/حوالة→Bank Transfer, نقدي→Cash, شيك/شيكات→Cheque.
+- "البائع" / "المورد" / "الجهة" / "الاسم التجاري" / "Seller" / "Vendor" / "Payee" → seller.
+- If there is NO separate description column but the row has extra words between activity and amount, put those words in "description".
+- USD column: If the table has a دولار or USD amount column, set amount_usd from that column and amount_value from the SDG/جنيه column with currency "SDG".
+- If ONLY SDG amounts appear in the amount column but the document states an exchange rate (e.g. "سعر الصرف" or "1 USD = X SDG"), set amount_usd to round(amount_value / X, 2) for that row; otherwise amount_usd may be null.
 
 TOTALS SECTION (verbatim extraction without math):
 - total_expenses_text: numeric string if A ( إجمالي النفقات ) is present, else null
@@ -221,7 +376,7 @@ OTHER:
 - language: "ar" or "en" inferred from the text
 - raw_ocr: include full OCR text back to caller
 
-Return strict JSON with keys exactly as specified above.` : (isF5 ? `Extract F5 program report data. Return MINIFIED JSON (no whitespace, no markdown) with EXACTLY these fields:
+Return strict JSON with keys exactly as specified above. Prefer empty string for missing string fields so that description, payment_date, payment_method, receipt_no, seller are never null.` : (isF5 ? `Extract F5 program report data. Return MINIFIED JSON (no whitespace, no markdown) with EXACTLY these fields:
 
 date: Report date (string)
 language: "ar" or "en"
@@ -249,11 +404,11 @@ IMPORTANT:
 - Return ONLY minified JSON, no markdown, no other text
 - Use null for missing values, not empty strings` : `Extract information from the following text (which may be in English or Arabic): ...`)
         },
-        { role: 'user', content: text }
+        { role: 'user', content: isF4 ? buildF4UserMessage(text) : text }
       ],
       temperature: 0.1
     }),
-    55000,
+    openAiTimeoutMs,
     'OpenAI completion'
   )
 
@@ -276,8 +431,21 @@ IMPORTANT:
     structuredData.language = detectLanguage(text)
   }
 
-  // F1 fallback: ensure objectives present
   const formTypeUpper = formType
+  if (formTypeUpper === 'F4') {
+    const rawEx: any[] = Array.isArray(structuredData.expenses)
+      ? structuredData.expenses
+      : Array.isArray(structuredData.expense_lines)
+        ? structuredData.expense_lines
+        : Array.isArray(structuredData.expense_items)
+          ? structuredData.expense_items
+          : Array.isArray(structuredData.lines)
+            ? structuredData.lines
+            : []
+    structuredData.expenses = rawEx.map(normalizeF4ExpenseRow).filter((x) => x && typeof x === 'object')
+  }
+
+  // F1 fallback: ensure objectives present
   if (formTypeUpper !== 'F4' && formTypeUpper !== 'F5') {
     const objectives = structuredData.project_objectives
     const objectivesStr = typeof objectives === 'string' ? objectives.trim() : ''

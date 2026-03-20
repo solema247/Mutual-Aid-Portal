@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { translateF4Summary, translateF4Expenses } from '@/lib/translateHelper'
+import { extractF4ReceiptPages } from '@/lib/extractF4ReceiptPages'
 
 export async function POST(req: Request) {
   try {
@@ -169,6 +170,28 @@ export async function POST(req: Request) {
         await supabase
           .from('err_summary_attachments')
           .insert({ summary_id, file_key: finalPath, file_type: 'summary_pdf', uploaded_by: uploaded_by || null })
+
+        // Extract receipt pages from PDF (pages after main report) and store as attachments
+        if (ext === 'pdf') {
+          try {
+            const arrayBuffer = await blob.arrayBuffer()
+            const receiptBuffers = await extractF4ReceiptPages(arrayBuffer)
+            const receiptsBasePath = `f4-financial-reports/${safe(state_name)}/${safe(err_code || err_id)}/${safe(grant_serial_id)}/${summary_id}/receipts`
+            for (let i = 0; i < receiptBuffers.length; i++) {
+              const receiptPath = `${receiptsBasePath}/receipt_${i + 1}.pdf`
+              const { error: receiptUpErr } = await supabase.storage
+                .from('images')
+                .upload(receiptPath, receiptBuffers[i], { contentType: 'application/pdf', upsert: true })
+              if (!receiptUpErr) {
+                await supabase
+                  .from('err_summary_attachments')
+                  .insert({ summary_id, file_key: receiptPath, file_type: 'receipt', uploaded_by: uploaded_by || null })
+              }
+            }
+          } catch (receiptErr) {
+            console.warn('F4 receipt extraction failed, continuing without receipt attachments', receiptErr)
+          }
+        }
       } catch (e) {
         console.warn('F4 file finalize failed, continuing without attachment', e)
       }

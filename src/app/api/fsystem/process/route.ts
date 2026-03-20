@@ -2,33 +2,56 @@ import { NextResponse } from 'next/server'
 import vision from '@google-cloud/vision'
 import OpenAI from 'openai'
 import path from 'path'
+import fs from 'fs'
 import { requirePermission } from '@/lib/requirePermission'
+import { getOpenAIApiKey } from '@/lib/getOpenAIApiKey'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
-// Initialize Google Vision client
-const visionClient = new vision.ImageAnnotatorClient({
-  credentials: (() => {
+// Lazy Vision client: credentials from GOOGLE_VISION_FILE (path to JSON) or GOOGLE_VISION (inline JSON)
+let visionClientInstance: vision.ImageAnnotatorClient | null = null
+function getVisionClient(): vision.ImageAnnotatorClient {
+  if (visionClientInstance) return visionClientInstance
+  const filePath = process.env.GOOGLE_VISION_FILE
+  let raw: string
+  if (filePath && filePath.trim()) {
+    const resolved = path.resolve(filePath.trim())
     try {
-      const raw = process.env.GOOGLE_VISION || '{}'
-      const creds = JSON.parse(raw)
-      if (creds && typeof creds.private_key === 'string') {
-        creds.private_key = creds.private_key.replace(/\\n/g, '\n')
-      }
-      return creds
+      raw = fs.readFileSync(resolved, 'utf8')
     } catch {
-      return {}
+      throw new Error(`GOOGLE_VISION_FILE could not be read (${resolved}). Check the path and file permissions.`)
     }
-  })()
-})
+  } else {
+    raw = process.env.GOOGLE_VISION || ''
+  }
+  if (!raw || raw.trim() === '' || raw === '{}') {
+    throw new Error(
+      'Vision credentials not set. Set GOOGLE_VISION_FILE=/path/to/service-account.json or GOOGLE_VISION=... in .env.local, then restart.'
+    )
+  }
+  let creds: Record<string, unknown>
+  try {
+    creds = JSON.parse(raw) as Record<string, unknown>
+  } catch {
+    throw new Error('Vision credentials are invalid JSON.')
+  }
+  if (!creds || typeof creds.client_email !== 'string' || typeof creds.private_key !== 'string') {
+    throw new Error('Vision credentials must be a service account JSON with client_email and private_key.')
+  }
+  if (typeof creds.private_key === 'string') {
+    (creds as any).private_key = (creds.private_key as string).replace(/\\n/g, '\n')
+  }
+  visionClientInstance = new vision.ImageAnnotatorClient({ credentials: creds as any })
+  return visionClientInstance
+}
 
 // Initialize OpenAI client lazily (only when needed)
 function getOpenAIClient(): OpenAI {
-  const apiKey = process.env.OPENAI_API_KEY
+  const apiKey = getOpenAIApiKey()
   if (!apiKey) {
-    throw new Error('OPENAI_API_KEY environment variable is required')
+    throw new Error('OpenAI API key missing. Set OPENAI_API_KEY in .env.local or run npm run sync:openai-key.')
   }
   return new OpenAI({ apiKey })
 }
@@ -192,7 +215,7 @@ export async function POST(req: Request) {
       
       let pageInfo: any
       try {
-        const result = await visionClient.batchAnnotateFiles({
+        const result = await getVisionClient().batchAnnotateFiles({
           requests: [{
             inputConfig: {
               mimeType: 'application/pdf',
@@ -273,7 +296,7 @@ export async function POST(req: Request) {
       text = allTexts.join('\n\n---PAGE BREAK---\n\n')
     } else {
       console.log('Processing image file...')
-      const [result] = await visionClient.documentTextDetection({
+      const [result] = await getVisionClient().documentTextDetection({
         image: { content: base64 },
         imageContext: {
           languageHints: ['ar', 'en']  // Help Vision detect Arabic/English text
