@@ -4,6 +4,7 @@ import OpenAI from 'openai'
 import path from 'path'
 import fs from 'fs'
 import { requirePermission } from '@/lib/requirePermission'
+import { getOpenAIApiKey } from '@/lib/getOpenAIApiKey'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 
 export const runtime = 'nodejs'
