@@ -1,7 +1,7 @@
 'use client'
 
 import { Suspense, useEffect, useMemo, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { useTranslation } from 'react-i18next'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
@@ -20,6 +20,8 @@ import { PlannedCategoriesRingChart } from './PlannedCategoriesRingChart'
 export default function DashboardPage() {
   const { t } = useTranslation(['dashboard', 'err', 'common'])
   const router = useRouter()
+  const pathname = usePathname()
+  const portalHomeHref = pathname.startsWith('/partner-portal') ? '/partner-portal' : '/err-portal'
   const { can } = useAllowedFunctions()
   const canViewPage = can('dashboard_view_page')
   const [filters, setFilters] = useState<ActiveFilter[]>([])
@@ -46,9 +48,9 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (!canViewPage) {
-      router.replace('/err-portal')
+      router.replace(portalHomeHref)
     }
-  }, [canViewPage, router])
+  }, [canViewPage, router, portalHomeHref])
 
   if (!canViewPage) return null
 
@@ -58,7 +60,7 @@ export default function DashboardPage() {
       <div className="space-y-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <Button variant="ghost" size="sm" asChild className="w-fit -ml-2">
-            <Link href="/err-portal" className="flex items-center gap-2 text-muted-foreground hover:text-foreground">
+            <Link href={portalHomeHref} className="flex items-center gap-2 text-muted-foreground hover:text-foreground">
               <ArrowLeft className="h-4 w-4" />
               {t('common:back_to_home')}
             </Link>
