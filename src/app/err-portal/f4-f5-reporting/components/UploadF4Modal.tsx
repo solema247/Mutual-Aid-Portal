@@ -468,7 +468,15 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
         setFileUrl(signedUrl.signedUrl)
       }
 
-      const parseRes = await fetch('/api/f4/parse', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ project_id: actualProjectId, file_key_temp: key }) })
+      const parseRes = await fetch('/api/f4/parse', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          project_id: actualProjectId,
+          file_key_temp: key,
+          f4_gemini_pdf: file.type === 'application/pdf' || ext === 'pdf'
+        })
+      })
       const text = await parseRes.text()
       let parseJson: any
       try { parseJson = JSON.parse(text) } catch { throw new Error(`Parse failed: ${parseRes.status} ${parseRes.statusText} — ${text.slice(0, 200)}`) }

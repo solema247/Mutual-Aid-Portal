@@ -1,9 +1,12 @@
 import { NextResponse } from 'next/server'
 import vision from '@google-cloud/vision'
 import OpenAI from 'openai'
-import path from 'path'
 import { requirePermission } from '@/lib/requirePermission'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
+import { buildF1ExtractInstructions } from '@/lib/f1FormExtractPrompt'
+import { extractF1FromPdfWithGemini } from '@/lib/geminiF1PdfExtract'
+import { logOpenAiUsage } from '@/lib/aiUsageLog'
+import { sanitizeAiJsonString } from '@/lib/sanitizeAiJson'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -214,6 +217,67 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'No file provided', details: 'Provide either file (formData) or file_key (Supabase storage path).' }, { status: 400 })
     }
 
+    const formType = String(formMetadata?.form_type || '').toUpperCase()
+    const isF4 = formType === 'F4'
+    const isF5 = formType === 'F5'
+    const hasGeminiKey = !!String(process.env.GEMINI_API_KEY || '').trim()
+    const useGeminiF1Pdf =
+      mimeType === 'application/pdf' &&
+      hasGeminiKey &&
+      formMetadata.f1_gemini_pdf === true &&
+      !isF4 &&
+      !isF5
+
+    if (formMetadata.f1_gemini_pdf === true && mimeType === 'application/pdf' && !isF4 && !isF5 && !hasGeminiKey) {
+      console.warn(
+        '[F1] f1_gemini_pdf requested but GEMINI_API_KEY is missing or empty — falling back to Vision + OpenAI. Restart dev server after adding the key to .env.local.'
+      )
+    }
+
+    if (useGeminiF1Pdf) {
+      try {
+        const { text: rawModel } = await extractF1FromPdfWithGemini(buffer, {
+          currency: formMetadata.currency,
+          exchange_rate: formMetadata.exchange_rate
+        })
+        const sanitizedContent = sanitizeAiJsonString(rawModel)
+        const structuredData = JSON.parse(sanitizedContent) as Record<string, unknown>
+
+        if (!structuredData.language) {
+          structuredData.language = detectLanguage(rawModel)
+        }
+
+        const objectives = structuredData.project_objectives
+        const objectivesStr = typeof objectives === 'string' ? objectives.trim() : ''
+        if (!objectivesStr || objectivesStr.length < 40) {
+          const fallback = getLongestArabicParagraph(rawModel)
+          if (fallback && fallback.length > objectivesStr.length) {
+            structuredData.project_objectives = fallback
+          }
+        }
+
+        if (formMetadata.state_name) {
+          structuredData.state = formMetadata.state_name
+          if (formMetadata.locality) {
+            structuredData.locality = formMetadata.locality
+          }
+        }
+
+        structuredData.raw_ocr = ''
+        console.log('[F1 Gemini] done in', Date.now() - start, 'ms')
+        return NextResponse.json(structuredData)
+      } catch (geminiErr) {
+        console.error('Gemini F1 PDF extraction failed:', geminiErr)
+        return NextResponse.json(
+          {
+            error: 'Error processing document',
+            details: geminiErr instanceof Error ? geminiErr.message : 'Gemini extraction failed'
+          },
+          { status: 500 }
+        )
+      }
+    }
+
     const base64 = buffer.toString('base64')
     let text = ''
 
@@ -340,13 +404,9 @@ export async function POST(req: Request) {
       })
     }
 
-    // Decide prompt based on form type
-    const formType = String(formMetadata?.form_type || '').toUpperCase()
-    const isF4 = formType === 'F4'
-    const isF5 = formType === 'F5'
-
     // Process with OpenAI
     const aiStart = Date.now()
+    const f1OcrPrompt = buildF1ExtractInstructions(formMetadata, 'ocr_text')
     const openai = getOpenAIClient()
     const completion = await openai.chat.completions.create({
       model: "gpt-3.5-turbo",
@@ -473,95 +533,7 @@ IMPORTANT:
     إناث تحت 18 -> under18_female
 
 Example output format (minified):
-{"date":"2025-08-25","language":"ar","reach":[{"activity_name":"ورشة تدريبية","activity_goal":"هدف الورشة","location":"موقع التنفيذ","start_date":"2025-08-01","end_date":"2025-08-02","individual_count":30,"household_count":10,"male_count":15,"female_count":15,"under18_male":5,"under18_female":5}],"positive_changes":"التغييرات الإيجابية","negative_results":null,"unexpected_results":null,"lessons_learned":null,"suggestions":null,"reporting_person":"اسم المسؤول"}` : `Extract information from the following text (which may be in English or Arabic):
-
-BASIC INFORMATION:
-- date: Date of the project in YYYY-MM-DD format (convert any date format to this)
-- state: State name (keep in original language)
-- locality: Locality name (keep in original language)
-- project_objectives: Return the exact text as found in the OCR (verbatim, preserve line breaks). Do not summarize or shorten. If not present, return null.
-- intended_beneficiaries: Description of who will benefit (keep in original language)
-- estimated_beneficiaries: Number of beneficiaries (integer)
-- estimated_timeframe: Project duration (keep in original language)
-- additional_support: Any additional support mentioned (keep in original language)
-- banking_details: Banking information (keep in original language)
-
-CONTACT INFORMATION:
-- program_officer_name: Name of program officer (keep in original language)
-- program_officer_phone: Phone of program officer
-- reporting_officer_name: Name of reporting officer (keep in original language)
-- reporting_officer_phone: Phone of reporting officer
-- finance_officer_name: Name of finance officer (keep in original language)
-- finance_officer_phone: Phone of finance officer
-
-ACTIVITIES AND EXPENSES:
-1. From section 6 (الأنشطة الرئيسية اللازمة):
-   - Each activity row has three columns: العدد, مدة النشاط, مكان التنفيذ
-   - ONLY include an activity if ALL THREE columns have values
-   - Example row with complete data:
-     Activity: المطبخ المشترك/ تموين
-     العدد: 100
-     مدة النشاط: 7 أيام
-     مكان التنفيذ: الدلنج -- حي الواحة
-   - This activity should be included because all columns are filled
-   - Activities with empty columns should be excluded
-
-2. From section 7 (الميزانية التفصيلية):
-   If form is in Arabic (RTL):
-   - Look at the leftmost column labeled الإجمالي for total costs
-   - Take activity names from rightmost column المصروفات
-   - Ignore middle columns (التكرار, سعر الوحدة)
-
-   If form is in English (LTR):
-   - Look at the rightmost column labeled Total/الإجمالي
-   - Take activity names from leftmost column Expenses/المصروفات
-   - Ignore middle columns
-
-   For each row:
-   - Only extract rows where الإجمالي has a value (e.g. $3,900, $10, $50)
-   - Remove $ symbol from numbers
-   - Ignore any numbers that aren't in the الإجمالي column
-
-CURRENCY CONVERSION:
-- Form currency: ${formMetadata.currency || 'USD'}
-- Exchange rate (USD to SDG): ${formMetadata.exchange_rate || '1'}
-- If form currency is SDG, convert all amounts to USD using the exchange rate (divide SDG amount by exchange rate)
-- If form currency is USD, keep amounts in USD (do NOT convert)
-- Return both USD and SDG amounts in the final JSON
-- For USD forms: total_cost_usd should be the original USD amount, total_cost_sdg should be null
-- For SDG forms: total_cost_sdg should be the original SDG amount, total_cost_usd should be the converted USD amount
-
-Example (USD form):
-الإجمالي: $3,900 | سعر الوحدة: $32.5 | المصروفات: مشتريات طبية
-Should extract: { activity: "مشتريات طبية", total_cost_usd: 3900, total_cost_sdg: null, currency: "USD" }
-
-Example (SDG form with exchange rate 2700):
-الإجمالي: 5,000,000 SDG | المصروفات: مشتريات طبية
-Should extract: { activity: "مشتريات طبية", total_cost_usd: 1851.85, total_cost_sdg: 5000000, currency: "SDG" }
-Note: Always include the original SDG amount in total_cost_sdg when form currency is SDG
-
-Return all fields in this format:
-{
-  "date": string | null,
-  "state": string | null,
-  "locality": string | null,
-  "project_objectives": string | null,
-  "intended_beneficiaries": string | null,
-  "estimated_beneficiaries": number | null,
-  "estimated_timeframe": string | null,
-  "additional_support": string | null,
-  "banking_details": string | null,
-  "program_officer_name": string | null,
-  "program_officer_phone": string | null,
-  "reporting_officer_name": string | null,
-  "reporting_officer_phone": string | null,
-  "finance_officer_name": string | null,
-  "finance_officer_phone": string | null,
-  "planned_activities": string[],
-  "expenses": Array<{activity: string, total_cost_usd: number, total_cost_sdg: number | null, currency: string}>,
-  "form_currency": string,
-  "exchange_rate": number
-}`)
+{"date":"2025-08-25","language":"ar","reach":[{"activity_name":"ورشة تدريبية","activity_goal":"هدف الورشة","location":"موقع التنفيذ","start_date":"2025-08-01","end_date":"2025-08-02","individual_count":30,"household_count":10,"male_count":15,"female_count":15,"under18_male":5,"under18_female":5}],"positive_changes":"التغييرات الإيجابية","negative_results":null,"unexpected_results":null,"lessons_learned":null,"suggestions":null,"reporting_person":"اسم المسؤول"}` : f1OcrPrompt)
         },
         {
           role: "user",
@@ -576,59 +548,12 @@ Return all fields in this format:
       throw new Error('No content in OpenAI response')
     }
 
+    logOpenAiUsage('gpt-3.5-turbo', completion.usage, `fsystem/process form=${formType || 'F1'}`)
+
     console.log('Raw GPT response:', content)
     // ai duration
 
-    // Sanitize the JSON string (basic cleanup only)
-    let sanitizedContent = content
-      .replace(/[\u0000-\u001F\u007F-\u009F]/g, '') // Remove control characters
-      .replace(/^```[a-zA-Z]*\n|```$/g, '') // Strip markdown fences if present
-
-    // Fix unescaped backslashes in JSON string values
-    // Valid JSON escape sequences are: \", \\, \/, \b, \f, \n, \r, \t, \uXXXX
-    // Any other backslash must be escaped as \\
-    // Process character by character to properly handle string boundaries
-    let inString = false
-    let result = ''
-    for (let i = 0; i < sanitizedContent.length; i++) {
-      const char = sanitizedContent[i]
-      
-      // Check if we're entering/exiting a string (unescaped quote)
-      // Count consecutive backslashes before the quote to determine if it's escaped
-      if (char === '"') {
-        let backslashCount = 0
-        let j = i - 1
-        while (j >= 0 && sanitizedContent[j] === '\\') {
-          backslashCount++
-          j--
-        }
-        // If even number of backslashes (or zero), the quote is not escaped
-        if (backslashCount % 2 === 0) {
-          inString = !inString
-        }
-        result += char
-        continue
-      }
-      
-      // If we're inside a string and see a backslash
-      if (inString && char === '\\') {
-        const nextChar = i + 1 < sanitizedContent.length ? sanitizedContent[i + 1] : ''
-        // Check if it's a valid escape sequence
-        const validEscapes = ['"', '\\', '/', 'b', 'f', 'n', 'r', 't']
-        const isUnicodeEscape = nextChar === 'u' && i + 5 < sanitizedContent.length && /^u[0-9a-fA-F]{4}/.test(sanitizedContent.substring(i + 1, i + 6))
-        
-        if (validEscapes.includes(nextChar) || isUnicodeEscape) {
-          // Valid escape sequence, keep as is
-          result += char
-        } else {
-          // Invalid escape, escape the backslash itself (double it)
-          result += '\\\\'
-        }
-      } else {
-        result += char
-      }
-    }
-    sanitizedContent = result
+    const sanitizedContent = sanitizeAiJsonString(content)
 
     try {
       const structuredData = JSON.parse(sanitizedContent)
@@ -887,6 +812,7 @@ Return all fields in this format:
               { role: 'user', content: sanitizedContent }
             ]
           })
+          logOpenAiUsage('gpt-3.5-turbo', repair.usage, 'fsystem/process F5 JSON repair')
           const fixed = repair.choices[0]?.message?.content || ''
           const fixedSan = fixed.replace(/^[\s`]+|[\s`]+$/g, '')
           const repaired = JSON.parse(fixedSan)

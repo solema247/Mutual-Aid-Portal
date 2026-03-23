@@ -1,5 +1,7 @@
 import vision from '@google-cloud/vision'
 import OpenAI from 'openai'
+import { buildF4ExtractInstructions } from '@/lib/f4FormExtractPrompt'
+import { buildF1ExtractInstructions } from '@/lib/f1FormExtractPrompt'
 
 // Initialize Google Vision client with proper private_key newline handling
 const visionClient = new vision.ImageAnnotatorClient({
@@ -146,82 +148,7 @@ export async function processFForm(file: File, metadata: ProcessMetadata): Promi
       messages: [
         {
           role: 'system',
-          content: isF4 ? `Extract ONLY F4 Financial Report data from the text (Arabic or English). Do not infer or convert amounts. Keep raw amounts and detected currency.
-
-CRITICAL EXPENSE TABLE EXTRACTION RULES:
-
-1. TABLE STRUCTURE (RTL - Right to Left):
-   - Arabic tables read right-to-left: activity names are on the RIGHT, amounts are on the LEFT
-   - Table headings may vary but look for columns like: "النشاط" (Activity), "قيمة المصروفات" (Expenditure Value), "المبلغ" (Amount)
-   - Match each expense row by reading horizontally across the table structure
-
-2. EXPENSE AMOUNT IDENTIFICATION (CRITICAL):
-   - ONLY extract amounts from the expense amount column (typically labeled "قيمة المصروفات", "المبلغ", "Amount", or similar)
-   - If amounts are listed separately at the bottom of the table (common in OCR), use those amounts IN ORDER
-   - DO NOT use amounts mentioned in descriptions, even if they look like expense amounts
-   - CRITICAL: If a description mentions "على مبلغ X" or "مبلغ X" - that X is NOT the expense amount. The expense amount is in the amount column only.
-   - Example: "تم خصم عمولة على مبلغ 5,000,000 بنسبة 8%" - IGNORE the 5,000,000. The actual expense is the commission amount (400,000) in the amount column.
-   - Each expense row has ONE amount - find it in the rightmost amount column or in the ordered list at bottom
-   - Ignore amounts in payment date fields, receipt numbers, or description text
-
-3. ACTIVITY NAME EXTRACTION:
-   - Extract ONLY the activity name from the activity column (typically "النشاط" or "Activity")
-   - DO NOT merge activity names with descriptions
-   - Keep activity names concise - separate from description columns
-   - If two activity names appear on the same row (e.g., "اعاشة التيم العامل" and "نثرية المأمورية"), they represent ONE expense entry - use the primary activity name or combine them appropriately
-   - Example: "صيانة مضخات مياة" NOT "صيانة مضخات مياة | مواد صيانة مضخات"
-
-4. ROW-BY-ROW ALIGNMENT (CRITICAL):
-   - Process expenses row by row in the order they appear
-   - Match each activity name with its corresponding amount in the SAME row
-   - If OCR lists amounts separately at the bottom, align them to activities in the EXACT order they appear (first activity = first amount, second activity = second amount, etc.)
-   - Do not skip rows - include ALL expense rows with amounts
-   - Do not reorder or swap amounts between activities
-
-5. BANK COMMISSIONS & SPECIAL EXPENSES:
-   - "خصم عمولة بنكك" (bank commission) is a separate expense row with its own amount
-   - Extract it as a distinct expense entry
-   - The commission amount is in the expense amount column, NOT the base amount mentioned in description
-   - The description may mention a larger amount (e.g., "على مبلغ 5,000,000") - this is the BASE amount, NOT the expense. The expense is the commission (e.g., 400,000).
-
-6. AMOUNT FILTERING:
-   - Ignore small numbers (e.g., 25, 31, 10) that are clearly units, dates, or page numbers
-   - Prefer numbers with thousands separators (e.g., 4,160,000) for SDG amounts
-   - Amounts should be substantial (typically 100,000+ for SDG, 100+ for USD)
-   - If you see a list of amounts at the bottom (e.g., "4,160,000\n400,000\n260,000\n400,000\n405,000"), these are the expense amounts in order - use them exactly as listed
-
-BASIC INFORMATION:
-- date: Report date in YYYY-MM-DD if present (convert formats); else null
-- state: State name as seen (original language) or null
-- locality: ERR room or locality name as seen or null
-
-EXPENSES TABLE (actual expenses):
-- For each listed expense row with an amount, return an object:
-  { activity: string, amount_value: number, currency: "USD" | "SDG" | null }
-- activity: Clean activity name only (from activity column, not merged with description). If two activities share a row, use the primary one or combine appropriately.
-- amount_value: The actual expense amount from the expense amount column (numeric, no commas). Use amounts in the order they appear - do not swap or reorder.
-- currency: Detect from context/symbols/labels (e.g., SDG, جنيه, $, USD). If the form is in Arabic and currency is unclear, default to "SDG". If form is in English and currency is unclear, default to "USD". Only use null if truly ambiguous.
-- Do NOT convert any amounts. Keep the number as it appears (strip commas and symbols).
-- Include ALL expense rows - do not skip any
-- Ignore receipt pages, bank slips, or pages without an expense row with amount
-
-TOTALS SECTION (verbatim extraction without math):
-- total_expenses_text: numeric string if A ( إجمالي النفقات ) is present, else null
-- total_grant_text: numeric string if B is present, else null
-- total_other_sources_text: numeric string if C is present, else null
-- remainder_text: numeric string if D is present, else null
-
-NARRATIVE RESPONSES:
-- excess_expenses: respondent's answer to question 4 (DO NOT return the question text itself); else null
-- surplus_use: respondent's answer to question 5 (DO NOT return the question text itself); else null
-- lessons: respondent's answer to question 6 (DO NOT return the question text itself); else null
-- training: respondent's answer to question 7 (DO NOT return the question text itself); else null
-
-OTHER:
-- language: "ar" or "en" inferred from the text
-- raw_ocr: include full OCR text back to caller
-
-Return strict JSON with keys exactly as specified above.` : (isF5 ? `Extract F5 program report data. Return MINIFIED JSON (no whitespace, no markdown) with EXACTLY these fields:
+          content: isF4 ? buildF4ExtractInstructions('ocr_text') : (isF5 ? `Extract F5 program report data. Return MINIFIED JSON (no whitespace, no markdown) with EXACTLY these fields:
 
 date: Report date (string)
 language: "ar" or "en"
@@ -247,7 +174,24 @@ reporting_person: Name of reporting person (string)
 
 IMPORTANT:
 - Return ONLY minified JSON, no markdown, no other text
-- Use null for missing values, not empty strings` : `Extract information from the following text (which may be in English or Arabic): ...`)
+- Use null for missing values, not empty strings
+- For reach activities:
+  - Extract all activities with their details
+  - Map Arabic headers:
+    اسم النشاط -> activity_name
+    هدف/تفاصيل النشاط -> activity_goal
+    مكان التنفيذ -> location
+    البداية -> start_date
+    النهاية -> end_date
+    أفراد -> individual_count
+    أسر -> household_count
+    ذكور -> male_count
+    إناث -> female_count
+    ذكور تحت 18 -> under18_male
+    إناث تحت 18 -> under18_female
+
+Example output format (minified):
+{"date":"2025-08-25","language":"ar","reach":[{"activity_name":"ورشة تدريبية","activity_goal":"هدف الورشة","location":"موقع التنفيذ","start_date":"2025-08-01","end_date":"2025-08-02","individual_count":30,"household_count":10,"male_count":15,"female_count":15,"under18_male":5,"under18_female":5}],"positive_changes":"التغييرات الإيجابية","negative_results":null,"unexpected_results":null,"lessons_learned":null,"suggestions":null,"reporting_person":"اسم المسؤول"}` : buildF1ExtractInstructions(metadata, 'ocr_text'))
         },
         { role: 'user', content: text }
       ],

@@ -403,6 +403,8 @@ export default function DirectUpload() {
       const finalStateId = roomState?.id || selectedState?.id || null
       
       const metadata = {
+        form_type: 'F1' as const,
+        f1_gemini_pdf: true,
         err_code: selectedRoom?.err_code,
         err_name: selectedRoom?.name_ar || selectedRoom?.name,
         donor_name: null,

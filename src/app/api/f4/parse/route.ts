@@ -1,16 +1,93 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { processFForm } from '@/lib/ocrProcess'
+import { extractF4FromPdfWithGemini } from '@/lib/geminiF4PdfExtract'
+import { sanitizeAiJsonString } from '@/lib/sanitizeAiJson'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
+function detectLanguageFromText(text: string): 'ar' | 'en' {
+  const arabicPattern = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/g
+  const englishPattern = /[a-zA-Z]/g
+  const arabicCount = (text.match(arabicPattern) || []).length
+  const englishCount = (text.match(englishPattern) || []).length
+  return arabicCount > englishCount ? 'ar' : 'en'
+}
+
+function clipText(s: unknown, max = 200): string {
+  if (s == null || s === '') return '(empty)'
+  const t = String(s).replace(/\r\n/g, '\n').trim()
+  if (!t) return '(empty)'
+  return t.length <= max ? t : `${t.slice(0, max)}…`
+}
+
+/** Terminal-friendly review of F4 extraction (grep: [F4 parse review]) */
+function logF4ParseReview(params: {
+  pipeline: 'gemini_pdf' | 'vision_openai'
+  projectId: string
+  fileKey: string
+  durationMs: number
+  ocrJson: any
+  summaryDraft: any
+  expensesDraft: any[]
+  rawOcrLength: number
+}) {
+  const { pipeline, projectId, fileKey, durationMs, ocrJson, summaryDraft, expensesDraft, rawOcrLength } = params
+  const sample = expensesDraft.slice(0, 6).map((r: any) => ({
+    activity: clipText(r.expense_activity, 70),
+    sdg: r.expense_amount_sdg ?? null,
+    usd: r.expense_amount ?? null
+  }))
+  const block = {
+    pipeline,
+    project_id: projectId,
+    file_key: fileKey,
+    duration_ms: durationMs,
+    raw_ocr_chars: rawOcrLength,
+    model_header: {
+      date: ocrJson?.date ?? null,
+      language: ocrJson?.language ?? null,
+      state: clipText(ocrJson?.state, 100),
+      locality: clipText(ocrJson?.locality, 100)
+    },
+    totals_from_model: {
+      total_expenses_text: ocrJson?.total_expenses_text ?? null,
+      total_grant_text: ocrJson?.total_grant_text ?? null,
+      total_other_sources_text: ocrJson?.total_other_sources_text ?? null,
+      remainder_text: ocrJson?.remainder_text ?? null
+    },
+    summary_draft_numbers: {
+      total_expenses: summaryDraft?.total_expenses ?? null,
+      total_grant: summaryDraft?.total_grant ?? null,
+      total_other_sources: summaryDraft?.total_other_sources ?? null,
+      remainder: summaryDraft?.remainder ?? null
+    },
+    narrative_lengths: {
+      excess_expenses: (summaryDraft?.excess_expenses && String(summaryDraft.excess_expenses).length) || 0,
+      surplus_use: (summaryDraft?.surplus_use && String(summaryDraft.surplus_use).length) || 0,
+      lessons: (summaryDraft?.lessons && String(summaryDraft.lessons).length) || 0,
+      training: (summaryDraft?.training && String(summaryDraft.training).length) || 0
+    },
+    expenses_rows: expensesDraft.length,
+    expenses_sample: sample
+  }
+  console.log('[F4 parse review]', JSON.stringify(block, null, 2))
+  console.log(
+    '[F4 parse review] narratives (first ~350 chars each):\n' +
+      `  excess_expenses: ${clipText(summaryDraft?.excess_expenses, 350)}\n` +
+      `  surplus_use:     ${clipText(summaryDraft?.surplus_use, 350)}\n` +
+      `  lessons:         ${clipText(summaryDraft?.lessons, 350)}\n` +
+      `  training:        ${clipText(summaryDraft?.training, 350)}`
+  )
+}
+
 export async function POST(request: Request) {
   try {
     const supabase = getSupabaseRouteClient()
     const routeStart = Date.now()
-    const { project_id, file_key_temp } = await request.json()
+    const { project_id, file_key_temp, f4_gemini_pdf } = await request.json()
     if (!project_id || !file_key_temp) return NextResponse.json({ error: 'project_id and file_key_temp required' }, { status: 400 })
 
     // Get a signed URL to download the file content (public bucket not guaranteed)
@@ -39,8 +116,37 @@ export async function POST(request: Request) {
 
     const file = new File([blob], filename, mime ? { type: mime } : undefined)
 
-    // Directly call shared OCR/AI processor (no internal HTTP hop)
-    const ocrJson = await processFForm(file, { ocr_max_pages: 3, form_type: 'F4' })
+    const isPdf = mime.includes('pdf') || lowerKey.endsWith('.pdf')
+    const hasGeminiKey = !!String(process.env.GEMINI_API_KEY || '').trim()
+    const useGeminiF4Pdf = isPdf && hasGeminiKey && f4_gemini_pdf === true
+
+    if (f4_gemini_pdf === true && isPdf && !hasGeminiKey) {
+      console.warn(
+        '[F4] f4_gemini_pdf requested but GEMINI_API_KEY is missing — falling back to Vision + OpenAI.'
+      )
+    }
+
+    let ocrJson: any
+    let pipeline: 'gemini_pdf' | 'vision_openai' = 'vision_openai'
+
+    if (useGeminiF4Pdf) {
+      const buffer = Buffer.from(await blob.arrayBuffer())
+      const { text: rawModel } = await extractF4FromPdfWithGemini(buffer)
+      try {
+        ocrJson = JSON.parse(sanitizeAiJsonString(rawModel))
+      } catch (parseErr) {
+        console.error('F4 Gemini JSON parse failed:', parseErr)
+        return NextResponse.json({ error: 'Failed to parse', details: 'Invalid JSON from Gemini' }, { status: 500 })
+      }
+      if (!ocrJson.language) {
+        ocrJson.language = detectLanguageFromText(rawModel)
+      }
+      ocrJson.raw_ocr = typeof ocrJson.raw_ocr === 'string' ? ocrJson.raw_ocr : ''
+      pipeline = 'gemini_pdf'
+      console.log('[F4 Gemini] done in', Date.now() - routeStart, 'ms')
+    } else {
+      ocrJson = await processFForm(file, { ocr_max_pages: 3, form_type: 'F4' })
+    }
 
     // Map to F4 drafts
     const raw = (ocrJson.raw_ocr || '') as string
@@ -67,21 +173,65 @@ export async function POST(request: Request) {
     const otherSourcesStr = (ocrJson.total_other_sources_text ?? null) || grab(/C\.[^\d]*(\d[\d,]*)/i)
     const remainderStr = (ocrJson.remainder_text ?? null) || grab(/D\.[^\d]*(\d[\d,]*)/i)
 
-    // Capture narrative answers between numbered prompts (allow multi-line) without complex regex
-    const extractBetween = (text: string, startNum: number, nextNum?: number): string | null => {
-      const startRe = new RegExp(`(^|\n)\s*${startNum}\\)`) // e.g., "\n4)"
-      const startMatch = text.match(startRe)
-      if (!startMatch) return null
-      const startIdx = (startMatch.index || 0) + startMatch[0].length
-      const remainder = text.slice(startIdx)
-      if (nextNum) {
-        const nextRe = new RegExp(`(^|\n)\s*${nextNum}\\)`) // e.g., next question marker
-        const nextMatch = remainder.match(nextRe)
-        const endIdx = nextMatch ? (startIdx + (nextMatch.index || 0)) : text.length
-        return text.slice(startIdx, endIdx).trim()
+    /** Text after D. line — narrative blocks live here; avoids (2) in pre-table instructions. */
+    const f4NarrativeRegion = (text: string): string => {
+      if (!text) return ''
+      const dIdx = text.search(/(?:^|[\n\r])\s*D\.[^\n]*/im)
+      if (dIdx >= 0) {
+        const lineEnd = text.indexOf('\n', dIdx)
+        return lineEnd >= 0 ? text.slice(lineEnd + 1) : text.slice(dIdx)
       }
-      return remainder.trim()
+      return text
     }
+    /** Match "(4)" or "4)" style markers at a line boundary. */
+    const extractNarrativeBlock = (text: string, startNum: number, nextNum?: number): string | null => {
+      if (!text?.trim()) return null
+      const startRes = [
+        new RegExp(`(?:^|[\\n\\r])\\s*\\(\\s*${startNum}\\s*\\)\\s*`, 'm'),
+        new RegExp(`(?:^|[\\n\\r])\\s*${startNum}\\s*\\)\\s*`, 'm'),
+      ]
+      let bestIdx = -1
+      let contentFrom = -1
+      for (const re of startRes) {
+        const m = re.exec(text)
+        if (m) {
+          const from = m.index + m[0].length
+          if (bestIdx < 0 || m.index < bestIdx) {
+            bestIdx = m.index
+            contentFrom = from
+          }
+        }
+      }
+      if (contentFrom < 0) return null
+      const tail = text.slice(contentFrom)
+      if (nextNum == null || nextNum === undefined) return tail.trim() || null
+      const endRes = [
+        new RegExp(`(?:^|[\\n\\r])\\s*\\(\\s*${nextNum}\\s*\\)\\s*`, 'm'),
+        new RegExp(`(?:^|[\\n\\r])\\s*${nextNum}\\s*\\)\\s*`, 'm'),
+      ]
+      let end = tail.length
+      for (const re of endRes) {
+        const m = re.exec(tail)
+        if (m && m.index < end) end = m.index
+      }
+      const out = tail.slice(0, end).trim()
+      return out || null
+    }
+    /** Some templates number narratives (2)–(5); others (4)–(7). Pick using first markers after D. */
+    const detectF4NarrativeScheme = (region: string): 'q25' | 'q47' => {
+      if (!region.trim()) return 'q47'
+      const idx2 = region.search(/\(\s*2\s*\)/)
+      const idx4 = region.search(/\(\s*4\s*\)/)
+      if (idx2 >= 0 && (idx4 < 0 || idx2 < idx4)) return 'q25'
+      return 'q47'
+    }
+    const narrativeRegion = f4NarrativeRegion(raw)
+    const narrativeScheme = detectF4NarrativeScheme(narrativeRegion)
+    const nar = (a: number, b?: number) => extractNarrativeBlock(narrativeRegion, a, b)
+    const fbExcess = narrativeScheme === 'q25' ? nar(2, 3) : nar(4, 5)
+    const fbSurplus = narrativeScheme === 'q25' ? nar(3, 4) : nar(5, 6)
+    const fbLessons = narrativeScheme === 'q25' ? nar(4, 5) : nar(6, 7)
+    const fbTraining = narrativeScheme === 'q25' ? nar(5) : nar(7)
     const stripQuestion = (ans: string | null) => {
       if (!ans) return ans
       // Remove common Arabic question headers if present
@@ -89,10 +239,41 @@ export async function POST(request: Request) {
         .replace(/^[^\n]{8,80}?[:؟]\s*/,'')
         .trim()
     }
-    const q1 = stripQuestion((typeof ocrJson.excess_expenses === 'string' && ocrJson.excess_expenses.trim()) ? ocrJson.excess_expenses.trim() : (extractBetween(raw, 4, 5) || grab(/4\.[\s\S]*?\n([^\n]+?)(?=\n\s*5\.)/)))
-    const q2 = stripQuestion((typeof ocrJson.surplus_use === 'string' && ocrJson.surplus_use.trim()) ? ocrJson.surplus_use.trim() : (extractBetween(raw, 5, 6) || grab(/5\.[\s\S]*?\n([^\n]+?)(?=\n\s*6\.)/)))
-    const q3 = stripQuestion((typeof ocrJson.lessons === 'string' && ocrJson.lessons.trim()) ? ocrJson.lessons.trim() : (extractBetween(raw, 6, 7) || grab(/6\.[\s\S]*?\n([^\n]+?)(?=\n\s*7\.)/)))
-    const q4 = stripQuestion((typeof ocrJson.training === 'string' && ocrJson.training.trim()) ? ocrJson.training.trim() : (extractBetween(raw, 7) || grab(/7\.[\s\S]*?\n([^\n]+?)(?:\n|$)/)))
+    /** Gemini sometimes returns the full printed question + lone لا/نعم; keep the answer line only. */
+    const normalizeF4QAnswer = (val: unknown): string => {
+      if (val == null) return ''
+      const s = String(val).trim()
+      if (!s) return ''
+      if (/^(لا|نعم)[\s,،]*$/u.test(s)) return /^لا/u.test(s) ? 'لا' : 'نعم'
+      const lines = s.split(/\n/).map((l) => l.trim()).filter(Boolean)
+      if (lines.length >= 2 && s.length > 80) {
+        const last = lines[lines.length - 1]
+        if (/^(لا|نعم)[\s,،]*$/u.test(last) && /؟/.test(s)) {
+          return /^لا/u.test(last) ? 'لا' : 'نعم'
+        }
+      }
+      return s
+    }
+    const q1 = stripQuestion(
+      normalizeF4QAnswer(ocrJson.excess_expenses) ||
+        fbExcess ||
+        grab(/4\.[\s\S]*?\n([^\n]+?)(?=\n\s*5\.)/)
+    )
+    const q2 = stripQuestion(
+      normalizeF4QAnswer(ocrJson.surplus_use) ||
+        fbSurplus ||
+        grab(/5\.[\s\S]*?\n([^\n]+?)(?=\n\s*6\.)/)
+    )
+    const q3 = stripQuestion(
+      normalizeF4QAnswer(ocrJson.lessons) ||
+        fbLessons ||
+        grab(/6\.[\s\S]*?\n([^\n]+?)(?=\n\s*7\.)/)
+    )
+    const q4 = stripQuestion(
+      normalizeF4QAnswer(ocrJson.training) ||
+        fbTraining ||
+        grab(/7\.[\s\S]*?\n([^\n]+?)(?:\n|$)/)
+    )
 
     const summaryDraft = {
       report_date: ocrJson.date || null,
@@ -372,6 +553,16 @@ export async function POST(request: Request) {
       expenses: Array.isArray(ocrJson.expenses) ? ocrJson.expenses.slice(0, 50) : []
     }
 
+    logF4ParseReview({
+      pipeline,
+      projectId: String(project_id),
+      fileKey: String(file_key_temp),
+      durationMs: Date.now() - routeStart,
+      ocrJson,
+      summaryDraft,
+      expensesDraft,
+      rawOcrLength: raw.length
+    })
 
     return NextResponse.json({ summaryDraft, expensesDraft, aiOutput })
   } catch (e) {
