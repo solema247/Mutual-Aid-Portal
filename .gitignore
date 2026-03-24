@@ -33,6 +33,9 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 
+# OpenAI key file (do not commit)
+openai-key.txt
+
 # vercel
 .vercel
 
@@ -50,3 +53,11 @@ next-env.d.ts
 # Logs
 /logs
 *.log
+
+# Office temporary lock files
+~$*
+/Mutual-Aid-Portal/
+
+# Large local samples under docs (do not commit PDF/Excel)
+docs/**/*.pdf
+docs/**/*.xlsx

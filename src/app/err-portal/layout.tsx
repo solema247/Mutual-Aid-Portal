@@ -3,6 +3,7 @@
 import { useTranslation } from 'react-i18next'
 import { useState, useEffect } from 'react'
 import MainLayout from '@/components/layout/MainLayout'
+import NotificationBell from '@/components/NotificationBell'
 import type { SidebarItem, SidebarLinkItem } from '@/components/layout/Sidebar'
 import { useRouter } from 'next/navigation'
 import { Users, ClipboardList, BarChart2, BarChart3, PieChart, UserCog, Home, CheckSquare, BookOpen, PenTool, Cog, FileText, BookMarked } from 'lucide-react'
@@ -177,6 +178,7 @@ export default function ErrPortalLayout({
         headerTitle="Mutual Aid Portal"
         userName={user?.display_name ?? undefined}
         userRole={user?.role}
+        headerActions={<NotificationBell variant="header" />}
       >
       {children}
       {minimizedType && (

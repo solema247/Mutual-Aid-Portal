@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin'
 
+export const dynamic = 'force-dynamic'
+
 /**
  * GET /api/grants - List grants from public.grants (foreign table / Airtable).
  * Uses service role so the foreign table is readable regardless of anon GRANTs.

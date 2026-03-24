@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 
+export const dynamic = 'force-dynamic'
+
 // GET /api/f2/grant-calls - Get grant calls with remaining amounts for reassignment
 export async function GET() {
   try {

@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 
+export const dynamic = 'force-dynamic'
+
 // Helper function to fetch all rows using pagination
 const fetchAllRows = async (supabase: any, table: string, select: string) => {
   let allData: any[] = []

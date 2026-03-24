@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { getUserStateAccess } from '@/lib/userStateAccess'
 
+export const dynamic = 'force-dynamic'
+
 export async function GET() {
   try {
     const supabase = getSupabaseRouteClient()

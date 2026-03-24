@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { getActivityAndCategoryLists } from '@/lib/plannedActivitiesExpenses'
 
+export const dynamic = 'force-dynamic'
+
 function sumPlanFromPlannedActivities(planned: any): number {
   try {
     const arr = Array.isArray(planned) ? planned : (typeof planned === 'string' ? JSON.parse(planned || '[]') : [])
@@ -326,7 +328,7 @@ export async function GET(request: Request) {
       const f5Complete = isStatusCompleteForOverdue(f5_status)
       const effectiveTransferDate = p.date_transfer || transferDateByProject[p.id] || null
       const { is_overdue, days_overdue } = computeOverdue(effectiveTransferDate, f4Complete, f5Complete)
-      const { activity_list, expense_category_list } = getActivityAndCategoryLists(p.planned_activities, p.expenses)
+      const project_status = f4Complete && f5Complete ? 'completed' : (agg.count === 0 && f5Agg.count === 0 ? 'not_started' : 'in_progress')
       return {
         project_id: p.id,
         state: p.state,
@@ -355,8 +357,7 @@ export async function GET(request: Request) {
         is_overdue,
         days_overdue,
         overdue: days_overdue != null ? String(days_overdue) : null,
-        activity_list,
-        expense_category_list,
+        project_status
       }
     })
 
@@ -428,8 +429,7 @@ export async function GET(request: Request) {
         is_overdue: is_overdue_historical,
         days_overdue: !Number.isNaN(overdueNum) ? overdueNum : null,
         overdue: overdueDisplay,
-        activity_list: [], // Historical projects from activities_raw_import do not have planned_activities
-        expense_category_list: [],
+        project_status: (f4Completed && f5Completed) ? 'completed' : (totalF4Count === 0 && !f5Completed ? 'not_started' : 'in_progress')
       }
     })
 

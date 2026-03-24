@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 
+export const dynamic = 'force-dynamic'
+
 // GET /api/pool/by-grant-for-state?state=Kassala
 export async function GET(request: Request) {
   try {

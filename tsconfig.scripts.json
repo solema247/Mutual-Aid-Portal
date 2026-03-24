@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "target": "ES2017",
+    "lib": ["es2017"],
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "esModuleInterop": true,
+    "allowJs": true,
+    "skipLibCheck": true,
+    "strict": false,
+    "resolveJsonModule": true,
+    "outDir": "./.scripts-build",
+    "baseUrl": ".",
+    "types": ["node"]
+  },
+  "include": ["scripts/**/*.ts"]
+}

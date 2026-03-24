@@ -4,6 +4,7 @@ export async function POST(request: Request) {
   try {
     const { project_id, ext } = await request.json()
     if (!project_id) return NextResponse.json({ error: 'project_id required' }, { status: 400 })
+    // Allow pdf, docx, image extensions for F4 (docx stored but not auto-parsed yet)
     const safeExt = typeof ext === 'string' && ext.length <= 6 ? ext.toLowerCase().replace(/[^a-z0-9]/g,'') : 'pdf'
     const file_key_temp = `f4-financial-reports/${project_id}/tmp/${Date.now()}-${Math.random().toString(36).slice(2)}.${safeExt}`
     return NextResponse.json({ file_key_temp })

@@ -27,6 +27,9 @@ import ProjectDetails from './ProjectDetails'
 import { F1Project } from '../../types'
 import type { FundingCycle } from '@/types/cycles'
 import { useAllowedFunctions } from '@/hooks/useAllowedFunctions'
+import { ScreeningStatusBadge } from './ScreeningStatusBadge'
+import { ProjectScreeningStatus } from './ProjectScreeningStatus'
+import { MOCK_F1_PROJECTS } from '@/app/err-portal/compliance/mockData'
 
 type ProjectStatus = 'new' | 'feedback' | 'staging' | 'declined' | 'draft' | 'pending' | 'approved'
 
@@ -58,7 +61,7 @@ export default function ERRAppSubmissions() {
   const [selectedProject, setSelectedProject] = useState<F1Project | null>(null)
   const [currentStatus, setCurrentStatus] = useState<ProjectStatus>('new')
   const [isDialogOpen, setIsDialogOpen] = useState(false)
-  const [selectedTab, setSelectedTab] = useState<'details' | 'feedback' | 'staging'>('details')
+  const [selectedTab, setSelectedTab] = useState<'details' | 'feedback' | 'screening' | 'staging'>('details')
   const [feedbackHistory, setFeedbackHistory] = useState<Feedback[]>([])
   const [user, setUser] = useState<User | null>(null)
   const [fundingCycles, setFundingCycles] = useState<FundingCycle[]>([])
@@ -68,6 +71,11 @@ export default function ERRAppSubmissions() {
   const [isCreatingSerial, setIsCreatingSerial] = useState<boolean>(false)
   const [isAssigningGrant, setIsAssigningGrant] = useState<boolean>(false)
   const [selectedRows, setSelectedRows] = useState<Record<string, boolean>>({})
+
+  // DEMO: Get mock screening data for a project
+  const getMockScreeningData = (projectId: string) => {
+    return MOCK_F1_PROJECTS.find(p => p.id === projectId) || null
+  }
 
   const filterProjectsByStatus = useCallback(() => {
     let filteredProjects: F1Project[] = []
@@ -644,6 +652,7 @@ export default function ERRAppSubmissions() {
                       <TableHead>{t('projects:version')}</TableHead>
                       <TableHead>{t('projects:funding_cycle')}</TableHead>
                       <TableHead>{t('projects:funding_status')}</TableHead>
+                      <TableHead>Screening</TableHead>
                       <TableHead>{t('projects:actions')}</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -666,6 +675,20 @@ export default function ERRAppSubmissions() {
                         <TableCell>{project.version}</TableCell>
                         <TableCell>{project.funding_cycles?.name || project.funding_cycle_id || '-'}</TableCell>
                         <TableCell>{t(`projects:status.${project.funding_status}`)}</TableCell>
+                        <TableCell>
+                          {(() => {
+                            const mockData = getMockScreeningData(project.id)
+                            return mockData ? (
+                              <ScreeningStatusBadge
+                                status={mockData.screening_status}
+                                pendingCount={mockData.pending_count}
+                                flaggedCount={mockData.flagged_count}
+                              />
+                            ) : (
+                              <span className="text-xs text-muted-foreground">—</span>
+                            )
+                          })()}
+                        </TableCell>
                         <TableCell>
                           {canStage && currentStatus === 'staging' ? (
                             selectedRows[project.id] && (
@@ -718,14 +741,28 @@ export default function ERRAppSubmissions() {
             <Tabs
               value={selectedTab === 'feedback' && !canApprove ? 'details' : selectedTab === 'staging' && !canStage ? 'details' : selectedTab}
               className="w-full"
-              onValueChange={(value) => setSelectedTab(value as 'details' | 'feedback' | 'staging')}
+              onValueChange={(value) => setSelectedTab(value as 'details' | 'feedback' | 'screening' | 'staging')}
             >
-              <TabsList className="grid w-full grid-cols-3">
+              <TabsList className={`grid w-full ${currentStatus === 'staging' ? 'grid-cols-4' : 'grid-cols-3'}`}>
                 <TabsTrigger value="details">
                   {t('projects:details_tab')}
                 </TabsTrigger>
                 <TabsTrigger value="feedback">
                   {t('projects:feedback_tab')}
+                </TabsTrigger>
+                <TabsTrigger value="screening">
+                  Screening
+                  {(() => {
+                    const mockData = getMockScreeningData(selectedProject.id)
+                    if (mockData && mockData.pending_count > 0) {
+                      return (
+                        <span className="ml-1.5 inline-flex items-center justify-center w-5 h-5 text-xs font-semibold text-yellow-800 bg-yellow-100 rounded-full">
+                          {mockData.pending_count}
+                        </span>
+                      )
+                    }
+                    return null
+                  })()}
                 </TabsTrigger>
                 {currentStatus === 'staging' && (
                   <TabsTrigger value="staging">
@@ -754,6 +791,10 @@ export default function ERRAppSubmissions() {
                     </div>
                   )}
                 </div>
+              </TabsContent>
+
+              <TabsContent value="screening" className="py-6">
+                <ProjectScreeningStatus projectId={selectedProject.id} />
               </TabsContent>
 
               <TabsContent value="staging" className="py-6">

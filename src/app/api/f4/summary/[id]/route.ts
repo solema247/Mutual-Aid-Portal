@@ -62,7 +62,37 @@ export async function GET(
       }
     }
 
-    return NextResponse.json({ summary, attachments: attachments || [], expenses: (expenses || []).map((e: any) => ({ ...e, receipts: receiptsByExpense[e.expense_id] || [] })) })
+    // F4 % completion: planned total from project, reported total from expenses
+    let planned_total: number | null = null
+    const reported_total = (expenses || []).reduce((s: number, e: any) => s + (Number(e.expense_amount) || 0), 0)
+    if (summary?.project_id) {
+      const { data: proj } = await supabase
+        .from('err_projects')
+        .select('expenses, planned_activities')
+        .eq('id', summary.project_id)
+        .single()
+      if (proj) {
+        const plannedArr = Array.isArray(proj.planned_activities) ? proj.planned_activities : (typeof proj.planned_activities === 'string' ? JSON.parse(proj.planned_activities || '[]') : [])
+        const fromPlanned = (Array.isArray(plannedArr) ? plannedArr : []).reduce((s: number, pa: any) => {
+          const inner = Array.isArray(pa?.expenses) ? pa.expenses : []
+          return s + inner.reduce((ss: number, ie: any) => ss + (Number(ie.total) || 0), 0)
+        }, 0)
+        const expensesArr = Array.isArray(proj.expenses) ? proj.expenses : (typeof proj.expenses === 'string' ? JSON.parse(proj.expenses || '[]') : [])
+        const fromExpenses = (Array.isArray(expensesArr) ? expensesArr : []).reduce((s: number, ex: any) => s + (Number(ex.total_cost) || 0), 0)
+        planned_total = fromExpenses > 0 ? fromExpenses : fromPlanned
+      }
+    }
+    const completion_percent = planned_total != null && planned_total > 0
+      ? Math.round((reported_total / planned_total) * 100)
+      : null
+    const totals_match = planned_total != null && Math.abs((reported_total || 0) - planned_total) < 0.01
+
+    return NextResponse.json({
+      summary,
+      attachments: attachments || [],
+      expenses: (expenses || []).map((e: any) => ({ ...e, receipts: receiptsByExpense[e.expense_id] || [] })),
+      completion: { completion_percent, planned_total, reported_total, totals_match }
+    })
   } catch (e) {
     console.error('F4 summary detail error', e)
     return NextResponse.json({ error: 'Failed to load summary' }, { status: 500 })

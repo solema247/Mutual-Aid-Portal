@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { getUserStateAccess } from '@/lib/userStateAccess'
 
+export const dynamic = 'force-dynamic'
+
 export async function GET() {
   try {
     const supabase = getSupabaseRouteClient()
@@ -36,6 +38,9 @@ export async function GET() {
         total_expenses,
         remainder,
         created_at,
+        review_status,
+        review_comment,
+        reviewed_at,
         err_projects (
           err_id,
           state,
@@ -68,6 +73,9 @@ export async function GET() {
         total_expenses,
         remainder,
         created_at,
+        review_status,
+        review_comment,
+        reviewed_at,
         activities_raw_import (
           id,
           "ERR CODE",
@@ -133,7 +141,10 @@ export async function GET() {
           total_expenses: s.total_expenses,
           remainder: s.remainder,
           attachments_count: attachCounts[s.id] || 0,
-          updated_at: s.created_at
+          updated_at: s.created_at,
+          review_status: s.review_status || 'pending_review',
+          review_comment: s.review_comment ?? null,
+          reviewed_at: s.reviewed_at ?? null
         }
       } else {
         // Portal project
@@ -154,7 +165,10 @@ export async function GET() {
           total_expenses: s.total_expenses,
           remainder: s.remainder,
           attachments_count: attachCounts[s.id] || 0,
-          updated_at: s.created_at
+          updated_at: s.created_at,
+          review_status: s.review_status || 'pending_review',
+          review_comment: s.review_comment ?? null,
+          reviewed_at: s.reviewed_at ?? null
         }
       }
     })

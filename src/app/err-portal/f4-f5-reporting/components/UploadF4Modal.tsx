@@ -460,7 +460,7 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
       setTempKey(key)
       // upload file to storage
       const { error: upErr } = await supabase.storage.from('images').upload(key, file, { upsert: true })
-      if (upErr) throw upErr
+      if (upErr) throw new Error(upErr.message || 'File upload failed')
       // parse
       // Get signed URL for file viewing
       const { data: signedUrl } = await supabase.storage.from('images').createSignedUrl(key, 3600)
@@ -522,7 +522,8 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
       setStep('preview')
     } catch (e) {
       console.error(e)
-      alert('Failed to process file')
+      const message = e instanceof Error ? e.message : 'Failed to process file'
+      alert(message)
     } finally {
       setIsLoading(false)
     }
@@ -721,7 +722,7 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
               <>
                 <div className="space-y-1">
                   <Label>{t('f4.modal.summary_file')}</Label>
-                  <Input type="file" accept=".pdf,image/*" onChange={(e) => setFile(e.target.files?.[0] || null)} />
+                  <Input type="file" accept=".pdf,.docx,image/*" onChange={(e) => setFile(e.target.files?.[0] || null)} />
                   <div className="text-xs text-muted-foreground">{t('f4.modal.choose_file_hint')}</div>
                 </div>
                 <div className="flex justify-end gap-2">
@@ -733,7 +734,7 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
               <>
                 <div className="space-y-1">
                   <Label>{t('f4.modal.attachment_optional')}</Label>
-                  <Input type="file" accept=".pdf,image/*" onChange={(e) => setAttachmentFile(e.target.files?.[0] || null)} />
+                  <Input type="file" accept=".pdf,.docx,image/*" onChange={(e) => setAttachmentFile(e.target.files?.[0] || null)} />
                   {attachmentFile && <span className="text-xs text-muted-foreground">{attachmentFile.name}</span>}
                 </div>
                 <div className="flex justify-end gap-2">
@@ -759,7 +760,7 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
                 <>
                   <div className="space-y-1">
                     <Label>{t('f4.modal.summary_file')}</Label>
-                    <Input type="file" accept=".pdf,image/*" onChange={(e) => setFile(e.target.files?.[0] || null)} />
+                    <Input type="file" accept=".pdf,.docx,image/*" onChange={(e) => setFile(e.target.files?.[0] || null)} />
                     <div className="text-xs text-muted-foreground">{t('f4.modal.choose_file_hint')}</div>
                   </div>
                   <div className="flex justify-end gap-2">
@@ -771,7 +772,7 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
                 <>
                   <div className="space-y-1">
                     <Label>{t('f4.modal.attachment_optional')}</Label>
-                    <Input type="file" accept=".pdf,image/*" onChange={(e) => setAttachmentFile(e.target.files?.[0] || null)} />
+                    <Input type="file" accept=".pdf,.docx,image/*" onChange={(e) => setAttachmentFile(e.target.files?.[0] || null)} />
                     {attachmentFile && <span className="text-xs text-muted-foreground">{attachmentFile.name}</span>}
                   </div>
                   <div className="flex justify-end gap-2">

@@ -4,6 +4,8 @@ import { NextResponse } from 'next/server'
 import { getAllowedFunctions } from '@/lib/permissions'
 import { getOverridesForUser } from '@/lib/userOverridesDb'
 
+export const dynamic = 'force-dynamic'
+
 export async function GET() {
   try {
     const supabase = createRouteHandlerClient({ cookies })
