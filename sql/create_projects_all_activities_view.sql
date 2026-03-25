@@ -182,14 +182,42 @@ with
               else null::date
             end
           ) + 32
-        ) < current_date
+        ) < CURRENT_DATE
         and not (
-          lower(trim(cpb.f4_status)) in ('completed', 'in review', 'under review', 'partial')
-          and lower(trim(cpb.f5_status)) in ('completed', 'in review', 'under review', 'partial')
-        )
-        then (
-          current_date
-          - (
+          (
+            lower(
+              TRIM(
+                both
+                from
+                  cpb.f4_status
+              )
+            ) = any (
+              array[
+                'completed'::text,
+                'in review'::text,
+                'under review'::text,
+                'partial'::text
+              ]
+            )
+          )
+          and (
+            lower(
+              TRIM(
+                both
+                from
+                  cpb.f5_status
+              )
+            ) = any (
+              array[
+                'completed'::text,
+                'in review'::text,
+                'under review'::text,
+                'partial'::text
+              ]
+            )
+          )
+        ) then (
+          CURRENT_DATE - (
             COALESCE(
               cpb.date_transfer,
               case
@@ -231,7 +259,7 @@ with
             ),
             'Unassigned'::text
           )
-        ) = 'fcdo-shpr' then 'FCDO SHPR'::text
+        ) = 'fcdo-shpr'::text then 'FCDO SHPR'::text
         else COALESCE(
           NULLIF(
             TRIM(
@@ -288,27 +316,55 @@ with
       end as start_date_activity,
       null::date as end_date_activity,
       cpb.estimated_timeframe as activity_duration,
-      initcap(lower(trim(cpb.f4_status))) as f4,
-      initcap(lower(trim(cpb.f5_status))) as f5,
+      initcap(
+        lower(
+          TRIM(
+            both
+            from
+              cpb.f4_status
+          )
+        )
+      ) as f4,
+      initcap(
+        lower(
+          TRIM(
+            both
+            from
+              cpb.f5_status
+          )
+        )
+      ) as f5,
       null::date as date_report_completed,
       null::numeric as reporting_duration,
-      (
-        case initcap(lower(trim(cpb.f4_status)))
-          when 'Completed' then 0.5
-          when 'Partial' then 0.25
-          when 'Under Review' then 0.25
-          when 'Waiting' then 0
-          else 0
-        end
-        +
-        case initcap(lower(trim(cpb.f5_status)))
-          when 'Completed' then 0.5
-          when 'Partial' then 0.25
-          when 'Under Review' then 0.25
-          when 'Waiting' then 0
-          else 0
-        end
-      )::numeric as tracker,
+      case initcap(
+          lower(
+            TRIM(
+              both
+              from
+                cpb.f4_status
+            )
+          )
+        )
+        when 'Completed'::text then 0.5
+        when 'Partial'::text then 0.25
+        when 'Under Review'::text then 0.25
+        when 'Waiting'::text then 0::numeric
+        else 0::numeric
+      end + case initcap(
+          lower(
+            TRIM(
+              both
+              from
+                cpb.f5_status
+            )
+          )
+        )
+        when 'Completed'::text then 0.5
+        when 'Partial'::text then 0.25
+        when 'Under Review'::text then 0.25
+        when 'Waiting'::text then 0::numeric
+        else 0::numeric
+      end as tracker,
       null::numeric as volunteers,
       null::numeric as family,
       null::numeric as individuals,
@@ -434,7 +490,13 @@ select
     else null::numeric
   end as num_base_err,
   case
-    when lower(TRIM(both from ari."Project Donor")) = 'fcdo-shpr' then 'FCDO SHPR'::text
+    when lower(
+      TRIM(
+        both
+        from
+          ari."Project Donor"
+      )
+    ) = 'fcdo-shpr'::text then 'FCDO SHPR'::text
     else ari."Project Donor"
   end as project_donor,
   ari."Partner" as partner,
@@ -460,6 +522,18 @@ select
           ari."Date Transfer"
       )
     ) = 'null'::text then null::date
+    when TRIM(
+      both
+      from
+        ari."Date Transfer"
+    ) ~ '^\d{4}-\d{2}-\d{2}$'::text then to_date(
+      TRIM(
+        both
+        from
+          ari."Date Transfer"
+      ),
+      'YYYY-MM-DD'::text
+    )
     when TRIM(
       both
       from
@@ -570,8 +644,24 @@ select
     else null::date
   end as end_date_activity,
   ari."Activity Duration" as activity_duration,
-  initcap(lower(trim(ari."F4"))) as f4,
-  initcap(lower(trim(ari."F5"))) as f5,
+  initcap(
+    lower(
+      TRIM(
+        both
+        from
+          ari."F4"
+      )
+    )
+  ) as f4,
+  initcap(
+    lower(
+      TRIM(
+        both
+        from
+          ari."F5"
+      )
+    )
+  ) as f5,
   case
     when ari."Date Report Completed" is null
     or TRIM(
@@ -629,23 +719,35 @@ select
     when ari."Reporting Duration (End Date to Report)" ~ '^[0-9]+\.?[0-9]*$'::text then ari."Reporting Duration (End Date to Report)"::numeric
     else null::numeric
   end as reporting_duration,
-  (
-    case initcap(lower(trim(ari."F4")))
-      when 'Completed' then 0.5
-      when 'Partial' then 0.25
-      when 'Under Review' then 0.25
-      when 'Waiting' then 0
-      else 0
-    end
-    +
-    case initcap(lower(trim(ari."F5")))
-      when 'Completed' then 0.5
-      when 'Partial' then 0.25
-      when 'Under Review' then 0.25
-      when 'Waiting' then 0
-      else 0
-    end
-  )::numeric as tracker,
+  case initcap(
+      lower(
+        TRIM(
+          both
+          from
+            ari."F4"
+        )
+      )
+    )
+    when 'Completed'::text then 0.5
+    when 'Partial'::text then 0.25
+    when 'Under Review'::text then 0.25
+    when 'Waiting'::text then 0::numeric
+    else 0::numeric
+  end + case initcap(
+      lower(
+        TRIM(
+          both
+          from
+            ari."F5"
+        )
+      )
+    )
+    when 'Completed'::text then 0.5
+    when 'Partial'::text then 0.25
+    when 'Under Review'::text then 0.25
+    when 'Waiting'::text then 0::numeric
+    else 0::numeric
+  end as tracker,
   ari."Volunteers"::numeric as volunteers,
   case
     when ari."Family" ~ '^[0-9]+\.?[0-9]*$'::text then ari."Family"::numeric
