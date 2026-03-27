@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -28,6 +28,9 @@ export default function ViewF4Modal({ summaryId, open, onOpenChange, onSaved }: 
   const [expensesDraft, setExpensesDraft] = useState<any[]>([])
   const [projectMeta, setProjectMeta] = useState<any | null>(null)
   const [fxRate, setFxRate] = useState<number | null>(null)
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [deletePhrase, setDeletePhrase] = useState('')
+  const [deleting, setDeleting] = useState(false)
 
   useEffect(() => {
     if (!open || !summaryId) { 
@@ -37,6 +40,9 @@ export default function ViewF4Modal({ summaryId, open, onOpenChange, onSaved }: 
       setExpensesDraft([])
       setProjectMeta(null)
       setFxRate(null)
+      setDeleteDialogOpen(false)
+      setDeletePhrase('')
+      setDeleting(false)
       return 
     }
     ;(async () => {
@@ -124,6 +130,75 @@ export default function ViewF4Modal({ summaryId, open, onOpenChange, onSaved }: 
   const project = summary?.err_projects
   const room = project?.emergency_rooms
   const attachments = data?.attachments || []
+  const completion = data?.completion
+
+  const rawImport = summary?.activities_raw_import
+  const histRow = (Array.isArray(rawImport) ? rawImport[0] : rawImport) as Record<string, unknown> | undefined
+  const grantIdDisplay =
+    histRow?.['Serial Number'] != null && String(histRow['Serial Number']).trim() !== ''
+      ? String(histRow['Serial Number']).trim()
+      : project?.grant_id != null && String(project.grant_id).trim() !== ''
+        ? String(project.grant_id).trim()
+        : '—'
+
+  const errDisplay =
+    room?.name ||
+    room?.name_ar ||
+    room?.err_code ||
+    project?.err_id ||
+    (histRow?.['ERR CODE'] != null && String(histRow['ERR CODE']).trim() !== '' ? String(histRow['ERR CODE']) : null) ||
+    (histRow?.['ERR Name'] != null && String(histRow['ERR Name']).trim() !== '' ? String(histRow['ERR Name']) : null) ||
+    '-'
+
+  const stateDisplay = project?.state || (histRow?.['State'] != null ? String(histRow['State']) : null) || '-'
+
+  const objectivesDisplay =
+    (project?.project_objectives != null && String(project.project_objectives).trim() !== ''
+      ? String(project.project_objectives)
+      : null) ||
+    (histRow?.['Description of ERRs activity'] != null && String(histRow['Description of ERRs activity']).trim() !== ''
+      ? String(histRow['Description of ERRs activity'])
+      : null) ||
+    '-'
+
+  const beneficiariesFromImport = (() => {
+    if (!histRow) return null
+    const parts: string[] = []
+    const ti = histRow['Target (Ind.)']
+    const tf = histRow['Target (Fam.)']
+    if (ti != null && String(ti).trim() !== '') parts.push(`Target (ind.): ${ti}`)
+    if (tf != null && String(tf).trim() !== '') parts.push(`Target (fam.): ${tf}`)
+    const ind = histRow['Individuals']
+    const fam = histRow['Family']
+    if (ind != null && String(ind).trim() !== '') parts.push(`Individuals: ${ind}`)
+    if (fam != null && String(fam).trim() !== '') parts.push(`Family: ${fam}`)
+    const vol = histRow['Volunteers']
+    if (vol != null && Number(vol) > 0) parts.push(`Volunteers: ${vol}`)
+    return parts.length ? parts.join(' · ') : null
+  })()
+
+  const reportDateDisplay = (() => {
+    if (summary?.report_date) {
+      return new Date(summary.report_date).toLocaleDateString()
+    }
+    const d = histRow?.['Date Report Completed']
+    if (d != null && String(d).trim() !== '') return String(d).trim()
+    return '-'
+  })()
+
+  const lessonsDisplay =
+    (summary?.lessons != null && String(summary.lessons).trim() !== '' ? String(summary.lessons) : null) ||
+    (histRow?.['Lessons learned'] != null && String(histRow['Lessons learned']).trim() !== ''
+      ? String(histRow['Lessons learned'])
+      : null) ||
+    '-'
+
+  const beneficiariesDisplay =
+    (summary?.beneficiaries != null && String(summary.beneficiaries).trim() !== ''
+      ? String(summary.beneficiaries)
+      : null) ||
+    beneficiariesFromImport ||
+    '-'
 
   const handleSave = async () => {
     if (!summaryId || !summaryDraft) return
@@ -190,7 +265,35 @@ export default function ViewF4Modal({ summaryId, open, onOpenChange, onSaved }: 
     }
   }
 
+  const canDeletePortalF4 =
+    Boolean(summary?.project_id) && !summary?.activities_raw_import_id
+
+  const handleDeleteF4 = async () => {
+    if (deletePhrase !== 'DELETE' || !summaryId) return
+    setDeleting(true)
+    try {
+      const res = await fetch(`/api/f4/summary/${summaryId}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ confirm: 'DELETE' }),
+      })
+      const j = await res.json()
+      if (!res.ok) throw new Error(j.error || 'Delete failed')
+      setDeleteDialogOpen(false)
+      setDeletePhrase('')
+      setIsEditing(false)
+      onOpenChange(false)
+      if (onSaved) onSaved()
+    } catch (e) {
+      console.error(e)
+      alert('Failed to delete F4 report')
+    } finally {
+      setDeleting(false)
+    }
+  }
+
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-7xl w-[95vw] max-h-[85vh] overflow-y-auto">
         <DialogHeader>
@@ -199,8 +302,20 @@ export default function ViewF4Modal({ summaryId, open, onOpenChange, onSaved }: 
             {!isEditing ? (
               <Button onClick={() => setIsEditing(true)}>Edit</Button>
             ) : (
-              <div className="flex gap-2">
-                <Button variant="outline" onClick={() => setIsEditing(false)}>Cancel</Button>
+              <div className="flex gap-2 flex-wrap justify-end">
+                <Button variant="outline" onClick={() => { setIsEditing(false); setDeleteDialogOpen(false); setDeletePhrase('') }}>Cancel</Button>
+                {canDeletePortalF4 && (
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    onClick={() => {
+                      setDeletePhrase('')
+                      setDeleteDialogOpen(true)
+                    }}
+                  >
+                    Delete
+                  </Button>
+                )}
                 <Button onClick={handleSave} disabled={saving}>{saving ? 'Saving...' : 'Save'}</Button>
               </div>
             )}
@@ -212,21 +327,40 @@ export default function ViewF4Modal({ summaryId, open, onOpenChange, onSaved }: 
           <div className="py-10 text-center text-muted-foreground">No data</div>
         ) : (
           <div className="space-y-6">
+            {completion && (completion.completion_percent != null || completion.planned_total != null) && (
+              <div className={`rounded-lg border p-3 ${completion.totals_match ? 'border-green-200 bg-green-50 dark:bg-green-950/20' : 'border-amber-200 bg-amber-50 dark:bg-amber-950/20'}`}>
+                <div className="text-sm font-medium mb-1">F4 completion</div>
+                <div className="flex flex-wrap gap-4 text-sm">
+                  {completion.completion_percent != null && (
+                    <span>Completion: <strong>{completion.completion_percent}%</strong></span>
+                  )}
+                  {completion.planned_total != null && (
+                    <span>Planned total: {Number(completion.planned_total).toLocaleString()}</span>
+                  )}
+                  <span>Reported total: {Number(completion.reported_total || 0).toLocaleString()}</span>
+                  <span>{completion.totals_match ? 'Match' : 'Mismatch'}</span>
+                </div>
+              </div>
+            )}
             {/* Project / F1 context */}
             <div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
                   <Label>ERR</Label>
-                  <div className="h-10 flex items-center px-3 rounded border bg-muted/50">{room?.name || room?.name_ar || room?.err_code || project?.err_id || '-'}</div>
+                  <div className="h-10 flex items-center px-3 rounded border bg-muted/50">{errDisplay}</div>
                 </div>
                 <div>
                   <Label>State</Label>
-                  <div className="h-10 flex items-center px-3 rounded border bg-muted/50">{project?.state || '-'}</div>
+                  <div className="h-10 flex items-center px-3 rounded border bg-muted/50">{stateDisplay}</div>
+                </div>
+                <div>
+                  <Label>Grant ID</Label>
+                  <div className="min-h-10 flex items-center px-3 rounded border bg-muted/50 text-sm break-all">{grantIdDisplay}</div>
                 </div>
               </div>
               <div className="mt-3">
                 <Label>Project Objectives</Label>
-                <div className="min-h-[40px] max-h-[14rem] overflow-y-auto px-3 py-2 rounded border bg-muted/50 text-sm whitespace-pre-wrap break-words">{project?.project_objectives || '-'}</div>
+                <div className="min-h-[40px] max-h-[14rem] overflow-y-auto px-3 py-2 rounded border bg-muted/50 text-sm whitespace-pre-wrap break-words">{objectivesDisplay}</div>
               </div>
             </div>
 
@@ -237,7 +371,7 @@ export default function ViewF4Modal({ summaryId, open, onOpenChange, onSaved }: 
                 {isEditing ? (
                   <Input type="date" value={summaryDraft?.report_date ? (typeof summaryDraft.report_date === 'string' ? summaryDraft.report_date.split('T')[0] : new Date(summaryDraft.report_date).toISOString().split('T')[0]) : ''} onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), report_date: e.target.value }))} />
                 ) : (
-                  <div className="h-10 flex items-center px-3 rounded border bg-muted/50">{summary?.report_date ? new Date(summary.report_date).toLocaleDateString() : '-'}</div>
+                  <div className="h-10 flex items-center px-3 rounded border bg-muted/50">{reportDateDisplay}</div>
                 )}
               </div>
               <div className={!isEditing ? 'col-span-2' : ''}>
@@ -245,7 +379,7 @@ export default function ViewF4Modal({ summaryId, open, onOpenChange, onSaved }: 
                 {isEditing ? (
                   <Input value={summaryDraft?.beneficiaries || ''} onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), beneficiaries: e.target.value }))} />
                 ) : (
-                  <div className="min-h-[2.5rem] max-h-[14rem] overflow-y-auto px-3 py-2 rounded border bg-muted/50 text-sm whitespace-pre-wrap break-words">{summary?.beneficiaries || '-'}</div>
+                  <div className="min-h-[2.5rem] max-h-[14rem] overflow-y-auto px-3 py-2 rounded border bg-muted/50 text-sm whitespace-pre-wrap break-words">{beneficiariesDisplay}</div>
                 )}
               </div>
             </div>
@@ -326,7 +460,7 @@ export default function ViewF4Modal({ summaryId, open, onOpenChange, onSaved }: 
                 {isEditing ? (
                   <Input value={summaryDraft?.lessons || ''} onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), lessons: e.target.value }))} />
                 ) : (
-                  <div className="min-h-[40px] max-h-[10rem] overflow-y-auto px-3 py-2 rounded border bg-muted/50 text-sm whitespace-pre-wrap break-words">{summary?.lessons || '-'}</div>
+                  <div className="min-h-[40px] max-h-[10rem] overflow-y-auto px-3 py-2 rounded border bg-muted/50 text-sm whitespace-pre-wrap break-words">{lessonsDisplay}</div>
                 )}
               </div>
               <div>
@@ -543,5 +677,44 @@ export default function ViewF4Modal({ summaryId, open, onOpenChange, onSaved }: 
         )}
       </DialogContent>
     </Dialog>
+
+    <Dialog
+      open={deleteDialogOpen}
+      onOpenChange={(v) => {
+        setDeleteDialogOpen(v)
+        if (!v) setDeletePhrase('')
+      }}
+    >
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Delete F4 report</DialogTitle>
+          <DialogDescription>
+            This permanently removes this F4 report and its linked expenses, receipts, and attachments. Type{' '}
+            <span className="font-mono font-semibold">DELETE</span> to confirm.
+          </DialogDescription>
+        </DialogHeader>
+        <Input
+          placeholder="DELETE"
+          value={deletePhrase}
+          onChange={(e) => setDeletePhrase(e.target.value)}
+          autoComplete="off"
+          className="mt-1"
+        />
+        <DialogFooter className="gap-2 sm:gap-0">
+          <Button type="button" variant="outline" onClick={() => { setDeleteDialogOpen(false); setDeletePhrase('') }}>
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            variant="destructive"
+            disabled={deletePhrase !== 'DELETE' || deleting}
+            onClick={handleDeleteF4}
+          >
+            {deleting ? 'Deleting…' : 'Delete permanently'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   )
 }

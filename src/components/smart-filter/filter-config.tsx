@@ -188,3 +188,53 @@ export function getProjectManagementFilterFields(options?: {
     },
   ]
 }
+
+/** F4 / F5 reporting tables: Grant ID (text prefix match), ERR, State, Donor */
+export function getF4F5ReportingFilterFields(options: {
+  errOptions: string[]
+  stateOptions: string[]
+  donorOptions: string[]
+  labels: {
+    grantId: string
+    grantIdPlaceholder: string
+    err: string
+    state: string
+    donor: string
+    all: string
+  }
+}): FilterFieldConfig[] {
+  const { errOptions, stateOptions, donorOptions, labels } = options
+  return [
+    {
+      id: 'grant_id',
+      label: labels.grantId,
+      type: 'text',
+      placeholder: labels.grantIdPlaceholder,
+      accessorKey: 'grant_serial_id',
+    },
+    {
+      id: 'err',
+      label: labels.err,
+      type: 'select',
+      options: errOptions.map((s) => ({ value: s, label: s })),
+      placeholder: labels.all,
+      accessorKey: 'err_name',
+    },
+    {
+      id: 'state',
+      label: labels.state,
+      type: 'select',
+      options: stateOptions.map((s) => ({ value: s, label: s })),
+      placeholder: labels.all,
+      accessorKey: 'state',
+    },
+    {
+      id: 'donor',
+      label: labels.donor,
+      type: 'select',
+      options: donorOptions.map((s) => ({ value: s, label: s })),
+      placeholder: labels.all,
+      accessorKey: 'donor',
+    },
+  ]
+}

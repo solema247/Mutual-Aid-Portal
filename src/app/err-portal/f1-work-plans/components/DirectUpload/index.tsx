@@ -22,6 +22,31 @@ import { cn } from '@/lib/utils'
 import { X, Plus } from 'lucide-react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 
+const F1_OCR_COMPARE_KEYS = [
+  'date', 'state', 'locality', 'project_objectives', 'intended_beneficiaries',
+  'estimated_beneficiaries', 'estimated_timeframe', 'additional_support', 'banking_details',
+  'program_officer_name', 'program_officer_phone', 'reporting_officer_name', 'reporting_officer_phone',
+  'finance_officer_name', 'finance_officer_phone', 'planned_activities', 'expenses'
+]
+
+function normVal (v: unknown): string {
+  if (v == null) return ''
+  if (typeof v === 'string') return v.trim()
+  if (typeof v === 'number') return String(v)
+  return JSON.stringify(v)
+}
+
+function countOcrEditedFields (initial: any, final: any): number {
+  if (!initial || typeof initial !== 'object') return 0
+  let count = 0
+  for (const key of F1_OCR_COMPARE_KEYS) {
+    const a = normVal(initial[key])
+    const b = normVal(final[key])
+    if (a !== b) count += 1
+  }
+  return count
+}
+
 export default function DirectUpload() {
   const { t } = useTranslation(['common', 'fsystem'])
   const [rooms, setRooms] = useState<EmergencyRoomWithState[]>([])
@@ -455,6 +480,11 @@ export default function DirectUpload() {
       const { translatedData, originalText } = await translateFields(editedData, sourceLanguage)
       console.log('Translation completed. Original text preserved:', Object.keys(originalText).length > 0)
 
+      const ocrEditedFieldsCount =
+        processedData != null
+          ? countOcrEditedFields(processedData, editedData)
+          : null
+
       // Get temp file key - file stays in temp folder until F2 assignment
       const tempKey = (window as any).__f1_temp_key__ as string
       if (!tempKey) throw new Error('Temp file key missing')
@@ -512,6 +542,7 @@ export default function DirectUpload() {
           temp_file_key: tempKey, // Store temp file path
           original_text: originalText,
           language: sourceLanguage,
+          ocr_edited_fields_count: ocrEditedFieldsCount,
           grant_segment: formData.grant_segment ? String(formData.grant_segment) : null,
           // Remove these fields - will be set in F2:
           // donor_id: null,

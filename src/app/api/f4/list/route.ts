@@ -17,17 +17,10 @@ export async function GET() {
         .select('id')
         .in('state', allowedStateNames)
       allowedProjectIds = (allowedProjects || []).map((p: any) => p.id)
-      if (allowedProjectIds.length === 0) {
-        // No projects in allowed states, return empty
-        return NextResponse.json([])
-      }
+      // Do not return early: portal list may be empty while historical F4 rows still apply
     }
     
-    // Get F4 summaries with attachment counts and project/room/grant context
-    // First, get portal projects only (exclude historical projects)
-    let query = supabase
-      .from('err_summary')
-      .select(`
+    const portalSelect = `
         id,
         project_id,
         activities_raw_import_id,
@@ -36,24 +29,39 @@ export async function GET() {
         total_expenses,
         remainder,
         created_at,
+        review_status,
+        review_comment,
+        reviewed_at,
         err_projects (
           err_id,
           state,
           donor_id,
+          grant_id,
+          grant_serial_id,
           emergency_rooms ( name, name_ar, err_code ),
           donors ( name, short_name )
         )
-      `)
-      .is('activities_raw_import_id', null) // Only portal projects
-      .order('created_at', { ascending: false })
-    
-    // Filter by allowed project IDs if state filtering is needed
-    if (allowedProjectIds !== null) {
-      query = query.in('project_id', allowedProjectIds)
+      `
+    let summaries: any[] = []
+    if (allowedProjectIds === null) {
+      const { data, error } = await supabase
+        .from('err_summary')
+        .select(portalSelect)
+        .is('activities_raw_import_id', null)
+        .order('created_at', { ascending: false })
+      if (error) throw error
+      summaries = data || []
+    } else if (allowedProjectIds.length > 0) {
+      const { data, error } = await supabase
+        .from('err_summary')
+        .select(portalSelect)
+        .is('activities_raw_import_id', null)
+        .in('project_id', allowedProjectIds)
+        .order('created_at', { ascending: false })
+      if (error) throw error
+      summaries = data || []
     }
-    
-    const { data: summaries, error } = await query
-    if (error) throw error
+    // else: state-restricted user with no portal projects in allowed states — summaries stay []
 
     // Get historical F4 reports (those with activities_raw_import_id)
     // Exclude summaries that also have project_id to prevent duplicates
@@ -68,12 +76,16 @@ export async function GET() {
         total_expenses,
         remainder,
         created_at,
+        review_status,
+        review_comment,
+        reviewed_at,
         activities_raw_import (
           id,
           "ERR CODE",
           "ERR Name",
           "State",
-          "Project Donor"
+          "Project Donor",
+          "Serial Number"
         )
       `)
       .not('activities_raw_import_id', 'is', null) // Only historical projects
@@ -81,12 +93,34 @@ export async function GET() {
       .order('created_at', { ascending: false })
     
     const { data: historicalSummaries } = await historicalQuery
-    
+
+    // Direct fetch of import rows: nested embed can be null (RLS/relationship), but FK still resolves grant fields
+    const importById: Record<string, Record<string, unknown>> = {}
+    const impIds = [
+      ...new Set(
+        (historicalSummaries || [])
+          .map((s: any) => s.activities_raw_import_id)
+          .filter(Boolean)
+      )
+    ] as string[]
+    if (impIds.length) {
+      const { data: impRows } = await supabase
+        .from('activities_raw_import')
+        .select('id, "Serial Number", "ERR CODE", "ERR Name", "State", "Project Donor"')
+        .in('id', impIds)
+      for (const row of impRows || []) {
+        importById[String((row as any).id)] = row as Record<string, unknown>
+      }
+    }
+
     // Filter historical summaries by state if needed
     let filteredHistorical = historicalSummaries || []
     if (allowedStateNames !== null && allowedStateNames.length > 0) {
       filteredHistorical = (historicalSummaries || []).filter((s: any) => {
-        const state = s.activities_raw_import?.['State']
+        const raw = s.activities_raw_import
+        const nested = (Array.isArray(raw) ? raw[0] : raw) || {}
+        const imp = importById[String(s.activities_raw_import_id)] || {}
+        const state = (nested as any)['State'] ?? (imp as any)['State']
         return state && allowedStateNames.includes(state)
       })
     }
@@ -118,14 +152,24 @@ export async function GET() {
     // Map summaries to response format
     const rows = allSummaries.map((s: any) => {
       if (s.activities_raw_import_id) {
-        // Historical project
-        const hist = s.activities_raw_import || {}
+        // Historical project (merge embed + direct import row so grant serial is always available when FK exists)
+        const rawImp = s.activities_raw_import
+        const nested = (Array.isArray(rawImp) ? rawImp[0] : rawImp) || {}
+        const hist = {
+          ...importById[String(s.activities_raw_import_id)],
+          ...nested
+        }
+        const serial = hist['Serial Number'] != null && String(hist['Serial Number']).trim() !== ''
+          ? String(hist['Serial Number']).trim()
+          : null
         return {
           id: s.id,
           project_id: `historical_${s.activities_raw_import_id}`,
           activities_raw_import_id: s.activities_raw_import_id,
           err_id: hist['ERR CODE'] || hist['ERR Name'] || null,
           err_name: hist['ERR CODE'] || hist['ERR Name'] || null,
+          grant_serial_id: serial,
+          grant_id: serial,
           state: hist['State'] || null,
           donor: hist['Project Donor'] || null,
           report_date: s.report_date,
@@ -133,7 +177,10 @@ export async function GET() {
           total_expenses: s.total_expenses,
           remainder: s.remainder,
           attachments_count: attachCounts[s.id] || 0,
-          updated_at: s.created_at
+          updated_at: s.created_at,
+          review_status: s.review_status || 'pending_review',
+          review_comment: s.review_comment ?? null,
+          reviewed_at: s.reviewed_at ?? null
         }
       } else {
         // Portal project
@@ -147,6 +194,8 @@ export async function GET() {
           activities_raw_import_id: null,
           err_id: prj?.err_id || null,
           err_name: errName,
+          grant_serial_id: prj?.grant_serial_id ?? null,
+          grant_id: prj?.grant_id ?? null,
           state: prj?.state || null,
           donor: donorRow?.short_name || donorRow?.name || null,
           report_date: s.report_date,
@@ -154,7 +203,10 @@ export async function GET() {
           total_expenses: s.total_expenses,
           remainder: s.remainder,
           attachments_count: attachCounts[s.id] || 0,
-          updated_at: s.created_at
+          updated_at: s.created_at,
+          review_status: s.review_status || 'pending_review',
+          review_comment: s.review_comment ?? null,
+          reviewed_at: s.reviewed_at ?? null
         }
       }
     })

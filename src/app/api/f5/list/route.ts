@@ -32,6 +32,8 @@ export async function GET() {
         created_at,
         err_projects (
           state,
+          grant_id,
+          grant_serial_id,
           emergency_rooms ( name, name_ar, err_code ),
           donors ( name, short_name )
         )
@@ -68,6 +70,8 @@ export async function GET() {
         id: r.id,
         project_id: r.project_id,
         err_name: errName,
+        grant_serial_id: prj.grant_serial_id ?? null,
+        grant_id: prj.grant_id ?? null,
         state: prj.state || null,
         donor: donorRow?.short_name || donorRow?.name || null,
         report_date: r.report_date,

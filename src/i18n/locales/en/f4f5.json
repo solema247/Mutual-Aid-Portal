@@ -26,6 +26,8 @@
       "cancel": "Cancel"
     },
     "filters": {
+      "grant_id": "Grant ID",
+      "grant_id_placeholder": "e.g. LCC-FCDO-ND-0326-0001",
       "err": "ERR",
       "state": "State",
       "donor": "Donor",
@@ -35,6 +37,7 @@
     },
     "headers": {
       "err": "ERR",
+      "grant_id": "Grant ID",
       "state": "State",
       "grant": "Grant Call",
       "donor": "Donor",
@@ -49,6 +52,17 @@
     "view": "View",
     "loading": "Loading…",
     "empty": "No F4 reports yet",
+    "serial_lookup": "F4 serial (LoHub)",
+    "serial_placeholder": "Enter serial number",
+    "fetch": "Fetch",
+    "by_serial_loading": "Fetching…",
+    "by_serial_error": "No project found with this serial",
+    "by_serial_f1_serial": "F1 serial",
+    "by_serial_mou": "MOU",
+    "by_serial_payment_confirmation": "Payment confirmation",
+    "by_serial_exchange_rate": "Exchange rate",
+    "by_serial_transfer_date": "Transfer date",
+    "by_serial_download_payment": "Download",
     "preview": {
       "tabs": { "edit_form": "Edit Form", "view_file": "View File" },
       "labels": {
@@ -112,6 +126,8 @@
       "cancel": "Cancel"
     },
     "filters": {
+      "grant_id": "Grant ID",
+      "grant_id_placeholder": "e.g. LCC-FCDO-ND-0326-0001",
       "err": "ERR",
       "state": "State",
       "donor": "Donor",
@@ -121,6 +137,7 @@
     },
     "headers": {
       "err": "ERR",
+      "grant_id": "Grant ID",
       "state": "State",
       "grant": "Grant Call",
       "donor": "Donor",

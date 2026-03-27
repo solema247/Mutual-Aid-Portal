@@ -18,6 +18,7 @@ const CHIP_COLORS: Record<string, string> = {
   grant_segment: 'bg-cyan-500/10 border-cyan-500/30 [&_.chip-dot]:bg-cyan-500',
   grant: 'bg-indigo-500/10 border-indigo-500/30 [&_.chip-dot]:bg-indigo-500',
   grant_serial: 'bg-teal-500/10 border-teal-500/30 [&_.chip-dot]:bg-teal-500',
+  grant_id: 'bg-teal-500/10 border-teal-500/30 [&_.chip-dot]:bg-teal-500',
   expense_category: 'bg-rose-500/10 border-rose-500/30 [&_.chip-dot]:bg-rose-500',
 }
 
@@ -58,8 +59,10 @@ export function FilterChip({
           onChange={(e) => onValueChange(e.target.value)}
           placeholder={field.placeholder}
           className={cn(
-            'h-7 rounded-sm border-0 bg-transparent px-2 text-xs shadow-none',
-            field.id === 'grant_serial' ? 'min-w-[200px] w-[200px]' : 'w-24'
+            'h-7 rounded-sm border-0 bg-transparent px-2 shadow-none',
+            field.id === 'grant_serial' || field.id === 'grant_id'
+              ? 'min-w-[280px] w-[min(100%,34rem)] max-w-[min(100vw-2rem,42rem)] text-[11px] leading-tight placeholder:text-muted-foreground'
+              : 'w-24 text-xs'
           )}
         />
       )}

@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -22,6 +22,9 @@ export default function ViewF5Modal({ reportId, open, onOpenChange, onSaved }: V
   const [isEditing, setIsEditing] = useState(false)
   const [summaryDraft, setSummaryDraft] = useState<any | null>(null)
   const [reachDraft, setReachDraft] = useState<any[]>([])
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [deletePhrase, setDeletePhrase] = useState('')
+  const [deleting, setDeleting] = useState(false)
 
   useEffect(() => {
     if (!open || !reportId) { 
@@ -29,6 +32,9 @@ export default function ViewF5Modal({ reportId, open, onOpenChange, onSaved }: V
       setIsEditing(false)
       setSummaryDraft(null)
       setReachDraft([])
+      setDeleteDialogOpen(false)
+      setDeletePhrase('')
+      setDeleting(false)
       return 
     }
     ;(async () => {
@@ -81,6 +87,11 @@ export default function ViewF5Modal({ reportId, open, onOpenChange, onSaved }: V
   const room = project?.emergency_rooms
   const reach = isEditing ? reachDraft : (data?.reach || [])
   const files = data?.files || []
+
+  const grantIdDisplay =
+    project?.grant_id != null && String(project.grant_id).trim() !== ''
+      ? String(project.grant_id).trim()
+      : '—'
 
   const handleSave = async () => {
     if (!reportId || !summaryDraft) return
@@ -139,7 +150,34 @@ export default function ViewF5Modal({ reportId, open, onOpenChange, onSaved }: V
     }
   }
 
+  const canDeletePortalF5 = Boolean(report?.project_id)
+
+  const handleDeleteF5 = async () => {
+    if (deletePhrase !== 'DELETE' || !reportId) return
+    setDeleting(true)
+    try {
+      const res = await fetch(`/api/f5/report/${reportId}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ confirm: 'DELETE' }),
+      })
+      const j = await res.json()
+      if (!res.ok) throw new Error(j.error || 'Delete failed')
+      setDeleteDialogOpen(false)
+      setDeletePhrase('')
+      setIsEditing(false)
+      onOpenChange(false)
+      if (onSaved) onSaved()
+    } catch (e) {
+      console.error(e)
+      alert('Failed to delete F5 report')
+    } finally {
+      setDeleting(false)
+    }
+  }
+
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-7xl w-[95vw] max-h-[85vh] overflow-y-auto">
         <DialogHeader>
@@ -148,8 +186,20 @@ export default function ViewF5Modal({ reportId, open, onOpenChange, onSaved }: V
             {!isEditing ? (
               <Button onClick={() => setIsEditing(true)}>Edit</Button>
             ) : (
-              <div className="flex gap-2">
-                <Button variant="outline" onClick={() => setIsEditing(false)}>Cancel</Button>
+              <div className="flex gap-2 flex-wrap justify-end">
+                <Button variant="outline" onClick={() => { setIsEditing(false); setDeleteDialogOpen(false); setDeletePhrase('') }}>Cancel</Button>
+                {canDeletePortalF5 && (
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    onClick={() => {
+                      setDeletePhrase('')
+                      setDeleteDialogOpen(true)
+                    }}
+                  >
+                    Delete
+                  </Button>
+                )}
                 <Button onClick={handleSave} disabled={saving}>{saving ? 'Saving...' : 'Save'}</Button>
               </div>
             )}
@@ -162,7 +212,7 @@ export default function ViewF5Modal({ reportId, open, onOpenChange, onSaved }: V
         ) : (
           <div className="space-y-6">
             {/* Project context */}
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
                 <Label>ERR</Label>
                 <div className="h-10 flex items-center px-3 rounded border bg-muted/50">{room?.name || room?.name_ar || room?.err_code || '-'}</div>
@@ -170,6 +220,10 @@ export default function ViewF5Modal({ reportId, open, onOpenChange, onSaved }: V
               <div>
                 <Label>State</Label>
                 <div className="h-10 flex items-center px-3 rounded border bg-muted/50">{project?.state || '-'}</div>
+              </div>
+              <div>
+                <Label>Grant ID</Label>
+                <div className="min-h-10 flex items-center px-3 rounded border bg-muted/50 text-sm break-all">{grantIdDisplay}</div>
               </div>
             </div>
             <div>
@@ -504,6 +558,45 @@ export default function ViewF5Modal({ reportId, open, onOpenChange, onSaved }: V
         )}
       </DialogContent>
     </Dialog>
+
+    <Dialog
+      open={deleteDialogOpen}
+      onOpenChange={(v) => {
+        setDeleteDialogOpen(v)
+        if (!v) setDeletePhrase('')
+      }}
+    >
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Delete F5 report</DialogTitle>
+          <DialogDescription>
+            This permanently removes this F5 report and its activities and attachments. Type{' '}
+            <span className="font-mono font-semibold">DELETE</span> to confirm.
+          </DialogDescription>
+        </DialogHeader>
+        <Input
+          placeholder="DELETE"
+          value={deletePhrase}
+          onChange={(e) => setDeletePhrase(e.target.value)}
+          autoComplete="off"
+          className="mt-1"
+        />
+        <DialogFooter className="gap-2 sm:gap-0">
+          <Button type="button" variant="outline" onClick={() => { setDeleteDialogOpen(false); setDeletePhrase('') }}>
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            variant="destructive"
+            disabled={deletePhrase !== 'DELETE' || deleting}
+            onClick={handleDeleteF5}
+          >
+            {deleting ? 'Deleting…' : 'Delete permanently'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   )
 }
 

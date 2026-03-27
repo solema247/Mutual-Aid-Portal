@@ -22,5 +22,10 @@ export { FilterChip } from './FilterChip'
 export { applyFilters } from './useFilteredData'
 export type { FilterChipProps } from './FilterChip'
 export type { ApplyFiltersOptions } from './useFilteredData'
-export { getReportTrackerFilterFields, getProjectManagementFilterFields, STATUS_OPTIONS } from './filter-config'
+export {
+  getReportTrackerFilterFields,
+  getProjectManagementFilterFields,
+  getF4F5ReportingFilterFields,
+  STATUS_OPTIONS,
+} from './filter-config'
 export { STATUS_DISPLAY, getStatusDisplay } from './status-config'
