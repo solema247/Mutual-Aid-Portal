@@ -13,6 +13,7 @@ with
       p.estimated_beneficiaries,
       p."Sector (Primary)",
       p."Sector (Secondary)",
+      p.grant_id,
       p.grant_serial,
       p.workplan_number,
       p.grant_serial_id,
@@ -97,9 +98,35 @@ with
     from
       current_projects_base cpb
   ),
+  current_projects_reach as (
+    select
+      pr.project_id,
+      sum(COALESCE(r.individual_count, 0))::bigint as individuals,
+      sum(COALESCE(r.household_count, 0))::bigint as family,
+      sum(COALESCE(r.male_count, 0))::bigint as male_over_18,
+      sum(COALESCE(r.female_count, 0))::bigint as female_over_18,
+      sum(COALESCE(r.under18_male, 0))::bigint as male_under_18,
+      sum(COALESCE(r.under18_female, 0))::bigint as female_under_18,
+      sum(COALESCE(r.people_with_disabilities, 0))::bigint as people_special_needs
+    from
+      err_program_reach r
+      inner join err_program_report pr on r.report_id = pr.id
+    where
+      pr.project_id is not null
+    group by
+      pr.project_id
+  ),
   current_projects_mapped as (
     select
       COALESCE(
+        NULLIF(
+          TRIM(
+            both
+            from
+              cpb.grant_id
+          ),
+          ''::text
+        ),
         NULLIF(
           TRIM(
             both
@@ -366,13 +393,13 @@ with
         else 0::numeric
       end as tracker,
       null::numeric as volunteers,
-      null::numeric as family,
-      null::numeric as individuals,
-      null::numeric as male_over_18,
-      null::numeric as female_over_18,
-      null::numeric as male_under_18,
-      null::numeric as female_under_18,
-      null::numeric as people_special_needs,
+      cpr.family::numeric,
+      cpr.individuals::numeric,
+      cpr.male_over_18::numeric,
+      cpr.female_over_18::numeric,
+      cpr.male_under_18::numeric,
+      cpr.female_under_18::numeric,
+      cpr.people_special_needs::numeric,
       null::text as lessons_learned,
       null::text as challenges,
       null::text as recommendations,
@@ -388,6 +415,7 @@ with
     from
       current_projects_base cpb
       join current_projects_plan cpp on cpb.id = cpp.id
+      left join current_projects_reach cpr on cpb.id = cpr.project_id
   )
 select
   ari."Serial Number" as serial_number,
