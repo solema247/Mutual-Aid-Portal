@@ -69,31 +69,32 @@ export function useRegisterPageExplainer(
   config: PageExplainerConfig | null,
   enabled: boolean
 ) {
-  const { setConfig, setOpen } = usePageExplainerContext()
+  const ctx = useContext(PageExplainerContext)
   const autoOpenedRef = useRef(false)
   const configRef = useRef(config)
   configRef.current = config
 
   useEffect(() => {
+    if (!ctx) return
     if (!enabled) {
       autoOpenedRef.current = false
-      setConfig(null)
-      setOpen(false)
+      ctx.setConfig(null)
+      ctx.setOpen(false)
     }
-  }, [enabled, setConfig, setOpen])
+  }, [ctx, enabled])
 
   useEffect(() => {
-    if (!enabled || !config) return
-    setConfig(config)
-  }, [enabled, config, setConfig])
+    if (!ctx || !enabled || !config) return
+    ctx.setConfig(config)
+  }, [ctx, enabled, config])
 
   useEffect(() => {
-    if (!enabled) return
+    if (!ctx || !enabled) return
     const c = configRef.current
     if (!c || c.openOnNavigate !== true) return
     if (autoOpenedRef.current) return
     autoOpenedRef.current = true
-    const frame = requestAnimationFrame(() => setOpen(true))
+    const frame = requestAnimationFrame(() => ctx.setOpen(true))
     return () => cancelAnimationFrame(frame)
-  }, [enabled, setOpen])
+  }, [ctx, enabled, config])
 }
