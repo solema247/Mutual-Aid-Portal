@@ -11,6 +11,7 @@ import ERRAppSubmissions from './components/ERRAppSubmissions'
 import DirectUpload from './components/DirectUpload'
 import ManualEntry from './components/ManualEntry'
 import PoolDashboard from './components/PoolDashboard'
+import { useF1WorkPlansPageExplainer } from './F1WorkPlansPageExplainer'
 
 export default function F1WorkPlansPage() {
   const { t } = useTranslation(['f1_plans', 'common'])
@@ -29,6 +30,8 @@ export default function F1WorkPlansPage() {
       router.replace('/err-portal')
     }
   }, [permissionsLoading, canViewPage, router])
+
+  useF1WorkPlansPageExplainer(!permissionsLoading && canViewPage)
 
   if (!canViewPage) {
     return null

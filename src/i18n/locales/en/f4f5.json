@@ -191,7 +191,16 @@
       "file": { "uploaded_file": "Uploaded File", "no_preview": "No file preview available" },
       "buttons": { "back": "Back", "save": "Save F5", "saving": "Saving…" }
     }
-  }
+  },
+  "explainer_tooltip": "About F4 & F5 Reporting",
+  "explainer_title": "📊 F4 & F5 Reporting",
+  "explainer_intro": "Use this page to work with submitted reports after implementation. F4 is the financial side: how much of the grant was spent, what remains, and supporting expense detail. F5 is the program side: what was delivered (activities, results, lessons learned, and related narrative fields). Switch tabs to see each type. In either tab you can narrow the list with filters (grant, ERR, state, donor), upload a new report, or open an existing row to read or change it when your role allows.",
+  "explainer_section_tabs": "📌 Two tabs",
+  "explainer_tabs": "F4 Financial lists financial summaries that have been saved in the system. F5 Program lists program reports the same way. Only the tab you are on is loaded at first: open the F5 tab to fetch and show the F5 list.",
+  "explainer_section_f4": "📋 F4 list",
+  "explainer_f4": "Upload F4 starts the wizard where you attach a summary file (parsed into line items) or enter figures manually, then save. Each table row is one saved F4 summary: which ERR and grant it belongs to, state, donor, report date, total grant, total expenses, and remainder. View opens that summary for reading or editing expenses and totals. If you have the reviewer role, Accept or Reject appears for reports created in this portal so they can be sent back for correction. Rows that came from historical data imports are read-only for that workflow and do not show Accept/Reject.",
+  "explainer_section_f5": "📖 F5 list",
+  "explainer_f5": "Upload F5 starts the wizard for a new program report (file or manual). Each row is one saved F5: ERR, grant, state, donor, report date, how many activities are recorded, and when it was last updated. View opens the full program report: activities, narrative sections, beneficiary breakdowns, and attachments as applicable."
 }
 
 

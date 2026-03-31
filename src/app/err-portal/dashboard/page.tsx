@@ -16,6 +16,7 @@ import {
 import { GrantsStackedBarChart } from './GrantsStackedBarChart'
 import { ProjectsByDonorChart } from './ProjectsByDonorChart'
 import { PlannedCategoriesRingChart } from './PlannedCategoriesRingChart'
+import { useDashboardPageExplainer } from './DashboardPageExplainer'
 
 export default function DashboardPage() {
   const { t } = useTranslation(['dashboard', 'err', 'common'])
@@ -24,6 +25,7 @@ export default function DashboardPage() {
   const portalHomeHref = pathname.startsWith('/partner-portal') ? '/partner-portal' : '/err-portal'
   const { can } = useAllowedFunctions()
   const canViewPage = can('dashboard_view_page')
+  useDashboardPageExplainer(canViewPage)
   const [filters, setFilters] = useState<ActiveFilter[]>([])
 
   const dateFilterFields: FilterFieldConfig[] = useMemo(

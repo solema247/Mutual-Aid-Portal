@@ -217,5 +217,78 @@
         "no_expenses": "No expenses"
       }
     }
-  }
-} 
+  },
+  "management_explainer_tooltip": "About Project Management",
+  "management_explainer_title": "📊 Project Management",
+  "management_explainer_intro": "Plan, actuals, and F4/F5 progress for committed projects—portal rows and legacy imports—organized by state, ERR, and project.",
+  "management_explainer_heading_metrics": "🧮 Metrics in the tables",
+  "management_explainer_metrics_scope": "Important: Plan, Actuals, Variance, and the Individuals/Families headline figures use totals for the full dataset from the server. Filters apply to the project list and to the second row of KPI cards (Projects, MOUs, F4/F5 coverage, tracker).",
+  "management_explainer_metrics_sub_kpi": "Top KPI cards",
+  "management_explainer_metrics_kpi_bullets": [
+    "Plan — Sum of planned budgets (from F1-style planned activities or structured expenses on each project).",
+    "Actuals — Sum of recorded spend from F4 financial summaries.",
+    "Variance — Plan minus actuals (surplus budget if positive).",
+    "Projects — Count of projects in your current filtered slice.",
+    "With MOUs — How many of those projects have an MOU link.",
+    "With F4s / With F5s — How many projects have at least one F4 or F5 report in the rollup.",
+    "% F4 Complete (card) — Overall utilization for the filtered slice: total actuals divided by total plan (not “percent of projects”).",
+    "% F5 Complete (card) — Share of filtered projects that have at least one F5 report.",
+    "% Tracker (card) — Average of the per-project tracker score across the filtered projects (see the % Tracker subsection below).",
+    "Total Individuals / Total Families — Reach from F5 beneficiary data, plus historical target columns where imported."
+  ],
+  "management_explainer_metrics_sub_table": "Main drill-down table (columns)",
+  "management_explainer_metrics_table_bullets": [
+    "Plan / Actuals / Variance — Same meanings as the cards, but for the row: state aggregate, ERR aggregate, or one project. Variance is plan minus actual.",
+    "Individuals — Intended or reported individuals for that row (targets from imports; F5 reach totals for portal projects where applicable).",
+    "Overdue — What this column shows (and how it is calculated) is spelled out in the Overdue subsection right below.",
+    "F4s — Number of F4 reports counted in the rollup; at project level you may see a status label (Waiting / Partial / In review / Completed) instead of only a count.",
+    "% F4 — Spend utilization for that row: actual divided by plan. Some historical rows show 100% when the import marks F4 complete.",
+    "F5s — Number of F5 program reports; at project level a status label may appear.",
+    "% F5 — For aggregated rows: share of projects under that state/ERR with at least one F5. For a single project: 100% if there is an F5, otherwise 0%.",
+    "% Tracker — Short label; details are in the % Tracker subsection below."
+  ],
+  "management_explainer_metrics_sub_tracker": "📈 % Tracker",
+  "management_explainer_metrics_tracker_bullets": [
+    "Each project gets a 0–100% score blending F4 (spend vs plan + status) and F5 (status and at least one report where that applies).",
+    "State, ERR, and grant rows show the average of those scores for projects in that row. The top % Tracker KPI does the same for your current filters."
+  ],
+  "management_explainer_metrics_sub_overdue": "⏱️ Overdue",
+  "management_explainer_metrics_overdue_bullets": [
+    "Due date = transfer date + 32 days (transfer from MOU payment or legacy import). Past that date you count as overdue until both F4 and F5 are far enough along: completed, partial, or in review.",
+    "Aggregated rows: Overdue is a count. Project rows: days overdue (or legacy imported text). Summary by Grant: same rule, count per grant."
+  ],
+  "management_explainer_metrics_sub_grant": "Summary by Grant table",
+  "management_explainer_metrics_grant_bullets": [
+    "One row per grant call (plus Unassigned for projects not on a grant row).",
+    "Plan, Actuals, Variance, Utilization (burn) — Rolled up across all projects matched to that grant (or donor match for legacy rows).",
+    "Overdue — Uses the same overdue definition as above; shows how many overdue projects fall in that grant bucket.",
+    "F4s / F5s — Total report counts in that bucket.",
+    "% F4 / % F5 — Share of projects in that grant that have at least one F4 or F5 report.",
+    "% Tracker — Same idea as above: average tracker score for projects in that grant row."
+  ],
+  "management_explainer_heading_data": "📡 How data is loaded",
+  "management_explainer_data_lead": "The first load asks the server for a consolidated rollup. That merges:",
+  "management_explainer_data_bullets": [
+    "Portal projects with committed or allocated funding (approved, active, pending, or completed). If your account is limited to certain states, only those states appear.",
+    "Legacy activity imported from older spreadsheets, joined to financial actuals and F4 summaries where the data model allows.",
+    "Plan totals from planned activities or structured expenses—portal-sourced projects prefer the expense table.",
+    "Actual spend from F4 summaries; F5 counts and last report dates from program reports; reach numbers from F5 beneficiary rows when present.",
+    "MOU payment records supply transfer dates used for overdue calculations.",
+    "A follow-up pass loads F4 and F5 report lists to count portal uploads per project for the table."
+  ],
+  "management_explainer_heading_ui": "📈 Navigation and layout",
+  "management_explainer_ui_bullets": [
+    "Summary by Grant sits below the main grid; it is described under Metrics.",
+    "Main grid: start at state level, click a state → ERR rooms → projects; use Back to move up. Grant-serial filter can skip straight to project rows.",
+    "Filters include historical vs new (from 2026 onward), grant, F4/F5 status, state, date range, grant segment, and sector expense category.",
+    "Refresh reloads everything; wide tables scroll sideways."
+  ],
+  "management_explainer_heading_actions": "🧭 What you can do",
+  "management_explainer_actions_bullets": [
+    "Open a project row: detail modal with objectives, financial rollups, and F4 report lines.",
+    "Upload or open F4/F5 from a row when your role allows (same modals as the reporting pages).",
+    "Change F4/F5 reporting status on the row when permitted; mark a project completed when permitted.",
+    "Export CSV for the rows currently shown.",
+    "Overdue follows the same rule as elsewhere: due window after transfer until both F4 and F5 are far enough along."
+  ]
+}

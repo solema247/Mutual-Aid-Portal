@@ -11,6 +11,7 @@ import { useAllowedFunctions } from '@/hooks/useAllowedFunctions'
 import { GrantCallsManager } from './components'
 import DistributionDecisionTableView from './components/DistributionDecisionTableView'
 import PoolOverviewByState from './components/PoolOverviewByState'
+import { useGrantManagementPageExplainer } from './GrantManagementPageExplainer'
 
 export default function GrantManagementPage() {
   const { t } = useTranslation(['err', 'common'])
@@ -44,6 +45,8 @@ export default function GrantManagementPage() {
     }
     load()
   }, [canViewGrantManagement, router])
+
+  useGrantManagementPageExplainer(canViewGrantManagement && !loading)
 
   if (!canViewGrantManagement) {
     return null

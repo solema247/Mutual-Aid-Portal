@@ -65,7 +65,22 @@
   "position": "Position",
   "email": "Email",
   "phone": "Phone",
-  "err_label": "ERR"
+  "err_label": "ERR",
+  "explainer_tooltip": "About F3 MOUs",
+  "explainer_title": "🤝 F3 MOUs",
+  "explainer_intro": "MOUs are built from committed F1 work plans in F2. This page lists them, lets you filter, tie them to grant calls, manage linked projects, record payment confirmations, and open the generated MOU for review or export.",
+  "explainer_section_alert": "🔔 Payment priority banner",
+  "explainer_alert": "If you can manage payment: when an MOU is on a grant but some linked projects still lack payment confirmation, it may appear here so you can open payment and complete the files.",
+  "explainer_section_table": "📋 MOU list",
+  "explainer_filters": "Filter by state and by grant ID. Grant ID is taken from projects linked to the MOU.",
+  "explainer_columns": "Columns: MOU code, grant ID, ERR and state, total amount, created date (use the header to sort), then actions.",
+  "explainer_actions_lead": "Row actions (each only if your role allows):",
+  "explainer_action_list": "List — see projects in the MOU; add or remove projects where allowed.",
+  "explainer_action_assign": "Assign — choose a grant call for projects not yet on a grant.",
+  "explainer_action_reassign": "Reassign — change the grant call for an MOU that is already assigned.",
+  "explainer_action_preview": "Preview — load the MOU text, edit fields you are allowed to change, export or print.",
+  "explainer_action_payment": "Payment — upload or update payment confirmation per linked project.",
+  "explainer_action_signed": "Signed MOU — upload the signed PDF or open the file already stored.",
+  "explainer_section_pool": "🗺️ By grant table",
+  "explainer_pool": "Below the list, the grant pool table matches F2: for each grant call, included, historical, assigned, and remaining amounts."
 }
-
-

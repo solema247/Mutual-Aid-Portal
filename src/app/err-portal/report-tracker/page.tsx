@@ -17,6 +17,7 @@ import {
 import { STATUS_DISPLAY } from '@/components/smart-filter'
 import { StatsDonutCard, CompactStatCard, type DonutSegment } from '@/components/report-tracker-stats'
 import { downloadCsv } from '@/lib/csvDownload'
+import { useReportTrackerPageExplainer } from './ReportTrackerPageExplainer'
 
 const PAGE_SIZE_OPTIONS = [10, 25, 50, 100] as const
 
@@ -87,7 +88,7 @@ function getTrackerBarClass(pct: number): string {
 
 export default function ReportTrackerPage() {
   const { i18n } = useTranslation()
-  const { can } = useAllowedFunctions()
+  const { can, isLoading: permissionsLoading } = useAllowedFunctions()
   const canViewPage = can('f4_f5_view_page')
   const isRtl = i18n.language === 'ar'
   const [rows, setRows] = useState<ReportTrackerRow[]>([])
@@ -145,6 +146,8 @@ export default function ReportTrackerPage() {
   useEffect(() => {
     if (canViewPage) load()
   }, [canViewPage])
+
+  useReportTrackerPageExplainer(!permissionsLoading && canViewPage && !loading)
 
   const stateOptions = Array.from(new Set(rows.map((r) => r.state).filter(Boolean))).sort()
   const donorOptions = Array.from(new Set(rows.map((r) => r.donor).filter((d): d is string => d != null && d !== ''))).sort()

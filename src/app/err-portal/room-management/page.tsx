@@ -8,6 +8,7 @@ import { useAllowedFunctions } from '@/hooks/useAllowedFunctions'
 import RoomManagement from './components/RoomManagement'
 import InactiveRoomsList from './components/InactiveRoomsList'
 import { supabase } from '@/lib/supabaseClient'
+import { useRoomManagementPageExplainer } from './RoomManagementPageExplainer'
 
 interface User {
   id: string;
@@ -25,6 +26,9 @@ export default function RoomManagementPage() {
   const canViewPage = can('rooms_view_page')
   const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  useRoomManagementPageExplainer(
+    canViewPage && !isLoading && user != null && user.role !== 'base_err'
+  )
 
   useEffect(() => {
     if (!canViewPage) {

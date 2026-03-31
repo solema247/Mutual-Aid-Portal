@@ -20,6 +20,7 @@ import { useTranslation } from 'react-i18next'
 import ViewF4Modal from './components/ViewF4Modal'
 import UploadF5Modal from './components/UploadF5Modal'
 import ViewF5Modal from './components/ViewF5Modal'
+import { useF4F5ReportingPageExplainer } from './F4F5ReportingPageExplainer'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 
@@ -77,7 +78,7 @@ function F4F5ReportingPageContent() {
   const { t } = useTranslation(['f4f5'])
   const searchParams = useSearchParams()
   const router = useRouter()
-  const { can } = useAllowedFunctions()
+  const { can, isLoading: permissionsLoading } = useAllowedFunctions()
   const canViewPage = can('f4_f5_view_page')
   const canUploadF4 = can('f4_upload')
   const canUploadF5 = can('f5_upload')
@@ -340,6 +341,8 @@ function F4F5ReportingPageContent() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams])
+
+  useF4F5ReportingPageExplainer(!permissionsLoading && canViewPage && !loading)
 
   if (!canViewPage) return null
 

@@ -20,6 +20,7 @@ import { supabase } from '@/lib/supabaseClient'
 import PoolByDonor from '@/app/err-portal/f2-approvals/components/PoolByDonor'
 import { useAllowedFunctions } from '@/hooks/useAllowedFunctions'
 import { cn } from '@/lib/utils'
+import { useF3MousPageExplainer } from './F3MousPageExplainer'
 
 interface Signature {
   id: string
@@ -186,7 +187,7 @@ export default function F3MOUsPage() {
   const [sortCreatedOrder, setSortCreatedOrder] = useState<'asc' | 'desc'>('desc')
   const [currentUser, setCurrentUser] = useState<{ role: string } | null>(null)
   const router = useRouter()
-  const { can } = useAllowedFunctions()
+  const { can, isLoading: permissionsLoading } = useAllowedFunctions()
   const canViewPage = can('f3_view_page')
   const canEditMou = can('f3_edit_mou')
   const canAssign = can('f3_assign')
@@ -1016,6 +1017,8 @@ export default function F3MOUsPage() {
         }
       })
   }, [mous, mouGrantIds, mouPaymentProjectCounts, mouProjectCounts])
+
+  useF3MousPageExplainer(!permissionsLoading && canViewPage && !loading)
 
   if (!canViewPage) return null
 

@@ -13,6 +13,7 @@ import PendingUsersList from './PendingUsersList'
 import ActiveUsersList from './ActiveUsersList'
 import AccessRightsManagement from './AccessRightsManagement'
 import { supabase } from '@/lib/supabaseClient'
+import { useUserManagementPageExplainer } from '../UserManagementPageExplainer'
 
 interface User {
   id: string;
@@ -34,6 +35,7 @@ export default function UserManagement() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [currentUser, setCurrentUser] = useState<User | null>(null)
+  useUserManagementPageExplainer(canViewPage && currentUser !== null)
 
   useEffect(() => {
     if (!canViewPage) {

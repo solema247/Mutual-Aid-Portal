@@ -8,6 +8,7 @@ import { ArrowLeft } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { useAllowedFunctions } from '@/hooks/useAllowedFunctions'
 import '@/i18n/config'
+import { useSurveysPageExplainer } from './SurveysPageExplainer'
 
 // Fallback URL from docs/SURVEYS.md; override with NEXT_PUBLIC_SURVEY_LOHUB_URL if set
 const LOHUB_SURVEY_URL =
@@ -20,6 +21,7 @@ export default function SurveysPage() {
   const router = useRouter()
   const { can, isLoading } = useAllowedFunctions()
   const canViewPage = can('surveys_view_page')
+  useSurveysPageExplainer(!isLoading && canViewPage)
 
   useEffect(() => {
     if (!isLoading && !canViewPage) {

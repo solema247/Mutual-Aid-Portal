@@ -25,10 +25,11 @@ import UploadF4Modal from '@/app/err-portal/f4-f5-reporting/components/UploadF4M
 import UploadF5Modal from '@/app/err-portal/f4-f5-reporting/components/UploadF5Modal'
 import ViewF4Modal from '@/app/err-portal/f4-f5-reporting/components/ViewF4Modal'
 import ViewF5Modal from '@/app/err-portal/f4-f5-reporting/components/ViewF5Modal'
+import { useProjectManagementPageExplainer } from '../ProjectManagementPageExplainer'
 
 export default function ProjectManagement() {
   const { t } = useTranslation(['projects', 'common'])
-  const { can } = useAllowedFunctions()
+  const { can, isLoading: permissionsLoading } = useAllowedFunctions()
   const canViewProject = can('management_view_project')
   const canEditReportingStatus = can('management_edit_reporting_status')
   const canCompleteProject = can('management_complete_project')
@@ -184,6 +185,8 @@ export default function ProjectManagement() {
   useEffect(() => {
     loadRollup()
   }, [])
+
+  useProjectManagementPageExplainer(!permissionsLoading && !loading)
 
   const CUTOFF_2026 = new Date('2026-01-01T00:00:00Z').getTime()
   const normalizedF4 = (s: any) => (s != null ? String(s).trim().toLowerCase() : '') || ''

@@ -13,6 +13,7 @@ import PoolByState from './components/PoolByState'
 import PoolByDonor from './components/PoolByDonor'
 import UncommittedF1sTab from './components/UncommittedF1sTab'
 import CommittedF1sTab from './components/CommittedF1sTab'
+import { useF2ApprovalsPageExplainer } from './F2ApprovalsPageExplainer'
 
 interface User {
   id: string;
@@ -71,6 +72,8 @@ export default function F2ApprovalsPage() {
 
     checkAuth()
   }, [router])
+
+  useF2ApprovalsPageExplainer(!permissionsLoading && canViewPage && !isLoading)
 
   if (!canViewPage) return null
   if (isLoading) return <div>Loading...</div>

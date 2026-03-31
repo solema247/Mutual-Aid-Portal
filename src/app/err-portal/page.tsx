@@ -7,6 +7,7 @@ import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/ca
 import { Users, BarChart2, BarChart3, ClipboardList, PieChart, UserCog, CheckSquare, LogOut, BookOpen, BookMarked, PenTool, Cog } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 import { useAllowedFunctions } from '@/hooks/useAllowedFunctions'
+import { useHomePageExplainer } from './HomePageExplainer'
 import '@/i18n/config'
 
 interface User {
@@ -20,7 +21,7 @@ interface User {
 
 export default function ErrPortalPage() {
   const { t } = useTranslation(['common', 'err'])
-  const { can } = useAllowedFunctions()
+  const { can, isLoading: permissionsLoading } = useAllowedFunctions()
   const canViewGrantManagement = can('grant_view')
   const canViewF1 = can('f1_view_page')
   const canViewF2 = can('f2_view_page')
@@ -66,6 +67,8 @@ export default function ErrPortalPage() {
 
     checkAuth()
   }, [])
+
+  useHomePageExplainer(!isLoading && !permissionsLoading)
 
   if (isLoading) return <div>Loading...</div>
 

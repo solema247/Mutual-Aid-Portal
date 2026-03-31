@@ -3,6 +3,8 @@
 import { useTranslation } from 'react-i18next'
 import { useState, useEffect } from 'react'
 import MainLayout from '@/components/layout/MainLayout'
+import PageExplainerHeader from '@/components/layout/PageExplainerHeader'
+import { PageExplainerProvider } from '@/contexts/PageExplainerContext'
 import type { SidebarItem, SidebarLinkItem } from '@/components/layout/Sidebar'
 import { useRouter } from 'next/navigation'
 import { Users, ClipboardList, BarChart2, BarChart3, PieChart, UserCog, Home, CheckSquare, BookOpen, PenTool, Cog, FileText, BookMarked } from 'lucide-react'
@@ -172,11 +174,13 @@ export default function ErrPortalLayout({
   ]
 
   return (
+    <PageExplainerProvider>
     <MainLayout
         sidebarItems={sidebarItems}
         headerTitle="Mutual Aid Portal"
         userName={user?.display_name ?? undefined}
         userRole={user?.role}
+        headerExtra={<PageExplainerHeader />}
       >
       {children}
       {minimizedType && (
@@ -200,5 +204,6 @@ export default function ErrPortalLayout({
         </div>
       )}
     </MainLayout>
+    </PageExplainerProvider>
   )
 }

@@ -58,6 +58,7 @@ import {
 } from '@/components/ui/select'
 import html2canvas from 'html2canvas'
 import { jsPDF } from 'jspdf'
+import { useStoriesPageExplainer } from './StoriesPageExplainer'
 
 type Mode = 'state' | 'theme'
 
@@ -517,6 +518,7 @@ function StoriesContent() {
   const searchParams = useSearchParams()
   const { can } = useAllowedFunctions()
   const canViewPage = can('learnings_view_page')
+  useStoriesPageExplainer(canViewPage)
 
   const mode = (searchParams.get('mode') === 'theme' ? 'theme' : 'state') as Mode
   const stateParam = searchParams.get('state')?.trim() || null
