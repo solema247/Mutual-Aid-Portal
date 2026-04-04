@@ -18,8 +18,8 @@
       "memory": 512
     },
     "src/app/api/slack/events/route.ts": {
-  "maxDuration": 60
-}
+      "maxDuration": 60
+    }
   },
   "crons": [
     {
