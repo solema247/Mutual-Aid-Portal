@@ -118,35 +118,38 @@ export async function handleSlackMessage(payload: {
   try {
     const answer = await runAgentLoop(openai, userMessage)
 
-    // Replace the thinking message with the real answer
+    // Delete the thinking message then post the real answer as a fresh message
     if (thinkingMsg.ts) {
-      await slack.chat.update({
+      await slack.chat.delete({
         channel: payload.channel,
         ts: thinkingMsg.ts,
-        text: answer,
-      })
-    } else {
-      await slack.chat.postMessage({
-        channel: payload.channel,
-        thread_ts: payload.thread_ts,
-        text: answer,
+      }).catch(() => {
+        // Ignore delete errors (e.g. message already gone)
       })
     }
+
+    await slack.chat.postMessage({
+      channel: payload.channel,
+      thread_ts: payload.thread_ts,
+      text: answer,
+    })
   } catch (err) {
     const errMsg =
       err instanceof Error ? err.message : 'An unexpected error occurred.'
     console.error('[slack-bot] Error processing message:', err)
 
-    const fallback =
-      `⚠️ Sorry, I ran into an error: ${errMsg}\n\n` +
-      'Please try again or contact your programme coordinator for help.'
-
+    // Delete thinking message and post the error as a clean message
     if (thinkingMsg.ts) {
-      await slack.chat.update({
+      await slack.chat.delete({
         channel: payload.channel,
         ts: thinkingMsg.ts,
-        text: fallback,
-      })
+      }).catch(() => {})
     }
+
+    await slack.chat.postMessage({
+      channel: payload.channel,
+      thread_ts: payload.thread_ts,
+      text: `⚠️ Sorry, I ran into an error: ${errMsg}\n\nPlease try again or contact your programme coordinator for help.`,
+    })
   }
 }
