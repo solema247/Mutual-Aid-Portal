@@ -16,7 +16,10 @@
     "src/app/api/airtable/sync/route.ts": {
       "maxDuration": 600,
       "memory": 512
-    }
+    },
+    "src/app/api/slack/events/route.ts": {
+  "maxDuration": 60
+}
   },
   "crons": [
     {
