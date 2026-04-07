@@ -1,3 +1,4 @@
+import { waitUntil } from '@vercel/functions'
 import { WebClient } from '@slack/web-api'
 import { verifySlackSignature } from '@/lib/slack/verify'
 
@@ -33,6 +34,7 @@ export async function POST(request: Request) {
   const params = new URLSearchParams(body)
   const command = params.get('command')
   const channelId = params.get('channel_id')
+  const userId = params.get('user_id') || ''
 
   if (!channelId) {
     return Response.json({ response_type: 'ephemeral', text: '⚠️ Could not determine channel.' })
@@ -40,14 +42,13 @@ export async function POST(request: Request) {
 
   // ── /delete-last ───────────────────────────────────────────────────────────
   if (command === '/delete-last') {
-    // Respond immediately so Slack doesn't show a timeout error.
-    // The actual deletion runs asynchronously and posts an ephemeral confirmation.
-    deleteLastBotMessage(channelId).catch(console.error)
+    // Use waitUntil so the async deletion keeps running after the response is sent
+    waitUntil(deleteLastBotMessage(channelId, userId))
 
-    // Acknowledge the command instantly
+    // Acknowledge instantly — Slack requires a response within 3 seconds
     return Response.json({
       response_type: 'ephemeral',
-      text: '🗑️ Looking for my last message to delete...',
+      text: '🗑️ Deleting my last message...',
     })
   }
 
@@ -58,12 +59,12 @@ export async function POST(request: Request) {
 }
 
 /** Finds and deletes the most recent message posted by this bot in the channel */
-async function deleteLastBotMessage(channelId: string): Promise<void> {
+async function deleteLastBotMessage(channelId: string, userId: string): Promise<void> {
   const slack = getSlackClient()
 
-  // Get this bot's own ID so we only delete our own messages
+  // Get this bot's own bot_id (B... format) — the reliable identifier on bot messages
   const auth = await slack.auth.test()
-  const botUserId = auth.user_id
+  const botId = auth.bot_id
 
   // Fetch recent channel history
   const history = await slack.conversations.history({
@@ -71,36 +72,20 @@ async function deleteLastBotMessage(channelId: string): Promise<void> {
     limit: 50,
   })
 
-  // Find the most recent message posted by our bot
+  // Match by bot_id — this is the consistent field on every message posted by this app
   const botMessage = (history.messages || []).find(
-    (msg) => msg.bot_id && msg.user === botUserId
+    (msg) => msg.bot_id === botId
   )
 
   if (!botMessage?.ts) {
-    // Post ephemeral "nothing to delete" message
     await slack.chat.postEphemeral({
       channel: channelId,
-      // We don't have user_id here, so post to channel as bot
-      // Fall back to posting a temporary visible message
-      user: botUserId || '',
+      user: userId,
       text: 'ℹ️ I couldn\'t find any recent messages from me in this channel.',
-    }).catch(async () => {
-      // If ephemeral fails (no user_id), post and auto-schedule delete
-      const msg = await slack.chat.postMessage({
-        channel: channelId,
-        text: 'ℹ️ No recent messages from me found to delete.',
-      })
-      // Auto-delete this notification after 5 seconds
-      if (msg.ts) {
-        setTimeout(async () => {
-          await slack.chat.delete({ channel: channelId, ts: msg.ts! }).catch(() => {})
-        }, 5000)
-      }
-    })
+    }).catch(() => {})
     return
   }
 
-  // Delete the found message
   await slack.chat.delete({
     channel: channelId,
     ts: botMessage.ts,
