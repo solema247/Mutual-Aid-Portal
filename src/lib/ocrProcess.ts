@@ -1,4 +1,5 @@
 import { GoogleGenerativeAI } from '@google/generative-ai'
+import mammoth from 'mammoth'
 import OpenAI from 'openai'
 import { getOpenAIApiKey } from '@/lib/getOpenAIApiKey'
 
@@ -13,7 +14,7 @@ function getGeminiModel() {
       'GEMINI_API_KEY not set. Add GEMINI_API_KEY=<your-key> to .env.local, then restart the dev server.'
     )
   }
-  geminiModelInstance = new GoogleGenerativeAI(apiKey).getGenerativeModel({ model: 'gemini-2.5-flash-preview-04-17' })
+  geminiModelInstance = new GoogleGenerativeAI(apiKey).getGenerativeModel({ model: 'gemini-2.5-flash' })
   return geminiModelInstance
 }
 
@@ -151,21 +152,29 @@ export async function processFForm(file: File, metadata: ProcessMetadata): Promi
     }
   }
 
-  // Build text using Gemini multimodal extraction
+  // Build text from file
   const buffer = Buffer.from(await file.arrayBuffer())
-  const base64 = buffer.toString('base64')
+  const isDocx = file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+    file.name?.toLowerCase().endsWith('.docx')
 
   let text = ''
 
-  const geminiResult = await withTimeout(
-    getGeminiModel().generateContent([
-      { inlineData: { mimeType: file.type, data: base64 } },
-      'Extract all text from this document exactly as it appears. Preserve line breaks and table structure. Include both Arabic and English text. Output only the raw extracted text, nothing else.'
-    ]),
-    90000,
-    'Gemini text extraction'
-  )
-  text = geminiResult.response.text()
+  if (isDocx) {
+    // mammoth extracts text directly from .docx without needing Gemini
+    const result = await mammoth.extractRawText({ buffer })
+    text = result.value
+  } else {
+    const base64 = buffer.toString('base64')
+    const geminiResult = await withTimeout(
+      getGeminiModel().generateContent([
+        { inlineData: { mimeType: file.type, data: base64 } },
+        'Extract all text from this document exactly as it appears. Preserve line breaks and table structure. Include both Arabic and English text. Output only the raw extracted text, nothing else.'
+      ]),
+      90000,
+      'Gemini text extraction'
+    )
+    text = geminiResult.response.text()
+  }
 
   // If no text, return minimal object
   if (!text) {

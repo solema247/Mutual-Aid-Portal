@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { GoogleGenerativeAI } from '@google/generative-ai'
+import mammoth from 'mammoth'
 import OpenAI from 'openai'
 import { requirePermission } from '@/lib/requirePermission'
 import { getOpenAIApiKey } from '@/lib/getOpenAIApiKey'
@@ -19,7 +20,7 @@ function getGeminiModel() {
       'GEMINI_API_KEY not set. Add GEMINI_API_KEY=<your-key> to .env.local, then restart the dev server.'
     )
   }
-  geminiModelInstance = new GoogleGenerativeAI(apiKey).getGenerativeModel({ model: 'gemini-2.5-flash-preview-04-17' })
+  geminiModelInstance = new GoogleGenerativeAI(apiKey).getGenerativeModel({ model: 'gemini-2.5-flash' })
   return geminiModelInstance
 }
 
@@ -212,19 +213,27 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'No file provided', details: 'Provide either file (formData) or file_key (Supabase storage path).' }, { status: 400 })
     }
 
-    const base64 = buffer.toString('base64')
     let text = ''
+    const isDocx = mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+      (fileKey || '').toLowerCase().endsWith('.docx')
 
-    console.log('Extracting text with Gemini...')
-    try {
-      const geminiResult = await getGeminiModel().generateContent([
-        { inlineData: { mimeType: mimeType, data: base64 } },
-        'Extract all text from this document exactly as it appears. Preserve line breaks and table structure. Include both Arabic and English text. Output only the raw extracted text, nothing else.'
-      ])
-      text = geminiResult.response.text()
-    } catch (geminiError: any) {
-      console.error('Gemini extraction error:', geminiError)
-      throw new Error(`Gemini text extraction error: ${geminiError.message || 'Unknown error occurred'}`)
+    if (isDocx) {
+      console.log('Extracting text from .docx with mammoth...')
+      const result = await mammoth.extractRawText({ buffer })
+      text = result.value
+    } else {
+      const base64 = buffer.toString('base64')
+      console.log('Extracting text with Gemini...')
+      try {
+        const geminiResult = await getGeminiModel().generateContent([
+          { inlineData: { mimeType: mimeType, data: base64 } },
+          'Extract all text from this document exactly as it appears. Preserve line breaks and table structure. Include both Arabic and English text. Output only the raw extracted text, nothing else.'
+        ])
+        text = geminiResult.response.text()
+      } catch (geminiError: any) {
+        console.error('Gemini extraction error:', geminiError)
+        throw new Error(`Gemini text extraction error: ${geminiError.message || 'Unknown error occurred'}`)
+      }
     }
 
     // extracted text
