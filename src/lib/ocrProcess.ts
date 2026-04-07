@@ -1,54 +1,20 @@
-import vision, { ImageAnnotatorClient } from '@google-cloud/vision'
+import { GoogleGenerativeAI } from '@google/generative-ai'
 import OpenAI from 'openai'
-import fs from 'fs'
-import path from 'path'
 import { getOpenAIApiKey } from '@/lib/getOpenAIApiKey'
 
-// Lazy Vision client so we only validate credentials when F4/F5 OCR is used
-let visionClientInstance: ImageAnnotatorClient | null = null
+// Lazy Gemini model — only instantiated when text extraction is needed
+let geminiModelInstance: ReturnType<GoogleGenerativeAI['getGenerativeModel']> | null = null
 
-function loadVisionCredentials(): Record<string, unknown> {
-  const filePath = process.env.GOOGLE_VISION_FILE
-  let raw: string
-  if (filePath && filePath.trim()) {
-    const resolved = path.resolve(filePath.trim())
-    try {
-      raw = fs.readFileSync(resolved, 'utf8')
-    } catch (e) {
-      throw new Error(`GOOGLE_VISION_FILE could not be read (${resolved}). Check the path and file permissions.`)
-    }
-  } else {
-    raw = process.env.GOOGLE_VISION || ''
-  }
-  if (!raw || raw.trim() === '' || raw === '{}') {
+function getGeminiModel() {
+  if (geminiModelInstance) return geminiModelInstance
+  const apiKey = process.env.GEMINI_API_KEY
+  if (!apiKey) {
     throw new Error(
-      'Vision credentials not set. In .env.local (project root) set either: ' +
-      'GOOGLE_VISION_FILE=/absolute/path/to/your-service-account.json or ' +
-      'GOOGLE_VISION={"type":"service_account",...} on one line. Then restart the dev server.'
+      'GEMINI_API_KEY not set. Add GEMINI_API_KEY=<your-key> to .env.local, then restart the dev server.'
     )
   }
-  let creds: Record<string, unknown>
-  try {
-    creds = JSON.parse(raw) as Record<string, unknown>
-  } catch {
-    throw new Error('Vision credentials are invalid JSON. Check GOOGLE_VISION or the file at GOOGLE_VISION_FILE.')
-  }
-  if (!creds || typeof creds.client_email !== 'string' || typeof creds.private_key !== 'string') {
-    throw new Error(
-      'Vision credentials must be a service account JSON with client_email and private_key.'
-    )
-  }
-  if (typeof creds.private_key === 'string') {
-    (creds as any).private_key = (creds.private_key as string).replace(/\\n/g, '\n')
-  }
-  return creds
-}
-
-function getVisionClient(): ImageAnnotatorClient {
-  if (visionClientInstance) return visionClientInstance
-  const creds = loadVisionCredentials()
-  visionClientInstance = new vision.ImageAnnotatorClient({ credentials: creds as any })
-  return visionClientInstance
+  geminiModelInstance = new GoogleGenerativeAI(apiKey).getGenerativeModel({ model: 'gemini-2.5-flash-preview-04-17' })
+  return geminiModelInstance
 }
 
 // Initialize OpenAI client lazily (only when needed)
@@ -185,47 +151,21 @@ export async function processFForm(file: File, metadata: ProcessMetadata): Promi
     }
   }
 
-  // Build OCR text using Google Vision
+  // Build text using Gemini multimodal extraction
   const buffer = Buffer.from(await file.arrayBuffer())
   const base64 = buffer.toString('base64')
 
-  const isPdf = file.type === 'application/pdf'
-  const maxPagesHint = Math.max(1, Math.min(Number(metadata?.ocr_max_pages) || 5, 20))
   let text = ''
 
-  if (isPdf) {
-    const visionStart = Date.now()
-    const pages = Array.from({ length: Math.min(5, maxPagesHint) }, (_, i) => i + 1)
-    const [pageInfo] = await withTimeout(
-      getVisionClient().batchAnnotateFiles({
-        requests: [{
-          inputConfig: { mimeType: 'application/pdf', content: base64 },
-          features: [{ type: 'DOCUMENT_TEXT_DETECTION' }],
-          imageContext: { languageHints: ['ar', 'en'] },
-          pages
-        }]
-      }),
-      90000,
-      'Vision PDF OCR'
-    )
-    const responses = pageInfo.responses?.[0]?.responses || []
-    const allTexts: string[] = []
-    responses.forEach((r: any) => allTexts.push(r?.fullTextAnnotation?.text || ''))
-    text = allTexts.join('\n\n---PAGE BREAK---\n\n')
-    // pdf done
-  } else {
-    const visionStart = Date.now()
-    const [result] = await withTimeout(
-      getVisionClient().documentTextDetection({
-        image: { content: base64 },
-        imageContext: { languageHints: ['ar', 'en'] }
-      }),
-      55000,
-      'Vision Image OCR'
-    )
-    text = result.fullTextAnnotation?.text || ''
-    // image done
-  }
+  const geminiResult = await withTimeout(
+    getGeminiModel().generateContent([
+      { inlineData: { mimeType: file.type, data: base64 } },
+      'Extract all text from this document exactly as it appears. Preserve line breaks and table structure. Include both Arabic and English text. Output only the raw extracted text, nothing else.'
+    ]),
+    90000,
+    'Gemini text extraction'
+  )
+  text = geminiResult.response.text()
 
   // If no text, return minimal object
   if (!text) {

@@ -1,8 +1,6 @@
 import { NextResponse } from 'next/server'
-import { ImageAnnotatorClient } from '@google-cloud/vision'
+import { GoogleGenerativeAI } from '@google/generative-ai'
 import OpenAI from 'openai'
-import path from 'path'
-import fs from 'fs'
 import { requirePermission } from '@/lib/requirePermission'
 import { getOpenAIApiKey } from '@/lib/getOpenAIApiKey'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
@@ -11,41 +9,18 @@ export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
-// Lazy Vision client: credentials from GOOGLE_VISION_FILE (path to JSON) or GOOGLE_VISION (inline JSON)
-let visionClientInstance: ImageAnnotatorClient | null = null
-function getVisionClient(): ImageAnnotatorClient {
-  if (visionClientInstance) return visionClientInstance
-  const filePath = process.env.GOOGLE_VISION_FILE
-  let raw: string
-  if (filePath && filePath.trim()) {
-    const resolved = path.resolve(filePath.trim())
-    try {
-      raw = fs.readFileSync(resolved, 'utf8')
-    } catch {
-      throw new Error(`GOOGLE_VISION_FILE could not be read (${resolved}). Check the path and file permissions.`)
-    }
-  } else {
-    raw = process.env.GOOGLE_VISION || ''
-  }
-  if (!raw || raw.trim() === '' || raw === '{}') {
+// Lazy Gemini model for text extraction
+let geminiModelInstance: ReturnType<GoogleGenerativeAI['getGenerativeModel']> | null = null
+function getGeminiModel() {
+  if (geminiModelInstance) return geminiModelInstance
+  const apiKey = process.env.GEMINI_API_KEY
+  if (!apiKey) {
     throw new Error(
-      'Vision credentials not set. Set GOOGLE_VISION_FILE=/path/to/service-account.json or GOOGLE_VISION=... in .env.local, then restart.'
+      'GEMINI_API_KEY not set. Add GEMINI_API_KEY=<your-key> to .env.local, then restart the dev server.'
     )
   }
-  let creds: Record<string, unknown>
-  try {
-    creds = JSON.parse(raw) as Record<string, unknown>
-  } catch {
-    throw new Error('Vision credentials are invalid JSON.')
-  }
-  if (!creds || typeof creds.client_email !== 'string' || typeof creds.private_key !== 'string') {
-    throw new Error('Vision credentials must be a service account JSON with client_email and private_key.')
-  }
-  if (typeof creds.private_key === 'string') {
-    (creds as any).private_key = (creds.private_key as string).replace(/\\n/g, '\n')
-  }
-  visionClientInstance = new ImageAnnotatorClient({ credentials: creds as any })
-  return visionClientInstance
+  geminiModelInstance = new GoogleGenerativeAI(apiKey).getGenerativeModel({ model: 'gemini-2.5-flash-preview-04-17' })
+  return geminiModelInstance
 }
 
 // Initialize OpenAI client lazily (only when needed)
@@ -240,92 +215,16 @@ export async function POST(req: Request) {
     const base64 = buffer.toString('base64')
     let text = ''
 
-    if (mimeType === 'application/pdf') {
-      console.log('Processing PDF file...')
-
-      // Respect max pages hint (default 5, capped 20)
-      const maxPagesHint = Math.max(1, Math.min(Number(formMetadata?.ocr_max_pages) || 5, 20))
-      const firstBatchPages = Array.from({ length: Math.min(5, maxPagesHint) }, (_, i) => i + 1)
-      
-      let pageInfo: any
-      try {
-        const result = await getVisionClient().batchAnnotateFiles({
-          requests: [{
-            inputConfig: {
-              mimeType: 'application/pdf',
-              content: base64
-            },
-            features: [{
-              type: 'DOCUMENT_TEXT_DETECTION'
-            }],
-            imageContext: {
-              languageHints: ['ar', 'en']
-            },
-            pages: firstBatchPages  // First batch pages
-          }]
-        })
-        pageInfo = result[0]
-      } catch (visionError: any) {
-        console.error('Vision API error:', visionError)
-        // Handle Vision API errors gracefully
-        if (visionError.code === 13 || visionError.message?.includes('INTERNAL')) {
-          throw new Error('Google Vision API encountered an internal error. Please try uploading the file again. If the problem persists, the file may be corrupted or too large.')
-        }
-        throw new Error(`Vision API error: ${visionError.message || 'Unknown error occurred'}`)
-      }
-
-      // Get initial text and count of first batch
-      let allTexts: string[] = []
-      const firstBatchResponses = pageInfo.responses?.[0]?.responses || []
-      firstBatchResponses.forEach((response: any, idx: number) => {
-        const pageText = response?.fullTextAnnotation?.text || ''
-        console.log(`Page ${idx + 1} text length:`, pageText.length)
-        allTexts.push(pageText)
-      })
-
-      // Remove second-batch attempts to bound runtime strictly to first batch only
-
-      console.log('Total pages processed:', allTexts.length)
-      // timing
-
-      if (allTexts.length === 0) {
-        // Gracefully handle empty OCR: return minimal structure
-        return NextResponse.json({
-          date: null,
-          state: null,
-          locality: null,
-          project_objectives: null,
-          intended_beneficiaries: null,
-          estimated_beneficiaries: null,
-          estimated_timeframe: null,
-          additional_support: null,
-          banking_details: null,
-          program_officer_name: null,
-          program_officer_phone: null,
-          reporting_officer_name: null,
-          reporting_officer_phone: null,
-          finance_officer_name: null,
-          finance_officer_phone: null,
-          planned_activities: [],
-          expenses: [],
-          form_currency: formMetadata?.currency || 'USD',
-          exchange_rate: formMetadata?.exchange_rate || 1,
-          language: null,
-          raw_ocr: ''
-        })
-      }
-
-      // Combine all texts with page breaks
-      text = allTexts.join('\n\n---PAGE BREAK---\n\n')
-    } else {
-      console.log('Processing image file...')
-      const [result] = await getVisionClient().documentTextDetection({
-        image: { content: base64 },
-        imageContext: {
-          languageHints: ['ar', 'en']  // Help Vision detect Arabic/English text
-        }
-      })
-      text = result.fullTextAnnotation?.text || ''
+    console.log('Extracting text with Gemini...')
+    try {
+      const geminiResult = await getGeminiModel().generateContent([
+        { inlineData: { mimeType: mimeType, data: base64 } },
+        'Extract all text from this document exactly as it appears. Preserve line breaks and table structure. Include both Arabic and English text. Output only the raw extracted text, nothing else.'
+      ])
+      text = geminiResult.response.text()
+    } catch (geminiError: any) {
+      console.error('Gemini extraction error:', geminiError)
+      throw new Error(`Gemini text extraction error: ${geminiError.message || 'Unknown error occurred'}`)
     }
 
     // extracted text
