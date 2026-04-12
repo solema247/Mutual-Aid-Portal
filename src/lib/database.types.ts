@@ -9,6 +9,7 @@ export interface Database {
           created_at: string
           status: 'active' | 'inactive'
           state_id?: string
+          is_wrr?: string | null
         }
       }
       states: {

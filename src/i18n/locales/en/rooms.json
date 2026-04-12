@@ -8,6 +8,8 @@
   "coming_soon": "This feature is coming soon...",
   "name": "Room Name",
   "err_code": "ERR Code",
+  "wrr": "WRR",
+  "wrr_unset": "—",
   "type": "Type",
   "state": "State",
   "locality": "Locality",

@@ -53,8 +53,8 @@ export default function PendingRoomsList({ rooms, isLoading, onUpdate }: Pending
   }
 
   return (
-    <div className="rounded-md border">
-      <div className="grid grid-cols-6 gap-4 p-4 font-medium border-b">
+    <div className="rounded-md border text-xs">
+      <div className="grid grid-cols-6 gap-2 px-2 py-2 font-medium border-b">
         <div>{t('rooms:name')}</div>
         <div>{t('rooms:type')}</div>
         <div>{t('rooms:state')}</div>
@@ -64,7 +64,7 @@ export default function PendingRoomsList({ rooms, isLoading, onUpdate }: Pending
       </div>
       <div className="divide-y">
         {rooms.map((room) => (
-          <div key={room.id} className="grid grid-cols-6 gap-4 p-4">
+          <div key={room.id} className="grid grid-cols-6 gap-2 px-2 py-2 items-center">
             <div>{i18n.language === 'ar' && room.name_ar ? room.name_ar : room.name}</div>
             <div>{t(`rooms:${room.type}_type`)}</div>
             <div>{room.stateName}</div>

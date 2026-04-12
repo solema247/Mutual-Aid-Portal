@@ -11,10 +11,12 @@ import {
 } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
 import { RoomWithState } from '@/app/api/rooms/types/rooms'
-import { getInactiveRooms, deleteRoom } from '@/app/api/rooms/utils/rooms'
+import { getInactiveRooms, deleteRoom, updateRoomIsWrr } from '@/app/api/rooms/utils/rooms'
+import { useAllowedFunctions } from '@/hooks/useAllowedFunctions'
 import { Trash2 } from 'lucide-react'
 
 const PAGE_SIZE = 50
+const WRR_UNSET = '__wrr_unset__'
 
 interface InactiveRoomsListProps {
   isLoading: boolean
@@ -28,6 +30,8 @@ export default function InactiveRoomsList({
   userErrId = null
 }: InactiveRoomsListProps) {
   const { t, i18n } = useTranslation(['rooms'])
+  const { can } = useAllowedFunctions()
+  const canModify = can('rooms_modify_room')
   const [rooms, setRooms] = useState<RoomWithState[]>([])
   const [isLoading, setIsLoading] = useState(initialLoading)
   const [error, setError] = useState<string | null>(null)
@@ -39,6 +43,7 @@ export default function InactiveRoomsList({
   const [currentPage, setCurrentPage] = useState(1)
   const [totalRooms, setTotalRooms] = useState(0)
   const [processingId, setProcessingId] = useState<string | null>(null)
+  const [wrrUpdatingId, setWrrUpdatingId] = useState<string | null>(null)
 
   const fetchRooms = useCallback(async () => {
     try {
@@ -154,6 +159,24 @@ export default function InactiveRoomsList({
 
   const totalPages = Math.ceil(totalRooms / PAGE_SIZE)
 
+  const handleIsWrrChange = async (roomId: string, value: string) => {
+    if (!canModify) return
+    const isWrr =
+      value === WRR_UNSET ? null : (value as 'Yes' | 'No')
+    setWrrUpdatingId(roomId)
+    try {
+      await updateRoomIsWrr(roomId, isWrr)
+      setRooms((prev) =>
+        prev.map((r) => (r.id === roomId ? { ...r, is_wrr: isWrr } : r))
+      )
+    } catch (error: any) {
+      console.error('Error updating WRR:', error)
+      alert('Failed to update WRR: ' + (error.message || 'Unknown error'))
+    } finally {
+      setWrrUpdatingId(null)
+    }
+  }
+
   const handleDelete = async (roomId: string) => {
     if (!confirm(t('rooms:delete_room_confirmation'))) {
       return
@@ -232,22 +255,43 @@ export default function InactiveRoomsList({
 
       {!isLoading && !error && rooms.length > 0 && (
         <>
-          <div className="rounded-md border">
-            <div className="grid grid-cols-6 gap-4 p-4 font-medium border-b">
+          <div className="rounded-md border text-xs">
+            <div className="grid grid-cols-7 gap-2 px-2 py-2 font-medium border-b">
               <div>{t('rooms:name')}</div>
               <div>{t('rooms:type')}</div>
               <div>{t('rooms:state')}</div>
               <div>{t('rooms:locality')}</div>
+              <div>{t('rooms:wrr')}</div>
               <div>{t('rooms:created_at')}</div>
               <div>{t('rooms:actions')}</div>
             </div>
             <div className="divide-y">
               {rooms.map((room) => (
-                <div key={room.id} className="grid grid-cols-6 gap-4 p-4">
-                  <div>{i18n.language === 'ar' && room.name_ar ? room.name_ar : room.name}</div>
+                <div key={room.id} className="grid grid-cols-7 gap-2 px-2 py-2 items-center">
+                  <div className="min-w-0 break-words">{i18n.language === 'ar' && room.name_ar ? room.name_ar : room.name}</div>
                   <div>{t(`rooms:${room.type}_type`)}</div>
-                  <div>{i18n.language === 'ar' ? room.state?.state_name_ar : room.state?.state_name}</div>
-                  <div>{i18n.language === 'ar' ? room.state?.locality_ar : room.state?.locality}</div>
+                  <div className="min-w-0 break-words">{i18n.language === 'ar' ? room.state?.state_name_ar : room.state?.state_name}</div>
+                  <div className="min-w-0 break-words">{i18n.language === 'ar' ? room.state?.locality_ar : room.state?.locality}</div>
+                  <div>
+                    {canModify ? (
+                      <Select
+                        value={room.is_wrr != null && room.is_wrr !== '' ? room.is_wrr : WRR_UNSET}
+                        onValueChange={(v) => handleIsWrrChange(room.id, v)}
+                        disabled={wrrUpdatingId === room.id}
+                      >
+                        <SelectTrigger className="h-8 w-full max-w-[120px] text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value={WRR_UNSET}>{t('rooms:wrr_unset')}</SelectItem>
+                          <SelectItem value="Yes">Yes</SelectItem>
+                          <SelectItem value="No">No</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <span>{room.is_wrr ?? t('rooms:wrr_unset')}</span>
+                    )}
+                  </div>
                   <div>{new Date(room.created_at || '').toLocaleDateString()}</div>
                   <div>
                     <Button

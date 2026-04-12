@@ -113,6 +113,21 @@ export async function updateRoomStateReference(roomId: string, stateReference: s
   }
 }
 
+export async function updateRoomIsWrr(
+  roomId: string,
+  isWrr: 'Yes' | 'No' | null
+): Promise<void> {
+  const { error } = await supabase
+    .from('emergency_rooms')
+    .update({ is_wrr: isWrr, updated_at: new Date().toISOString() })
+    .eq('id', roomId)
+
+  if (error) {
+    console.error('Error updating room is_wrr:', error)
+    throw error
+  }
+}
+
 export async function deleteRoom(roomId: string): Promise<void> {
   const { error } = await supabase
     .from('emergency_rooms')

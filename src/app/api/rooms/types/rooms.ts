@@ -11,6 +11,8 @@ export interface RoomWithState {
   created_at: string
   status: 'active' | 'inactive'
   err_code: string | null
+  /** Yes / No / unset — database column `is_wrr` */
+  is_wrr?: string | null
   state?: State
 }
 
