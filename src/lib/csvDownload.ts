@@ -2,6 +2,9 @@
  * Build a CSV string from columns and rows, then trigger a file download.
  */
 
+/** UTF-8 BOM so Excel on Windows detects UTF-8 and displays Arabic correctly */
+const UTF8_BOM = '\uFEFF'
+
 function escapeCsvValue(value: string | number | null | undefined): string {
   const s = value == null ? '' : String(value)
   if (s.includes(',') || s.includes('"') || s.includes('\n') || s.includes('\r')) {
@@ -31,7 +34,7 @@ export function downloadCsv<T extends Record<string, any>>(
       })
       .join(',')
   )
-  const csv = [header, ...body].join('\r\n')
+  const csv = UTF8_BOM + [header, ...body].join('\r\n')
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
   const link = document.createElement('a')
   link.href = URL.createObjectURL(blob)
