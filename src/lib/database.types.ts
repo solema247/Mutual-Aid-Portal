@@ -21,6 +21,17 @@ export interface Database {
           locality_ar: string
         }
       }
+      grant_segments: {
+        Row: {
+          id: string
+          code: string
+          label_en: string
+          label_ar: string | null
+          sort_order: number
+          is_active: boolean
+          created_at: string
+        }
+      }
     }
   }
 } 

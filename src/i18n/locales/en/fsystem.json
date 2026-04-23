@@ -41,6 +41,7 @@
     "create_new_serial": "Create New Serial",
     "grant_segment": "Grant Segment",
     "select_grant_segment": "Select Grant Segment",
+    "loading_grant_segments": "Loading…",
     "generated_id": "Generated Form ID",
     "generating": "Generating...",
     "complete_fields": "Complete required fields to generate ID",

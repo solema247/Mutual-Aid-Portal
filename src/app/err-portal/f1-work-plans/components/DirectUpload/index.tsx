@@ -18,6 +18,7 @@ type EmergencyRoomWithState = RoomWithState & {
   state_reference: string
 }
 import ExtractedDataReview from './ExtractedDataReview'
+import { GrantSegmentSelect } from '../GrantSegmentSelect'
 import { cn } from '@/lib/utils'
 import { X, Plus } from 'lucide-react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
@@ -884,20 +885,11 @@ export default function DirectUpload() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <Label className="mb-2">{t('fsystem:f1.grant_segment')}</Label>
-              <Select
-                value={formData.grant_segment || ''}
-                onValueChange={(value) => handleInputChange('grant_segment', value ? (value as 'Flexible' | 'Sustainability' | 'WRR' | 'Capacity Building') : undefined)}
-              >
-                <SelectTrigger className="h-[38px] w-full">
-                  <SelectValue placeholder={t('fsystem:f1.select_grant_segment')} />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Flexible">Flexible</SelectItem>
-                  <SelectItem value="Sustainability">Sustainability</SelectItem>
-                  <SelectItem value="WRR">WRR</SelectItem>
-                  <SelectItem value="Capacity Building">Capacity Building</SelectItem>
-                </SelectContent>
-              </Select>
+              <GrantSegmentSelect
+                triggerClassName="h-[38px] w-full"
+                value={formData.grant_segment}
+                onValueChange={(v) => handleInputChange('grant_segment', v)}
+              />
             </div>
           </div>
             </div>

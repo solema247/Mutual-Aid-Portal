@@ -13,6 +13,7 @@ import { Plus, Paperclip, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { defaultFormData, type ManualEntryFormData, type Expense, type PlannedActivity } from './types'
 import { submitManualEntry } from './submitManualEntry'
+import { GrantSegmentSelect } from '../GrantSegmentSelect'
 import type { State } from '@/app/api/fsystem/types/fsystem'
 
 type RoomRow = {
@@ -369,17 +370,11 @@ export default function ManualEntry({ onSuccess }: ManualEntryProps) {
           </div>
           <div>
             <Label>{t('fsystem:f1.grant_segment')}</Label>
-            <Select value={grantSegment} onValueChange={setGrantSegment}>
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder={t('fsystem:f1.select_grant_segment')} />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Flexible">Flexible</SelectItem>
-                <SelectItem value="Sustainability">Sustainability</SelectItem>
-                <SelectItem value="WRR">WRR</SelectItem>
-                <SelectItem value="Capacity Building">Capacity Building</SelectItem>
-              </SelectContent>
-            </Select>
+            <GrantSegmentSelect
+              triggerClassName="w-full"
+              value={grantSegment || undefined}
+              onValueChange={(v) => setGrantSegment(v ?? '')}
+            />
           </div>
           <div>
             <Label>Form language (for translation)</Label>
