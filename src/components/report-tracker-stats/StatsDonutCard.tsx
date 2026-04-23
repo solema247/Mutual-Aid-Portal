@@ -1,7 +1,6 @@
 'use client'
 
 import * as React from 'react'
-import { Info, MoreHorizontal } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 export interface DonutSegment {
@@ -27,6 +26,8 @@ interface StatsDonutCardProps {
   className?: string
   /** Optional icon in header (e.g. BarChart3) */
   icon?: React.ReactNode
+  /** Muted explainer below the main content (e.g. what the % means) */
+  footnote?: React.ReactNode
 }
 
 const DEFAULT_EMPTY_COLOR = '#e5e7eb'
@@ -133,37 +134,23 @@ export function StatsDonutCard({
   singleSegmentMode = false,
   className,
   icon,
+  footnote,
 }: StatsDonutCardProps) {
   return (
     <div
       className={cn(
-        'flex min-w-0 flex-col rounded-xl border-0 bg-white p-5 shadow-md overflow-hidden',
+        '@container/stat-donut flex min-w-0 flex-col rounded-xl border-0 bg-white p-5 shadow-md overflow-hidden',
         className
       )}
     >
-      <div className="flex min-w-0 items-center justify-between gap-2">
-        <div className="flex min-w-0 flex-1 items-center gap-2">
-          {icon && <span className="shrink-0 text-primary">{icon}</span>}
-          <span className="min-w-0 truncate font-semibold text-foreground">{title}</span>
-          <button
-            type="button"
-            className="shrink-0 rounded-full p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
-            aria-label="More info"
-          >
-            <Info className="h-4 w-4" />
-          </button>
-        </div>
-        <button
-          type="button"
-          className="shrink-0 rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-          aria-label="Options"
-        >
-          <MoreHorizontal className="h-4 w-4" />
-        </button>
+      <div className="flex min-w-0 items-center gap-2">
+        {icon && <span className="shrink-0 text-primary">{icon}</span>}
+        <span className="min-w-0 truncate font-semibold text-foreground">{title}</span>
       </div>
 
-      <div className="mt-4 flex min-w-0 flex-1 flex-wrap items-center gap-4">
-        <div className="min-w-0 flex-1">
+      {/* Stack value + donut when card is narrow (e.g. sidebar open); side-by-side only when container has room */}
+      <div className="mt-4 grid min-w-0 flex-1 grid-cols-1 gap-x-4 gap-y-3 @min-[360px]/stat-donut:grid-cols-[minmax(0,1fr)_auto] @min-[360px]/stat-donut:items-center">
+        <div className="min-w-0">
           <div className="text-2xl font-bold tabular-nums text-foreground">
             {mainValue}
             {mainSuffix}
@@ -175,12 +162,14 @@ export function StatsDonutCard({
             <div className="mt-0.5 text-sm text-muted-foreground">{tertiary}</div>
           )}
         </div>
-        <DonutSvg
-          segments={segments}
-          singleSegmentMode={singleSegmentMode}
-          size={100}
-          strokeWidth={12}
-        />
+        <div className="flex shrink-0 justify-self-start @min-[360px]/stat-donut:justify-self-end">
+          <DonutSvg
+            segments={segments}
+            singleSegmentMode={singleSegmentMode}
+            size={100}
+            strokeWidth={12}
+          />
+        </div>
       </div>
 
       {!singleSegmentMode && segments.length > 0 && (
@@ -199,6 +188,10 @@ export function StatsDonutCard({
             )
           })}
         </div>
+      )}
+
+      {footnote != null && (
+        <p className="mt-3 border-t border-border/60 pt-3 text-xs leading-snug text-muted-foreground">{footnote}</p>
       )}
     </div>
   )

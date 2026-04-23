@@ -1,12 +1,30 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MouseEvent,
+  type ReactNode,
+  type TouchEvent,
+} from 'react'
 import { useTranslation } from 'react-i18next'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
-import { ChevronLeft, ChevronRight, BarChart3, DollarSign, FolderOpen, Download } from 'lucide-react'
+import {
+  ChevronLeft,
+  ChevronRight,
+  BarChart3,
+  DollarSign,
+  FolderOpen,
+  Download,
+  Hand,
+  MousePointer2,
+} from 'lucide-react'
 import { useAllowedFunctions } from '@/hooks/useAllowedFunctions'
 import {
   SmartFilter,
@@ -17,9 +35,115 @@ import {
 import { STATUS_DISPLAY } from '@/components/smart-filter'
 import { StatsDonutCard, CompactStatCard, type DonutSegment } from '@/components/report-tracker-stats'
 import { downloadCsv } from '@/lib/csvDownload'
+import { cn } from '@/lib/utils'
 import { useReportTrackerPageExplainer } from './ReportTrackerPageExplainer'
 
 const PAGE_SIZE_OPTIONS = [10, 25, 50, 100] as const
+
+function isDragScrollInteractiveTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof Element)) return false
+  return !!target.closest(
+    'button, input, textarea, select, option, a[href], label, [role="combobox"], [role="listbox"], [role="menuitem"], [role="menu"]'
+  )
+}
+
+/** Click-drag (or touch-drag) on the table body to pan horizontally; grab cursor when scrollable and mode is pan. */
+function ReportTrackerTableDragScroll({
+  children,
+  layoutKey,
+  interactionMode,
+}: {
+  children: (props: {
+    setTableRef: (el: HTMLDivElement | null) => void
+    tableClassName: string
+    onTableMouseDown: (e: MouseEvent<HTMLDivElement>) => void
+    onTableTouchStart: (e: TouchEvent<HTMLDivElement>) => void
+  }) => ReactNode
+  layoutKey: string
+  interactionMode: 'pan' | 'select'
+}) {
+  const tableRef = useRef<HTMLDivElement | null>(null)
+  const [canScrollHorizontally, setCanScrollHorizontally] = useState(false)
+
+  const setTableRef = useCallback((el: HTMLDivElement | null) => {
+    tableRef.current = el
+  }, [])
+
+  useEffect(() => {
+    const el = tableRef.current
+    if (!el) return
+    const update = () => {
+      setCanScrollHorizontally(el.scrollWidth > el.clientWidth + 2)
+    }
+    update()
+    const ro = new ResizeObserver(update)
+    ro.observe(el)
+    window.addEventListener('resize', update)
+    return () => {
+      ro.disconnect()
+      window.removeEventListener('resize', update)
+    }
+  }, [layoutKey])
+
+  const onTableMouseDown = useCallback((e: MouseEvent<HTMLDivElement>) => {
+    if (interactionMode !== 'pan') return
+    if (e.button !== 0) return
+    if (isDragScrollInteractiveTarget(e.target)) return
+    const el = tableRef.current
+    if (!el || el.scrollWidth <= el.clientWidth) return
+    const startX = e.pageX
+    const startScroll = el.scrollLeft
+
+    const onMove = (ev: globalThis.MouseEvent) => {
+      const dx = ev.pageX - startX
+      el.scrollLeft = startScroll - dx
+    }
+    const onUp = () => {
+      document.body.style.userSelect = ''
+      document.body.style.cursor = ''
+      document.removeEventListener('mousemove', onMove)
+      document.removeEventListener('mouseup', onUp)
+    }
+    document.body.style.userSelect = 'none'
+    document.body.style.cursor = 'grabbing'
+    document.addEventListener('mousemove', onMove)
+    document.addEventListener('mouseup', onUp)
+  }, [interactionMode])
+
+  const onTableTouchStart = useCallback((e: TouchEvent<HTMLDivElement>) => {
+    if (interactionMode !== 'pan') return
+    if (e.touches.length !== 1) return
+    if (isDragScrollInteractiveTarget(e.target)) return
+    const el = tableRef.current
+    if (!el || el.scrollWidth <= el.clientWidth) return
+    const startX = e.touches[0].pageX
+    const startScroll = el.scrollLeft
+
+    const onTouchMove = (ev: globalThis.TouchEvent) => {
+      if (ev.touches.length !== 1) return
+      const dx = ev.touches[0].pageX - startX
+      el.scrollLeft = startScroll - dx
+    }
+    const onTouchEnd = () => {
+      document.removeEventListener('touchmove', onTouchMove)
+      document.removeEventListener('touchend', onTouchEnd)
+      document.removeEventListener('touchcancel', onTouchEnd)
+    }
+    document.addEventListener('touchmove', onTouchMove, { passive: true })
+    document.addEventListener('touchend', onTouchEnd)
+    document.addEventListener('touchcancel', onTouchEnd)
+  }, [interactionMode])
+
+  const tableClassName = cn(
+    interactionMode === 'pan' &&
+      canScrollHorizontally &&
+      'cursor-grab [&_th]:!cursor-grab [&_td]:!cursor-grab [&_button]:!cursor-pointer [&_[data-radix-collection-item]]:!cursor-pointer',
+    interactionMode === 'select' &&
+      'select-text [&_th]:select-text [&_td]:select-text [&_th]:cursor-default [&_td]:cursor-text [&_button]:!cursor-pointer [&_[role=combobox]]:!cursor-pointer'
+  )
+
+  return <>{children({ setTableRef, tableClassName, onTableMouseDown, onTableTouchStart })}</>
+}
 
 const STATUS_OPTIONS = STATUS_DISPLAY.map((d) => ({ value: d.value, label: d.label }))
 
@@ -119,6 +243,8 @@ export default function ReportTrackerPage() {
   const [filters, setFilters] = useState<ActiveFilter[]>([])
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(25)
+  /** Pan = drag-scroll table; Select = pointer/text selection and controls without accidental drag */
+  const [tableInteractionMode, setTableInteractionMode] = useState<'pan' | 'select'>('pan')
 
   const load = async () => {
     setLoading(true)
@@ -211,6 +337,11 @@ export default function ReportTrackerPage() {
   const currentPage = Math.min(page, totalPages)
   const startIndex = (currentPage - 1) * pageSize
   const paginatedRows = filteredRows.slice(startIndex, startIndex + pageSize)
+
+  const tableScrollLayoutKey = useMemo(
+    () => `${loading}-${totalFiltered}-${page}-${pageSize}-${startIndex}`,
+    [loading, totalFiltered, page, pageSize, startIndex]
+  )
 
   const statsCards = useMemo(() => {
     const norm = (s: string) => {
@@ -345,6 +476,7 @@ export default function ReportTrackerPage() {
             segments={statsCards.trackerSegments}
             singleSegmentMode
             icon={<BarChart3 className="h-5 w-5" />}
+            footnote="Average of (F4% + F5%) ÷ 2 per project."
           />
           <div className="flex flex-col gap-4 min-w-0 sm:col-span-3 lg:col-span-1">
             <CompactStatCard
@@ -428,39 +560,96 @@ export default function ReportTrackerPage() {
           {error && (
             <p className="text-destructive text-sm mb-4">{error}</p>
           )}
-          {loading ? (
-            <div className="table-container report-tracker-table report-tracker-table-sm">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    {Array.from({ length: 22 }).map((_, i) => (
-                      <TableHead key={i}>
-                        <div className="h-4 w-16 rounded bg-white/20 animate-pulse" />
-                      </TableHead>
-                    ))}
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {Array.from({ length: 10 }).map((_, r) => (
-                    <TableRow key={r}>
-                      {Array.from({ length: 22 }).map((_, c) => (
-                        <TableCell key={c}>
-                          <div className="h-5 w-full max-w-[70%] rounded bg-muted animate-pulse" />
-                        </TableCell>
-                      ))}
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+          <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-xs text-muted-foreground max-w-xl leading-relaxed">
+              {tableInteractionMode === 'pan'
+                ? 'Pan mode: drag the table sideways or use the scrollbar. Switch to Select to highlight text or use dropdowns without dragging the sheet.'
+                : 'Select mode: normal pointer — select cell text and use status picks. Switch to Pan to drag-scroll horizontally.'}
+            </p>
+            <div className="flex shrink-0 flex-wrap items-center gap-2">
+              <span className="text-xs font-medium text-muted-foreground">Mode</span>
+              <Button
+                type="button"
+                variant={tableInteractionMode === 'pan' ? 'default' : 'outline'}
+                size="sm"
+                className="h-8 gap-1.5"
+                onClick={() => setTableInteractionMode('pan')}
+                aria-pressed={tableInteractionMode === 'pan'}
+              >
+                <Hand className="h-3.5 w-3.5" aria-hidden />
+                Pan
+              </Button>
+              <Button
+                type="button"
+                variant={tableInteractionMode === 'select' ? 'default' : 'outline'}
+                size="sm"
+                className="h-8 gap-1.5"
+                onClick={() => setTableInteractionMode('select')}
+                aria-pressed={tableInteractionMode === 'select'}
+              >
+                <MousePointer2 className="h-3.5 w-3.5" aria-hidden />
+                Select
+              </Button>
             </div>
+          </div>
+          {loading ? (
+            <ReportTrackerTableDragScroll
+              layoutKey={tableScrollLayoutKey}
+              interactionMode={tableInteractionMode}
+            >
+              {({ setTableRef, tableClassName, onTableMouseDown, onTableTouchStart }) => (
+                <div
+                  ref={setTableRef}
+                  onMouseDown={onTableMouseDown}
+                  onTouchStart={onTableTouchStart}
+                  className={cn(
+                    'table-container report-tracker-table report-tracker-table-sm',
+                    tableClassName
+                  )}
+                >
+                  <Table noOverflowWrapper>
+                    <TableHeader>
+                      <TableRow>
+                        {Array.from({ length: 22 }).map((_, i) => (
+                          <TableHead key={i}>
+                            <div className="h-4 w-16 rounded bg-white/20 animate-pulse" />
+                          </TableHead>
+                        ))}
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {Array.from({ length: 10 }).map((_, r) => (
+                        <TableRow key={r}>
+                          {Array.from({ length: 22 }).map((_, c) => (
+                            <TableCell key={c}>
+                              <div className="h-5 w-full max-w-[70%] rounded bg-muted animate-pulse" />
+                            </TableCell>
+                          ))}
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </ReportTrackerTableDragScroll>
           ) : (
             <>
-            <p className="text-xs text-muted-foreground mb-2 flex items-center gap-1.5" dir="ltr">
-              <span>Scroll horizontally to view all columns</span>
-              <ChevronRight className="h-3.5 w-3.5 shrink-0 opacity-70" aria-hidden />
-            </p>
-            <div className="table-container report-tracker-table report-tracker-table-sm" dir="ltr">
-              <Table>
+            <ReportTrackerTableDragScroll
+              layoutKey={tableScrollLayoutKey}
+              interactionMode={tableInteractionMode}
+            >
+              {({ setTableRef, tableClassName, onTableMouseDown, onTableTouchStart }) => (
+                <div
+                  ref={setTableRef}
+                  onMouseDown={onTableMouseDown}
+                  onTouchStart={onTableTouchStart}
+                  className={cn(
+                    'table-container report-tracker-table report-tracker-table-sm',
+                    tableClassName
+                  )}
+                  dir="ltr"
+                >
+              <Table noOverflowWrapper>
                 <TableHeader>
                   <TableRow>
                     <TableHead className="text-left" dir="ltr">Serial Number</TableHead>
@@ -622,6 +811,8 @@ export default function ReportTrackerPage() {
                 </TableBody>
               </Table>
             </div>
+              )}
+            </ReportTrackerTableDragScroll>
               {!loading && filteredRows.length > 0 && (
                 <div className="flex flex-wrap items-center justify-between gap-4 mt-4 py-2">
                   <div className="flex items-center gap-3 text-sm text-muted-foreground">
