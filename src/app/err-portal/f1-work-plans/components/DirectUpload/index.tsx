@@ -473,6 +473,9 @@ export default function DirectUpload() {
       if (!stateName) {
         throw new Error('State selection is required')
       }
+      if (!formData.emergency_room_id) {
+        throw new Error('Emergency room is required')
+      }
 
       // Detect language and translate if needed
       const sourceLanguage = editedData.language || 'en'
@@ -502,64 +505,45 @@ export default function DirectUpload() {
       // Normalize planned_activities to new format and ensure it's an array of objects
       const plannedActivitiesForDB = normalizePlannedActivities(translatedData.planned_activities || [])
 
-      // ERR room
-      const selectedRoom = (rooms as any[]).find(r => r.id === formData.emergency_room_id)
-
       // Prepare data for DB - remove metadata fields that will be set in F2
       const { form_currency, exchange_rate, raw_ocr, _selected_state_name, _selected_grant_call_id, _yymm, _existing_serial, _selected_funding_cycle_id, _cycle_state_allocation_id, ...dataForDB } = translatedData
 
-      // Generate project_name from locality only (sectors are now set per activity)
-      const locality = dataForDB.locality || ''
-      const projectName = locality || null
-
-      // Normalize date for DB (MMYY -> YYYY-MM-01)
-      let dbDate: string | null = null
-      if (typeof dataForDB.date === 'string') {
-        const val = dataForDB.date
-        if (/^\d{4}$/.test(val)) {
-          const mm = val.slice(0, 2)
-          const yy = val.slice(2, 4)
-          dbDate = `20${yy}-${mm}-01`
-        } else if (/^\d{4}-\d{2}-\d{2}$/.test(val)) {
-          dbDate = val
-        }
+      const payload = {
+        mode: 'ocr' as const,
+        emergency_room_id: formData.emergency_room_id,
+        grant_segment: formData.grant_segment ? String(formData.grant_segment) : null,
+        date: typeof dataForDB.date === 'string' ? dataForDB.date : null,
+        locality: dataForDB.locality ?? null,
+        project_objectives: dataForDB.project_objectives ?? null,
+        intended_beneficiaries: dataForDB.intended_beneficiaries ?? null,
+        estimated_beneficiaries: dataForDB.estimated_beneficiaries ?? null,
+        estimated_timeframe: dataForDB.estimated_timeframe ?? null,
+        additional_support: dataForDB.additional_support ?? null,
+        banking_details: dataForDB.banking_details ?? null,
+        program_officer_name: dataForDB.program_officer_name ?? null,
+        program_officer_phone: dataForDB.program_officer_phone ?? null,
+        reporting_officer_name: dataForDB.reporting_officer_name ?? null,
+        reporting_officer_phone: dataForDB.reporting_officer_phone ?? null,
+        finance_officer_name: dataForDB.finance_officer_name ?? null,
+        finance_officer_phone: dataForDB.finance_officer_phone ?? null,
+        planned_activities: plannedActivitiesForDB,
+        expenses: expensesForDB,
+        original_text: originalText,
+        language: sourceLanguage,
+        temp_file_key: tempKey,
+        ocr_edited_fields_count: ocrEditedFieldsCount
       }
 
-      // Insert into database with temp file path - NO FINAL FILE MOVE
-      const { error: insertError } = await supabase
-        .from('err_projects')
-        .insert([{
-          ...dataForDB,
-          date: dbDate,
-          expenses: expensesForDB,
-          planned_activities: plannedActivitiesForDB, // Save as array of objects with category, individuals, families, cost
-          emergency_room_id: formData.emergency_room_id,
-          err_id: selectedRoom?.err_code || null,
-          status: 'pending', // Status for files awaiting F2 approval
-          source: 'mutual_aid_portal',
-          state: stateName,
-          // Primary and Secondary categories removed - will be set per activity in planned_activities
-          project_name: projectName,
-          temp_file_key: tempKey, // Store temp file path
-          original_text: originalText,
-          language: sourceLanguage,
-          ocr_edited_fields_count: ocrEditedFieldsCount,
-          grant_segment: formData.grant_segment ? String(formData.grant_segment) : null,
-          // Remove these fields - will be set in F2:
-          // donor_id: null,
-          // grant_call_id: null,
-          // funding_cycle_id: null,
-          // grant_id: null,
-          // grant_serial: null,
-          // workplan_number: null
-        }])
-      if (insertError) {
-        console.error('Database insert error:', insertError)
-        console.error('Insert data:', {
-          grant_segment: formData.grant_segment,
-          grant_segment_type: typeof formData.grant_segment
-        })
-        throw insertError
+      const res = await fetch('/api/f1/workplan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify(payload)
+      })
+      const resultBody = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        console.error('F1 workplan API error:', resultBody)
+        throw new Error(resultBody?.error || 'Failed to save workplan')
       }
 
       alert('F1 workplan uploaded successfully!')

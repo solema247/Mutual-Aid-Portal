@@ -1,12 +1,13 @@
 /**
  * Submit logic for manual F1 entry. Mirrors DirectUpload handleConfirmUpload
- * but with no file (temp_file_key: null). Kept in a separate file for clarity.
+ * but with no file (temp_file_key: null). Writes via POST /api/f1/workplan.
  */
 
-import { supabase } from '@/lib/supabaseClient'
 import type { ManualEntryFormData, Expense, PlannedActivity } from './types'
 
-function normalizePlannedActivities(activities: PlannedActivity[] | { activity: string; category: string | null; individuals: number | null; families: number | null; planned_activity_cost: number | null }[]): any[] {
+function normalizePlannedActivities (
+  activities: PlannedActivity[] | { activity: string; category: string | null; individuals: number | null; families: number | null; planned_activity_cost: number | null }[]
+): any[] {
   if (!Array.isArray(activities) || activities.length === 0) return []
   if (typeof activities[0] === 'object' && activities[0] !== null && 'activity' in activities[0]) {
     return activities as any[]
@@ -20,7 +21,10 @@ function normalizePlannedActivities(activities: PlannedActivity[] | { activity: 
   }))
 }
 
-async function translateFields(data: ManualEntryFormData, sourceLanguage: string): Promise<{ translatedData: ManualEntryFormData; originalText: any }> {
+async function translateFields (
+  data: ManualEntryFormData,
+  sourceLanguage: string
+): Promise<{ translatedData: ManualEntryFormData; originalText: any }> {
   if (sourceLanguage !== 'ar') {
     return {
       translatedData: data,
@@ -103,26 +107,28 @@ async function translateFields(data: ManualEntryFormData, sourceLanguage: string
     reporting_officer_name: data.reporting_officer_name,
     finance_officer_name: data.finance_officer_name,
     planned_activities: data.planned_activities.map(a => ({ activity: a.activity })),
-    expenses: data.expenses.map(e => ({ activity: e.activity, planned_activity: e.planned_activity || null, planned_activity_other: e.planned_activity_other || null }))
+    expenses: data.expenses.map(e => ({
+      activity: e.activity,
+      planned_activity: e.planned_activity || null,
+      planned_activity_other: e.planned_activity_other || null
+    }))
   }
 
   return { translatedData, originalText }
 }
 
 export interface SubmitManualEntryOptions {
-  stateName: string
   emergency_room_id: string
-  err_code: string | null
   grant_segment?: string | null
   /** Storage key for optional attachment (same pattern as OCR: f1-forms/_incoming/<uuid>.<ext>) */
   temp_file_key?: string | null
 }
 
-export async function submitManualEntry(
+export async function submitManualEntry (
   formData: ManualEntryFormData,
   options: SubmitManualEntryOptions
 ): Promise<void> {
-  const { stateName, emergency_room_id, err_code, grant_segment, temp_file_key: tempFileKey } = options
+  const { emergency_room_id, grant_segment, temp_file_key: tempFileKey } = options
   const sourceLanguage = formData.language || 'en'
   const { translatedData, originalText } = await translateFields(formData, sourceLanguage)
 
@@ -137,41 +143,41 @@ export async function submitManualEntry(
   const plannedActivitiesForDB = normalizePlannedActivities(translatedData.planned_activities || [])
 
   const { form_currency, exchange_rate, ...dataForDB } = translatedData as any
-  const projectName = dataForDB.locality || null
 
-  let dbDate: string | null = null
-  if (typeof dataForDB.date === 'string') {
-    const val = dataForDB.date
-    if (/^\d{4}$/.test(val)) {
-      const mm = val.slice(0, 2)
-      const yy = val.slice(2, 4)
-      dbDate = `20${yy}-${mm}-01`
-    } else if (/^\d{4}-\d{2}-\d{2}$/.test(val)) {
-      dbDate = val
-    }
+  const payload = {
+    mode: 'manual' as const,
+    emergency_room_id,
+    grant_segment: grant_segment ? String(grant_segment) : null,
+    date: typeof dataForDB.date === 'string' ? dataForDB.date : null,
+    locality: dataForDB.locality ?? null,
+    project_objectives: dataForDB.project_objectives ?? null,
+    intended_beneficiaries: dataForDB.intended_beneficiaries ?? null,
+    estimated_beneficiaries: dataForDB.estimated_beneficiaries ?? null,
+    estimated_timeframe: dataForDB.estimated_timeframe ?? null,
+    additional_support: dataForDB.additional_support ?? null,
+    banking_details: dataForDB.banking_details ?? null,
+    program_officer_name: dataForDB.program_officer_name ?? null,
+    program_officer_phone: dataForDB.program_officer_phone ?? null,
+    reporting_officer_name: dataForDB.reporting_officer_name ?? null,
+    reporting_officer_phone: dataForDB.reporting_officer_phone ?? null,
+    finance_officer_name: dataForDB.finance_officer_name ?? null,
+    finance_officer_phone: dataForDB.finance_officer_phone ?? null,
+    planned_activities: plannedActivitiesForDB,
+    expenses: expensesForDB,
+    original_text: originalText,
+    language: sourceLanguage,
+    temp_file_key: tempFileKey ?? null
   }
 
-  const { error: insertError } = await supabase
-    .from('err_projects')
-    .insert([{
-      ...dataForDB,
-      date: dbDate,
-      expenses: expensesForDB,
-      planned_activities: plannedActivitiesForDB,
-      emergency_room_id,
-      err_id: err_code,
-      status: 'pending',
-      source: 'mutual_aid_portal',
-      state: stateName,
-      project_name: projectName,
-      temp_file_key: tempFileKey ?? null,
-      original_text: originalText,
-      language: sourceLanguage,
-      grant_segment: grant_segment || null
-    }])
+  const res = await fetch('/api/f1/workplan', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'same-origin',
+    body: JSON.stringify(payload)
+  })
 
-  if (insertError) {
-    console.error('Manual entry insert error:', insertError)
-    throw insertError
+  const body = await res.json().catch(() => ({}))
+  if (!res.ok) {
+    throw new Error(body?.error || 'Failed to submit F1 workplan')
   }
 }

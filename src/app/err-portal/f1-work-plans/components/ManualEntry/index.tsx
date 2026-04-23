@@ -302,9 +302,7 @@ export default function ManualEntry({ onSuccess }: ManualEntryProps) {
       await submitManualEntry(
         { ...form, planned_activities: plannedActivitiesDisplayed, form_currency: currency, exchange_rate: currency === 'SDG' ? exchangeRate : undefined },
         {
-          stateName,
           emergency_room_id: emergencyRoomId,
-          err_code: selectedRoom?.err_code ?? null,
           grant_segment: grantSegment || null,
           temp_file_key: tempFileKey
         }

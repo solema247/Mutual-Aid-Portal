@@ -41,11 +41,6 @@ type Feedback = {
   iteration_number: number
 }
 
-interface User {
-  id: string;
-  name: string;
-}
-
 export default function ERRAppSubmissions() {
   const { t } = useTranslation(['f1_plans', 'projects', 'common'])
   const { can } = useAllowedFunctions()
@@ -60,7 +55,6 @@ export default function ERRAppSubmissions() {
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [selectedTab, setSelectedTab] = useState<'details' | 'feedback' | 'staging'>('details')
   const [feedbackHistory, setFeedbackHistory] = useState<Feedback[]>([])
-  const [user, setUser] = useState<User | null>(null)
   const [fundingCycles, setFundingCycles] = useState<FundingCycle[]>([])
   const [grantSerials, setGrantSerials] = useState<any[]>([])
   const [selectedFundingCycle, setSelectedFundingCycle] = useState<string>('')
@@ -95,13 +89,6 @@ export default function ERRAppSubmissions() {
 
     setProjects(filteredProjects)
   }, [currentStatus, allProjects])
-
-  useEffect(() => {
-    const userData = localStorage.getItem('user')
-    if (userData) {
-      setUser(JSON.parse(userData))
-    }
-  }, [])
 
   useEffect(() => {
     fetchAllProjects()
@@ -245,30 +232,9 @@ export default function ERRAppSubmissions() {
     }
   }
 
-  const getCycleYYMM = async (fundingCycleId: string): Promise<string> => {
-    // Derive YYMM from the funding cycle start_date
-    const { data, error } = await supabase
-      .from('funding_cycles')
-      .select('start_date')
-      .eq('id', fundingCycleId)
-      .single()
-
-    if (error || !data?.start_date) {
-      // Fallback to current date if start_date is missing
-      const now = new Date()
-      const yy = String(now.getFullYear()).slice(-2)
-      const mm = String(now.getMonth() + 1).padStart(2, '0')
-      return `${mm}${yy}`
-    }
-
-    const start = new Date(data.start_date)
-    const yy = String(start.getFullYear()).slice(-2)
-    const mm = String(start.getMonth() + 1).padStart(2, '0')
-    return `${mm}${yy}`
-  }
-
   const handleCreateSerialForProject = async () => {
     if (!canAssignGrant) return
+    if (!selectedProject?.id) return
     if (!selectedProject?.funding_cycle_id || !selectedProject?.cycle_state_allocation_id) {
       alert('Project is missing cycle information.')
       return
@@ -277,71 +243,29 @@ export default function ERRAppSubmissions() {
     try {
       setIsCreatingSerial(true)
 
-      // Derive YYMM from cycle
-      const yymm = await getCycleYYMM(selectedProject.funding_cycle_id)
-
-      // Create serial using cycle-based params
-      const resp = await fetch('/api/fsystem/grant-serials/create', {
+      const resp = await fetch('/api/f1/err/create-serial', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          funding_cycle_id: selectedProject.funding_cycle_id,
-          cycle_state_allocation_id: selectedProject.cycle_state_allocation_id,
-          state_name: selectedProject.state,
-          yymm
-        })
+        credentials: 'same-origin',
+        body: JSON.stringify({ project_id: selectedProject.id })
       })
 
+      const body = await resp.json().catch(() => ({}))
       if (!resp.ok) {
-        const msg = await resp.json().catch(() => ({}))
-        throw new Error(msg?.error || 'Failed to create grant serial')
+        throw new Error(body?.error || 'Failed to create serial')
       }
 
-      const newSerial = await resp.json()
-
-      // Ensure grant_workplan_seq exists and increment workplan number
-      const { data: seqData, error: seqError } = await supabase
-        .from('grant_workplan_seq')
-        .select('last_workplan_number')
-        .eq('grant_serial', newSerial.grant_serial)
-        .single()
-
-      if (seqError && seqError.code !== 'PGRST116') {
-        throw seqError
-      }
-
-      const nextWorkplanNumber = seqData ? seqData.last_workplan_number + 1 : 1
-
-      if (seqData) {
-        const { error: updateSeqError } = await supabase
-          .from('grant_workplan_seq')
-          .update({ last_workplan_number: nextWorkplanNumber, last_used: new Date().toISOString() })
-          .eq('grant_serial', newSerial.grant_serial)
-        if (updateSeqError) throw updateSeqError
-      } else {
-        const { error: insertSeqError } = await supabase
-          .from('grant_workplan_seq')
-          .insert({ grant_serial: newSerial.grant_serial, last_workplan_number: nextWorkplanNumber, last_used: new Date().toISOString(), funding_cycle_id: selectedProject.funding_cycle_id })
-        if (insertSeqError) throw insertSeqError
-      }
-
-      // Update project with serial and allocation status
-      const { error: updError } = await supabase
-        .from('err_projects')
-        .update({ grant_serial_id: newSerial.grant_serial, workplan_number: nextWorkplanNumber, funding_status: 'allocated' })
-        .eq('id', selectedProject.id)
-      if (updError) throw updError
-
-      // Refresh lists and UI state
       await fetchAllProjects()
       if (selectedProject.funding_cycle_id) {
         await fetchGrantSerials(selectedProject.funding_cycle_id)
       }
-      setSelectedGrantSerial(newSerial.grant_serial)
-      alert(`Serial created and assigned. Workplan #${nextWorkplanNumber}`)
+      if (body.grant_serial) {
+        setSelectedGrantSerial(body.grant_serial)
+      }
+      alert(`Serial created and assigned. Workplan #${body.workplan_number ?? ''}`)
     } catch (e) {
       console.error('Error creating serial for project:', e)
-      alert('Error creating serial. Please try again.')
+      alert(e instanceof Error ? e.message : 'Error creating serial. Please try again.')
     } finally {
       setIsCreatingSerial(false)
     }
@@ -365,100 +289,49 @@ export default function ERRAppSubmissions() {
   const handleGrantAssignment = async (projectId: string, grantSerial: string) => {
     if (!canAssignGrant) return
     try {
-      // First, get the next workplan number for this grant serial
-      const { data: seqData, error: seqError } = await supabase
-        .from('grant_workplan_seq')
-        .select('last_workplan_number')
-        .eq('grant_serial', grantSerial)
-        .single()
-
-      if (seqError && seqError.code !== 'PGRST116') { // PGRST116 is "not found"
-        throw seqError
+      const resp = await fetch('/api/f1/err/assign-grant', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ project_id: projectId, grant_serial: grantSerial })
+      })
+      const body = await resp.json().catch(() => ({}))
+      if (!resp.ok) {
+        throw new Error(body?.error || 'Assignment failed')
       }
 
-      const nextWorkplanNumber = seqData ? seqData.last_workplan_number + 1 : 1
-
-      // Update or insert the workplan sequence
-      if (seqData) {
-        const { error: updateSeqError } = await supabase
-          .from('grant_workplan_seq')
-          .update({
-            last_workplan_number: nextWorkplanNumber,
-            last_used: new Date().toISOString()
-          })
-          .eq('grant_serial', grantSerial)
-
-        if (updateSeqError) throw updateSeqError
-      } else {
-        const { error: insertSeqError } = await supabase
-          .from('grant_workplan_seq')
-          .insert({
-            grant_serial: grantSerial,
-            last_workplan_number: nextWorkplanNumber,
-            last_used: new Date().toISOString()
-          })
-
-        if (insertSeqError) throw insertSeqError
-      }
-
-      // Now update the project with grant serial, funding status, and workplan number
-      const { error } = await supabase
-        .from('err_projects')
-        .update({
-          grant_serial_id: grantSerial,
-          funding_status: 'allocated',
-          workplan_number: nextWorkplanNumber
-        })
-        .eq('id', projectId)
-
-      if (error) throw error
-
-      // Refresh projects list
       fetchAllProjects()
-      alert(`Project assigned to grant serial successfully! Workplan number: ${nextWorkplanNumber}`)
+      alert(`Project assigned to grant serial successfully! Workplan number: ${body.workplan_number ?? ''}`)
     } catch (error) {
       console.error('Error assigning project to grant serial:', error)
-      alert('Error assigning project to grant serial. Please try again.')
+      alert(error instanceof Error ? error.message : 'Error assigning project to grant serial. Please try again.')
     }
   }
 
   const handleFeedbackSubmit = async (feedbackText: string, action: 'approve' | 'feedback' | 'decline') => {
-    if (!selectedProject || !user) return
+    if (!selectedProject) return
 
     try {
-      const newStatus = action === 'approve' ? 'approved' : 
-                       action === 'decline' ? 'declined' : 
-                       'feedback'
-      
-      const { data: feedbackData, error: feedbackError } = await supabase
-        .from('project_feedback')
-        .insert({
+      const resp = await fetch('/api/f1/err/feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({
           project_id: selectedProject.id,
           feedback_text: feedbackText,
-          feedback_status: action === 'approve' ? 'resolved' : 'pending_changes',
-          created_by: user.id,
-          iteration_number: feedbackHistory.length + 1
+          action
         })
-        .select()
-        .single()
-
-      if (feedbackError) throw feedbackError
-
-      const { error: projectError } = await supabase
-        .from('err_projects')
-        .update({
-          status: newStatus,
-          current_feedback_id: feedbackData.id,
-          version: selectedProject.version + 1
-        })
-        .eq('id', selectedProject.id)
-
-      if (projectError) throw projectError
+      })
+      const body = await resp.json().catch(() => ({}))
+      if (!resp.ok) {
+        throw new Error(body?.error || 'Failed to submit feedback')
+      }
 
       setIsDialogOpen(false)
       fetchAllProjects()
     } catch (error) {
       console.error('Error submitting feedback:', error)
+      alert(error instanceof Error ? error.message : 'Failed to submit feedback.')
     }
   }
 
@@ -530,15 +403,17 @@ export default function ERRAppSubmissions() {
 
     try {
       setIsAssigningGrant(true)
-      
-      // Update status to 'pending' (which makes them appear in F2 Uncommitted List)
-      // Do NOT set grant_call_id or funding_status - that happens in F2
-      const { error } = await supabase
-        .from('err_projects')
-        .update({ status: 'pending' })
-        .in('id', selectedProjectIds)
 
-      if (error) throw error
+      const resp = await fetch('/api/f1/err/move-to-f2', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ project_ids: selectedProjectIds })
+      })
+      const body = await resp.json().catch(() => ({}))
+      if (!resp.ok) {
+        throw new Error(body?.error || 'Failed to move projects to F2')
+      }
 
       // Clear proposals
       try {
