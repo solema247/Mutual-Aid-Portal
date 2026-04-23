@@ -124,7 +124,7 @@ export default function ReportTrackerPage() {
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch('/api/report-tracker')
+      const res = await fetch(`/api/report-tracker?locale=${encodeURIComponent(i18n.language)}`)
       if (!res.ok) throw new Error('Failed to load data')
       const data = await res.json()
       setRows(
@@ -170,7 +170,7 @@ export default function ReportTrackerPage() {
 
   useEffect(() => {
     if (canViewPage) load()
-  }, [canViewPage])
+  }, [canViewPage, i18n.language])
 
   useReportTrackerPageExplainer(!permissionsLoading && canViewPage && !loading)
 

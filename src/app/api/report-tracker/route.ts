@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { getUserStateAccess } from '@/lib/userStateAccess'
 import { getActivityAndCategoryLists, getSectorWithHighestAmount } from '@/lib/plannedActivitiesExpenses'
+import { pickF5TextForEnUi } from '@/lib/storiesEnDisplay'
 
 function sumPlanFromPlannedActivities(planned: any): number {
   try {
@@ -62,11 +63,50 @@ function statusToPercent(status: string | null | undefined): number {
 }
 
 /**
+ * English UI: use pickF5TextForEnUi (primary + _en cache, same as overview).
+ * Arabic (or other) UI: show primary text, then fall back to _en if primary is empty.
+ */
+function pickNarrativeForReportTracker(
+  useEnUi: boolean,
+  language: string | null | undefined,
+  primary: string | null | undefined,
+  enCached: string | null | undefined
+): string | null {
+  if (useEnUi) {
+    return pickF5TextForEnUi(language, primary, enCached)
+  }
+  const p = primary?.trim()
+  if (p) return primary!
+  const e = enCached?.trim()
+  if (e) return enCached!
+  return null
+}
+
+/**
+ * PostgREST sends `.in()` as a long query string; hundreds of UUIDs can exceed URL limits
+ * and surface as undici `TypeError: fetch failed`.
+ */
+const SUPABASE_IN_BATCH = 80
+
+function chunkIds<T extends string | number>(ids: T[]): T[][] {
+  if (ids.length === 0) return []
+  const out: T[][] = []
+  for (let i = 0; i < ids.length; i += SUPABASE_IN_BATCH) {
+    out.push(ids.slice(i, i + SUPABASE_IN_BATCH))
+  }
+  return out
+}
+
+/**
  * GET /api/report-tracker
  * Returns err_projects list for Report Tracker with overdue, f4_pct, f5_pct, tracker (same logic as project management).
+ * Query: `locale` (e.g. from i18n) — `en` uses F5 _en cache for Arabic-authored reports; `ar` prefers primary columns.
  */
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    const loc = new URL(request.url).searchParams.get('locale')?.toLowerCase() ?? ''
+    /** Arabic UI: prefer primary Arabic columns (+ en fallback). Other locales: same as Stories overview (en cache for ar-authored reports). */
+    const useEnUi = loc === '' || !loc.startsWith('ar')
     const supabase = getSupabaseRouteClient()
     const { allowedStateNames } = await getUserStateAccess()
 
@@ -149,12 +189,22 @@ export async function GET() {
     }
 
     if (projectIds.length > 0) {
-      const { data: summaries } = await supabase
-        .from('err_summary')
-        .select('id, project_id, report_date, total_expenses, total_expenses_sdg')
-        .in('project_id', projectIds)
-        .is('activities_raw_import_id', null)
-        .order('report_date', { ascending: false })
+      let summaries: any[] = []
+      for (const batch of chunkIds(projectIds)) {
+        const { data: batchSummaries, error: sumErr } = await supabase
+          .from('err_summary')
+          .select('id, project_id, report_date, total_expenses, total_expenses_sdg')
+          .in('project_id', batch)
+          .is('activities_raw_import_id', null)
+          .order('report_date', { ascending: false })
+        if (sumErr) console.error('Report tracker err_summary fetch:', sumErr)
+        summaries.push(...(batchSummaries || []))
+      }
+      summaries.sort((a, b) => {
+        const ta = a?.report_date ? new Date(a.report_date).getTime() : 0
+        const tb = b?.report_date ? new Date(b.report_date).getTime() : 0
+        return tb - ta
+      })
 
       const summaryIds: number[] = []
       for (const s of summaries || []) {
@@ -172,10 +222,19 @@ export async function GET() {
           dateByProject[pid] = (s as any).report_date
       }
 
-      const { data: f5Reports } = await supabase
-        .from('err_program_report')
-        .select('id, project_id, report_date, negative_results, lessons_learned, suggestions')
-        .in('project_id', projectIds)
+      let f5Reports: any[] = []
+      for (const batch of chunkIds(projectIds)) {
+        const { data: batchF5, error: f5Err } = await supabase
+          .from('err_program_report')
+          .select(
+            'id, project_id, report_date, language, negative_results, lessons_learned, suggestions, negative_results_en, lessons_learned_en, suggestions_en'
+          )
+          .in('project_id', batch)
+        if (f5Err) {
+          console.error('Report tracker err_program_report fetch:', f5Err)
+        }
+        f5Reports.push(...(batchF5 || []))
+      }
       const f5ReportIds: string[] = []
       const reportToProject = new Map<string, string>()
       for (const f5 of f5Reports || []) {
@@ -207,18 +266,23 @@ export async function GET() {
         })
         const r = sorted[0]
         latestF5NarrativeByProject[pid] = {
-          challenges: r.negative_results != null ? String(r.negative_results) : null,
-          lessons: r.lessons_learned != null ? String(r.lessons_learned) : null,
-          recommendations: r.suggestions != null ? String(r.suggestions) : null,
+          challenges: pickNarrativeForReportTracker(useEnUi, r.language, r.negative_results, r.negative_results_en),
+          lessons: pickNarrativeForReportTracker(useEnUi, r.language, r.lessons_learned, r.lessons_learned_en),
+          recommendations: pickNarrativeForReportTracker(useEnUi, r.language, r.suggestions, r.suggestions_en),
         }
       }
 
       if (f5ReportIds.length > 0) {
-        const { data: reachRows } = await supabase
-          .from('err_program_reach')
-          .select('report_id, individual_count, household_count')
-          .in('report_id', f5ReportIds)
-        for (const r of reachRows || []) {
+        let reachRows: any[] = []
+        for (const batch of chunkIds(f5ReportIds)) {
+          const { data: batchReach, error: reachErr } = await supabase
+            .from('err_program_reach')
+            .select('report_id, individual_count, household_count')
+            .in('report_id', batch)
+          if (reachErr) console.error('Report tracker err_program_reach fetch:', reachErr)
+          reachRows.push(...(batchReach || []))
+        }
+        for (const r of reachRows) {
           const reportId = (r as any).report_id
           const pid = reportId ? reportToProject.get(reportId) : null
           const ind = Number((r as any).individual_count) || 0
@@ -235,12 +299,17 @@ export async function GET() {
       }
 
       if (summaryIds.length > 0) {
-        const { data: expenses } = await supabase
-          .from('err_expense')
-          .select('summary_id, expense_amount, expense_amount_sdg')
-          .in('summary_id', summaryIds)
+        let expenses: any[] = []
+        for (const batch of chunkIds(summaryIds)) {
+          const { data: batchExp, error: expErr } = await supabase
+            .from('err_expense')
+            .select('summary_id, expense_amount, expense_amount_sdg')
+            .in('summary_id', batch)
+          if (expErr) console.error('Report tracker err_expense fetch:', expErr)
+          expenses.push(...(batchExp || []))
+        }
         const sumBySummary: Record<number, { usd: number; sdg: number }> = {}
-        for (const e of expenses || []) {
+        for (const e of expenses) {
           const sid = (e as any).summary_id
           if (sid == null) continue
           if (!sumBySummary[sid]) sumBySummary[sid] = { usd: 0, sdg: 0 }
