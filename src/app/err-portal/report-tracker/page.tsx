@@ -48,6 +48,10 @@ interface ReportTrackerRow {
   sector_highest_amount?: string | null
   estimated_beneficiaries: number | null
   f5_reported_individuals: number
+  f5_reported_households: number
+  f5_challenges: string | null
+  f5_recommendations: string | null
+  f5_lessons_learned: string | null
 }
 
 function formatDate(d: string | null | undefined): string {
@@ -66,6 +70,23 @@ function formatAmount(n: number | string | null | undefined): string {
   if (Number.isNaN(num)) return '—'
   if (num === 0) return '0'
   return num.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })
+}
+
+function F5TextCell({ value }: { value: string | null | undefined }) {
+  if (value == null || String(value).trim() === '') {
+    return <span className="text-muted-foreground">—</span>
+  }
+  const full = String(value)
+  const max = 120
+  const display = full.length > max ? `${full.slice(0, max)}…` : full
+  return (
+    <div
+      className="max-w-[min(100vw,220px)] text-xs text-muted-foreground line-clamp-3 whitespace-pre-wrap"
+      title={full}
+    >
+      {display}
+    </div>
+  )
 }
 
 /** Waiting 0%, Under review 25%, Partial 50%, Completed 100% (same as API). */
@@ -133,6 +154,10 @@ export default function ReportTrackerPage() {
               sector_highest_amount: r.sector_highest_amount ?? null,
               estimated_beneficiaries: r.estimated_beneficiaries != null ? Number(r.estimated_beneficiaries) : null,
               f5_reported_individuals: Number(r.f5_reported_individuals) || 0,
+              f5_reported_households: Number(r.f5_reported_households) || 0,
+              f5_challenges: r.f5_challenges ?? null,
+              f5_recommendations: r.f5_recommendations ?? null,
+              f5_lessons_learned: r.f5_lessons_learned ?? null,
             }))
           : []
       )
@@ -382,6 +407,10 @@ export default function ReportTrackerPage() {
                     { key: 'amount_sdg', header: 'SDG', format: (v) => formatAmount(v) },
                     { key: 'estimated_beneficiaries', header: 'Planned Individuals', format: (v) => (v != null && v !== '' ? Number(v).toLocaleString() : '') },
                     { key: 'f5_reported_individuals', header: 'F5 Reported Individuals', format: (v) => (v != null ? Number(v).toLocaleString() : '0') },
+                    { key: 'f5_reported_households', header: 'F5 Reported Households', format: (v) => (v != null ? Number(v).toLocaleString() : '0') },
+                    { key: 'f5_challenges', header: 'F5 Challenges' },
+                    { key: 'f5_recommendations', header: 'F5 Recommendations' },
+                    { key: 'f5_lessons_learned', header: 'F5 Lessons learned' },
                     { key: 'f4_status', header: 'F4 Status' },
                       { key: 'f5_status', header: 'F5 Status' },
                       { key: 'tracker', header: 'Tracker', format: (v) => (v != null ? Number(v).toFixed(0) : '') },
@@ -404,7 +433,7 @@ export default function ReportTrackerPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    {Array.from({ length: 18 }).map((_, i) => (
+                    {Array.from({ length: 22 }).map((_, i) => (
                       <TableHead key={i}>
                         <div className="h-4 w-16 rounded bg-white/20 animate-pulse" />
                       </TableHead>
@@ -414,7 +443,7 @@ export default function ReportTrackerPage() {
                 <TableBody>
                   {Array.from({ length: 10 }).map((_, r) => (
                     <TableRow key={r}>
-                      {Array.from({ length: 17 }).map((_, c) => (
+                      {Array.from({ length: 22 }).map((_, c) => (
                         <TableCell key={c}>
                           <div className="h-5 w-full max-w-[70%] rounded bg-muted animate-pulse" />
                         </TableCell>
@@ -449,6 +478,10 @@ export default function ReportTrackerPage() {
                     <TableHead className="text-center tabular-nums" dir="ltr">SDG</TableHead>
                     <TableHead className="text-center tabular-nums" dir="ltr">Planned Individuals</TableHead>
                     <TableHead className="text-center tabular-nums" dir="ltr">F5 Reported Individuals</TableHead>
+                    <TableHead className="text-center tabular-nums" dir="ltr">F5 Reported Households</TableHead>
+                    <TableHead className="text-left min-w-[200px] max-w-[240px]" dir="ltr">F5 Challenges</TableHead>
+                    <TableHead className="text-left min-w-[200px] max-w-[240px]" dir="ltr">F5 Recommendations</TableHead>
+                    <TableHead className="text-left min-w-[200px] max-w-[240px]" dir="ltr">F5 Lessons learned</TableHead>
                     <TableHead className="text-left" dir="ltr">F4 Status</TableHead>
                     <TableHead className="text-left" dir="ltr">F5 Status</TableHead>
                     <TableHead className="text-center" dir="ltr">Tracker</TableHead>
@@ -457,7 +490,7 @@ export default function ReportTrackerPage() {
                 <TableBody>
                   {paginatedRows.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={18} className="text-muted-foreground text-center py-8">
+                      <TableCell colSpan={22} className="text-muted-foreground text-center py-8">
                         {rows.length === 0 ? 'No projects found.' : 'No rows match the selected filters.'}
                       </TableCell>
                     </TableRow>
@@ -507,6 +540,20 @@ export default function ReportTrackerPage() {
                         <TableCell className="text-center tabular-nums" dir="ltr">{formatAmount(row.amount_sdg)}</TableCell>
                         <TableCell className="text-center tabular-nums" dir="ltr">{row.estimated_beneficiaries != null ? Number(row.estimated_beneficiaries).toLocaleString() : '—'}</TableCell>
                         <TableCell className="text-center tabular-nums" dir="ltr">{row.f5_reported_individuals != null ? Number(row.f5_reported_individuals).toLocaleString() : '0'}</TableCell>
+                        <TableCell className="text-center tabular-nums" dir="ltr">
+                          {row.f5_reported_households != null
+                            ? Number(row.f5_reported_households).toLocaleString()
+                            : '0'}
+                        </TableCell>
+                        <TableCell>
+                          <F5TextCell value={row.f5_challenges} />
+                        </TableCell>
+                        <TableCell>
+                          <F5TextCell value={row.f5_recommendations} />
+                        </TableCell>
+                        <TableCell>
+                          <F5TextCell value={row.f5_lessons_learned} />
+                        </TableCell>
                         <TableCell>
                           <Select
                             value={row.f4_status}

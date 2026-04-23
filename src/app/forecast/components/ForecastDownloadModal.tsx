@@ -219,7 +219,8 @@ function sheetName(label: string): string {
 }
 
 function downloadCsv(filename: string, csv: string) {
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+  // UTF-8 BOM so Excel on Windows detects UTF-8 (Arabic etc.)
+  const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8;' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url

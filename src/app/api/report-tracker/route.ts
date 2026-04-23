@@ -108,7 +108,11 @@ export async function GET() {
     const projectIds = (rows || []).map((p: any) => p.id).filter(Boolean)
     const mouIds = Array.from(new Set((rows || []).map((p: any) => p.mou_id).filter(Boolean))) as string[]
     const f5ReportedIndividualsByProject: Record<string, number> = {}
-    for (const id of projectIds) f5ReportedIndividualsByProject[id] = 0
+    const f5ReportedHouseholdsByProject: Record<string, number> = {}
+    for (const id of projectIds) {
+      f5ReportedIndividualsByProject[id] = 0
+      f5ReportedHouseholdsByProject[id] = 0
+    }
     let transferDateByProject: Record<string, string> = {}
     let rateByProject: Record<string, number> = {}
     if (mouIds.length > 0) {
@@ -137,6 +141,7 @@ export async function GET() {
     const amountsByProject: Record<string, { amount_usd: number; amount_sdg: number; f4_count: number }> = {}
     const dateByProject: Record<string, string | null> = {}
     const f5CountByProject: Record<string, number> = {}
+    const latestF5NarrativeByProject: Record<string, { challenges: string | null; lessons: string | null; recommendations: string | null }> = {}
     for (const id of projectIds) {
       amountsByProject[id] = { amount_usd: 0, amount_sdg: 0, f4_count: 0 }
       f5CountByProject[id] = 0
@@ -169,7 +174,7 @@ export async function GET() {
 
       const { data: f5Reports } = await supabase
         .from('err_program_report')
-        .select('id, project_id')
+        .select('id, project_id, report_date, negative_results, lessons_learned, suggestions')
         .in('project_id', projectIds)
       const f5ReportIds: string[] = []
       const reportToProject = new Map<string, string>()
@@ -182,17 +187,49 @@ export async function GET() {
           reportToProject.set(rid, pid)
         }
       }
+
+      /** Latest F5 report per project (by report_date, then id) for narrative fields */
+      const f5ByProject = new Map<string, any[]>()
+      for (const f5 of f5Reports || []) {
+        const pid = (f5 as any).project_id
+        if (!pid) continue
+        if (!f5ByProject.has(pid)) f5ByProject.set(pid, [])
+        f5ByProject.get(pid)!.push(f5)
+      }
+      for (const [pid, reports] of f5ByProject) {
+        const sorted = [...reports].sort((a, b) => {
+          const da = a.report_date ? new Date(a.report_date).getTime() : 0
+          const db = b.report_date ? new Date(b.report_date).getTime() : 0
+          if (db !== da) return db - da
+          const ida = String(a.id)
+          const idb = String(b.id)
+          return idb.localeCompare(ida, undefined, { numeric: true })
+        })
+        const r = sorted[0]
+        latestF5NarrativeByProject[pid] = {
+          challenges: r.negative_results != null ? String(r.negative_results) : null,
+          lessons: r.lessons_learned != null ? String(r.lessons_learned) : null,
+          recommendations: r.suggestions != null ? String(r.suggestions) : null,
+        }
+      }
+
       if (f5ReportIds.length > 0) {
         const { data: reachRows } = await supabase
           .from('err_program_reach')
-          .select('report_id, individual_count')
+          .select('report_id, individual_count, household_count')
           .in('report_id', f5ReportIds)
         for (const r of reachRows || []) {
           const reportId = (r as any).report_id
           const pid = reportId ? reportToProject.get(reportId) : null
-          const count = Number((r as any).individual_count) || 0
-          if (pid && !Number.isNaN(count)) {
-            f5ReportedIndividualsByProject[pid] = (f5ReportedIndividualsByProject[pid] ?? 0) + count
+          const ind = Number((r as any).individual_count) || 0
+          const hh = Number((r as any).household_count) || 0
+          if (pid) {
+            if (!Number.isNaN(ind)) {
+              f5ReportedIndividualsByProject[pid] = (f5ReportedIndividualsByProject[pid] ?? 0) + ind
+            }
+            if (!Number.isNaN(hh)) {
+              f5ReportedHouseholdsByProject[pid] = (f5ReportedHouseholdsByProject[pid] ?? 0) + hh
+            }
           }
         }
       }
@@ -283,6 +320,10 @@ export async function GET() {
         sector_highest_amount,
         estimated_beneficiaries: p.estimated_beneficiaries != null ? Number(p.estimated_beneficiaries) : null,
         f5_reported_individuals: f5ReportedIndividualsByProject[p.id] ?? 0,
+        f5_reported_households: f5ReportedHouseholdsByProject[p.id] ?? 0,
+        f5_challenges: latestF5NarrativeByProject[p.id]?.challenges ?? null,
+        f5_recommendations: latestF5NarrativeByProject[p.id]?.recommendations ?? null,
+        f5_lessons_learned: latestF5NarrativeByProject[p.id]?.lessons ?? null,
       }
     })
 

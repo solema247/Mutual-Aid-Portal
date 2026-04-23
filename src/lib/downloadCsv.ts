@@ -1,3 +1,6 @@
+/** UTF-8 BOM so Excel on Windows detects UTF-8 and displays Arabic correctly */
+const UTF8_BOM = '\uFEFF'
+
 /**
  * Escape a value for CSV (quote if contains comma, newline, or double quote).
  */
@@ -34,7 +37,7 @@ export function buildCsv<T extends Record<string, unknown>>(
  * Trigger browser download of a CSV file.
  */
 export function downloadCsv(content: string, filename: string): void {
-  const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' })
+  const blob = new Blob([UTF8_BOM + content], { type: 'text/csv;charset=utf-8;' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
