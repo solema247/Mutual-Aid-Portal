@@ -43,5 +43,6 @@
   { "code": "rooms_deactivate_room", "module": "rooms", "label_ar": "إلغاء تفعيل الغرف", "label_en": "Deactivate rooms", "description_en": "Deactivate active rooms on the Room Management page." },
   { "code": "dashboard_view_page", "module": "dashboard", "label_ar": "عرض لوحة التحكم", "label_en": "View Dashboard page", "description_en": "View the ERR Portal Dashboard page." },
   { "code": "learnings_view_page", "module": "learnings", "label_ar": "عرض صفحة تعلم المساعدة المتبادلة", "label_en": "View Mutual Aid Learnings page", "description_en": "View the Mutual Aid Learnings (stories) page." },
-  { "code": "surveys_view_page", "module": "surveys", "label_ar": "عرض صفحة الاستبيانات", "label_en": "View Surveys page", "description_en": "View the Surveys page for user feedback surveys." }
+  { "code": "surveys_view_page", "module": "surveys", "label_ar": "عرض صفحة الاستبيانات", "label_en": "View Surveys page", "description_en": "View the Surveys page for user feedback surveys." },
+  { "code": "raise_ticket_page", "module": "tickets", "label_ar": "فتح تذكرة (GitHub)", "label_en": "Raise a ticket", "description_en": "Use Raise a ticket to submit GitHub issues for the Mutual Aid Portal." }
 ]

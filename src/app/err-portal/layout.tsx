@@ -7,7 +7,7 @@ import PageExplainerHeader from '@/components/layout/PageExplainerHeader'
 import { PageExplainerProvider } from '@/contexts/PageExplainerContext'
 import type { SidebarItem, SidebarLinkItem } from '@/components/layout/Sidebar'
 import { useRouter } from 'next/navigation'
-import { Users, ClipboardList, BarChart2, BarChart3, PieChart, UserCog, Home, CheckSquare, BookOpen, PenTool, Cog, FileText, BookMarked } from 'lucide-react'
+import { Users, ClipboardList, BarChart2, BarChart3, PieChart, UserCog, Home, CheckSquare, BookOpen, PenTool, Cog, FileText, BookMarked, Ticket } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 import { useAllowedFunctions } from '@/hooks/useAllowedFunctions'
 
@@ -76,6 +76,7 @@ export default function ErrPortalLayout({
   const canViewRooms = can('rooms_view_page')
   const canViewDashboard = can('dashboard_view_page')
   const canViewSurveys = can('surveys_view_page')
+  const canRaiseTicket = can('raise_ticket_page')
 
   const reportingGroupChildren: SidebarLinkItem[] = []
   if (canViewF4F5) {
@@ -120,6 +121,13 @@ export default function ErrPortalLayout({
       href: '/err-portal/user-management',
       label: t('err:user_management'),
       icon: <UserCog className="h-5 w-5" />
+    })
+  }
+  if (canRaiseTicket) {
+    adminGroupChildren.push({
+      href: '/err-portal/raise-a-ticket',
+      label: t('err:raise_ticket_title', 'Raise a ticket'),
+      icon: <Ticket className="h-5 w-5" />
     })
   }
   if (canViewSurveys) {
