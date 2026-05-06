@@ -1,7 +1,15 @@
 import { NextResponse } from 'next/server'
-import vision from '@google-cloud/vision'
-import OpenAI from 'openai'
-import path from 'path'
+import { GoogleGenerativeAI } from '@google/generative-ai'
+import mammoth from 'mammoth'
+import {
+  type FormStructureFormType,
+  getFormStructureSystemInstruction,
+} from '@/lib/formStructurePrompts'
+import {
+  generateStructuredFormJson,
+  repairMalformedJsonWithGemini,
+  sanitizeModelJsonOutput,
+} from '@/lib/geminiStructureOcrText'
 import { requirePermission } from '@/lib/requirePermission'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 
@@ -9,29 +17,18 @@ export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
-// Initialize Google Vision client
-const visionClient = new vision.ImageAnnotatorClient({
-  credentials: (() => {
-    try {
-      const raw = process.env.GOOGLE_VISION || '{}'
-      const creds = JSON.parse(raw)
-      if (creds && typeof creds.private_key === 'string') {
-        creds.private_key = creds.private_key.replace(/\\n/g, '\n')
-      }
-      return creds
-    } catch {
-      return {}
-    }
-  })()
-})
-
-// Initialize OpenAI client lazily (only when needed)
-function getOpenAIClient(): OpenAI {
-  const apiKey = process.env.OPENAI_API_KEY
+// Lazy Gemini model for text extraction
+let geminiModelInstance: ReturnType<GoogleGenerativeAI['getGenerativeModel']> | null = null
+function getGeminiModel () {
+  if (geminiModelInstance) return geminiModelInstance
+  const apiKey = process.env.GEMINI_API_KEY
   if (!apiKey) {
-    throw new Error('OPENAI_API_KEY environment variable is required')
+    throw new Error(
+      'GEMINI_API_KEY not set. Add GEMINI_API_KEY=<your-key> to .env.local, then restart the dev server.'
+    )
   }
-  return new OpenAI({ apiKey })
+  geminiModelInstance = new GoogleGenerativeAI(apiKey).getGenerativeModel({ model: 'gemini-2.5-flash' })
+  return geminiModelInstance
 }
 
 // Add types for the expense object
@@ -214,95 +211,27 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'No file provided', details: 'Provide either file (formData) or file_key (Supabase storage path).' }, { status: 400 })
     }
 
-    const base64 = buffer.toString('base64')
     let text = ''
+    const isDocx = mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+      (fileKey || '').toLowerCase().endsWith('.docx')
 
-    if (mimeType === 'application/pdf') {
-      console.log('Processing PDF file...')
-
-      // Respect max pages hint (default 5, capped 20)
-      const maxPagesHint = Math.max(1, Math.min(Number(formMetadata?.ocr_max_pages) || 5, 20))
-      const firstBatchPages = Array.from({ length: Math.min(5, maxPagesHint) }, (_, i) => i + 1)
-      
-      let pageInfo: any
-      try {
-        const result = await visionClient.batchAnnotateFiles({
-          requests: [{
-            inputConfig: {
-              mimeType: 'application/pdf',
-              content: base64
-            },
-            features: [{
-              type: 'DOCUMENT_TEXT_DETECTION'
-            }],
-            imageContext: {
-              languageHints: ['ar', 'en']
-            },
-            pages: firstBatchPages  // First batch pages
-          }]
-        })
-        pageInfo = result[0]
-      } catch (visionError: any) {
-        console.error('Vision API error:', visionError)
-        // Handle Vision API errors gracefully
-        if (visionError.code === 13 || visionError.message?.includes('INTERNAL')) {
-          throw new Error('Google Vision API encountered an internal error. Please try uploading the file again. If the problem persists, the file may be corrupted or too large.')
-        }
-        throw new Error(`Vision API error: ${visionError.message || 'Unknown error occurred'}`)
-      }
-
-      // Get initial text and count of first batch
-      let allTexts: string[] = []
-      const firstBatchResponses = pageInfo.responses?.[0]?.responses || []
-      firstBatchResponses.forEach((response: any, idx: number) => {
-        const pageText = response?.fullTextAnnotation?.text || ''
-        console.log(`Page ${idx + 1} text length:`, pageText.length)
-        allTexts.push(pageText)
-      })
-
-      // Remove second-batch attempts to bound runtime strictly to first batch only
-
-      console.log('Total pages processed:', allTexts.length)
-      // timing
-
-      if (allTexts.length === 0) {
-        // Gracefully handle empty OCR: return minimal structure
-        return NextResponse.json({
-          date: null,
-          state: null,
-          locality: null,
-          project_objectives: null,
-          intended_beneficiaries: null,
-          estimated_beneficiaries: null,
-          estimated_timeframe: null,
-          additional_support: null,
-          banking_details: null,
-          program_officer_name: null,
-          program_officer_phone: null,
-          reporting_officer_name: null,
-          reporting_officer_phone: null,
-          finance_officer_name: null,
-          finance_officer_phone: null,
-          planned_activities: [],
-          expenses: [],
-          form_currency: formMetadata?.currency || 'USD',
-          exchange_rate: formMetadata?.exchange_rate || 1,
-          language: null,
-          raw_ocr: ''
-        })
-      }
-
-      // Combine all texts with page breaks
-      text = allTexts.join('\n\n---PAGE BREAK---\n\n')
+    if (isDocx) {
+      console.log('Extracting text from .docx with mammoth...')
+      const result = await mammoth.extractRawText({ buffer })
+      text = result.value
     } else {
-      console.log('Processing image file...')
-      const [result] = await visionClient.documentTextDetection({
-        image: { content: base64 },
-        imageContext: {
-          languageHints: ['ar', 'en']  // Help Vision detect Arabic/English text
-        }
-      })
-      text = result.fullTextAnnotation?.text || ''
+      const base64 = buffer.toString('base64')
+      console.log('Extracting text with Gemini...')
+      try {
+        const geminiResult = await getGeminiModel().generateContent([
+          { inlineData: { mimeType: mimeType, data: base64 } },
+          'Extract all text from this document exactly as it appears. Preserve line breaks and table structure. Include both Arabic and English text. Output only the raw extracted text, nothing else.'
+        ])
+        text = geminiResult.response.text()
+      } catch (geminiError: any) {
+        console.error('Gemini extraction error:', geminiError)
+        throw new Error(`Gemini text extraction error: ${geminiError.message || 'Unknown error occurred'}`)
+      }
     }
 
     // extracted text
@@ -345,303 +274,31 @@ export async function POST(req: Request) {
     const isF4 = formType === 'F4'
     const isF5 = formType === 'F5'
 
-    // Process with OpenAI
-    const aiStart = Date.now()
-    const openai = getOpenAIClient()
-    const completion = await openai.chat.completions.create({
-      model: "gpt-3.5-turbo",
-      max_tokens: 3000,
-      response_format: (isF4 || isF5) ? { type: 'json_object' } as any : undefined,
-      messages: [
-        {
-          role: "system",
-          content: isF4 ? `Extract ONLY F4 Financial Report data from the text (Arabic or English). Do not infer or convert amounts. Keep raw amounts and detected currency.
-
-CRITICAL EXPENSE TABLE EXTRACTION RULES:
-
-1. TABLE STRUCTURE (RTL - Right to Left):
-   - Arabic tables read right-to-left: activity names are on the RIGHT, amounts are on the LEFT
-   - Table headings may vary but look for columns like: "النشاط" (Activity), "قيمة المصروفات" (Expenditure Value), "المبلغ" (Amount)
-   - Match each expense row by reading horizontally across the table structure
-
-2. EXPENSE AMOUNT IDENTIFICATION (CRITICAL):
-   - ONLY extract amounts from the expense amount column (typically labeled "قيمة المصروفات", "المبلغ", "Amount", or similar)
-   - If amounts are listed separately at the bottom of the table (common in OCR), use those amounts IN ORDER
-   - DO NOT use amounts mentioned in descriptions, even if they look like expense amounts
-   - CRITICAL: If a description mentions "على مبلغ X" or "مبلغ X" - that X is NOT the expense amount. The expense amount is in the amount column only.
-   - Example: "تم خصم عمولة على مبلغ 5,000,000 بنسبة 8%" - IGNORE the 5,000,000. The actual expense is the commission amount (400,000) in the amount column.
-   - Each expense row has ONE amount - find it in the rightmost amount column or in the ordered list at bottom
-   - Ignore amounts in payment date fields, receipt numbers, or description text
-
-3. ACTIVITY NAME EXTRACTION:
-   - Extract ONLY the activity name from the activity column (typically "النشاط" or "Activity")
-   - DO NOT merge activity names with descriptions
-   - Keep activity names concise - separate from description columns
-   - If two activity names appear on the same row (e.g., "اعاشة التيم العامل" and "نثرية المأمورية"), they represent ONE expense entry - use the primary activity name or combine them appropriately
-   - Example: "صيانة مضخات مياة" NOT "صيانة مضخات مياة | مواد صيانة مضخات"
-
-4. ROW-BY-ROW ALIGNMENT (CRITICAL):
-   - Process expenses row by row in the order they appear
-   - Match each activity name with its corresponding amount in the SAME row
-   - If OCR lists amounts separately at the bottom, align them to activities in the EXACT order they appear (first activity = first amount, second activity = second amount, etc.)
-   - Do not skip rows - include ALL expense rows with amounts
-   - Do not reorder or swap amounts between activities
-
-5. BANK COMMISSIONS & SPECIAL EXPENSES:
-   - "خصم عمولة بنكك" (bank commission) is a separate expense row with its own amount
-   - Extract it as a distinct expense entry
-   - The commission amount is in the expense amount column, NOT the base amount mentioned in description
-   - The description may mention a larger amount (e.g., "على مبلغ 5,000,000") - this is the BASE amount, NOT the expense. The expense is the commission (e.g., 400,000).
-
-6. AMOUNT FILTERING:
-   - Ignore small numbers (e.g., 25, 31, 10) that are clearly units, dates, or page numbers
-   - Prefer numbers with thousands separators (e.g., 4,160,000) for SDG amounts
-   - Amounts should be substantial (typically 100,000+ for SDG, 100+ for USD)
-   - If you see a list of amounts at the bottom (e.g., "4,160,000\n400,000\n260,000\n400,000\n405,000"), these are the expense amounts in order - use them exactly as listed
-
-BASIC INFORMATION:
-- date: Report date in YYYY-MM-DD if present (convert formats); else null
-- state: State name as seen (original language) or null
-- locality: ERR room or locality name as seen or null
-
-EXPENSES TABLE (actual expenses):
-- For each listed expense row with an amount, return an object:
-  { activity: string, amount_value: number, currency: "USD" | "SDG" | null }
-- activity: Clean activity name only (from activity column, not merged with description). If two activities share a row, use the primary one or combine appropriately.
-- amount_value: The actual expense amount from the expense amount column (numeric, no commas). Use amounts in the order they appear - do not swap or reorder.
-- currency: Detect from context/symbols/labels (e.g., SDG, جنيه, $, USD). If the form is in Arabic and currency is unclear, default to "SDG". If form is in English and currency is unclear, default to "USD". Only use null if truly ambiguous.
-- Do NOT convert any amounts. Keep the number as it appears (strip commas and symbols).
-- Include ALL expense rows - do not skip any
-- Ignore receipt pages, bank slips, or pages without an expense row with amount
-
-TOTALS SECTION (verbatim extraction without math):
-- total_expenses_text: numeric string if A ( إجمالي النفقات ) is present, else null
-- total_grant_text: numeric string if B is present, else null
-- total_other_sources_text: numeric string if C is present, else null
-- remainder_text: numeric string if D is present, else null
-
-NARRATIVE RESPONSES:
-- excess_expenses: text for question 4 if present, else null
-- surplus_use: text for question 5 if present, else null
-- lessons: text for question 6 if present, else null
-- training: text for question 7 if present, else null
-
-OTHER:
-- language: "ar" or "en" inferred from the text
-- raw_ocr: include full OCR text back to caller
-
-Return strict JSON with keys exactly as specified above.` : (isF5 ? `Extract F5 program report data. Return MINIFIED JSON (no whitespace, no markdown) with EXACTLY these fields:
-
-date: Report date (string)
-language: "ar" or "en"
-reach: Array of activity objects with EXACTLY these fields:
-  activity_name: Activity name (string)
-  activity_goal: Activity goal/details (string)
-  location: Implementation location (string)
-  start_date: Start date (string)
-  end_date: End date (string)
-  individual_count: Number of individuals (number)
-  household_count: Number of families/households (number)
-  male_count: Number of males (number)
-  female_count: Number of females (number)
-  under18_male: Number of males under 18 (number)
-  under18_female: Number of females under 18 (number)
-
-positive_changes: Positive changes/impacts text (string)
-negative_results: Negative results/challenges text (string)
-unexpected_results: Unexpected results text (string)
-lessons_learned: Lessons learned text (string)
-suggestions: Suggestions/requests text (string)
-reporting_person: Name of reporting person (string)
-
-IMPORTANT:
-- Return ONLY minified JSON, no markdown, no other text
-- Use null for missing values, not empty strings
-- For reach activities:
-  - Extract all activities with their details
-  - Map Arabic headers:
-    اسم النشاط -> activity_name
-    هدف/تفاصيل النشاط -> activity_goal
-    مكان التنفيذ -> location
-    البداية -> start_date
-    النهاية -> end_date
-    أفراد -> individual_count
-    أسر -> household_count
-    ذكور -> male_count
-    إناث -> female_count
-    ذكور تحت 18 -> under18_male
-    إناث تحت 18 -> under18_female
-
-Example output format (minified):
-{"date":"2025-08-25","language":"ar","reach":[{"activity_name":"ورشة تدريبية","activity_goal":"هدف الورشة","location":"موقع التنفيذ","start_date":"2025-08-01","end_date":"2025-08-02","individual_count":30,"household_count":10,"male_count":15,"female_count":15,"under18_male":5,"under18_female":5}],"positive_changes":"التغييرات الإيجابية","negative_results":null,"unexpected_results":null,"lessons_learned":null,"suggestions":null,"reporting_person":"اسم المسؤول"}` : `Extract information from the following text (which may be in English or Arabic):
-
-BASIC INFORMATION:
-- date: Date of the project in YYYY-MM-DD format (convert any date format to this)
-- state: State name (keep in original language)
-- locality: Locality name (keep in original language)
-- project_objectives: Return the exact text as found in the OCR (verbatim, preserve line breaks). Do not summarize or shorten. If not present, return null.
-- intended_beneficiaries: Description of who will benefit (keep in original language)
-- estimated_beneficiaries: Number of beneficiaries (integer)
-- estimated_timeframe: Project duration (keep in original language)
-- additional_support: Any additional support mentioned (keep in original language)
-- banking_details: Banking information (keep in original language)
-
-CONTACT INFORMATION:
-- program_officer_name: Name of program officer (keep in original language)
-- program_officer_phone: Phone of program officer
-- reporting_officer_name: Name of reporting officer (keep in original language)
-- reporting_officer_phone: Phone of reporting officer
-- finance_officer_name: Name of finance officer (keep in original language)
-- finance_officer_phone: Phone of finance officer
-
-ACTIVITIES AND EXPENSES:
-1. From section 6 (الأنشطة الرئيسية اللازمة):
-   - Each activity row has three columns: العدد, مدة النشاط, مكان التنفيذ
-   - ONLY include an activity if ALL THREE columns have values
-   - Example row with complete data:
-     Activity: المطبخ المشترك/ تموين
-     العدد: 100
-     مدة النشاط: 7 أيام
-     مكان التنفيذ: الدلنج -- حي الواحة
-   - This activity should be included because all columns are filled
-   - Activities with empty columns should be excluded
-
-2. From section 7 (الميزانية التفصيلية):
-   If form is in Arabic (RTL):
-   - Look at the leftmost column labeled الإجمالي for total costs
-   - Take activity names from rightmost column المصروفات
-   - Ignore middle columns (التكرار, سعر الوحدة)
-
-   If form is in English (LTR):
-   - Look at the rightmost column labeled Total/الإجمالي
-   - Take activity names from leftmost column Expenses/المصروفات
-   - Ignore middle columns
-
-   For each row:
-   - Only extract rows where الإجمالي has a value (e.g. $3,900, $10, $50)
-   - Remove $ symbol from numbers
-   - Ignore any numbers that aren't in the الإجمالي column
-
-CURRENCY CONVERSION:
-- Form currency: ${formMetadata.currency || 'USD'}
-- Exchange rate (USD to SDG): ${formMetadata.exchange_rate || '1'}
-- If form currency is SDG, convert all amounts to USD using the exchange rate (divide SDG amount by exchange rate)
-- If form currency is USD, keep amounts in USD (do NOT convert)
-- Return both USD and SDG amounts in the final JSON
-- For USD forms: total_cost_usd should be the original USD amount, total_cost_sdg should be null
-- For SDG forms: total_cost_sdg should be the original SDG amount, total_cost_usd should be the converted USD amount
-
-Example (USD form):
-الإجمالي: $3,900 | سعر الوحدة: $32.5 | المصروفات: مشتريات طبية
-Should extract: { activity: "مشتريات طبية", total_cost_usd: 3900, total_cost_sdg: null, currency: "USD" }
-
-Example (SDG form with exchange rate 2700):
-الإجمالي: 5,000,000 SDG | المصروفات: مشتريات طبية
-Should extract: { activity: "مشتريات طبية", total_cost_usd: 1851.85, total_cost_sdg: 5000000, currency: "SDG" }
-Note: Always include the original SDG amount in total_cost_sdg when form currency is SDG
-
-Return all fields in this format:
-{
-  "date": string | null,
-  "state": string | null,
-  "locality": string | null,
-  "project_objectives": string | null,
-  "intended_beneficiaries": string | null,
-  "estimated_beneficiaries": number | null,
-  "estimated_timeframe": string | null,
-  "additional_support": string | null,
-  "banking_details": string | null,
-  "program_officer_name": string | null,
-  "program_officer_phone": string | null,
-  "reporting_officer_name": string | null,
-  "reporting_officer_phone": string | null,
-  "finance_officer_name": string | null,
-  "finance_officer_phone": string | null,
-  "planned_activities": string[],
-  "expenses": Array<{activity: string, total_cost_usd: number, total_cost_sdg: number | null, currency: string}>,
-  "form_currency": string,
-  "exchange_rate": number
-}`)
-        },
-        {
-          role: "user",
-          content: text
-        }
-      ],
-      temperature: 0.1
+    const structureKind: FormStructureFormType = isF4 ? 'F4' : isF5 ? 'F5' : 'F1'
+    const systemInstruction = getFormStructureSystemInstruction(structureKind, {
+      currency: formMetadata.currency,
+      exchange_rate: formMetadata.exchange_rate,
     })
 
-    const content = completion.choices[0]?.message?.content
-    if (!content) {
-      throw new Error('No content in OpenAI response')
-    }
+    const rawJson = await generateStructuredFormJson(systemInstruction, text)
 
-    console.log('Raw GPT response:', content)
-    // ai duration
+    console.log('Raw Gemini structure response:', rawJson)
 
-    // Sanitize the JSON string (basic cleanup only)
-    let sanitizedContent = content
-      .replace(/[\u0000-\u001F\u007F-\u009F]/g, '') // Remove control characters
-      .replace(/^```[a-zA-Z]*\n|```$/g, '') // Strip markdown fences if present
+    const sanitizedContent = sanitizeModelJsonOutput(rawJson)
 
-    // Fix unescaped backslashes in JSON string values
-    // Valid JSON escape sequences are: \", \\, \/, \b, \f, \n, \r, \t, \uXXXX
-    // Any other backslash must be escaped as \\
-    // Process character by character to properly handle string boundaries
-    let inString = false
-    let result = ''
-    for (let i = 0; i < sanitizedContent.length; i++) {
-      const char = sanitizedContent[i]
-      
-      // Check if we're entering/exiting a string (unescaped quote)
-      // Count consecutive backslashes before the quote to determine if it's escaped
-      if (char === '"') {
-        let backslashCount = 0
-        let j = i - 1
-        while (j >= 0 && sanitizedContent[j] === '\\') {
-          backslashCount++
-          j--
-        }
-        // If even number of backslashes (or zero), the quote is not escaped
-        if (backslashCount % 2 === 0) {
-          inString = !inString
-        }
-        result += char
-        continue
-      }
-      
-      // If we're inside a string and see a backslash
-      if (inString && char === '\\') {
-        const nextChar = i + 1 < sanitizedContent.length ? sanitizedContent[i + 1] : ''
-        // Check if it's a valid escape sequence
-        const validEscapes = ['"', '\\', '/', 'b', 'f', 'n', 'r', 't']
-        const isUnicodeEscape = nextChar === 'u' && i + 5 < sanitizedContent.length && /^u[0-9a-fA-F]{4}/.test(sanitizedContent.substring(i + 1, i + 6))
-        
-        if (validEscapes.includes(nextChar) || isUnicodeEscape) {
-          // Valid escape sequence, keep as is
-          result += char
-        } else {
-          // Invalid escape, escape the backslash itself (double it)
-          result += '\\\\'
-        }
-      } else {
-        result += char
-      }
-    }
-    sanitizedContent = result
 
     try {
       const structuredData = JSON.parse(sanitizedContent)
       
-      // Log AI response for F4 debugging
+      // Log structured JSON for F4 debugging
       if (isF4) {
-        const contentPreview = completion.choices[0]?.message?.content?.substring(0, 1000) || ''
-        console.log('[F4 AI] Response length:', completion.choices[0]?.message?.content?.length || 0)
-        console.log('[F4 AI] Response preview:', contentPreview)
+        const contentPreview = rawJson.substring(0, 1000)
+        console.log('[F4 Gemini] Response length:', rawJson.length)
+        console.log('[F4 Gemini] Response preview:', contentPreview)
         if (Array.isArray(structuredData.expenses)) {
-          console.log('[F4 AI] Parsed expenses count:', structuredData.expenses.length)
-          console.log('[F4 AI] Expenses:', JSON.stringify(structuredData.expenses, null, 2))
-          console.log('[F4 AI] Total expenses text:', structuredData.total_expenses_text)
+          console.log('[F4 Gemini] Parsed expenses count:', structuredData.expenses.length)
+          console.log('[F4 Gemini] Expenses:', JSON.stringify(structuredData.expenses, null, 2))
+          console.log('[F4 Gemini] Total expenses text:', structuredData.total_expenses_text)
         }
       }
       
@@ -877,18 +534,8 @@ Return all fields in this format:
       // Attempt a one-shot repair for F5 JSON
       if (isF5) {
         try {
-          const openai = getOpenAIClient()
-          const repair = await openai.chat.completions.create({
-            model: 'gpt-3.5-turbo',
-            max_tokens: 3000,
-            temperature: 0,
-            messages: [
-              { role: 'system', content: 'You will receive possibly malformed JSON. Return STRICT, MINIFIED JSON only (no code fences, no prose). Use exactly these keys: raw_ocr, language, date, reach (array of objects with activity_name, activity_goal, location, start_date, end_date, individual_count, household_count, male_count, female_count, under18_male, under18_female), positive_changes, negative_results, unexpected_results, lessons_learned, suggestions, reporting_person.' },
-              { role: 'user', content: sanitizedContent }
-            ]
-          })
-          const fixed = repair.choices[0]?.message?.content || ''
-          const fixedSan = fixed.replace(/^[\s`]+|[\s`]+$/g, '')
+          const fixedRaw = await repairMalformedJsonWithGemini(sanitizedContent)
+          const fixedSan = sanitizeModelJsonOutput(fixedRaw).replace(/^[\s`]+|[\s`]+$/g, '')
           const repaired = JSON.parse(fixedSan)
           if (!repaired.language) repaired.language = detectLanguage(text)
           repaired.raw_ocr = text
@@ -915,7 +562,7 @@ Return all fields in this format:
         })
       }
 
-      throw new Error(`Failed to parse OpenAI response: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      throw new Error(`Failed to parse Gemini structure response: ${error instanceof Error ? error.message : 'Unknown error'}`)
     }
   } catch (error) {
     console.error('Error processing document:', error)

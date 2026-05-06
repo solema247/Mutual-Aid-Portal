@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { translateF4Summary, translateF4Expenses } from '@/lib/translateHelper'
+import { inferF4SourceLanguage, normalizePaymentDateForDb } from '@/lib/f4SaveNormalize'
 
 export async function POST(req: Request) {
   try {
@@ -96,9 +97,9 @@ export async function POST(req: Request) {
       } catch {}
     }
 
-    // Detect language and translate if needed
-    const sourceLanguage = summary.language || 'en'
-    console.log('F4 detected source language:', sourceLanguage)
+    // Infer Arabic vs English from payload text (client often omits or sets "en" for Arabic forms)
+    const sourceLanguage = inferF4SourceLanguage(summary, Array.isArray(expenses) ? expenses : [])
+    console.log('F4 source language (inferred for translation):', sourceLanguage, { clientLanguage: summary.language })
     
     const { translatedData: translatedSummary, originalText: summaryOriginalText } = await translateF4Summary(summary, sourceLanguage)
     console.log('F4 summary translation completed. Original text preserved:', Object.keys(summaryOriginalText).length > 0)
@@ -119,6 +120,7 @@ export async function POST(req: Request) {
         lessons: translatedSummary.lessons || null,
         training: translatedSummary.training || null,
         project_objectives: translatedSummary.project_objectives || null,
+        receipt_check: translatedSummary.receipt_check ?? null,
         original_text: summaryOriginalText,
         language: sourceLanguage
       })
@@ -127,12 +129,40 @@ export async function POST(req: Request) {
     if (insErr) throw insErr
     const summary_id = inserted.id
 
-    // For portal projects, set f4_status to completed on err_projects
-    if (actual_project_id) {
-      await supabase
-        .from('err_projects')
-        .update({ f4_status: 'completed' })
-        .eq('id', actual_project_id)
+    // Insert expenses before moving temp files so a failed insert does not leave an orphan summary + attachment.
+    let expense_ids: number[] = []
+    if (Array.isArray(expenses) && expenses.length) {
+      // Translate expenses if needed
+      const { translatedData: translatedExpenses, originalText: expensesOriginalText } = await translateF4Expenses(expenses, sourceLanguage)
+      console.log('F4 expenses translation completed. Original text preserved for', expensesOriginalText.length, 'expenses')
+
+      const reportDateStr =
+        translatedSummary.report_date != null ? String(translatedSummary.report_date).slice(0, 10) : null
+      const payload = translatedExpenses.map((e: any, index: number) => ({
+        project_id: actual_project_id,
+        activities_raw_import_id: activities_raw_import_id,
+        summary_id,
+        expense_activity: e.expense_activity || null,
+        expense_description: e.expense_description || null,
+        expense_amount: e.expense_amount ?? null,
+        expense_amount_sdg: e.expense_amount_sdg ?? null,
+        payment_date: normalizePaymentDateForDb(e.payment_date, reportDateStr),
+        payment_method: e.payment_method || null,
+        receipt_no: e.receipt_no || null,
+        seller: e.seller || null,
+        uploaded_by: uploaded_by || null,
+        original_text: expensesOriginalText[index] || null,
+        language: sourceLanguage
+      }))
+      const { data: expRows, error: expErr } = await supabase
+        .from('err_expense')
+        .insert(payload)
+        .select('expense_id')
+      if (expErr) {
+        await supabase.from('err_summary').delete().eq('id', summary_id)
+        throw expErr
+      }
+      expense_ids = (expRows || []).map((r: any) => r.expense_id)
     }
 
     // If a summary file exists, move it from tmp to a clear final path and record attachment
@@ -174,35 +204,12 @@ export async function POST(req: Request) {
       }
     }
 
-    // Insert expenses
-    let expense_ids: number[] = []
-    if (Array.isArray(expenses) && expenses.length) {
-      // Translate expenses if needed
-      const { translatedData: translatedExpenses, originalText: expensesOriginalText } = await translateF4Expenses(expenses, sourceLanguage)
-      console.log('F4 expenses translation completed. Original text preserved for', expensesOriginalText.length, 'expenses')
-
-      const payload = translatedExpenses.map((e: any, index: number) => ({
-        project_id: actual_project_id,
-        activities_raw_import_id: activities_raw_import_id,
-        summary_id,
-        expense_activity: e.expense_activity || null,
-        expense_description: e.expense_description || null,
-        expense_amount: e.expense_amount ?? null,
-        expense_amount_sdg: e.expense_amount_sdg ?? null,
-        payment_date: e.payment_date || null,
-        payment_method: e.payment_method || null,
-        receipt_no: e.receipt_no || null,
-        seller: e.seller || null,
-        uploaded_by: uploaded_by || null,
-        original_text: expensesOriginalText[index] || null,
-        language: sourceLanguage
-      }))
-      const { data: expRows, error: expErr } = await supabase
-        .from('err_expense')
-        .insert(payload)
-        .select('expense_id')
-      if (expErr) throw expErr
-      expense_ids = (expRows || []).map((r: any) => r.expense_id)
+    // Mark project complete only after summary + expenses succeeded
+    if (actual_project_id) {
+      await supabase
+        .from('err_projects')
+        .update({ f4_status: 'completed' })
+        .eq('id', actual_project_id)
     }
 
     return NextResponse.json({ summary_id, expense_ids })

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -12,6 +13,12 @@ import { supabase } from '@/lib/supabaseClient'
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '@/components/ui/table'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { CollapsibleRow } from '@/components/ui/collapsible'
+import type { RegionSelection, WizardKind, WizardPageEntry } from '../f4Wizard/types'
+import { normalizeWizardPage } from '../f4Wizard/types'
+import { buildSnippetFilesFromSelections } from '../f4Wizard/buildSnippetFiles'
+import { f4ParseSnips, f4Save, f4UploadInit } from '../f4Wizard/f4WizardApi'
+import { useF4WizardViewerPages } from '../f4Wizard/useF4WizardViewerPages'
+import { useF4WizardDrag, type WizardDragState } from '../f4Wizard/useF4WizardDrag'
 
 interface UploadF4ModalProps {
   open: boolean
@@ -44,20 +51,56 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
   const [file, setFile] = useState<File | null>(null)
   const [reportDate, setReportDate] = useState('')
   const [isLoading, setIsLoading] = useState(false)
-  const [step, setStep] = useState<'select'|'preview'>('select')
+  const [step, setStep] = useState<'select'|'wizard'|'preview'>('select')
   const [summaryDraft, setSummaryDraft] = useState<any | null>(null)
   const [expensesDraft, setExpensesDraft] = useState<any[]>([])
   const [tempKey, setTempKey] = useState<string>('')
   const [fxRate, setFxRate] = useState<number | null>(null)
   const [fileUrl, setFileUrl] = useState<string>('')
-  const [rawOcr, setRawOcr] = useState<string>('')
-  const [aiOutput, setAiOutput] = useState<any | null>(null)
   const [minimized, setMinimized] = useState(false)
   const isMinimizingRef = useRef(false)
   const isRestoringRef = useRef(false)
   const [isRestoring, setIsRestoring] = useState(false)
   const [entryMode, setEntryMode] = useState<'upload' | 'manual'>('upload')
   const [attachmentFile, setAttachmentFile] = useState<File | null>(null)
+  const [wizardLoading, setWizardLoading] = useState<WizardKind | null>(null)
+  const [receiptValidation, setReceiptValidation] = useState<any | null>(null)
+  const [wizardKind, setWizardKind] = useState<WizardKind>('table')
+  const [wizardProgress, setWizardProgress] = useState<{ table: boolean; questions: boolean; receipts: boolean }>({
+    table: false,
+    questions: false,
+    receipts: false,
+  })
+  const [viewerMode, setViewerMode] = useState<'pdf' | 'image' | 'unsupported'>('unsupported')
+  const [wizardPages, setWizardPages] = useState<WizardPageEntry[]>([])
+  const [isRenderingPages, setIsRenderingPages] = useState(false)
+  const [selectionByKind, setSelectionByKind] = useState<Record<WizardKind, RegionSelection[]>>({
+    table: [],
+    questions: [],
+    receipts: [],
+  })
+  const [dragging, setDragging] = useState<WizardDragState>(null)
+  const saveInFlightRef = useRef(false)
+  const wizardViewerScrollRef = useRef<HTMLDivElement | null>(null)
+  const wizardPageWrapRefs = useRef<(HTMLDivElement | null)[]>([])
+  const draggingRef = useRef<WizardDragState>(null)
+  const wizardKindRef = useRef(wizardKind)
+  wizardKindRef.current = wizardKind
+
+  useEffect(() => {
+    draggingRef.current = dragging
+  }, [dragging])
+
+  const { startDragOnPage } = useF4WizardDrag({
+    open,
+    step,
+    wizardKindRef,
+    wizardPageWrapRefs,
+    wizardViewerScrollRef,
+    draggingRef,
+    setDragging,
+    setSelectionByKind,
+  })
 
   useEffect(() => {
     if (!open) return
@@ -93,10 +136,12 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
         setExpensesDraft([])
         setTempKey('')
         setFileUrl('')
-        setRawOcr('')
-        setAiOutput(null)
         setEntryMode('upload')
         setAttachmentFile(null)
+        setReceiptValidation(null)
+        setSelectionByKind({ table: [], questions: [], receipts: [] })
+        setWizardKind('table')
+        setWizardProgress({ table: false, questions: false, receipts: false })
         return
       }
     } catch {}
@@ -108,7 +153,10 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
         if (p?.type === 'f4') {
           isRestoringRef.current = true
           setIsRestoring(true)
-          if (p.step) setStep(p.step)
+          if (p.step) {
+            setStep(p.step)
+            if (p.step === 'wizard') setIsRenderingPages(true)
+          }
           if (p.summaryDraft) setSummaryDraft(p.summaryDraft)
           if (Array.isArray(p.expensesDraft)) setExpensesDraft(p.expensesDraft)
           if (p.projectId) setProjectId(p.projectId)
@@ -449,82 +497,153 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
   const handleUploadAndParse = async () => {
     const actualProjectId = projectId || initialProjectId
     if (!actualProjectId || !file) return
+    const uploadFlowStart = Date.now()
     setIsLoading(true)
     try {
       const ext = (file.name.split('.').pop() || 'pdf').toLowerCase()
+      console.info('[F4 upload] start', {
+        projectId: actualProjectId,
+        fileName: file.name,
+        fileBytes: file.size,
+        ext,
+      })
       // init temp key
-      const initRes = await fetch('/api/f4/upload/init', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ project_id: actualProjectId, ext }) })
-      const initJson = await initRes.json()
-      if (!initRes.ok) throw new Error(initJson.error || 'Init failed')
-      const key = initJson.file_key_temp as string
+      const { file_key_temp: key } = await f4UploadInit(actualProjectId, ext)
       setTempKey(key)
       // upload file to storage
       const { error: upErr } = await supabase.storage.from('images').upload(key, file, { upsert: true })
       if (upErr) throw upErr
-      // parse
+      console.info('[F4 upload] stored temp file', { tempKey: key, msSinceStart: Date.now() - uploadFlowStart })
       // Get signed URL for file viewing
       const { data: signedUrl } = await supabase.storage.from('images').createSignedUrl(key, 3600)
       if (signedUrl?.signedUrl) {
         setFileUrl(signedUrl.signedUrl)
       }
-
-      const parseRes = await fetch('/api/f4/parse', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ project_id: actualProjectId, file_key_temp: key }) })
-      const text = await parseRes.text()
-      let parseJson: any
-      try { parseJson = JSON.parse(text) } catch { throw new Error(`Parse failed: ${parseRes.status} ${parseRes.statusText} — ${text.slice(0, 200)}`) }
-      if (!parseRes.ok) throw new Error(parseJson.error || 'Parse failed')
-      setSummaryDraft({ ...(parseJson.summaryDraft || {}), report_date: reportDate || (parseJson.summaryDraft?.report_date || '') })
-      setRawOcr(parseJson.summaryDraft?.raw_ocr || '')
-      setAiOutput(parseJson.aiOutput || null)
-      setExpensesDraft((parseJson.expensesDraft || []).map((ex: any) => ({
-        expense_activity: ex.expense_activity != null ? String(ex.expense_activity) : '',
-        expense_description: ex.expense_description != null ? String(ex.expense_description) : '',
-        expense_amount_sdg: ex.expense_amount_sdg != null ? Number(ex.expense_amount_sdg) : null,
-        expense_amount: ex.expense_amount != null ? Number(ex.expense_amount) : null,
-        payment_date: ex.payment_date != null ? String(ex.payment_date) : '',
-        payment_method: ex.payment_method != null ? String(ex.payment_method) : 'Bank Transfer',
-        receipt_no: ex.receipt_no != null ? String(ex.receipt_no) : '',
-        seller: ex.seller != null ? String(ex.seller) : '',
-        is_draft: ex.is_draft ?? true
-      })))
-      
-      // Preserve projectMeta for historical projects - reload if needed
-      const isHistorical = String(actualProjectId).startsWith('historical_')
-      if (isHistorical && !projectMeta) {
-        console.log('projectMeta is missing after OCR, reloading for historical project:', actualProjectId)
-        const realUuid = String(actualProjectId).replace('historical_', '')
-        const { data: histData, error: histError } = await supabase
-          .from('activities_raw_import')
-          .select('id, "ERR CODE", "ERR Name", "USD", "Description of ERRs activity", "Target (Ind.)", "Target (Fam.)"')
-          .eq('id', realUuid)
-          .single()
-        
-        if (!histError && histData) {
-          const dataAny = histData as any
-          const usd = Number(dataAny['USD'] || dataAny['usd'] || dataAny.USD || 0)
-          const errCode = dataAny['ERR CODE'] || dataAny['ERR Name'] || dataAny['err_code'] || dataAny['err_name'] || ''
-          const description = histData['Description of ERRs activity'] || ''
-          const targetInd = histData['Target (Ind.)'] || null
-          const targetFam = histData['Target (Fam.)'] || null
-          
-          setProjectMeta({
-            roomLabel: errCode,
-            project_objectives: description,
-            beneficiaries: targetInd || targetFam ? `${targetInd || 0} individuals, ${targetFam || 0} families` : '',
-            total_grant_from_project: usd
-          })
-          console.log('Reloaded projectMeta after OCR:', { usd, errCode })
-        }
-      } else {
-        console.log('projectMeta after OCR:', projectMeta)
-      }
-      
-      setStep('preview')
+      setSummaryDraft((prev:any) => ({
+        ...(prev || {}),
+        report_date: reportDate || prev?.report_date || '',
+        beneficiaries: prev?.beneficiaries || projectMeta?.beneficiaries || '',
+        lessons: prev?.lessons || '',
+        training: prev?.training || '',
+        project_objectives: prev?.project_objectives || projectMeta?.project_objectives || '',
+        receipt_check: prev?.receipt_check || null,
+      }))
+      setExpensesDraft([])
+      setReceiptValidation(null)
+      setWizardProgress({ table: false, questions: false, receipts: false })
+      setSelectionByKind({ table: [], questions: [], receipts: [] })
+      setWizardKind('table')
+      setIsRenderingPages(true)
+      setStep('wizard')
     } catch (e) {
-      console.error(e)
+      console.error('[F4 upload] failed', e, { msSinceStart: Date.now() - uploadFlowStart })
       alert('Failed to process file')
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  useF4WizardViewerPages({
+    step,
+    fileUrl,
+    file,
+    tempKey,
+    setViewerMode,
+    setWizardPages,
+    setIsRenderingPages,
+  })
+
+  const expectedWizardKind: WizardKind = !wizardProgress.table ? 'table' : !wizardProgress.questions ? 'questions' : 'receipts'
+  useEffect(() => {
+    if (wizardKind !== expectedWizardKind) setWizardKind(expectedWizardKind)
+  }, [expectedWizardKind, wizardKind])
+
+  const parseSnips = async (kind: WizardKind, overrideFiles?: File[]) => {
+    const actualProjectId = projectId || initialProjectId
+    if (!actualProjectId) return
+    if (kind !== expectedWizardKind) {
+      alert(`Please complete the ${expectedWizardKind} step first.`)
+      return
+    }
+    const files = overrideFiles || []
+    if (!files.length) {
+      alert('Please highlight at least one region first.')
+      return
+    }
+    setWizardLoading(kind)
+    try {
+      const form = new FormData()
+      form.append('kind', kind)
+      form.append('project_id', String(actualProjectId))
+      files.forEach((f) => form.append('files', f))
+      if (kind === 'receipts') {
+        const expenseAmounts = expensesDraft
+          .map((r: any) => Number(r.expense_amount_sdg))
+          .filter((n: number) => Number.isFinite(n) && n > 0)
+        form.append('expense_amounts_sdg', JSON.stringify(expenseAmounts))
+      }
+
+      const json = (await f4ParseSnips(form)) as Record<string, unknown>
+
+      if (kind === 'table') {
+        const rows = Array.isArray(json.expenses) ? json.expenses : []
+        setExpensesDraft(rows.map((ex: any) => ({
+          expense_activity: ex.activity != null ? String(ex.activity) : '',
+          expense_description: ex.description != null ? String(ex.description) : '',
+          expense_amount_sdg: ex.amount_value != null ? Number(ex.amount_value) : null,
+          expense_amount: null,
+          payment_date: ex.payment_date != null ? String(ex.payment_date) : '',
+          payment_method: ex.payment_method != null ? String(ex.payment_method) : 'Bank Transfer',
+          receipt_no: ex.receipt_no != null ? String(ex.receipt_no) : '',
+          seller: ex.seller != null ? String(ex.seller) : '',
+          is_draft: true
+        })))
+        setSummaryDraft((prev: any) => ({
+          ...(prev || {}),
+          total_expenses: json.total_expenses_text != null ? Number(String(json.total_expenses_text).replace(/[,\s]/g, '')) || prev?.total_expenses || null : prev?.total_expenses || null,
+          total_grant: json.total_grant_text != null ? Number(String(json.total_grant_text).replace(/[,\s]/g, '')) || prev?.total_grant || null : prev?.total_grant || null,
+          total_other_sources: json.total_other_sources_text != null ? Number(String(json.total_other_sources_text).replace(/[,\s]/g, '')) || prev?.total_other_sources || null : prev?.total_other_sources || null,
+          remainder: json.remainder_text != null ? Number(String(json.remainder_text).replace(/[,\s]/g, '')) || prev?.remainder || null : prev?.remainder || null,
+        }))
+        setWizardProgress(prev => ({ ...prev, table: true }))
+        setWizardKind('questions')
+      } else if (kind === 'questions') {
+        setSummaryDraft((prev: any) => ({
+          ...(prev || {}),
+          excess_expenses: json.excess_expenses ?? prev?.excess_expenses ?? '',
+          surplus_use: json.surplus_use ?? prev?.surplus_use ?? '',
+          lessons: json.lessons ?? prev?.lessons ?? '',
+          training: json.training ?? prev?.training ?? '',
+        }))
+        setWizardProgress(prev => ({ ...prev, questions: true }))
+        setWizardKind('receipts')
+      } else {
+        setReceiptValidation(json)
+        setSummaryDraft((prev: any) => ({
+          ...(prev || {}),
+          receipt_check: {
+            receipts_total_sdg: Number(json?.receipts_total_sdg) || 0,
+            receipts_detected_count: Number(json?.receipts_detected_count) || 0,
+            expected_count: Number(json?.expected_count) || 0,
+            expected_total_sdg: Number(json?.expected_total_sdg) || 0,
+            receipts: Array.isArray(json?.receipts)
+              ? json.receipts.map((r: any, idx: number) => ({
+                  reference: r?.reference ? String(r.reference) : `receipt-${idx + 1}`,
+                  amount_sdg: r?.amount_value != null ? Number(r.amount_value) : null,
+                  currency: r?.currency ? String(r.currency) : 'SDG',
+                  missing: r?.amount_value == null,
+                }))
+              : [],
+            confirmed: false,
+          },
+        }))
+        setWizardProgress(prev => ({ ...prev, receipts: true }))
+      }
+    } catch (e) {
+      console.error('[F4 wizard] snippet parse failed', e)
+      alert('Failed to parse snippet files')
+    } finally {
+      setWizardLoading(null)
     }
   }
 
@@ -535,10 +654,7 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
     try {
       if (attachmentFile) {
         const ext = (attachmentFile.name.split('.').pop() || 'pdf').toLowerCase()
-        const initRes = await fetch('/api/f4/upload/init', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ project_id: actualProjectId, ext }) })
-        const initJson = await initRes.json()
-        if (!initRes.ok) throw new Error(initJson.error || 'Init failed')
-        const key = initJson.file_key_temp as string
+        const { file_key_temp: key } = await f4UploadInit(actualProjectId, ext)
         const { error: upErr } = await supabase.storage.from('images').upload(key, attachmentFile, { upsert: true })
         if (upErr) throw upErr
         setTempKey(key)
@@ -550,7 +666,8 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
         beneficiaries: projectMeta?.beneficiaries || '',
         lessons: '',
         training: '',
-        project_objectives: projectMeta?.project_objectives || ''
+        project_objectives: projectMeta?.project_objectives || '',
+        receipt_check: null,
       })
       setExpensesDraft([{
         expense_activity: '',
@@ -577,28 +694,46 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
       console.warn('Cannot save while restoring state')
       return
     }
+    if (saveInFlightRef.current) return
     const actualProjectId = projectId || initialProjectId
     if (!actualProjectId || !summaryDraft) {
       console.warn('Missing required fields:', { projectId: actualProjectId, hasSummaryDraft: !!summaryDraft })
       return
     }
+    const receiptConfirmed = Boolean(summaryDraft?.receipt_check?.confirmed)
+    if (!receiptConfirmed) {
+      alert('Please confirm the receipt total check before saving.')
+      return
+    }
+    saveInFlightRef.current = true
     setIsLoading(true)
     try {
       const totalExpensesSDG = expensesDraft.reduce((s, ex) => s + (Number(ex.expense_amount_sdg) || 0), 0)
       const totalExpensesUSD = expensesDraft.reduce((s, ex) => s + (Number(ex.expense_amount) || 0), 0)
       const totalGrantUSD = projectMeta?.total_grant_from_project ?? 0
       const remainderUSD = totalGrantUSD - totalExpensesUSD
+      const receiptRows = Array.isArray(summaryDraft?.receipt_check?.receipts) ? summaryDraft.receipt_check.receipts : []
+      const computedReceiptsTotalSDG = receiptRows.reduce((s: number, r: any) => {
+        if (r?.missing) return s
+        return s + (Number(r?.amount_sdg) || 0)
+      }, 0)
+      const missingReceiptsCount = receiptRows.reduce((s: number, r: any) => s + (r?.missing ? 1 : 0), 0)
       
       const summaryToSave = {
         ...summaryDraft,
+        receipt_check: {
+          ...(summaryDraft?.receipt_check || {}),
+          receipts_total_sdg: computedReceiptsTotalSDG,
+          receipts_detected_count: receiptRows.length,
+          missing_receipts_count: missingReceiptsCount,
+          variance_sdg: totalExpensesSDG - computedReceiptsTotalSDG,
+        },
         total_grant: totalGrantUSD,
         total_expenses: totalExpensesUSD,
         total_expenses_sdg: totalExpensesSDG,
         remainder: remainderUSD
       }
-      const res = await fetch('/api/f4/save', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ project_id: actualProjectId, summary: summaryToSave, expenses: expensesDraft, file_key_temp: tempKey }) })
-      const json = await res.json()
-      if (!res.ok) throw new Error(json.error || 'Save failed')
+      await f4Save({ project_id: actualProjectId, summary: summaryToSave, expenses: expensesDraft, file_key_temp: tempKey })
       try { window.localStorage.removeItem('err_minimized_modal') } catch {}
       onOpenChange(false)
       onSaved()
@@ -607,7 +742,13 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
       alert('Failed to save F4')
     } finally {
       setIsLoading(false)
+      saveInFlightRef.current = false
     }
+  }
+
+  const runWizardStep = async (kind: WizardKind) => {
+    const files = await buildSnippetFilesFromSelections(kind, wizardPages, selectionByKind[kind] ?? [])
+    await parseSnips(kind, files)
   }
 
   const reset = () => {
@@ -621,11 +762,13 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
     setStep('select')
     setTempKey('')
     setFileUrl('')
-    setRawOcr('')
-    setAiOutput(null)
     setFxRate(null)
     setEntryMode('upload')
     setAttachmentFile(null)
+    setReceiptValidation(null)
+    setSelectionByKind({ table: [], questions: [], receipts: [] })
+    setWizardKind('table')
+    setWizardProgress({ table: false, questions: false, receipts: false })
   }
 
   return (
@@ -648,10 +791,12 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
           setExpensesDraft([])
           setTempKey('')
           setFileUrl('')
-          setRawOcr('')
-          setAiOutput(null)
           setEntryMode('upload')
           setAttachmentFile(null)
+          setReceiptValidation(null)
+          setSelectionByKind({ table: [], questions: [], receipts: [] })
+          setWizardKind('table')
+          setWizardProgress({ table: false, questions: false, receipts: false })
         }
       }
     }}>
@@ -721,19 +866,19 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
               <>
                 <div className="space-y-1">
                   <Label>{t('f4.modal.summary_file')}</Label>
-                  <Input type="file" accept=".pdf,image/*" onChange={(e) => setFile(e.target.files?.[0] || null)} />
+                  <Input type="file" accept=".pdf,.doc,.docx,image/*" onChange={(e) => setFile(e.target.files?.[0] || null)} />
                   <div className="text-xs text-muted-foreground">{t('f4.modal.choose_file_hint')}</div>
                 </div>
                 <div className="flex justify-end gap-2">
                   <Button variant="outline" onClick={() => onOpenChange(false)}>{t('f4.modal.cancel')}</Button>
-                  <Button onClick={handleUploadAndParse} disabled={!projectId || !file || isLoading}>{isLoading ? 'Processing…' : t('f4.modal.process')}</Button>
+                  <Button onClick={handleUploadAndParse} disabled={!projectId || !file || isLoading}>{isLoading ? 'Preparing…' : 'Start guided extraction'}</Button>
                 </div>
               </>
             ) : (
               <>
                 <div className="space-y-1">
                   <Label>{t('f4.modal.attachment_optional')}</Label>
-                  <Input type="file" accept=".pdf,image/*" onChange={(e) => setAttachmentFile(e.target.files?.[0] || null)} />
+                  <Input type="file" accept=".pdf,.doc,.docx,image/*" onChange={(e) => setAttachmentFile(e.target.files?.[0] || null)} />
                   {attachmentFile && <span className="text-xs text-muted-foreground">{attachmentFile.name}</span>}
                 </div>
                 <div className="flex justify-end gap-2">
@@ -759,19 +904,19 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
                 <>
                   <div className="space-y-1">
                     <Label>{t('f4.modal.summary_file')}</Label>
-                    <Input type="file" accept=".pdf,image/*" onChange={(e) => setFile(e.target.files?.[0] || null)} />
+                    <Input type="file" accept=".pdf,.doc,.docx,image/*" onChange={(e) => setFile(e.target.files?.[0] || null)} />
                     <div className="text-xs text-muted-foreground">{t('f4.modal.choose_file_hint')}</div>
                   </div>
                   <div className="flex justify-end gap-2">
                     <Button variant="outline" onClick={() => onOpenChange(false)}>{t('f4.modal.cancel')}</Button>
-                    <Button onClick={handleUploadAndParse} disabled={(!projectId && !initialProjectId) || !file || isLoading}>{isLoading ? 'Processing…' : t('f4.modal.process')}</Button>
+                    <Button onClick={handleUploadAndParse} disabled={(!projectId && !initialProjectId) || !file || isLoading}>{isLoading ? 'Preparing…' : 'Start guided extraction'}</Button>
                   </div>
                 </>
               ) : (
                 <>
                   <div className="space-y-1">
                     <Label>{t('f4.modal.attachment_optional')}</Label>
-                    <Input type="file" accept=".pdf,image/*" onChange={(e) => setAttachmentFile(e.target.files?.[0] || null)} />
+                    <Input type="file" accept=".pdf,.doc,.docx,image/*" onChange={(e) => setAttachmentFile(e.target.files?.[0] || null)} />
                     {attachmentFile && <span className="text-xs text-muted-foreground">{attachmentFile.name}</span>}
                   </div>
                   <div className="flex justify-end gap-2">
@@ -781,6 +926,152 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
                 </>
               )}
             </div>
+          ) : step === 'wizard' ? (
+          <div className="flex flex-col gap-2 min-h-0 max-h-[82vh]">
+            {/* Instruction row + controls row */}
+            <div className="sticky top-0 z-30 shrink-0 rounded-md border bg-background/95 px-2 py-1.5 shadow-sm supports-[backdrop-filter]:backdrop-blur-sm">
+              <p className="text-[11px] leading-snug text-muted-foreground pb-1.5 border-b border-border/70 mb-1.5">
+                Highlight a section directly on the document viewer, then run extraction for this step.
+              </p>
+              <div className="flex flex-nowrap items-center gap-2 overflow-x-auto">
+              <div className="flex items-center gap-1 shrink-0">
+                <span className={`inline-flex h-7 items-center rounded border px-1.5 text-[11px] leading-none ${wizardProgress.table ? 'bg-green-50 border-green-300 text-green-800' : expectedWizardKind === 'table' ? 'bg-sky-50 border-sky-300 text-sky-800' : 'bg-muted/30 text-muted-foreground'}`}>1) Expense table</span>
+                <span className={`inline-flex h-7 items-center rounded border px-1.5 text-[11px] leading-none ${wizardProgress.questions ? 'bg-green-50 border-green-300 text-green-800' : expectedWizardKind === 'questions' ? 'bg-sky-50 border-sky-300 text-sky-800' : 'bg-muted/30 text-muted-foreground'}`}>2) Additional questions</span>
+                <span className={`inline-flex h-7 items-center rounded border px-1.5 text-[11px] leading-none ${wizardProgress.receipts ? 'bg-green-50 border-green-300 text-green-800' : expectedWizardKind === 'receipts' ? 'bg-sky-50 border-sky-300 text-sky-800' : 'bg-muted/30 text-muted-foreground'}`}>3) Receipts</span>
+              </div>
+              <span className="text-[11px] leading-tight text-muted-foreground whitespace-nowrap shrink-0">
+                · Draw on one or more pages · Step <strong className="font-semibold text-foreground">{expectedWizardKind}</strong> · {selectionByKind[expectedWizardKind].length} selection(s)
+              </span>
+              <div className="flex-1 min-w-[8px] shrink" aria-hidden />
+              <div className="flex flex-nowrap items-center gap-1.5 shrink-0">
+                <Button
+                  type="button"
+                  size="sm"
+                  className="h-7 px-2.5 text-[11px]"
+                  onClick={() => runWizardStep(expectedWizardKind)}
+                  disabled={
+                    wizardLoading != null ||
+                    selectionByKind[expectedWizardKind].length === 0 ||
+                    (expectedWizardKind === 'receipts' && expensesDraft.length === 0)
+                  }
+                >
+                  {wizardLoading === expectedWizardKind ? 'Processing…' : `Process ${expectedWizardKind}`}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 px-2.5 text-[11px]"
+                  onClick={() => setSelectionByKind(prev => ({ ...prev, [expectedWizardKind]: [] }))}
+                  disabled={wizardLoading != null || selectionByKind[expectedWizardKind].length === 0}
+                >
+                  Clear current step selections
+                </Button>
+                {expectedWizardKind === 'table' && (
+                  <span className="text-[11px] text-muted-foreground whitespace-nowrap">Rows: {expensesDraft.length}</span>
+                )}
+                {expectedWizardKind === 'receipts' && receiptValidation && (
+                  <span className="text-[11px] text-muted-foreground whitespace-nowrap">
+                    Receipts total (SDG): {(Number(receiptValidation.receipts_total_sdg) || 0).toLocaleString()} ({receiptValidation.receipts_detected_count ?? 0} detected)
+                  </span>
+                )}
+              </div>
+              </div>
+            </div>
+
+            {viewerMode === 'unsupported' && !isRenderingPages && (
+              <div className="shrink-0 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded p-3">
+                This file type cannot be rendered for in-modal selection yet. Please use PDF or image files for guided snip/highlight extraction.
+              </div>
+            )}
+
+            <Card className="flex min-h-0 flex-1 flex-col overflow-hidden border">
+              <CardHeader className="shrink-0 py-2 pb-1.5">
+                <CardTitle className="text-sm font-semibold">Document viewer — drag to select regions</CardTitle>
+              </CardHeader>
+              <CardContent className="flex min-h-0 flex-1 flex-col overflow-hidden p-0 px-6 pb-6 pt-0">
+                {/* Inner div holds ref: CardContent is not forwardRef, so ref must attach to a real DOM node for edge scroll */}
+                <div ref={wizardViewerScrollRef} className="min-h-0 flex-1 overflow-auto pr-1">
+                  {isRenderingPages ? (
+                    <div className="w-full min-h-[280px] border rounded flex items-center justify-center text-muted-foreground text-sm">Rendering document pages…</div>
+                  ) : wizardPages.length > 0 ? (
+                    <div className="space-y-4 pb-2">
+                      {wizardPages.map((raw, pageIndex) => {
+                        const page = normalizeWizardPage(raw)
+                        if (!page?.dataUrl) return null
+                        const keySuffix = page.dataUrl.length > 32 ? page.dataUrl.slice(0, 32) : page.dataUrl
+                        return (
+                        <div
+                          key={`${pageIndex}-${keySuffix}`}
+                          className="mx-auto w-fit max-w-full border rounded overflow-hidden bg-white"
+                        >
+                          {/*
+                            Inner box matches the &lt;img&gt; exactly so drag/snipping coords match overlay pixels.
+                            (Border stays on the outer shell.)
+                          */}
+                          <div
+                            ref={(el) => {
+                              wizardPageWrapRefs.current[pageIndex] = el
+                            }}
+                            className="relative inline-block max-w-full select-none touch-none"
+                            onMouseDown={(e) => startDragOnPage(pageIndex, e)}
+                          >
+                          <img
+                            src={page.dataUrl}
+                            alt={`Page ${pageIndex + 1}`}
+                            width={page.displayWidth || undefined}
+                            height={page.displayHeight || undefined}
+                            className="max-w-full h-auto w-auto select-none pointer-events-none block"
+                            style={{
+                              width: page.displayWidth ? `${page.displayWidth}px` : undefined,
+                              maxWidth: '100%',
+                              height: 'auto',
+                            }}
+                          />
+                          {selectionByKind[expectedWizardKind]
+                            .filter(s => s.pageIndex === pageIndex)
+                            .map((s, idx) => (
+                              <div
+                                key={`sel-${expectedWizardKind}-${pageIndex}-${idx}`}
+                                className="absolute border-2 border-sky-500 bg-sky-300/15 pointer-events-none"
+                                style={{ left: s.x, top: s.y, width: s.w, height: s.h }}
+                              />
+                            ))}
+                          {dragging && dragging.pageIndex === pageIndex && (
+                            <div
+                              className="absolute border-2 border-orange-500 bg-orange-300/20 pointer-events-none"
+                              style={{
+                                left: Math.min(dragging.sx, dragging.cx),
+                                top: Math.min(dragging.sy, dragging.cy),
+                                width: Math.abs(dragging.cx - dragging.sx),
+                                height: Math.abs(dragging.cy - dragging.sy),
+                              }}
+                            />
+                          )}
+                          <div className="absolute top-2 left-2 bg-black/60 text-white text-xs px-2 py-1 rounded pointer-events-none">
+                            Page {pageIndex + 1}
+                          </div>
+                          </div>
+                        </div>
+                        )
+                      })}
+                    </div>
+                  ) : (
+                    <div className="w-full h-[400px] border rounded flex items-center justify-center text-muted-foreground">
+                      No renderable pages available
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
+            <div className="shrink-0 flex justify-between border-t pt-3">
+              <Button variant="outline" onClick={() => setStep('select')} disabled={!!initialProjectId || wizardLoading != null}>Back</Button>
+              <Button onClick={() => setStep('preview')} disabled={wizardLoading != null || !wizardProgress.table || !wizardProgress.questions || !wizardProgress.receipts}>
+                Continue to review form
+              </Button>
+            </div>
+          </div>
           ) : step === 'preview' ? (
           <div className="space-y-6 select-text">
             {/* Form Content */}
@@ -1209,11 +1500,176 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
                   onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), training: e.target.value }))} 
                 />
               </div>
+
+              <div className="col-span-2 rounded border p-3 bg-muted/20 space-y-3">
+                <div className="font-medium text-sm">Receipt Check</div>
+                {(() => {
+                  const receiptRows = Array.isArray(summaryDraft?.receipt_check?.receipts) ? summaryDraft.receipt_check.receipts : []
+                  const expenseTotalSdg = expensesDraft.reduce((s, ex) => s + (Number(ex.expense_amount_sdg) || 0), 0)
+                  const receiptsTotalSdg = receiptRows.reduce((s: number, r: any) => {
+                    if (r?.missing) return s
+                    return s + (Number(r?.amount_sdg) || 0)
+                  }, 0)
+                  const varianceSdg = expenseTotalSdg - receiptsTotalSdg
+                  return (
+                    <>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+                        <div>
+                          <div className="text-muted-foreground">Expense table total (SDG)</div>
+                          <div className="font-medium">{expenseTotalSdg.toLocaleString()}</div>
+                        </div>
+                        <div>
+                          <div className="text-muted-foreground">Receipts extracted total (SDG)</div>
+                          <div className="font-medium">{receiptsTotalSdg.toLocaleString()}</div>
+                        </div>
+                        <div>
+                          <div className="text-muted-foreground">Variance (SDG)</div>
+                          <div className="font-medium">{varianceSdg.toLocaleString()}</div>
+                        </div>
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        Edit extracted receipt amounts as needed, add missing receipts manually, or mark unreadable receipts as missing.
+                      </div>
+                      <div className="border rounded overflow-hidden bg-background">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead className="w-[40%]">Receipt / Reference</TableHead>
+                              <TableHead className="w-[25%]">Amount (SDG)</TableHead>
+                              <TableHead className="w-[20%]">Missing</TableHead>
+                              <TableHead className="w-[15%] text-right">Actions</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {receiptRows.length === 0 ? (
+                              <TableRow>
+                                <TableCell colSpan={4} className="text-sm text-muted-foreground">
+                                  No receipt rows yet. Add rows manually if needed.
+                                </TableCell>
+                              </TableRow>
+                            ) : (
+                              receiptRows.map((row: any, idx: number) => (
+                                <TableRow key={`receipt-row-${idx}`}>
+                                  <TableCell>
+                                    <Input
+                                      value={row?.reference || ''}
+                                      onChange={(e) => {
+                                        const nextRows = [...receiptRows]
+                                        nextRows[idx] = { ...nextRows[idx], reference: e.target.value }
+                                        setSummaryDraft((s: any) => ({
+                                          ...(s || {}),
+                                          receipt_check: { ...(s?.receipt_check || {}), receipts: nextRows, confirmed: false },
+                                        }))
+                                      }}
+                                      placeholder={`receipt-${idx + 1}`}
+                                    />
+                                  </TableCell>
+                                  <TableCell>
+                                    <Input
+                                      type="number"
+                                      value={row?.amount_sdg != null ? String(row.amount_sdg) : ''}
+                                      onChange={(e) => {
+                                        const nextRows = [...receiptRows]
+                                        const num = parseFloat(e.target.value)
+                                        nextRows[idx] = { ...nextRows[idx], amount_sdg: Number.isFinite(num) ? num : null }
+                                        setSummaryDraft((s: any) => ({
+                                          ...(s || {}),
+                                          receipt_check: { ...(s?.receipt_check || {}), receipts: nextRows, confirmed: false },
+                                        }))
+                                      }}
+                                      placeholder="0"
+                                      disabled={Boolean(row?.missing)}
+                                    />
+                                  </TableCell>
+                                  <TableCell>
+                                    <div className="flex items-center gap-2">
+                                      <Checkbox
+                                        checked={Boolean(row?.missing)}
+                                        onCheckedChange={(checked) => {
+                                          const nextRows = [...receiptRows]
+                                          nextRows[idx] = {
+                                            ...nextRows[idx],
+                                            missing: Boolean(checked),
+                                            amount_sdg: checked ? null : nextRows[idx]?.amount_sdg,
+                                          }
+                                          setSummaryDraft((s: any) => ({
+                                            ...(s || {}),
+                                            receipt_check: { ...(s?.receipt_check || {}), receipts: nextRows, confirmed: false },
+                                          }))
+                                        }}
+                                      />
+                                      <span className="text-xs text-muted-foreground">mark missing</span>
+                                    </div>
+                                  </TableCell>
+                                  <TableCell className="text-right">
+                                    <Button
+                                      variant="destructive"
+                                      size="sm"
+                                      onClick={() => {
+                                        const nextRows = [...receiptRows]
+                                        nextRows.splice(idx, 1)
+                                        setSummaryDraft((s: any) => ({
+                                          ...(s || {}),
+                                          receipt_check: { ...(s?.receipt_check || {}), receipts: nextRows, confirmed: false },
+                                        }))
+                                      }}
+                                    >
+                                      Delete
+                                    </Button>
+                                  </TableCell>
+                                </TableRow>
+                              ))
+                            )}
+                          </TableBody>
+                        </Table>
+                      </div>
+                      <div>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            const nextRows = [
+                              ...receiptRows,
+                              { reference: `manual-receipt-${receiptRows.length + 1}`, amount_sdg: null, currency: 'SDG', missing: false },
+                            ]
+                            setSummaryDraft((s: any) => ({
+                              ...(s || {}),
+                              receipt_check: { ...(s?.receipt_check || {}), receipts: nextRows, confirmed: false },
+                            }))
+                          }}
+                        >
+                          Add receipt row
+                        </Button>
+                      </div>
+                    </>
+                  )
+                })()}
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="receipt-check-confirmed"
+                    checked={Boolean(summaryDraft?.receipt_check?.confirmed)}
+                    onCheckedChange={(checked) => {
+                      setSummaryDraft((s: any) => ({
+                        ...(s || {}),
+                        receipt_check: {
+                          ...(s?.receipt_check || {}),
+                          confirmed: Boolean(checked),
+                          confirmed_at: new Date().toISOString(),
+                        },
+                      }))
+                    }}
+                  />
+                  <Label htmlFor="receipt-check-confirmed" className="text-sm">
+                    I confirm the receipts total has been reviewed against the expense table total.
+                  </Label>
+                </div>
+              </div>
             </div>
 
             <div className="flex justify-between">
               <Button variant="outline" onClick={()=>setStep('select')} disabled={!!initialProjectId}>{t('f4.preview.buttons.back')}</Button>
-              <Button onClick={handleSave} disabled={isLoading || isRestoring}>{isLoading ? t('f4.preview.buttons.saving') : t('f4.preview.buttons.save')}</Button>
+              <Button onClick={handleSave} disabled={isLoading || isRestoring || !Boolean(summaryDraft?.receipt_check?.confirmed)}>{isLoading ? t('f4.preview.buttons.saving') : t('f4.preview.buttons.save')}</Button>
             </div>
             </div>
 
@@ -1247,37 +1703,6 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
                   )}
                 </CardContent>
               </Card>
-            </CollapsibleRow>
-
-            {/* OCR Text - Collapsible Section */}
-            <CollapsibleRow title="OCR Text" defaultOpen={false}>
-              <div className="space-y-4">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>AI Output (Parsed JSON)</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="bg-muted/30 p-4 rounded font-mono text-sm whitespace-pre whitespace-pre-wrap max-h-[400px] overflow-y-auto">
-                      {aiOutput ? (
-                        <pre>{JSON.stringify(aiOutput, null, 2)}</pre>
-                      ) : (
-                        'No AI output available'
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Full OCR Text</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="bg-muted/30 p-4 rounded font-mono text-sm whitespace-pre-wrap max-h-[400px] overflow-y-auto" dir="rtl">
-                      {rawOcr || 'No OCR text available'}
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
             </CollapsibleRow>
           </div>
           ) : null

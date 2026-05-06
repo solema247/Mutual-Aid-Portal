@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { translateF4Summary, translateF4Expenses } from '@/lib/translateHelper'
+import { inferF4SourceLanguage, normalizePaymentDateForDb } from '@/lib/f4SaveNormalize'
 
 export async function POST(req: Request) {
   try {
@@ -39,6 +40,7 @@ export async function POST(req: Request) {
         lessons: translatedSummary.lessons || null,
         training: translatedSummary.training || null,
         project_objectives: translatedSummary.project_objectives || null,
+        receipt_check: translatedSummary.receipt_check ?? null,
         excess_expenses: translatedSummary.excess_expenses || null,
         surplus_use: translatedSummary.surplus_use || null,
         total_other_sources: translatedSummary.total_other_sources ?? null,
@@ -61,6 +63,8 @@ export async function POST(req: Request) {
       const { translatedData: translatedExpenses, originalText: expensesOriginalText } = await translateF4Expenses(expenses, sourceLanguage)
       console.log('F4 expenses translation completed. Original text preserved for', expensesOriginalText.length, 'expenses')
 
+      const reportDateStr =
+        translatedSummary.report_date != null ? String(translatedSummary.report_date).slice(0, 10) : null
       const payload = translatedExpenses.map((e: any, index: number) => ({
         project_id,
         summary_id,
@@ -68,7 +72,7 @@ export async function POST(req: Request) {
         expense_description: e.expense_description || null,
         expense_amount: e.expense_amount ?? null,
         expense_amount_sdg: e.expense_amount_sdg ?? null,
-        payment_date: e.payment_date || null,
+        payment_date: normalizePaymentDateForDb(e.payment_date, reportDateStr),
         payment_method: e.payment_method || null,
         receipt_no: e.receipt_no || null,
         seller: e.seller || null,
