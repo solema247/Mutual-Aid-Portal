@@ -27,6 +27,18 @@ interface UploadF4ModalProps {
   initialProjectId?: string | null
 }
 
+/** SDG per 1 USD — fills USD column from SDG when rate is known */
+function recalcExpenseUsdFromSdg(fx: number | null, expenses: any[]): any[] {
+  if (fx == null || fx <= 0 || !Number.isFinite(fx)) return expenses
+  return expenses.map((ex: any) => {
+    const sdg = ex.expense_amount_sdg
+    if (typeof sdg === 'number' && sdg > 0) {
+      return { ...ex, expense_amount: +(sdg / fx).toFixed(2) }
+    }
+    return ex
+  })
+}
+
 export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProjectId }: UploadF4ModalProps) {
   const { t } = useTranslation(['f4f5'])
   
@@ -56,6 +68,7 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
   const [expensesDraft, setExpensesDraft] = useState<any[]>([])
   const [tempKey, setTempKey] = useState<string>('')
   const [fxRate, setFxRate] = useState<number | null>(null)
+  const fxRateRef = useRef<number | null>(null)
   const [fileUrl, setFileUrl] = useState<string>('')
   const [minimized, setMinimized] = useState(false)
   const isMinimizingRef = useRef(false)
@@ -90,6 +103,10 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
   useEffect(() => {
     draggingRef.current = dragging
   }, [dragging])
+
+  useEffect(() => {
+    fxRateRef.current = fxRate
+  }, [fxRate])
 
   const { startDragOnPage } = useF4WizardDrag({
     open,
@@ -142,6 +159,7 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
         setSelectionByKind({ table: [], questions: [], receipts: [] })
         setWizardKind('table')
         setWizardProgress({ table: false, questions: false, receipts: false })
+        setFxRate(null)
         return
       }
     } catch {}
@@ -173,6 +191,10 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
             })()
           } else if (p.fileUrl) {
             setFileUrl(p.fileUrl)
+          }
+          if (p.fxRate != null && p.fxRate !== '') {
+            const n = Number(p.fxRate)
+            if (!Number.isNaN(n) && n > 0) setFxRate(n)
           }
           try { window.localStorage.removeItem('err_minimized_modal'); window.localStorage.removeItem('err_minimized_payload'); window.dispatchEvent(new CustomEvent('err_minimized_modal_change')) } catch {}
           // Reset restore flag after a brief delay to allow all state updates to propagate
@@ -383,23 +405,14 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
   // Load selected project meta
   useEffect(() => {
     const loadProject = async () => {
-      if (!projectId) { 
-        // Only clear projectMeta if we don't have initialProjectId either
-        // This preserves projectMeta for historical projects loaded via initialProjectId
+      if (!projectId) {
         if (!initialProjectId) {
           setProjectMeta(null)
+          setFxRate(null)
         }
-        return 
-      }
-      
-      // Skip if this is being loaded from initialProjectId (let that useEffect handle it)
-      // This prevents race conditions where both useEffects try to load the same data
-      if (initialProjectId && String(projectId) === String(initialProjectId)) {
-        // The initialProjectId useEffect will handle loading, so we skip here
-        // But make sure projectMeta is preserved - don't clear it
         return
       }
-      
+
       const isHistorical = String(projectId).startsWith('historical_')
       
       if (isHistorical) {
@@ -415,12 +428,14 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
           console.error('loadProject meta (historical) - error:', error)
           console.error('loadProject meta (historical) - realUuid:', realUuid)
           setProjectMeta(null)
+          setFxRate(null)
           return
         }
         
         if (!data) {
           console.error('loadProject meta (historical) - no data returned for UUID:', realUuid)
           setProjectMeta(null)
+          setFxRate(null)
           return
         }
         
@@ -446,6 +461,7 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
           beneficiaries: targetInd || targetFam ? `${targetInd || 0} individuals, ${targetFam || 0} families` : '',
           total_grant_from_project: usd
         })
+        setFxRate(null)
       } else {
         // Load regular portal project metadata
         const { data, error } = await supabase
@@ -461,7 +477,12 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
           `)
           .eq('id', projectId)
           .single()
-        if (error) { console.error('loadProject meta', error); setProjectMeta(null); return }
+        if (error) {
+          console.error('loadProject meta', error)
+          setProjectMeta(null)
+          setFxRate(null)
+          return
+        }
         // Calculate total from planned_activities (for ERR App submissions)
         const plannedArr = Array.isArray((data as any)?.planned_activities)
           ? (data as any).planned_activities
@@ -489,6 +510,29 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
           beneficiaries: (data as any)?.intended_beneficiaries || (data as any)?.estimated_beneficiaries || '',
           total_grant_from_project: grantSum
         })
+
+        if (!isRestoringRef.current) {
+          try {
+            const res = await fetch(
+              `/api/f4/project-exchange-rate?project_id=${encodeURIComponent(projectId)}`
+            )
+            const j = (await res.json().catch(() => ({}))) as {
+              exchange_rate?: number | null
+            }
+            const r =
+              typeof j.exchange_rate === 'number' && j.exchange_rate > 0 && Number.isFinite(j.exchange_rate)
+                ? j.exchange_rate
+                : null
+            if (r != null) {
+              setFxRate(r)
+              setExpensesDraft((prev) => recalcExpenseUsdFromSdg(r, prev))
+            } else {
+              setFxRate(null)
+            }
+          } catch {
+            setFxRate(null)
+          }
+        }
       }
     }
     loadProject()
@@ -587,7 +631,7 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
 
       if (kind === 'table') {
         const rows = Array.isArray(json.expenses) ? json.expenses : []
-        setExpensesDraft(rows.map((ex: any) => ({
+        const mapped = rows.map((ex: any) => ({
           expense_activity: ex.activity != null ? String(ex.activity) : '',
           expense_description: ex.description != null ? String(ex.description) : '',
           expense_amount_sdg: ex.amount_value != null ? Number(ex.amount_value) : null,
@@ -597,7 +641,8 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
           receipt_no: ex.receipt_no != null ? String(ex.receipt_no) : '',
           seller: ex.seller != null ? String(ex.seller) : '',
           is_draft: true
-        })))
+        }))
+        setExpensesDraft(recalcExpenseUsdFromSdg(fxRateRef.current, mapped))
         setSummaryDraft((prev: any) => ({
           ...(prev || {}),
           total_expenses: json.total_expenses_text != null ? Number(String(json.total_expenses_text).replace(/[,\s]/g, '')) || prev?.total_expenses || null : prev?.total_expenses || null,
@@ -797,6 +842,7 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
           setSelectionByKind({ table: [], questions: [], receipts: [] })
           setWizardKind('table')
           setWizardProgress({ table: false, questions: false, receipts: false })
+          setFxRate(null)
         }
       }
     }}>
@@ -805,7 +851,7 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
         onInteractOutside={(e:any)=>{ 
           e.preventDefault(); 
           try { 
-            const snapshot = JSON.stringify({ type: 'f4', step, summaryDraft, expensesDraft, projectId, reportDate, selectedState, selectedRoomId, tempKey, fileUrl })
+            const snapshot = JSON.stringify({ type: 'f4', step, summaryDraft, expensesDraft, projectId, reportDate, selectedState, selectedRoomId, tempKey, fileUrl, fxRate })
             window.localStorage.setItem('err_minimized_modal','f4'); 
             window.localStorage.setItem('err_minimized_payload', snapshot);
             window.dispatchEvent(new CustomEvent('err_minimized_modal_change', { detail: 'f4' } as any)) 
@@ -1152,8 +1198,11 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label className="font-bold text-red-600">{t('f4.preview.labels.fx_rate')} *</Label>
+                  <p className="text-xs text-muted-foreground mt-0.5 mb-1.5 max-w-md">
+                    {t('f4.preview.labels.fx_rate_note')}
+                  </p>
                   <Input 
-                    className="select-text selection:bg-blue-200 selection:text-blue-900 dark:selection:bg-blue-800 dark:selection:text-blue-100" 
+                    className="select-text text-foreground bg-background font-medium selection:bg-blue-200 selection:text-blue-900 dark:selection:bg-blue-800 dark:selection:text-blue-100" 
                     style={selectableInputStyle}
                     type="number" 
                     value={fxRate != null ? String(fxRate) : ''} 
@@ -1175,18 +1224,8 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
                     onChange={(e)=>{
                     const v = parseFloat(e.target.value)
                     setFxRate(isNaN(v) ? null : v)
-                    // When exchange rate is set, calculate USD from SDG for all expenses
                     if (!isNaN(v) && v > 0) {
-                      setExpensesDraft(prev => prev.map((ex:any)=>{
-                        const sdg = ex.expense_amount_sdg
-                        if (typeof sdg === 'number' && sdg > 0) {
-                          return {
-                            ...ex,
-                            expense_amount: +(sdg / v).toFixed(2)
-                          }
-                        }
-                        return ex
-                      }))
+                      setExpensesDraft((prev) => recalcExpenseUsdFromSdg(v, prev))
                     }
                   }} placeholder={t('f4.preview.labels.fx_placeholder') as string} />
                 </div>

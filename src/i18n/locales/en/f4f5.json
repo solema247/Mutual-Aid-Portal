@@ -71,6 +71,7 @@
         "project_activities": "Project Activities",
         "beneficiaries": "Beneficiaries",
         "fx_rate": "FX Rate (SDG per 1 USD)",
+        "fx_rate_note": "When available, this value is taken from the F1 workplan MOU payment transfer confirmation for this project.",
         "fx_placeholder": "e.g. 3200"
       },
       "expenses": {
