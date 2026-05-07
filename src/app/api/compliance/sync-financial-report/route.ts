@@ -26,6 +26,7 @@
 import { NextResponse } from 'next/server'
 import { google } from 'googleapis'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
+import { GOOGLE_SHEETS_LOG_SOURCE, logGoogleSheetsAutomation } from '@/lib/googleSheetsVercelTelemetry'
 
 /** Service client without generated DB types — matches `createClient(url, key)`. */
 type ServiceSupabase = SupabaseClient<any, 'public', any>
@@ -349,6 +350,7 @@ async function syncF4sReport(
 
 export async function POST(req: Request) {
   const startTime = Date.now()
+  const at = () => new Date().toISOString()
 
   // Auth check — accept webhook secret or Supabase service role key
   const authHeader = req.headers.get('authorization') || ''
@@ -371,6 +373,15 @@ export async function POST(req: Request) {
 
   const result: Record<string, unknown> = { synced_at: new Date().toISOString() }
 
+  logGoogleSheetsAutomation({
+    source: GOOGLE_SHEETS_LOG_SOURCE,
+    automation: 'fcdo_financial_report',
+    event: 'start',
+    at: at(),
+    http_method: 'POST',
+    metrics: { sheet_target: target, spreadsheet_id: SPREADSHEET_ID },
+  })
+
   try {
     if (target === 'all' || target === 'spending_summary') {
       console.log('Fetching Spending Summary sheet...')
@@ -391,10 +402,35 @@ export async function POST(req: Request) {
     }
 
     result.elapsed_ms = Date.now() - startTime
+    logGoogleSheetsAutomation({
+      source: GOOGLE_SHEETS_LOG_SOURCE,
+      automation: 'fcdo_financial_report',
+      event: 'complete',
+      at: at(),
+      http_method: 'POST',
+      duration_ms: result.elapsed_ms as number,
+      metrics: {
+        sheet_target: target,
+        spreadsheet_id: SPREADSHEET_ID,
+        spending_summary: result.spending_summary,
+        disbursement_overview: result.disbursement_overview,
+        f4s_report: result.f4s_report,
+      },
+    })
     return NextResponse.json({ ok: true, ...result })
   } catch (e) {
     const msg = errMsg(e)
     console.error('sync-financial-report error:', msg)
+    logGoogleSheetsAutomation({
+      source: GOOGLE_SHEETS_LOG_SOURCE,
+      automation: 'fcdo_financial_report',
+      event: 'error',
+      at: at(),
+      http_method: 'POST',
+      duration_ms: Date.now() - startTime,
+      error_message: msg,
+      metrics: { sheet_target: target, spreadsheet_id: SPREADSHEET_ID },
+    })
     return NextResponse.json({ error: msg }, { status: 500 })
   }
 }

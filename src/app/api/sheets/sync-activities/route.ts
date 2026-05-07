@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { google } from 'googleapis'
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin'
+import { GOOGLE_SHEETS_LOG_SOURCE, logGoogleSheetsAutomation } from '@/lib/googleSheetsVercelTelemetry'
 import { syncLogger } from '@/lib/syncLogger'
 
 // Initialize Google Sheets with better error handling
@@ -290,9 +291,19 @@ function validateEnvironment() {
  * Sync data from Google Sheets to activities_raw_import table
  */
 export async function POST(req: Request) {
+  const sheetSyncT0 = Date.now()
   try {
     // Validate environment variables first
     validateEnvironment()
+
+    logGoogleSheetsAutomation({
+      source: GOOGLE_SHEETS_LOG_SOURCE,
+      automation: 'activities_sheet_sync',
+      event: 'start',
+      at: new Date().toISOString(),
+      http_method: 'POST',
+      metrics: { spreadsheet_id: SPREADSHEET_ID, sheet_name: SHEET_NAME },
+    })
 
     const syncId = `sync-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
     syncLogger.startSync(syncId)
@@ -313,6 +324,15 @@ export async function POST(req: Request) {
     }
 
     if (data.length === 0) {
+      logGoogleSheetsAutomation({
+        source: GOOGLE_SHEETS_LOG_SOURCE,
+        automation: 'activities_sheet_sync',
+        event: 'complete',
+        at: new Date().toISOString(),
+        http_method: 'POST',
+        duration_ms: Date.now() - sheetSyncT0,
+        metrics: { synced: 0, total_rows: 0, reason: 'no_sheet_data' },
+      })
       return NextResponse.json({
         success: true,
         message: 'No data to sync',
@@ -721,6 +741,16 @@ export async function POST(req: Request) {
     syncLogger.success(`Successfully synced ${totalSynced} rows to activities_raw_import`, summary)
     syncLogger.endSync(true, summary)
 
+    logGoogleSheetsAutomation({
+      source: GOOGLE_SHEETS_LOG_SOURCE,
+      automation: 'activities_sheet_sync',
+      event: 'complete',
+      at: new Date().toISOString(),
+      http_method: 'POST',
+      duration_ms: Date.now() - sheetSyncT0,
+      metrics: { ...summary, spreadsheet_id: SPREADSHEET_ID, sheet_name: SHEET_NAME },
+    })
+
     return NextResponse.json({
       success: true,
       message: `Successfully synced ${totalSynced} rows`,
@@ -737,6 +767,17 @@ export async function POST(req: Request) {
         code: errorCode,
         stack: error instanceof Error ? error.stack : undefined,
       }
+
+      logGoogleSheetsAutomation({
+        source: GOOGLE_SHEETS_LOG_SOURCE,
+        automation: 'activities_sheet_sync',
+        event: 'error',
+        at: new Date().toISOString(),
+        http_method: 'POST',
+        duration_ms: Date.now() - sheetSyncT0,
+        error_message: errorMessage,
+        metrics: { code: errorCode, spreadsheet_id: SPREADSHEET_ID, sheet_name: SHEET_NAME },
+      })
       
       // Try to log error, but don't fail if logging fails
       try {
@@ -783,9 +824,19 @@ export async function POST(req: Request) {
  * Also used by cron jobs
  */
 export async function GET() {
+  const sheetSyncT0 = Date.now()
   try {
     // Validate environment variables first
     validateEnvironment()
+
+    logGoogleSheetsAutomation({
+      source: GOOGLE_SHEETS_LOG_SOURCE,
+      automation: 'activities_sheet_sync',
+      event: 'start',
+      at: new Date().toISOString(),
+      http_method: 'GET',
+      metrics: { spreadsheet_id: SPREADSHEET_ID, sheet_name: SHEET_NAME, trigger: 'cron_or_manual' },
+    })
 
     const syncId = `sync-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
     syncLogger.startSync(syncId)
@@ -808,6 +859,15 @@ export async function GET() {
     if (data.length === 0) {
       syncLogger.warn('No data to sync')
       syncLogger.endSync(true, { synced: 0 })
+      logGoogleSheetsAutomation({
+        source: GOOGLE_SHEETS_LOG_SOURCE,
+        automation: 'activities_sheet_sync',
+        event: 'complete',
+        at: new Date().toISOString(),
+        http_method: 'GET',
+        duration_ms: Date.now() - sheetSyncT0,
+        metrics: { synced: 0, total_rows: 0, reason: 'no_sheet_data' },
+      })
       return NextResponse.json({
         success: true,
         message: 'No data to sync',
@@ -1178,6 +1238,16 @@ export async function GET() {
     syncLogger.success(`Successfully synced ${totalSynced} rows to activities_raw_import`, summary)
     syncLogger.endSync(true, summary)
 
+    logGoogleSheetsAutomation({
+      source: GOOGLE_SHEETS_LOG_SOURCE,
+      automation: 'activities_sheet_sync',
+      event: 'complete',
+      at: new Date().toISOString(),
+      http_method: 'GET',
+      duration_ms: Date.now() - sheetSyncT0,
+      metrics: { ...summary, spreadsheet_id: SPREADSHEET_ID, sheet_name: SHEET_NAME },
+    })
+
     return NextResponse.json({
       success: true,
       message: `Successfully synced ${totalSynced} rows`,
@@ -1194,6 +1264,17 @@ export async function GET() {
         code: errorCode,
         stack: error instanceof Error ? error.stack : undefined,
       }
+
+      logGoogleSheetsAutomation({
+        source: GOOGLE_SHEETS_LOG_SOURCE,
+        automation: 'activities_sheet_sync',
+        event: 'error',
+        at: new Date().toISOString(),
+        http_method: 'GET',
+        duration_ms: Date.now() - sheetSyncT0,
+        error_message: errorMessage,
+        metrics: { code: errorCode, spreadsheet_id: SPREADSHEET_ID, sheet_name: SHEET_NAME },
+      })
       
       // Try to log error, but don't fail if logging fails
       try {

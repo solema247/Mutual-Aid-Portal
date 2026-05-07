@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { google } from 'googleapis'
-import path from 'path'
+import { GOOGLE_SHEETS_LOG_SOURCE, logGoogleSheetsAutomation } from '@/lib/googleSheetsVercelTelemetry'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import OpenAI from 'openai'
 import { getOpenAIApiKey } from '@/lib/getOpenAIApiKey'
@@ -48,9 +48,23 @@ async function translateToEnglish(text: string): Promise<string> {
 }
 
 export async function POST(req: Request) {
+  const t0 = Date.now()
   try {
     const supabase = getSupabaseRouteClient()
     const data = await req.json()
+
+    logGoogleSheetsAutomation({
+      source: GOOGLE_SHEETS_LOG_SOURCE,
+      automation: 'f1_grant_sheet_append',
+      event: 'start',
+      at: new Date().toISOString(),
+      http_method: 'POST',
+      metrics: {
+        spreadsheet_id: process.env.GOOGLE_SHEET_ID ?? null,
+        grant_id: data?.grant_id ?? null,
+        emergency_room_id: data?.emergency_room_id ?? null,
+      },
+    })
     
     console.log('Received data:', {
       emergency_room_id: data.emergency_room_id,
@@ -147,12 +161,36 @@ export async function POST(req: Request) {
     })
 
     console.log('Sheet response:', response.data)
+    logGoogleSheetsAutomation({
+      source: GOOGLE_SHEETS_LOG_SOURCE,
+      automation: 'f1_grant_sheet_append',
+      event: 'complete',
+      at: new Date().toISOString(),
+      http_method: 'POST',
+      duration_ms: Date.now() - t0,
+      metrics: {
+        spreadsheet_id: process.env.GOOGLE_SHEET_ID ?? null,
+        updated_range: response.data?.updates?.updatedRange ?? null,
+        updated_rows: response.data?.updates?.updatedRows ?? null,
+      },
+    })
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error('Error updating Google Sheet:', error)
+    const details = error instanceof Error ? error.message : 'Unknown error'
+    logGoogleSheetsAutomation({
+      source: GOOGLE_SHEETS_LOG_SOURCE,
+      automation: 'f1_grant_sheet_append',
+      event: 'error',
+      at: new Date().toISOString(),
+      http_method: 'POST',
+      duration_ms: Date.now() - t0,
+      error_message: details,
+      metrics: { spreadsheet_id: process.env.GOOGLE_SHEET_ID ?? null },
+    })
     return NextResponse.json({ 
       error: 'Failed to update Google Sheet',
-      details: error instanceof Error ? error.message : 'Unknown error'
+      details,
     }, { status: 500 })
   }
 } 
