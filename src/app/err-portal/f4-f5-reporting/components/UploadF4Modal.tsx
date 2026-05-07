@@ -19,6 +19,7 @@ import { buildSnippetFilesFromSelections } from '../f4Wizard/buildSnippetFiles'
 import { f4ParseSnips, f4Save, f4UploadInit } from '../f4Wizard/f4WizardApi'
 import { useF4WizardViewerPages } from '../f4Wizard/useF4WizardViewerPages'
 import { useF4WizardDrag, type WizardDragState } from '../f4Wizard/useF4WizardDrag'
+import { Check } from 'lucide-react'
 
 interface UploadF4ModalProps {
   open: boolean
@@ -981,9 +982,18 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
               </p>
               <div className="flex flex-nowrap items-center gap-2 overflow-x-auto">
               <div className="flex items-center gap-1 shrink-0">
-                <span className={`inline-flex h-7 items-center rounded border px-1.5 text-[11px] leading-none ${wizardProgress.table ? 'bg-green-50 border-green-300 text-green-800' : expectedWizardKind === 'table' ? 'bg-sky-50 border-sky-300 text-sky-800' : 'bg-muted/30 text-muted-foreground'}`}>1) Expense table</span>
-                <span className={`inline-flex h-7 items-center rounded border px-1.5 text-[11px] leading-none ${wizardProgress.questions ? 'bg-green-50 border-green-300 text-green-800' : expectedWizardKind === 'questions' ? 'bg-sky-50 border-sky-300 text-sky-800' : 'bg-muted/30 text-muted-foreground'}`}>2) Additional questions</span>
-                <span className={`inline-flex h-7 items-center rounded border px-1.5 text-[11px] leading-none ${wizardProgress.receipts ? 'bg-green-50 border-green-300 text-green-800' : expectedWizardKind === 'receipts' ? 'bg-sky-50 border-sky-300 text-sky-800' : 'bg-muted/30 text-muted-foreground'}`}>3) Receipts</span>
+                <span className={`inline-flex h-7 items-center gap-0.5 rounded border px-1.5 text-[11px] leading-none ${wizardProgress.table ? 'bg-green-50 border-green-300 text-green-800' : expectedWizardKind === 'table' ? 'bg-sky-50 border-sky-300 text-sky-800' : 'bg-muted/30 text-muted-foreground'}`}>
+                  1) Expense table
+                  {wizardProgress.table && <Check className="h-3.5 w-3.5 shrink-0 text-green-700" strokeWidth={2.5} aria-hidden />}
+                </span>
+                <span className={`inline-flex h-7 items-center gap-0.5 rounded border px-1.5 text-[11px] leading-none ${wizardProgress.questions ? 'bg-green-50 border-green-300 text-green-800' : expectedWizardKind === 'questions' ? 'bg-sky-50 border-sky-300 text-sky-800' : 'bg-muted/30 text-muted-foreground'}`}>
+                  2) Additional questions
+                  {wizardProgress.questions && <Check className="h-3.5 w-3.5 shrink-0 text-green-700" strokeWidth={2.5} aria-hidden />}
+                </span>
+                <span className={`inline-flex h-7 items-center gap-0.5 rounded border px-1.5 text-[11px] leading-none ${wizardProgress.receipts ? 'bg-green-50 border-green-300 text-green-800' : expectedWizardKind === 'receipts' ? 'bg-sky-50 border-sky-300 text-sky-800' : 'bg-muted/30 text-muted-foreground'}`}>
+                  3) Receipts
+                  {wizardProgress.receipts && <Check className="h-3.5 w-3.5 shrink-0 text-green-700" strokeWidth={2.5} aria-hidden />}
+                </span>
               </div>
               <span className="text-[11px] leading-tight text-muted-foreground whitespace-nowrap shrink-0">
                 · Draw on one or more pages · Step <strong className="font-semibold text-foreground">{expectedWizardKind}</strong> · {selectionByKind[expectedWizardKind].length} selection(s)

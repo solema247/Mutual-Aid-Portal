@@ -12,7 +12,7 @@ import { supabase } from '@/lib/supabaseClient'
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '@/components/ui/table'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { CollapsibleRow } from '@/components/ui/collapsible'
-import { Pencil, Flag } from 'lucide-react'
+import { Check, Pencil, Flag } from 'lucide-react'
 import type { F5WizardKind, RegionSelection, WizardPageEntry } from '../f5Wizard/types'
 import { normalizeWizardPage } from '../f5Wizard/types'
 import { buildSnippetFilesFromSelections } from '../f5Wizard/buildSnippetFiles'
@@ -886,9 +886,18 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved, initialProj
                 </p>
                 <div className="flex flex-nowrap items-center gap-2 overflow-x-auto">
                   <div className="flex items-center gap-1 shrink-0">
-                    <span className={`inline-flex h-7 items-center rounded border px-1.5 text-[11px] leading-none ${wizardProgress.activities ? 'bg-green-50 border-green-300 text-green-800' : expectedWizardKind === 'activities' ? 'bg-sky-50 border-sky-300 text-sky-800' : 'bg-muted/30 text-muted-foreground'}`}>1) Activities</span>
-                    <span className={`inline-flex h-7 items-center rounded border px-1.5 text-[11px] leading-none ${wizardProgress.demographics ? 'bg-green-50 border-green-300 text-green-800' : expectedWizardKind === 'demographics' ? 'bg-sky-50 border-sky-300 text-sky-800' : 'bg-muted/30 text-muted-foreground'}`}>2) Demographics</span>
-                    <span className={`inline-flex h-7 items-center rounded border px-1.5 text-[11px] leading-none ${wizardProgress.questions ? 'bg-green-50 border-green-300 text-green-800' : expectedWizardKind === 'questions' ? 'bg-sky-50 border-sky-300 text-sky-800' : 'bg-muted/30 text-muted-foreground'}`}>3) Questions</span>
+                    <span className={`inline-flex h-7 items-center gap-0.5 rounded border px-1.5 text-[11px] leading-none ${wizardProgress.activities ? 'bg-green-50 border-green-300 text-green-800' : expectedWizardKind === 'activities' ? 'bg-sky-50 border-sky-300 text-sky-800' : 'bg-muted/30 text-muted-foreground'}`}>
+                      1) Activities
+                      {wizardProgress.activities && <Check className="h-3.5 w-3.5 shrink-0 text-green-700" strokeWidth={2.5} aria-hidden />}
+                    </span>
+                    <span className={`inline-flex h-7 items-center gap-0.5 rounded border px-1.5 text-[11px] leading-none ${wizardProgress.demographics ? 'bg-green-50 border-green-300 text-green-800' : expectedWizardKind === 'demographics' ? 'bg-sky-50 border-sky-300 text-sky-800' : 'bg-muted/30 text-muted-foreground'}`}>
+                      2) Demographics
+                      {wizardProgress.demographics && <Check className="h-3.5 w-3.5 shrink-0 text-green-700" strokeWidth={2.5} aria-hidden />}
+                    </span>
+                    <span className={`inline-flex h-7 items-center gap-0.5 rounded border px-1.5 text-[11px] leading-none ${wizardProgress.questions ? 'bg-green-50 border-green-300 text-green-800' : expectedWizardKind === 'questions' ? 'bg-sky-50 border-sky-300 text-sky-800' : 'bg-muted/30 text-muted-foreground'}`}>
+                      3) Questions
+                      {wizardProgress.questions && <Check className="h-3.5 w-3.5 shrink-0 text-green-700" strokeWidth={2.5} aria-hidden />}
+                    </span>
                   </div>
                   <span className="text-[11px] leading-tight text-muted-foreground whitespace-nowrap shrink-0">
                     · Draw on one or more pages · Step <strong className="font-semibold text-foreground">{expectedWizardKind}</strong> · {selectionByKind[expectedWizardKind].length} selection(s)
