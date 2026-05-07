@@ -32,13 +32,16 @@ with
       p.date_transfer,
       p.f4_status,
       p.f5_status,
-      ggv.grant_id as grid_grant_id
+      ggv.grant_id as grid_grant_id,
+      ggv.partner_name as grid_partner_name,
+      ggv_grant_call.partner_name as grant_call_partner_name
     from
       err_projects p
       left join emergency_rooms er on p.emergency_room_id = er.id
       left join donors d on p.donor_id = d.id
       left join mous m on p.mou_id = m.id
       left join grants_grid_view ggv on p.grant_grid_id = ggv.id
+      left join grants_grid_view ggv_grant_call on p.grant_call_id = ggv_grant_call.id
   ),
   current_projects_plan as (
     select
@@ -299,7 +302,24 @@ with
           'Unassigned'::text
         )
       end as project_donor,
-      null::text as partner,
+      COALESCE(
+        NULLIF(
+          TRIM(
+            both
+            from
+              cpb.grant_call_partner_name
+          ),
+          ''::text
+        ),
+        NULLIF(
+          TRIM(
+            both
+            from
+              cpb.grid_partner_name
+          ),
+          ''::text
+        )
+      ) as partner,
       cpb.state,
       null::text as responsible,
       cpb."Sector (Primary)" as sector_primary,
