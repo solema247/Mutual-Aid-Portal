@@ -19,6 +19,12 @@ import { buildSnippetFilesFromSelections } from '../f5Wizard/buildSnippetFiles'
 import { f5ParseSnips, f5Save, f5UploadInit } from '../f5Wizard/f5WizardApi'
 import { useF5WizardViewerPages } from '../f5Wizard/useF5WizardViewerPages'
 import { useF5WizardDrag, type WizardDragState } from '../f5Wizard/useF5WizardDrag'
+import {
+  clampDateInputToToday,
+  getTodayDateInputValue,
+  isValidReportDate,
+  normalizeReportDateInput,
+} from '@/lib/reportUploadDate'
 
 interface UploadF5ModalProps {
   open: boolean
@@ -267,9 +273,15 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved, initialProj
             setStep(p.step)
             if (p.step === 'wizard') setIsRenderingPages(true)
           }
-          if (p.summaryDraft) setSummaryDraft(p.summaryDraft)
+          if (p.summaryDraft) {
+            const sd = { ...p.summaryDraft }
+            if (sd.report_date) {
+              sd.report_date = clampDateInputToToday(normalizeReportDateInput(sd.report_date))
+            }
+            setSummaryDraft(sd)
+          }
           if (Array.isArray(p.reachDraft)) setReachDraft(p.reachDraft)
-          if (p.reportDate) setReportDate(p.reportDate)
+          if (p.reportDate) setReportDate(clampDateInputToToday(p.reportDate))
           if (p.selectedState) setSelectedState(p.selectedState)
           if (p.selectedRoomId) setSelectedRoomId(p.selectedRoomId)
           if (p.projectId) setProjectId(p.projectId)
@@ -454,6 +466,10 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved, initialProj
   const handleUploadAndParse = async () => {
     const actualProjectId = projectId || initialProjectId
     if (!actualProjectId || !file) return
+    if (!isValidReportDate(reportDate)) {
+      alert(t('f5.modal.report_date_required'))
+      return
+    }
     setIsLoading(true)
     try {
       const ext = (file.name.split('.').pop() || 'pdf').toLowerCase()
@@ -623,6 +639,10 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved, initialProj
   const handleContinueToForm = async () => {
     const actualProjectId = projectId || initialProjectId
     if (!actualProjectId) return
+    if (!isValidReportDate(reportDate)) {
+      alert(t('f5.modal.report_date_required'))
+      return
+    }
     setIsLoading(true)
     try {
       if (attachmentFile) {
@@ -677,6 +697,11 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved, initialProj
       console.warn('Missing required fields:', { projectId: actualProjectId, hasSummaryDraft: !!summaryDraft })
       return
     }
+    const previewDate = normalizeReportDateInput(summaryDraft?.report_date ?? reportDate)
+    if (!isValidReportDate(previewDate)) {
+      alert(t('f5.modal.report_date_required'))
+      return
+    }
     setIsLoading(true)
     try {
       const summaryToSave = { ...summaryDraft }
@@ -712,6 +737,11 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved, initialProj
     setEntryMode('upload')
     setAttachmentFile(null)
   }
+
+  const reportDateInputMax = getTodayDateInputValue()
+  const isSelectReportDateValid = isValidReportDate(reportDate)
+  const effectivePreviewReportDate = normalizeReportDateInput(summaryDraft?.report_date ?? reportDate)
+  const isPreviewReportDateValid = isValidReportDate(effectivePreviewReportDate)
 
   return (
     <>
@@ -811,8 +841,14 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved, initialProj
               </div>
             </div>
             <div className="space-y-1">
-              <Label>{t('f5.modal.report_date')}</Label>
-              <Input type="date" value={reportDate} onChange={(e) => setReportDate(e.target.value)} />
+              <Label>{t('f5.modal.report_date')} *</Label>
+              <Input
+                type="date"
+                max={reportDateInputMax}
+                value={reportDate}
+                onChange={(e) => setReportDate(clampDateInputToToday(e.target.value))}
+                required
+              />
             </div>
             {entryMode === 'upload' ? (
               <>
@@ -823,7 +859,7 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved, initialProj
                 </div>
                 <div className="flex justify-end gap-2">
                   <Button variant="outline" onClick={() => onOpenChange(false)}>{t('f5.modal.cancel')}</Button>
-                  <Button onClick={handleUploadAndParse} disabled={!projectId || !file || isLoading}>{isLoading ? 'Processing…' : t('f5.modal.process')}</Button>
+                  <Button onClick={handleUploadAndParse} disabled={!projectId || !file || isLoading || !isSelectReportDateValid}>{isLoading ? 'Processing…' : t('f5.modal.process')}</Button>
                 </div>
               </>
             ) : (
@@ -835,7 +871,7 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved, initialProj
                 </div>
                 <div className="flex justify-end gap-2">
                   <Button variant="outline" onClick={() => onOpenChange(false)}>{t('f5.modal.cancel')}</Button>
-                  <Button onClick={handleContinueToForm} disabled={!projectId || isLoading}>{isLoading ? '…' : t('f5.modal.continue_to_form')}</Button>
+                  <Button onClick={handleContinueToForm} disabled={!projectId || isLoading || !isSelectReportDateValid}>{isLoading ? '…' : t('f5.modal.continue_to_form')}</Button>
                 </div>
               </>
             )}
@@ -849,8 +885,14 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved, initialProj
                 <Button type="button" variant={entryMode === 'manual' ? 'default' : 'ghost'} size="sm" onClick={() => setEntryMode('manual')}>{t('f5.modal.entry_mode_manual')}</Button>
               </div>
               <div className="space-y-1">
-                <Label>{t('f5.modal.report_date')}</Label>
-                <Input type="date" value={reportDate} onChange={(e) => setReportDate(e.target.value)} />
+                <Label>{t('f5.modal.report_date')} *</Label>
+                <Input
+                  type="date"
+                  max={reportDateInputMax}
+                  value={reportDate}
+                  onChange={(e) => setReportDate(clampDateInputToToday(e.target.value))}
+                  required
+                />
               </div>
               {entryMode === 'upload' ? (
                 <>
@@ -861,7 +903,7 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved, initialProj
                   </div>
                   <div className="flex justify-end gap-2">
                     <Button variant="outline" onClick={() => onOpenChange(false)}>{t('f5.modal.cancel')}</Button>
-                    <Button onClick={handleUploadAndParse} disabled={(!projectId && !initialProjectId) || !file || isLoading}>{isLoading ? 'Processing…' : t('f5.modal.process')}</Button>
+                    <Button onClick={handleUploadAndParse} disabled={(!projectId && !initialProjectId) || !file || isLoading || !isSelectReportDateValid}>{isLoading ? 'Processing…' : t('f5.modal.process')}</Button>
                   </div>
                 </>
               ) : (
@@ -873,7 +915,7 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved, initialProj
                   </div>
                   <div className="flex justify-end gap-2">
                     <Button variant="outline" onClick={() => onOpenChange(false)}>{t('f5.modal.cancel')}</Button>
-                    <Button onClick={handleContinueToForm} disabled={(!projectId && !initialProjectId) || isLoading}>{isLoading ? '…' : t('f5.modal.continue_to_form')}</Button>
+                    <Button onClick={handleContinueToForm} disabled={(!projectId && !initialProjectId) || isLoading || !isSelectReportDateValid}>{isLoading ? '…' : t('f5.modal.continue_to_form')}</Button>
                   </div>
                 </>
               )}
@@ -1013,7 +1055,7 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved, initialProj
 
               <div className="shrink-0 flex justify-between border-t pt-3">
                 <Button variant="outline" onClick={() => setStep('select')} disabled={!!initialProjectId || wizardLoading != null}>Back</Button>
-                <Button onClick={() => setStep('preview')} disabled={wizardLoading != null || !wizardProgress.activities || !wizardProgress.demographics || !wizardProgress.questions}>
+                <Button onClick={() => setStep('preview')} disabled={wizardLoading != null || !wizardProgress.activities || !wizardProgress.demographics || !wizardProgress.questions || !isSelectReportDateValid}>
                   Continue to preview
                 </Button>
               </div>
@@ -1027,8 +1069,20 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved, initialProj
             <div className="space-y-3">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label className="select-text" style={{ userSelect: 'text' }}>{t('f5.preview.summary.report_date')}</Label>
-                  <Input className="select-text" type="date" value={summaryDraft?.report_date ?? reportDate} onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), report_date: e.target.value }))} />
+                  <Label className="select-text" style={{ userSelect: 'text' }}>{t('f5.preview.summary.report_date')} *</Label>
+                  <Input
+                    className="select-text"
+                    type="date"
+                    max={reportDateInputMax}
+                    value={effectivePreviewReportDate || ''}
+                    onChange={(e) =>
+                      setSummaryDraft((s: any) => ({
+                        ...(s || {}),
+                        report_date: clampDateInputToToday(e.target.value),
+                      }))
+                    }
+                    required
+                  />
                 </div>
                 <div>
                   <Label className="select-text" style={{ userSelect: 'text' }}>{t('f5.preview.summary.reporting_person')}</Label>
@@ -1396,7 +1450,7 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved, initialProj
 
             <div className="flex justify-between">
               <Button variant="outline" onClick={()=>setStep('select')}>{t('f5.preview.buttons.back')}</Button>
-              <Button onClick={handleSave} disabled={isLoading || isRestoring}>{isLoading ? t('f5.preview.buttons.saving') : t('f5.preview.buttons.save')}</Button>
+              <Button onClick={handleSave} disabled={isLoading || isRestoring || !isPreviewReportDateValid}>{isLoading ? t('f5.preview.buttons.saving') : t('f5.preview.buttons.save')}</Button>
             </div>
               </div>
             </CollapsibleRow>
