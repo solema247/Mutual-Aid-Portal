@@ -61,6 +61,10 @@ interface F5Row {
   updated_at: string
 }
 
+type SortDirection = 'asc' | 'desc'
+type F4SortKey = 'err_name' | 'grant' | 'state' | 'donor' | 'report_date' | 'total_grant' | 'total_expenses' | 'remainder'
+type F5SortKey = 'err_name' | 'grant' | 'state' | 'donor' | 'report_date' | 'activities_count' | 'updated_at'
+
 function grantIdTableText(r: { grant_serial_id?: string | null; grant_id?: string | null }) {
   const v = r.grant_serial_id ?? r.grant_id
   if (v == null || String(v).trim() === '') return '-'
@@ -72,6 +76,19 @@ function formatMoneyTwoDecimals(n: number | null | undefined) {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })
+}
+
+function compareNullableValues (a: unknown, b: unknown): number {
+  if (a == null && b == null) return 0
+  if (a == null) return 1
+  if (b == null) return -1
+  if (typeof a === 'number' && typeof b === 'number') return a - b
+  return String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: 'base' })
+}
+
+function sortWithDirection<T> (items: T[], dir: SortDirection, pick: (row: T) => unknown): T[] {
+  const factor = dir === 'asc' ? 1 : -1
+  return [...items].sort((a, b) => compareNullableValues(pick(a), pick(b)) * factor)
 }
 
 function F4F5ReportingPageContent() {
@@ -103,6 +120,8 @@ function F4F5ReportingPageContent() {
   const [uploadF5Open, setUploadF5Open] = useState(false)
   const [viewF5Id, setViewF5Id] = useState<string | null>(null)
   const [viewF5Open, setViewF5Open] = useState(false)
+  const [f4Sort, setF4Sort] = useState<{ key: F4SortKey; dir: SortDirection }>({ key: 'report_date', dir: 'desc' })
+  const [f5Sort, setF5Sort] = useState<{ key: F5SortKey; dir: SortDirection }>({ key: 'report_date', dir: 'desc' })
 
   const [f4Page, setF4Page] = useState(1)
   const [f4PageSize, setF4PageSize] = useState(20)
@@ -291,8 +310,33 @@ function F4F5ReportingPageContent() {
     return result
   }, [f5Rows, f5Filters, f5FilterFields, getF5FieldValue])
 
-  const f4TotalPages = Math.max(1, Math.ceil(f4Filtered.length / f4PageSize))
-  const f5TotalPages = Math.max(1, Math.ceil(f5Filtered.length / f5PageSize))
+  const f4Sorted = useMemo(() => {
+    return sortWithDirection(f4Filtered, f4Sort.dir, (r) => {
+      if (f4Sort.key === 'err_name') return r.err_name ?? r.err_id ?? null
+      if (f4Sort.key === 'grant') return grantIdTableText(r)
+      if (f4Sort.key === 'state') return r.state ?? null
+      if (f4Sort.key === 'donor') return r.donor ?? null
+      if (f4Sort.key === 'report_date') return r.report_date ? new Date(r.report_date).getTime() : null
+      if (f4Sort.key === 'total_grant') return r.total_grant ?? null
+      if (f4Sort.key === 'total_expenses') return r.total_expenses ?? null
+      return r.remainder ?? null
+    })
+  }, [f4Filtered, f4Sort])
+
+  const f5Sorted = useMemo(() => {
+    return sortWithDirection(f5Filtered, f5Sort.dir, (r) => {
+      if (f5Sort.key === 'err_name') return r.err_name ?? null
+      if (f5Sort.key === 'grant') return grantIdTableText(r)
+      if (f5Sort.key === 'state') return r.state ?? null
+      if (f5Sort.key === 'donor') return r.donor ?? null
+      if (f5Sort.key === 'report_date') return r.report_date ? new Date(r.report_date).getTime() : null
+      if (f5Sort.key === 'activities_count') return Number(r.activities_count || 0)
+      return r.updated_at ? new Date(r.updated_at).getTime() : null
+    })
+  }, [f5Filtered, f5Sort])
+
+  const f4TotalPages = Math.max(1, Math.ceil(f4Sorted.length / f4PageSize))
+  const f5TotalPages = Math.max(1, Math.ceil(f5Sorted.length / f5PageSize))
 
   useEffect(() => {
     setF4Page(1)
@@ -312,13 +356,31 @@ function F4F5ReportingPageContent() {
 
   const f4PageRows = useMemo(() => {
     const start = (f4Page - 1) * f4PageSize
-    return f4Filtered.slice(start, start + f4PageSize)
-  }, [f4Filtered, f4Page, f4PageSize])
+    return f4Sorted.slice(start, start + f4PageSize)
+  }, [f4Sorted, f4Page, f4PageSize])
 
   const f5PageRows = useMemo(() => {
     const start = (f5Page - 1) * f5PageSize
-    return f5Filtered.slice(start, start + f5PageSize)
-  }, [f5Filtered, f5Page, f5PageSize])
+    return f5Sorted.slice(start, start + f5PageSize)
+  }, [f5Sorted, f5Page, f5PageSize])
+
+  const toggleF4Sort = (key: F4SortKey) => {
+    setF4Sort((prev) =>
+      prev.key === key
+        ? { key, dir: prev.dir === 'asc' ? 'desc' : 'asc' }
+        : { key, dir: 'asc' }
+    )
+  }
+
+  const toggleF5Sort = (key: F5SortKey) => {
+    setF5Sort((prev) =>
+      prev.key === key
+        ? { key, dir: prev.dir === 'asc' ? 'desc' : 'asc' }
+        : { key, dir: 'asc' }
+    )
+  }
+
+  const sortIndicator = (active: boolean, dir: SortDirection) => (active ? (dir === 'asc' ? '▲' : '▼') : '↕')
 
   // Handle restore from minimized across pages and when search params change
   useEffect(() => {
@@ -382,14 +444,46 @@ function F4F5ReportingPageContent() {
                 <Table className="min-w-[860px] text-xs [&_th]:py-1.5 [&_td]:py-1 [&_th]:px-2 [&_td]:px-2 [&_td]:text-xs">
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="text-xs whitespace-nowrap">{t('f4.headers.err')}</TableHead>
-                      <TableHead className="text-xs whitespace-nowrap">{t('f4.headers.grant_id')}</TableHead>
-                      <TableHead className="text-xs whitespace-nowrap">{t('f4.headers.state')}</TableHead>
-                      <TableHead className="text-xs whitespace-nowrap">{t('f4.headers.donor')}</TableHead>
-                      <TableHead className="text-xs whitespace-nowrap">{t('f4.headers.report_date')}</TableHead>
-                      <TableHead className="text-xs text-right whitespace-nowrap">{t('f4.headers.total_grant')}</TableHead>
-                      <TableHead className="text-xs text-right whitespace-nowrap">{t('f4.headers.total_expenses')}</TableHead>
-                      <TableHead className="text-xs text-right whitespace-nowrap">{t('f4.headers.remainder')}</TableHead>
+                      <TableHead className="text-xs whitespace-nowrap">
+                        <button type="button" className="inline-flex items-center gap-1" onClick={() => toggleF4Sort('err_name')}>
+                          {t('f4.headers.err')} <span className="text-[10px]">{sortIndicator(f4Sort.key === 'err_name', f4Sort.dir)}</span>
+                        </button>
+                      </TableHead>
+                      <TableHead className="text-xs whitespace-nowrap">
+                        <button type="button" className="inline-flex items-center gap-1" onClick={() => toggleF4Sort('grant')}>
+                          {t('f4.headers.grant_id')} <span className="text-[10px]">{sortIndicator(f4Sort.key === 'grant', f4Sort.dir)}</span>
+                        </button>
+                      </TableHead>
+                      <TableHead className="text-xs whitespace-nowrap">
+                        <button type="button" className="inline-flex items-center gap-1" onClick={() => toggleF4Sort('state')}>
+                          {t('f4.headers.state')} <span className="text-[10px]">{sortIndicator(f4Sort.key === 'state', f4Sort.dir)}</span>
+                        </button>
+                      </TableHead>
+                      <TableHead className="text-xs whitespace-nowrap">
+                        <button type="button" className="inline-flex items-center gap-1" onClick={() => toggleF4Sort('donor')}>
+                          {t('f4.headers.donor')} <span className="text-[10px]">{sortIndicator(f4Sort.key === 'donor', f4Sort.dir)}</span>
+                        </button>
+                      </TableHead>
+                      <TableHead className="text-xs whitespace-nowrap">
+                        <button type="button" className="inline-flex items-center gap-1" onClick={() => toggleF4Sort('report_date')}>
+                          {t('f4.headers.report_date')} <span className="text-[10px]">{sortIndicator(f4Sort.key === 'report_date', f4Sort.dir)}</span>
+                        </button>
+                      </TableHead>
+                      <TableHead className="text-xs text-right whitespace-nowrap">
+                        <button type="button" className="inline-flex items-center gap-1" onClick={() => toggleF4Sort('total_grant')}>
+                          {t('f4.headers.total_grant')} <span className="text-[10px]">{sortIndicator(f4Sort.key === 'total_grant', f4Sort.dir)}</span>
+                        </button>
+                      </TableHead>
+                      <TableHead className="text-xs text-right whitespace-nowrap">
+                        <button type="button" className="inline-flex items-center gap-1" onClick={() => toggleF4Sort('total_expenses')}>
+                          {t('f4.headers.total_expenses')} <span className="text-[10px]">{sortIndicator(f4Sort.key === 'total_expenses', f4Sort.dir)}</span>
+                        </button>
+                      </TableHead>
+                      <TableHead className="text-xs text-right whitespace-nowrap">
+                        <button type="button" className="inline-flex items-center gap-1" onClick={() => toggleF4Sort('remainder')}>
+                          {t('f4.headers.remainder')} <span className="text-[10px]">{sortIndicator(f4Sort.key === 'remainder', f4Sort.dir)}</span>
+                        </button>
+                      </TableHead>
                       <TableHead className="text-xs whitespace-nowrap w-[1%]">{t('f4.headers.actions')}</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -537,13 +631,41 @@ function F4F5ReportingPageContent() {
                 <Table className="min-w-[840px] text-xs [&_th]:py-1.5 [&_td]:py-1 [&_th]:px-2 [&_td]:px-2 [&_td]:text-xs">
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="text-xs whitespace-nowrap">{t('f5.headers.err')}</TableHead>
-                      <TableHead className="text-xs whitespace-nowrap">{t('f5.headers.grant_id')}</TableHead>
-                      <TableHead className="text-xs whitespace-nowrap">{t('f5.headers.state')}</TableHead>
-                      <TableHead className="text-xs whitespace-nowrap">{t('f5.headers.donor')}</TableHead>
-                      <TableHead className="text-xs whitespace-nowrap">{t('f5.headers.report_date')}</TableHead>
-                      <TableHead className="text-xs text-right whitespace-nowrap">{t('f5.headers.activities')}</TableHead>
-                      <TableHead className="text-xs whitespace-nowrap">{t('f5.headers.updated')}</TableHead>
+                      <TableHead className="text-xs whitespace-nowrap">
+                        <button type="button" className="inline-flex items-center gap-1" onClick={() => toggleF5Sort('err_name')}>
+                          {t('f5.headers.err')} <span className="text-[10px]">{sortIndicator(f5Sort.key === 'err_name', f5Sort.dir)}</span>
+                        </button>
+                      </TableHead>
+                      <TableHead className="text-xs whitespace-nowrap">
+                        <button type="button" className="inline-flex items-center gap-1" onClick={() => toggleF5Sort('grant')}>
+                          {t('f5.headers.grant_id')} <span className="text-[10px]">{sortIndicator(f5Sort.key === 'grant', f5Sort.dir)}</span>
+                        </button>
+                      </TableHead>
+                      <TableHead className="text-xs whitespace-nowrap">
+                        <button type="button" className="inline-flex items-center gap-1" onClick={() => toggleF5Sort('state')}>
+                          {t('f5.headers.state')} <span className="text-[10px]">{sortIndicator(f5Sort.key === 'state', f5Sort.dir)}</span>
+                        </button>
+                      </TableHead>
+                      <TableHead className="text-xs whitespace-nowrap">
+                        <button type="button" className="inline-flex items-center gap-1" onClick={() => toggleF5Sort('donor')}>
+                          {t('f5.headers.donor')} <span className="text-[10px]">{sortIndicator(f5Sort.key === 'donor', f5Sort.dir)}</span>
+                        </button>
+                      </TableHead>
+                      <TableHead className="text-xs whitespace-nowrap">
+                        <button type="button" className="inline-flex items-center gap-1" onClick={() => toggleF5Sort('report_date')}>
+                          {t('f5.headers.report_date')} <span className="text-[10px]">{sortIndicator(f5Sort.key === 'report_date', f5Sort.dir)}</span>
+                        </button>
+                      </TableHead>
+                      <TableHead className="text-xs text-right whitespace-nowrap">
+                        <button type="button" className="inline-flex items-center gap-1" onClick={() => toggleF5Sort('activities_count')}>
+                          {t('f5.headers.activities')} <span className="text-[10px]">{sortIndicator(f5Sort.key === 'activities_count', f5Sort.dir)}</span>
+                        </button>
+                      </TableHead>
+                      <TableHead className="text-xs whitespace-nowrap">
+                        <button type="button" className="inline-flex items-center gap-1" onClick={() => toggleF5Sort('updated_at')}>
+                          {t('f5.headers.updated')} <span className="text-[10px]">{sortIndicator(f5Sort.key === 'updated_at', f5Sort.dir)}</span>
+                        </button>
+                      </TableHead>
                       <TableHead className="text-xs whitespace-nowrap w-[1%]">{t('f5.headers.actions')}</TableHead>
                     </TableRow>
                   </TableHeader>
