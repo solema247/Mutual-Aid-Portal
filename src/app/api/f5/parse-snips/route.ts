@@ -1,28 +1,32 @@
 import { NextResponse } from 'next/server'
-import { GoogleGenerativeAI } from '@google/generative-ai'
 import { sanitizeModelJsonOutput } from '@/lib/geminiStructureOcrText'
+import { createGeminiParseSnipsResilient } from '@/lib/geminiParseSnipsResilient'
 import mammoth from 'mammoth'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
-type SnipKind = 'activities' | 'demographics' | 'questions'
+/** F5 wizard (`/api/f5/parse-snips`). Set `GEMINI_F5_PARSE_SNIPS_MODEL=gemini-2.5-flash` to force full Flash. */
+const F5_PARSE_SNIPS_MODEL =
+  process.env.GEMINI_F5_PARSE_SNIPS_MODEL?.trim() || 'gemini-2.5-flash-lite'
 
-function getModel (systemInstruction: string, maxOutputTokens = 8192) {
-  const apiKey = process.env.GEMINI_API_KEY
-  if (!apiKey) throw new Error('GEMINI_API_KEY not set')
-  const genAI = new GoogleGenerativeAI(apiKey)
-  return genAI.getGenerativeModel({
-    model: 'gemini-2.5-flash',
-    systemInstruction,
-    generationConfig: {
-      temperature: 0,
-      responseMimeType: 'application/json',
-      maxOutputTokens,
-    },
-  })
-}
+const F5_PARSE_SNIPS_FALLBACK_MODEL = 'gemini-2.5-flash'
+
+/** Narrative answers + Arabic text can exceed 8k output tokens; truncation yields "Unterminated string" in JSON.parse */
+const F5_QUESTIONS_MAX_OUTPUT = 32_768
+const F5_GRID_MAX_OUTPUT = 12_288
+/** Repair must be able to emit a full JSON copy of long malformed output */
+const F5_JSON_REPAIR_MAX_OUTPUT = 32_768
+
+const { generateContentResilient } = createGeminiParseSnipsResilient({
+  logPrefix: '[F5 parse-snips]',
+  primaryModelId: F5_PARSE_SNIPS_MODEL,
+  fallbackModelId: F5_PARSE_SNIPS_FALLBACK_MODEL,
+  temperatureDefault: 0,
+})
+
+type SnipKind = 'activities' | 'demographics' | 'questions'
 
 async function toInlineParts (files: File[]) {
   const parts: Array<{ inlineData?: { mimeType: string, data: string }, text?: string }> = []
@@ -59,16 +63,32 @@ async function parseJsonWithRepair (rawText: string) {
   const sanitized = sanitizeModelJsonOutput(rawText)
   try {
     return safeParse(sanitized)
-  } catch {
-    const repairModel = getModel(
-      'You will receive malformed JSON. Return STRICT valid JSON only, no markdown. Keep key names; only repair escapes, quotes, commas, and brackets.'
+  } catch (firstErr) {
+    console.warn('[F5 parse-snips] JSON_PARSE_RETRY', {
+      sanitizedChars: sanitized.length,
+      firstError: firstErr instanceof Error ? firstErr.message : String(firstErr),
+      tail200: sanitized.slice(-200),
+    })
+    const repairResult = await generateContentResilient(
+      'You will receive malformed JSON. Return STRICT valid JSON only, no markdown. Keep key names; only repair escapes, quotes, commas, and brackets. If the input was truncated mid-string, complete missing closing quotes/braces and use null for fields you cannot recover.',
+      F5_JSON_REPAIR_MAX_OUTPUT,
+      undefined,
+      [
+        { text: 'Repair this JSON and return valid JSON only:' },
+        { text: sanitized },
+      ] as any
     )
-    const repairResult = await repairModel.generateContent([
-      { text: 'Repair this JSON and return valid JSON only:' },
-      { text: sanitized },
-    ] as any)
     const repaired = sanitizeModelJsonOutput(repairResult.response.text())
-    return safeParse(repaired)
+    try {
+      return safeParse(repaired)
+    } catch (repairErr) {
+      console.error('[F5 parse-snips] JSON_PARSE_REPAIR_FAILED', {
+        repairedChars: repaired.length,
+        repairError: repairErr instanceof Error ? repairErr.message : String(repairErr),
+        tail200: repaired.slice(-200),
+      })
+      throw repairErr
+    }
   }
 }
 
@@ -167,8 +187,8 @@ async function parseWithGemini (kind: SnipKind, files: File[]) {
       : kind === 'demographics'
         ? DEMOGRAPHICS_INSTRUCTION
         : QUESTIONS_INSTRUCTION
-  const model = getModel(instruction, kind === 'questions' ? 8192 : 12288)
-  const result = await model.generateContent(parts as any)
+  const maxOut = kind === 'questions' ? F5_QUESTIONS_MAX_OUTPUT : F5_GRID_MAX_OUTPUT
+  const result = await generateContentResilient(instruction, maxOut, undefined, parts as any)
   return parseJsonWithRepair(result.response.text()) as Promise<Record<string, unknown>>
 }
 
@@ -184,6 +204,14 @@ export async function POST (request: Request) {
     if (!files.length) {
       return NextResponse.json({ error: 'No snippet files provided' }, { status: 400 })
     }
+
+    console.log('[F5 parse-snips] START', {
+      kind,
+      model: F5_PARSE_SNIPS_MODEL,
+      fileCount: files.length,
+      files: files.map(f => ({ name: f.name, mime: f.type || '(unknown)', bytes: f.size })),
+      ts: new Date().toISOString(),
+    })
 
     const parsed = await parseWithGemini(kind, files)
 

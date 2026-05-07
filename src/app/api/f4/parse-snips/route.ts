@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
-import { GoogleGenerativeAI } from '@google/generative-ai'
 import { sanitizeModelJsonOutput } from '@/lib/geminiStructureOcrText'
+import { createGeminiParseSnipsResilient } from '@/lib/geminiParseSnipsResilient'
 import { getF4AdditionalQuestionsSnipInstruction, getF4ExpenseTableSnipInstruction } from '@/lib/formStructurePrompts'
 import mammoth from 'mammoth'
 
@@ -8,26 +8,21 @@ export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
-type SnipKind = 'table' | 'questions' | 'receipts'
+/** F4 wizard only (`/api/f4/parse-snips`). Set `GEMINI_F4_PARSE_SNIPS_MODEL=gemini-2.5-flash` to compare with full Flash. */
+const F4_PARSE_SNIPS_MODEL =
+  process.env.GEMINI_F4_PARSE_SNIPS_MODEL?.trim() || 'gemini-2.5-flash-lite'
 
-function getModel (
-  systemInstruction: string,
-  maxOutputTokens = 8192,
-  opts?: { temperature?: number }
-) {
-  const apiKey = process.env.GEMINI_API_KEY
-  if (!apiKey) throw new Error('GEMINI_API_KEY not set')
-  const genAI = new GoogleGenerativeAI(apiKey)
-  return genAI.getGenerativeModel({
-    model: 'gemini-2.5-flash',
-    systemInstruction,
-    generationConfig: {
-      temperature: opts?.temperature ?? 0.1,
-      responseMimeType: 'application/json',
-      maxOutputTokens,
-    },
-  })
-}
+/** Used when Flash Lite returns 503/overload after retries (same prompts, higher capacity tier). */
+const F4_PARSE_SNIPS_FALLBACK_MODEL = 'gemini-2.5-flash'
+
+const { generateContentResilient } = createGeminiParseSnipsResilient({
+  logPrefix: '[F4 parse-snips]',
+  primaryModelId: F4_PARSE_SNIPS_MODEL,
+  fallbackModelId: F4_PARSE_SNIPS_FALLBACK_MODEL,
+  temperatureDefault: 0.1,
+})
+
+type SnipKind = 'table' | 'questions' | 'receipts'
 
 async function toInlineParts (files: File[]) {
   const parts: Array<{ inlineData?: { mimeType: string, data: string }, text?: string }> = []
@@ -127,16 +122,18 @@ async function parseJsonWithRepair (kind: SnipKind, rawText: string) {
       firstError: firstErr instanceof Error ? firstErr.message : String(firstErr),
       sample: sanitized.slice(0, 240),
     })
-    const repairModel = getModel(
+    const repairResult = await generateContentResilient(
       `You will receive malformed JSON output for F4 ${kind} extraction.
 Return STRICT valid JSON only, no markdown, no explanation.
 Do not change key names; only repair escaping/quoting/commas/brackets.
-If a value is unknown, keep it null.`
+If a value is unknown, keep it null.`,
+      8192,
+      undefined,
+      [
+        { text: 'Repair this JSON and return valid JSON only:' },
+        { text: sanitized },
+      ] as any
     )
-    const repairResult = await repairModel.generateContent([
-      { text: 'Repair this JSON and return valid JSON only:' },
-      { text: sanitized },
-    ] as any)
     const repaired = sanitizeModelJsonOutput(repairResult.response.text())
     try {
       return safeParse(repaired)
@@ -214,14 +211,18 @@ function alignExpensesToAmounts (parsed: Record<string, unknown>, amounts: numbe
 async function parseTableSnippetsWithGemini (files: File[]): Promise<unknown> {
   const parts = await toInlineParts(files)
 
-  const scanModel = getModel(TABLE_AMOUNT_SCAN_INSTRUCTION, 8192, { temperature: 0 })
-  const scanResult = await scanModel.generateContent([
-    {
-      text:
-        'Task: list every body-row amount from column قيمة المصروفات top-to-bottom, and footer A/B/C text. JSON only.',
-    },
-    ...parts as any[],
-  ] as any)
+  const scanResult = await generateContentResilient(
+    TABLE_AMOUNT_SCAN_INSTRUCTION,
+    8192,
+    { temperature: 0 },
+    [
+      {
+        text:
+          'Task: list every body-row amount from column قيمة المصروفات top-to-bottom, and footer A/B/C text. JSON only.',
+      },
+      ...parts as any[],
+    ] as any
+  )
   const scanRaw = scanResult.response.text()
   let scanParsed: Record<string, unknown> = {}
   try {
@@ -247,7 +248,6 @@ async function parseTableSnippetsWithGemini (files: File[]): Promise<unknown> {
   })
 
   const tableInstruction = getF4ExpenseTableSnipInstruction()
-  const detailModel = getModel(tableInstruction, 16384, { temperature: 0 })
   const detailHint =
     amounts.length > 0
       ? `This expense grid has EXACTLY ${amounts.length} data rows (confirmed from column قيمة المصروفات).
@@ -264,7 +264,12 @@ Extract footer A/B/C into total_expenses_text, total_grant_text, total_other_sou
 Return JSON only.`
       : `Extract the full expense table (every body row with description columns). Return JSON only.`
 
-  const detailResult = await detailModel.generateContent([{ text: detailHint }, ...parts as any[]] as any)
+  const detailResult = await generateContentResilient(
+    tableInstruction,
+    16384,
+    { temperature: 0 },
+    [{ text: detailHint }, ...parts as any[]] as any
+  )
   const detailRaw = detailResult.response.text()
   logTableGeminiRaw(detailRaw, detailResult.response)
 
@@ -327,15 +332,19 @@ Rules:
 - If truly unclear, return amount_value as null.`
 
   if (kind === 'receipts') {
-    const model = getModel(receiptInstruction)
     const receipts: Array<{ amount_value: number | null, currency: 'SDG' | 'USD' | null, reference: string | null }> = []
     for (let i = 0; i < files.length; i++) {
       const file = files[i]
       const parts = await toInlineParts([file])
-      const result = await model.generateContent([
-        { text: `Process receipt snippet ${i + 1}/${files.length}. Return JSON only.` },
-        ...parts as any[],
-      ] as any)
+      const result = await generateContentResilient(
+        receiptInstruction,
+        8192,
+        undefined,
+        [
+          { text: `Process receipt snippet ${i + 1}/${files.length}. Return JSON only.` },
+          ...parts as any[],
+        ] as any
+      )
       const parsed = await parseJsonWithRepair(kind, result.response.text())
       const obj = parsed && typeof parsed === 'object' ? parsed : {}
       const amount = obj && (obj as any).amount_value != null ? Number((obj as any).amount_value) : null
@@ -350,16 +359,20 @@ Rules:
     return { receipts }
   }
 
-  const model = getModel(questionInstruction, 8192, { temperature: 0 })
   const parts = await toInlineParts(files)
   /** Put images first so vision attention stays on the snippet; instruction reinforces numbered (4)-(7) mapping. */
-  const result = await model.generateContent([
-    ...parts as any[],
-    {
-      text:
-        'Using the image(s) above: map answers under (4)(5)(6)(7) to excess_expenses, surplus_use, lessons, training (see system rules). Copy نعم/لا verbatim when that is the whole answer. Return JSON only.',
-    },
-  ] as any)
+  const result = await generateContentResilient(
+    questionInstruction,
+    8192,
+    { temperature: 0 },
+    [
+      ...parts as any[],
+      {
+        text:
+          'Using the image(s) above: map answers under (4)(5)(6)(7) to excess_expenses, surplus_use, lessons, training (see system rules). Copy نعم/لا verbatim when that is the whole answer. Return JSON only.',
+      },
+    ] as any
+  )
   const rawText = result.response.text()
   logQuestionsGeminiRaw(rawText, result.response)
   return parseJsonWithRepair(kind, rawText)
@@ -384,6 +397,7 @@ export async function POST (request: Request) {
     }
     console.log('[F4 parse-snips] START', {
       kind,
+      model: F4_PARSE_SNIPS_MODEL,
       fileCount: files.length,
       files: files.map(f => ({ name: f.name, mime: f.type || '(unknown)', bytes: f.size })),
       ts: new Date().toISOString(),
