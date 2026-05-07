@@ -11,66 +11,20 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { supabase } from '@/lib/supabaseClient'
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '@/components/ui/table'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
 import { CollapsibleRow } from '@/components/ui/collapsible'
 import { Pencil, Flag } from 'lucide-react'
+import type { F5WizardKind, RegionSelection, WizardPageEntry } from '../f5Wizard/types'
+import { normalizeWizardPage } from '../f5Wizard/types'
+import { buildSnippetFilesFromSelections } from '../f5Wizard/buildSnippetFiles'
+import { f5ParseSnips, f5Save, f5UploadInit } from '../f5Wizard/f5WizardApi'
+import { useF5WizardViewerPages } from '../f5Wizard/useF5WizardViewerPages'
+import { useF5WizardDrag, type WizardDragState } from '../f5Wizard/useF5WizardDrag'
 
 interface UploadF5ModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   onSaved: () => void
   initialProjectId?: string | null
-}
-
-// Helper function to extract table data from raw OCR
-const extractTables = (rawOcr: string) => {
-  const activitiesTable: string[] = []
-  const demographicsTable: string[] = []
-  
-  if (!rawOcr) return { activitiesTable, demographicsTable }
-  
-  const lines = rawOcr.split('\n')
-  let inActivitiesSection = false
-  let inDemographicsSection = false
-  
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i].trim()
-    
-    // Detect activities table section
-    if (line.includes('الأنشطة المنفذة') || line.includes('إسم النشاط')) {
-      inActivitiesSection = true
-      inDemographicsSection = false
-      activitiesTable.push(line)
-      continue
-    }
-    
-    // Detect demographics table section
-    if (line.includes('الحصر الإضافي للمستفيدين') || (line.includes('ذكور') && line.includes('إناث'))) {
-      inDemographicsSection = true
-      inActivitiesSection = false
-      demographicsTable.push(line)
-      continue
-    }
-    
-    // Stop activities section when we hit demographics or narrative
-    if (inActivitiesSection && (line.includes('الحصر الإضافي') || line.includes('التأثيرات'))) {
-      inActivitiesSection = false
-    }
-    
-    // Stop demographics section when we hit narrative
-    if (inDemographicsSection && (line.includes('التأثيرات') || line.includes('أروي'))) {
-      inDemographicsSection = false
-    }
-    
-    // Add lines to appropriate table
-    if (inActivitiesSection && line.length > 0) {
-      activitiesTable.push(line)
-    } else if (inDemographicsSection && line.length > 0) {
-      demographicsTable.push(line)
-    }
-  }
-  
-  return { activitiesTable, demographicsTable }
 }
 
 export default function UploadF5Modal({ open, onOpenChange, onSaved, initialProjectId }: UploadF5ModalProps) {
@@ -94,12 +48,27 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved, initialProj
   const [file, setFile] = useState<File | null>(null)
   const [reportDate, setReportDate] = useState('')
   const [isLoading, setIsLoading] = useState(false)
-  const [step, setStep] = useState<'select'|'preview'>('select')
+  const [step, setStep] = useState<'select'|'wizard'|'preview'>('select')
   const [summaryDraft, setSummaryDraft] = useState<any | null>(null)
   const [reachDraft, setReachDraft] = useState<any[]>([])
   const [tempKey, setTempKey] = useState<string>('')
   const [fileUrl, setFileUrl] = useState<string>('')
-  const [rawOcr, setRawOcr] = useState<string>('')
+  const [wizardLoading, setWizardLoading] = useState<F5WizardKind | null>(null)
+  const [wizardKind, setWizardKind] = useState<F5WizardKind>('activities')
+  const [wizardProgress, setWizardProgress] = useState<{ activities: boolean; demographics: boolean; questions: boolean }>({
+    activities: false,
+    demographics: false,
+    questions: false,
+  })
+  const [viewerMode, setViewerMode] = useState<'pdf' | 'image' | 'unsupported'>('unsupported')
+  const [wizardPages, setWizardPages] = useState<WizardPageEntry[]>([])
+  const [isRenderingPages, setIsRenderingPages] = useState(false)
+  const [selectionByKind, setSelectionByKind] = useState<Record<F5WizardKind, RegionSelection[]>>({
+    activities: [],
+    demographics: [],
+    questions: [],
+  })
+  const [dragging, setDragging] = useState<WizardDragState>(null)
   const [adjustOpen, setAdjustOpen] = useState<{ row: number | null; key: string } | null>(null)
   const [adjustTempValue, setAdjustTempValue] = useState<number | ''>('')
   const [adjustTempNote, setAdjustTempNote] = useState<string>('')
@@ -111,6 +80,26 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved, initialProj
   const [isRestoring, setIsRestoring] = useState(false)
   const [entryMode, setEntryMode] = useState<'upload' | 'manual'>('upload')
   const [attachmentFile, setAttachmentFile] = useState<File | null>(null)
+  const wizardViewerScrollRef = useRef<HTMLDivElement | null>(null)
+  const wizardPageWrapRefs = useRef<(HTMLDivElement | null)[]>([])
+  const draggingRef = useRef<WizardDragState>(null)
+  const wizardKindRef = useRef(wizardKind)
+  wizardKindRef.current = wizardKind
+
+  useEffect(() => {
+    draggingRef.current = dragging
+  }, [dragging])
+
+  const { startDragOnPage } = useF5WizardDrag({
+    open,
+    step,
+    wizardKindRef,
+    wizardPageWrapRefs,
+    wizardViewerScrollRef,
+    draggingRef,
+    setDragging,
+    setSelectionByKind,
+  })
 
   const keyToOriginal = (row: any, key: string): number => {
     switch (key) {
@@ -255,7 +244,12 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved, initialProj
         setReachDraft([])
         setTempKey('')
         setFileUrl('')
-        setRawOcr('')
+        setWizardProgress({ activities: false, demographics: false, questions: false })
+        setSelectionByKind({ activities: [], demographics: [], questions: [] })
+        setWizardKind('activities')
+        setWizardPages([])
+        setViewerMode('unsupported')
+        setIsRenderingPages(false)
         setEntryMode('upload')
         setAttachmentFile(null)
         return
@@ -269,7 +263,10 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved, initialProj
         if (p?.type === 'f5') {
           isRestoringRef.current = true
           setIsRestoring(true)
-          if (p.step) setStep(p.step)
+          if (p.step) {
+            setStep(p.step)
+            if (p.step === 'wizard') setIsRenderingPages(true)
+          }
           if (p.summaryDraft) setSummaryDraft(p.summaryDraft)
           if (Array.isArray(p.reachDraft)) setReachDraft(p.reachDraft)
           if (p.reportDate) setReportDate(p.reportDate)
@@ -460,33 +457,167 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved, initialProj
     setIsLoading(true)
     try {
       const ext = (file.name.split('.').pop() || 'pdf').toLowerCase()
-      const initRes = await fetch('/api/f4/upload/init', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ project_id: actualProjectId, ext }) })
-      const initJson = await initRes.json()
-      if (!initRes.ok) throw new Error(initJson.error || 'Init failed')
-      const key = initJson.file_key_temp as string
+      const { file_key_temp: key } = await f5UploadInit(actualProjectId, ext)
       setTempKey(key)
       const { error: upErr } = await supabase.storage.from('images').upload(key, file, { upsert: true })
       if (upErr) throw upErr
-      const parseRes = await fetch('/api/f5/parse', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ project_id: actualProjectId, file_key_temp: key }) })
-      const parseJson = await parseRes.json()
-      if (!parseRes.ok) throw new Error(parseJson.error || 'Parse failed')
-      setSummaryDraft({ ...(parseJson.summaryDraft || {}), report_date: reportDate || (parseJson.summaryDraft?.report_date || '') })
-      setReachDraft(parseJson.reachDraft || [])
-      setRawOcr(parseJson.summaryDraft?.raw_ocr || '')
-      
+
       // Get signed URL for file viewing
       const { data: signedUrl } = await supabase.storage.from('images').createSignedUrl(key, 3600)
       if (signedUrl?.signedUrl) {
         setFileUrl(signedUrl.signedUrl)
       }
-      
-      setStep('preview')
+
+      setSummaryDraft((prev:any) => ({
+        ...(prev || {}),
+        report_date: reportDate || prev?.report_date || '',
+        reporting_person: prev?.reporting_person || '',
+        positive_changes: prev?.positive_changes || '',
+        negative_results: prev?.negative_results || '',
+        unexpected_results: prev?.unexpected_results || '',
+        lessons_learned: prev?.lessons_learned || '',
+        suggestions: prev?.suggestions || '',
+      }))
+      setReachDraft([])
+      setWizardProgress({ activities: false, demographics: false, questions: false })
+      setSelectionByKind({ activities: [], demographics: [], questions: [] })
+      setWizardKind('activities')
+      setIsRenderingPages(true)
+      setStep('wizard')
     } catch (e) {
       console.error(e)
       alert('Failed to process file')
     } finally {
       setIsLoading(false)
     }
+  }
+
+  useF5WizardViewerPages({
+    step,
+    fileUrl,
+    file,
+    tempKey,
+    setViewerMode,
+    setWizardPages,
+    setIsRenderingPages,
+  })
+
+  const expectedWizardKind: F5WizardKind =
+    !wizardProgress.activities ? 'activities' : !wizardProgress.demographics ? 'demographics' : 'questions'
+
+  useEffect(() => {
+    if (wizardKind !== expectedWizardKind) setWizardKind(expectedWizardKind)
+  }, [expectedWizardKind, wizardKind])
+
+  const normalizeActivityName = (value: unknown) => String(value || '').trim().toLowerCase().replace(/\s+/g, ' ')
+
+  const mergeDemographicsIntoReach = (incoming: any[]) => {
+    setReachDraft((prev) => {
+      const next = [...prev]
+      for (let i = 0; i < incoming.length; i++) {
+        const row = incoming[i] || {}
+        const targetName = normalizeActivityName(row.activity_name)
+        let idx = targetName ? next.findIndex((r: any) => normalizeActivityName(r?.activity_name) === targetName) : -1
+        if (idx < 0 && i < next.length) idx = i
+        if (idx < 0) {
+          next.push({
+            activity_name: row.activity_name ? String(row.activity_name) : '',
+            activity_goal: '',
+            location: '',
+            start_date: '',
+            end_date: '',
+            individual_count: null,
+            household_count: null,
+            male_count: row.male_count ?? null,
+            female_count: row.female_count ?? null,
+            under18_male: row.under18_male ?? null,
+            under18_female: row.under18_female ?? null,
+            people_with_disabilities: row.people_with_disabilities ?? null,
+            is_draft: true,
+          })
+          continue
+        }
+        const existing = next[idx] || {}
+        next[idx] = {
+          ...existing,
+          male_count: row.male_count ?? existing.male_count ?? null,
+          female_count: row.female_count ?? existing.female_count ?? null,
+          under18_male: row.under18_male ?? existing.under18_male ?? null,
+          under18_female: row.under18_female ?? existing.under18_female ?? null,
+          people_with_disabilities: row.people_with_disabilities ?? existing.people_with_disabilities ?? null,
+        }
+      }
+      return next
+    })
+  }
+
+  const parseSnips = async (kind: F5WizardKind, overrideFiles?: File[]) => {
+    const actualProjectId = projectId || initialProjectId
+    if (!actualProjectId) return
+    if (kind !== expectedWizardKind) {
+      alert(`Please complete the ${expectedWizardKind} step first.`)
+      return
+    }
+    const files = overrideFiles || []
+    if (!files.length) {
+      alert('Please highlight at least one region first.')
+      return
+    }
+    setWizardLoading(kind)
+    try {
+      const form = new FormData()
+      form.append('kind', kind)
+      form.append('project_id', String(actualProjectId))
+      files.forEach((f) => form.append('files', f))
+      const json = (await f5ParseSnips(form)) as Record<string, unknown>
+
+      if (kind === 'activities') {
+        const rows = Array.isArray(json.reach) ? json.reach : []
+        setReachDraft(rows.map((r: any) => ({
+          activity_name: r.activity_name != null ? String(r.activity_name) : '',
+          activity_goal: r.activity_goal != null ? String(r.activity_goal) : '',
+          location: r.location != null ? String(r.location) : '',
+          start_date: r.start_date != null ? String(r.start_date) : '',
+          end_date: r.end_date != null ? String(r.end_date) : '',
+          individual_count: r.individual_count != null ? Number(r.individual_count) : null,
+          household_count: r.household_count != null ? Number(r.household_count) : null,
+          male_count: null,
+          female_count: null,
+          under18_male: null,
+          under18_female: null,
+          people_with_disabilities: null,
+          is_draft: true,
+        })))
+        setWizardProgress(prev => ({ ...prev, activities: true }))
+        setWizardKind('demographics')
+      } else if (kind === 'demographics') {
+        const rows = Array.isArray(json.reach) ? json.reach : []
+        mergeDemographicsIntoReach(rows as any[])
+        setWizardProgress(prev => ({ ...prev, demographics: true }))
+        setWizardKind('questions')
+      } else {
+        setSummaryDraft((prev: any) => ({
+          ...(prev || {}),
+          positive_changes: json.positive_changes ?? prev?.positive_changes ?? '',
+          negative_results: json.negative_results ?? prev?.negative_results ?? '',
+          unexpected_results: json.unexpected_results ?? prev?.unexpected_results ?? '',
+          lessons_learned: json.lessons_learned ?? prev?.lessons_learned ?? '',
+          suggestions: json.suggestions ?? prev?.suggestions ?? '',
+          reporting_person: json.reporting_person ?? prev?.reporting_person ?? '',
+        }))
+        setWizardProgress(prev => ({ ...prev, questions: true }))
+      }
+    } catch (e) {
+      console.error('[F5 wizard] snippet parse failed', e)
+      alert('Failed to parse snippet files')
+    } finally {
+      setWizardLoading(null)
+    }
+  }
+
+  const runWizardStep = async (kind: F5WizardKind) => {
+    const files = await buildSnippetFilesFromSelections(kind, wizardPages, selectionByKind[kind] ?? [])
+    await parseSnips(kind, files)
   }
 
   const handleContinueToForm = async () => {
@@ -496,10 +627,7 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved, initialProj
     try {
       if (attachmentFile) {
         const ext = (attachmentFile.name.split('.').pop() || 'pdf').toLowerCase()
-        const initRes = await fetch('/api/f4/upload/init', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ project_id: actualProjectId, ext }) })
-        const initJson = await initRes.json()
-        if (!initRes.ok) throw new Error(initJson.error || 'Init failed')
-        const key = initJson.file_key_temp as string
+        const { file_key_temp: key } = await f5UploadInit(actualProjectId, ext)
         const { error: upErr } = await supabase.storage.from('images').upload(key, attachmentFile, { upsert: true })
         if (upErr) throw upErr
         setTempKey(key)
@@ -552,9 +680,7 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved, initialProj
     setIsLoading(true)
     try {
       const summaryToSave = { ...summaryDraft }
-      const res = await fetch('/api/f5/save', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ project_id: actualProjectId, summary: summaryToSave, reach: reachDraft, file_key_temp: tempKey }) })
-      const json = await res.json()
-      if (!res.ok) throw new Error(json.error || 'Save failed')
+      await f5Save({ project_id: actualProjectId, summary: summaryToSave, reach: reachDraft, file_key_temp: tempKey })
       try { window.localStorage.removeItem('err_minimized_modal') } catch {}
       onOpenChange(false)
       onSaved()
@@ -577,7 +703,12 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved, initialProj
     setStep('select')
     setTempKey('')
     setFileUrl('')
-    setRawOcr('')
+    setWizardProgress({ activities: false, demographics: false, questions: false })
+    setSelectionByKind({ activities: [], demographics: [], questions: [] })
+    setWizardKind('activities')
+    setWizardPages([])
+    setViewerMode('unsupported')
+    setIsRenderingPages(false)
     setEntryMode('upload')
     setAttachmentFile(null)
   }
@@ -608,7 +739,12 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved, initialProj
           setReachDraft([])
           setTempKey('')
           setFileUrl('')
-          setRawOcr('')
+          setWizardProgress({ activities: false, demographics: false, questions: false })
+          setSelectionByKind({ activities: [], demographics: [], questions: [] })
+          setWizardKind('activities')
+          setWizardPages([])
+          setViewerMode('unsupported')
+          setIsRenderingPages(false)
           setEntryMode('upload')
           setAttachmentFile(null)
         }
@@ -741,6 +877,137 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved, initialProj
                   </div>
                 </>
               )}
+            </div>
+          ) : step === 'wizard' ? (
+            <div className="flex flex-col gap-2 min-h-0 max-h-[82vh]">
+              <div className="sticky top-0 z-30 shrink-0 rounded-md border bg-background/95 px-2 py-1.5 shadow-sm supports-[backdrop-filter]:backdrop-blur-sm">
+                <p className="text-[11px] leading-snug text-muted-foreground pb-1.5 border-b border-border/70 mb-1.5">
+                  Highlight a section directly on the document viewer, then run extraction for this step.
+                </p>
+                <div className="flex flex-nowrap items-center gap-2 overflow-x-auto">
+                  <div className="flex items-center gap-1 shrink-0">
+                    <span className={`inline-flex h-7 items-center rounded border px-1.5 text-[11px] leading-none ${wizardProgress.activities ? 'bg-green-50 border-green-300 text-green-800' : expectedWizardKind === 'activities' ? 'bg-sky-50 border-sky-300 text-sky-800' : 'bg-muted/30 text-muted-foreground'}`}>1) Activities</span>
+                    <span className={`inline-flex h-7 items-center rounded border px-1.5 text-[11px] leading-none ${wizardProgress.demographics ? 'bg-green-50 border-green-300 text-green-800' : expectedWizardKind === 'demographics' ? 'bg-sky-50 border-sky-300 text-sky-800' : 'bg-muted/30 text-muted-foreground'}`}>2) Demographics</span>
+                    <span className={`inline-flex h-7 items-center rounded border px-1.5 text-[11px] leading-none ${wizardProgress.questions ? 'bg-green-50 border-green-300 text-green-800' : expectedWizardKind === 'questions' ? 'bg-sky-50 border-sky-300 text-sky-800' : 'bg-muted/30 text-muted-foreground'}`}>3) Questions</span>
+                  </div>
+                  <span className="text-[11px] leading-tight text-muted-foreground whitespace-nowrap shrink-0">
+                    · Draw on one or more pages · Step <strong className="font-semibold text-foreground">{expectedWizardKind}</strong> · {selectionByKind[expectedWizardKind].length} selection(s)
+                  </span>
+                  <div className="flex-1 min-w-[8px] shrink" aria-hidden />
+                  <div className="flex flex-nowrap items-center gap-1.5 shrink-0">
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="h-7 px-2.5 text-[11px]"
+                      onClick={() => runWizardStep(expectedWizardKind)}
+                      disabled={wizardLoading != null || selectionByKind[expectedWizardKind].length === 0}
+                    >
+                      {wizardLoading === expectedWizardKind ? 'Processing…' : `Process ${expectedWizardKind}`}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-7 px-2.5 text-[11px]"
+                      onClick={() => setSelectionByKind(prev => ({ ...prev, [expectedWizardKind]: [] }))}
+                      disabled={wizardLoading != null || selectionByKind[expectedWizardKind].length === 0}
+                    >
+                      Clear current step selections
+                    </Button>
+                    {expectedWizardKind === 'activities' && (
+                      <span className="text-[11px] text-muted-foreground whitespace-nowrap">Rows: {reachDraft.length}</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {viewerMode === 'unsupported' && !isRenderingPages && (
+                <div className="shrink-0 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded p-3">
+                  This file type cannot be rendered for in-modal selection yet. Please use PDF or image files for guided snip/highlight extraction.
+                </div>
+              )}
+
+              <Card className="flex min-h-0 flex-1 flex-col overflow-hidden border">
+                <CardHeader className="shrink-0 py-2 pb-1.5">
+                  <CardTitle className="text-sm font-semibold">Document viewer — drag to select regions</CardTitle>
+                </CardHeader>
+                <CardContent className="flex min-h-0 flex-1 flex-col overflow-hidden p-0 px-6 pb-6 pt-0">
+                  <div ref={wizardViewerScrollRef} className="min-h-0 flex-1 overflow-auto pr-1">
+                    {isRenderingPages ? (
+                      <div className="w-full min-h-[280px] border rounded flex items-center justify-center text-muted-foreground text-sm">Rendering document pages…</div>
+                    ) : wizardPages.length > 0 ? (
+                      <div className="space-y-4 pb-2">
+                        {wizardPages.map((raw, pageIndex) => {
+                          const page = normalizeWizardPage(raw)
+                          if (!page?.dataUrl) return null
+                          const keySuffix = page.dataUrl.length > 32 ? page.dataUrl.slice(0, 32) : page.dataUrl
+                          return (
+                            <div
+                              key={`${pageIndex}-${keySuffix}`}
+                              className="mx-auto w-fit max-w-full border rounded overflow-hidden bg-white"
+                            >
+                              <div
+                                ref={(el) => {
+                                  wizardPageWrapRefs.current[pageIndex] = el
+                                }}
+                                className="relative inline-block max-w-full select-none touch-none"
+                                onMouseDown={(e) => startDragOnPage(pageIndex, e)}
+                              >
+                                <img
+                                  src={page.dataUrl}
+                                  alt={`Page ${pageIndex + 1}`}
+                                  width={page.displayWidth || undefined}
+                                  height={page.displayHeight || undefined}
+                                  className="max-w-full h-auto w-auto select-none pointer-events-none block"
+                                  style={{
+                                    width: page.displayWidth ? `${page.displayWidth}px` : undefined,
+                                    maxWidth: '100%',
+                                    height: 'auto',
+                                  }}
+                                />
+                                {selectionByKind[expectedWizardKind]
+                                  .filter(s => s.pageIndex === pageIndex)
+                                  .map((s, idx) => (
+                                    <div
+                                      key={`sel-${expectedWizardKind}-${pageIndex}-${idx}`}
+                                      className="absolute border-2 border-sky-500 bg-sky-300/15 pointer-events-none"
+                                      style={{ left: s.x, top: s.y, width: s.w, height: s.h }}
+                                    />
+                                  ))}
+                                {dragging && dragging.pageIndex === pageIndex && (
+                                  <div
+                                    className="absolute border-2 border-orange-500 bg-orange-300/20 pointer-events-none"
+                                    style={{
+                                      left: Math.min(dragging.sx, dragging.cx),
+                                      top: Math.min(dragging.sy, dragging.cy),
+                                      width: Math.abs(dragging.cx - dragging.sx),
+                                      height: Math.abs(dragging.cy - dragging.sy),
+                                    }}
+                                  />
+                                )}
+                                <div className="absolute top-2 left-2 bg-black/60 text-white text-xs px-2 py-1 rounded pointer-events-none">
+                                  Page {pageIndex + 1}
+                                </div>
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    ) : (
+                      <div className="w-full h-[400px] border rounded flex items-center justify-center text-muted-foreground">
+                        No renderable pages available
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+
+              <div className="shrink-0 flex justify-between border-t pt-3">
+                <Button variant="outline" onClick={() => setStep('select')} disabled={!!initialProjectId || wizardLoading != null}>Back</Button>
+                <Button onClick={() => setStep('preview')} disabled={wizardLoading != null || !wizardProgress.activities || !wizardProgress.demographics || !wizardProgress.questions}>
+                  Continue to preview
+                </Button>
+              </div>
             </div>
           ) : step === 'preview' ? (
             <div className="space-y-4">
@@ -1157,50 +1424,6 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved, initialProj
               </Card>
             </CollapsibleRow>
 
-            {/* Extracted Tables - Collapsible Section */}
-            <CollapsibleRow title={t('f5.preview.tabs.tables')} defaultOpen={false}>
-              <div className="space-y-6">
-                {(() => {
-                  const { activitiesTable, demographicsTable } = extractTables(rawOcr)
-                  return (
-                    <>
-                      <Card>
-                        <CardHeader>
-                          <CardTitle>Activities Table (الأنشطة المنفذة)</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                          <div className="bg-muted/30 p-4 rounded font-mono text-sm whitespace-pre-wrap max-h-[300px] overflow-y-auto" dir="rtl">
-                            {activitiesTable.length > 0 ? activitiesTable.join('\n') : 'No activities table detected'}
-                          </div>
-                        </CardContent>
-                      </Card>
-                      
-                      <Card>
-                        <CardHeader>
-                          <CardTitle>Demographics Table (الحصر الإضافي للمستفيدين)</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                          <div className="bg-muted/30 p-4 rounded font-mono text-sm whitespace-pre-wrap max-h-[300px] overflow-y-auto" dir="rtl">
-                            {demographicsTable.length > 0 ? demographicsTable.join('\n') : 'No demographics table detected'}
-                          </div>
-                        </CardContent>
-                      </Card>
-                      
-                      <Card>
-                        <CardHeader>
-                          <CardTitle>Full OCR Text</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                          <div className="bg-muted/30 p-4 rounded font-mono text-sm whitespace-pre-wrap max-h-[400px] overflow-y-auto" dir="rtl">
-                            {rawOcr || 'No OCR text available'}
-                          </div>
-                        </CardContent>
-                      </Card>
-                    </>
-                  )
-                })()}
-              </div>
-            </CollapsibleRow>
           </div>
           ) : null
         )
