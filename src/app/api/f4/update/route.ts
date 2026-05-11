@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { translateF4Summary, translateF4Expenses } from '@/lib/translateHelper'
 import { inferF4SourceLanguage, normalizePaymentDateForDb } from '@/lib/f4SaveNormalize'
+import { fetchF4SectorsForMatch, normalizeF4ExpenseActivitiesToSectors } from '@/lib/f4ExpenseSectors'
 
 export async function POST(req: Request) {
   try {
@@ -59,8 +60,14 @@ export async function POST(req: Request) {
     // Insert updated expenses
     let expense_ids: number[] = []
     if (Array.isArray(expenses) && expenses.length) {
-      // Translate expenses if needed
-      const { translatedData: translatedExpenses, originalText: expensesOriginalText } = await translateF4Expenses(expenses, sourceLanguage)
+      const sectors = await fetchF4SectorsForMatch(supabase)
+      const expenseActivityOriginal = expenses.map((e: any) => e?.expense_activity)
+      const expensesCanon = normalizeF4ExpenseActivitiesToSectors(expenses, sectors)
+      const { translatedData: translatedExpenses, originalText: expensesOriginalText } = await translateF4Expenses(
+        expensesCanon,
+        sourceLanguage,
+        { expenseActivityOriginal }
+      )
       console.log('F4 expenses translation completed. Original text preserved for', expensesOriginalText.length, 'expenses')
 
       const reportDateStr =

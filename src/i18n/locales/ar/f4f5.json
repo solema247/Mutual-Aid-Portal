@@ -79,6 +79,7 @@
         "title": "المصروفات",
         "empty": "لا توجد مصروفات مستخرجة",
         "add": "إضافة مصروف",
+        "sector_placeholder": "اختر القطاع",
         "cols": {
           "activity": "النشاط",
           "description": "الوصف",

@@ -73,8 +73,7 @@ export default function ViewF5Modal({ reportId, open, onOpenChange, onSaved }: V
           under18_female: r.under18_female ?? null,
           people_with_disabilities: r.people_with_disabilities ?? null
         })))
-      } catch (e) {
-        console.error(e)
+      } catch {
         setData(null)
       } finally {
         setLoading(false)
@@ -142,8 +141,7 @@ export default function ViewF5Modal({ reportId, open, onOpenChange, onSaved }: V
           people_with_disabilities: r.people_with_disabilities ?? null
         })))
       }
-    } catch (e) {
-      console.error(e)
+    } catch {
       alert('Failed to update F5')
     } finally {
       setSaving(false)
@@ -168,8 +166,7 @@ export default function ViewF5Modal({ reportId, open, onOpenChange, onSaved }: V
       setIsEditing(false)
       onOpenChange(false)
       if (onSaved) onSaved()
-    } catch (e) {
-      console.error(e)
+    } catch {
       alert('Failed to delete F5 report')
     } finally {
       setDeleting(false)
@@ -541,8 +538,7 @@ export default function ViewF5Modal({ reportId, open, onOpenChange, onSaved }: V
                         document.body.appendChild(link)
                         link.click()
                         document.body.removeChild(link)
-                      } catch (error) {
-                        console.error('Error opening file:', error)
+                      } catch {
                         alert(`Failed to open file`)
                       }
                     }}

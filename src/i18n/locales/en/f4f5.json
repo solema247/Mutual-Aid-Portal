@@ -79,6 +79,7 @@
         "title": "Expenses",
         "empty": "No expenses parsed",
         "add": "Add expense",
+        "sector_placeholder": "Select sector",
         "cols": {
           "activity": "Activity",
           "description": "Description",

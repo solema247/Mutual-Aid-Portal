@@ -336,7 +336,6 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved, initialProj
             .single()
           
           if (error || !historicalData) {
-            console.error('Failed to load historical project:', error)
             return
           }
           
@@ -352,7 +351,6 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved, initialProj
             .single()
           
           if (error || !projectData) {
-            console.error('Failed to load portal project:', error)
             return
           }
           
@@ -360,8 +358,8 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved, initialProj
           setSelectedRoomId(projectData.emergency_room_id || '')
           // projectId already set above
         }
-      } catch (e) {
-        console.error('Failed to load initial project', e)
+      } catch {
+        /* ignore */
       }
     })()
   }, [open, initialProjectId])
@@ -500,8 +498,7 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved, initialProj
       setWizardKind('activities')
       setIsRenderingPages(true)
       setStep('wizard')
-    } catch (e) {
-      console.error(e)
+    } catch {
       alert('Failed to process file')
     } finally {
       setIsLoading(false)
@@ -623,8 +620,7 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved, initialProj
         }))
         setWizardProgress(prev => ({ ...prev, questions: true }))
       }
-    } catch (e) {
-      console.error('[F5 wizard] snippet parse failed', e)
+    } catch {
       alert('Failed to parse snippet files')
     } finally {
       setWizardLoading(null)
@@ -679,8 +675,7 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved, initialProj
         is_draft: true
       }])
       setStep('preview')
-    } catch (e) {
-      console.error(e)
+    } catch {
       alert('Failed to continue')
     } finally {
       setIsLoading(false)
@@ -689,12 +684,10 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved, initialProj
 
   const handleSave = async () => {
     if (isRestoring || isRestoringRef.current) {
-      console.warn('Cannot save while restoring state')
       return
     }
     const actualProjectId = projectId || initialProjectId
     if (!actualProjectId || !summaryDraft) {
-      console.warn('Missing required fields:', { projectId: actualProjectId, hasSummaryDraft: !!summaryDraft })
       return
     }
     const previewDate = normalizeReportDateInput(summaryDraft?.report_date ?? reportDate)
@@ -709,8 +702,7 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved, initialProj
       try { window.localStorage.removeItem('err_minimized_modal') } catch {}
       onOpenChange(false)
       onSaved()
-    } catch (e) {
-      console.error(e)
+    } catch {
       alert('Failed to save F5')
     } finally {
       setIsLoading(false)

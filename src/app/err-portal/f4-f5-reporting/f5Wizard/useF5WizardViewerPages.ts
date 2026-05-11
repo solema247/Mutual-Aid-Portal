@@ -102,8 +102,7 @@ export function useF5WizardViewerPages ({
           setViewerMode('unsupported')
           setWizardPages([])
         }
-      } catch (e) {
-        console.error('[F5 wizard] failed to render viewer pages', e)
+      } catch {
         if (!cancelled) {
           setViewerMode('unsupported')
           setWizardPages([])

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
+import { fetchF4SectorsForMatch, normalizeF4ExpenseActivitiesToSectors } from '@/lib/f4ExpenseSectors'
 import { processFForm } from '@/lib/ocrProcess'
 
 export const runtime = 'nodejs'
@@ -881,6 +882,9 @@ export async function POST(request: Request) {
     console.log('[F4 parse] sums:', { draftExpenseSumSdg, draftExpenseSumUsd })
     console.log('[F4 parse] timing ms:', { gemini_pipeline: ocrMs, route_total: Date.now() - routeStart })
     console.log('[F4 parse] NOT IN THIS RESPONSE: Total Grant USD, per-row USD, Total Expenses USD, Remainder USD → user exchange rate + project (F1) in UI')
+
+    const sectorsForF4 = await fetchF4SectorsForMatch(supabase)
+    expensesDraft = normalizeF4ExpenseActivitiesToSectors(expensesDraft, sectorsForF4)
 
     return NextResponse.json({ summaryDraft, expensesDraft, aiOutput })
   } catch (e) {

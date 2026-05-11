@@ -40,15 +40,6 @@ export async function buildSnippetFilesFromSelections (
     sh = Math.max(1, Math.min(sh, img.naturalHeight - sy))
     const outW = Math.max(1, Math.floor(sw))
     const outH = Math.max(1, Math.floor(sh))
-    console.info('[F5 wizard] snip crop', {
-      kind,
-      pageIndex: sel.pageIndex,
-      selectionCss: { x, y, w, h },
-      refW,
-      refH,
-      natural: { w: img.naturalWidth, h: img.naturalHeight },
-      bitmapCrop: { sx: Math.floor(sx), sy: Math.floor(sy), sw: outW, sh: outH },
-    })
     const canvas = document.createElement('canvas')
     canvas.width = outW
     canvas.height = outH

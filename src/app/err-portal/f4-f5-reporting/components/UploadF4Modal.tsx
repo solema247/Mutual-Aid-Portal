@@ -26,6 +26,8 @@ import {
   isValidReportDate,
   normalizeReportDateInput,
 } from '@/lib/reportUploadDate'
+import { type F4SectorRow } from '@/lib/f4ExpenseSectors'
+import { F4ExpenseSectorSelect } from './F4ExpenseSectorSelect'
 
 interface UploadF4ModalProps {
   open: boolean
@@ -100,6 +102,7 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
     receipts: [],
   })
   const [dragging, setDragging] = useState<WizardDragState>(null)
+  const [f4Sectors, setF4Sectors] = useState<F4SectorRow[]>([])
   const saveInFlightRef = useRef(false)
   const wizardViewerScrollRef = useRef<HTMLDivElement | null>(null)
   const wizardPageWrapRefs = useRef<(HTMLDivElement | null)[]>([])
@@ -114,6 +117,17 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
   useEffect(() => {
     fxRateRef.current = fxRate
   }, [fxRate])
+
+  useEffect(() => {
+    if (!open) return
+    ;(async () => {
+      const { data, error } = await supabase
+        .from('sectors')
+        .select('id, sector_name_en, sector_name_ar')
+        .order('sector_name_en', { ascending: true })
+      if (!error && data) setF4Sectors(data as F4SectorRow[])
+    })()
+  }, [open])
 
   const { startDragOnPage } = useF4WizardDrag({
     open,
@@ -260,7 +274,6 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
             .single()
           
           if (error || !historicalData) {
-            console.error('Failed to load historical project:', error)
             setProjectMeta(null)
             return
           }
@@ -275,15 +288,6 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
           const description = historicalData['Description of ERRs activity'] || ''
           const targetInd = historicalData['Target (Ind.)'] || null
           const targetFam = historicalData['Target (Fam.)'] || null
-          
-          console.log('Initial project load (historical) - loaded data:', {
-            usd,
-            errCode,
-            description: description.substring(0, 50),
-            targetInd,
-            targetFam,
-            rawData: historicalData
-          })
           
           setProjectMeta({
             roomLabel: errCode,
@@ -302,7 +306,6 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
             .single()
           
           if (error || !projectData) {
-            console.error('Failed to load portal project:', error)
             return
           }
           
@@ -310,8 +313,8 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
           setSelectedRoomId(projectData.emergency_room_id || '')
           // projectId already set above
         }
-      } catch (e) {
-        console.error('Failed to load initial project', e)
+      } catch {
+        /* ignore */
       }
     })()
   }, [open, initialProjectId])
@@ -437,16 +440,13 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
           .eq('id', realUuid)
           .single()
         
-        if (error) { 
-          console.error('loadProject meta (historical) - error:', error)
-          console.error('loadProject meta (historical) - realUuid:', realUuid)
+        if (error) {
           setProjectMeta(null)
           setFxRate(null)
           return
         }
         
         if (!data) {
-          console.error('loadProject meta (historical) - no data returned for UUID:', realUuid)
           setProjectMeta(null)
           setFxRate(null)
           return
@@ -459,14 +459,6 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
         const description = data['Description of ERRs activity'] || ''
         const targetInd = data['Target (Ind.)'] || null
         const targetFam = data['Target (Fam.)'] || null
-        
-        console.log('loadProject meta (historical) - loaded data:', {
-          usd,
-          errCode,
-          description: description.substring(0, 50),
-          targetInd,
-          targetFam
-        })
         
         setProjectMeta({
           roomLabel: errCode,
@@ -491,7 +483,6 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
           .eq('id', projectId)
           .single()
         if (error) {
-          console.error('loadProject meta', error)
           setProjectMeta(null)
           setFxRate(null)
           return
@@ -558,23 +549,15 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
       alert(t('f4.modal.report_date_required'))
       return
     }
-    const uploadFlowStart = Date.now()
     setIsLoading(true)
     try {
       const ext = (file.name.split('.').pop() || 'pdf').toLowerCase()
-      console.info('[F4 upload] start', {
-        projectId: actualProjectId,
-        fileName: file.name,
-        fileBytes: file.size,
-        ext,
-      })
       // init temp key
       const { file_key_temp: key } = await f4UploadInit(actualProjectId, ext)
       setTempKey(key)
       // upload file to storage
       const { error: upErr } = await supabase.storage.from('images').upload(key, file, { upsert: true })
       if (upErr) throw upErr
-      console.info('[F4 upload] stored temp file', { tempKey: key, msSinceStart: Date.now() - uploadFlowStart })
       // Get signed URL for file viewing
       const { data: signedUrl } = await supabase.storage.from('images').createSignedUrl(key, 3600)
       if (signedUrl?.signedUrl) {
@@ -596,8 +579,7 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
       setWizardKind('table')
       setIsRenderingPages(true)
       setStep('wizard')
-    } catch (e) {
-      console.error('[F4 upload] failed', e, { msSinceStart: Date.now() - uploadFlowStart })
+    } catch {
       alert('Failed to process file')
     } finally {
       setIsLoading(false)
@@ -649,7 +631,7 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
       if (kind === 'table') {
         const rows = Array.isArray(json.expenses) ? json.expenses : []
         const mapped = rows.map((ex: any) => ({
-          expense_activity: ex.activity != null ? String(ex.activity) : '',
+          expense_activity: ex.activity != null ? String(ex.activity).trim() : '',
           expense_description: ex.description != null ? String(ex.description) : '',
           expense_amount_sdg: ex.amount_value != null ? Number(ex.amount_value) : null,
           expense_amount: null,
@@ -701,8 +683,7 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
         }))
         setWizardProgress(prev => ({ ...prev, receipts: true }))
       }
-    } catch (e) {
-      console.error('[F4 wizard] snippet parse failed', e)
+    } catch {
       alert('Failed to parse snippet files')
     } finally {
       setWizardLoading(null)
@@ -747,8 +728,7 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
         is_draft: true
       } as any])
       setStep('preview')
-    } catch (e) {
-      console.error(e)
+    } catch {
       alert('Failed to continue')
     } finally {
       setIsLoading(false)
@@ -757,13 +737,11 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
 
   const handleSave = async () => {
     if (isRestoring || isRestoringRef.current) {
-      console.warn('Cannot save while restoring state')
       return
     }
     if (saveInFlightRef.current) return
     const actualProjectId = projectId || initialProjectId
     if (!actualProjectId || !summaryDraft) {
-      console.warn('Missing required fields:', { projectId: actualProjectId, hasSummaryDraft: !!summaryDraft })
       return
     }
     const receiptConfirmed = Boolean(summaryDraft?.receipt_check?.confirmed)
@@ -808,8 +786,7 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
       try { window.localStorage.removeItem('err_minimized_modal') } catch {}
       onOpenChange(false)
       onSaved()
-    } catch (e) {
-      console.error(e)
+    } catch {
       alert('Failed to save F4')
     } finally {
       setIsLoading(false)
@@ -1338,31 +1315,16 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
                       {expensesDraft.map((ex, idx) => (
                         <TableRow key={idx} className="text-sm">
                           <TableCell className="py-1 px-2" style={{ userSelect: 'text' }}>
-                            <Input 
-                              className="h-8 select-text selection:bg-blue-200 selection:text-blue-900 dark:selection:bg-blue-800 dark:selection:text-blue-100" 
-                              style={selectableInputStyle}
-                              placeholder={t('f4.preview.expenses.cols.activity') as string} 
-                              value={ex.expense_activity || ''} 
-                              onMouseDown={(e) => {
-                                // Removed logging(`Expense ${idx} Activity onMouseDown`, e.target as HTMLInputElement, e)
+                            <F4ExpenseSectorSelect
+                              sectors={f4Sectors}
+                              valueEn={ex.expense_activity || ''}
+                              onChangeEn={(sectorNameEn) => {
+                                const arr = [...expensesDraft]
+                                arr[idx] = { ...arr[idx], expense_activity: sectorNameEn }
+                                setExpensesDraft(arr)
                               }}
-                              onMouseUp={(e) => {
-                                // Removed logging(`Expense ${idx} Activity onMouseUp`, e.target as HTMLInputElement, e)
-                              }}
-                              onSelect={(e) => {
-                                // Removed logging(`Expense ${idx} Activity onSelect`, e.target as HTMLInputElement, e)
-                              }}
-                              onClick={(e) => {
-                                // Removed logging(`Expense ${idx} Activity onClick`, e.target as HTMLInputElement, e)
-                              }}
-                              onFocus={(e) => {
-                                // Removed logging(`Expense ${idx} Activity onFocus`, e.target as HTMLInputElement, e)
-                                // REMOVED: Don't interfere with browser's default selection behavior
-                                // User can click once to select all, click again to place cursor, or drag to select
-                              }}
-                              onChange={(e)=>{
-                                const arr=[...expensesDraft]; arr[idx]={...arr[idx], expense_activity: e.target.value}; setExpensesDraft(arr)
-                              }} 
+                              placeholder={t('f4.preview.expenses.sector_placeholder') as string}
+                              className="h-8 w-full"
                             />
                           </TableCell>
                           <TableCell className="py-1 px-2" style={{ userSelect: 'text' }}>

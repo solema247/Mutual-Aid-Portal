@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server'
+import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
+import { fetchF4SectorsForMatch, matchRawActivityToSectorNameEn } from '@/lib/f4ExpenseSectors'
 import { sanitizeModelJsonOutput } from '@/lib/geminiStructureOcrText'
 import { createGeminiParseSnipsResilient } from '@/lib/geminiParseSnipsResilient'
 import { getF4AdditionalQuestionsSnipInstruction, getF4ExpenseTableSnipInstruction } from '@/lib/formStructurePrompts'
@@ -486,6 +488,19 @@ export async function POST (request: Request) {
         },
       })
     }
+
+    if (kind === 'table' && parsed && typeof parsed === 'object') {
+      const supabase = getSupabaseRouteClient()
+      const sectors = await fetchF4SectorsForMatch(supabase)
+      const body = parsed as Record<string, unknown>
+      if (Array.isArray(body.expenses) && sectors.length) {
+        body.expenses = body.expenses.map((row: Record<string, unknown>) => ({
+          ...row,
+          activity: matchRawActivityToSectorNameEn(row.activity as string | null | undefined, sectors),
+        }))
+      }
+    }
+
     return NextResponse.json(parsed || {})
   } catch (e) {
     console.error('[F4 parse-snips] error', {

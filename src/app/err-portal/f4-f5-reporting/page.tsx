@@ -135,8 +135,8 @@ function F4F5ReportingPageContent() {
       if (!res.ok) throw new Error('failed list')
       const data = await res.json()
       setRows(data)
-    } catch (e) {
-      console.error(e)
+    } catch {
+      /* list load failed */
     } finally {
       setLoading(false)
     }
@@ -149,8 +149,8 @@ function F4F5ReportingPageContent() {
       if (!res.ok) throw new Error('failed f5 list')
       const data = await res.json()
       setF5Rows(data)
-    } catch (e) {
-      console.error(e)
+    } catch {
+      /* F5 list load failed */
     } finally {
       setF5Loading(false)
     }
@@ -168,8 +168,8 @@ function F4F5ReportingPageContent() {
       setRejectSummaryId(null)
       setRejectComment('')
       load()
-    } catch (e) {
-      console.error(e)
+    } catch {
+      /* review submit failed */
     } finally {
       setReviewSaving(false)
     }

@@ -8,6 +8,8 @@ import { Button } from '@/components/ui/button'
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '@/components/ui/table'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { supabase } from '@/lib/supabaseClient'
+import { fetchF4SectorsForMatch, normalizeF4ExpenseActivitiesToSectors, type F4SectorRow } from '@/lib/f4ExpenseSectors'
+import { F4ExpenseSectorSelect } from './F4ExpenseSectorSelect'
 import { useTranslation } from 'react-i18next'
 import { FileText } from 'lucide-react'
 
@@ -31,6 +33,7 @@ export default function ViewF4Modal({ summaryId, open, onOpenChange, onSaved }: 
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [deletePhrase, setDeletePhrase] = useState('')
   const [deleting, setDeleting] = useState(false)
+  const [f4Sectors, setF4Sectors] = useState<F4SectorRow[]>([])
 
   useEffect(() => {
     if (!open || !summaryId) { 
@@ -43,11 +46,14 @@ export default function ViewF4Modal({ summaryId, open, onOpenChange, onSaved }: 
       setDeleteDialogOpen(false)
       setDeletePhrase('')
       setDeleting(false)
+      setF4Sectors([])
       return 
     }
     ;(async () => {
       try {
         setLoading(true)
+        const sectorsRows = await fetchF4SectorsForMatch(supabase)
+        setF4Sectors(sectorsRows)
         const res = await fetch(`/api/f4/summary/${summaryId}`)
         const j = await res.json()
         if (!res.ok) throw new Error(j.error || 'Failed to load summary')
@@ -65,8 +71,8 @@ export default function ViewF4Modal({ summaryId, open, onOpenChange, onSaved }: 
           total_other_sources: summary?.total_other_sources || 0
         })
         
-        // Initialize expenses draft
-        setExpensesDraft((j.expenses || []).map((e: any) => ({
+        // Initialize expenses draft (map legacy activity labels to `sectors`)
+        const expenseRows = (j.expenses || []).map((e: any) => ({
           expense_id: e.expense_id,
           expense_activity: e.expense_activity || '',
           expense_description: e.expense_description || '',
@@ -76,7 +82,8 @@ export default function ViewF4Modal({ summaryId, open, onOpenChange, onSaved }: 
           payment_method: e.payment_method || 'Bank Transfer',
           receipt_no: e.receipt_no || '',
           seller: e.seller || ''
-        })))
+        }))
+        setExpensesDraft(normalizeF4ExpenseActivitiesToSectors(expenseRows, sectorsRows))
         
         // Load project meta to get total grant
         if (summary?.project_id) {
@@ -117,8 +124,7 @@ export default function ViewF4Modal({ summaryId, open, onOpenChange, onSaved }: 
             })
           }
         }
-      } catch (e) {
-        console.error(e)
+      } catch {
         setData(null)
       } finally {
         setLoading(false)
@@ -245,7 +251,7 @@ export default function ViewF4Modal({ summaryId, open, onOpenChange, onSaved }: 
           surplus_use: reloadJson.summary?.surplus_use || '',
           total_other_sources: reloadJson.summary?.total_other_sources || 0
         })
-        setExpensesDraft((reloadJson.expenses || []).map((e: any) => ({
+        const reloadRows = (reloadJson.expenses || []).map((e: any) => ({
           expense_id: e.expense_id,
           expense_activity: e.expense_activity || '',
           expense_description: e.expense_description || '',
@@ -255,10 +261,10 @@ export default function ViewF4Modal({ summaryId, open, onOpenChange, onSaved }: 
           payment_method: e.payment_method || 'Bank Transfer',
           receipt_no: e.receipt_no || '',
           seller: e.seller || ''
-        })))
+        }))
+        setExpensesDraft(normalizeF4ExpenseActivitiesToSectors(reloadRows, f4Sectors))
       }
-    } catch (e) {
-      console.error(e)
+    } catch {
       alert('Failed to update F4')
     } finally {
       setSaving(false)
@@ -284,8 +290,7 @@ export default function ViewF4Modal({ summaryId, open, onOpenChange, onSaved }: 
       setIsEditing(false)
       onOpenChange(false)
       if (onSaved) onSaved()
-    } catch (e) {
-      console.error(e)
+    } catch {
       alert('Failed to delete F4 report')
     } finally {
       setDeleting(false)
@@ -516,9 +521,17 @@ export default function ViewF4Modal({ summaryId, open, onOpenChange, onSaved }: 
                       <TableRow key={ex.expense_id || idx}>
                         <TableCell className="py-1 px-2">
                           {isEditing ? (
-                            <Input className="h-8" value={ex.expense_activity || ''} onChange={(e)=>{
-                              const arr=[...expensesDraft]; arr[idx]={...arr[idx], expense_activity: e.target.value}; setExpensesDraft(arr)
-                            }} />
+                            <F4ExpenseSectorSelect
+                              sectors={f4Sectors}
+                              valueEn={ex.expense_activity || ''}
+                              onChangeEn={(sectorNameEn) => {
+                                const arr = [...expensesDraft]
+                                arr[idx] = { ...arr[idx], expense_activity: sectorNameEn }
+                                setExpensesDraft(arr)
+                              }}
+                              placeholder={t('f4.preview.expenses.sector_placeholder') as string}
+                              className="h-8 w-full"
+                            />
                           ) : (
                             ex.expense_activity || '-'
                           )}
@@ -660,8 +673,7 @@ export default function ViewF4Modal({ summaryId, open, onOpenChange, onSaved }: 
                         document.body.appendChild(link)
                         link.click()
                         document.body.removeChild(link)
-                      } catch (error) {
-                        console.error('Error opening file:', error)
+                      } catch {
                         alert(`Failed to open file`)
                       }
                     }}

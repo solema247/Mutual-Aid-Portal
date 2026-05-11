@@ -95,16 +95,26 @@ export async function translateF4Summary(data: any, sourceLanguage: string): Pro
   return { translatedData, originalText }
 }
 
+export type TranslateF4ExpensesOpts = {
+  /** Raw activity text before sector canonicalization (stored in original_text for Arabic forms). */
+  expenseActivityOriginal?: (string | null | undefined)[]
+}
+
 /**
- * Translate F4 expense fields from Arabic to English
+ * Translate F4 expense fields from Arabic to English.
+ * `expense_activity` is a controlled vocabulary (`sectors.sector_name_en`) — it is not machine-translated.
  */
-export async function translateF4Expenses(expenses: any[], sourceLanguage: string): Promise<TranslationResult<any[]>> {
+export async function translateF4Expenses (
+  expenses: any[],
+  sourceLanguage: string,
+  opts?: TranslateF4ExpensesOpts
+): Promise<TranslationResult<any[]>> {
   if (sourceLanguage !== 'ar') {
     return {
       translatedData: expenses,
-      originalText: expenses.map(() => ({
+      originalText: expenses.map((e, i) => ({
         source_language: sourceLanguage,
-        expense_activity: null,
+        expense_activity: opts?.expenseActivityOriginal?.[i] ?? e?.expense_activity ?? null,
         expense_description: null,
         seller: null
       }))
@@ -114,17 +124,18 @@ export async function translateF4Expenses(expenses: any[], sourceLanguage: strin
   const translatedExpenses = []
   const originalTexts = []
 
-  for (const expense of expenses) {
+  for (let i = 0; i < expenses.length; i++) {
+    const expense = expenses[i]
     const originalText = {
       source_language: sourceLanguage,
-      expense_activity: expense.expense_activity,
+      expense_activity: opts?.expenseActivityOriginal?.[i] ?? expense.expense_activity,
       expense_description: expense.expense_description,
       seller: expense.seller
     }
 
     const translatedExpense = {
       ...expense,
-      expense_activity: await translateText(expense.expense_activity),
+      expense_activity: expense.expense_activity,
       expense_description: await translateText(expense.expense_description),
       seller: await translateText(expense.seller)
     }

@@ -43,12 +43,6 @@ export function useF4WizardViewerPages ({
           file?.type?.startsWith('image/') ||
           /\.(png|jpg|jpeg|webp|gif)$/i.test(String(file?.name || '')) ||
           urlLooksImage
-        console.info('[F4 wizard] render viewer start', {
-          mode: isPdf ? 'pdf' : isImage ? 'image' : 'unsupported',
-          fileName: file?.name,
-          mime: file?.type,
-          tempKey,
-        })
         if (isPdf) {
           const pdfJsUrl = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.min.mjs'
           const pdfjs = await import(/* webpackIgnore: true */ pdfJsUrl)
@@ -60,7 +54,6 @@ export function useF4WizardViewerPages ({
           const pdf = await loadingTask.promise
           const pages: WizardPageEntry[] = []
           const pageCount = Math.min(pdf.numPages || 0, 40)
-          console.info('[F4 wizard] pdf loaded', { pageCount })
           const PDF_BASE_SCALE = 1.42
           const dpr = typeof window !== 'undefined' ? Math.min(window.devicePixelRatio || 1, 2) : 1
           for (let i = 1; i <= pageCount; i++) {
@@ -84,7 +77,6 @@ export function useF4WizardViewerPages ({
             setViewerMode('pdf')
             setWizardPages(pages)
           }
-          console.info('[F4 wizard] viewer pages ready', { pages: pages.length })
           return
         }
         if (isImage) {
@@ -112,15 +104,13 @@ export function useF4WizardViewerPages ({
               },
             ])
           }
-          console.info('[F4 wizard] image viewer ready')
           return
         }
         if (!cancelled) {
           setViewerMode('unsupported')
           setWizardPages([])
         }
-      } catch (e) {
-        console.error('[F4 wizard] failed to render viewer pages', e)
+      } catch {
         if (!cancelled) {
           setViewerMode('unsupported')
           setWizardPages([])
