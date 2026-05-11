@@ -9,6 +9,14 @@ export const revalidate = 0
 export const fetchCache = 'force-no-store'
 
 const MAP_STATUSES = ['approved', 'active', 'pending', 'completed'] as const
+/** Same limit as stories/cards: large `.in()` lists exceed PostgREST URL limits. */
+const REPORT_PROJECT_ID_CHUNK = 120
+
+function chunkArray<T>(arr: T[], size: number): T[][] {
+  const out: T[][] = []
+  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size))
+  return out
+}
 
 /** API state name -> GeoJSON state name (for centroid lookup) */
 const API_STATE_TO_GEO: Record<string, string> = {
@@ -154,16 +162,27 @@ export async function GET() {
       )
     }
 
-    const { data: reportRows } = await supabase
-      .from('err_program_report')
-      .select('project_id')
-      .in('project_id', projectIds)
-    console.log('[stories/geojson] report rows', Date.now() - t0, 'ms', (reportRows?.length ?? 0), 'rows')
     const projectIdsWithF5 = new Set<string>()
-    for (const r of reportRows || []) {
-      const pid = (r as any).project_id
-      if (pid) projectIdsWithF5.add(pid)
+    let reportRowCount = 0
+    for (const chunk of chunkArray(projectIds, REPORT_PROJECT_ID_CHUNK)) {
+      const { data: reportRows, error: reportErr } = await supabase
+        .from('err_program_report')
+        .select('project_id')
+        .in('project_id', chunk)
+      if (reportErr) {
+        console.error('[stories/geojson] reports error:', reportErr)
+        return NextResponse.json(
+          { error: 'Failed to load reports for map' },
+          { status: 500, headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } }
+        )
+      }
+      reportRowCount += reportRows?.length ?? 0
+      for (const r of reportRows || []) {
+        const pid = (r as any).project_id
+        if (pid) projectIdsWithF5.add(pid)
+      }
     }
+    console.log('[stories/geojson] report rows', Date.now() - t0, 'ms', reportRowCount, 'rows')
 
     const projectsWithF5 = (projects || []).filter((p: any) => projectIdsWithF5.has(p.id))
     const jitter = 0.04 // ~4 km spread so points don't stack exactly

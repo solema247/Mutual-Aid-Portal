@@ -10,6 +10,48 @@ export const fetchCache = 'force-no-store'
 
 const MAP_STATUSES = ['approved', 'active', 'pending', 'completed'] as const
 const SNIPPET_LENGTH = 150
+/** PostgREST GET URLs can exceed limits when `.in()` has hundreds of UUIDs. */
+const REPORT_IN_CHUNK = 120
+const REACH_IN_CHUNK = 200
+
+function chunkArray<T>(arr: T[], size: number): T[][] {
+  const out: T[][] = []
+  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size))
+  return out
+}
+
+/** When reports are loaded in chunks, pick the row with the latest created_at per project. */
+function mergeLatestReportPerProject(rows: any[]): Map<string, any> {
+  const map = new Map<string, any>()
+  for (const r of rows) {
+    const pid = r?.project_id
+    if (!pid) continue
+    const prev = map.get(pid)
+    const t = r.created_at ? new Date(r.created_at).getTime() : 0
+    const pt = prev?.created_at ? new Date(prev.created_at).getTime() : -1
+    if (!prev || t > pt) map.set(pid, r)
+  }
+  return map
+}
+
+async function fetchReportsChunked(
+  supabase: ReturnType<typeof getSupabaseRouteClient>,
+  projectIds: string[],
+  reportSelect: string
+): Promise<{ data: any[] | null; error: { message: string } | null }> {
+  if (projectIds.length === 0) return { data: [], error: null }
+  const merged: any[] = []
+  for (const chunk of chunkArray(projectIds, REPORT_IN_CHUNK)) {
+    const { data, error } = await supabase
+      .from('err_program_report')
+      .select(reportSelect)
+      .in('project_id', chunk)
+      .order('created_at', { ascending: false })
+    if (error) return { data: null, error }
+    merged.push(...(data || []))
+  }
+  return { data: merged, error: null }
+}
 
 function slugify(label: string): string {
   return label
@@ -187,15 +229,23 @@ export async function GET(request: Request) {
 
     const projectIds = filtered.map((p) => p.id)
 
-    // Latest F5 per project; when English UI, need _en for AR-authored reports
-    const reportSelect = useEnCache
-      ? 'id, project_id, report_date, reporting_person, positive_changes, positive_changes_en, created_at, language'
-      : 'id, project_id, report_date, reporting_person, positive_changes, created_at, language'
-    const { data: reports, error: reportsError } = await supabase
-      .from('err_program_report')
-      .select(reportSelect)
-      .in('project_id', projectIds)
-      .order('created_at', { ascending: false })
+    // Latest F5 per project; when English UI, prefer _en for AR-authored reports (column may be absent until migration).
+    const reportSelectEn =
+      'id, project_id, report_date, reporting_person, positive_changes, positive_changes_en, created_at, language'
+    const reportSelectBase =
+      'id, project_id, report_date, reporting_person, positive_changes, created_at, language'
+    const primarySelect = useEnCache ? reportSelectEn : reportSelectBase
+
+    let { data: reports, error: reportsError } = await fetchReportsChunked(
+      supabase,
+      projectIds,
+      primarySelect
+    )
+    if (reportsError && useEnCache) {
+      const retry = await fetchReportsChunked(supabase, projectIds, reportSelectBase)
+      reports = retry.data
+      reportsError = retry.error
+    }
     console.log('[stories/cards] reports query', Date.now() - t0, 'ms', (reports?.length ?? 0), 'rows')
 
     if (reportsError) {
@@ -206,11 +256,7 @@ export async function GET(request: Request) {
       )
     }
 
-    const latestReportByProject = new Map<string, any>()
-    for (const r of reports || []) {
-      const pid = (r as any).project_id
-      if (pid && !latestReportByProject.has(pid)) latestReportByProject.set(pid, r)
-    }
+    const latestReportByProject = mergeLatestReportPerProject(reports || [])
 
     const reportIds = Array.from(latestReportByProject.values()).map((r: any) => r.id)
 
@@ -220,11 +266,19 @@ export async function GET(request: Request) {
     let reachByReport: Record<string, { individuals: number; households: number }> = {}
     if (reportIds.length > 0) {
       const tReach = Date.now()
-      const { data: reachRows } = await supabase
-        .from('err_program_reach')
-        .select('report_id, individual_count, household_count')
-        .in('report_id', reportIds)
-      console.log('[stories/cards] reach query', Date.now() - tReach, 'ms', (reachRows?.length ?? 0), 'rows')
+      const reachRows: any[] = []
+      for (const chunk of chunkArray(reportIds, REACH_IN_CHUNK)) {
+        const { data, error: reachErr } = await supabase
+          .from('err_program_reach')
+          .select('report_id, individual_count, household_count')
+          .in('report_id', chunk)
+        if (reachErr) {
+          console.error('Stories cards reach error', reachErr)
+        } else {
+          reachRows.push(...(data || []))
+        }
+      }
+      console.log('[stories/cards] reach query', Date.now() - tReach, 'ms', reachRows.length, 'rows')
       for (const row of reachRows || []) {
         const rid = (row as any).report_id
         const ind = (row as any).individual_count
