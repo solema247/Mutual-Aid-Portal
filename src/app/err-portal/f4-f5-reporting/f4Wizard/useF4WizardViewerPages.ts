@@ -59,7 +59,7 @@ export function useF4WizardViewerPages ({
           const loadingTask = (pdfjs as any).getDocument({ data: ab, disableWorker: false })
           const pdf = await loadingTask.promise
           const pages: WizardPageEntry[] = []
-          const pageCount = Math.min(pdf.numPages || 0, 20)
+          const pageCount = Math.min(pdf.numPages || 0, 40)
           console.info('[F4 wizard] pdf loaded', { pageCount })
           const PDF_BASE_SCALE = 1.42
           const dpr = typeof window !== 'undefined' ? Math.min(window.devicePixelRatio || 1, 2) : 1
