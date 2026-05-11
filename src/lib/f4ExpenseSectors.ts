@@ -49,23 +49,27 @@ export function matchRawActivityToSectorNameEn (
     if (ar && normRaw === ar) return canonicalEn(s)
   }
 
-  let best: { score: number; en: string } | null = null
+  let bestScore = -1
+  let bestEn = ''
   for (const s of sectors) {
     const canon = canonicalEn(s)
-    const en = normalizeF4SectorKey(canon)
+    const enKey = normalizeF4SectorKey(canon)
     const ar = s.sector_name_ar ? normalizeF4SectorKey(s.sector_name_ar) : ''
 
     const consider = (a: string, b: string, scoreBase: number) => {
       if (!a || !b) return
       if (a.includes(b)) {
         const score = scoreBase + b.length
-        if (!best || score > best.score) best = { score, en: canon }
+        if (score > bestScore) {
+          bestScore = score
+          bestEn = canon
+        }
       }
     }
 
-    if (en.length >= 3) {
-      consider(normRaw, en, 1000)
-      consider(en, normRaw, normRaw.length >= 4 ? 500 : 0)
+    if (enKey.length >= 3) {
+      consider(normRaw, enKey, 1000)
+      consider(enKey, normRaw, normRaw.length >= 4 ? 500 : 0)
     }
     if (ar.length >= 3) {
       consider(normRaw, ar, 1000)
@@ -73,7 +77,7 @@ export function matchRawActivityToSectorNameEn (
     }
   }
 
-  return best?.en ?? fallback
+  return bestScore >= 0 ? bestEn : fallback
 }
 
 export function normalizeF4ExpenseActivitiesToSectors<T extends { expense_activity?: string | null }> (
