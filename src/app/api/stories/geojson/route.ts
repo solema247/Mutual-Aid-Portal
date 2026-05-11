@@ -3,6 +3,7 @@ import { readFileSync } from 'fs'
 import { join } from 'path'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { getUserStateAccess } from '@/lib/userStateAccess'
+import { getCategorySpend } from '@/lib/mutualAidCategorySpend'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -54,39 +55,6 @@ function parseJsonArray(raw: unknown): any[] {
 function sumExpensesUsd(expenses: unknown): number {
   const arr = parseJsonArray(expenses)
   return arr.reduce((s: number, e: any) => s + (Number(e?.total_cost) || 0), 0)
-}
-
-function getActivityToCategory(plannedActivities: unknown): Map<string, string> {
-  const planned = parseJsonArray(plannedActivities)
-  const map = new Map<string, string>()
-  for (const item of planned) {
-    const activity = item?.activity ?? item?.Activity
-    const category = item?.category ?? item?.Category
-    if (activity != null && String(activity).trim() && category != null && String(category).trim())
-      map.set(String(activity).trim(), String(category).trim())
-  }
-  return map
-}
-
-function getCategorySpend(
-  expenses: unknown,
-  plannedActivities: unknown
-): Map<string, number> {
-  const exp = parseJsonArray(expenses)
-  const activityToCategory = getActivityToCategory(plannedActivities)
-  const byCategory = new Map<string, number>()
-  for (const e of exp) {
-    const cost = Number(e?.total_cost) || 0
-    if (cost <= 0) continue
-    const category =
-      (e?.category ?? e?.Category)
-        ?.trim?.() ||
-      activityToCategory.get(String(e?.planned_activity ?? e?.activity ?? '').trim()) ||
-      'Other'
-    const key = category.trim() || 'Other'
-    byCategory.set(key, (byCategory.get(key) ?? 0) + cost)
-  }
-  return byCategory
 }
 
 function getPrimaryCategoryAndUsd(

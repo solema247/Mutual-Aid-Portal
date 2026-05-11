@@ -997,13 +997,19 @@ function MapPopup({
   }
 
   const handleClose = () => {
-    popup.remove();
+    try {
+      popup.remove();
+    } finally {
+      // Ensure parent state clears even if MapLibre does not emit `close` for this path
+      onCloseRef.current?.();
+    }
   };
 
   return createPortal(
     <div
       className={cn(
         "relative rounded-md border bg-popover p-3 text-popover-foreground shadow-md animate-in fade-in-0 zoom-in-95",
+        closeButton && "pt-2 pr-9",
         className
       )}
     >
@@ -1011,7 +1017,7 @@ function MapPopup({
         <button
           type="button"
           onClick={handleClose}
-          className="absolute top-1 right-1 z-10 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+          className="absolute top-1.5 right-1.5 z-[100] rounded-sm bg-popover/90 p-0.5 opacity-90 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
           aria-label="Close popup"
         >
           <X className="h-4 w-4" />

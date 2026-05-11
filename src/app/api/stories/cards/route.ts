@@ -3,6 +3,7 @@ import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { getUserStateAccess } from '@/lib/userStateAccess'
 import { getActivityAndCategoryLists } from '@/lib/plannedActivitiesExpenses'
 import { pickF5TextForEnUi } from '@/lib/storiesEnDisplay'
+import { getCategorySpend, getOtherLabels } from '@/lib/mutualAidCategorySpend'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -88,41 +89,6 @@ function sumExpensesUsd(expenses: unknown): number {
   return arr.reduce((s: number, e: any) => s + (Number(e?.total_cost) || 0), 0)
 }
 
-/** Build a map from activity name to category from planned_activities. */
-function getActivityToCategory(plannedActivities: unknown): Map<string, string> {
-  const planned = parseJsonArray(plannedActivities)
-  const map = new Map<string, string>()
-  for (const item of planned) {
-    const activity = item?.activity ?? item?.Activity
-    const category = item?.category ?? item?.Category
-    if (activity != null && String(activity).trim() && category != null && String(category).trim())
-      map.set(String(activity).trim(), String(category).trim())
-  }
-  return map
-}
-
-/** Sum expenses by category; use planned_activities to map activity -> category when expense has no category. */
-function getCategorySpend(
-  expenses: unknown,
-  plannedActivities: unknown
-): Map<string, number> {
-  const exp = parseJsonArray(expenses)
-  const activityToCategory = getActivityToCategory(plannedActivities)
-  const byCategory = new Map<string, number>()
-  for (const e of exp) {
-    const cost = Number(e?.total_cost) || 0
-    if (cost <= 0) continue
-    const category =
-      (e?.category ?? e?.Category)
-        ?.trim?.() ||
-      activityToCategory.get(String(e?.planned_activity ?? e?.activity ?? '').trim()) ||
-      'Other'
-    const key = category.trim() || 'Other'
-    byCategory.set(key, (byCategory.get(key) ?? 0) + cost)
-  }
-  return byCategory
-}
-
 /**
  * Spend diversity: 1 - Herfindahl index.
  * 0 = all spend in one category (focused), 1 = perfectly even across categories (spread out).
@@ -138,34 +104,6 @@ function getSpendDiversity(byCategory: Map<string, number>): number {
     herfindahl += share * share
   }
   return Math.min(1, Math.max(0, 1 - herfindahl))
-}
-
-/** Labels for expenses that resolved to "Other" (activity name or planned_activity_other), for display. */
-function getOtherLabels(
-  expenses: unknown,
-  plannedActivities: unknown
-): string[] {
-  const exp = parseJsonArray(expenses)
-  const activityToCategory = getActivityToCategory(plannedActivities)
-  const labels: string[] = []
-  for (const e of exp) {
-    const cost = Number(e?.total_cost) || 0
-    if (cost <= 0) continue
-    const category =
-      (e?.category ?? e?.Category)
-        ?.trim?.() ||
-      activityToCategory.get(String(e?.planned_activity ?? e?.activity ?? '').trim()) ||
-      'Other'
-    const key = category.trim() || 'Other'
-    if (key !== 'Other') continue
-    const activity = String(e?.planned_activity ?? e?.activity ?? '').trim()
-    const otherText = String(e?.planned_activity_other ?? '').trim()
-    const isOtherActivity =
-      !activity || activity.toLowerCase().includes('other') || activity.includes('أخرى')
-    const label = isOtherActivity && otherText ? otherText : activity || 'Other'
-    if (label && label !== 'Other') labels.push(label)
-  }
-  return labels
 }
 
 /**
@@ -374,7 +312,7 @@ export async function GET(request: Request) {
     const withOtherLast = [
       ...sorted.filter((x) => x.category !== 'Other'),
       ...sorted.filter((x) => x.category === 'Other'),
-    ].slice(0, 5)
+    ]
     const top_categories = withOtherLast.map((item) =>
       item.category === 'Other' && otherSubcategories.length > 0
         ? { ...item, other_subcategories: otherSubcategories }

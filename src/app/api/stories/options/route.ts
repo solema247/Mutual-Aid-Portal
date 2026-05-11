@@ -8,6 +8,14 @@ export const revalidate = 0
 export const fetchCache = 'force-no-store'
 
 const MAP_STATUSES = ['approved', 'active', 'pending', 'completed'] as const
+/** Same as stories/cards & geojson: huge `.in()` lists exceed PostgREST URL limits. */
+const REPORT_PROJECT_ID_CHUNK = 120
+
+function chunkArray<T>(arr: T[], size: number): T[][] {
+  const out: T[][] = []
+  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size))
+  return out
+}
 
 function slugify(label: string): string {
   return label
@@ -61,10 +69,21 @@ export async function GET() {
     }
 
     // Only projects that have at least one F5 report (story cards require F1 + F5)
-    const { data: reportRows } = await supabase
-      .from('err_program_report')
-      .select('project_id')
-      .in('project_id', projectIds)
+    const reportRows: { project_id?: string }[] = []
+    for (const chunk of chunkArray(projectIds, REPORT_PROJECT_ID_CHUNK)) {
+      const { data: rows, error: reportErr } = await supabase
+        .from('err_program_report')
+        .select('project_id')
+        .in('project_id', chunk)
+      if (reportErr) {
+        console.error('[stories/options] reports error:', reportErr)
+        return NextResponse.json(
+          { error: 'Failed to load stories options' },
+          { status: 500, headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } }
+        )
+      }
+      reportRows.push(...(rows || []))
+    }
     const projectIdsWithF5 = new Set<string>()
     const reportsByProject = new Map<string, number>()
     for (const r of reportRows || []) {

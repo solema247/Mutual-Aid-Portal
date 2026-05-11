@@ -25,6 +25,7 @@ import {
   Truck,
   Users,
   UtensilsCrossed,
+  X,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import {
@@ -501,6 +502,12 @@ function getStateAtCoordinate(
 /** Sudan bounding box [[sw lng, sw lat], [ne lng, ne lat]] with small margin */
 const SUDAN_BOUNDS: [[number, number], [number, number]] = [[21.5, 8.5], [39, 23]]
 
+/** Cluster project list: items per page (pagination avoids huge scroll areas). */
+const CLUSTER_POPUP_PAGE_SIZE = 12
+
+/** Overview card "Where support went": categories per page. */
+const WHERE_SUPPORT_PAGE_SIZE = 5
+
 /** Fits map to full Sudan once when loaded */
 function SudanFitBounds() {
   const { map, isLoaded } = useMap()
@@ -556,6 +563,8 @@ function StoriesContent() {
     coordinates: [number, number]
     features: Array<GeoJSON.Feature<GeoJSON.Point, MapPointProperties>>
   } | null>(null)
+  const [clusterPopupPage, setClusterPopupPage] = useState(0)
+  const [whereSupportPage, setWhereSupportPage] = useState(0)
   const [baseMapStyle, setBaseMapStyle] = useState<BaseMapStyleKey>('carto')
   const [highlightedCard, setHighlightedCard] = useState<StoryCard | null>(null)
   const [highlightedDetail, setHighlightedDetail] = useState<ProjectDetailData | null>(null)
@@ -811,6 +820,38 @@ function StoriesContent() {
     return () => document.removeEventListener('click', handle)
   }, [themeDropdownOpen])
 
+  useEffect(() => {
+    setClusterPopupPage(0)
+  }, [clusterPopup])
+
+  const themeParamsKey = themeParams.join('\u0001')
+  useEffect(() => {
+    setWhereSupportPage(0)
+  }, [summary, stateParam, themeParamsKey, mode])
+
+  const clusterPopupPagination = useMemo(() => {
+    if (!clusterPopup) return null
+    const total = clusterPopup.features.length
+    const pageCount = Math.max(1, Math.ceil(total / CLUSTER_POPUP_PAGE_SIZE))
+    const pageIdx = Math.min(clusterPopupPage, pageCount - 1)
+    const pageFeatures = clusterPopup.features.slice(
+      pageIdx * CLUSTER_POPUP_PAGE_SIZE,
+      (pageIdx + 1) * CLUSTER_POPUP_PAGE_SIZE
+    )
+    return { total, pageCount, pageIdx, pageFeatures }
+  }, [clusterPopup, clusterPopupPage])
+
+  const whereSupportPagination = useMemo(() => {
+    const all = summary?.top_categories ?? []
+    const pageCount = Math.max(1, Math.ceil(all.length / WHERE_SUPPORT_PAGE_SIZE))
+    const pageIdx = Math.min(whereSupportPage, pageCount - 1)
+    const slice = all.slice(
+      pageIdx * WHERE_SUPPORT_PAGE_SIZE,
+      (pageIdx + 1) * WHERE_SUPPORT_PAGE_SIZE
+    )
+    return { all, pageCount, pageIdx, slice }
+  }, [summary?.top_categories, whereSupportPage])
+
   const hasSelection = mode === 'state' || themeParams.length > 0
   const fromQuery =
     (stateParam && `fromState=${encodeURIComponent(stateParam)}`) ||
@@ -1049,15 +1090,6 @@ function StoriesContent() {
                         },
                       })
                       setPendingHighlightProjectId(projectId)
-                      if (props.state) {
-                        const resolved =
-                          options?.states?.some((s) => s.state === props.state)
-                            ? props.state
-                            : props.state === 'Al Jazirah'
-                              ? 'Gezira'
-                              : props.state
-                        selectState(resolved)
-                      }
                     }
                   }}
                 />
@@ -1107,7 +1139,7 @@ function StoriesContent() {
                   </div>
                 </MapPopup>
               )}
-              {clusterPopup && (
+              {clusterPopup && clusterPopupPagination && (
                 <MapPopup
                   key={`cluster-${clusterPopup.coordinates[0]}-${clusterPopup.coordinates[1]}`}
                   longitude={clusterPopup.coordinates[0]}
@@ -1115,45 +1147,86 @@ function StoriesContent() {
                   onClose={() => setClusterPopup(null)}
                   closeOnClick={false}
                   focusAfterOpen={false}
-                  closeButton
-                  className="!p-2 !bg-gray-900/90 !text-gray-100 !border-gray-600/50 shadow-lg backdrop-blur-sm"
+                  closeButton={false}
+                  className="!p-2 !bg-gray-900/90 !text-gray-100 !border-gray-600/50 shadow-lg backdrop-blur-sm min-w-[200px] max-w-[280px]"
                 >
-                  <div className="space-y-1.5 px-0.5 py-0 min-w-[140px] max-h-[200px] overflow-y-auto">
-                    <p className="text-xs font-medium text-gray-300">
-                      {clusterPopup.features.length} project{clusterPopup.features.length !== 1 ? 's' : ''} in this cluster
-                    </p>
-                    <ul className="space-y-0.5">
-                      {clusterPopup.features.map((f) => {
-                        const id = f.properties?.project_id ?? ''
-                        const locality = f.properties?.locality?.trim() || f.properties?.project_name || 'Project'
-                        const category = f.properties?.primary_category
-                        const usd = f.properties?.total_usd
-                        const parts = [locality]
-                        if (category) parts.push(category)
-                        if (usd != null && usd > 0)
-                          parts.push(`$${usd.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`)
-                        return (
-                          <li key={id} className="text-xs">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const card = cards.find((c) => c.project_id === id)
-                                if (card) {
-                                  setHighlightedCard(card)
-                                  setHighlightedStoryExpanded(true)
-                                } else {
-                                  setPendingHighlightProjectId(id)
-                                  setHighlightedStoryExpanded(true)
-                                }
-                              }}
-                              className="text-amber-200 hover:text-amber-100 hover:underline block w-full text-left"
-                            >
-                              {parts.join(' · ')} →
-                            </button>
-                          </li>
-                        )
-                      })}
-                    </ul>
+                  <div className="flex flex-col gap-1.5 min-w-0">
+                    <div className="flex items-start justify-between gap-2 border-b border-gray-600/50 pb-1.5">
+                      <p className="text-xs font-medium text-gray-300 leading-snug flex-1 min-w-0 pr-1">
+                        {clusterPopupPagination.total} project{clusterPopupPagination.total !== 1 ? 's' : ''} in this cluster
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setClusterPopup(null)}
+                        className="shrink-0 rounded-sm p-0.5 text-gray-400 hover:bg-white/10 hover:text-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        aria-label="Close cluster list"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                    <div className="max-h-[220px] overflow-y-auto min-h-0">
+                      <ul className="space-y-0.5 pr-0.5">
+                        {clusterPopupPagination.pageFeatures.map((f) => {
+                          const id = f.properties?.project_id ?? ''
+                          const locality = f.properties?.locality?.trim() || f.properties?.project_name || 'Project'
+                          const category = f.properties?.primary_category
+                          const usd = f.properties?.total_usd
+                          const parts = [locality]
+                          if (category) parts.push(category)
+                          if (usd != null && usd > 0)
+                            parts.push(`$${usd.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`)
+                          return (
+                            <li key={id} className="text-xs">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const card = cards.find((c) => c.project_id === id)
+                                  if (card) {
+                                    setHighlightedCard(card)
+                                    setHighlightedStoryExpanded(true)
+                                  } else {
+                                    setPendingHighlightProjectId(id)
+                                    setHighlightedStoryExpanded(true)
+                                  }
+                                }}
+                                className="text-amber-200 hover:text-amber-100 hover:underline block w-full text-left"
+                              >
+                                {parts.join(' · ')} →
+                              </button>
+                            </li>
+                          )
+                        })}
+                      </ul>
+                    </div>
+                    {clusterPopupPagination.pageCount > 1 && (
+                      <div className="flex items-center justify-between gap-2 border-t border-gray-600/50 pt-1.5">
+                        <button
+                          type="button"
+                          disabled={clusterPopupPagination.pageIdx <= 0}
+                          onClick={() => setClusterPopupPage((p) => Math.max(0, p - 1))}
+                          className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded border border-gray-600/50 bg-gray-800/80 text-gray-200 disabled:pointer-events-none disabled:opacity-40 hover:bg-gray-700/80"
+                          aria-label="Previous page"
+                        >
+                          <ChevronLeft className="h-4 w-4" />
+                        </button>
+                        <span className="text-[11px] tabular-nums text-gray-400">
+                          Page {clusterPopupPagination.pageIdx + 1} of {clusterPopupPagination.pageCount}
+                        </span>
+                        <button
+                          type="button"
+                          disabled={clusterPopupPagination.pageIdx >= clusterPopupPagination.pageCount - 1}
+                          onClick={() =>
+                            setClusterPopupPage((p) =>
+                              Math.min(clusterPopupPagination.pageCount - 1, p + 1)
+                            )
+                          }
+                          className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded border border-gray-600/50 bg-gray-800/80 text-gray-200 disabled:pointer-events-none disabled:opacity-40 hover:bg-gray-700/80"
+                          aria-label="Next page"
+                        >
+                          <ChevronRight className="h-4 w-4" />
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </MapPopup>
               )}
@@ -1189,42 +1262,49 @@ function StoriesContent() {
                   </span>
                   <ChevronDown className="h-3.5 w-3.5 shrink-0 text-gray-400" />
                 </button>
-                {themeDropdownOpen && (options?.themes.length ?? 0) > 0 && (
-                  <div className="absolute right-0 top-full z-50 mt-1 w-[140px] rounded-md border border-gray-600/50 bg-gray-900/95 p-1.5 shadow-lg">
-                    <div className="max-h-[200px] space-y-0.5 overflow-y-auto">
-                      <label className="flex cursor-pointer items-center gap-1.5 rounded px-1.5 py-1 text-xs text-gray-100 hover:bg-white/10 border-b border-gray-600/50 mb-0.5">
-                        <Checkbox
-                          checked={themeParams.length === options!.themes.length}
-                          onCheckedChange={(checked) => {
-                            setThemeFilter(checked ? options!.themes.map((t) => t.id) : [])
-                          }}
-                          className="border-gray-400 data-[state=checked]:bg-gray-100 data-[state=checked]:text-gray-900"
-                        />
-                        <span className="truncate font-medium">Select all</span>
-                      </label>
-                      {options!.themes.map((t) => (
-                        <label
-                          key={t.id}
-                          className="flex cursor-pointer items-center gap-1.5 rounded px-1.5 py-1 text-xs text-gray-100 hover:bg-white/10"
-                        >
+                {themeDropdownOpen &&
+                  ((options?.themes.length ?? 0) > 0 ? (
+                    <div className="absolute right-0 top-full z-50 mt-1 w-[140px] rounded-md border border-gray-600/50 bg-gray-900/95 p-1.5 shadow-lg">
+                      <div className="max-h-[200px] space-y-0.5 overflow-y-auto">
+                        <label className="flex cursor-pointer items-center gap-1.5 rounded px-1.5 py-1 text-xs text-gray-100 hover:bg-white/10 border-b border-gray-600/50 mb-0.5">
                           <Checkbox
-                            checked={themeParams.includes(t.id)}
+                            checked={themeParams.length === options!.themes.length}
                             onCheckedChange={(checked) => {
-                              const next = checked
-                                ? [...themeParams, t.id]
-                                : themeParams.filter((id) => id !== t.id)
-                              setThemeFilter(next)
+                              setThemeFilter(checked ? options!.themes.map((t) => t.id) : [])
                             }}
                             className="border-gray-400 data-[state=checked]:bg-gray-100 data-[state=checked]:text-gray-900"
                           />
-                          <span className="truncate">
-                            {t.label} ({t.project_count})
-                          </span>
+                          <span className="truncate font-medium">Select all</span>
                         </label>
-                      ))}
+                        {options!.themes.map((t) => (
+                          <label
+                            key={t.id}
+                            className="flex cursor-pointer items-center gap-1.5 rounded px-1.5 py-1 text-xs text-gray-100 hover:bg-white/10"
+                          >
+                            <Checkbox
+                              checked={themeParams.includes(t.id)}
+                              onCheckedChange={(checked) => {
+                                const next = checked
+                                  ? [...themeParams, t.id]
+                                  : themeParams.filter((id) => id !== t.id)
+                                setThemeFilter(next)
+                              }}
+                              className="border-gray-400 data-[state=checked]:bg-gray-100 data-[state=checked]:text-gray-900"
+                            />
+                            <span className="truncate">
+                              {t.label} ({t.project_count})
+                            </span>
+                          </label>
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  ) : (
+                    <div className="absolute right-0 top-full z-50 mt-1 min-w-[140px] max-w-[220px] rounded-md border border-gray-600/50 bg-gray-900/95 px-2.5 py-2 shadow-lg">
+                      <p className="text-xs text-gray-300">
+                        {loadingOptions ? 'Loading themes…' : 'No themes available yet.'}
+                      </p>
+                    </div>
+                  ))}
               </div>
             </div>
             <div className="absolute top-2 left-2 z-10">
@@ -1370,14 +1450,17 @@ function StoriesContent() {
                       <>
                         <p className="text-base font-medium mt-4 mb-2 text-accent-foreground">Where support went:</p>
                         <ul className="list-none space-y-1.5 text-base text-accent-foreground">
-                          {summary.top_categories!.map((tc, i) => {
+                          {whereSupportPagination.slice.map((tc, i) => {
                             const Icon = getSectorIcon(tc.category)
                             const label =
                               tc.category === 'Other' && (tc.other_subcategories?.length ?? 0) > 0
                                 ? `Other (e.g. ${tc.other_subcategories!.slice(0, 4).join(', ')})`
                                 : tc.category
                             return (
-                              <li key={tc.category + String(i)} className="flex items-center gap-2">
+                              <li
+                                key={`${tc.category}-${whereSupportPagination.pageIdx}-${i}`}
+                                className="flex items-center gap-2"
+                              >
                                 <Icon className="h-4 w-4 shrink-0 text-[var(--muted-foreground)]" aria-hidden />
                                 <span>
                                   <strong>{label}</strong>{' '}
@@ -1387,8 +1470,42 @@ function StoriesContent() {
                             )
                           })}
                         </ul>
+                        {whereSupportPagination.all.length > WHERE_SUPPORT_PAGE_SIZE && (
+                          <div className="flex items-center justify-between gap-2 mt-3 pt-2 border-t border-border/60">
+                            <button
+                              type="button"
+                              disabled={whereSupportPagination.pageIdx <= 0}
+                              onClick={() => setWhereSupportPage((p) => Math.max(0, p - 1))}
+                              className="inline-flex h-8 items-center gap-1 rounded-md border border-border bg-background px-2 text-sm text-accent-foreground disabled:pointer-events-none disabled:opacity-40 hover:bg-muted/80"
+                              aria-label="Previous categories"
+                            >
+                              <ChevronLeft className="h-4 w-4" />
+                              Previous
+                            </button>
+                            <span className="text-xs tabular-nums text-muted-foreground shrink-0">
+                              {whereSupportPagination.pageIdx + 1} / {whereSupportPagination.pageCount}
+                            </span>
+                            <button
+                              type="button"
+                              disabled={whereSupportPagination.pageIdx >= whereSupportPagination.pageCount - 1}
+                              onClick={() =>
+                                setWhereSupportPage((p) =>
+                                  Math.min(whereSupportPagination.pageCount - 1, p + 1)
+                                )
+                              }
+                              className="inline-flex h-8 items-center gap-1 rounded-md border border-border bg-background px-2 text-sm text-accent-foreground disabled:pointer-events-none disabled:opacity-40 hover:bg-muted/80"
+                              aria-label="Next categories"
+                            >
+                              Next
+                              <ChevronRight className="h-4 w-4" />
+                            </button>
+                          </div>
+                        )}
                         {(() => {
-                          const diversity = getSpendDiversityFromCategories(summary.top_categories!, summary.total_usd)
+                          const diversity = getSpendDiversityFromCategories(
+                            summary.top_categories!,
+                            summary.total_usd
+                          )
                           return diversity != null ? (
                             <p className="text-base text-muted-foreground mt-3">
                               <strong className="text-accent-foreground">Spend diversity: {(diversity * 100).toFixed(0)}%.</strong>{' '}
