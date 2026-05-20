@@ -14,12 +14,10 @@ import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { CollapsibleRow } from '@/components/ui/collapsible'
 import type { RegionSelection, WizardKind, WizardPageEntry } from '../f4Wizard/types'
-import { normalizeWizardPage } from '../f4Wizard/types'
 import { buildSnippetFilesFromSelections } from '../f4Wizard/buildSnippetFiles'
 import { f4ParseSnips, f4Save, f4UploadInit } from '../f4Wizard/f4WizardApi'
 import { useF4WizardViewerPages } from '../f4Wizard/useF4WizardViewerPages'
 import { useF4WizardDrag, type WizardDragState } from '../f4Wizard/useF4WizardDrag'
-import { Check } from 'lucide-react'
 import {
   clampDateInputToToday,
   getTodayDateInputValue,
@@ -28,6 +26,7 @@ import {
 } from '@/lib/reportUploadDate'
 import { type F4SectorRow } from '@/lib/f4ExpenseSectors'
 import { F4ExpenseSectorSelect } from './F4ExpenseSectorSelect'
+import { WizardFullscreenShell, WIZARD_FULLSCREEN_DIALOG_CLASS } from './WizardFullscreenShell'
 
 interface UploadF4ModalProps {
   open: boolean
@@ -93,6 +92,8 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
     questions: false,
     receipts: false,
   })
+  const [wizardViewerExpanded, setWizardViewerExpanded] = useState(false)
+  const [wizardZoom, setWizardZoom] = useState(1)
   const [viewerMode, setViewerMode] = useState<'pdf' | 'image' | 'unsupported'>('unsupported')
   const [wizardPages, setWizardPages] = useState<WizardPageEntry[]>([])
   const [isRenderingPages, setIsRenderingPages] = useState(false)
@@ -180,6 +181,8 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
         setSelectionByKind({ table: [], questions: [], receipts: [] })
         setWizardKind('table')
         setWizardProgress({ table: false, questions: false, receipts: false })
+        setWizardViewerExpanded(false)
+        setWizardZoom(1)
         setFxRate(null)
         return
       }
@@ -817,6 +820,8 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
     setSelectionByKind({ table: [], questions: [], receipts: [] })
     setWizardKind('table')
     setWizardProgress({ table: false, questions: false, receipts: false })
+    setWizardViewerExpanded(false)
+    setWizardZoom(1)
   }
 
   const reportDateInputMax = getTodayDateInputValue()
@@ -850,12 +855,14 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
           setSelectionByKind({ table: [], questions: [], receipts: [] })
           setWizardKind('table')
           setWizardProgress({ table: false, questions: false, receipts: false })
+          setWizardViewerExpanded(false)
+          setWizardZoom(1)
           setFxRate(null)
         }
       }
     }}>
       <DialogContent 
-        className="max-w-7xl w-[95vw] max-h-[85vh] overflow-y-auto select-text"
+        className={step === 'wizard' && wizardViewerExpanded ? WIZARD_FULLSCREEN_DIALOG_CLASS : 'max-w-7xl w-[95vw] max-h-[85vh] overflow-y-auto select-text'}
         onInteractOutside={(e:any)=>{ 
           e.preventDefault(); 
           try { 
@@ -868,9 +875,11 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
           onOpenChange(false) 
         }}
       >
-        <DialogHeader>
-          <DialogTitle>{t('f4.modal.title')}</DialogTitle>
-        </DialogHeader>
+        {(step !== 'wizard' || !wizardViewerExpanded) && (
+          <DialogHeader>
+            <DialogTitle>{t('f4.modal.title')}</DialogTitle>
+          </DialogHeader>
+        )}
         {step === 'select' && !initialProjectId ? (
           <div className="space-y-4">
             <div className="flex gap-2 p-1 rounded-lg border bg-muted/30 w-fit">
@@ -993,160 +1002,68 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
               )}
             </div>
           ) : step === 'wizard' ? (
-          <div className="flex flex-col gap-2 min-h-0 max-h-[82vh]">
-            {/* Instruction row + controls row */}
-            <div className="sticky top-0 z-30 shrink-0 rounded-md border bg-background/95 px-2 py-1.5 shadow-sm supports-[backdrop-filter]:backdrop-blur-sm">
-              <p className="text-[11px] leading-snug text-muted-foreground pb-1.5 border-b border-border/70 mb-1.5">
-                Highlight a section directly on the document viewer, then run extraction for this step.
-              </p>
-              <div className="flex flex-nowrap items-center gap-2 overflow-x-auto">
-              <div className="flex items-center gap-1 shrink-0">
-                <span className={`inline-flex h-7 items-center gap-0.5 rounded border px-1.5 text-[11px] leading-none ${wizardProgress.table ? 'bg-green-50 border-green-300 text-green-800' : expectedWizardKind === 'table' ? 'bg-sky-50 border-sky-300 text-sky-800' : 'bg-muted/30 text-muted-foreground'}`}>
-                  1) Expense table
-                  {wizardProgress.table && <Check className="h-3.5 w-3.5 shrink-0 text-green-700" strokeWidth={2.5} aria-hidden />}
-                </span>
-                <span className={`inline-flex h-7 items-center gap-0.5 rounded border px-1.5 text-[11px] leading-none ${wizardProgress.questions ? 'bg-green-50 border-green-300 text-green-800' : expectedWizardKind === 'questions' ? 'bg-sky-50 border-sky-300 text-sky-800' : 'bg-muted/30 text-muted-foreground'}`}>
-                  2) Additional questions
-                  {wizardProgress.questions && <Check className="h-3.5 w-3.5 shrink-0 text-green-700" strokeWidth={2.5} aria-hidden />}
-                </span>
-                <span className={`inline-flex h-7 items-center gap-0.5 rounded border px-1.5 text-[11px] leading-none ${wizardProgress.receipts ? 'bg-green-50 border-green-300 text-green-800' : expectedWizardKind === 'receipts' ? 'bg-sky-50 border-sky-300 text-sky-800' : 'bg-muted/30 text-muted-foreground'}`}>
-                  3) Receipts
-                  {wizardProgress.receipts && <Check className="h-3.5 w-3.5 shrink-0 text-green-700" strokeWidth={2.5} aria-hidden />}
-                </span>
-              </div>
-              <span className="text-[11px] leading-tight text-muted-foreground whitespace-nowrap shrink-0">
-                · Draw on one or more pages · Step <strong className="font-semibold text-foreground">{expectedWizardKind}</strong> · {selectionByKind[expectedWizardKind].length} selection(s)
-              </span>
-              <div className="flex-1 min-w-[8px] shrink" aria-hidden />
-              <div className="flex flex-nowrap items-center gap-1.5 shrink-0">
-                <Button
-                  type="button"
-                  size="sm"
-                  className="h-7 px-2.5 text-[11px]"
-                  onClick={() => runWizardStep(expectedWizardKind)}
-                  disabled={
-                    wizardLoading != null ||
-                    selectionByKind[expectedWizardKind].length === 0 ||
-                    (expectedWizardKind === 'receipts' && expensesDraft.length === 0)
-                  }
-                >
-                  {wizardLoading === expectedWizardKind ? 'Processing…' : `Process ${expectedWizardKind}`}
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="h-7 px-2.5 text-[11px]"
-                  onClick={() => setSelectionByKind(prev => ({ ...prev, [expectedWizardKind]: [] }))}
-                  disabled={wizardLoading != null || selectionByKind[expectedWizardKind].length === 0}
-                >
-                  Clear current step selections
-                </Button>
-                {expectedWizardKind === 'table' && (
-                  <span className="text-[11px] text-muted-foreground whitespace-nowrap">Rows: {expensesDraft.length}</span>
-                )}
-                {expectedWizardKind === 'receipts' && receiptValidation && (
-                  <span className="text-[11px] text-muted-foreground whitespace-nowrap">
-                    Receipts total (SDG): {(Number(receiptValidation.receipts_total_sdg) || 0).toLocaleString()} ({receiptValidation.receipts_detected_count ?? 0} detected)
-                  </span>
-                )}
-              </div>
-              </div>
-            </div>
-
-            {viewerMode === 'unsupported' && !isRenderingPages && (
-              <div className="shrink-0 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded p-3">
-                This file type cannot be rendered for in-modal selection yet. Please use PDF or image files for guided snip/highlight extraction.
-              </div>
-            )}
-
-            <Card className="flex min-h-0 flex-1 flex-col overflow-hidden border">
-              <CardHeader className="shrink-0 py-2 pb-1.5">
-                <CardTitle className="text-sm font-semibold">Document viewer — drag to select regions</CardTitle>
-              </CardHeader>
-              <CardContent className="flex min-h-0 flex-1 flex-col overflow-hidden p-0 px-6 pb-6 pt-0">
-                {/* Inner div holds ref: CardContent is not forwardRef, so ref must attach to a real DOM node for edge scroll */}
-                <div ref={wizardViewerScrollRef} className="min-h-0 flex-1 overflow-auto pr-1">
-                  {isRenderingPages ? (
-                    <div className="w-full min-h-[280px] border rounded flex items-center justify-center text-muted-foreground text-sm">Rendering document pages…</div>
-                  ) : wizardPages.length > 0 ? (
-                    <div className="space-y-4 pb-2">
-                      {wizardPages.map((raw, pageIndex) => {
-                        const page = normalizeWizardPage(raw)
-                        if (!page?.dataUrl) return null
-                        const keySuffix = page.dataUrl.length > 32 ? page.dataUrl.slice(0, 32) : page.dataUrl
-                        return (
-                        <div
-                          key={`${pageIndex}-${keySuffix}`}
-                          className="mx-auto w-fit max-w-full border rounded overflow-hidden bg-white"
-                        >
-                          {/*
-                            Inner box matches the &lt;img&gt; exactly so drag/snipping coords match overlay pixels.
-                            (Border stays on the outer shell.)
-                          */}
-                          <div
-                            ref={(el) => {
-                              wizardPageWrapRefs.current[pageIndex] = el
-                            }}
-                            className="relative inline-block max-w-full select-none touch-none"
-                            onMouseDown={(e) => startDragOnPage(pageIndex, e)}
-                          >
-                          <img
-                            src={page.dataUrl}
-                            alt={`Page ${pageIndex + 1}`}
-                            width={page.displayWidth || undefined}
-                            height={page.displayHeight || undefined}
-                            className="max-w-full h-auto w-auto select-none pointer-events-none block"
-                            style={{
-                              width: page.displayWidth ? `${page.displayWidth}px` : undefined,
-                              maxWidth: '100%',
-                              height: 'auto',
-                            }}
-                          />
-                          {selectionByKind[expectedWizardKind]
-                            .filter(s => s.pageIndex === pageIndex)
-                            .map((s, idx) => (
-                              <div
-                                key={`sel-${expectedWizardKind}-${pageIndex}-${idx}`}
-                                className="absolute border-2 border-sky-500 bg-sky-300/15 pointer-events-none"
-                                style={{ left: s.x, top: s.y, width: s.w, height: s.h }}
-                              />
-                            ))}
-                          {dragging && dragging.pageIndex === pageIndex && (
-                            <div
-                              className="absolute border-2 border-orange-500 bg-orange-300/20 pointer-events-none"
-                              style={{
-                                left: Math.min(dragging.sx, dragging.cx),
-                                top: Math.min(dragging.sy, dragging.cy),
-                                width: Math.abs(dragging.cx - dragging.sx),
-                                height: Math.abs(dragging.cy - dragging.sy),
-                              }}
-                            />
-                          )}
-                          <div className="absolute top-2 left-2 bg-black/60 text-white text-xs px-2 py-1 rounded pointer-events-none">
-                            Page {pageIndex + 1}
-                          </div>
-                          </div>
-                        </div>
-                        )
-                      })}
-                    </div>
-                  ) : (
-                    <div className="w-full h-[400px] border rounded flex items-center justify-center text-muted-foreground">
-                      No renderable pages available
-                    </div>
+            <WizardFullscreenShell
+              title={t('f4.modal.title')}
+              expanded={wizardViewerExpanded}
+              onExpandedChange={setWizardViewerExpanded}
+              zoom={wizardZoom}
+              onZoomChange={setWizardZoom}
+              steps={[
+                { id: 'table', label: '1) Expense table', completed: wizardProgress.table, isCurrent: expectedWizardKind === 'table' },
+                { id: 'questions', label: '2) Additional questions', completed: wizardProgress.questions, isCurrent: expectedWizardKind === 'questions' },
+                { id: 'receipts', label: '3) Receipts', completed: wizardProgress.receipts, isCurrent: expectedWizardKind === 'receipts' },
+              ]}
+              expectedStepId={expectedWizardKind}
+              selectionCount={selectionByKind[expectedWizardKind].length}
+              wizardLoading={wizardLoading != null}
+              processDisabled={
+                selectionByKind[expectedWizardKind].length === 0 ||
+                (expectedWizardKind === 'receipts' && expensesDraft.length === 0)
+              }
+              clearDisabled={selectionByKind[expectedWizardKind].length === 0}
+              onProcess={() => runWizardStep(expectedWizardKind)}
+              onClearSelections={() => setSelectionByKind((prev) => ({ ...prev, [expectedWizardKind]: [] }))}
+              toolbarExtra={
+                <>
+                  {expectedWizardKind === 'table' && (
+                    <span className="text-[11px] text-muted-foreground whitespace-nowrap">Rows: {expensesDraft.length}</span>
                   )}
-                </div>
-              </CardContent>
-            </Card>
-
-            <div className="shrink-0 flex justify-between border-t pt-3">
-              <Button variant="outline" onClick={() => setStep('select')} disabled={!!initialProjectId || wizardLoading != null}>Back</Button>
-              <Button onClick={() => setStep('preview')} disabled={wizardLoading != null || !wizardProgress.table || !wizardProgress.questions || !wizardProgress.receipts || !isSelectReportDateValid}>
-                Continue to review form
-              </Button>
-            </div>
-          </div>
+                  {expectedWizardKind === 'receipts' && receiptValidation && (
+                    <span className="text-[11px] text-muted-foreground whitespace-nowrap">
+                      Receipts total (SDG): {(Number(receiptValidation.receipts_total_sdg) || 0).toLocaleString()} (
+                      {receiptValidation.receipts_detected_count ?? 0} detected)
+                    </span>
+                  )}
+                </>
+              }
+              viewerMode={viewerMode}
+              isRenderingPages={isRenderingPages}
+              wizardPages={wizardPages}
+              currentSelections={selectionByKind[expectedWizardKind]}
+              dragging={dragging}
+              startDragOnPage={startDragOnPage}
+              wizardViewerScrollRef={wizardViewerScrollRef}
+              wizardPageWrapRefs={wizardPageWrapRefs}
+              unsupportedBanner={
+                viewerMode === 'unsupported' && !isRenderingPages ? (
+                  <div className="shrink-0 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded p-3">
+                    This file type cannot be rendered for selection yet. Please use PDF or image files for guided extraction.
+                  </div>
+                ) : undefined
+              }
+              onBack={() => {
+                setWizardViewerExpanded(false)
+                setStep('select')
+              }}
+              onContinue={() => {
+                setWizardViewerExpanded(false)
+                setStep('preview')
+              }}
+              backDisabled={!!initialProjectId}
+              continueDisabled={
+                !wizardProgress.table || !wizardProgress.questions || !wizardProgress.receipts || !isSelectReportDateValid
+              }
+            />
           ) : step === 'preview' ? (
           <div className="space-y-6 select-text">
             {/* Form Content */}
