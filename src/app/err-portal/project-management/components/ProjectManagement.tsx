@@ -704,7 +704,7 @@ export default function ProjectManagement() {
                         }
                         cols.push(
                           { key: 'plan', header: t('management.table.plan'), format: (v) => Number(v || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) },
-                          { key: 'actual', header: t('management.table.actuals'), format: (v) => Number(v || 0).toLocaleString() },
+                          { key: 'actual', header: t('management.table.actuals'), format: (v) => Number(v || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) },
                           { key: 'variance', header: t('management.table.variance'), format: (v) => Number(v || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) },
                           { key: 'individuals', header: t('management.table.individuals'), format: (v) => Number(v || 0).toLocaleString() },
                           { key: 'overdue_count', header: t('management.table.overdue'), format: (v, r) => r.overdue_count ?? (r.is_overdue ? 1 : 0) },
@@ -823,7 +823,7 @@ export default function ProjectManagement() {
                         </>
                       )}
                       <TableCell className="text-right font-semibold">{Number(totals.plan || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
-                      <TableCell className="text-right font-semibold">{Number(totals.actual || 0).toLocaleString()}</TableCell>
+                      <TableCell className="text-right font-semibold">{Number(totals.actual || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
                       <TableCell className="text-right font-semibold">{Number(totals.variance || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
                       <TableCell className="text-right font-semibold">{Number(totals.individuals || 0).toLocaleString()}</TableCell>
                       <TableCell className="text-right font-semibold w-14">{totals.overdue_count ?? 0}</TableCell>
@@ -887,7 +887,7 @@ export default function ProjectManagement() {
                       </>
                     )}
                     <TableCell className="text-right">{Number(r.plan||0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
-                    <TableCell className="text-right">{Number(r.actual||0).toLocaleString()}</TableCell>
+                    <TableCell className="text-right">{Number(r.actual||0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
                     <TableCell className="text-right">{Number(r.variance||0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
                     <TableCell className="text-right">{Number(r.individuals || 0).toLocaleString()}</TableCell>
                     <TableCell className="text-right w-14">
@@ -1117,7 +1117,7 @@ export default function ProjectManagement() {
                         {grantSummaryRows.reduce((s, r) => s + r.plan, 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </TableCell>
                       <TableCell className="text-right font-semibold">
-                        {grantSummaryRows.reduce((s, r) => s + r.actual, 0).toLocaleString()}
+                        {grantSummaryRows.reduce((s, r) => s + r.actual, 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </TableCell>
                       <TableCell className="text-right font-semibold">
                         {grantSummaryRows.reduce((s, r) => s + r.variance, 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -1164,7 +1164,7 @@ export default function ProjectManagement() {
                       <TableRow key={`grant-${idx}-${r.grantLabel}`}>
                         <TableCell className="font-medium">{r.grantLabel}</TableCell>
                         <TableCell className="text-right">{Number(r.plan || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
-                        <TableCell className="text-right">{Number(r.actual || 0).toLocaleString()}</TableCell>
+                        <TableCell className="text-right">{Number(r.actual || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
                         <TableCell className="text-right">{Number(r.variance || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
                         <TableCell className="text-right">{r.burn ? (r.burn * 100).toFixed(0) + '%' : '0%'}</TableCell>
                         <TableCell className="text-right w-14">{r.overdue_count ?? 0}</TableCell>

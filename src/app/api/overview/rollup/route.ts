@@ -1,6 +1,57 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
+import { getSupabaseAdmin } from '@/lib/supabaseAdmin'
 import { getActivityAndCategoryLists } from '@/lib/plannedActivitiesExpenses'
+import {
+  computePortalActualsByProject,
+  computePortalActualsFromProjectExpenses,
+} from '@/lib/f4ExpenseDisplay'
+
+/** PostgREST `.in()` with hundreds of UUIDs can exceed URL limits and return empty data. */
+const SUPABASE_IN_BATCH = 80
+
+function chunkIds<T extends string | number>(ids: T[]): T[][] {
+  if (!ids.length) return []
+  const out: T[][] = []
+  for (let i = 0; i < ids.length; i += SUPABASE_IN_BATCH) {
+    out.push(ids.slice(i, i + SUPABASE_IN_BATCH))
+  }
+  return out
+}
+
+async function fetchPortalSummariesForProjects(supabase: any, projectIds: string[]) {
+  if (!projectIds.length) return []
+  const rows: any[] = []
+  for (const batch of chunkIds(projectIds)) {
+    const { data, error } = await supabase
+      .from('err_summary')
+      .select('id, project_id, total_expenses, report_date')
+      .in('project_id', batch)
+    if (error) {
+      console.error('[overview/rollup] err_summary batch failed:', error.message)
+      throw error
+    }
+    rows.push(...(data || []))
+  }
+  return rows
+}
+
+async function fetchF5ReportsForProjects(supabase: any, projectIds: string[]) {
+  if (!projectIds.length) return []
+  const rows: any[] = []
+  for (const batch of chunkIds(projectIds)) {
+    const { data, error } = await supabase
+      .from('err_program_report')
+      .select('id, project_id, report_date')
+      .in('project_id', batch)
+    if (error) {
+      console.error('[overview/rollup] err_program_report batch failed:', error.message)
+      throw error
+    }
+    rows.push(...(data || []))
+  }
+  return rows
+}
 
 function sumPlanFromPlannedActivities(planned: any): number {
   try {
@@ -111,6 +162,40 @@ function getTransferDateByProjectFromMous(mousRows: any[]): Record<string, strin
   return out
 }
 
+async function fetchRowsByIdColumn(
+  supabase: any,
+  table: string,
+  select: string,
+  column: string,
+  ids: (string | number)[]
+) {
+  if (!ids.length) return []
+  const allData: any[] = []
+  const idChunkSize = 150
+  const pageSize = 1000
+  for (let i = 0; i < ids.length; i += idChunkSize) {
+    const idBatch = ids.slice(i, i + idChunkSize)
+    let from = 0
+    let hasMore = true
+    while (hasMore) {
+      const { data: page, error } = await supabase
+        .from(table)
+        .select(select)
+        .in(column, idBatch)
+        .range(from, from + pageSize - 1)
+      if (error) throw error
+      if (page?.length) {
+        allData.push(...page)
+        from += pageSize
+        hasMore = page.length === pageSize
+      } else {
+        hasMore = false
+      }
+    }
+  }
+  return allData
+}
+
 // Helper function to fetch all rows using pagination
 const fetchAllRows = async (supabase: any, table: string, select: string) => {
   let allData: any[] = []
@@ -174,11 +259,12 @@ export async function GET(request: Request) {
     }
 
     const projectIds = (projects || []).map((p:any)=> p.id)
+    const dataSupabase = getSupabaseAdmin()
 
     // ===== Fetch ALL historical data from activities_raw_import FIRST =====
     // This ensures we have all data before filtering, making it more stable
     const allHistoricalData = await fetchAllRows(
-      supabase,
+      dataSupabase,
       'activities_raw_import',
       'id,"ERR CODE","ERR Name","State","Project Donor","USD","MOU Signed","F4","F5","Date Report Completed","Date Transfer","Serial Number","Target (Ind.)","Target (Fam.)","Overdue"'
     )
@@ -205,7 +291,7 @@ export async function GET(request: Request) {
 
     // Historical financial reports: actuals by serial (match historical_financial_reports.budget_items = activities_raw_import."Serial Number")
     const historicalFinancialReports = await fetchAllRows(
-      supabase,
+      dataSupabase,
       'historical_financial_reports',
       'budget_items, total_errs_expenditure_usd'
     )
@@ -217,17 +303,48 @@ export async function GET(request: Request) {
       actualBySerial.set(key, (actualBySerial.get(key) ?? 0) + val)
     }
 
-    // Summaries for actuals (portal projects)
-    // Only get summaries that are NOT historical (exclude those with activities_raw_import_id)
-    let sq = supabase.from('err_summary').select('id, project_id, total_expenses, report_date').is('activities_raw_import_id', null)
-    if (projectIds.length) sq = sq.in('project_id', projectIds)
-    const { data: summaries } = await sq
+    const portalSummaries = await fetchPortalSummariesForProjects(dataSupabase, projectIds)
+
+    // Line-item expenses by summary_id (project_id on err_expense may not match err_summary)
+    const portalSummaryIds = portalSummaries
+      .map((s: any) => s.id)
+      .filter((id: unknown): id is number => typeof id === 'number')
+    const expenseSelect =
+      'expense_id, project_id, summary_id, expense_amount, expense_amount_sdg, payment_date, payment_method, seller, receipt_no, expense_description, expense_activity'
+    const expensesBySummary =
+      portalSummaryIds.length > 0
+        ? await fetchRowsByIdColumn(dataSupabase, 'err_expense', expenseSelect, 'summary_id', portalSummaryIds)
+        : []
+    const expensesByProject = projectIds.length
+      ? await fetchRowsByIdColumn(dataSupabase, 'err_expense', expenseSelect, 'project_id', projectIds)
+      : []
+    const portalExpenseById = new Map<number, (typeof expensesBySummary)[0]>()
+    for (const row of [...expensesBySummary, ...expensesByProject]) {
+      const id = (row as { expense_id?: number }).expense_id
+      if (typeof id === 'number') portalExpenseById.set(id, row)
+    }
+    const portalExpenses = Array.from(portalExpenseById.values())
+    const portalActualsByProject = computePortalActualsByProject(portalExpenses, portalSummaries)
+    const orphanActualsByProject = computePortalActualsFromProjectExpenses(
+      portalExpenses,
+      projectIds
+    )
+    for (const [projectId, actual] of orphanActualsByProject) {
+      const prev = portalActualsByProject.get(projectId) || { actual: 0, count: 0, last: null }
+      if (prev.actual <= 0 && actual > 0) {
+        portalActualsByProject.set(projectId, {
+          ...prev,
+          actual,
+          count: Math.max(prev.count, 1),
+        })
+      }
+    }
     
     // Get historical F4 summaries (linked to activities_raw_import)
     // Fetch all historical summaries first (no filtering at query level)
     // Only get summaries that are historical (have activities_raw_import_id) and don't have project_id
     const allHistoricalSummaries = await fetchAllRows(
-      supabase,
+      dataSupabase,
       'err_summary',
       'id, activities_raw_import_id, total_expenses, report_date'
     ).then((data: any[]) => (data || []).filter((s: any) => s.activities_raw_import_id != null && !s.project_id))
@@ -241,30 +358,24 @@ export async function GET(request: Request) {
       })
     }
     
-    // Combine portal and historical summaries for processing
-    // Deduplicate by summary ID to prevent counting the same summary twice
-    const allSummariesMap = new Map<number, any>()
-    for (const s of (summaries || [])) {
-      if (s.id) allSummariesMap.set(s.id, s)
-    }
-    for (const s of filteredHistoricalSummaries) {
-      if (s.id) allSummariesMap.set(s.id, s)
-    }
-    const allSummaries = Array.from(allSummariesMap.values())
+    // Historical summaries only (portal uses portalActualsByProject)
+    const allSummaries = filteredHistoricalSummaries || []
 
-    // F5 reports for program reporting - get reach data for totals
-    let f5q = supabase.from('err_program_report').select('id, project_id, report_date')
-    if (projectIds.length) f5q = f5q.in('project_id', projectIds)
-    const { data: f5Reports } = await f5q
+    const f5Reports = await fetchF5ReportsForProjects(dataSupabase, projectIds)
     
     // Get F5 reach data for individual and family totals
     const f5ReportIds = (f5Reports || []).map((f:any) => f.id)
     let f5ReachData: any[] = []
     if (f5ReportIds.length) {
-      const { data: reachData } = await supabase
-        .from('err_program_reach')
-        .select('report_id, individual_count, household_count')
-        .in('report_id', f5ReportIds)
+      let reachData: any[] = []
+      for (const batch of chunkIds(f5ReportIds)) {
+        const { data: page, error: reachErr } = await dataSupabase
+          .from('err_program_reach')
+          .select('report_id, individual_count, household_count')
+          .in('report_id', batch)
+        if (reachErr) throw reachErr
+        reachData.push(...(page || []))
+      }
       f5ReachData = reachData || []
     }
     
@@ -313,7 +424,7 @@ export async function GET(request: Request) {
       const plan = p.source === 'mutual_aid_portal' 
         ? sumPlanFromExpenses(p.expenses)
         : sumPlanFromPlannedActivities(p.planned_activities)
-      const agg = sumByProject.get(p.id) || { actual: 0, count: 0, last: null }
+      const agg = portalActualsByProject.get(p.id) || { actual: 0, count: 0, last: null }
       const f5Agg = f5ByProject.get(p.id) || { count: 0, last: null }
       const variance = plan - agg.actual
       const burn = plan > 0 ? agg.actual / plan : 0

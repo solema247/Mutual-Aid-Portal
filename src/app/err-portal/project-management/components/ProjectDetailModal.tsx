@@ -7,6 +7,12 @@ import { Label } from '@/components/ui/label'
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
 import { FileText, FileCheck, Receipt, FileSignature, CheckCircle, AlertCircle } from 'lucide-react'
+import {
+  filterF4ExpensesForDisplay,
+  formatF4SdgAmount,
+  formatF4UsdAmount,
+  sumF4ExpenseDisplayAmounts,
+} from '@/lib/f4ExpenseDisplay'
 
 interface ProjectDetailModalProps {
   projectId: string | null
@@ -361,17 +367,24 @@ export default function ProjectDetailModal({ projectId, open, onOpenChange }: Pr
                           {summaries.map((s: any) => (
                             <TableRow key={s.id}>
                               <TableCell>{s.report_date ? new Date(s.report_date).toLocaleDateString() : '-'}</TableCell>
-                              <TableCell className="text-right">{Number(s.total_grant || 0).toLocaleString()}</TableCell>
-                              <TableCell className="text-right">{Number(s.total_expenses || 0).toLocaleString()}</TableCell>
-                              <TableCell className="text-right">{Number(s.total_expenses_sdg || 0).toLocaleString()}</TableCell>
-                              <TableCell className="text-right">{Number(s.remainder || 0).toLocaleString()}</TableCell>
+                              <TableCell className="text-right">{formatF4UsdAmount(s.total_grant)}</TableCell>
+                              <TableCell className="text-right">{formatF4UsdAmount(s.total_expenses)}</TableCell>
+                              <TableCell className="text-right">{formatF4SdgAmount(s.total_expenses_sdg)}</TableCell>
+                              <TableCell className="text-right">{formatF4UsdAmount(s.remainder)}</TableCell>
                             </TableRow>
                           ))}
                         </TableBody>
                       </Table>
 
                       {/* F4 Expenses for Latest Report */}
-                      {summaries[0]?.expenses && summaries[0].expenses.length > 0 && (
+                      {(() => {
+                        const latestExpenses = filterF4ExpensesForDisplay(
+                          summaries[0]?.expenses,
+                          summaries[0]?.total_expenses
+                        )
+                        if (latestExpenses.length === 0) return null
+                        const expenseTotals = sumF4ExpenseDisplayAmounts(latestExpenses)
+                        return (
                         <div className="mt-4">
                           <Label className="text-sm font-medium mb-2">Latest F4 Expenses</Label>
                           <Table>
@@ -388,22 +401,29 @@ export default function ProjectDetailModal({ projectId, open, onOpenChange }: Pr
                               </TableRow>
                             </TableHeader>
                             <TableBody>
-                              {summaries[0].expenses.map((e: any) => (
+                              {latestExpenses.map((e: any) => (
                                 <TableRow key={e.expense_id}>
                                   <TableCell>{e.expense_activity || '-'}</TableCell>
                                   <TableCell>{e.expense_description || '-'}</TableCell>
-                                  <TableCell className="text-right">{Number(e.expense_amount || 0).toLocaleString()}</TableCell>
-                                  <TableCell className="text-right">{Number(e.expense_amount_sdg || 0).toLocaleString()}</TableCell>
+                                  <TableCell className="text-right">{formatF4UsdAmount(e.expense_amount)}</TableCell>
+                                  <TableCell className="text-right">{formatF4SdgAmount(e.expense_amount_sdg)}</TableCell>
                                   <TableCell>{e.payment_date ? new Date(e.payment_date).toLocaleDateString() : '-'}</TableCell>
                                   <TableCell>{e.payment_method || '-'}</TableCell>
                                   <TableCell>{e.receipt_no || '-'}</TableCell>
                                   <TableCell>{e.seller || '-'}</TableCell>
                                 </TableRow>
                               ))}
+                              <TableRow className="bg-muted/50 font-semibold">
+                                <TableCell colSpan={2}>{t('total')}</TableCell>
+                                <TableCell className="text-right">{formatF4UsdAmount(expenseTotals.usd)}</TableCell>
+                                <TableCell className="text-right">{formatF4SdgAmount(expenseTotals.sdg)}</TableCell>
+                                <TableCell colSpan={4} />
+                              </TableRow>
                             </TableBody>
                           </Table>
                         </div>
-                      )}
+                        )
+                      })()}
 
                       {/* F4 Additional Fields */}
                       {summaries[0] && (
@@ -858,9 +878,9 @@ export default function ProjectDetailModal({ projectId, open, onOpenChange }: Pr
                       ) : summaries.map((s:any)=> (
                         <TableRow key={s.id}>
                           <TableCell>{s.report_date ? new Date(s.report_date).toLocaleDateString() : '-'}</TableCell>
-                          <TableCell className="text-right">{Number(s.total_grant || 0).toLocaleString()}</TableCell>
-                          <TableCell className="text-right">{Number(s.total_expenses || 0).toLocaleString()}</TableCell>
-                          <TableCell className="text-right">{Number(s.remainder || 0).toLocaleString()}</TableCell>
+                          <TableCell className="text-right">{formatF4UsdAmount(s.total_grant)}</TableCell>
+                          <TableCell className="text-right">{formatF4UsdAmount(s.total_expenses)}</TableCell>
+                          <TableCell className="text-right">{formatF4UsdAmount(s.remainder)}</TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
@@ -868,7 +888,13 @@ export default function ProjectDetailModal({ projectId, open, onOpenChange }: Pr
                 </div>
 
                 {/* F4 expenses (for latest report) */}
-                {summaries.length > 0 && (
+                {summaries.length > 0 && (() => {
+                  const latestExpenses = filterF4ExpensesForDisplay(
+                    summaries[0].expenses,
+                    summaries[0].total_expenses
+                  )
+                  const expenseTotals = sumF4ExpenseDisplayAmounts(latestExpenses)
+                  return (
                   <div>
                     <Label>{t('management.detail_modal.labels.latest_f4_expenses')}</Label>
                     <Table>
@@ -884,23 +910,33 @@ export default function ProjectDetailModal({ projectId, open, onOpenChange }: Pr
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {(summaries[0].expenses || []).length === 0 ? (
+                        {latestExpenses.length === 0 ? (
                           <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground">{t('management.detail_modal.table.no_expenses')}</TableCell></TableRow>
-                        ) : (summaries[0].expenses || []).map((e:any)=> (
-                          <TableRow key={e.expense_id}>
-                            <TableCell>{e.expense_activity || '-'}</TableCell>
-                            <TableCell>{e.expense_description || '-'}</TableCell>
-                            <TableCell className="text-right">{Number(e.expense_amount || 0).toLocaleString()}</TableCell>
-                            <TableCell>{e.payment_date ? new Date(e.payment_date).toLocaleDateString() : '-'}</TableCell>
-                            <TableCell>{e.payment_method || '-'}</TableCell>
-                            <TableCell>{e.receipt_no || '-'}</TableCell>
-                            <TableCell>{e.seller || '-'}</TableCell>
-                          </TableRow>
-                        ))}
+                        ) : (
+                          <>
+                            {latestExpenses.map((e:any)=> (
+                              <TableRow key={e.expense_id}>
+                                <TableCell>{e.expense_activity || '-'}</TableCell>
+                                <TableCell>{e.expense_description || '-'}</TableCell>
+                                <TableCell className="text-right">{formatF4UsdAmount(e.expense_amount)}</TableCell>
+                                <TableCell>{e.payment_date ? new Date(e.payment_date).toLocaleDateString() : '-'}</TableCell>
+                                <TableCell>{e.payment_method || '-'}</TableCell>
+                                <TableCell>{e.receipt_no || '-'}</TableCell>
+                                <TableCell>{e.seller || '-'}</TableCell>
+                              </TableRow>
+                            ))}
+                            <TableRow className="bg-muted/50 font-semibold">
+                              <TableCell colSpan={2}>{t('total')}</TableCell>
+                              <TableCell className="text-right">{formatF4UsdAmount(expenseTotals.usd)}</TableCell>
+                              <TableCell colSpan={4} />
+                            </TableRow>
+                          </>
+                        )}
                       </TableBody>
                     </Table>
                   </div>
-                )}
+                  )
+                })()}
 
                 {/* F5 Reports */}
                 {f5Reports.length > 0 && (
