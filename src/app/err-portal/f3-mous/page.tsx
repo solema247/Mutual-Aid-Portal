@@ -102,6 +102,13 @@ interface MOUDetail {
   } | null
 }
 
+function splitApprovedAccountBlocks(text: string): string[] {
+  return text
+    .split(/\n\s*[─-]{3,}\s*\n/g)
+    .map((block) => block.trim())
+    .filter(Boolean)
+}
+
 export default function F3MOUsPage() {
   const { t, i18n } = useTranslation(['f3', 'common'])
   const [mous, setMous] = useState<MOU[]>([])
@@ -1419,6 +1426,8 @@ export default function F3MOUsPage() {
           {activeMou && (() => {
             const viewMouProjects = detail?.projects || (detail?.project ? [detail.project] : [])
             const mouTotalFromProjects = viewMouProjects.reduce((s: number, p: any) => s + sumExpensesUsd(p.expenses), 0)
+            const approvedAccountsText = activeMou.banking_details_override || aggregatedData.banking || ''
+            const approvedAccountBlocks = approvedAccountsText ? splitApprovedAccountBlocks(approvedAccountsText) : []
             return (
             <div id={previewId} className="space-y-4">
               <div className="rounded-lg border p-4" data-mou-section="true">
@@ -1719,7 +1728,7 @@ export default function F3MOUsPage() {
               </div>
 
               <div className="rounded-lg border p-4" data-mou-section="true">
-                <div className="font-semibold mb-2">5. {t('f3:approved_accounts')}</div>
+                <div className="font-semibold mb-2" data-mou-subsection="true">5. {t('f3:approved_accounts')}</div>
                 {editMode ? (
                   <div>
                     <Label>Banking Details</Label>
@@ -1731,10 +1740,23 @@ export default function F3MOUsPage() {
                     />
                     <p className="text-xs text-muted-foreground mt-1">Leave empty to use aggregated data from projects</p>
                   </div>
+                ) : approvedAccountBlocks.length > 0 ? (
+                  <div className="space-y-4">
+                    {approvedAccountBlocks.map((accountBlock, index) => (
+                      <div
+                        key={index}
+                        className="grid grid-cols-1 md:grid-cols-2 gap-4 break-inside-avoid"
+                        data-mou-subsection="true"
+                      >
+                        <div className="rounded-md border p-3 text-sm whitespace-pre-wrap">{accountBlock}</div>
+                        <div className="rounded-md border p-3 text-sm whitespace-pre-wrap" dir="rtl">{accountBlock}</div>
+                      </div>
+                    ))}
+                  </div>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="rounded-md border p-3 text-sm whitespace-pre-wrap">{(activeMou.banking_details_override || aggregatedData.banking) || t('f3:approved_accounts_en_desc')}</div>
-                    <div className="rounded-md border p-3 text-sm whitespace-pre-wrap" dir="rtl">{(activeMou.banking_details_override || aggregatedData.banking) || t('f3:approved_accounts_ar_desc')}</div>
+                    <div className="rounded-md border p-3 text-sm whitespace-pre-wrap">{t('f3:approved_accounts_en_desc')}</div>
+                    <div className="rounded-md border p-3 text-sm whitespace-pre-wrap" dir="rtl">{t('f3:approved_accounts_ar_desc')}</div>
                   </div>
                 )}
               </div>
