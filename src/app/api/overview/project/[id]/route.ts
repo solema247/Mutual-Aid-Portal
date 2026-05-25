@@ -30,6 +30,34 @@ function computeOverdue(
   return { is_overdue: true, days_overdue: days }
 }
 
+function getPaymentConfirmationForProject(
+  paymentConfirmationRaw: string | null | undefined,
+  projectId: string
+): { filePath: string | null; transferDate: string | null } {
+  if (!paymentConfirmationRaw || typeof paymentConfirmationRaw !== 'string') {
+    return { filePath: null, transferDate: null }
+  }
+
+  try {
+    const parsed = JSON.parse(paymentConfirmationRaw)
+    if (typeof parsed === 'string') {
+      return { filePath: parsed.trim() || null, transferDate: null }
+    }
+
+    if (parsed && typeof parsed === 'object') {
+      const entry = (parsed as Record<string, { file_path?: unknown; transfer_date?: unknown }>)[projectId]
+      const filePath = typeof entry?.file_path === 'string' ? entry.file_path.trim() || null : null
+      const transferDate = typeof entry?.transfer_date === 'string' ? entry.transfer_date : null
+      return { filePath, transferDate }
+    }
+  } catch {
+    // Old records stored a single storage key rather than the per-project JSON map.
+    return { filePath: paymentConfirmationRaw.trim() || null, transferDate: null }
+  }
+
+  return { filePath: null, transferDate: null }
+}
+
 export async function GET(
   req: Request,
   { params }: { params: { id: string } }
@@ -253,21 +281,12 @@ export async function GET(
           .eq('id', project.mou_id)
           .single()
         if (!mouErr && mou) {
+          const paymentConfirmation = getPaymentConfirmationForProject(mou.payment_confirmation_file, id)
           mouFileKeys = {
-            payment_confirmation_file: mou.payment_confirmation_file || null,
+            payment_confirmation_file: paymentConfirmation.filePath,
             signed_mou_file_key: mou.signed_mou_file_key || null
           }
-          if (mou.payment_confirmation_file && typeof mou.payment_confirmation_file === 'string') {
-            try {
-              const parsed = JSON.parse(mou.payment_confirmation_file)
-              if (parsed && typeof parsed === 'object' && parsed[id]) {
-                const d = parsed[id].transfer_date
-                if (d && typeof d === 'string') transferDateFromMou = d
-              }
-            } catch {
-              // ignore
-            }
-          }
+          transferDateFromMou = paymentConfirmation.transferDate
         }
       }
 
