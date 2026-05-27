@@ -50,3 +50,13 @@ next-env.d.ts
 # Logs
 /logs
 *.log
+
+# Supabase CLI (local link state — do not commit)
+.supabase/
+
+# Production schema lives in private sudan-err-portal-schema repo
+/supabase/migrations/
+/supabase/config.toml
+
+# Cursor MCP — local only (contains project ref)
+.cursor/mcp.json
