@@ -1,5 +1,9 @@
 import { GoogleGenerativeAI } from '@google/generative-ai'
+import { GoogleAIFileManager, FileState } from '@google/generative-ai/server'
 import mammoth from 'mammoth'
+import * as os from 'os'
+import * as fs from 'fs'
+import * as path from 'path'
 import {
   type FormStructureFormType,
   getFormStructureSystemInstruction,
@@ -9,19 +13,77 @@ import {
   sanitizeModelJsonOutput,
 } from '@/lib/geminiStructureOcrText'
 
+const INLINE_SIZE_LIMIT = 15 * 1024 * 1024 // 15 MB — above this use the File API to avoid base64 request cap
+
 // Lazy Gemini model — only instantiated when text extraction is needed
 let geminiModelInstance: ReturnType<GoogleGenerativeAI['getGenerativeModel']> | null = null
 
-function getGeminiModel () {
-  if (geminiModelInstance) return geminiModelInstance
+function getGeminiApiKey(): string {
   const apiKey = process.env.GEMINI_API_KEY
   if (!apiKey) {
     throw new Error(
       'GEMINI_API_KEY not set. Add GEMINI_API_KEY=<your-key> to .env.local, then restart the dev server.'
     )
   }
-  geminiModelInstance = new GoogleGenerativeAI(apiKey).getGenerativeModel({ model: 'gemini-2.5-flash' })
+  return apiKey
+}
+
+function getGeminiModel () {
+  if (geminiModelInstance) return geminiModelInstance
+  geminiModelInstance = new GoogleGenerativeAI(getGeminiApiKey()).getGenerativeModel({ model: 'gemini-2.5-flash' })
   return geminiModelInstance
+}
+
+async function extractTextWithGemini(
+  buffer: Buffer,
+  mimeType: string,
+  withTimeout: <T>(p: Promise<T>, ms: number, label: string) => Promise<T>
+): Promise<string> {
+  if (buffer.length <= INLINE_SIZE_LIMIT) {
+    const base64 = buffer.toString('base64')
+    const result = await withTimeout(
+      getGeminiModel().generateContent([
+        { inlineData: { mimeType, data: base64 } },
+        'Extract all text from this document exactly as it appears. Preserve line breaks and table structure. Include both Arabic and English text. Output only the raw extracted text, nothing else.'
+      ]),
+      90000,
+      'Gemini text extraction (inline)'
+    )
+    return result.response.text()
+  }
+
+  // Large file — upload via File API then reference by URI
+  const fileManager = new GoogleAIFileManager(getGeminiApiKey())
+  const tmpPath = path.join(os.tmpdir(), `gemini-upload-${Date.now()}`)
+  fs.writeFileSync(tmpPath, buffer)
+  try {
+    const uploadResult = await withTimeout(
+      fileManager.uploadFile(tmpPath, { mimeType, displayName: 'document' }),
+      120000,
+      'Gemini file upload'
+    )
+    let uploadedFile = uploadResult.file
+    // Poll until ACTIVE (usually instant for PDFs, a few seconds for large files)
+    while (uploadedFile.state === FileState.PROCESSING) {
+      await new Promise(r => setTimeout(r, 2000))
+      uploadedFile = await fileManager.getFile(uploadedFile.name)
+    }
+    if (uploadedFile.state !== FileState.ACTIVE) {
+      throw new Error(`Gemini file processing failed with state: ${uploadedFile.state}`)
+    }
+    const result = await withTimeout(
+      getGeminiModel().generateContent([
+        { fileData: { mimeType, fileUri: uploadedFile.uri } },
+        'Extract all text from this document exactly as it appears. Preserve line breaks and table structure. Include both Arabic and English text. Output only the raw extracted text, nothing else.'
+      ]),
+      90000,
+      'Gemini text extraction (file API)'
+    )
+    fileManager.deleteFile(uploadedFile.name).catch(() => {}) // cleanup async, don't block
+    return result.response.text()
+  } finally {
+    try { fs.unlinkSync(tmpPath) } catch {}
+  }
 }
 
 function inferMimeFromName (fileName: string): string {
@@ -98,16 +160,7 @@ export async function processFForm(file: File, metadata: ProcessMetadata): Promi
     const result = await mammoth.extractRawText({ buffer })
     text = result.value
   } else {
-    const base64 = buffer.toString('base64')
-    const geminiResult = await withTimeout(
-      getGeminiModel().generateContent([
-        { inlineData: { mimeType: mimeType, data: base64 } },
-        'Extract all text from this document exactly as it appears. Preserve line breaks and table structure. Include both Arabic and English text. Output only the raw extracted text, nothing else.'
-      ]),
-      90000,
-      'Gemini text extraction'
-    )
-    text = geminiResult.response.text()
+    text = await extractTextWithGemini(buffer, mimeType, withTimeout)
   }
 
   // If no text, return minimal object

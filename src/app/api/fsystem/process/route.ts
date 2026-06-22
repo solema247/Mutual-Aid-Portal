@@ -1,6 +1,10 @@
 import { NextResponse } from 'next/server'
 import { GoogleGenerativeAI } from '@google/generative-ai'
+import { GoogleAIFileManager, FileState } from '@google/generative-ai/server'
 import mammoth from 'mammoth'
+import * as os from 'os'
+import * as fsNode from 'fs'
+import * as pathMod from 'path'
 import {
   type FormStructureFormType,
   getFormStructureSystemInstruction,
@@ -17,18 +21,60 @@ export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
+const INLINE_SIZE_LIMIT = 15 * 1024 * 1024 // 15 MB
+
 // Lazy Gemini model for text extraction
 let geminiModelInstance: ReturnType<GoogleGenerativeAI['getGenerativeModel']> | null = null
-function getGeminiModel () {
-  if (geminiModelInstance) return geminiModelInstance
+function getGeminiApiKey (): string {
   const apiKey = process.env.GEMINI_API_KEY
   if (!apiKey) {
     throw new Error(
       'GEMINI_API_KEY not set. Add GEMINI_API_KEY=<your-key> to .env.local, then restart the dev server.'
     )
   }
-  geminiModelInstance = new GoogleGenerativeAI(apiKey).getGenerativeModel({ model: 'gemini-2.5-flash' })
+  return apiKey
+}
+function getGeminiModel () {
+  if (geminiModelInstance) return geminiModelInstance
+  geminiModelInstance = new GoogleGenerativeAI(getGeminiApiKey()).getGenerativeModel({ model: 'gemini-2.5-flash' })
   return geminiModelInstance
+}
+
+async function extractTextWithGemini (buffer: Buffer, mimeType: string): Promise<string> {
+  const prompt = 'Extract all text from this document exactly as it appears. Preserve line breaks and table structure. Include both Arabic and English text. Output only the raw extracted text, nothing else.'
+
+  if (buffer.length <= INLINE_SIZE_LIMIT) {
+    const base64 = buffer.toString('base64')
+    const result = await getGeminiModel().generateContent([
+      { inlineData: { mimeType, data: base64 } },
+      prompt
+    ])
+    return result.response.text()
+  }
+
+  // Large file — upload via File API then reference by URI
+  const fileManager = new GoogleAIFileManager(getGeminiApiKey())
+  const tmpPath = pathMod.join(os.tmpdir(), `gemini-upload-${Date.now()}`)
+  fsNode.writeFileSync(tmpPath, buffer)
+  try {
+    const uploadResult = await fileManager.uploadFile(tmpPath, { mimeType, displayName: 'document' })
+    let uploadedFile = uploadResult.file
+    while (uploadedFile.state === FileState.PROCESSING) {
+      await new Promise(r => setTimeout(r, 2000))
+      uploadedFile = await fileManager.getFile(uploadedFile.name)
+    }
+    if (uploadedFile.state !== FileState.ACTIVE) {
+      throw new Error(`Gemini file processing failed with state: ${uploadedFile.state}`)
+    }
+    const result = await getGeminiModel().generateContent([
+      { fileData: { mimeType, fileUri: uploadedFile.uri } },
+      prompt
+    ])
+    fileManager.deleteFile(uploadedFile.name).catch(() => {})
+    return result.response.text()
+  } finally {
+    try { fsNode.unlinkSync(tmpPath) } catch {}
+  }
 }
 
 // Add types for the expense object
@@ -220,14 +266,11 @@ export async function POST(req: Request) {
       const result = await mammoth.extractRawText({ buffer })
       text = result.value
     } else {
-      const base64 = buffer.toString('base64')
-      console.log('Extracting text with Gemini...')
+      const sizeKb = (buffer.length / 1024).toFixed(1)
+      const method = buffer.length <= INLINE_SIZE_LIMIT ? 'inline' : 'File API'
+      console.log(`Extracting text with Gemini (${method}, ${sizeKb} KB)...`)
       try {
-        const geminiResult = await getGeminiModel().generateContent([
-          { inlineData: { mimeType: mimeType, data: base64 } },
-          'Extract all text from this document exactly as it appears. Preserve line breaks and table structure. Include both Arabic and English text. Output only the raw extracted text, nothing else.'
-        ])
-        text = geminiResult.response.text()
+        text = await extractTextWithGemini(buffer, mimeType)
       } catch (geminiError: any) {
         console.error('Gemini extraction error:', geminiError)
         throw new Error(`Gemini text extraction error: ${geminiError.message || 'Unknown error occurred'}`)
