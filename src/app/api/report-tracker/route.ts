@@ -128,6 +128,7 @@ export async function GET(request: Request) {
         expenses,
         planned_activities,
         grant_segment,
+        grant_grid_id,
         estimated_beneficiaries,
         emergency_rooms ( err_code ),
         donors ( name, short_name )
@@ -384,6 +385,7 @@ export async function GET(request: Request) {
         f5_pct,
         tracker,
         grant_segment: p.grant_segment ?? null,
+        grant_grid_id: p.grant_grid_id ?? null,
         activity_list,
         expense_category_list,
         sector_highest_amount,

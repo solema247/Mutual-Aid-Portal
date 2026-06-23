@@ -19,15 +19,23 @@ const GRANT_SEGMENT_OPTIONS = [
   { value: 'Capacity Building', label: 'Capacity Building' },
 ] as const
 
-/** Report Tracker filter fields: Donor, Grant Segment, F4 Status, F5 Status, State, Date Range, Sector */
+/** Report Tracker filter fields: Donor, Grant, Grant Segment, F4 Status, F5 Status, State, Date Range, Sector */
 export function getReportTrackerFilterFields(options?: {
   stateOptions?: string[]
   donorOptions?: string[]
   expenseCategoryOptions?: string[]
+  grants?: Array<{ id: string; grant_id: string; donor_name: string; project_name: string | null }>
 }): FilterFieldConfig[] {
   const stateOptions = (options?.stateOptions ?? []).map((s) => ({ value: s, label: s }))
   const donorOptions = (options?.donorOptions ?? []).map((d) => ({ value: d, label: d }))
   const expenseCategoryOptions = (options?.expenseCategoryOptions ?? []).map((c) => ({ value: c, label: c }))
+  const grantOptions = [
+    { value: '__unassigned__', label: 'Unassigned' },
+    ...(options?.grants ?? []).map((g) => ({
+      value: g.id,
+      label: `${g.grant_id} – ${g.project_name || g.grant_id} (${g.donor_name})`,
+    })),
+  ]
 
   return [
     {
@@ -37,6 +45,14 @@ export function getReportTrackerFilterFields(options?: {
       options: donorOptions,
       placeholder: 'All donors',
       accessorKey: 'donor',
+    },
+    {
+      id: 'grant',
+      label: 'Grant',
+      type: 'select',
+      options: grantOptions,
+      placeholder: 'All grants',
+      accessorKey: 'grant',
     },
     {
       id: 'grant_segment',

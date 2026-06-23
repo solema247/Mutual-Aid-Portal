@@ -35,6 +35,7 @@ import {
 import { STATUS_DISPLAY } from '@/components/smart-filter'
 import { StatsDonutCard, CompactStatCard, type DonutSegment } from '@/components/report-tracker-stats'
 import { downloadCsv } from '@/lib/csvDownload'
+import { supabase } from '@/lib/supabaseClient'
 import { cn } from '@/lib/utils'
 import { useReportTrackerPageExplainer } from './ReportTrackerPageExplainer'
 
@@ -167,6 +168,7 @@ interface ReportTrackerRow {
   f5_pct: number
   tracker: number
   grant_segment: string | null
+  grant_grid_id: string | null
   activity_list?: string[]
   expense_category_list?: string[]
   sector_highest_amount?: string | null
@@ -237,6 +239,7 @@ export default function ReportTrackerPage() {
   const canViewPage = can('f4_f5_view_page')
   const isRtl = i18n.language === 'ar'
   const [rows, setRows] = useState<ReportTrackerRow[]>([])
+  const [grants, setGrants] = useState<Array<{ id: string; grant_id: string; donor_name: string; project_name: string | null }>>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [updatingId, setUpdatingId] = useState<string | null>(null)
@@ -275,6 +278,7 @@ export default function ReportTrackerPage() {
               f5_pct: Number(r.f5_pct) || 0,
               tracker: Number(r.tracker) || 0,
               grant_segment: r.grant_segment ?? null,
+              grant_grid_id: r.grant_grid_id ?? null,
               activity_list: r.activity_list ?? [],
               expense_category_list: r.expense_category_list ?? [],
               sector_highest_amount: r.sector_highest_amount ?? null,
@@ -298,6 +302,34 @@ export default function ReportTrackerPage() {
     if (canViewPage) load()
   }, [canViewPage, i18n.language])
 
+  useEffect(() => {
+    const fetchGrants = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('grants_grid_view')
+          .select('id, grant_id, donor_name, project_name')
+          .order('grant_id', { ascending: true })
+        if (error) throw error
+        const uniqueGrants = new Map<string, { id: string; grant_id: string; donor_name: string; project_name: string | null }>()
+        ;(data || []).forEach((grant: { id: string; grant_id: string; donor_name: string; project_name: string | null }) => {
+          const key = `${grant.grant_id}|${grant.donor_name}`
+          if (!uniqueGrants.has(key)) {
+            uniqueGrants.set(key, {
+              id: grant.id,
+              grant_id: grant.grant_id,
+              donor_name: grant.donor_name,
+              project_name: grant.project_name || null,
+            })
+          }
+        })
+        setGrants(Array.from(uniqueGrants.values()))
+      } catch (e) {
+        console.error('Error fetching grants for report tracker:', e)
+      }
+    }
+    fetchGrants()
+  }, [])
+
   useReportTrackerPageExplainer(!permissionsLoading && canViewPage && !loading)
 
   const stateOptions = Array.from(new Set(rows.map((r) => r.state).filter(Boolean))).sort()
@@ -308,11 +340,15 @@ export default function ReportTrackerPage() {
     return Array.from(set).sort()
   }, [rows])
   const filterFields = useMemo(
-    () => getReportTrackerFilterFields({ stateOptions, donorOptions, expenseCategoryOptions }),
-    [stateOptions, donorOptions, expenseCategoryOptions]
+    () => getReportTrackerFilterFields({ stateOptions, donorOptions, expenseCategoryOptions, grants }),
+    [stateOptions, donorOptions, expenseCategoryOptions, grants]
   )
   const getFieldValue = useCallback((row: ReportTrackerRow, fieldId: string): string | null | undefined => {
     if (fieldId === 'date_range') return row.date
+    if (fieldId === 'grant') {
+      if (row.grant_grid_id) return row.grant_grid_id
+      return '__unassigned__'
+    }
     const key = fieldId as keyof ReportTrackerRow
     const v = row[key]
     return v != null ? String(v) : null
