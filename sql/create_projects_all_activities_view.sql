@@ -394,8 +394,8 @@ with
         )
         when 'Completed'::text then 0.5
         when 'Partial'::text then 0.25
-        when 'Under Review'::text then 0.25
-        when 'In Review'::text then 0.25
+        when 'Under Review'::text then 0.125
+        when 'In Review'::text then 0.125
         when 'Waiting'::text then 0::numeric
         else 0::numeric
       end + case initcap(
@@ -409,8 +409,8 @@ with
         )
         when 'Completed'::text then 0.5
         when 'Partial'::text then 0.25
-        when 'Under Review'::text then 0.25
-        when 'In Review'::text then 0.25
+        when 'Under Review'::text then 0.125
+        when 'In Review'::text then 0.125
         when 'Waiting'::text then 0::numeric
         else 0::numeric
       end as tracker,
@@ -780,8 +780,8 @@ select
     )
     when 'Completed'::text then 0.5
     when 'Partial'::text then 0.25
-    when 'Under Review'::text then 0.25
-    when 'In Review'::text then 0.25
+    when 'Under Review'::text then 0.125
+    when 'In Review'::text then 0.125
     when 'Waiting'::text then 0::numeric
     else 0::numeric
   end + case initcap(
@@ -795,8 +795,8 @@ select
     )
     when 'Completed'::text then 0.5
     when 'Partial'::text then 0.25
-    when 'Under Review'::text then 0.25
-    when 'In Review'::text then 0.25
+    when 'Under Review'::text then 0.125
+    when 'In Review'::text then 0.125
     when 'Waiting'::text then 0::numeric
     else 0::numeric
   end as tracker,
