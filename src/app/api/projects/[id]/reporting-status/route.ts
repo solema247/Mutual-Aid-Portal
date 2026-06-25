@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { applyReportingStatusUpdates } from '@/lib/projectStatus'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 
 const ALLOWED_F4 = ['waiting', 'partial', 'in review', 'completed'] as const
@@ -39,21 +40,20 @@ export async function PATCH(
       return NextResponse.json({ error: 'Provide at least one of f4_status or f5_status.' }, { status: 400 })
     }
 
-    const update: Record<string, string> = {}
-    if (f4_status !== null) update.f4_status = f4_status
-    if (f5_status !== null) update.f5_status = f5_status
+    const changes: { f4_status?: string; f5_status?: string } = {}
+    if (f4_status !== null) changes.f4_status = f4_status
+    if (f5_status !== null) changes.f5_status = f5_status
 
-    const { error } = await supabase
-      .from('err_projects')
-      .update(update)
-      .eq('id', projectId)
-
-    if (error) {
-      console.error('Error updating reporting status:', error)
+    const result = await applyReportingStatusUpdates(supabase, projectId, changes)
+    if (!result.ok) {
+      if (result.error === 'Project not found') {
+        return NextResponse.json({ error: result.error }, { status: 404 })
+      }
+      console.error('Error updating reporting status:', result.error)
       return NextResponse.json({ error: 'Failed to update reporting status' }, { status: 500 })
     }
 
-    return NextResponse.json({ success: true, ...update })
+    return NextResponse.json({ success: true, ...result.applied })
   } catch (e) {
     console.error('PATCH /api/projects/[id]/reporting-status:', e)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

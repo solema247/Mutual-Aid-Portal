@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { applyReportingStatusUpdates } from '@/lib/projectStatus'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { translateF4Summary, translateF4Expenses } from '@/lib/translateHelper'
 import { inferF4SourceLanguage, normalizePaymentDateForDb } from '@/lib/f4SaveNormalize'
@@ -211,12 +212,14 @@ export async function POST(req: Request) {
       }
     }
 
-    // Mark project complete only after summary + expenses succeeded
+    // Mark F4 completed; auto-complete project when F5 is already completed
     if (actual_project_id) {
-      await supabase
-        .from('err_projects')
-        .update({ f4_status: 'completed' })
-        .eq('id', actual_project_id)
+      const statusResult = await applyReportingStatusUpdates(supabase, actual_project_id, {
+        f4_status: 'completed',
+      })
+      if (!statusResult.ok) {
+        console.warn('F4 save: failed to update reporting status', statusResult.error)
+      }
     }
 
     return NextResponse.json({ summary_id, expense_ids })

@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { applyReportingStatusUpdates } from '@/lib/projectStatus'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { translateF5Report, translateF5Reach } from '@/lib/translateHelper'
 
@@ -108,11 +109,13 @@ export async function POST(req: Request) {
     if (insErr) throw insErr
     const report_id = inserted.id
 
-    // Set f5_status to completed on err_projects for this project
-    await supabase
-      .from('err_projects')
-      .update({ f5_status: 'completed' })
-      .eq('id', project_id)
+    // Set F5 completed; auto-complete project when F4 is already completed
+    const statusResult = await applyReportingStatusUpdates(supabase, project_id, {
+      f5_status: 'completed',
+    })
+    if (!statusResult.ok) {
+      console.warn('F5 save: failed to update reporting status', statusResult.error)
+    }
 
     // If a summary file exists, move it from tmp to a clear final path and record attachment
     if (file_key_temp) {
