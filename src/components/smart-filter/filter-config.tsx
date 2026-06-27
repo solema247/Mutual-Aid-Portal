@@ -205,21 +205,30 @@ export function getProjectManagementFilterFields(options?: {
   ]
 }
 
-/** F4 / F5 reporting tables: Grant ID (text prefix match), ERR, State, Donor */
+/** F4 / F5 reporting tables: Grant ID (text prefix match), room, State, Donor */
 export function getF4F5ReportingFilterFields(options: {
-  errOptions: string[]
+  roomOptions: string[]
   stateOptions: string[]
   donorOptions: string[]
   labels: {
     grantId: string
     grantIdPlaceholder: string
-    err: string
+    room: string
     state: string
     donor: string
     all: string
   }
+  roomFieldId?: 'base_room' | 'err'
+  roomAccessorKey?: 'base_room_name' | 'err_name'
 }): FilterFieldConfig[] {
-  const { errOptions, stateOptions, donorOptions, labels } = options
+  const {
+    roomOptions,
+    stateOptions,
+    donorOptions,
+    labels,
+    roomFieldId = 'err',
+    roomAccessorKey = 'err_name',
+  } = options
   return [
     {
       id: 'grant_id',
@@ -229,12 +238,12 @@ export function getF4F5ReportingFilterFields(options: {
       accessorKey: 'grant_serial_id',
     },
     {
-      id: 'err',
-      label: labels.err,
+      id: roomFieldId,
+      label: labels.room,
       type: 'select',
-      options: errOptions.map((s) => ({ value: s, label: s })),
+      options: roomOptions.map((s) => ({ value: s, label: s })),
       placeholder: labels.all,
-      accessorKey: 'err_name',
+      accessorKey: roomAccessorKey,
     },
     {
       id: 'state',

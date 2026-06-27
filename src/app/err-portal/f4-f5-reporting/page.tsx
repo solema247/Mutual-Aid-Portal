@@ -27,23 +27,28 @@ import { ChevronLeft, ChevronRight } from 'lucide-react'
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100] as const
 
 interface F4Row {
-  id: number
+  id: number | null
   project_id: string | null
   err_id: string | null
+  base_room_name?: string | null
   err_name?: string | null
   state?: string | null
   donor?: string | null
+  payment_date?: string | null
+  amount_sdg?: number | null
+  exchange_rate?: number | null
   report_date: string | null
   total_grant: number | null
   total_expenses: number | null
   remainder: number | null
   attachments_count: number
-  updated_at: string
+  updated_at: string | null
   review_status?: string | null
   review_comment?: string | null
   reviewed_at?: string | null
   grant_serial_id?: string | null
   grant_id?: string | null
+  has_f4_report?: boolean
   /** Set for tracker/historical rows; review workflow does not apply */
   activities_raw_import_id?: string | null
 }
@@ -62,7 +67,18 @@ interface F5Row {
 }
 
 type SortDirection = 'asc' | 'desc'
-type F4SortKey = 'err_name' | 'grant' | 'state' | 'donor' | 'report_date' | 'total_grant' | 'total_expenses' | 'remainder'
+type F4SortKey =
+  | 'base_room_name'
+  | 'grant'
+  | 'state'
+  | 'donor'
+  | 'payment_date'
+  | 'amount_sdg'
+  | 'exchange_rate'
+  | 'report_date'
+  | 'total_grant'
+  | 'total_expenses'
+  | 'remainder'
 type F5SortKey = 'err_name' | 'grant' | 'state' | 'donor' | 'report_date' | 'activities_count' | 'updated_at'
 
 function grantIdTableText(r: { grant_serial_id?: string | null; grant_id?: string | null }) {
@@ -107,6 +123,7 @@ function F4F5ReportingPageContent() {
   const [loading, setLoading] = useState(false)
   const [f4Filters, setF4Filters] = useState<ActiveFilter[]>([])
   const [uploadOpen, setUploadOpen] = useState(false)
+  const [uploadProjectId, setUploadProjectId] = useState<string | null>(null)
   const [viewId, setViewId] = useState<number | null>(null)
   const [viewOpen, setViewOpen] = useState(false)
   const [rejectSummaryId, setRejectSummaryId] = useState<number | null>(null)
@@ -184,8 +201,8 @@ function F4F5ReportingPageContent() {
   useEffect(() => { load() }, [])
   useEffect(() => { if (tab === 'f5') loadF5() }, [tab])
 
-  const f4ErrOptions = useMemo(
-    () => Array.from(new Set(rows.map((r) => r.err_name).filter(Boolean) as string[])).sort(),
+  const f4BaseRoomOptions = useMemo(
+    () => Array.from(new Set(rows.map((r) => r.base_room_name).filter(Boolean) as string[])).sort(),
     [rows]
   )
   const f4StateOptions = useMemo(
@@ -213,31 +230,33 @@ function F4F5ReportingPageContent() {
   const f4FilterFields = useMemo(
     () =>
       getF4F5ReportingFilterFields({
-        errOptions: f4ErrOptions,
+        roomOptions: f4BaseRoomOptions,
         stateOptions: f4StateOptions,
         donorOptions: f4DonorOptions,
+        roomFieldId: 'base_room',
+        roomAccessorKey: 'base_room_name',
         labels: {
           grantId: t('f4.filters.grant_id'),
           grantIdPlaceholder: t('f4.filters.grant_id_placeholder'),
-          err: t('f4.filters.err'),
+          room: t('f4.filters.base_room'),
           state: t('f4.filters.state'),
           donor: t('f4.filters.donor'),
           all: t('f4.filters.all'),
         },
       }),
-    [f4ErrOptions, f4StateOptions, f4DonorOptions, t]
+    [f4BaseRoomOptions, f4StateOptions, f4DonorOptions, t]
   )
 
   const f5FilterFields = useMemo(
     () =>
       getF4F5ReportingFilterFields({
-        errOptions: f5ErrOptions,
+        roomOptions: f5ErrOptions,
         stateOptions: f5StateOptions,
         donorOptions: f5DonorOptions,
         labels: {
           grantId: t('f5.filters.grant_id'),
           grantIdPlaceholder: t('f5.filters.grant_id_placeholder'),
-          err: t('f5.filters.err'),
+          room: t('f5.filters.err'),
           state: t('f5.filters.state'),
           donor: t('f5.filters.donor'),
           all: t('f5.filters.all'),
@@ -251,7 +270,7 @@ function F4F5ReportingPageContent() {
       const v = row.grant_serial_id ?? row.grant_id
       return v != null && String(v).trim() !== '' ? String(v).trim() : ''
     }
-    if (fieldId === 'err') return row.err_name ?? ''
+    if (fieldId === 'base_room') return row.base_room_name ?? ''
     if (fieldId === 'state') return row.state ?? ''
     if (fieldId === 'donor') return row.donor ?? ''
     return null
@@ -312,10 +331,13 @@ function F4F5ReportingPageContent() {
 
   const f4Sorted = useMemo(() => {
     return sortWithDirection(f4Filtered, f4Sort.dir, (r) => {
-      if (f4Sort.key === 'err_name') return r.err_name ?? r.err_id ?? null
+      if (f4Sort.key === 'base_room_name') return r.base_room_name ?? r.err_id ?? null
       if (f4Sort.key === 'grant') return grantIdTableText(r)
       if (f4Sort.key === 'state') return r.state ?? null
       if (f4Sort.key === 'donor') return r.donor ?? null
+      if (f4Sort.key === 'payment_date') return r.payment_date ? new Date(r.payment_date).getTime() : null
+      if (f4Sort.key === 'amount_sdg') return r.amount_sdg ?? null
+      if (f4Sort.key === 'exchange_rate') return r.exchange_rate ?? null
       if (f4Sort.key === 'report_date') return r.report_date ? new Date(r.report_date).getTime() : null
       if (f4Sort.key === 'total_grant') return r.total_grant ?? null
       if (f4Sort.key === 'total_expenses') return r.total_expenses ?? null
@@ -419,7 +441,16 @@ function F4F5ReportingPageContent() {
         <TabsContent value="f4" className="mt-4 space-y-4">
           <div className="flex items-center justify-end">
             {canUploadF4 && (
-            <Button onClick={() => { try { window.localStorage.removeItem('err_minimized_modal'); window.localStorage.removeItem('err_minimized_payload'); window.localStorage.removeItem('err_restore'); window.dispatchEvent(new CustomEvent('err_minimized_modal_change')) } catch {}; setUploadOpen(true) }}>{t('f4.upload')}</Button>
+            <Button onClick={() => {
+              try {
+                window.localStorage.removeItem('err_minimized_modal')
+                window.localStorage.removeItem('err_minimized_payload')
+                window.localStorage.removeItem('err_restore')
+                window.dispatchEvent(new CustomEvent('err_minimized_modal_change'))
+              } catch {}
+              setUploadProjectId(null)
+              setUploadOpen(true)
+            }}>{t('f4.upload')}</Button>
             )}
           </div>
 
@@ -441,12 +472,12 @@ function F4F5ReportingPageContent() {
             </CardHeader>
             <CardContent className="p-0">
               <div className="overflow-x-auto w-full">
-                <Table className="min-w-[860px] text-xs [&_th]:py-1.5 [&_td]:py-1 [&_th]:px-2 [&_td]:px-2 [&_td]:text-xs">
+                <Table className="min-w-[1100px] text-xs [&_th]:py-1.5 [&_td]:py-1 [&_th]:px-2 [&_td]:px-2 [&_td]:text-xs">
                   <TableHeader>
                     <TableRow>
                       <TableHead className="text-xs whitespace-nowrap">
-                        <button type="button" className="inline-flex items-center gap-1" onClick={() => toggleF4Sort('err_name')}>
-                          {t('f4.headers.err')} <span className="text-[10px]">{sortIndicator(f4Sort.key === 'err_name', f4Sort.dir)}</span>
+                        <button type="button" className="inline-flex items-center gap-1" onClick={() => toggleF4Sort('base_room_name')}>
+                          {t('f4.headers.base_room')} <span className="text-[10px]">{sortIndicator(f4Sort.key === 'base_room_name', f4Sort.dir)}</span>
                         </button>
                       </TableHead>
                       <TableHead className="text-xs whitespace-nowrap">
@@ -462,6 +493,21 @@ function F4F5ReportingPageContent() {
                       <TableHead className="text-xs whitespace-nowrap">
                         <button type="button" className="inline-flex items-center gap-1" onClick={() => toggleF4Sort('donor')}>
                           {t('f4.headers.donor')} <span className="text-[10px]">{sortIndicator(f4Sort.key === 'donor', f4Sort.dir)}</span>
+                        </button>
+                      </TableHead>
+                      <TableHead className="text-xs whitespace-nowrap">
+                        <button type="button" className="inline-flex items-center gap-1" onClick={() => toggleF4Sort('payment_date')}>
+                          {t('f4.headers.payment_date')} <span className="text-[10px]">{sortIndicator(f4Sort.key === 'payment_date', f4Sort.dir)}</span>
+                        </button>
+                      </TableHead>
+                      <TableHead className="text-xs text-right whitespace-nowrap">
+                        <button type="button" className="inline-flex items-center gap-1" onClick={() => toggleF4Sort('amount_sdg')}>
+                          {t('f4.headers.amount_sdg')} <span className="text-[10px]">{sortIndicator(f4Sort.key === 'amount_sdg', f4Sort.dir)}</span>
+                        </button>
+                      </TableHead>
+                      <TableHead className="text-xs text-right whitespace-nowrap">
+                        <button type="button" className="inline-flex items-center gap-1" onClick={() => toggleF4Sort('exchange_rate')}>
+                          {t('f4.headers.exchange_rate')} <span className="text-[10px]">{sortIndicator(f4Sort.key === 'exchange_rate', f4Sort.dir)}</span>
                         </button>
                       </TableHead>
                       <TableHead className="text-xs whitespace-nowrap">
@@ -489,36 +535,60 @@ function F4F5ReportingPageContent() {
                   </TableHeader>
                   <TableBody>
                     {loading ? (
-                      <TableRow><TableCell colSpan={9} className="text-center py-4 text-xs">{t('f4.loading')}</TableCell></TableRow>
+                      <TableRow><TableCell colSpan={12} className="text-center py-4 text-xs">{t('f4.loading')}</TableCell></TableRow>
                     ) : f4Filtered.length === 0 ? (
-                      <TableRow><TableCell colSpan={9} className="text-center py-4 text-muted-foreground text-xs">{t('f4.empty')}</TableCell></TableRow>
+                      <TableRow><TableCell colSpan={12} className="text-center py-4 text-muted-foreground text-xs">{t('f4.empty')}</TableCell></TableRow>
                     ) : f4PageRows.map(r => {
                       const grantCol = grantIdTableText(r)
+                      const hasReport = r.has_f4_report !== false && r.id != null
+                      const rowKey = r.id != null ? `summary-${r.id}` : `project-${r.project_id}`
                       return (
-                      <TableRow key={r.id}>
-                        <TableCell className="text-xs max-w-[10rem] truncate" title={String(r.err_name || r.err_id || '')}>{r.err_name || r.err_id || '-'}</TableCell>
+                      <TableRow key={rowKey}>
+                        <TableCell className="text-xs max-w-[10rem] truncate" title={String(r.base_room_name || '')}>{r.base_room_name || '-'}</TableCell>
                         <TableCell className="text-xs max-w-[12rem] truncate" title={grantCol === '-' ? '' : grantCol}>{grantCol}</TableCell>
                         <TableCell className="text-xs whitespace-nowrap">{r.state || '-'}</TableCell>
                         <TableCell className="text-xs max-w-[8rem] truncate" title={String(r.donor || '')}>{r.donor || '-'}</TableCell>
+                        <TableCell className="text-xs whitespace-nowrap">{r.payment_date ? new Date(r.payment_date).toLocaleDateString() : '-'}</TableCell>
+                        <TableCell className="text-xs text-right tabular-nums">{r.amount_sdg != null ? formatMoneyTwoDecimals(r.amount_sdg) : '-'}</TableCell>
+                        <TableCell className="text-xs text-right tabular-nums">{r.exchange_rate != null ? formatMoneyTwoDecimals(r.exchange_rate) : '-'}</TableCell>
                         <TableCell className="text-xs whitespace-nowrap">{r.report_date ? new Date(r.report_date).toLocaleDateString() : '-'}</TableCell>
                         <TableCell className="text-xs text-right tabular-nums">{formatMoneyTwoDecimals(r.total_grant)}</TableCell>
                         <TableCell className="text-xs text-right tabular-nums">{formatMoneyTwoDecimals(r.total_expenses)}</TableCell>
                         <TableCell className="text-xs text-right tabular-nums">{formatMoneyTwoDecimals(r.remainder)}</TableCell>
                         <TableCell className="text-xs whitespace-nowrap">
                           <div className="flex flex-nowrap items-center justify-end gap-1">
-                            {(r.review_status === 'accepted' || r.review_status === 'rejected') && (
+                            {hasReport && (r.review_status === 'accepted' || r.review_status === 'rejected') && (
                               <span className="text-[10px] leading-none text-muted-foreground capitalize shrink-0 mr-0.5">{r.review_status}</span>
                             )}
-                            {canViewF4 && (
+                            {hasReport && canViewF4 && (
                               <Button variant="outline" size="sm" className="h-7 px-2 py-0 text-[11px] leading-none shrink-0" onClick={()=>{ setViewId(r.id); setViewOpen(true) }}>{t('f4.view')}</Button>
                             )}
-                            {canReviewF4 && !r.activities_raw_import_id && (
+                            {!hasReport && canUploadF4 && r.project_id && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-7 px-2 py-0 text-[11px] leading-none shrink-0"
+                                onClick={() => {
+                                  try {
+                                    window.localStorage.removeItem('err_minimized_modal')
+                                    window.localStorage.removeItem('err_minimized_payload')
+                                    window.localStorage.removeItem('err_restore')
+                                    window.dispatchEvent(new CustomEvent('err_minimized_modal_change'))
+                                  } catch {}
+                                  setUploadProjectId(r.project_id)
+                                  setUploadOpen(true)
+                                }}
+                              >
+                                {t('f4.upload')}
+                              </Button>
+                            )}
+                            {hasReport && canReviewF4 && !r.activities_raw_import_id && (
                               <>
                                 {r.review_status !== 'accepted' && (
-                                  <Button variant="outline" size="sm" className="h-7 px-2 py-0 text-[11px] leading-none shrink-0 text-green-700 border-green-200 hover:bg-green-50" onClick={() => submitReview(r.id, 'accepted')} disabled={reviewSaving}>Accept</Button>
+                                  <Button variant="outline" size="sm" className="h-7 px-2 py-0 text-[11px] leading-none shrink-0 text-green-700 border-green-200 hover:bg-green-50" onClick={() => r.id != null && submitReview(r.id, 'accepted')} disabled={reviewSaving}>Accept</Button>
                                 )}
                                 {r.review_status !== 'rejected' && (
-                                  <Button variant="outline" size="sm" className="h-7 px-2 py-0 text-[11px] leading-none shrink-0 text-destructive border-destructive/30 hover:bg-destructive/5" onClick={() => setRejectSummaryId(r.id)} disabled={reviewSaving}>Reject</Button>
+                                  <Button variant="outline" size="sm" className="h-7 px-2 py-0 text-[11px] leading-none shrink-0 text-destructive border-destructive/30 hover:bg-destructive/5" onClick={() => r.id != null && setRejectSummaryId(r.id)} disabled={reviewSaving}>Reject</Button>
                                 )}
                               </>
                             )}
@@ -585,7 +655,15 @@ function F4F5ReportingPageContent() {
             </CardContent>
           </Card>
 
-          <UploadF4Modal open={uploadOpen} onOpenChange={setUploadOpen} onSaved={load} />
+          <UploadF4Modal
+            open={uploadOpen}
+            onOpenChange={(open) => {
+              setUploadOpen(open)
+              if (!open) setUploadProjectId(null)
+            }}
+            onSaved={load}
+            initialProjectId={uploadProjectId}
+          />
           <ViewF4Modal summaryId={viewId} open={viewOpen} onOpenChange={(v)=>{ setViewOpen(v); if (!v) setViewId(null) }} onSaved={load} />
 
           <Dialog open={rejectSummaryId != null} onOpenChange={(open) => { if (!open) { setRejectSummaryId(null); setRejectComment('') } }}>

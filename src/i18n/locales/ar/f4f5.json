@@ -29,6 +29,7 @@
     "filters": {
       "grant_id": "معرّف المنحة",
       "grant_id_placeholder": "مثال: LCC-FCDO-ND-0326-0001",
+      "base_room": "الغرفة الأساسية",
       "err": "غرفة الطوارئ",
       "state": "الولاية",
       "donor": "المانح",
@@ -37,11 +38,15 @@
       "reset": "إعادة تعيين"
     },
     "headers": {
+      "base_room": "الغرفة الأساسية",
       "err": "غرفة الطوارئ",
       "grant_id": "معرّف المنحة",
       "state": "الولاية",
       "grant": "نداء المنحة",
       "donor": "المانح",
+      "payment_date": "تاريخ الدفع",
+      "amount_sdg": "المبلغ (جنيه)",
+      "exchange_rate": "سعر الصرف",
       "report_date": "تاريخ التقرير",
       "total_grant": "إجمالي المنحة",
       "total_expenses": "إجمالي المصروفات",
@@ -52,7 +57,7 @@
     },
     "view": "عرض",
     "loading": "جارٍ التحميل…",
-    "empty": "لا توجد تقارير F4 بعد",
+    "empty": "لا توجد سجلات بعد",
     "serial_lookup": "الرقم التسلسلي F4 (LoHub)",
     "serial_placeholder": "أدخل الرقم التسلسلي",
     "fetch": "استعلام",

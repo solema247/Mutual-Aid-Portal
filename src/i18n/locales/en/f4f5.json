@@ -29,6 +29,7 @@
     "filters": {
       "grant_id": "Grant ID",
       "grant_id_placeholder": "e.g. LCC-FCDO-ND-0326-0001",
+      "base_room": "Base Room",
       "err": "ERR",
       "state": "State",
       "donor": "Donor",
@@ -37,11 +38,15 @@
       "reset": "Reset"
     },
     "headers": {
+      "base_room": "Base Room",
       "err": "ERR",
       "grant_id": "Grant ID",
       "state": "State",
       "grant": "Grant Call",
       "donor": "Donor",
+      "payment_date": "Payment Date",
+      "amount_sdg": "Amount (SDG)",
+      "exchange_rate": "Exchange Rate",
       "report_date": "Report Date",
       "total_grant": "Total Grant",
       "total_expenses": "Total Expenses",
@@ -52,7 +57,7 @@
     },
     "view": "View",
     "loading": "Loading…",
-    "empty": "No F4 reports yet",
+    "empty": "No records yet",
     "serial_lookup": "F4 serial (LoHub)",
     "serial_placeholder": "Enter serial number",
     "fetch": "Fetch",
