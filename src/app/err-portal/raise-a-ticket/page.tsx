@@ -19,23 +19,21 @@ import {
 } from '@/components/ui/select'
 import {
   GITHUB_RAISE_TICKET_LABELS,
+  RAISE_TICKET_LABEL_I18N_KEYS,
   RAISE_TICKET_PRIORITIES,
 } from '@/lib/raiseTicketGithub'
 import { useAllowedFunctions } from '@/hooks/useAllowedFunctions'
+import { TicketsByTypeChart } from '@/app/err-portal/raise-a-ticket/TicketsByTypeChart'
+import { BigRockExplainer } from '@/app/err-portal/raise-a-ticket/BigRockExplainer'
+import { ActiveIterationTasks } from '@/app/err-portal/raise-a-ticket/ActiveIterationTasks'
+import { SprintAnalyticsSection } from '@/app/err-portal/raise-a-ticket/SprintAnalyticsSection'
+import { BigRockTaskStatusChart } from '@/app/err-portal/raise-a-ticket/BigRockTaskStatusChart'
+import { GITHUB_PROJECT_BIG_ROCKS } from '@/lib/raiseTicketGithub'
 import '@/i18n/config'
 
 const GITHUB_PROJECT_BOARD_URL =
   process.env.NEXT_PUBLIC_GITHUB_PROJECT_BOARD_URL ||
   'https://github.com/users/solema247/projects/6/views/7'
-
-function labelTranslationKey (value: string): string {
-  const keys: Record<string, string> = {
-    bug: 'raise_ticket_label_bug',
-    'portal-ui-major-fix': 'raise_ticket_label_major',
-    'portal-ui-minor-fix': 'raise_ticket_label_minor',
-  }
-  return keys[value] ?? value
-}
 
 export default function RaiseATicketPage () {
   const { t } = useTranslation(['err', 'common'])
@@ -160,8 +158,8 @@ export default function RaiseATicketPage () {
   }
 
   return (
-    <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-      <div className="space-y-6">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <div className="mx-auto max-w-3xl space-y-6">
         <Link
           href="/err-portal"
           className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground -ml-2"
@@ -227,7 +225,7 @@ export default function RaiseATicketPage () {
                   <SelectContent>
                     {GITHUB_RAISE_TICKET_LABELS.map((value) => (
                       <SelectItem key={value} value={value}>
-                        {t(`err:${labelTranslationKey(value)}`, value)}
+                        {t(`err:${RAISE_TICKET_LABEL_I18N_KEYS[value]}`, value)}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -304,7 +302,9 @@ export default function RaiseATicketPage () {
             </form>
           </CardContent>
         </Card>
+      </div>
 
+      <div className="mx-auto mt-6 max-w-3xl">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-lg">
@@ -329,6 +329,41 @@ export default function RaiseATicketPage () {
             </a>
           </CardContent>
         </Card>
+      </div>
+
+      <div className="mt-6 space-y-4">
+        <div className="space-y-2">
+          <h2 className="text-3xl font-bold">
+            {t('err:raise_ticket_dashboard_title', 'Dashboard')}
+          </h2>
+          <p className="text-muted-foreground">
+            {t(
+              'err:raise_ticket_dashboard_intro',
+              'Live reporting from the Mutual Aid Portal GitHub project board—Big Rocks, sprints, and open work.'
+            )}
+          </p>
+          <p className="text-sm text-muted-foreground border-l-2 border-muted pl-3">
+            {t(
+              'err:raise_ticket_dashboard_note',
+              'Figures reflect board fields set during weekly triage; use the project board link above for full detail.'
+            )}
+          </p>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+          <div className="sm:col-span-2 xl:col-span-2">
+            <TicketsByTypeChart enabled={ready} />
+          </div>
+          <div className="sm:col-span-2 xl:col-span-2">
+            <BigRockExplainer />
+          </div>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+          {GITHUB_PROJECT_BIG_ROCKS.map((bigRock) => (
+            <BigRockTaskStatusChart key={bigRock} bigRock={bigRock} enabled={ready} />
+          ))}
+        </div>
+        <ActiveIterationTasks enabled={ready} />
+        <SprintAnalyticsSection enabled={ready} />
       </div>
     </div>
   )

@@ -2,8 +2,10 @@ import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { assertPermission, getRouteHandlerAuth } from '@/lib/routeHandlerAuth'
 import {
+  DEFAULT_GITHUB_ISSUES_REPO,
   GITHUB_RAISE_TICKET_LABELS,
   PRIORITY_TO_DESCRIPTION_LINE,
+  RAISE_TICKET_LABEL_I18N_KEYS,
   RAISE_TICKET_PRIORITIES,
 } from '@/lib/raiseTicketGithub'
 import { checkRaiseTicketRateLimit } from '@/lib/rateLimitSlidingWindow'
@@ -17,7 +19,7 @@ const bodySchema = z
   })
   .strict()
 
-const DEFAULT_REPO = 'solema247/Mutual-Aid-Portal'
+const DEFAULT_REPO = DEFAULT_GITHUB_ISSUES_REPO
 
 export async function POST (request: Request) {
   try {
