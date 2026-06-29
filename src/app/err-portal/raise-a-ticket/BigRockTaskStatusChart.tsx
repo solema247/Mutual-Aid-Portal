@@ -225,7 +225,7 @@ export function BigRockTaskStatusChart ({
                 offset={4}
                 className="fill-foreground"
                 fontSize={10}
-                formatter={(value: number) => (value > 0 ? value : '')}
+                formatter={(value) => (Number(value) > 0 ? value : '')}
               />
             </Bar>
           ))}
