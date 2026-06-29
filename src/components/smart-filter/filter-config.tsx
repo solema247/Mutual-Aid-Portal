@@ -3,7 +3,7 @@
  * Keep field config separate from UI so it can be shared with server-side or other pages.
  */
 
-import type { FilterFieldConfig } from './types'
+import type { FilterFieldConfig, FilterSelectOption } from './types'
 
 export const STATUS_OPTIONS = [
   { value: 'waiting', label: 'Waiting' },
@@ -260,6 +260,66 @@ export function getF4F5ReportingFilterFields(options: {
       options: donorOptions.map((s) => ({ value: s, label: s })),
       placeholder: labels.all,
       accessorKey: 'donor',
+    },
+  ]
+}
+
+/** F4 reporting: multi-select filters + report status */
+export function getF4ReportingFilterFields(options: {
+  baseRoomOptions: string[]
+  stateOptions: string[]
+  donorOptions: string[]
+  reportStatusOptions: FilterSelectOption[]
+  labels: {
+    grantId: string
+    grantIdPlaceholder: string
+    baseRoom: string
+    state: string
+    donor: string
+    reportStatus: string
+    all: string
+  }
+}): FilterFieldConfig[] {
+  const { baseRoomOptions, stateOptions, donorOptions, reportStatusOptions, labels } = options
+  return [
+    {
+      id: 'grant_id',
+      label: labels.grantId,
+      type: 'text',
+      placeholder: labels.grantIdPlaceholder,
+      accessorKey: 'grant_serial_id',
+    },
+    {
+      id: 'base_room',
+      label: labels.baseRoom,
+      type: 'multi_select',
+      options: baseRoomOptions.map((s) => ({ value: s, label: s })),
+      placeholder: labels.all,
+      accessorKey: 'base_room_name',
+    },
+    {
+      id: 'state',
+      label: labels.state,
+      type: 'multi_select',
+      options: stateOptions.map((s) => ({ value: s, label: s })),
+      placeholder: labels.all,
+      accessorKey: 'state',
+    },
+    {
+      id: 'donor',
+      label: labels.donor,
+      type: 'multi_select',
+      options: donorOptions.map((s) => ({ value: s, label: s })),
+      placeholder: labels.all,
+      accessorKey: 'donor',
+    },
+    {
+      id: 'report_status',
+      label: labels.reportStatus,
+      type: 'multi_select',
+      options: reportStatusOptions,
+      placeholder: labels.all,
+      accessorKey: 'report_status',
     },
   ]
 }

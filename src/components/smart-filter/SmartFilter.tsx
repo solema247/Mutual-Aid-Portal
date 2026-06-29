@@ -6,15 +6,17 @@ import { Filter, ChevronDown, Eraser } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { FilterChip } from './FilterChip'
-import type { ActiveFilter, FilterFieldConfig, FilterValues, SmartFilterProps } from './types'
+import type { ActiveFilter, FilterFieldConfig, FilterValues, SmartFilterProps, FilterValue } from './types'
 
 const DEFAULT_URL_PREFIX = 'f_'
 
 /** Parse URL search params into filter values (for hydration / server) */
 export function parseFiltersFromSearchParams(
   searchParams: URLSearchParams,
-  prefix: string = DEFAULT_URL_PREFIX
+  prefix: string = DEFAULT_URL_PREFIX,
+  fields: FilterFieldConfig[] = []
 ): FilterValues {
+  const fieldById = new Map(fields.map((f) => [f.id, f]))
   const out: FilterValues = {}
   searchParams.forEach((value, key) => {
     if (!key.startsWith(prefix)) return
@@ -28,7 +30,12 @@ export function parseFiltersFromSearchParams(
       if (out[base] == null) out[base] = ['', value]
       else (out[base] as [string, string])[1] = value
     } else {
-      out[fieldId] = value
+      const field = fieldById.get(fieldId)
+      if (field?.type === 'multi_select') {
+        out[fieldId] = value.includes('|') ? value.split('|').filter(Boolean) : value ? [value] : []
+      } else {
+        out[fieldId] = value
+      }
     }
   })
   return out
@@ -37,11 +44,19 @@ export function parseFiltersFromSearchParams(
 /** Serialize filter values to URL search params */
 export function filtersToSearchParams(
   filters: ActiveFilter[],
-  prefix: string = DEFAULT_URL_PREFIX
+  prefix: string = DEFAULT_URL_PREFIX,
+  fields: FilterFieldConfig[] = []
 ): Record<string, string> {
+  const fieldById = new Map(fields.map((f) => [f.id, f]))
   const params: Record<string, string> = {}
   filters.forEach((f) => {
-    if (Array.isArray(f.value)) {
+    const field = fieldById.get(f.fieldId)
+    if (field?.type === 'multi_select' && Array.isArray(f.value)) {
+      const joined = f.value.map((v) => String(v).trim()).filter(Boolean).join('|')
+      if (joined) params[`${prefix}${f.fieldId}`] = joined
+      return
+    }
+    if (Array.isArray(f.value) && field?.type === 'date_range') {
       if (f.value[0]) params[`${prefix}${f.fieldId}_from`] = f.value[0]
       if (f.value[1]) params[`${prefix}${f.fieldId}_to`] = f.value[1]
     } else if (f.value != null && String(f.value).trim() !== '') {
@@ -71,8 +86,9 @@ export function SmartFilter({
 
   const addFilter = React.useCallback(
     (field: FilterFieldConfig) => {
-      const defaultValue =
-        field.type === 'date_range' ? (['', ''] as [string, string]) : ''
+      let defaultValue: FilterValue = ''
+      if (field.type === 'date_range') defaultValue = ['', '']
+      else if (field.type === 'multi_select') defaultValue = []
       onFiltersChange([
         ...filters,
         { id: `${field.id}-${Date.now()}`, fieldId: field.id, value: defaultValue },
@@ -82,7 +98,7 @@ export function SmartFilter({
   )
 
   const updateFilter = React.useCallback(
-    (id: string, value: string | [string, string]) => {
+    (id: string, value: FilterValue) => {
       onFiltersChange(
         filters.map((f) => (f.id === id ? { ...f, value } : f))
       )
@@ -105,7 +121,7 @@ export function SmartFilter({
   React.useEffect(() => {
     if (typeof window === 'undefined') return
     const params = new URLSearchParams(searchParams.toString())
-    const newParams = filtersToSearchParams(filters, urlParamPrefix)
+    const newParams = filtersToSearchParams(filters, urlParamPrefix, fields)
     let changed = false
     const keysToDelete: string[] = []
     params.forEach((_, key) => {
@@ -132,10 +148,15 @@ export function SmartFilter({
   React.useEffect(() => {
     if (hydratedRef.current) return
     hydratedRef.current = true
-    const fromUrl = parseFiltersFromSearchParams(searchParams, urlParamPrefix)
-    const fromUrlEntries = Object.entries(fromUrl).filter(
-      ([_, v]) => (Array.isArray(v) ? v.some(Boolean) : String(v).trim() !== '')
-    )
+    const fromUrl = parseFiltersFromSearchParams(searchParams, urlParamPrefix, fields)
+    const fromUrlEntries = Object.entries(fromUrl).filter(([fieldId, v]) => {
+      const field = fields.find((f) => f.id === fieldId)
+      if (field?.type === 'multi_select' && Array.isArray(v)) {
+        return v.length > 0
+      }
+      if (Array.isArray(v)) return v[0]?.trim() || v[1]?.trim()
+      return String(v).trim() !== ''
+    })
     if (fromUrlEntries.length === 0) return
     const toAdd: ActiveFilter[] = []
     fromUrlEntries.forEach(([fieldId, value]) => {

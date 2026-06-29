@@ -26,6 +26,7 @@ export {
   getReportTrackerFilterFields,
   getProjectManagementFilterFields,
   getF4F5ReportingFilterFields,
+  getF4ReportingFilterFields,
   STATUS_OPTIONS,
 } from './filter-config'
 export { STATUS_DISPLAY, getStatusDisplay } from './status-config'

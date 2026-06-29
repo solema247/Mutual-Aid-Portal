@@ -5,7 +5,8 @@ import { X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import type { ActiveFilter, FilterFieldConfig, FilterSelectOption } from './types'
+import { Checkbox } from '@/components/ui/checkbox'
+import type { ActiveFilter, FilterFieldConfig, FilterSelectOption, FilterValue } from './types'
 import { STATUS_DISPLAY } from './status-config'
 
 const CHIP_COLORS: Record<string, string> = {
@@ -19,13 +20,15 @@ const CHIP_COLORS: Record<string, string> = {
   grant: 'bg-indigo-500/10 border-indigo-500/30 [&_.chip-dot]:bg-indigo-500',
   grant_serial: 'bg-teal-500/10 border-teal-500/30 [&_.chip-dot]:bg-teal-500',
   grant_id: 'bg-teal-500/10 border-teal-500/30 [&_.chip-dot]:bg-teal-500',
+  report_status: 'bg-orange-500/10 border-orange-500/30 [&_.chip-dot]:bg-orange-500',
+  base_room: 'bg-primary/10 border-primary/30 [&_.chip-dot]:bg-primary',
   expense_category: 'bg-rose-500/10 border-rose-500/30 [&_.chip-dot]:bg-rose-500',
 }
 
 export interface FilterChipProps {
   filter: ActiveFilter
   field: FilterFieldConfig
-  onValueChange: (value: string | [string, string]) => void
+  onValueChange: (value: FilterValue) => void
   onRemove: () => void
   options?: FilterSelectOption[]
   className?: string
@@ -36,10 +39,31 @@ export function FilterChip({
   field,
   onValueChange,
   onRemove,
-  options = field.type === 'select' ? field.options : undefined,
+  options = field.type === 'select' || field.type === 'multi_select' ? field.options : undefined,
   className,
 }: FilterChipProps) {
   const colorClass = CHIP_COLORS[field.id] ?? 'bg-muted border-border [&_.chip-dot]:bg-muted-foreground'
+  const [multiOpen, setMultiOpen] = React.useState(false)
+
+  const multiSelected = React.useMemo(() => {
+    if (field.type !== 'multi_select' || !Array.isArray(filter.value)) return [] as string[]
+    return filter.value.map((v) => String(v)).filter(Boolean)
+  }, [field.type, filter.value])
+
+  const toggleMultiValue = (optionValue: string) => {
+    const current = multiSelected
+    const next = current.includes(optionValue)
+      ? current.filter((v) => v !== optionValue)
+      : [...current, optionValue]
+    onValueChange(next)
+  }
+
+  const multiLabel =
+    multiSelected.length === 0
+      ? (field.placeholder ?? 'All')
+      : multiSelected.length === 1
+        ? (options?.find((o) => o.value === multiSelected[0])?.label ?? multiSelected[0])
+        : `${multiSelected.length} selected`
 
   return (
     <span
@@ -65,6 +89,44 @@ export function FilterChip({
               : 'w-24 text-xs'
           )}
         />
+      )}
+
+      {field.type === 'multi_select' && (
+        <div className="relative">
+          <button
+            type="button"
+            className="h-7 min-w-[140px] rounded-sm border-0 bg-transparent px-2 text-left text-xs hover:bg-black/5 dark:hover:bg-white/5"
+            onClick={() => setMultiOpen((o) => !o)}
+          >
+            {multiLabel}
+          </button>
+          {multiOpen && (
+            <>
+              <div
+                className="fixed inset-0 z-40"
+                aria-hidden
+                onClick={() => setMultiOpen(false)}
+              />
+              <div className="absolute left-0 top-full z-50 mt-1 max-h-56 min-w-[220px] overflow-y-auto rounded-md border border-border bg-popover p-2 shadow-md">
+                {(options ?? []).map((opt) => {
+                  const checked = multiSelected.includes(opt.value)
+                  return (
+                    <label
+                      key={opt.value}
+                      className="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-xs hover:bg-accent"
+                    >
+                      <Checkbox
+                        checked={checked}
+                        onCheckedChange={() => toggleMultiValue(opt.value)}
+                      />
+                      <span className="truncate">{opt.label}</span>
+                    </label>
+                  )
+                })}
+              </div>
+            </>
+          )}
+        </div>
       )}
 
       {field.type === 'select' && (

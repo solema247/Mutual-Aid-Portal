@@ -29,7 +29,10 @@
     "filters": {
       "grant_id": "معرّف المنحة",
       "grant_id_placeholder": "مثال: LCC-FCDO-ND-0326-0001",
+      "grant_name": "اسم المنحة",
+      "grant_name_placeholder": "ابحث باسم المنحة أو الرقم التسلسلي",
       "base_room": "الغرفة الأساسية",
+      "report_status": "حالة التقرير",
       "err": "غرفة الطوارئ",
       "state": "الولاية",
       "donor": "المانح",
@@ -41,6 +44,7 @@
       "base_room": "الغرفة الأساسية",
       "err": "غرفة الطوارئ",
       "grant_id": "معرّف المنحة",
+      "grant_name": "اسم المنحة",
       "state": "الولاية",
       "grant": "نداء المنحة",
       "donor": "المانح",
@@ -58,6 +62,13 @@
     "view": "عرض",
     "loading": "جارٍ التحميل…",
     "empty": "لا توجد سجلات بعد",
+    "report_status": {
+      "not_uploaded": "لم يُرفع",
+      "pending_review": "قيد المراجعة",
+      "accepted": "مقبول",
+      "rejected": "مرفوض",
+      "historical": "تاريخي"
+    },
     "serial_lookup": "الرقم التسلسلي F4 (LoHub)",
     "serial_placeholder": "أدخل الرقم التسلسلي",
     "fetch": "استعلام",
@@ -137,6 +148,10 @@
     "filters": {
       "grant_id": "معرّف المنحة",
       "grant_id_placeholder": "مثال: LCC-FCDO-ND-0326-0001",
+      "grant_name": "اسم المنحة",
+      "grant_name_placeholder": "ابحث باسم المنحة أو الرقم التسلسلي",
+      "base_room": "الغرفة الأساسية",
+      "report_status": "حالة التقرير",
       "err": "غرفة الطوارئ",
       "state": "الولاية",
       "donor": "المانح",
@@ -145,11 +160,16 @@
       "reset": "إعادة تعيين"
     },
     "headers": {
+      "base_room": "الغرفة الأساسية",
       "err": "غرفة الطوارئ",
       "grant_id": "معرّف المنحة",
+      "grant_name": "اسم المنحة",
       "state": "الولاية",
       "grant": "نداء المنحة",
       "donor": "المانح",
+      "payment_date": "تاريخ الدفع",
+      "amount_sdg": "المبلغ (جنيه)",
+      "exchange_rate": "سعر الصرف",
       "report_date": "تاريخ التقرير",
       "activities": "الأنشطة",
       "updated": "آخر تحديث",
@@ -157,7 +177,11 @@
     },
     "view": "عرض",
     "loading": "جارٍ التحميل…",
-    "empty": "لا توجد تقارير F5 بعد",
+    "empty": "لا توجد سجلات بعد",
+    "report_status": {
+      "not_uploaded": "لم يُرفع",
+      "uploaded": "مُرفوع"
+    },
     "preview": {
       "tabs": { "edit_form": "تحرير النموذج", "view_file": "عرض الملف", "tables": "الجداول المستخرجة" },
       "summary": {

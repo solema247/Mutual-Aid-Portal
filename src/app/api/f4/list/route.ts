@@ -65,7 +65,97 @@ function baseRoomLabel(project: Record<string, unknown>): string | null {
 
 function donorLabel(project: Record<string, unknown>): string | null {
   const donor = resolveDonor(project)
-  return donor?.short_name || donor?.name || null
+  return donor?.name || donor?.short_name || null
+}
+
+function computeReportStatus(args: {
+  has_f4_report: boolean
+  activities_raw_import_id: unknown
+  review_status: unknown
+}): string {
+  if (args.activities_raw_import_id) return 'historical'
+  if (!args.has_f4_report) return 'not_uploaded'
+  const status = String(args.review_status ?? 'pending_review').trim().toLowerCase()
+  if (status === 'accepted') return 'accepted'
+  if (status === 'rejected') return 'rejected'
+  return 'pending_review'
+}
+
+function grantNameForProject(
+  project: Record<string, unknown>,
+  gridById: Map<string, string>,
+  gridByGrantKey: Map<string, string>
+): string | null {
+  const gridId = project.grant_grid_id != null ? String(project.grant_grid_id) : ''
+  if (gridId && gridById.has(gridId)) return gridById.get(gridId) ?? null
+
+  for (const key of [project.grant_serial_id, project.grant_id]) {
+    if (key == null) continue
+    const normalized = String(key).trim()
+    if (normalized && gridByGrantKey.has(normalized)) {
+      return gridByGrantKey.get(normalized) ?? null
+    }
+  }
+  return null
+}
+
+async function loadGrantNameMaps(
+  supabase: ReturnType<typeof getSupabaseRouteClient>,
+  projects: Record<string, unknown>[]
+): Promise<{ gridById: Map<string, string>; gridByGrantKey: Map<string, string> }> {
+  const gridById = new Map<string, string>()
+  const gridByGrantKey = new Map<string, string>()
+
+  const gridIds = [
+    ...new Set(
+      projects
+        .map((p) => (p.grant_grid_id != null ? String(p.grant_grid_id) : ''))
+        .filter(Boolean)
+    ),
+  ]
+  const grantKeys = [
+    ...new Set(
+      projects.flatMap((p) => {
+        const keys: string[] = []
+        if (p.grant_serial_id) keys.push(String(p.grant_serial_id).trim())
+        if (p.grant_id) keys.push(String(p.grant_id).trim())
+        return keys.filter(Boolean)
+      })
+    ),
+  ]
+
+  if (gridIds.length > 0) {
+    for (const batch of chunkIds(gridIds)) {
+      const { data } = await supabase
+        .from('grants_grid_view')
+        .select('id, project_name, grant_id')
+        .in('id', batch)
+      for (const row of data || []) {
+        const name = (row as { project_name?: string }).project_name
+        if (name) {
+          gridById.set(String((row as { id: string }).id), name)
+        }
+      }
+    }
+  }
+
+  if (grantKeys.length > 0) {
+    for (const batch of chunkIds(grantKeys)) {
+      const { data } = await supabase
+        .from('grants_grid_view')
+        .select('project_name, grant_id')
+        .in('grant_id', batch)
+      for (const row of data || []) {
+        const name = (row as { project_name?: string }).project_name
+        const grantId = (row as { grant_id?: string }).grant_id
+        if (name && grantId) {
+          gridByGrantKey.set(String(grantId).trim(), name)
+        }
+      }
+    }
+  }
+
+  return { gridById, gridByGrantKey }
 }
 
 function grantAmountUsd(project: Record<string, unknown>): number {
@@ -173,6 +263,7 @@ export async function GET() {
       status,
       funding_status,
       f4_status,
+      grant_grid_id,
       emergency_room_id,
       emergency_rooms ( id, name, name_ar, err_code, type ),
       donors ( name, short_name )
@@ -225,6 +316,7 @@ export async function GET() {
           status,
           funding_status,
           f4_status,
+          grant_grid_id,
           emergency_room_id,
           emergency_rooms ( id, name, name_ar, err_code, type ),
           donors ( name, short_name )
@@ -232,6 +324,9 @@ export async function GET() {
       `
 
     const summaries = await fetchPortalSummaries(supabase, allowedStateNames, portalSelect)
+
+    const allProjectsForGrants = Array.from(projectById.values())
+    const { gridById, gridByGrantKey } = await loadGrantNameMaps(supabase, allProjectsForGrants)
 
     // Historical F4 reports (unchanged)
     const { data: historicalSummaries } = await supabase
@@ -394,6 +489,7 @@ export async function GET() {
         err_id: project.err_id ?? null,
         grant_serial_id: project.grant_serial_id ?? project.grant_id ?? null,
         grant_id: project.grant_id ?? null,
+        grant_name: grantNameForProject(project, gridById, gridByGrantKey),
         state: project.state ?? null,
         donor: donorLabel(project),
         payment_date: paymentDate,
@@ -409,6 +505,11 @@ export async function GET() {
         review_comment: s.review_comment ?? null,
         reviewed_at: s.reviewed_at ?? null,
         has_f4_report: true,
+        report_status: computeReportStatus({
+          has_f4_report: true,
+          activities_raw_import_id: null,
+          review_status: s.review_status || 'pending_review',
+        }),
       })
     }
 
@@ -429,6 +530,7 @@ export async function GET() {
         err_id: project.err_id ?? null,
         grant_serial_id: project.grant_serial_id ?? project.grant_id ?? null,
         grant_id: project.grant_id ?? null,
+        grant_name: grantNameForProject(project, gridById, gridByGrantKey),
         state: project.state ?? null,
         donor: donorLabel(project),
         payment_date: paymentDate,
@@ -444,6 +546,11 @@ export async function GET() {
         review_comment: null,
         reviewed_at: null,
         has_f4_report: false,
+        report_status: computeReportStatus({
+          has_f4_report: false,
+          activities_raw_import_id: null,
+          review_status: null,
+        }),
       })
     }
 
@@ -467,6 +574,7 @@ export async function GET() {
         err_id: hist['ERR CODE'] || hist['ERR Name'] || null,
         grant_serial_id: serial,
         grant_id: serial,
+        grant_name: serial,
         state: hist['State'] || null,
         donor: hist['Project Donor'] || null,
         payment_date: null,
@@ -482,6 +590,11 @@ export async function GET() {
         review_comment: s.review_comment ?? null,
         reviewed_at: s.reviewed_at ?? null,
         has_f4_report: true,
+        report_status: computeReportStatus({
+          has_f4_report: true,
+          activities_raw_import_id: s.activities_raw_import_id,
+          review_status: s.review_status || 'pending_review',
+        }),
       })
     }
 
