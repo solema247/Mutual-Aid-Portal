@@ -1,8 +1,8 @@
 'use client'
 
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -21,6 +21,12 @@ import PoolByDonor from '@/app/err-portal/f2-approvals/components/PoolByDonor'
 import { useAllowedFunctions } from '@/hooks/useAllowedFunctions'
 import { cn } from '@/lib/utils'
 import { useF3MousPageExplainer } from './F3MousPageExplainer'
+import {
+  SmartFilter,
+  applyFilters,
+  getF3MousFilterFields,
+  type ActiveFilter,
+} from '@/components/smart-filter'
 
 interface Signature {
   id: string
@@ -116,10 +122,7 @@ export default function F3MOUsPage() {
   const [mouProjectCounts, setMouProjectCounts] = useState<Record<string, number>>({})
   /** Count of all projects per MOU (no status filter) – used for payment confirmation total so partial flag is correct */
   const [mouPaymentProjectCounts, setMouPaymentProjectCounts] = useState<Record<string, number>>({})
-  const [selectedState, setSelectedState] = useState<string>('all')
-  const [availableStates, setAvailableStates] = useState<string[]>([])
-  const [selectedGrantId, setSelectedGrantId] = useState<string>('all')
-  const [availableGrants, setAvailableGrants] = useState<string[]>([])
+  const [mousFilters, setMousFilters] = useState<ActiveFilter[]>([])
   const [loading, setLoading] = useState(true)
   const [previewOpen, setPreviewOpen] = useState(false)
   const [activeMou, setActiveMou] = useState<MOU | null>(null)
@@ -143,6 +146,8 @@ export default function F3MOUsPage() {
   const [paymentConfirmations, setPaymentConfirmations] = useState<Record<string, { exchange_rate: string; transfer_date: string; file: File | null; file_path?: string }>>({})
   const [uploadingPayments, setUploadingPayments] = useState<Record<string, boolean>>({})
   const [uploadingAllPayments, setUploadingAllPayments] = useState(false)
+  const [bulkPaymentExchangeRate, setBulkPaymentExchangeRate] = useState('')
+  const [bulkPaymentTransferDate, setBulkPaymentTransferDate] = useState('')
   const [isAssigning, setIsAssigning] = useState(false)
   const [isReassigning, setIsReassigning] = useState(false)
   const [mouAssignmentStatus, setMouAssignmentStatus] = useState<Record<string, { hasUnassigned: boolean; hasAssigned: boolean; projectCount: number }>>({})
@@ -309,18 +314,10 @@ export default function F3MOUsPage() {
   const fetchMous = async () => {
     try {
       setLoading(true)
-      setAvailableGrants([])
-      const params = new URLSearchParams()
-      if (selectedState && selectedState !== 'all') params.append('state', selectedState)
-      
-      const res = await fetch(`/api/f3/mous?${params.toString()}`)
+      const res = await fetch('/api/f3/mous')
       const data = await res.json()
       setMous(data)
       setCurrentPage(1) // Reset to first page when data refreshes
-      
-      // Extract unique states from MOUs for the filter dropdown
-      const uniqueStates = Array.from(new Set(data.map((m: MOU) => m.state).filter(Boolean))) as string[]
-      setAvailableStates(uniqueStates.sort())
       
       // Check assignment status for each MOU
       await checkMouAssignmentStatus(data.map((m: MOU) => m.id))
@@ -412,14 +409,13 @@ export default function F3MOUsPage() {
             })
             
             setMouGrantIds(grantIdMap)
-            setAvailableGrants(Array.from(new Set(Object.values(grantIdMap).filter(Boolean))).sort())
           } else {
-            setAvailableGrants([])
+            setMouGrantIds({})
           }
         }
       } catch (error) {
         console.error('Error fetching grant_ids for MOUs:', error)
-        setAvailableGrants([])
+        setMouGrantIds({})
       }
     } catch (e) {
       console.error('Failed to load MOUs', e)
@@ -817,6 +813,8 @@ export default function F3MOUsPage() {
   
   const openPaymentModal = async (mou: MOU) => {
     setSelectedMouForPayment(mou)
+    setBulkPaymentExchangeRate('')
+    setBulkPaymentTransferDate('')
     
     // Fetch projects in this MOU (no status filter - show all linked projects so payment data is visible)
     try {
@@ -895,6 +893,36 @@ export default function F3MOUsPage() {
     setPaymentModalOpen(true)
   }
 
+  const applyBulkPaymentToAllProjects = () => {
+    const rate = bulkPaymentExchangeRate.trim()
+    const date = bulkPaymentTransferDate.trim()
+    if (!rate || !date) {
+      alert(t('f3:payment_modal.bulk_required'))
+      return
+    }
+    if (Number.isNaN(Number(rate)) || Number(rate) <= 0) {
+      alert(t('f3:payment_modal.bulk_rate_invalid'))
+      return
+    }
+    setPaymentConfirmations((prev) => {
+      const next = { ...prev }
+      for (const project of paymentProjects) {
+        const current = next[project.id] ?? {
+          exchange_rate: '',
+          transfer_date: '',
+          file: null,
+          file_path: undefined,
+        }
+        next[project.id] = {
+          ...current,
+          exchange_rate: rate,
+          transfer_date: date,
+        }
+      }
+      return next
+    })
+  }
+
   const calculateGrantRemaining = async (grantId: string, _donorName: string) => {
     if (!grantId) {
       setGrantRemaining(null)
@@ -966,7 +994,7 @@ export default function F3MOUsPage() {
       }
     })()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedState])
+  }, [])
   
   // Calculate grant remaining when grant changes
   useEffect(() => {
@@ -989,10 +1017,54 @@ export default function F3MOUsPage() {
     }
   }, [assignModalOpen, reassignModalOpen, mouProjects])
 
+  const mouStateOptions = useMemo(
+    () => Array.from(new Set(mous.map((m) => m.state).filter(Boolean) as string[])).sort(),
+    [mous]
+  )
+  const mouGrantIdOptions = useMemo(
+    () => Array.from(new Set(Object.values(mouGrantIds).filter(Boolean))).sort(),
+    [mouGrantIds]
+  )
+
+  const mouFilterFields = useMemo(
+    () =>
+      getF3MousFilterFields({
+        stateOptions: mouStateOptions,
+        grantIdOptions: mouGrantIdOptions,
+        labels: {
+          state: t('f3:filters.state'),
+          grantId: t('f3:filters.grant_id'),
+          unassignedGrant: t('f3:filters.unassigned_grant'),
+          all: t('f3:filters.all'),
+        },
+      }),
+    [mouStateOptions, mouGrantIdOptions, t]
+  )
+
+  const getMouFieldValue = useCallback(
+    (row: MOU, fieldId: string): string | null | undefined => {
+      if (fieldId === 'state') return row.state ?? ''
+      if (fieldId === 'grant_id') {
+        const grantId = mouGrantIds[row.id]
+        return grantId && String(grantId).trim() ? String(grantId).trim() : '__unassigned__'
+      }
+      return null
+    },
+    [mouGrantIds]
+  )
+
   const filteredMous = useMemo(() => {
-    if (selectedGrantId === 'all') return mous
-    return mous.filter(m => mouGrantIds[m.id] === selectedGrantId)
-  }, [mous, mouGrantIds, selectedGrantId])
+    return applyFilters({
+      data: mous,
+      filters: mousFilters,
+      fields: mouFilterFields,
+      getFieldValue: getMouFieldValue,
+    })
+  }, [mous, mousFilters, mouFilterFields, getMouFieldValue])
+
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [mousFilters])
 
   const sortedMous = useMemo(() => {
     const list = [...filteredMous]
@@ -1039,35 +1111,17 @@ export default function F3MOUsPage() {
         />
       )}
       <Card className="w-full">
-        <CardHeader>
-          <CardTitle>{t('f3:title')}</CardTitle>
+        <CardHeader className="pb-4">
+          <SmartFilter
+            fields={mouFilterFields}
+            filters={mousFilters}
+            onFiltersChange={setMousFilters}
+            urlParamPrefix="f3m_"
+            title={t('f3:title')}
+            count={loading ? undefined : filteredMous.length}
+          />
         </CardHeader>
         <CardContent className="space-y-4 w-full overflow-x-auto">
-          <div className="flex items-center gap-2 flex-wrap">
-            <Select value={selectedState} onValueChange={setSelectedState}>
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Filter by State" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All States</SelectItem>
-                {availableStates.map(state => (
-                  <SelectItem key={state} value={state}>{state}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select value={selectedGrantId} onValueChange={(v) => { setSelectedGrantId(v); setCurrentPage(1) }}>
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Filter by Grant ID" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Grants</SelectItem>
-                {availableGrants.map(grantId => (
-                  <SelectItem key={grantId} value={grantId}>{grantId}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
           {loading ? (
             <div className="py-8 text-center text-muted-foreground">{t('common:loading') || 'Loading...'}</div>
           ) : (
@@ -3394,7 +3448,20 @@ export default function F3MOUsPage() {
       </Dialog>
 
       {/* Payment Confirmation Modal */}
-      <Dialog open={paymentModalOpen} onOpenChange={setPaymentModalOpen}>
+      <Dialog
+        open={paymentModalOpen}
+        onOpenChange={(open) => {
+          setPaymentModalOpen(open)
+          if (!open) {
+            setSelectedMouForPayment(null)
+            setPaymentProjects([])
+            setPaymentConfirmations({})
+            setUploadingPayments({})
+            setBulkPaymentExchangeRate('')
+            setBulkPaymentTransferDate('')
+          }
+        }}
+      >
         <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
@@ -3404,6 +3471,53 @@ export default function F3MOUsPage() {
               {paymentProjects.length} project{paymentProjects.length !== 1 ? 's' : ''} in this MOU
             </p>
           </DialogHeader>
+          <div className="mt-2 rounded-md border border-border bg-muted/30 p-3">
+            <p className="text-xs text-muted-foreground mb-3">{t('f3:payment_modal.bulk_hint')}</p>
+            <div className="flex flex-wrap items-end gap-3">
+              <div className="space-y-1">
+                <Label htmlFor="bulk-payment-exchange-rate" className="text-xs">
+                  {t('f3:payment_modal.bulk_exchange_rate')}
+                </Label>
+                <Input
+                  id="bulk-payment-exchange-rate"
+                  type="number"
+                  step="0.0001"
+                  value={bulkPaymentExchangeRate}
+                  onChange={(e) => setBulkPaymentExchangeRate(e.target.value)}
+                  placeholder="e.g., 600.5"
+                  className="h-8 w-[160px] text-sm"
+                  disabled={uploadingAllPayments || Object.values(uploadingPayments).some(Boolean)}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="bulk-payment-transfer-date" className="text-xs">
+                  {t('f3:payment_modal.bulk_transfer_date')}
+                </Label>
+                <Input
+                  id="bulk-payment-transfer-date"
+                  type="date"
+                  value={bulkPaymentTransferDate}
+                  onChange={(e) => setBulkPaymentTransferDate(e.target.value)}
+                  className="h-8 w-[160px] text-sm"
+                  disabled={uploadingAllPayments || Object.values(uploadingPayments).some(Boolean)}
+                />
+              </div>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                className="h-8"
+                onClick={applyBulkPaymentToAllProjects}
+                disabled={
+                  uploadingAllPayments ||
+                  Object.values(uploadingPayments).some(Boolean) ||
+                  paymentProjects.length === 0
+                }
+              >
+                {t('f3:payment_modal.apply_to_all')}
+              </Button>
+            </div>
+          </div>
           <div className="mt-4 overflow-x-auto">
             <Table className="text-xs min-w-[700px]">
               <TableHeader>
@@ -3672,6 +3786,8 @@ export default function F3MOUsPage() {
                   setPaymentProjects([])
                   setPaymentConfirmations({})
                   setUploadingPayments({})
+                  setBulkPaymentExchangeRate('')
+                  setBulkPaymentTransferDate('')
                 }}
               >
                 Close

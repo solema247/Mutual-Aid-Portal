@@ -2,6 +2,7 @@
 
 import * as React from 'react'
 import { X } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -42,6 +43,7 @@ export function FilterChip({
   options = field.type === 'select' || field.type === 'multi_select' ? field.options : undefined,
   className,
 }: FilterChipProps) {
+  const { t } = useTranslation('common')
   const colorClass = CHIP_COLORS[field.id] ?? 'bg-muted border-border [&_.chip-dot]:bg-muted-foreground'
   const [multiOpen, setMultiOpen] = React.useState(false)
 
@@ -50,12 +52,25 @@ export function FilterChip({
     return filter.value.map((v) => String(v)).filter(Boolean)
   }, [field.type, filter.value])
 
+  const multiOptionValues = React.useMemo(
+    () => (options ?? []).map((opt) => opt.value),
+    [options]
+  )
+
+  const allMultiSelected =
+    multiOptionValues.length > 0 && multiOptionValues.every((v) => multiSelected.includes(v))
+  const someMultiSelected = multiSelected.length > 0 && !allMultiSelected
+
   const toggleMultiValue = (optionValue: string) => {
     const current = multiSelected
     const next = current.includes(optionValue)
       ? current.filter((v) => v !== optionValue)
       : [...current, optionValue]
     onValueChange(next)
+  }
+
+  const toggleSelectAllMulti = () => {
+    onValueChange(allMultiSelected ? [] : [...multiOptionValues])
   }
 
   const multiLabel =
@@ -108,6 +123,17 @@ export function FilterChip({
                 onClick={() => setMultiOpen(false)}
               />
               <div className="absolute left-0 top-full z-50 mt-1 max-h-56 min-w-[220px] overflow-y-auto rounded-md border border-border bg-popover p-2 shadow-md">
+                {multiOptionValues.length > 0 && (
+                  <>
+                    <label className="flex cursor-pointer items-center gap-2 rounded-sm border-b border-border px-2 py-1.5 text-xs font-medium hover:bg-accent mb-1">
+                      <Checkbox
+                        checked={allMultiSelected ? true : someMultiSelected ? 'indeterminate' : false}
+                        onCheckedChange={toggleSelectAllMulti}
+                      />
+                      <span>{t('select_all')}</span>
+                    </label>
+                  </>
+                )}
                 {(options ?? []).map((opt) => {
                   const checked = multiSelected.includes(opt.value)
                   return (

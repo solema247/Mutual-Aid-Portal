@@ -2,6 +2,12 @@
   "title": "F3 MOUs",
   "search_placeholder": "Search by code or partner",
   "search": "Search",
+  "filters": {
+    "state": "State",
+    "grant_id": "Grant ID",
+    "unassigned_grant": "Not assigned to grant",
+    "all": "All"
+  },
   "headers": {
     "mou_code": "MOU Code",
     "partner": "Partner",
@@ -24,6 +30,14 @@
   "payment_priority_projects": "projects",
   "payment_priority_partial": "{{confirmed}}/{{total}} projects ({{missing}} missing)",
   "view_payment_info": "View Payment Information",
+  "payment_modal": {
+    "bulk_hint": "Enter an exchange rate and transfer date, then apply to all projects. You can still adjust each row individually before uploading.",
+    "bulk_exchange_rate": "Exchange rate",
+    "bulk_transfer_date": "Transfer date",
+    "apply_to_all": "Apply to all projects",
+    "bulk_required": "Please enter both exchange rate and transfer date.",
+    "bulk_rate_invalid": "Please enter a valid exchange rate greater than zero."
+  },
   "mou_agreement": "Memorandum of Understanding Agreement",
   "between": "Between",
   "and": "And",
@@ -72,7 +86,7 @@
   "explainer_section_alert": "🔔 Payment priority banner",
   "explainer_alert": "If you can manage payment: when an MOU is on a grant but some linked projects still lack payment confirmation, it may appear here so you can open payment and complete the files.",
   "explainer_section_table": "📋 MOU list",
-  "explainer_filters": "Filter by state and by grant ID. Grant ID is taken from projects linked to the MOU.",
+  "explainer_filters": "Use smart filters with multi-select: narrow by state or grant ID. Choose “Not assigned to grant” to show MOUs with no linked grant call.",
   "explainer_columns": "Columns: MOU code, grant ID, ERR and state, total amount, created date (use the header to sort), then actions.",
   "explainer_actions_lead": "Row actions (each only if your role allows):",
   "explainer_action_list": "List — see projects in the MOU; add or remove projects where allowed.",

@@ -264,6 +264,41 @@ export function getF4F5ReportingFilterFields(options: {
   ]
 }
 
+/** F3 MOUs list: multi-select filters (state, grant ID incl. unassigned) */
+export function getF3MousFilterFields(options: {
+  stateOptions: string[]
+  grantIdOptions: string[]
+  labels: {
+    state: string
+    grantId: string
+    unassignedGrant: string
+    all: string
+  }
+}): FilterFieldConfig[] {
+  const { stateOptions, grantIdOptions, labels } = options
+  return [
+    {
+      id: 'state',
+      label: labels.state,
+      type: 'multi_select',
+      options: stateOptions.map((s) => ({ value: s, label: s })),
+      placeholder: labels.all,
+      accessorKey: 'state',
+    },
+    {
+      id: 'grant_id',
+      label: labels.grantId,
+      type: 'multi_select',
+      options: [
+        { value: '__unassigned__', label: labels.unassignedGrant },
+        ...grantIdOptions.map((s) => ({ value: s, label: s })),
+      ],
+      placeholder: labels.all,
+      accessorKey: 'grant_id',
+    },
+  ]
+}
+
 /** F4 reporting: multi-select filters + report status */
 export function getF4ReportingFilterFields(options: {
   baseRoomOptions: string[]
