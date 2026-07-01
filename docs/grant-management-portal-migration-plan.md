@@ -9,6 +9,57 @@ This document is the implementation plan for moving **Grants** and **Allocations
 
 ---
 
+## Current status (2026-07-01)
+
+### Completed
+
+| Phase | Status | Notes |
+|-------|--------|-------|
+| **A1** — Airtable `Portal_*` raw tables | ✅ Done | `Portal_Decisions`, `Portal_Allocations`, `Portal_Grants` created; table ids recorded |
+| **0** — Schema sync columns | ✅ Done | Migration `20260626120000_grant_management_airtable_sync_columns.sql` applied; types on `main` |
+| **1** — FDW → canonical backfill | ✅ Done | See [Phase 1 results](#phase-1-results-2026-07-01) below |
+
+### Canonical row counts (post-backfill)
+
+| Table | Rows | vs FDW | Excluded |
+|-------|------|--------|----------|
+| `grants_grid_view` | **28** | 27 FDW + 1 portal-only (`Avaaz 2`) | — |
+| `distribution_decision_master_sheet_1` | **69** | 71 FDW − 2 `#ERROR!` | `recKhnE6o5ktuEteU`, `recxnYC1Zo9rc2t1y` |
+| `allocations_by_date` | **530** | 531 FDW − 1 `#ERROR!` | North Darfur ~$485k (broken formula) |
+
+**Allocation total:** canonical **$18,453,345.67** vs FDW **$18,938,345.67** — gap = excluded $485k row only.
+
+**FK:** `allocations_by_date.Decision_ID` → `distribution_decision_master_sheet_1.decision_id_proposed` — **530/530 linked, 0 orphans**; `fk_alloc_decision` enforced (validated 2026-07-01).
+
+### Cutover scripts (app repo)
+
+| Script | Purpose |
+|--------|---------|
+| `scripts/cutover/backfill-grants-from-fdw.ts` | Grants FDW → `grants_grid_view` |
+| `scripts/cutover/backfill-decisions-from-fdw.ts` | Decisions FDW → `distribution_decision_master_sheet_1` |
+| `scripts/cutover/backfill-allocations-from-fdw.ts` | Allocations FDW → `allocations_by_date` |
+| `scripts/cutover/compare-decisions-fdw-canonical.ts` | Side-by-side decisions reconciliation |
+| `scripts/cutover/validate-allocations-fk.ts` | FK orphan + enforcement check |
+
+All backfill scripts: dry-run default; `--inserts-only` / `--updates-only` / `--apply`.
+
+### Not started
+
+| Phase | What |
+|-------|------|
+| **1.3** (remaining) | Full reconciliation (grant totals, pool summary vs FDW) |
+| **3** | Switch grant-management APIs to read canonical instead of FDW |
+| **2** | Portal push → Airtable `Portal_*` raw tables |
+| **4** | Enable grant-management UI edits + Excel upload |
+| **A2** | Airtable automations raw → existing display tables |
+| **5** | End-to-end test plan |
+
+### Immediate next step
+
+**Phase 1.3 validation** (remaining gates) → then **Phase 3** (API read path to canonical). UI still reads FDW today.
+
+---
+
 ## Goals
 
 | Area | Today | Target |
@@ -74,7 +125,7 @@ This document is the implementation plan for moving **Grants** and **Allocations
 | `allocation_amount`, `percent_decision_amount`, `serial` | numeric |
 | `sequence` | text |
 
-### Canonical baseline (MCP, 2025-06-26)
+### Canonical baseline (pre-backfill, 2025-06-26)
 
 | Table | Rows | Notable total |
 |-------|------|----------------|
@@ -82,9 +133,9 @@ This document is the implementation plan for moving **Grants** and **Allocations
 | `distribution_decision_master_sheet_1` | 39 | — |
 | `allocations_by_date` | 338 | `sum("Allocation Amount")` = **7,954,208.95** |
 
-Phase 0 columns (`airtable_record_id`, `sync_status`, `last_pushed_at`) — **not present yet** on canonical tables.
+Phase 0 columns (`airtable_record_id`, `sync_status`, `last_pushed_at`) — **applied 2026-06-26** (see Phase 0).
 
-### FDW vs canonical — Q1 results (2025-06-26)
+### FDW vs canonical — Q1 results (pre-backfill, 2025-06-26)
 
 | Check | FDW (Airtable) | Canonical (portal) | Delta | Match? |
 |-------|----------------|-------------------|-------|--------|
@@ -221,12 +272,13 @@ All 184 missing allocation rows are on the FDW side — canonical has **no orpha
 
 **State name note:** FDW uses `Sinar` in some rows; portal canonical often uses `Sennar` — apply existing state normalization in backfill (`normalizeActivitiesStateName` / state mappings).
 
-### Backfill strategy (updated after Q6–Q7)
+### Backfill strategy (updated after Q6–Q7) — **applied 2026-07-01**
 
-1. **Grants:** Upsert all 27 FDW rows; add 3 new; preserve `Avaaz 2` unless explicitly retired.
-2. **Decisions:** Upsert ~69 FDW rows by `decision_id_proposed`; store `airtable_record_id` from FDW `id`; resolve `Flex` vs `Flex-2` canonical row manually.
-3. **Allocations:** Insert 184 `fdw_only` rows; skip or fix `#ERROR!` rows; 0 canonical deletes needed.
-4. Post-backfill Q1 must match exactly (except excluded error rows).
+1. **Grants:** ✅ Upserted 27 FDW rows; inserted 3 new donors/grants; preserved `Avaaz 2`.
+2. **Decisions:** ✅ 30 inserts + 39 updates; `airtable_record_id` from FDW `id`; Flex duplicate → `Flex-2` suffix row via `airtable_record_id` match.
+3. **Allocations:** ✅ 192 inserts + 337 updates; `Decision_ID` resolved via decision `airtable_record_id`; state normalization applied; `%_Decision_Amount` corrected to percent scale.
+4. **Excluded:** 2 decision + 1 allocation `#ERROR!` rows (per policy — fix in Airtable later).
+5. Post-backfill: row-level match on synced fields ✅; allocation FK ✅; financial total gap = excluded $485k only.
 
 Run in **Supabase → SQL editor**. Copy each result set into chat (CSV or table). Redact if needed.
 
@@ -246,13 +298,13 @@ See section **Appendix: Airtable audit SQL** at the bottom of this file.
 
 ## Current split-brain (why cutover matters)
 
-Grant management UI was repointed to Airtable FDW while other portal features kept using local tables. At cutover, **Airtable FDW is likely more current** than `grants_grid_view` / `allocations_by_date` for grant-management data.
+Grant management UI was repointed to Airtable FDW while other portal features kept using local tables. **Phase 1 backfill (2026-07-01) closed the data gap** — canonical tables now mirror FDW for grants, decisions, and allocations (except excluded `#ERROR!` rows). **UI and APIs still read FDW** until Phase 3.
 
-We must run a **one-time backfill** from FDW (or Airtable API) into canonical tables **before** switching the UI read path.
+We ran a **one-time backfill** from FDW into canonical tables **before** switching the UI read path. ✅ Complete.
 
 ---
 
-## Phase 0: Schema preparation
+## Phase 0: Schema preparation — ✅ complete (2026-06-26)
 
 **Repo:** `sudan-err-portal-schema` (requires approval per `docs/db-workflow.md`).
 
@@ -309,21 +361,37 @@ Optional: `sync_outbox` table for failed Airtable pushes (retry cron). Can be Ph
 
 ---
 
-## Phase 1: One-time cutover — canonical tables get latest data
+## Phase 1: One-time cutover — canonical tables get latest data — ✅ backfill complete (2026-07-01)
 
 This answers: *How do we ensure canonical tables have the latest data when we make the switch?*
 
+### Phase 1 results (2026-07-01)
+
+| Entity | Script | Inserts | Updates | Canonical rows | FDW synced | Excluded |
+|--------|--------|---------|---------|----------------|------------|----------|
+| Grants | `backfill-grants-from-fdw.ts` | 3 | 15 | 28 | 27 | `Avaaz 2` kept |
+| Decisions | `backfill-decisions-from-fdw.ts` | 30 | 39 | 69 | 69 | 2 `#ERROR!` |
+| Allocations | `backfill-allocations-from-fdw.ts` | 192 | 337 | 530 | 530 | 1 `#ERROR!` ($485k) |
+
+**Decisions — Flex duplicate:** Two FDW rows share proposed id `LCC.P2H.2025-10-22.Flex`. Canonical uses `…Flex` and `…Flex-2` (unique `decision_id_proposed`); matched by `airtable_record_id` (`recAvT5U…` / `recsZuJx…`).
+
+**Allocations — decision link:** FDW `decision_id` `["rec…"]` → canonical `Decision_ID` = parent `decision_id_proposed` via decisions’ `airtable_record_id`.
+
+**Allocations — `%_Decision_Amount`:** Canonical had fractional values (e.g. `0.06`); backfill set true percent (e.g. `6.18`) from FDW or `amount / decision_amount`.
+
+**`airtable_record_id` after backfill:** Set on all decisions from FDW `id`. Grants and allocations: FDW has no `rec…` column on those tables — left `null`, `sync_status = pending` until Phase 2 push or API lookup.
+
 ### 1.1 Pre-cutover checklist
 
-- [ ] Announce **freeze on Airtable edits** for Grants, Distribution Decision, and Allocations tables (coordinate with Airtable users).
-- [ ] Confirm FDW reflects Airtable (no stale wrapper lag; if uncertain, read via Airtable API instead).
-- [ ] Export row counts and key totals from **both** FDW and canonical tables for comparison baseline.
+- [ ] Announce **freeze on Airtable edits** for Grants, Distribution Decision, and Allocations tables (coordinate with Airtable users). *Deferred — preview mode; backfill run without freeze.*
+- [x] Confirm FDW reflects Airtable (backfill dry-runs matched prod FDW).
+- [x] Export row counts and key totals from **both** FDW and canonical tables for comparison baseline.
 
-### 1.2 Backfill script (one-time)
+### 1.2 Backfill scripts (one-time) — ✅ run in prod
 
-Create `scripts/cutover/backfill-grant-management-from-airtable.ts` (or SQL migration run once):
+Separate scripts per entity (not a single monolithic file):
 
-**Source:** `public.grants`, `public.distribution_decision`, `public.allocations` (FDW), using service role.
+**Source:** `public.grants`, `public.distribution_decision`, `public.allocations` (FDW), using service role via `.env.local`.
 
 **Target:** canonical tables above.
 
@@ -376,6 +444,17 @@ Upsert on `Allocation_ID`.
 
 ### 1.3 Validation gates (must pass before UI switch)
 
+| Check | Status (2026-07-01) |
+|-------|---------------------|
+| Decision count vs FDW (excl. errors) | ✅ 69 = 71 − 2 |
+| Allocation count vs FDW (excl. errors) | ✅ 530 = 531 − 1 |
+| Allocation total vs FDW (excl. errors) | ✅ Gap = $485k excluded row only |
+| Orphan allocations (`Decision_ID` FK) | ✅ 0 orphans; `fk_alloc_decision` enforced |
+| Grant count vs FDW | ✅ 27 synced + `Avaaz 2` portal-only |
+| Grant financial totals | ⏳ Not re-run post-backfill |
+| Pool summary vs FDW totals | ⏳ UI still on FDW — run after Phase 3 |
+| Decisions field-level reconciliation | ✅ `compare-decisions-fdw-canonical.ts` — 69/69 matched |
+
 Run a reconciliation report comparing FDW vs canonical:
 
 | Check | Query idea |
@@ -392,14 +471,14 @@ Log discrepancies to `logs/cutover-grant-management.log`. **Do not proceed** if 
 
 ### 1.4 Cutover window (ordered steps)
 
-1. Freeze Airtable edits (communicated).
-2. Run backfill script.
-3. Run validation gates; fix mapping bugs if needed.
-3. Deploy API changes that read canonical tables (UI still on old path — optional dark launch).
-4. Switch grant-management page components to canonical read path.
-5. Enable write UI.
-6. Run smoke test: one grant edit, one decision + allocation create, confirm Airtable reflects changes.
-7. Lift Airtable edit freeze; document that Airtable is **read-only mirror** for these tables.
+1. ~~Freeze Airtable edits~~ *deferred for preview*.
+2. ~~Run backfill script.~~ ✅ Done (2026-07-01).
+3. Run **remaining** validation gates; fix mapping bugs if needed. ⏳ In progress.
+4. Deploy API changes that read canonical tables (UI still on old path — optional dark launch). **← next**
+5. Switch grant-management page components to canonical read path.
+6. Enable write UI.
+7. Run smoke test: one grant edit, one decision + allocation create, confirm Airtable reflects changes.
+8. Lift Airtable edit freeze; document that Airtable is **read-only mirror** for these tables.
 
 ### 1.5 Rollback
 
@@ -642,12 +721,12 @@ Phase 2b (optional): cron `/api/airtable/push-retry` drains `sync_status = 'pend
 ## Implementation order (summary)
 
 ```
-Phase A1 Airtable: create Portal_* raw tables only              [Airtable UI — now]
+Phase A1 Airtable: create Portal_* raw tables only              [DONE]
 Phase A2 Airtable: wire raw → existing (automations)          [later]
-Phase 0  Schema (airtable_record_id, sync_status)             [schema repo]
-Phase 1  Backfill FDW → canonical + validation              [script]
+Phase 0  Schema (airtable_record_id, sync_status)             [DONE]
+Phase 1  Backfill FDW → canonical + validation              [backfill DONE; validation partial]
+Phase 3  API routes read canonical                              [NEXT]
 Phase 2  push.ts → raw tables only                            [app repo]
-Phase 3  API routes read/write canonical                      [app repo]
 Phase 4  UI switch + Excel restore                            [app repo]
 Phase 5  Test                                                 [both]
 ```
@@ -656,19 +735,20 @@ Deploy order: **A1 → 0 → 1 → 3 (reads) → 2+3 (writes) → A2 (when ready
 
 ### Immediate next step
 
-**Phase A1:** Create `Portal_Decisions`, `Portal_Allocations`, and `Portal_Grants` in Airtable (field lists above). Record table ids. Leave existing tables and automations for later.
+**Phase 1.3** — finish remaining validation (grant totals, pool summary). Then **Phase 3** — switch `/api/grants`, `/api/allocations`, `/api/distribution-decisions` to read canonical tables.
 
 ### After that (concise)
 
-| Step | What |
-|------|------|
-| **0** | Supabase migration: `airtable_record_id`, `sync_status` |
-| **1** | Backfill FDW → canonical |
-| **3** | APIs read canonical |
-| **2** | Portal push → raw tables |
-| **A2** | Automations: raw → existing tables |
-| **4** | Enable UI + Excel |
-| **5** | Test |
+| Step | What | Status |
+|------|------|--------|
+| **A1** | Portal_* raw tables in Airtable | ✅ |
+| **0** | Supabase migration: `airtable_record_id`, `sync_status` | ✅ |
+| **1** | Backfill FDW → canonical | ✅ |
+| **3** | APIs read canonical | ⏳ next |
+| **2** | Portal push → raw tables | pending |
+| **A2** | Automations: raw → existing tables | pending |
+| **4** | Enable UI + Excel | pending |
+| **5** | Test | pending |
 
 ---
 
@@ -681,7 +761,9 @@ Deploy order: **A1 → 0 → 1 → 3 (reads) → 2+3 (writes) → A2 (when ready
 - [x] `allocations.decision_id` — always array of one decision `rec…`.
 - [x] `distribution_decision.decision_id` often null — use `decision_id_proposed`.
 - [x] `grants.donor_name` / `partner_name` — link `rec…` arrays, not display text.
-- [ ] `airtable_record_id` for grants + allocations — requires **Airtable API** at backfill (not on FDW).
+- [ ] `airtable_record_id` for **grants** — still null on canonical; FDW has no `rec…`; populate at Phase 2 push or Airtable API lookup.
+- [x] `airtable_record_id` for **decisions** — set from FDW `id` during Phase 1 backfill.
+- [ ] `airtable_record_id` for **allocations** — still null on canonical; FDW has no `rec…`; populate at Phase 2 push or Airtable API lookup.
 - [x] Q1 FDW vs canonical counts/totals — **major mismatch** (see table above).
 - [x] Q6/Q7 — row-level diff complete (see sections above).
 - [ ] Confirm exact Airtable **API field names** for push — **done (Q8)**; see field reference section.
@@ -704,7 +786,11 @@ Deploy order: **A1 → 0 → 1 → 3 (reads) → 2+3 (writes) → A2 (when ready
 | `src/app/api/pool/summary/route.ts` | Canonical sources |
 | `src/app/api/airtable/sync/route.ts` | Remove grant-management inbound entries |
 | `src/lib/airtable/push.ts` | **New** |
-| `scripts/cutover/backfill-grant-management-from-airtable.ts` | **New** |
+| `scripts/cutover/backfill-grants-from-fdw.ts` | ✅ Created + applied |
+| `scripts/cutover/backfill-decisions-from-fdw.ts` | ✅ Created + applied |
+| `scripts/cutover/backfill-allocations-from-fdw.ts` | ✅ Created + applied |
+| `scripts/cutover/compare-decisions-fdw-canonical.ts` | ✅ Created |
+| `scripts/cutover/validate-allocations-fk.ts` | ✅ Created |
 
 ---
 

@@ -1,8 +1,12 @@
 /**
  * Phase 1 — grants only: sync public.grants (FDW) → grants_grid_view.
  *
- *   npx tsx scripts/cutover/backfill-grants-from-fdw.ts           # dry-run (default)
- *   npx tsx scripts/cutover/backfill-grants-from-fdw.ts --apply     # write changes
+ *   npx tsx scripts/cutover/backfill-grants-from-fdw.ts                    # dry-run (default)
+ *   npx tsx scripts/cutover/backfill-grants-from-fdw.ts --donors-only      # dry-run donors only
+ *   npx tsx scripts/cutover/backfill-grants-from-fdw.ts --donors-only --apply
+ *   npx tsx scripts/cutover/backfill-grants-from-fdw.ts --inserts-only --apply
+ *   npx tsx scripts/cutover/backfill-grants-from-fdw.ts --updates-only --apply
+ *   npx tsx scripts/cutover/backfill-grants-from-fdw.ts --apply            # full write
  */
 import { config } from 'dotenv'
 import { resolve } from 'path'
@@ -11,6 +15,9 @@ import { getSupabaseAdmin } from '../../src/lib/supabaseAdmin'
 config({ path: resolve(process.cwd(), '.env.local') })
 
 const APPLY = process.argv.includes('--apply')
+const DONORS_ONLY = process.argv.includes('--donors-only')
+const INSERTS_ONLY = process.argv.includes('--inserts-only')
+const UPDATES_ONLY = process.argv.includes('--updates-only')
 
 /** Canonical-only grants — never insert/update from FDW */
 const SKIP_GRANT_IDS = new Set(['Avaaz 2'])
@@ -302,10 +309,27 @@ async function main() {
   }
 
   const supabase = getSupabaseAdmin()
+
+  if (DONORS_ONLY) {
+    let donorsOk = 0
+    for (const { grant_id, donor } of donorsToCreate) {
+      try {
+        const id = await ensureDonor(supabase, donor)
+        console.log(`Created/found donor "${donor.name}" → ${id} (for grant ${grant_id})`)
+        donorsOk++
+      } catch (err) {
+        console.error(`Donor failed for ${grant_id}:`, err instanceof Error ? err.message : err)
+      }
+    }
+    console.log(`Applied: ${donorsOk} donor(s)`)
+    return
+  }
+
   let insertOk = 0
   let updateOk = 0
 
   for (const plan of toInsert) {
+    if (UPDATES_ONLY) continue
     try {
       const donorId = await ensureDonor(supabase, plan.donor)
       const { error } = await supabase.from('grants_grid_view').insert({
@@ -324,6 +348,7 @@ async function main() {
   }
 
   for (const { grant_id, id, payload } of toUpdate) {
+    if (INSERTS_ONLY) continue
     const { error } = await supabase.from('grants_grid_view').update(payload).eq('id', id)
     if (error) {
       console.error(`Update failed for ${grant_id}:`, error.message)
@@ -332,7 +357,9 @@ async function main() {
     }
   }
 
-  console.log(`Applied: ${insertOk} inserted, ${updateOk} updated`)
+  console.log(
+    `Applied: ${UPDATES_ONLY ? 0 : insertOk} inserted, ${INSERTS_ONLY ? 0 : updateOk} updated`
+  )
 }
 
 main().catch((err) => {
