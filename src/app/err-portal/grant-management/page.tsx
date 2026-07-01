@@ -9,7 +9,7 @@ import { ArrowLeft } from 'lucide-react'
 
 import { useAllowedFunctions } from '@/hooks/useAllowedFunctions'
 import { GrantCallsManager } from './components'
-import DistributionDecisionTableView from './components/DistributionDecisionTableView'
+import DistributionDecisionsManager from './components/DistributionDecisionsManager'
 import PoolOverviewByState from './components/PoolOverviewByState'
 import { useGrantManagementPageExplainer } from './GrantManagementPageExplainer'
 
@@ -120,8 +120,8 @@ export default function GrantManagementPage() {
       {/* Grant Calls Management */}
       <GrantCallsManager />
 
-      {/* Distribution Decisions (read-only from Airtable; original DistributionDecisionsManager kept for later use) */}
-      <DistributionDecisionTableView />
+      {/* Distribution Decisions — create, Excel upload, edit allocations */}
+      <DistributionDecisionsManager />
 
       {/* Pool Overview By State */}
       <PoolOverviewByState />

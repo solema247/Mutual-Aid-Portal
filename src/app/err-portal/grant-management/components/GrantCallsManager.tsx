@@ -1,8 +1,5 @@
 'use client'
 
-// Set to true to re-enable editing the grants table (e.g. when not using read-only Airtable-linked 'grants' table).
-const GRANTS_TABLE_EDIT_ENABLED = false
-
 import React, { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useForm } from 'react-hook-form'
@@ -75,6 +72,9 @@ interface Donor {
 interface GrantCall {
   id: string
   grant_id: string
+  donor_id?: string | null
+  donor_name?: string | null
+  partner_name?: string | null
   project_name: string | null
   grant_start_date: string | null
   grant_end_date: string | null
@@ -105,6 +105,11 @@ export default function GrantCallsManager() {
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
   const [deleteConfirmText, setDeleteConfirmText] = useState('')
   const [grantToDelete, setGrantToDelete] = useState<string | null>(null)
+
+  const canEditGrants =
+    currentUser?.role === 'support' ||
+    currentUser?.role === 'admin' ||
+    currentUser?.role === 'superadmin'
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
@@ -165,7 +170,7 @@ export default function GrantCallsManager() {
 
   const fetchGrants = async () => {
     try {
-      // Fetch via API so the server uses the service role to read public.grants (foreign table).
+      // Fetch via API (canonical grants_grid_view).
       const res = await fetch(
         `/api/grants?status=${encodeURIComponent(statusFilter)}`,
         { cache: 'no-store' }
@@ -184,7 +189,7 @@ export default function GrantCallsManager() {
 
   const onSubmit = async (values: FormData) => {
     try {
-      const submissionData: any = {
+      const payload = {
         grant_id: values.grant_id,
         donor_id: values.donor_id,
         donor_name: values.donor_name,
@@ -193,26 +198,35 @@ export default function GrantCallsManager() {
         grant_start_date: values.grant_start_date || null,
         grant_end_date: values.grant_end_date || null,
         status: values.status || null,
-        total_transferred_amount_usd: values.total_transferred_amount_usd ? parseFloat(values.total_transferred_amount_usd) : null,
-        sum_activity_amount: values.sum_activity_amount ? parseFloat(values.sum_activity_amount) : null,
+        total_transferred_amount_usd: values.total_transferred_amount_usd
+          ? parseFloat(values.total_transferred_amount_usd)
+          : null,
+        sum_activity_amount: values.sum_activity_amount
+          ? parseFloat(values.sum_activity_amount)
+          : null,
       }
 
       if (editingGrant) {
-        // Update existing grant
-        const { error } = await supabase
-          .from('grants_grid_view')
-          .update(submissionData)
-          .eq('id', editingGrant.id)
-
-        if (error) throw error
+        const res = await fetch(`/api/grants/${editingGrant.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        })
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}))
+          throw new Error(err.error || 'Failed to update grant')
+        }
         alert('Grant updated successfully')
       } else {
-        // Create new grant
-        const { error } = await supabase
-          .from('grants_grid_view')
-          .insert([submissionData])
-
-        if (error) throw error
+        const res = await fetch('/api/grants', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        })
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}))
+          throw new Error(err.error || 'Failed to create grant')
+        }
         alert('Grant created successfully')
       }
 
@@ -220,9 +234,9 @@ export default function GrantCallsManager() {
       setIsFormOpen(false)
       setEditingGrant(null)
       fetchGrants()
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Error saving grant:', error)
-      alert('Failed to save grant')
+      alert(error instanceof Error ? error.message : 'Failed to save grant')
     }
   }
 
@@ -230,10 +244,10 @@ export default function GrantCallsManager() {
     setEditingGrant(grant)
     form.reset({
       grant_id: grant.grant_id,
-      donor_id: '',
-      donor_name: '',
+      donor_id: grant.donor_id || '',
+      donor_name: grant.donor_name || '',
       project_name: grant.project_name || '',
-      partner_name: '',
+      partner_name: grant.partner_name || '',
       grant_start_date: grant.grant_start_date || '',
       grant_end_date: grant.grant_end_date || '',
       status: grant.status || 'Active',
@@ -258,20 +272,19 @@ export default function GrantCallsManager() {
     if (!grantToDelete) return
 
     try {
-      const { error } = await supabase
-        .from('grants_grid_view')
-        .delete()
-        .eq('id', grantToDelete)
-
-      if (error) throw error
+      const res = await fetch(`/api/grants/${grantToDelete}`, { method: 'DELETE' })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error || 'Failed to delete grant')
+      }
       alert('Grant deleted successfully')
       setDeleteConfirmOpen(false)
       setDeleteConfirmText('')
       setGrantToDelete(null)
       fetchGrants()
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Error deleting grant:', error)
-      alert('Failed to delete grant')
+      alert(error instanceof Error ? error.message : 'Failed to delete grant')
     }
   }
 
@@ -314,6 +327,7 @@ export default function GrantCallsManager() {
               <ChevronUp className="h-4 w-4" />
             )}
           </CardTitle>
+          {!isCollapsed && (
           <div className="flex items-center gap-2">
             <Select
               value={statusFilter}
@@ -328,14 +342,11 @@ export default function GrantCallsManager() {
                 <SelectItem value="Complete">Complete</SelectItem>
               </SelectContent>
             </Select>
-            {(currentUser?.role === 'support' || currentUser?.role === 'admin' || currentUser?.role === 'superadmin') && GRANTS_TABLE_EDIT_ENABLED && (
+            {canEditGrants && (
               <>
                 {!isEditMode ? (
-                  <Button 
-                    className="bg-[#007229] hover:bg-[#007229]/90 text-white"
-                    onClick={() => setIsEditMode(true)}
-                  >
-                    Edit Grant Call Table
+                  <Button onClick={() => setIsEditMode(true)}>
+                    Edit Grant Table
                   </Button>
                 ) : (
                   <>
@@ -353,7 +364,7 @@ export default function GrantCallsManager() {
                       }
                     }}>
                       <DialogTrigger asChild>
-                        <Button className="bg-[#007229] hover:bg-[#007229]/90 text-white">
+                        <Button>
                           <Plus className="h-4 w-4 mr-2" />
                           Create Grant
                         </Button>
@@ -555,10 +566,7 @@ export default function GrantCallsManager() {
                       >
                         Cancel
                       </Button>
-                      <Button
-                        type="submit"
-                        className="bg-[#007229] hover:bg-[#007229]/90 text-white"
-                      >
+                      <Button type="submit">
                         {editingGrant ? 'Update' : 'Create'}
                       </Button>
                     </div>
@@ -571,6 +579,7 @@ export default function GrantCallsManager() {
               </>
             )}
           </div>
+          )}
         </div>
       </CardHeader>
       {!isCollapsed && (
@@ -587,13 +596,13 @@ export default function GrantCallsManager() {
                 <TableHead className="px-2">Total Transferred (USD)</TableHead>
                 <TableHead className="px-2">Sum Activity Amount (USD)</TableHead>
                 <TableHead className="px-2">Sum Transfer Fee (USD)</TableHead>
-                {(currentUser?.role === 'support' || currentUser?.role === 'admin' || currentUser?.role === 'superadmin') && GRANTS_TABLE_EDIT_ENABLED && isEditMode && <TableHead className="px-2">Actions</TableHead>}
+                {canEditGrants && isEditMode && <TableHead className="px-2">Actions</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
               {grants.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={(currentUser?.role === 'support' || currentUser?.role === 'admin' || currentUser?.role === 'superadmin') && GRANTS_TABLE_EDIT_ENABLED && isEditMode ? 10 : 9} className="text-center py-6 text-muted-foreground text-xs">
+                  <TableCell colSpan={canEditGrants && isEditMode ? 10 : 9} className="text-center py-6 text-muted-foreground text-xs">
                     No grants found
                   </TableCell>
                 </TableRow>
@@ -612,7 +621,7 @@ export default function GrantCallsManager() {
                     <TableCell className="text-right whitespace-nowrap">{formatCurrency(grant.total_transferred_amount_usd)}</TableCell>
                     <TableCell className="text-right whitespace-nowrap">{formatCurrency(grant.sum_activity_amount)}</TableCell>
                     <TableCell className="text-right whitespace-nowrap">{formatCurrency(grant.sum_transfer_fee_amount)}</TableCell>
-                    {(currentUser?.role === 'support' || currentUser?.role === 'admin' || currentUser?.role === 'superadmin') && GRANTS_TABLE_EDIT_ENABLED && isEditMode && (
+                    {canEditGrants && isEditMode && (
                       <TableCell>
                         <div className="flex items-center gap-1">
                           <Button

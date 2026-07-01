@@ -79,7 +79,7 @@ export default function DistributionDecisionsManager() {
   const [expandedDecisionKey, setExpandedDecisionKey] = useState<string | null>(null) // decision_id used for API
   const [allocationsByDecision, setAllocationsByDecision] = useState<Record<string, Allocation[]>>({})
   const [isAllocLoading, setIsAllocLoading] = useState<Record<string, boolean>>({})
-  const [allocRows, setAllocRows] = useState<Array<{ state: string; amount: string }>>([{ state: '', amount: '' }])
+  const [allocRows, setAllocRows] = useState<Array<{ state: string; amount: string }>>([])
   const [stateOptions, setStateOptions] = useState<string[]>([])
   const [isDeleting, setIsDeleting] = useState<Record<string, boolean>>({})
   const [isCollapsed, setIsCollapsed] = useState(true)
@@ -98,6 +98,16 @@ export default function DistributionDecisionsManager() {
   const [editAllocationAmount, setEditAllocationAmount] = useState<string>('')
   const [isUpdatingAllocation, setIsUpdatingAllocation] = useState(false)
   const [isDeletingAllocation, setIsDeletingAllocation] = useState<string | null>(null)
+
+  const canEditAllocations =
+    currentUser?.role === 'support' ||
+    currentUser?.role === 'admin' ||
+    currentUser?.role === 'superadmin'
+
+  const validPendingAllocRows = (rows: Array<{ state: string; amount: string }>) =>
+    rows
+      .map((r) => ({ state: r.state.trim(), amount: Number(r.amount) }))
+      .filter((r) => r.state && !Number.isNaN(r.amount) && r.amount > 0)
 
   const decisionForm = useForm<z.infer<typeof decisionSchema>>({
     resolver: zodResolver(decisionSchema),
@@ -197,9 +207,7 @@ export default function DistributionDecisionsManager() {
       // If CSV was used, automatically add allocations
       if (useCsvUpload && csvFile && allocRows.length > 0) {
         try {
-          const validRows = allocRows
-            .map(r => ({ state: r.state.trim(), amount: Number(r.amount) }))
-            .filter(r => r.state && !Number.isNaN(r.amount) && r.amount > 0)
+          const validRows = validPendingAllocRows(allocRows)
           
           if (validRows.length > 0) {
             const allocRes = await fetch(`/api/distribution-decisions/${decisionKey}/allocations`, {
@@ -225,7 +233,7 @@ export default function DistributionDecisionsManager() {
       setUseCsvUpload(false)
       setCsvFile(null)
       setManualFile(null)
-      setAllocRows([{ state: '', amount: '' }])
+      setAllocRows([])
       fetchDecisions()
     } catch (error: any) {
       console.error(error)
@@ -289,14 +297,9 @@ export default function DistributionDecisionsManager() {
   }
 
   const handleAddAllocation = async (decisionKey: string) => {
-    const validRows = allocRows
-      .map(r => ({ state: r.state.trim(), amount: Number(r.amount) }))
-      .filter(r => r.state && !Number.isNaN(r.amount) && r.amount > 0)
+    const validRows = validPendingAllocRows(allocRows)
 
-    if (validRows.length === 0) {
-      alert('Please add at least one allocation with State and Amount.')
-      return
-    }
+    if (validRows.length === 0) return
 
     try {
       const res = await fetch(`/api/distribution-decisions/${decisionKey}/allocations`, {
@@ -308,7 +311,7 @@ export default function DistributionDecisionsManager() {
         const err = await res.json()
         throw new Error(err.error || 'Failed to add allocation')
       }
-      setAllocRows([{ state: '', amount: '' }])
+      setAllocRows([])
       fetchAllocations(decisionKey)
       fetchDecisions()
     } catch (error: any) {
@@ -320,10 +323,12 @@ export default function DistributionDecisionsManager() {
     if (expandedDecisionId === rowId) {
       setExpandedDecisionId(null)
       setExpandedDecisionKey(null)
+      setAllocRows([])
       return
     }
     setExpandedDecisionId(rowId)
     setExpandedDecisionKey(decisionKey)
+    setAllocRows([])
     if (!allocationsByDecision[decisionKey]) {
       fetchAllocations(decisionKey)
     }
@@ -539,6 +544,7 @@ export default function DistributionDecisionsManager() {
               <ChevronUp className="h-4 w-4" />
             )}
           </CardTitle>
+          {!isCollapsed && (
           <div className="flex items-center gap-2">
             <Button variant="outline" size="icon" onClick={fetchDecisions} disabled={isLoading}>
               <RefreshCw className="h-4 w-4" />
@@ -552,11 +558,11 @@ export default function DistributionDecisionsManager() {
                   setUseCsvUpload(false)
                   setCsvFile(null)
                   setManualFile(null)
-                  setAllocRows([{ state: '', amount: '' }])
+                  setAllocRows([])
                 }
               }}>
                 <DialogTrigger asChild>
-                  <Button className="bg-[#007229] hover:bg-[#007229]/90 text-white">
+                  <Button>
                     <Plus className="h-4 w-4 mr-2" />
                     New Decision
                   </Button>
@@ -579,7 +585,7 @@ export default function DistributionDecisionsManager() {
                             setManualFile(null)
                           } else {
                             setCsvFile(null)
-                            setAllocRows([{ state: '', amount: '' }])
+                            setAllocRows([])
                           }
                         }}
                         className="w-full"
@@ -746,14 +752,13 @@ export default function DistributionDecisionsManager() {
                           setUseCsvUpload(false)
                           setCsvFile(null)
                           setManualFile(null)
-                          setAllocRows([{ state: '', amount: '' }])
+                          setAllocRows([])
                         }}
                       >
                         Cancel
                       </Button>
-                      <Button 
-                        type="submit" 
-                        className="bg-[#007229] hover:bg-[#007229]/90 text-white"
+                      <Button
+                        type="submit"
                         disabled={useCsvUpload && !csvFile}
                       >
                         Create
@@ -765,6 +770,7 @@ export default function DistributionDecisionsManager() {
             </Dialog>
             )}
           </div>
+          )}
         </div>
       </CardHeader>
       {!isCollapsed && (
@@ -1054,7 +1060,8 @@ export default function DistributionDecisionsManager() {
                                             })()}
                                           </>
                                         )}
-                                        {allocRows.map((row, idx) => (
+                                        {canEditAllocations &&
+                                          allocRows.map((row, idx) => (
                                           <TableRow key={`new-${idx}`}>
                                             <TableCell>
                                               <Select
@@ -1091,18 +1098,18 @@ export default function DistributionDecisionsManager() {
                                             <TableCell className="text-right">—</TableCell>
                                             <TableCell className="text-right">
                                               <div className="flex justify-end gap-2">
-                                                {allocRows.length > 1 && (
-                                                  <Button
-                                                    type="button"
-                                                    variant="outline"
-                                                    size="sm"
-                                                    onClick={() =>
-                                                      setAllocRows((prev) => prev.filter((_, i) => i !== idx))
-                                                    }
-                                                  >
-                                                    Remove
-                                                  </Button>
-                                                )}
+                                                <Button
+                                                  type="button"
+                                                  variant="outline"
+                                                  size="sm"
+                                                  onClick={() =>
+                                                    allocRows.length > 1
+                                                      ? setAllocRows((prev) => prev.filter((_, i) => i !== idx))
+                                                      : setAllocRows([])
+                                                  }
+                                                >
+                                                  {allocRows.length > 1 ? 'Remove' : 'Cancel'}
+                                                </Button>
                                                 {idx === allocRows.length - 1 && (
                                                   <Button
                                                     type="button"
@@ -1121,15 +1128,29 @@ export default function DistributionDecisionsManager() {
                                         ))}
                                       </TableBody>
                                     </Table>
-                                    <div className="flex justify-end mt-3">
-                                      <Button
-                                        type="button"
-                                        className="bg-[#007229] hover:bg-[#007229]/90 text-white"
-                                        onClick={() => handleAddAllocation(fetchKey)}
-                                      >
-                                        Save allocations
-                                      </Button>
-                                    </div>
+                                    {canEditAllocations && (
+                                      <div className="flex justify-end mt-3">
+                                        {allocRows.length === 0 ? (
+                                          <Button
+                                            type="button"
+                                            variant="outline"
+                                            onClick={() => setAllocRows([{ state: '', amount: '' }])}
+                                          >
+                                            <Plus className="h-4 w-4 mr-2" />
+                                            Add state allocation
+                                          </Button>
+                                        ) : (
+                                          validPendingAllocRows(allocRows).length > 0 && (
+                                            <Button
+                                              type="button"
+                                              onClick={() => handleAddAllocation(fetchKey)}
+                                            >
+                                              Save allocations
+                                            </Button>
+                                          )
+                                        )}
+                                      </div>
+                                    )}
                                   </div>
                                 )}
                               </div>

@@ -1,13 +1,16 @@
 import { NextResponse } from 'next/server'
-import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
+import { requireGrantEditor } from '@/lib/grantManagement/requireGrantEditor'
+import { refreshDecisionAllocationSum } from '@/lib/grantManagement/refreshDecisionSum'
 
 // PUT /api/distribution-decisions/allocations/[allocationId] - Update a specific allocation
 export async function PUT(
   request: Request,
   { params }: { params: { allocationId: string } }
 ) {
+  const auth = await requireGrantEditor()
+  if (!auth.ok) return auth.response
+
   try {
-    const supabase = getSupabaseRouteClient()
     const body = await request.json()
     const { state, amount } = body
 
@@ -15,8 +18,7 @@ export async function PUT(
       return NextResponse.json({ error: 'State and valid amount are required' }, { status: 400 })
     }
 
-    // Get decision info to recalculate percent
-    const { data: allocationData, error: fetchError } = await supabase
+    const { data: allocationData, error: fetchError } = await auth.ctx.supabase
       .from('allocations_by_date')
       .select('Decision_ID')
       .eq('Allocation_ID', params.allocationId)
@@ -26,12 +28,15 @@ export async function PUT(
       return NextResponse.json({ error: 'Allocation not found' }, { status: 404 })
     }
 
-    const decisionId = allocationData.Decision_ID
+    const groupKey = allocationData.Decision_ID
+    if (!groupKey) {
+      return NextResponse.json({ error: 'Allocation has no linked decision' }, { status: 400 })
+    }
 
-    const { data: decision, error: decisionError } = await supabase
+    const { data: decision, error: decisionError } = await auth.ctx.supabase
       .from('distribution_decision_master_sheet_1')
       .select('decision_amount')
-      .eq('decision_id', decisionId)
+      .eq('decision_id_proposed', groupKey)
       .single()
 
     if (decisionError || !decision) {
@@ -41,12 +46,13 @@ export async function PUT(
     const decisionAmount = decision.decision_amount
     const percent = decisionAmount ? (Number(amount) / Number(decisionAmount)) * 100 : null
 
-    const { data, error } = await supabase
+    const { data, error } = await auth.ctx.supabase
       .from('allocations_by_date')
-      .update({ 
-        'State': state,
+      .update({
+        State: state,
         'Allocation Amount': Number(amount),
-        '%_Decision_Amount': percent
+        '%_Decision_Amount': percent,
+        sync_status: 'pending',
       })
       .eq('Allocation_ID', params.allocationId)
       .select()
@@ -54,25 +60,7 @@ export async function PUT(
 
     if (error) throw error
 
-    // Recalculate sum in master sheet
-    const { data: sumRows, error: sumError } = await supabase
-      .from('allocations_by_date')
-      .select('"Allocation Amount"')
-      .eq('Decision_ID', decisionId)
-
-    if (sumError) throw sumError
-
-    const totalAllocated = (sumRows || []).reduce((sum, row: any) => {
-      const amt = row?.['Allocation Amount']
-      return sum + (amt ? Number(amt) : 0)
-    }, 0)
-
-    const { error: updateError } = await supabase
-      .from('distribution_decision_master_sheet_1')
-      .update({ sum_allocation_amount: totalAllocated })
-      .eq('decision_id', decisionId)
-
-    if (updateError) throw updateError
+    await refreshDecisionAllocationSum(auth.ctx.supabase, groupKey)
 
     return NextResponse.json(data)
   } catch (error) {
@@ -83,14 +71,14 @@ export async function PUT(
 
 // DELETE /api/distribution-decisions/allocations/[allocationId] - Delete a specific allocation
 export async function DELETE(
-  request: Request,
+  _request: Request,
   { params }: { params: { allocationId: string } }
 ) {
-  try {
-    const supabase = getSupabaseRouteClient()
+  const auth = await requireGrantEditor()
+  if (!auth.ok) return auth.response
 
-    // Get decision ID before deleting
-    const { data: allocationData, error: fetchError } = await supabase
+  try {
+    const { data: allocationData, error: fetchError } = await auth.ctx.supabase
       .from('allocations_by_date')
       .select('Decision_ID')
       .eq('Allocation_ID', params.allocationId)
@@ -100,34 +88,19 @@ export async function DELETE(
       return NextResponse.json({ error: 'Allocation not found' }, { status: 404 })
     }
 
-    const decisionId = allocationData.Decision_ID
+    const groupKey = allocationData.Decision_ID
+    if (!groupKey) {
+      return NextResponse.json({ error: 'Allocation has no linked decision' }, { status: 404 })
+    }
 
-    const { error } = await supabase
+    const { error } = await auth.ctx.supabase
       .from('allocations_by_date')
       .delete()
       .eq('Allocation_ID', params.allocationId)
 
     if (error) throw error
 
-    // Recalculate sum in master sheet
-    const { data: sumRows, error: sumError } = await supabase
-      .from('allocations_by_date')
-      .select('"Allocation Amount"')
-      .eq('Decision_ID', decisionId)
-
-    if (sumError) throw sumError
-
-    const totalAllocated = (sumRows || []).reduce((sum, row: any) => {
-      const amt = row?.['Allocation Amount']
-      return sum + (amt ? Number(amt) : 0)
-    }, 0)
-
-    const { error: updateError } = await supabase
-      .from('distribution_decision_master_sheet_1')
-      .update({ sum_allocation_amount: totalAllocated })
-      .eq('decision_id', decisionId)
-
-    if (updateError) throw updateError
+    await refreshDecisionAllocationSum(auth.ctx.supabase, groupKey)
 
     return NextResponse.json({ success: true })
   } catch (error) {
@@ -135,4 +108,3 @@ export async function DELETE(
     return NextResponse.json({ error: 'Failed to delete allocation' }, { status: 500 })
   }
 }
-

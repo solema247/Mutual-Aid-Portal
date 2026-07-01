@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabaseAdmin } from '@/lib/supabaseAdmin'
 import { requireGrantEditor } from '@/lib/grantManagement/requireGrantEditor'
 
 const GRANT_SELECT =
@@ -83,36 +82,11 @@ function parseGrantBody(body: Record<string, unknown>) {
   }
 }
 
-/**
- * GET /api/grants - List grants from grants_grid_view (portal canonical).
- * Query: ?status=all|Active|Complete (default all)
- */
-export async function GET(request: NextRequest) {
-  try {
-    const supabase = getSupabaseAdmin()
-    const { searchParams } = new URL(request.url)
-    const status = searchParams.get('status') ?? 'all'
-
-    let query = supabase.from('grants_grid_view').select(GRANT_SELECT).order('grant_start_date', {
-      ascending: false,
-    })
-
-    if (status !== 'all') {
-      query = query.eq('status', status)
-    }
-
-    const { data, error } = await query
-    if (error) throw error
-
-    return NextResponse.json((data || []).map((item) => mapGrantRow(item as Record<string, unknown>)))
-  } catch (error) {
-    console.error('Error fetching grants:', error)
-    return NextResponse.json({ error: 'Failed to fetch grants' }, { status: 500 })
-  }
-}
-
-/** POST /api/grants - Create a grant in grants_grid_view (Supabase only; sync_status = pending). */
-export async function POST(request: NextRequest) {
+/** PUT /api/grants/[id] - Update a grant (sync_status = pending). */
+export async function PUT(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
   const auth = await requireGrantEditor()
   if (!auth.ok) return auth.response
 
@@ -125,15 +99,41 @@ export async function POST(request: NextRequest) {
 
     const { data, error } = await auth.ctx.supabase
       .from('grants_grid_view')
-      .insert(parsed.payload)
+      .update(parsed.payload)
+      .eq('id', params.id)
       .select(GRANT_SELECT)
       .single()
 
+    if (error) {
+      if (error.code === 'PGRST116') {
+        return NextResponse.json({ error: 'Grant not found' }, { status: 404 })
+      }
+      throw error
+    }
+
+    return NextResponse.json(mapGrantRow(data as Record<string, unknown>))
+  } catch (error) {
+    console.error('Error updating grant:', error)
+    return NextResponse.json({ error: 'Failed to update grant' }, { status: 500 })
+  }
+}
+
+/** DELETE /api/grants/[id] - Delete a grant from grants_grid_view. */
+export async function DELETE(
+  _request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  const auth = await requireGrantEditor()
+  if (!auth.ok) return auth.response
+
+  try {
+    const { error } = await auth.ctx.supabase.from('grants_grid_view').delete().eq('id', params.id)
+
     if (error) throw error
 
-    return NextResponse.json(mapGrantRow(data as Record<string, unknown>), { status: 201 })
+    return NextResponse.json({ success: true })
   } catch (error) {
-    console.error('Error creating grant:', error)
-    return NextResponse.json({ error: 'Failed to create grant' }, { status: 500 })
+    console.error('Error deleting grant:', error)
+    return NextResponse.json({ error: 'Failed to delete grant' }, { status: 500 })
   }
 }

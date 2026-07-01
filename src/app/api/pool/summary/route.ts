@@ -44,11 +44,11 @@ export async function GET() {
   try {
     const supabase = getSupabaseRouteClient()
     
-    // 1. Total Included = sum of all allocation_amount from allocations table (foreign table)
+    // 1. Total Included = sum of all allocation amounts from allocations_by_date (canonical)
     const allocationsSupabase = getSupabaseAdmin()
-    const allocData = await fetchAllRows(allocationsSupabase, 'allocations', 'allocation_amount')
+    const allocData = await fetchAllRows(allocationsSupabase, 'allocations_by_date', '"Allocation Amount"')
     const total_included = (allocData || []).reduce((sum, row) => {
-      const amount = row['allocation_amount'] != null ? Number(row['allocation_amount']) : 0
+      const amount = row['Allocation Amount'] != null ? Number(row['Allocation Amount']) : 0
       return sum + (Number.isNaN(amount) ? 0 : amount)
     }, 0)
 
@@ -84,9 +84,9 @@ export async function GET() {
     // 5. Remaining = Total - Committed - Pending
     const remaining = total_included - total_committed - pending
 
-    // 6. Get Total Grants from public.grants (foreign table) – sum of sum_activity_amount
+    // 6. Get Total Grants from grants_grid_view (canonical) – sum of sum_activity_amount
     const grantsSupabase = getSupabaseAdmin()
-    const grantsData = await fetchAllRows(grantsSupabase, 'grants', 'sum_activity_amount')
+    const grantsData = await fetchAllRows(grantsSupabase, 'grants_grid_view', 'sum_activity_amount')
     const total_grants = (grantsData || []).reduce((sum, row) => {
       const amount = row['sum_activity_amount'] != null ? Number(row['sum_activity_amount']) : 0
       return sum + (Number.isNaN(amount) ? 0 : amount)

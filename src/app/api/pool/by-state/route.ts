@@ -79,20 +79,19 @@ export async function GET() {
     const { getUserStateAccess } = await import('@/lib/userStateAccess')
     const { allowedStateNames } = await getUserStateAccess()
     
-    // 1. Get allocations from allocations foreign table (state + allocation_amount numeric)
+    // 1. Get allocations from allocations_by_date (canonical)
     const allocationsSupabase = getSupabaseAdmin()
-    const { data: allocationsData } = await allocationsSupabase
-      .from('allocations')
-      .select('state, allocation_amount')
+    const allocationsData = await fetchAllRows(allocationsSupabase, 'allocations_by_date', 'State,"Allocation Amount"')
 
     const allocatedByState = new Map<string, number>()
     for (const row of allocationsData || []) {
-      const rawState = row?.state
+      const rawState = row?.State ?? row?.state
       const state = normalizeActivitiesStateName(rawState)
       if (allowedStateNames !== null && allowedStateNames.length > 0 && !allowedStateNames.includes(state)) {
         continue
       }
-      const amount = row?.allocation_amount != null ? Number(row.allocation_amount) : 0
+      const rawAmount = row?.['Allocation Amount'] ?? row?.allocation_amount
+      const amount = rawAmount != null ? Number(rawAmount) : 0
       if (!Number.isNaN(amount) && amount > 0) {
         allocatedByState.set(state, (allocatedByState.get(state) || 0) + amount)
       }

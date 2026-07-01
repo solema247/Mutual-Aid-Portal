@@ -53,18 +53,18 @@ export async function GET(request: NextRequest) {
 
     const adminSupabase = getSupabaseAdmin()
 
-    // Allocations table (foreign): sum allocation_amount for this state (match normalized)
-    const { data: allocRows, error: allocError } = await adminSupabase
-      .from('allocations')
-      .select('state, allocation_amount')
-
-    if (allocError) throw allocError
+    // allocations_by_date (canonical): sum allocation amount for this state (match normalized)
+    const allocRows = await fetchAllRows<{ State?: string | null; 'Allocation Amount'?: number | null }>(
+      adminSupabase,
+      'allocations_by_date',
+      'State,"Allocation Amount"'
+    )
 
     let totalAllocated = 0
     for (const row of allocRows || []) {
-      const rowState = normalizeState(row?.state)
+      const rowState = normalizeState(row?.State)
       if (rowState !== stateNormalized) continue
-      const amt = row?.allocation_amount != null ? Number(row.allocation_amount) : 0
+      const amt = row?.['Allocation Amount'] != null ? Number(row['Allocation Amount']) : 0
       if (!Number.isNaN(amt) && amt > 0) totalAllocated += amt
     }
 
