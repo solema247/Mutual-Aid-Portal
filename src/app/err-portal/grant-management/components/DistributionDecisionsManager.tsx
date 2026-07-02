@@ -98,6 +98,7 @@ export default function DistributionDecisionsManager() {
   const [editAllocationAmount, setEditAllocationAmount] = useState<string>('')
   const [isUpdatingAllocation, setIsUpdatingAllocation] = useState(false)
   const [isDeletingAllocation, setIsDeletingAllocation] = useState<string | null>(null)
+  const [dateSortOrder, setDateSortOrder] = useState<'desc' | 'asc'>('desc')
 
   const canEditAllocations =
     currentUser?.role === 'support' ||
@@ -507,21 +508,26 @@ export default function DistributionDecisionsManager() {
 
   const sortedDecisions = useMemo(() => {
     return [...decisions].sort((a, b) => {
-      const da = a.decision_date ? new Date(a.decision_date).getTime() : 0
-      const db = b.decision_date ? new Date(b.decision_date).getTime() : 0
-      return db - da
+      const hasA = Boolean(a.decision_date)
+      const hasB = Boolean(b.decision_date)
+      if (!hasA && !hasB) return 0
+      if (!hasA) return 1
+      if (!hasB) return -1
+      const da = new Date(a.decision_date!).getTime()
+      const db = new Date(b.decision_date!).getTime()
+      return dateSortOrder === 'desc' ? db - da : da - db
     })
-  }, [decisions])
+  }, [decisions, dateSortOrder])
 
   const totalPages = Math.ceil(sortedDecisions.length / itemsPerPage)
   const startIndex = (currentPage - 1) * itemsPerPage
   const endIndex = startIndex + itemsPerPage
   const paginatedDecisions = sortedDecisions.slice(startIndex, endIndex)
 
-  // Reset to page 1 when decisions change
+  // Reset to page 1 when decisions change or sort order changes
   useEffect(() => {
     setCurrentPage(1)
-  }, [decisions.length])
+  }, [decisions.length, dateSortOrder])
 
   return (
     <Card>
@@ -779,12 +785,25 @@ export default function DistributionDecisionsManager() {
           <div className="py-6 text-center text-muted-foreground">Loading...</div>
         ) : (
           <div className="overflow-x-auto">
-            <Table>
+            <Table className="text-xs [&_th]:py-1.5 [&_th]:px-2 [&_td]:py-1 [&_td]:px-2">
               <TableHeader>
                 <TableRow>
                   <TableHead />
                   <TableHead>Decision ID</TableHead>
-                  <TableHead>Date</TableHead>
+                  <TableHead>
+                    <button
+                      type="button"
+                      className="inline-flex items-center gap-1 font-medium hover:text-foreground"
+                      onClick={() => setDateSortOrder((order) => (order === 'desc' ? 'asc' : 'desc'))}
+                    >
+                      Date
+                      {dateSortOrder === 'desc' ? (
+                        <ChevronDown className="h-3.5 w-3.5" />
+                      ) : (
+                        <ChevronUp className="h-3.5 w-3.5" />
+                      )}
+                    </button>
+                  </TableHead>
                   <TableHead>Amount</TableHead>
                   <TableHead>Allocated</TableHead>
                   <TableHead>Remaining</TableHead>
@@ -796,7 +815,7 @@ export default function DistributionDecisionsManager() {
               <TableBody>
                 {sortedDecisions.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center text-muted-foreground py-6">
+                    <TableCell colSpan={9} className="text-center text-muted-foreground py-4">
                       No distribution decisions found
                     </TableCell>
                   </TableRow>
@@ -813,8 +832,8 @@ export default function DistributionDecisionsManager() {
                     return (
                       <React.Fragment key={decision.id}>
                         <TableRow>
-                          <TableCell className="w-10">
-                            <Button variant="ghost" size="icon" onClick={() => toggleExpanded(decision.id, fetchKey)}>
+                          <TableCell className="w-10 py-1">
+                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => toggleExpanded(decision.id, fetchKey)}>
                               {isOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                             </Button>
                           </TableCell>
@@ -826,7 +845,7 @@ export default function DistributionDecisionsManager() {
                           <TableCell>{decision.partner || '—'}</TableCell>
                           <TableCell>
                             {decision.restriction ? (
-                              <Badge variant="secondary">{decision.restriction}</Badge>
+                              <Badge variant="secondary" className="text-[10px] px-1.5 py-0">{decision.restriction}</Badge>
                             ) : (
                               '—'
                             )}
@@ -836,7 +855,7 @@ export default function DistributionDecisionsManager() {
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                className="text-destructive hover:text-destructive/80"
+                                className="h-7 w-7 text-destructive hover:text-destructive/80"
                                 onClick={() => handleDeleteClick(fetchKey)}
                               >
                                 <Trash2 className="h-4 w-4" />
@@ -846,7 +865,7 @@ export default function DistributionDecisionsManager() {
                         </TableRow>
                         {isOpen && (
                           <TableRow>
-                            <TableCell colSpan={8} className="bg-muted/40">
+                            <TableCell colSpan={9} className="bg-muted/40 py-2 px-2">
                               <div className="space-y-4">
                                 <div className="flex items-center justify-between">
                                   <div className="font-semibold">State Allocations</div>
@@ -864,7 +883,7 @@ export default function DistributionDecisionsManager() {
                                   <div className="text-muted-foreground">Loading allocations...</div>
                                 ) : (
                                   <div className="space-y-2">
-                                    <Table>
+                                    <Table className="text-xs [&_th]:py-1 [&_th]:px-2 [&_td]:py-0.5 [&_td]:px-2">
                                       <TableHeader>
                                         <TableRow>
                                           <TableHead>State</TableHead>
