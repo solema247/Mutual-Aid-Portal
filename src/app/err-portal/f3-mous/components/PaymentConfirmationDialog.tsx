@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { parsePaymentConfirmations } from '../lib/payment-confirmations'
+import { parseMousListResponse } from '@/lib/mou-list-enrichment'
 import type { usePaymentModal } from '../hooks/usePaymentModal'
 import type { MOU } from '../types'
 
@@ -241,8 +242,8 @@ export default function PaymentConfirmationDialog(props: PaymentConfirmationDial
                               
                               // Refresh MOU data to get updated payment confirmations
                               const mouResponse = await fetch(`/api/f3/mous?state=${selectedMouForPayment?.state || 'all'}`)
-                              const mouData = await mouResponse.json()
-                              const updatedMou = mouData.find((m: MOU) => m.id === selectedMouForPayment?.id)
+                              const mouData = parseMousListResponse(await mouResponse.json())
+                              const updatedMou = mouData.mous.find((m) => (m as MOU).id === selectedMouForPayment?.id) as MOU | undefined
                               
                               if (updatedMou) {
                                 // Re-parse payment confirmations
@@ -322,8 +323,8 @@ export default function PaymentConfirmationDialog(props: PaymentConfirmationDial
                       }
                     }
                     const mouResponse = await fetch(`/api/f3/mous?state=${selectedMouForPayment?.state || 'all'}`)
-                    const mouData = await mouResponse.json()
-                    const updatedMou = mouData.find((m: MOU) => m.id === selectedMouForPayment?.id)
+                    const mouData = parseMousListResponse(await mouResponse.json())
+                    const updatedMou = mouData.mous.find((m) => (m as MOU).id === selectedMouForPayment?.id) as MOU | undefined
                     if (updatedMou) {
                       const existing = parsePaymentConfirmations(updatedMou.payment_confirmation_file)
                       const updatedConfirmations: Record<string, { exchange_rate: string; transfer_date: string; file: File | null; file_path?: string }> = {}

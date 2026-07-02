@@ -6,12 +6,10 @@ import type { MOU, MouProjectRow, MouProjectRowWithoutGrant } from '../types'
 
 interface UseListProjectsModalOptions {
   fetchMous: () => Promise<void>
-  checkMouAssignmentStatus: (mouIds: string[]) => Promise<void>
 }
 
 export function useListProjectsModal({
   fetchMous,
-  checkMouAssignmentStatus,
 }: UseListProjectsModalOptions) {
   const [listProjectsModalOpen, setListProjectsModalOpen] = useState(false)
   const [listProjectsMouId, setListProjectsMouId] = useState<string | null>(null)
@@ -97,7 +95,6 @@ export function useListProjectsModal({
         /* doc updated */
       }
       await fetchMous()
-      await checkMouAssignmentStatus([listProjectsMouId])
     } catch (e) {
       console.error(e)
       alert(e instanceof Error ? e.message : 'Failed to remove project')
@@ -160,7 +157,6 @@ export function useListProjectsModal({
         /* doc updated */
       }
       await fetchMous()
-      await checkMouAssignmentStatus([listProjectsMouId])
       const refetchRes = await fetch(`/api/f3/mous/${listProjectsMouId}`)
       const refetchData = await refetchRes.json()
       const projects = refetchData.projects || []

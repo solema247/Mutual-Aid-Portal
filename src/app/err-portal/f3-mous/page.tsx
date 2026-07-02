@@ -39,7 +39,6 @@ function F3MOUsPageContent() {
   })
   const listProjects = useListProjectsModal({
     fetchMous: list.fetchMous,
-    checkMouAssignmentStatus: list.checkMouAssignmentStatus,
   })
   const payment = usePaymentModal({ fetchMous: list.fetchMous })
 
