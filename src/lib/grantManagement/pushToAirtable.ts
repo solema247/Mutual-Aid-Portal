@@ -9,6 +9,7 @@ import {
   pushDecision,
   pushGrant,
 } from '@/lib/airtable/push'
+import { resolveSyncTargetFromGrantName, shouldPushToAirtable } from '@/lib/grantManagement/syncTarget'
 import { SYNC_STATUS } from '@/lib/grantManagement/syncStatus'
 import { syncLogger } from '@/lib/syncLogger'
 
@@ -19,7 +20,7 @@ export type AirtableSyncOutcome = {
 }
 
 const GRANT_PUSH_SELECT =
-  'id, grant_id, project_name, status, grant_start_date, grant_end_date, donor_name, partner_name, project_id, airtable_record_id, last_pushed_at, sync_status'
+  'id, grant_id, project_name, status, grant_start_date, grant_end_date, donor_name, partner_name, project_id, airtable_record_id, last_pushed_at, sync_status, sync_target'
 
 const DECISION_PUSH_SELECT =
   'id, decision_id_proposed, decision_id, decision_amount, decision_date, restriction, partner, grant_name, notes, file_name, file_link, airtable_record_id, last_pushed_at, sync_status'
@@ -75,6 +76,11 @@ export async function syncGrantToAirtable(
     return { status: 'pending', error: error?.message ?? 'Grant not found' }
   }
 
+  if (!shouldPushToAirtable(data.sync_target)) {
+    syncLogger.info('Grant push skipped (sync_target)', { grantId, sync_target: data.sync_target })
+    return { status: 'skipped' }
+  }
+
   const result = await pushGrant(data, {
     airtable_record_id: data.airtable_record_id,
     last_pushed_at: data.last_pushed_at,
@@ -105,6 +111,16 @@ export async function syncDecisionToAirtable(
 
   if (error || !data) {
     return { status: 'pending', error: error?.message ?? 'Decision not found' }
+  }
+
+  const syncTarget = await resolveSyncTargetFromGrantName(supabase, data.grant_name)
+  if (!shouldPushToAirtable(syncTarget)) {
+    syncLogger.info('Decision push skipped (sync_target)', {
+      decisionUuid,
+      grant_name: data.grant_name,
+      sync_target: syncTarget,
+    })
+    return { status: 'skipped' }
   }
 
   const result = await pushDecision(data, {
@@ -184,6 +200,22 @@ export async function syncAllocationToAirtable(
   const groupKey = data.Decision_ID
   if (!groupKey) {
     return { status: 'pending', error: 'Allocation has no Decision_ID' }
+  }
+
+  const { data: decisionRow } = await supabase
+    .from('distribution_decision_master_sheet_1')
+    .select('grant_name')
+    .eq('decision_id_proposed', groupKey)
+    .maybeSingle()
+
+  const syncTarget = await resolveSyncTargetFromGrantName(supabase, decisionRow?.grant_name)
+  if (!shouldPushToAirtable(syncTarget)) {
+    syncLogger.info('Allocation push skipped (sync_target)', {
+      allocationId,
+      grant_name: decisionRow?.grant_name,
+      sync_target: syncTarget,
+    })
+    return { status: 'skipped' }
   }
 
   const portalDecisionId = await ensureDecisionPortalRecord(supabase, groupKey)

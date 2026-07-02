@@ -47,6 +47,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
+import { Checkbox } from '@/components/ui/checkbox'
 
 const formSchema = z.object({
   grant_id: z.string().min(1, "Grant ID is required"),
@@ -59,6 +60,7 @@ const formSchema = z.object({
   status: z.string().optional(),
   total_transferred_amount_usd: z.string().optional(),
   sum_activity_amount: z.string().optional(),
+  sync_to_p2h_airtable: z.boolean(),
 })
 
 type FormData = z.infer<typeof formSchema>
@@ -124,6 +126,7 @@ export default function GrantCallsManager() {
       status: 'Active',
       total_transferred_amount_usd: '',
       sum_activity_amount: '',
+      sync_to_p2h_airtable: true,
     },
   })
 
@@ -221,7 +224,10 @@ export default function GrantCallsManager() {
         const res = await fetch('/api/grants', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
+          body: JSON.stringify({
+            ...payload,
+            sync_to_p2h_airtable: values.sync_to_p2h_airtable,
+          }),
         })
         if (!res.ok) {
           const err = await res.json().catch(() => ({}))
@@ -253,6 +259,7 @@ export default function GrantCallsManager() {
       status: grant.status || 'Active',
       total_transferred_amount_usd: grant.total_transferred_amount_usd?.toString() || '',
       sum_activity_amount: grant.sum_activity_amount?.toString() || '',
+      sync_to_p2h_airtable: true,
     })
     setIsFormOpen(true)
   }
@@ -553,6 +560,26 @@ export default function GrantCallsManager() {
                         )}
                       />
                     </div>
+
+                    {!editingGrant && (
+                      <FormField
+                        control={form.control}
+                        name="sync_to_p2h_airtable"
+                        render={({ field }) => (
+                          <FormItem className="flex flex-row items-start gap-3 space-y-0 rounded-md border p-4">
+                            <FormControl>
+                              <Checkbox
+                                checked={field.value}
+                                onCheckedChange={(checked) => field.onChange(checked === true)}
+                              />
+                            </FormControl>
+                            <div className="space-y-1 leading-none">
+                              <FormLabel>Sync to P2H Airtable</FormLabel>
+                            </div>
+                          </FormItem>
+                        )}
+                      />
+                    )}
 
                     <div className="flex justify-end gap-2">
                       <Button

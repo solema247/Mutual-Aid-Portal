@@ -3,6 +3,7 @@ import { getSupabaseAdmin } from '@/lib/supabaseAdmin'
 import { requireGrantEditor } from '@/lib/grantManagement/requireGrantEditor'
 import { airtableMeta, syncGrantToAirtable } from '@/lib/grantManagement/pushToAirtable'
 import { SYNC_STATUS } from '@/lib/grantManagement/syncStatus'
+import { parseSyncTargetFromBody, SYNC_TARGET } from '@/lib/grantManagement/syncTarget'
 
 const GRANT_SELECT =
   'id, grant_id, donor_id, donor_name, partner_name, project_name, grant_start_date, grant_end_date, status, total_transferred_amount_usd, sum_activity_amount, sum_transfer_fee_amount'
@@ -63,6 +64,8 @@ function parseGrantBody(body: Record<string, unknown>) {
     body.sum_transfer_fee_amount != null ? Number(body.sum_transfer_fee_amount) : null
   )
 
+  const sync_target = parseSyncTargetFromBody(body)
+
   return {
     payload: {
       grant_id,
@@ -80,7 +83,9 @@ function parseGrantBody(body: Record<string, unknown>) {
       sum_activity_amount:
         sum_activity_amount != null && !Number.isNaN(sum_activity_amount) ? sum_activity_amount : null,
       sum_transfer_fee_amount,
-      sync_status: SYNC_STATUS.PENDING,
+      sync_target,
+      sync_status:
+        sync_target === SYNC_TARGET.P2H ? SYNC_STATUS.PENDING : SYNC_STATUS.LEGACY,
     },
   }
 }
