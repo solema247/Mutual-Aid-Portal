@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin'
 import { requireGrantEditor } from '@/lib/grantManagement/requireGrantEditor'
+import { airtableMeta, syncDecisionToAirtable } from '@/lib/grantManagement/pushToAirtable'
+import { SYNC_STATUS } from '@/lib/grantManagement/syncStatus'
 
 /**
  * GET /api/distribution-decisions - List distribution decisions from canonical master sheet.
@@ -76,7 +78,7 @@ export async function POST(request: Request) {
       file_name: typeof body.file_name === 'string' ? body.file_name.trim() || null : null,
       file_link: typeof body.file_link === 'string' ? body.file_link.trim() || null : null,
       sum_allocation_amount: 0,
-      sync_status: 'pending' as const,
+      sync_status: SYNC_STATUS.PENDING,
     }
 
     const { data, error } = await auth.ctx.supabase
@@ -94,6 +96,8 @@ export async function POST(request: Request) {
       throw error
     }
 
+    const push = await syncDecisionToAirtable(auth.ctx.supabase, data.id)
+
     return NextResponse.json(
       {
         id: data.id,
@@ -106,6 +110,7 @@ export async function POST(request: Request) {
         decision_amount: data.decision_amount != null ? Number(data.decision_amount) : null,
         decision_date: data.decision_date ?? null,
         partner: data.partner ?? null,
+        ...airtableMeta(push),
       },
       { status: 201 }
     )

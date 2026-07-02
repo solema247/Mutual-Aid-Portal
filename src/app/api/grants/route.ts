@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin'
 import { requireGrantEditor } from '@/lib/grantManagement/requireGrantEditor'
+import { airtableMeta, syncGrantToAirtable } from '@/lib/grantManagement/pushToAirtable'
+import { SYNC_STATUS } from '@/lib/grantManagement/syncStatus'
 
 const GRANT_SELECT =
   'id, grant_id, donor_id, donor_name, partner_name, project_name, grant_start_date, grant_end_date, status, total_transferred_amount_usd, sum_activity_amount, sum_transfer_fee_amount'
@@ -78,7 +80,7 @@ function parseGrantBody(body: Record<string, unknown>) {
       sum_activity_amount:
         sum_activity_amount != null && !Number.isNaN(sum_activity_amount) ? sum_activity_amount : null,
       sum_transfer_fee_amount,
-      sync_status: 'pending' as const,
+      sync_status: SYNC_STATUS.PENDING,
     },
   }
 }
@@ -131,7 +133,12 @@ export async function POST(request: NextRequest) {
 
     if (error) throw error
 
-    return NextResponse.json(mapGrantRow(data as Record<string, unknown>), { status: 201 })
+    const push = await syncGrantToAirtable(auth.ctx.supabase, data.id)
+
+    return NextResponse.json(
+      { ...mapGrantRow(data as Record<string, unknown>), ...airtableMeta(push) },
+      { status: 201 }
+    )
   } catch (error) {
     console.error('Error creating grant:', error)
     return NextResponse.json({ error: 'Failed to create grant' }, { status: 500 })

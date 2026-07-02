@@ -1,6 +1,12 @@
 import { NextResponse } from 'next/server'
 import { requireGrantEditor } from '@/lib/grantManagement/requireGrantEditor'
 import { refreshDecisionAllocationSum } from '@/lib/grantManagement/refreshDecisionSum'
+import {
+  airtableMeta,
+  removeAllocationFromAirtable,
+  syncAllocationToAirtable,
+} from '@/lib/grantManagement/pushToAirtable'
+import { SYNC_STATUS } from '@/lib/grantManagement/syncStatus'
 
 // PUT /api/distribution-decisions/allocations/[allocationId] - Update a specific allocation
 export async function PUT(
@@ -20,7 +26,7 @@ export async function PUT(
 
     const { data: allocationData, error: fetchError } = await auth.ctx.supabase
       .from('allocations_by_date')
-      .select('Decision_ID')
+      .select('Decision_ID, airtable_record_id, last_pushed_at')
       .eq('Allocation_ID', params.allocationId)
       .single()
 
@@ -52,7 +58,7 @@ export async function PUT(
         State: state,
         'Allocation Amount': Number(amount),
         '%_Decision_Amount': percent,
-        sync_status: 'pending',
+        sync_status: SYNC_STATUS.PENDING,
       })
       .eq('Allocation_ID', params.allocationId)
       .select()
@@ -62,7 +68,9 @@ export async function PUT(
 
     await refreshDecisionAllocationSum(auth.ctx.supabase, groupKey)
 
-    return NextResponse.json(data)
+    const push = await syncAllocationToAirtable(auth.ctx.supabase, params.allocationId)
+
+    return NextResponse.json({ ...data, ...airtableMeta(push) })
   } catch (error) {
     console.error('Error updating allocation:', error)
     return NextResponse.json({ error: 'Failed to update allocation' }, { status: 500 })
@@ -80,7 +88,7 @@ export async function DELETE(
   try {
     const { data: allocationData, error: fetchError } = await auth.ctx.supabase
       .from('allocations_by_date')
-      .select('Decision_ID')
+      .select('Decision_ID, airtable_record_id, last_pushed_at')
       .eq('Allocation_ID', params.allocationId)
       .single()
 
@@ -93,6 +101,11 @@ export async function DELETE(
       return NextResponse.json({ error: 'Allocation has no linked decision' }, { status: 404 })
     }
 
+    const push = await removeAllocationFromAirtable(
+      allocationData.airtable_record_id,
+      allocationData.last_pushed_at
+    )
+
     const { error } = await auth.ctx.supabase
       .from('allocations_by_date')
       .delete()
@@ -102,7 +115,7 @@ export async function DELETE(
 
     await refreshDecisionAllocationSum(auth.ctx.supabase, groupKey)
 
-    return NextResponse.json({ success: true })
+    return NextResponse.json({ success: true, ...airtableMeta(push) })
   } catch (error) {
     console.error('Error deleting allocation:', error)
     return NextResponse.json({ error: 'Failed to delete allocation' }, { status: 500 })

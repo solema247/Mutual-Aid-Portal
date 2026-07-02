@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { SYNC_STATUS } from '@/lib/grantManagement/syncStatus'
 
 /** Recompute sum_allocation_amount and mark decision pending for Airtable push. */
 export async function refreshDecisionAllocationSum(
@@ -19,7 +20,7 @@ export async function refreshDecisionAllocationSum(
 
   const { error: updateError } = await supabase
     .from('distribution_decision_master_sheet_1')
-    .update({ sum_allocation_amount: totalAllocated, sync_status: 'pending' })
+    .update({ sum_allocation_amount: totalAllocated, sync_status: SYNC_STATUS.PENDING })
     .eq('decision_id_proposed', groupKey)
 
   if (updateError) throw updateError

@@ -1,5 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireGrantEditor } from '@/lib/grantManagement/requireGrantEditor'
+import {
+  airtableMeta,
+  removeGrantFromAirtable,
+  syncGrantToAirtable,
+} from '@/lib/grantManagement/pushToAirtable'
+import { SYNC_STATUS } from '@/lib/grantManagement/syncStatus'
 
 const GRANT_SELECT =
   'id, grant_id, donor_id, donor_name, partner_name, project_name, grant_start_date, grant_end_date, status, total_transferred_amount_usd, sum_activity_amount, sum_transfer_fee_amount'
@@ -77,7 +83,7 @@ function parseGrantBody(body: Record<string, unknown>) {
       sum_activity_amount:
         sum_activity_amount != null && !Number.isNaN(sum_activity_amount) ? sum_activity_amount : null,
       sum_transfer_fee_amount,
-      sync_status: 'pending' as const,
+      sync_status: SYNC_STATUS.PENDING,
     },
   }
 }
@@ -111,7 +117,12 @@ export async function PUT(
       throw error
     }
 
-    return NextResponse.json(mapGrantRow(data as Record<string, unknown>))
+    const push = await syncGrantToAirtable(auth.ctx.supabase, params.id)
+
+    return NextResponse.json({
+      ...mapGrantRow(data as Record<string, unknown>),
+      ...airtableMeta(push),
+    })
   } catch (error) {
     console.error('Error updating grant:', error)
     return NextResponse.json({ error: 'Failed to update grant' }, { status: 500 })
@@ -127,11 +138,29 @@ export async function DELETE(
   if (!auth.ok) return auth.response
 
   try {
+    const { data: existing, error: fetchError } = await auth.ctx.supabase
+      .from('grants_grid_view')
+      .select('airtable_record_id, last_pushed_at')
+      .eq('id', params.id)
+      .single()
+
+    if (fetchError) {
+      if (fetchError.code === 'PGRST116') {
+        return NextResponse.json({ error: 'Grant not found' }, { status: 404 })
+      }
+      throw fetchError
+    }
+
+    const push = await removeGrantFromAirtable(
+      existing.airtable_record_id,
+      existing.last_pushed_at
+    )
+
     const { error } = await auth.ctx.supabase.from('grants_grid_view').delete().eq('id', params.id)
 
     if (error) throw error
 
-    return NextResponse.json({ success: true })
+    return NextResponse.json({ success: true, ...airtableMeta(push) })
   } catch (error) {
     console.error('Error deleting grant:', error)
     return NextResponse.json({ error: 'Failed to delete grant' }, { status: 500 })

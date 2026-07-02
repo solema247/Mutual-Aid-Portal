@@ -40,6 +40,7 @@ This document is the implementation plan for moving **Grants** and **Allocations
 | `scripts/cutover/backfill-allocations-from-fdw.ts` | Allocations FDW → `allocations_by_date` |
 | `scripts/cutover/compare-decisions-fdw-canonical.ts` | Side-by-side decisions reconciliation |
 | `scripts/cutover/validate-allocations-fk.ts` | FK orphan + enforcement check |
+| `scripts/cutover/mark-sync-status-legacy.ts` | Relabel backfill `pending` → `legacy` (not outbox) |
 
 All backfill scripts: dry-run default; `--inserts-only` / `--updates-only` / `--apply`.
 
@@ -315,10 +316,23 @@ Supabase is the **source of truth**. Airtable raw tables are a **copy**. Each ca
 | Column | Purpose | Example |
 |--------|---------|---------|
 | `airtable_record_id` | The Airtable `rec…` id for the matching row in `Portal_*` raw table. Needed to **update** or **delete** the right Airtable row later (not search by name every time). | `recABC123xyz` |
-| `sync_status` | Is this row mirrored to Airtable? `synced` = ok, `pending` = portal saved but Airtable push failed or not run yet, `failed` = gave up / needs attention. | `pending` |
+| `sync_status` | Portal_* outbox state — see [sync_status semantics](#sync_status-semantics) below. | `legacy` (backfill) / `pending` (after portal edit) |
 | `last_pushed_at` | When we last successfully pushed (or last attempted). For debugging and retries. | `2026-06-26T14:30:00Z` |
 
-**Flow:** User saves in portal → row written to Supabase → push to Airtable raw table → Airtable returns `rec…` → we store it in `airtable_record_id` and set `sync_status = 'synced'`.
+**Flow:** User saves in portal → row written to Supabase with `sync_status = pending` → push to `Portal_*` raw table → Airtable returns `rec…` → store in `airtable_record_id` and set `sync_status = synced`.
+
+### sync_status semantics
+
+| Value | Meaning | Portal_* push? |
+|-------|---------|----------------|
+| `legacy` | Backfilled or pre-push; already in Airtable **display** tables. Not an outbox item. | No — until user edits in portal (then → `pending`) |
+| `pending` | Portal saved; needs push to `Portal_*` (or push failed, retry). | **Yes** |
+| `synced` | Successfully pushed to `Portal_*`; `airtable_record_id` is raw `rec…` | No |
+| `failed` | Push gave up / needs attention | **Yes** (retry) |
+
+**Cutover:** Run `scripts/cutover/mark-sync-status-legacy.ts --apply` once after backfill to relabel all `pending` backfill rows → `legacy`. Retry/cron must use `needsPortalPush()` (`pending` + `failed` only) — never treat `legacy` as backlog.
+
+**Note:** Decisions may still have `airtable_record_id` pointing at the **display** table `rec…` from FDW backfill until first Portal_* push stores the raw inbox id.
 
 Without these columns, the portal would not know which Airtable record to update on the second edit.
 
@@ -624,7 +638,7 @@ Recommended for v1:
 2. Attempt Airtable push.
 3. On failure: set `sync_status = 'pending'`, log via `syncLogger`, return success to user with non-blocking warning (or 207-style payload).
 
-Phase 2b (optional): cron `/api/airtable/push-retry` drains `sync_status = 'pending'` rows.
+Phase 2b (optional): cron `/api/airtable/push-retry` drains rows where `needsPortalPush(sync_status)` (`pending` or `failed` only — **not** `legacy`).
 
 ### 2.3 Disable inbound sync
 

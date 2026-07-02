@@ -7,6 +7,12 @@ import {
   resolveDecisionGroupKey,
 } from '@/lib/grantManagement/resolveDecisionKey'
 import { refreshDecisionAllocationSum } from '@/lib/grantManagement/refreshDecisionSum'
+import {
+  airtableMeta,
+  syncAllocationToAirtable,
+  syncDecisionToAirtableByGroupKey,
+} from '@/lib/grantManagement/pushToAirtable'
+import { SYNC_STATUS } from '@/lib/grantManagement/syncStatus'
 
 /**
  * GET /api/distribution-decisions/[decisionId]/allocations - Allocations for one decision.
@@ -106,7 +112,7 @@ export async function POST(
         Status: typeof alloc?.status === 'string' ? alloc.status : 'new',
         'Flow Oversight': typeof alloc?.flow_oversight === 'string' ? alloc.flow_oversight : null,
         Serial: alloc?.serial ?? null,
-        sync_status: 'pending' as const,
+        sync_status: SYNC_STATUS.PENDING,
       }
     })
 
@@ -118,7 +124,19 @@ export async function POST(
 
     const totalAllocated = await refreshDecisionAllocationSum(auth.ctx.supabase, groupKey)
 
-    return NextResponse.json({ success: true, total_allocated: totalAllocated })
+    const decisionPush = await syncDecisionToAirtableByGroupKey(auth.ctx.supabase, groupKey)
+    const allocationPushes = await Promise.all(
+      rowsToInsert.map((row) => syncAllocationToAirtable(auth.ctx.supabase, row.Allocation_ID))
+    )
+    const failedAlloc = allocationPushes.find((p) => p.status === 'pending')
+
+    return NextResponse.json({
+      success: true,
+      total_allocated: totalAllocated,
+      ...airtableMeta(decisionPush),
+      allocations_airtable_sync: failedAlloc ? 'pending' : 'synced',
+      ...(failedAlloc?.error ? { allocations_airtable_sync_error: failedAlloc.error } : {}),
+    })
   } catch (error) {
     console.error('Error creating allocations:', error)
     return NextResponse.json({ error: 'Failed to create allocations' }, { status: 500 })

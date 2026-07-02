@@ -13,11 +13,6 @@ type TableSyncConfig = {
 
 const TABLES: TableSyncConfig[] = [
   {
-    airtableTable: 'Distribution_Decision',
-    supabaseTable: 'distribution_decision_master_sheet_1',
-    upsertKey: 'decision_id_proposed',
-  },
-  {
     airtableTable: 'transfer_segment',
     supabaseTable: 'transfer_segment_partner_grouping_1',
     upsertKey: 'Transfer_ID',
