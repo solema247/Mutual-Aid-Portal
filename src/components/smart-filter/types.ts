@@ -3,7 +3,9 @@
  * Reusable filter system with AND logic, URL sync, and server-side ready shape.
  */
 
-export type FilterInputType = 'text' | 'select' | 'date' | 'date_range'
+export type FilterInputType = 'text' | 'select' | 'multi_select' | 'date' | 'date_range'
+
+export type FilterValue = string | [string, string] | string[]
 
 export interface FilterSelectOption {
   value: string
@@ -24,14 +26,14 @@ export interface FilterFieldConfig {
 }
 
 /** One active filter instance (field + value) */
-export interface ActiveFilter<V = string | [string, string]> {
+export interface ActiveFilter<V = FilterValue> {
   id: string
   fieldId: string
   value: V
 }
 
 /** Parsed filter state: fieldId -> value. Used for AND logic and URL. */
-export type FilterValues = Record<string, string | [string, string]>
+export type FilterValues = Record<string, FilterValue>
 
 /** Props for the SmartFilter component */
 export interface SmartFilterProps {

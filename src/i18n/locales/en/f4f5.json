@@ -29,6 +29,10 @@
     "filters": {
       "grant_id": "Grant ID",
       "grant_id_placeholder": "e.g. LCC-FCDO-ND-0326-0001",
+      "grant_name": "Grant Name",
+      "grant_name_placeholder": "Search by grant name or serial",
+      "base_room": "Base Room",
+      "report_status": "Report Status",
       "err": "ERR",
       "state": "State",
       "donor": "Donor",
@@ -37,11 +41,16 @@
       "reset": "Reset"
     },
     "headers": {
+      "base_room": "Base Room",
       "err": "ERR",
       "grant_id": "Grant ID",
+      "grant_name": "Grant Name",
       "state": "State",
       "grant": "Grant Call",
       "donor": "Donor",
+      "payment_date": "Payment Date",
+      "amount_sdg": "Amount (SDG)",
+      "exchange_rate": "Exchange Rate",
       "report_date": "Report Date",
       "total_grant": "Total Grant",
       "total_expenses": "Total Expenses",
@@ -52,7 +61,14 @@
     },
     "view": "View",
     "loading": "Loading…",
-    "empty": "No F4 reports yet",
+    "empty": "No records yet",
+    "report_status": {
+      "not_uploaded": "Not uploaded",
+      "pending_review": "Pending review",
+      "accepted": "Accepted",
+      "rejected": "Rejected",
+      "historical": "Historical"
+    },
     "serial_lookup": "F4 serial (LoHub)",
     "serial_placeholder": "Enter serial number",
     "fetch": "Fetch",
@@ -132,6 +148,10 @@
     "filters": {
       "grant_id": "Grant ID",
       "grant_id_placeholder": "e.g. LCC-FCDO-ND-0326-0001",
+      "grant_name": "Grant Name",
+      "grant_name_placeholder": "Search by grant name or serial",
+      "base_room": "Base Room",
+      "report_status": "Report Status",
       "err": "ERR",
       "state": "State",
       "donor": "Donor",
@@ -140,11 +160,16 @@
       "reset": "Reset"
     },
     "headers": {
+      "base_room": "Base Room",
       "err": "ERR",
       "grant_id": "Grant ID",
+      "grant_name": "Grant Name",
       "state": "State",
       "grant": "Grant Call",
       "donor": "Donor",
+      "payment_date": "Payment Date",
+      "amount_sdg": "Amount (SDG)",
+      "exchange_rate": "Exchange Rate",
       "report_date": "Report Date",
       "activities": "Activities",
       "updated": "Updated",
@@ -152,7 +177,11 @@
     },
     "view": "View",
     "loading": "Loading…",
-    "empty": "No F5 reports yet",
+    "empty": "No records yet",
+    "report_status": {
+      "not_uploaded": "Not uploaded",
+      "uploaded": "Uploaded"
+    },
     "preview": {
       "tabs": { "edit_form": "Edit Form", "view_file": "View File", "tables": "Extracted Tables" },
       "summary": {

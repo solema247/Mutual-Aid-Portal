@@ -25,7 +25,9 @@ export type { ApplyFiltersOptions } from './useFilteredData'
 export {
   getReportTrackerFilterFields,
   getProjectManagementFilterFields,
+  getF3MousFilterFields,
   getF4F5ReportingFilterFields,
+  getF4ReportingFilterFields,
   STATUS_OPTIONS,
 } from './filter-config'
 export { STATUS_DISPLAY, getStatusDisplay } from './status-config'

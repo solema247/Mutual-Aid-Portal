@@ -11,5 +11,6 @@
   "error_declining_user": "Failed to decline user",
   "error_updating_user_status": "Failed to update user status",
   "error_unexpected": "An unexpected error occurred",
-  "cancel": "Cancel"
+  "cancel": "Cancel",
+  "select_all": "Select all"
 } 

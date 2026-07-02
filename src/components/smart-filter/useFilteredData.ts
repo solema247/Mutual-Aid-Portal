@@ -22,8 +22,14 @@ export function applyFilters<T>({
   if (filters.length === 0) return data
 
   const activeFilters = filters.filter((f) => {
+    const field = fields.find((x) => x.id === f.fieldId)
     const v = f.value
-    if (Array.isArray(v)) return v[0]?.trim() || v[1]?.trim()
+    if (field?.type === 'multi_select' && Array.isArray(v)) {
+      return v.some((item) => String(item).trim() !== '')
+    }
+    if (Array.isArray(v) && field?.type === 'date_range') {
+      return v[0]?.trim() || v[1]?.trim()
+    }
     return v != null && String(v).trim() !== ''
   })
 
@@ -36,7 +42,14 @@ export function applyFilters<T>({
       const raw = rowValue != null ? String(rowValue).trim() : ''
 
       const filterValue = filter.value
-      if (Array.isArray(filterValue)) {
+
+      if (field?.type === 'multi_select' && Array.isArray(filterValue)) {
+        const selected = filterValue.map((v) => String(v).trim().toLowerCase()).filter(Boolean)
+        if (selected.length === 0) return true
+        return selected.includes(raw.toLowerCase())
+      }
+
+      if (Array.isArray(filterValue) && field?.type === 'date_range') {
         const [from, to] = filterValue
         if (!from && !to) return true
         const rowDate = raw ? new Date(raw).getTime() : NaN
