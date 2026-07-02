@@ -636,7 +636,7 @@ Until A2 is live, Portal edits appear only in `Portal_Grants`, `Portal_Decisions
 Use existing env pattern from `/api/airtable/sync`:
 
 - `AIRTABLE_BASE_ID` = `appq9qjlnEW7d0tqZ`
-- `Airtable_Personal_Access_Token`
+- `Airtable_Personal_Access_Token_2` (grant-management Portal_* push; separate from inbound `Airtable_Personal_Access_Token` used by `/api/airtable/sync`)
 
 ### 2.1 Push functions
 

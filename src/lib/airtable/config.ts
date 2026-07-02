@@ -1,5 +1,5 @@
 export const AIRTABLE_BASE_ID = 'appq9qjlnEW7d0tqZ'
-export const AIRTABLE_TOKEN_ENV = 'Airtable_Personal_Access_Token'
+export const AIRTABLE_TOKEN_ENV = 'Airtable_Personal_Access_Token_2'
 
 export const PORTAL_AIRTABLE_TABLES = {
   GRANTS: 'Portal_Grants',
