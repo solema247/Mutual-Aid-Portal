@@ -9,15 +9,30 @@ This document is the implementation plan for moving **Grants** and **Allocations
 
 ---
 
-## Current status (2026-07-01)
+## Current status (2026-07-02)
 
 ### Completed
 
 | Phase | Status | Notes |
 |-------|--------|-------|
 | **A1** — Airtable `Portal_*` raw tables | ✅ Done | `Portal_Decisions`, `Portal_Allocations`, `Portal_Grants` created; table ids recorded |
-| **0** — Schema sync columns | ✅ Done | Migration `20260626120000_grant_management_airtable_sync_columns.sql` applied; types on `main` |
+| **0** — Schema sync columns | ✅ Done | Migration `20260626120000_grant_management_airtable_sync_columns.sql` applied |
+| **0b** — `sync_target` on grants | ✅ Done | Migration `20260626140000_grants_sync_target.sql`; all grants `p2h` except `Avaaz 2` → `none` |
 | **1** — FDW → canonical backfill | ✅ Done | See [Phase 1 results](#phase-1-results-2026-07-01) below |
+| **1b** — `sync_status = legacy` cutover | ✅ Done | `mark-sync-status-legacy.ts` applied (29 grants, 69 decisions, 530 allocations) |
+| **3** — APIs read canonical | ✅ Done | `/api/grants`, `/api/allocations`, `/api/distribution-decisions`, pool APIs |
+| **4** — Portal UI edits + Excel | ✅ Done | `GrantCallsManager` + `DistributionDecisionsManager`; support/admin/superadmin edit |
+| **2** — Portal push → `Portal_*` | ✅ Done | `src/lib/airtable/*`, `pushToAirtable.ts`; inline push on CRUD; prototype E2E tested 2026-07-02 |
+
+**Push modules (app repo):** `src/lib/airtable/config.ts`, `client.ts`, `fieldMaps.ts`, `push.ts`, `src/lib/grantManagement/pushToAirtable.ts`, `syncTarget.ts`, `syncStatus.ts`.
+
+**Retry:** `POST /api/airtable/push-retry` (editor-only; no cron yet). Failed pushes stay `pending` until user re-saves or push-retry is called.
+
+**Inbound sync:** `Distribution_Decision` removed from `/api/airtable/sync` `TABLES` (transfer_segment only).
+
+**Grant create UI:** “Sync to P2H Airtable” checkbox (default checked → `sync_target = p2h`; unchecked → `none`).
+
+**Prototype test (2026-07-02):** Create grant → decision → allocations → rows in `Portal_Grants` / `Portal_Decisions` / `Portal_Allocations`; edit allocation retry after adding missing Airtable field; delete decision + grant removes raw rows.
 
 ### Canonical row counts (post-backfill)
 
@@ -44,31 +59,31 @@ This document is the implementation plan for moving **Grants** and **Allocations
 
 All backfill scripts: dry-run default; `--inserts-only` / `--updates-only` / `--apply`.
 
-### Not started
+### Remaining
 
 | Phase | What |
 |-------|------|
-| **1.3** (remaining) | Full reconciliation (grant totals, pool summary vs FDW) |
-| **3** | Switch grant-management APIs to read canonical instead of FDW |
-| **2** | Portal push → Airtable `Portal_*` raw tables |
-| **4** | Enable grant-management UI edits + Excel upload |
-| **A2** | Airtable automations raw → existing display tables |
-| **5** | End-to-end test plan |
+| **1.3** (optional) | Full reconciliation (grant totals, pool summary vs FDW) |
+| **A2** | Airtable automations: `Portal_*` → display tables (`Grants`, `Distribution_Decision`, `Allocations`) |
+| **5** | Broader test plan (Excel upload, legacy decision edit, pool totals, partner edge cases) |
+| **Polish** | Cron for push-retry; user-visible sync failure toasts; `npm run db:types` after schema changes |
 
 ### Immediate next step
 
-**Phase 1.3 validation** (remaining gates) → then **Phase 3** (API read path to canonical). UI still reads FDW today.
+**A2 — Airtable automations** to wire inbox (`Portal_*`) → existing display tables so P2H team members see Portal edits in their normal Airtable views. Until A2, changes land in inbox tables only.
+
+Fix or re-enter Airtable `#ERROR!` records (2 decisions + ~$485k North Darfur allocation) if full total reconciliation is required.
 
 ---
 
 ## Goals
 
-| Area | Today | Target |
-|------|--------|--------|
-| Grants (`GrantCallsManager`) | Read `public.grants` (Airtable FDW); edit disabled | Read/write `grants_grid_view`; push to Airtable on mutation |
-| Allocations | Read `public.allocations` + `public.distribution_decision` (FDW) | Read/write `distribution_decision_master_sheet_1` + `allocations_by_date`; Excel upload restored; push to Airtable on mutation |
-| Pool summary cards | Mixed sources (FDW for totals, local for by-state) | Single source: canonical tables |
-| Sync direction | Airtable → Portal (FDW reads; optional `/api/airtable/sync`) | Portal → Airtable only |
+| Area | Before cutover | Now (2026-07-02) |
+|------|----------------|------------------|
+| Grants (`GrantCallsManager`) | Read FDW; edit disabled | Read/write `grants_grid_view` via API; push to `Portal_Grants` when `sync_target = p2h` |
+| Allocations | Read FDW | Read/write canonical; `DistributionDecisionsManager`; push to `Portal_*` when grant syncs |
+| Pool summary cards | Mixed sources | Canonical `allocations_by_date` + `grants_grid_view` |
+| Sync direction | Airtable → Portal (FDW) | Portal → Airtable only (`Portal_*` inbox); no grant-management inbound sync |
 
 ---
 
@@ -297,11 +312,9 @@ See section **Appendix: Airtable audit SQL** at the bottom of this file.
 
 ---
 
-## Current split-brain (why cutover matters)
+## Current split-brain (resolved 2026-07-02)
 
-Grant management UI was repointed to Airtable FDW while other portal features kept using local tables. **Phase 1 backfill (2026-07-01) closed the data gap** — canonical tables now mirror FDW for grants, decisions, and allocations (except excluded `#ERROR!` rows). **UI and APIs still read FDW** until Phase 3.
-
-We ran a **one-time backfill** from FDW into canonical tables **before** switching the UI read path. ✅ Complete.
+Grant management UI previously read Airtable FDW while other portal features used local tables. **Phase 1 backfill (2026-07-01)** copied FDW data into canonical tables. **Phases 3–4 (2026-07-01)** switched APIs and UI to canonical. **Phase 2 (2026-07-02)** pushes portal edits to `Portal_*` inbox tables. Display-table mirror (A2 automations) is still pending.
 
 ---
 
@@ -318,6 +331,7 @@ Supabase is the **source of truth**. Airtable raw tables are a **copy**. Each ca
 | `airtable_record_id` | The Airtable `rec…` id for the matching row in `Portal_*` raw table. Needed to **update** or **delete** the right Airtable row later (not search by name every time). | `recABC123xyz` |
 | `sync_status` | Portal_* outbox state — see [sync_status semantics](#sync_status-semantics) below. | `legacy` (backfill) / `pending` (after portal edit) |
 | `last_pushed_at` | When we last successfully pushed (or last attempted). For debugging and retries. | `2026-06-26T14:30:00Z` |
+| `sync_target` | On `grants_grid_view` only: `p2h` (push to P2H inbox) or `none` (portal-only). Decisions/allocations inherit via `grant_name`. Migration `20260626140000_grants_sync_target.sql`. | `p2h` / `none` |
 
 **Flow:** User saves in portal → row written to Supabase with `sync_status = pending` → push to `Portal_*` raw table → Airtable returns `rec…` → store in `airtable_record_id` and set `sync_status = synced`.
 
@@ -393,7 +407,15 @@ This answers: *How do we ensure canonical tables have the latest data when we ma
 
 **Allocations — `%_Decision_Amount`:** Canonical had fractional values (e.g. `0.06`); backfill set true percent (e.g. `6.18`) from FDW or `amount / decision_amount`.
 
-**`airtable_record_id` after backfill:** Set on all decisions from FDW `id`. Grants and allocations: FDW has no `rec…` column on those tables — left `null`, `sync_status = pending` until Phase 2 push or API lookup.
+**`airtable_record_id` after backfill:** Set on all decisions from FDW `id`. Grants and allocations: FDW has no `rec…` — left `null`; backfill rows marked `sync_status = legacy`. On first portal edit (or new create), push sets `airtable_record_id` to `Portal_*` `rec…` and `sync_status = synced`.
+
+### sync_target (grants only)
+
+| Column | Values | Rule |
+|--------|--------|------|
+| `grants_grid_view.sync_target` | `p2h` \| `none` | **Create grant UI:** checkbox “Sync to P2H Airtable” (default on). Backfill: all grants `p2h` except `Avaaz 2` → `none`. |
+
+Decisions and allocations inherit via `grant_name` → grant row. Push skipped when target is `none`.
 
 ### 1.1 Pre-cutover checklist
 
@@ -518,7 +540,7 @@ Create three **new** tables. Plain fields only — **no automations**, **no chan
 
 Record each table’s **table id** (`tbl…`) when done.
 
-### Phase A2 — later: wire raw → existing
+### Phase A2 — next: wire raw → existing display tables
 
 Automations copy raw values into existing writable fields. Existing formulas/rollups unchanged. Detail deferred until portal + canonical work is further along.
 
@@ -600,12 +622,14 @@ Do **not** modify `Grants`, `Distribution_Decision`, or `Allocations`. No automa
 
 ---
 
-## Phase A2 — Wire to existing tables (deferred)
+## Phase A2 — Wire to existing tables (next)
 
-See audit notes: automations write existing **writable** fields only; do not change display table schemas. Revisit when ready to mirror portal edits into `Grants` / `Distribution_Decision` / `Allocations`.
+See audit notes: automations write existing **writable** fields only; do not change display table schemas. Upsert display rows by `grant_id`, `decision_id_proposed`, `allocation_id`; use `display_record_id` from `Portal_*` when updating legacy rows.
+
+Until A2 is live, Portal edits appear only in `Portal_Grants`, `Portal_Decisions`, `Portal_Allocations` — not in the main Airtable views P2H team members use day to day.
 
 ---
-## Phase 2: Airtable push layer (Portal → raw tables only)
+## Phase 2: Airtable push layer (Portal → raw tables only) — ✅ complete (2026-07-02)
 
 **New module:** `src/lib/airtable/push.ts` (and `fieldMaps.ts`).
 
@@ -638,16 +662,16 @@ Recommended for v1:
 2. Attempt Airtable push.
 3. On failure: set `sync_status = 'pending'`, log via `syncLogger`, return success to user with non-blocking warning (or 207-style payload).
 
-Phase 2b (optional): cron `/api/airtable/push-retry` drains rows where `needsPortalPush(sync_status)` (`pending` or `failed` only — **not** `legacy`).
+Phase 2b (optional): `POST /api/airtable/push-retry` drains rows where `needsPortalPush(sync_status)` (`pending` or `failed` only — **not** `legacy`). **Implemented**; cron not scheduled yet.
 
-### 2.3 Disable inbound sync
+### 2.3 Disable inbound sync — ✅ done
 
-- Remove or stop scheduling `Distribution_Decision` pull in `/api/airtable/sync` for grant-management tables (or remove those entries from `TABLES` array entirely).
+- `Distribution_Decision` pull removed from `/api/airtable/sync` `TABLES` array.
 - Document that Airtable must not be edited for these entities post-cutover.
 
 ---
 
-## Phase 3: API routes
+## Phase 3: API routes — ✅ complete (2026-07-01)
 
 ### 3.1 Grants — `/api/grants`
 
@@ -686,19 +710,19 @@ Phase 2b (optional): cron `/api/airtable/push-retry` drains rows where `needsPor
 
 ---
 
-## Phase 4: UI
+## Phase 4: UI — ✅ complete (2026-07-01)
 
 ### 4.1 Grants (`GrantCallsManager`)
 
-- [ ] Set `GRANTS_TABLE_EDIT_ENABLED = true` (or replace with `can('grant_edit')` permission).
-- [ ] Reads already go through `/api/grants` — will pick up canonical data after Phase 3.
-- [ ] Route create/update/delete through `/api/grants` instead of direct `supabase.from('grants_grid_view')`.
+- [x] Edit enabled for support/admin/superadmin via `/api/grants`.
+- [x] Create/update/delete through API routes (server-side Airtable push).
+- [x] “Sync to P2H Airtable” checkbox on create (2026-07-02).
 
 ### 4.2 Allocations
 
-- [ ] Replace `DistributionDecisionTableView` with `DistributionDecisionsManager` on `grant-management/page.tsx` (or merge read layout + manager actions).
-- [ ] Excel/CSV upload: already in `DistributionDecisionsManager` — template cells B2, C3:P3, C36:P36; verify template unchanged with stakeholders.
-- [ ] Re-test create decision + bulk allocation flow end-to-end.
+- [x] `DistributionDecisionsManager` on `grant-management/page.tsx`.
+- [x] Excel/CSV upload in `DistributionDecisionsManager`.
+- [x] Create decision + bulk allocation flow wired to API + push.
 
 ### 4.3 Copy / explainer
 
@@ -716,19 +740,21 @@ Phase 2b (optional): cron `/api/airtable/push-retry` drains rows where `needsPor
 
 ### Manual test plan
 
-| # | Scenario | Expected |
-|---|----------|----------|
-| 1 | Load grant-management page | Grants and allocations match pre-cutover totals |
-| 2 | Create grant | Row in `grants_grid_view` + new row in Airtable |
-| 3 | Edit grant amounts | Both sides updated |
-| 4 | Delete grant | Removed both sides |
-| 5 | Create decision manually | Decision in both systems |
-| 6 | Upload Excel allocations | Parser populates states; allocations in both systems |
-| 7 | Edit single allocation | Updated both sides; decision `sum_allocation_amount` correct |
-| 8 | Delete decision | Cascading allocations removed both sides |
-| 9 | Pool summary cards | Match sum of canonical tables |
-| 10 | F2 / project management | Still resolves grants via `grants_grid_view` |
-| 11 | Simulate Airtable API failure | Portal save succeeds; `sync_status = pending`; retry works |
+| # | Scenario | Expected | Status |
+|---|----------|----------|--------|
+| 1 | Load grant-management page | Grants and allocations match pre-cutover totals | ⏳ |
+| 2 | Create grant | Row in `grants_grid_view` + new row in `Portal_Grants` | ✅ prototype |
+| 3 | Edit grant amounts | Both sides updated | ⏳ |
+| 4 | Delete grant | Removed from Portal + `Portal_Grants` | ✅ prototype |
+| 5 | Create decision manually | Decision in Portal + `Portal_Decisions` | ✅ prototype |
+| 6 | Upload Excel allocations | Parser populates states; allocations in both systems | ⏳ |
+| 7 | Edit single allocation | Updated both sides; decision `sum_allocation_amount` correct | ✅ prototype |
+| 8 | Delete decision | Cascading allocations removed Portal + `Portal_*` | ✅ prototype |
+| 9 | Pool summary cards | Match sum of canonical tables | ⏳ |
+| 10 | F2 / project management | Still resolves grants via `grants_grid_view` | ⏳ |
+| 11 | Simulate Airtable API failure | Portal save succeeds; `sync_status = pending`; re-save retries | ✅ (restriction field gap) |
+| 12 | Grant with sync unchecked | `sync_target = none`; no `Portal_Grants` row | ⏳ |
+| 13 | Edit legacy decision | First push sends `display_record_id`; updates `Portal_Decisions` | ⏳ |
 
 ---
 
@@ -736,33 +762,35 @@ Phase 2b (optional): cron `/api/airtable/push-retry` drains rows where `needsPor
 
 ```
 Phase A1 Airtable: create Portal_* raw tables only              [DONE]
-Phase A2 Airtable: wire raw → existing (automations)          [later]
-Phase 0  Schema (airtable_record_id, sync_status)             [DONE]
-Phase 1  Backfill FDW → canonical + validation              [backfill DONE; validation partial]
-Phase 3  API routes read canonical                              [NEXT]
-Phase 2  push.ts → raw tables only                            [app repo]
-Phase 4  UI switch + Excel restore                            [app repo]
-Phase 5  Test                                                 [both]
+Phase 0   Schema (airtable_record_id, sync_status)              [DONE]
+Phase 0b  sync_target on grants_grid_view                       [DONE]
+Phase 1   Backfill FDW → canonical + legacy sync_status       [DONE]
+Phase 3   API routes read/write canonical                       [DONE]
+Phase 2   push.ts → Portal_* raw tables                         [DONE]
+Phase 4   UI switch + Excel restore                             [DONE]
+Phase 5   Test (prototype done; broader coverage pending)       [PARTIAL]
+Phase A2  Airtable automations: raw → display tables            [NEXT]
 ```
 
-Deploy order: **A1 → 0 → 1 → 3 (reads) → 2+3 (writes) → A2 (when ready) → 4 → 5**.
+Deploy order: **A1 → 0 → 0b → 1 → 3 → 2+4 → 5 → A2** (A2 can overlap with late Phase 5).
 
 ### Immediate next step
 
-**Phase 1.3** — finish remaining validation (grant totals, pool summary). Then **Phase 3** — switch `/api/grants`, `/api/allocations`, `/api/distribution-decisions` to read canonical tables.
+**A2** — Airtable automations inbox → display tables. See [Phase A2](#phase-a2--wire-to-existing-tables-next).
 
-### After that (concise)
+### Status table
 
 | Step | What | Status |
 |------|------|--------|
 | **A1** | Portal_* raw tables in Airtable | ✅ |
-| **0** | Supabase migration: `airtable_record_id`, `sync_status` | ✅ |
-| **1** | Backfill FDW → canonical | ✅ |
-| **3** | APIs read canonical | ⏳ next |
-| **2** | Portal push → raw tables | pending |
-| **A2** | Automations: raw → existing tables | pending |
-| **4** | Enable UI + Excel | pending |
-| **5** | Test | pending |
+| **0** | Supabase: `airtable_record_id`, `sync_status`, `last_pushed_at` | ✅ |
+| **0b** | Supabase: `sync_target` on grants | ✅ |
+| **1** | Backfill FDW → canonical + `legacy` | ✅ |
+| **3** | APIs read/write canonical | ✅ |
+| **2** | Portal push → raw tables | ✅ |
+| **4** | Enable UI + Excel | ✅ |
+| **5** | Test | ⏳ partial |
+| **A2** | Automations: raw → existing tables | ⏳ next |
 
 ---
 
@@ -775,15 +803,15 @@ Deploy order: **A1 → 0 → 1 → 3 (reads) → 2+3 (writes) → A2 (when ready
 - [x] `allocations.decision_id` — always array of one decision `rec…`.
 - [x] `distribution_decision.decision_id` often null — use `decision_id_proposed`.
 - [x] `grants.donor_name` / `partner_name` — link `rec…` arrays, not display text.
-- [ ] `airtable_record_id` for **grants** — still null on canonical; FDW has no `rec…`; populate at Phase 2 push or Airtable API lookup.
-- [x] `airtable_record_id` for **decisions** — set from FDW `id` during Phase 1 backfill.
-- [ ] `airtable_record_id` for **allocations** — still null on canonical; FDW has no `rec…`; populate at Phase 2 push or Airtable API lookup.
+- [x] `airtable_record_id` for **grants** — populated on first successful `Portal_Grants` push; legacy backfill rows null until edited.
+- [x] `airtable_record_id` for **decisions** — set from FDW `id` during Phase 1 backfill; overwritten with `Portal_Decisions` `rec…` after first portal push.
+- [x] `airtable_record_id` for **allocations** — populated on first successful `Portal_Allocations` push; legacy backfill rows null until edited.
 - [x] Q1 FDW vs canonical counts/totals — **major mismatch** (see table above).
 - [x] Q6/Q7 — row-level diff complete (see sections above).
-- [ ] Confirm exact Airtable **API field names** for push — **done (Q8)**; see field reference section.
-- [ ] Decide permission: reuse admin/support roles or add `grant_edit` / `allocation_edit`.
+- [x] Confirm exact Airtable **API field names** for push — see field reference section; `restriction` required on live `Portal_Allocations` table.
+- [x] Permissions: `requireGrantEditor` — support/admin/superadmin for mutations.
 - [x] Airtable mirror strategy — **raw tables + automations**; existing table **schemas frozen** (automations write existing writable fields only).
-- [ ] Decide user-visible behaviour when Airtable push fails (toast warning vs hard error).
+- [x] User-visible behaviour when Airtable push fails: portal save succeeds; API returns `airtable_sync: pending` + optional `airtable_sync_error`; re-save or `POST /api/airtable/push-retry` to retry.
 
 ---
 
@@ -791,20 +819,35 @@ Deploy order: **A1 → 0 → 1 → 3 (reads) → 2+3 (writes) → A2 (when ready
 
 | File | Change |
 |------|--------|
-| `src/app/err-portal/grant-management/page.tsx` | Swap allocations component |
-| `src/app/err-portal/grant-management/components/GrantCallsManager.tsx` | Enable edit; API mutations |
-| `src/app/api/grants/route.ts` | CRUD + canonical read |
-| `src/app/api/allocations/route.ts` | Canonical read |
-| `src/app/api/distribution-decisions/route.ts` | Restore POST; canonical GET |
-| `src/app/api/distribution-decisions/[decisionId]/allocations/route.ts` | Airtable push |
-| `src/app/api/pool/summary/route.ts` | Canonical sources |
-| `src/app/api/airtable/sync/route.ts` | Remove grant-management inbound entries |
-| `src/lib/airtable/push.ts` | **New** |
+| `src/app/err-portal/grant-management/page.tsx` | ✅ `DistributionDecisionsManager` |
+| `src/app/err-portal/grant-management/components/GrantCallsManager.tsx` | ✅ Edit via API; P2H sync checkbox on create |
+| `src/app/err-portal/grant-management/components/DistributionDecisionsManager.tsx` | ✅ Decision + allocation CRUD |
+| `src/app/api/grants/route.ts` | ✅ CRUD + canonical read + push |
+| `src/app/api/grants/[id]/route.ts` | ✅ PUT/DELETE + push |
+| `src/app/api/allocations/route.ts` | ✅ Canonical read |
+| `src/app/api/distribution-decisions/route.ts` | ✅ POST + canonical GET + push |
+| `src/app/api/distribution-decisions/[decisionId]/route.ts` | ✅ DELETE + push |
+| `src/app/api/distribution-decisions/[decisionId]/allocations/route.ts` | ✅ POST + push |
+| `src/app/api/distribution-decisions/allocations/[allocationId]/route.ts` | ✅ PUT/DELETE + push |
+| `src/app/api/pool/summary/route.ts` | ✅ Canonical sources |
+| `src/app/api/pool/by-state/route.ts` | ✅ Canonical |
+| `src/app/api/airtable/sync/route.ts` | ✅ Grant-management inbound removed |
+| `src/app/api/airtable/push-retry/route.ts` | ✅ Retry drain |
+| `src/lib/airtable/push.ts` | ✅ |
+| `src/lib/airtable/fieldMaps.ts` | ✅ |
+| `src/lib/airtable/client.ts` | ✅ |
+| `src/lib/airtable/config.ts` | ✅ |
+| `src/lib/grantManagement/pushToAirtable.ts` | ✅ |
+| `src/lib/grantManagement/syncTarget.ts` | ✅ |
+| `src/lib/grantManagement/syncStatus.ts` | ✅ |
+| `src/lib/grantManagement/requireGrantEditor.ts` | ✅ |
 | `scripts/cutover/backfill-grants-from-fdw.ts` | ✅ Created + applied |
 | `scripts/cutover/backfill-decisions-from-fdw.ts` | ✅ Created + applied |
 | `scripts/cutover/backfill-allocations-from-fdw.ts` | ✅ Created + applied |
 | `scripts/cutover/compare-decisions-fdw-canonical.ts` | ✅ Created |
 | `scripts/cutover/validate-allocations-fk.ts` | ✅ Created |
+| `scripts/cutover/mark-sync-status-legacy.ts` | ✅ Created + applied |
+| `sudan-err-portal-schema/.../20260626140000_grants_sync_target.sql` | ✅ Applied |
 
 ---
 
