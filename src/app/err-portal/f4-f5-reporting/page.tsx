@@ -481,7 +481,7 @@ function F4F5ReportingPageContent() {
   if (!canViewPage) return null
 
   return (
-    <div className="max-w-7xl mx-auto p-6 space-y-6">
+    <div className="w-full min-w-0 space-y-6">
       <Tabs value={tab} onValueChange={(v) => setTab(v as any)}>
         <TabsList>
           <TabsTrigger value="f4">{t('tabs.f4')}</TabsTrigger>
@@ -504,7 +504,7 @@ function F4F5ReportingPageContent() {
             )}
           </div>
 
-          <Card>
+          <Card className="w-full">
             <CardHeader className="pb-4">
               {!loading && (
                 <SmartFilter
@@ -520,9 +520,11 @@ function F4F5ReportingPageContent() {
                 <div className="text-lg font-semibold">{t('f4.title')}</div>
               )}
             </CardHeader>
-            <CardContent className="p-0">
-              <div className="overflow-x-auto w-full">
-                <Table className="min-w-[1100px] text-xs [&_th]:py-1.5 [&_td]:py-1 [&_th]:px-2 [&_td]:px-2 [&_td]:text-xs">
+            <CardContent className="w-full p-0 overflow-x-auto">
+                <Table
+                  noOverflowWrapper
+                  className="w-full min-w-[1100px] text-xs [&_th]:py-1.5 [&_td]:py-1 [&_th]:px-2 [&_td]:px-2 [&_td]:text-xs"
+                >
                   <TableHeader>
                     <TableRow>
                       <TableHead className="text-xs whitespace-nowrap">
@@ -594,10 +596,10 @@ function F4F5ReportingPageContent() {
                       const rowKey = r.id != null ? `summary-${r.id}` : `project-${r.project_id}`
                       return (
                       <TableRow key={rowKey}>
-                        <TableCell className="text-xs max-w-[10rem] truncate" title={String(r.base_room_name || '')}>{r.base_room_name || '-'}</TableCell>
-                        <TableCell className="text-xs max-w-[12rem] truncate" title={grantCol === '-' ? '' : grantCol}>{grantCol}</TableCell>
+                        <TableCell className="text-xs min-w-0 truncate" title={String(r.base_room_name || '')}>{r.base_room_name || '-'}</TableCell>
+                        <TableCell className="text-xs min-w-0 truncate" title={grantCol === '-' ? '' : grantCol}>{grantCol}</TableCell>
                         <TableCell className="text-xs whitespace-nowrap">{r.state || '-'}</TableCell>
-                        <TableCell className="text-xs max-w-[8rem] truncate" title={String(r.donor || '')}>{r.donor || '-'}</TableCell>
+                        <TableCell className="text-xs min-w-0 truncate" title={String(r.donor || '')}>{r.donor || '-'}</TableCell>
                         <TableCell className="text-xs whitespace-nowrap">{r.payment_date ? new Date(r.payment_date).toLocaleDateString() : '-'}</TableCell>
                         <TableCell className="text-xs text-right tabular-nums">{r.amount_sdg != null ? formatMoneyTwoDecimals(r.amount_sdg) : '-'}</TableCell>
                         <TableCell className="text-xs text-right tabular-nums">{r.exchange_rate != null ? formatMoneyTwoDecimals(r.exchange_rate) : '-'}</TableCell>
@@ -648,7 +650,6 @@ function F4F5ReportingPageContent() {
                     )})}
                   </TableBody>
                 </Table>
-              </div>
               {!loading && f4Filtered.length > 0 && (
                 <div className="flex flex-wrap items-center justify-between gap-3 border-t px-3 py-2">
                   <span className="text-xs text-muted-foreground tabular-nums">
@@ -747,7 +748,7 @@ function F4F5ReportingPageContent() {
             )}
           </div>
 
-          <Card>
+          <Card className="w-full">
             <CardHeader className="pb-4">
               {!f5Loading && (
                 <SmartFilter
@@ -763,9 +764,11 @@ function F4F5ReportingPageContent() {
                 <div className="text-lg font-semibold">{t('f5.title')}</div>
               )}
             </CardHeader>
-            <CardContent className="p-0">
-              <div className="overflow-x-auto w-full">
-                <Table className="min-w-[1100px] text-xs [&_th]:py-1.5 [&_td]:py-1 [&_th]:px-2 [&_td]:px-2 [&_td]:text-xs">
+            <CardContent className="w-full p-0 overflow-x-auto">
+                <Table
+                  noOverflowWrapper
+                  className="w-full min-w-[1100px] text-xs [&_th]:py-1.5 [&_td]:py-1 [&_th]:px-2 [&_td]:px-2 [&_td]:text-xs"
+                >
                   <TableHeader>
                     <TableRow>
                       <TableHead className="text-xs whitespace-nowrap">
@@ -832,10 +835,10 @@ function F4F5ReportingPageContent() {
                       const rowKey = r.id != null ? `report-${r.id}` : `project-${r.project_id}`
                       return (
                       <TableRow key={rowKey}>
-                        <TableCell className="text-xs max-w-[10rem] truncate" title={String(r.base_room_name || '')}>{r.base_room_name || '-'}</TableCell>
-                        <TableCell className="text-xs max-w-[12rem] truncate" title={grantCol === '-' ? '' : grantCol}>{grantCol}</TableCell>
+                        <TableCell className="text-xs min-w-0 truncate" title={String(r.base_room_name || '')}>{r.base_room_name || '-'}</TableCell>
+                        <TableCell className="text-xs min-w-0 truncate" title={grantCol === '-' ? '' : grantCol}>{grantCol}</TableCell>
                         <TableCell className="text-xs whitespace-nowrap">{r.state || '-'}</TableCell>
-                        <TableCell className="text-xs max-w-[8rem] truncate" title={String(r.donor || '')}>{r.donor || '-'}</TableCell>
+                        <TableCell className="text-xs min-w-0 truncate" title={String(r.donor || '')}>{r.donor || '-'}</TableCell>
                         <TableCell className="text-xs whitespace-nowrap">{r.payment_date ? new Date(r.payment_date).toLocaleDateString() : '-'}</TableCell>
                         <TableCell className="text-xs text-right tabular-nums">{r.amount_sdg != null ? formatMoneyTwoDecimals(r.amount_sdg) : '-'}</TableCell>
                         <TableCell className="text-xs text-right tabular-nums">{r.exchange_rate != null ? formatMoneyTwoDecimals(r.exchange_rate) : '-'}</TableCell>
@@ -872,7 +875,6 @@ function F4F5ReportingPageContent() {
                     )})}
                   </TableBody>
                 </Table>
-              </div>
               {!f5Loading && f5Filtered.length > 0 && (
                 <div className="flex flex-wrap items-center justify-between gap-3 border-t px-3 py-2">
                   <span className="text-xs text-muted-foreground tabular-nums">
@@ -947,7 +949,7 @@ function F4F5ReportingPageContent() {
 
 export default function F4F5ReportingPage() {
   return (
-    <Suspense fallback={<div className="max-w-7xl mx-auto p-6">Loading...</div>}>
+    <Suspense fallback={<div className="w-full p-6">Loading...</div>}>
       <F4F5ReportingPageContent />
     </Suspense>
   )
