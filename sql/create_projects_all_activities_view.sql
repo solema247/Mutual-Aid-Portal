@@ -550,7 +550,13 @@ select
     else ari."Project Donor"
   end as project_donor,
   ari."Partner" as partner,
-  ari."State" as state,
+  case trim(ari."State")
+    when 'Gadarif' then 'Gadaref'
+    when 'Sinar' then 'Sennar'
+    when 'Northern State' then 'Northern'
+    when 'Al Jazeera' then 'Al Jazirah'
+    else trim(ari."State")
+  end as state,
   ari."Responsible" as responsible,
   ari."Sector (Primary)" as sector_primary,
   ari."Sector (Secondardy" as sector_secondary,
