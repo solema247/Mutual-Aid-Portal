@@ -51,6 +51,7 @@ type ActiveIterationReport = SprintTaskListReport & {
 }
 
 type ApiResponse = {
+  previous: ActiveIterationReport | null
   active: ActiveIterationReport | null
   planned: ActiveIterationReport | null
   unscheduled: SprintTaskListReport
@@ -316,6 +317,7 @@ function IterationSection ({
 
 export function ActiveIterationTasks ({ enabled = true }: ActiveIterationTasksProps) {
   const { t, i18n } = useTranslation('err')
+  const [previous, setPrevious] = useState<ActiveIterationReport | null>(null)
   const [active, setActive] = useState<ActiveIterationReport | null>(null)
   const [planned, setPlanned] = useState<ActiveIterationReport | null>(null)
   const [unscheduled, setUnscheduled] = useState<SprintTaskListReport | null>(null)
@@ -352,6 +354,7 @@ export function ActiveIterationTasks ({ enabled = true }: ActiveIterationTasksPr
         }
         const json = (await res.json()) as ApiResponse
         if (!cancelled) {
+          setPrevious(json.previous ?? null)
           setActive(json.active ?? null)
           setPlanned(json.planned ?? null)
           setUnscheduled(json.unscheduled)
@@ -382,7 +385,7 @@ export function ActiveIterationTasks ({ enabled = true }: ActiveIterationTasksPr
         <CardDescription className="text-xs leading-relaxed">
           {t(
             'raise_ticket_sprint_intro',
-            'Work is organised in two-week sprint cycles on the GitHub project board. Progress is reviewed weekly and tasks move between the current and planned iterations.'
+            'Work is organised in two-week sprint cycles on the GitHub project board. Progress is reviewed weekly and tasks move between the previous, current, and planned sprints.'
           )}
         </CardDescription>
       </CardHeader>
@@ -397,23 +400,33 @@ export function ActiveIterationTasks ({ enabled = true }: ActiveIterationTasksPr
           </div>
         ) : (
           <>
+            {previous ? (
+              <IterationSection
+                heading={t('raise_ticket_sprint_previous_heading', 'Previous sprint')}
+                report={previous}
+                emptyMessage={t(
+                  'raise_ticket_sprint_previous_empty',
+                  'No tasks are assigned to the previous sprint.'
+                )}
+              />
+            ) : null}
             {active ? (
               <IterationSection
-                heading={t('raise_ticket_sprint_current_heading', 'Current iteration')}
+                heading={t('raise_ticket_sprint_current_heading', 'Current sprint')}
                 report={active}
                 emptyMessage={t(
                   'raise_ticket_sprint_empty',
-                  'No tasks are assigned to the current iteration yet.'
+                  'No tasks are assigned to the current sprint yet.'
                 )}
               />
             ) : null}
             {planned ? (
               <IterationSection
-                heading={t('raise_ticket_sprint_planned_heading', 'Planned iteration')}
+                heading={t('raise_ticket_sprint_planned_heading', 'Planned sprint')}
                 report={planned}
                 emptyMessage={t(
                   'raise_ticket_sprint_planned_empty',
-                  'No tasks are assigned to the planned iteration yet.'
+                  'No tasks are assigned to the planned sprint yet.'
                 )}
               />
             ) : null}
@@ -422,13 +435,13 @@ export function ActiveIterationTasks ({ enabled = true }: ActiveIterationTasksPr
                 heading={t('raise_ticket_sprint_unscheduled_heading', 'Not in a sprint')}
                 description={t(
                   'raise_ticket_sprint_unscheduled_desc',
-                  'Open tasks (Backlog, Ready, In progress) with no iteration · {{count}} tasks',
+                  'Open tasks (Backlog, Ready, In progress) with no sprint · {{count}} tasks',
                   { count: unscheduled.total }
                 )}
                 report={unscheduled}
                 emptyMessage={t(
                   'raise_ticket_sprint_unscheduled_empty',
-                  'All open tasks are assigned to an iteration.'
+                  'All open tasks are assigned to a sprint.'
                 )}
                 pageSize={UNSCHEDULED_PAGE_SIZE}
               />

@@ -78,6 +78,7 @@ export type ActiveIterationReport = SprintTaskListReport & {
 }
 
 export type SprintReports = {
+  previous: ActiveIterationReport | null
   active: ActiveIterationReport | null
   planned: ActiveIterationReport | null
   unscheduled: SprintTaskListReport
@@ -207,6 +208,12 @@ query ProjectIterationConfig($login: String!, $number: Int!) {
                 startDate
                 duration
               }
+              completedIterations {
+                id
+                title
+                startDate
+                duration
+              }
             }
           }
         }
@@ -291,6 +298,13 @@ type GraphqlPage = {
   }
 }
 
+type GraphqlIterationNode = {
+  id?: string
+  title?: string
+  startDate?: string
+  duration?: number
+}
+
 type GraphqlIterationConfigPage = {
   owner?: {
     projectV2?: {
@@ -298,12 +312,8 @@ type GraphqlIterationConfigPage = {
         nodes?: Array<{
           name?: string
           configuration?: {
-            iterations?: Array<{
-              id?: string
-              title?: string
-              startDate?: string
-              duration?: number
-            }>
+            iterations?: GraphqlIterationNode[]
+            completedIterations?: GraphqlIterationNode[]
           }
         }>
       }
@@ -482,6 +492,36 @@ export function resolvePlannedIteration (
   return sorted.find((iteration) => isIterationPlanned(iteration, now)) ?? null
 }
 
+export function isIterationCompleted (
+  iteration: Pick<ProjectIteration, 'startDate' | 'duration'>,
+  now = new Date()
+): boolean {
+  const start = new Date(`${iteration.startDate}T12:00:00`)
+  const end = new Date(start)
+  end.setUTCDate(end.getUTCDate() + iteration.duration)
+  return end <= now
+}
+
+export function resolvePreviousIteration (
+  iterations: ProjectIteration[],
+  now = new Date()
+): ProjectIteration | null {
+  const sorted = sortIterationsByStart(iterations)
+  const active = resolveActiveIteration(sorted, now)
+  if (active) {
+    const activeIndex = sorted.findIndex(
+      (iteration) => iteration.iterationId === active.iterationId
+    )
+    if (activeIndex > 0) {
+      return sorted[activeIndex - 1]
+    }
+    return null
+  }
+
+  const completed = sorted.filter((iteration) => isIterationCompleted(iteration, now))
+  return completed.length ? completed[completed.length - 1] : null
+}
+
 export function isIterationActive (
   iteration: Pick<ProjectIteration, 'startDate' | 'duration'>,
   now = new Date()
@@ -633,18 +673,27 @@ async function fetchIterationConfig (
 
   for (const field of fields) {
     if (field.name !== ITERATION_FIELD) continue
-    const iterations = field.configuration?.iterations ?? []
-    return iterations
-      .filter(
-        (iteration): iteration is Required<typeof iteration> =>
-          Boolean(iteration.id && iteration.title && iteration.startDate && iteration.duration)
-      )
-      .map((iteration) => ({
-        iterationId: iteration.id!,
-        title: iteration.title!,
-        startDate: iteration.startDate!,
-        duration: iteration.duration!,
-      }))
+    const mapNodes = (nodes: GraphqlIterationNode[]): ProjectIteration[] =>
+      nodes
+        .filter(
+          (iteration): iteration is Required<GraphqlIterationNode> =>
+            Boolean(iteration.id && iteration.title && iteration.startDate && iteration.duration)
+        )
+        .map((iteration) => ({
+          iterationId: iteration.id,
+          title: iteration.title,
+          startDate: iteration.startDate,
+          duration: iteration.duration,
+        }))
+
+    const byId = new Map<string, ProjectIteration>()
+    for (const iteration of [
+      ...mapNodes(field.configuration?.completedIterations ?? []),
+      ...mapNodes(field.configuration?.iterations ?? []),
+    ]) {
+      byId.set(iteration.iterationId, iteration)
+    }
+    return [...byId.values()]
   }
 
   return []
@@ -830,8 +879,12 @@ export function buildSprintReports (
 ): SprintReports {
   const activeIteration = resolveActiveIterationFromData(items, iterationConfig)
   const plannedIteration = resolvePlannedIteration(iterationConfig)
+  const previousIteration = resolvePreviousIteration(iterationConfig)
 
   return {
+    previous: previousIteration
+      ? buildIterationReport(items, previousIteration, locale)
+      : null,
     active: activeIteration ? buildIterationReport(items, activeIteration, locale) : null,
     planned: plannedIteration ? buildIterationReport(items, plannedIteration, locale) : null,
     unscheduled: buildUnscheduledOpenTasksReport(items),

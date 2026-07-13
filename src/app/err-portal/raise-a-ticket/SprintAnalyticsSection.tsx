@@ -302,7 +302,7 @@ export function SprintAnalyticsSection ({ enabled = true }: SprintAnalyticsSecti
           title={t('raise_ticket_sprint_chart_level_title', 'Tasks by sprint')}
           description={t(
             'raise_ticket_sprint_chart_level_desc',
-            '{{count}} open tasks by iteration assignment',
+            '{{count}} open tasks by sprint assignment',
             { count: rows?.totals.open ?? 0 }
           )}
           rows={rows?.bySprintLevel ?? []}
