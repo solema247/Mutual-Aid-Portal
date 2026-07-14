@@ -14,13 +14,17 @@ import {
 import { Button } from '@/components/ui/button'
 import {
   GITHUB_PROJECT_STATUS_CHART_ORDER,
+  GITHUB_PROJECT_TEAM_REQUEST_CHART_ORDER,
   RAISE_TICKET_BIG_ROCK_SHORT_I18N_KEYS,
   RAISE_TICKET_STATUS_I18N_KEYS,
   RAISE_TICKET_TASK_TYPE_SHORT_I18N_KEYS,
+  RAISE_TICKET_TEAM_REQUEST_I18N_KEYS,
   STATUS_CHART_COLORS,
   STATUS_DATA_KEYS,
+  TEAM_REQUEST_CHART_COLORS,
   type GithubProjectBigRock,
   type GithubProjectStatus,
+  type GithubProjectTeamRequest,
 } from '@/lib/raiseTicketGithub'
 
 type ActiveIterationTask = {
@@ -29,14 +33,18 @@ type ActiveIterationTask = {
   status: GithubProjectStatus
   bigRock: GithubProjectBigRock
   typeOfTask: string | null
+  teamRequest?: GithubProjectTeamRequest
   priority: string | null
   size: string | null
   assignees: string[]
 }
 
+type TeamRequestCounts = Record<GithubProjectTeamRequest, number>
+
 type SprintTaskListReport = {
   tasks: ActiveIterationTask[]
   statusCounts: Record<GithubProjectStatus, number>
+  teamRequestCounts?: TeamRequestCounts
   total: number
 }
 
@@ -109,6 +117,65 @@ function StatusSummary ({ report }: { report: SprintTaskListReport }) {
   )
 }
 
+function TeamRequestSummary ({ report }: { report: SprintTaskListReport }) {
+  if (report.total === 0) return null
+
+  const counts = report.teamRequestCounts
+  const hasCounts = counts && GITHUB_PROJECT_TEAM_REQUEST_CHART_ORDER.some((key) => (counts[key] ?? 0) > 0)
+  if (!hasCounts) {
+    // Fallback for older API payloads without teamRequestCounts
+    const derived = Object.fromEntries(
+      GITHUB_PROJECT_TEAM_REQUEST_CHART_ORDER.map((key) => [key, 0])
+    ) as TeamRequestCounts
+    for (const task of report.tasks) {
+      const key = task.teamRequest ?? 'Not set'
+      if (key in derived) derived[key as GithubProjectTeamRequest] += 1
+    }
+    return <TeamRequestPills counts={derived} total={report.total} />
+  }
+
+  return <TeamRequestPills counts={counts} total={report.total} />
+}
+
+function TeamRequestPills ({
+  counts,
+  total,
+}: {
+  counts: TeamRequestCounts
+  total: number
+}) {
+  const { t } = useTranslation('err')
+
+  return (
+    <div className="space-y-1">
+      <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+        {t('raise_ticket_sprint_team_request_label', 'Team Request')}
+      </p>
+      <div className="flex flex-wrap gap-2">
+        {GITHUB_PROJECT_TEAM_REQUEST_CHART_ORDER.map((team) => {
+          const count = counts[team] ?? 0
+          if (count === 0) return null
+          const percent = total > 0 ? Math.round((count / total) * 100) : 0
+          const color = TEAM_REQUEST_CHART_COLORS[team]
+          return (
+            <div
+              key={team}
+              className="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-medium leading-none text-foreground/90 ring-1 ring-border/60"
+              style={{ backgroundColor: `${color}55` }}
+            >
+              <span>{t(RAISE_TICKET_TEAM_REQUEST_I18N_KEYS[team], team)}</span>
+              <span className="tabular-nums text-muted-foreground">
+                {percent}%
+                <span className="opacity-70"> · {count}</span>
+              </span>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 function TaskTable ({
   tasks,
   emptyMessage,
@@ -129,7 +196,7 @@ function TaskTable ({
 
   return (
     <div className="overflow-x-auto rounded-lg ring-1 ring-border/50">
-      <table className="w-full min-w-[980px] text-left text-sm">
+      <table className="w-full min-w-[1080px] text-left text-sm">
         <thead>
           <tr className="border-b border-border/60 bg-muted/30 text-[10px] uppercase tracking-wide text-muted-foreground">
             <th className="px-3 py-2 font-medium">{t('raise_ticket_sprint_col_task', 'Task')}</th>
@@ -141,6 +208,9 @@ function TaskTable ({
             <th className="px-3 py-2 font-medium">{t('raise_ticket_sprint_col_status', 'Status')}</th>
             <th className="px-3 py-2 font-medium">
               {t('raise_ticket_sprint_col_type_of_task', 'Type of Task')}
+            </th>
+            <th className="px-3 py-2 font-medium">
+              {t('raise_ticket_sprint_col_team_request', 'Team Request')}
             </th>
             <th className="px-3 py-2 font-medium">{t('raise_ticket_sprint_col_big_rock', 'Big Rock')}</th>
           </tr>
@@ -194,6 +264,11 @@ function TaskTable ({
                 {typeOfTaskLabel}
               </td>
               <td className="px-3 py-2.5 text-xs text-muted-foreground">
+                {task.teamRequest
+                  ? t(RAISE_TICKET_TEAM_REQUEST_I18N_KEYS[task.teamRequest], task.teamRequest)
+                  : notSet}
+              </td>
+              <td className="px-3 py-2.5 text-xs text-muted-foreground">
                 {t(RAISE_TICKET_BIG_ROCK_SHORT_I18N_KEYS[task.bigRock], task.bigRock)}
               </td>
             </tr>
@@ -241,6 +316,7 @@ function PaginatedTaskListSection ({
         <h3 className="text-sm font-semibold text-foreground">{heading}</h3>
         <p className="text-xs text-muted-foreground">{description}</p>
         <StatusSummary report={report} />
+        <TeamRequestSummary report={report} />
       </div>
       <TaskTable tasks={paginatedTasks} emptyMessage={emptyMessage} />
       {report.tasks.length > pageSize ? (
@@ -309,6 +385,7 @@ function IterationSection ({
           })}
         </p>
         <StatusSummary report={report} />
+        <TeamRequestSummary report={report} />
       </div>
       <TaskTable tasks={report.tasks} emptyMessage={emptyMessage} />
     </section>
