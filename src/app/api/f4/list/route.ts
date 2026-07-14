@@ -72,13 +72,28 @@ function computeReportStatus(args: {
   has_f4_report: boolean
   activities_raw_import_id: unknown
   review_status: unknown
+  f4_status?: unknown
 }): string {
   if (args.activities_raw_import_id) return 'historical'
-  if (!args.has_f4_report) return 'not_uploaded'
+  if (!args.has_f4_report) {
+    const f4Status = args.f4_status != null ? String(args.f4_status).trim().toLowerCase() : null
+    if (f4Status === 'completed') return 'complete_no_report'
+    return 'not_uploaded'
+  }
   const status = String(args.review_status ?? 'pending_review').trim().toLowerCase()
   if (status === 'accepted') return 'accepted'
   if (status === 'rejected') return 'rejected'
   return 'pending_review'
+}
+
+function grantCallIdForProject(
+  project: Record<string, unknown>,
+  gridGrantIdByUuid: Map<string, string>
+): string | null {
+  const gridId = project.grant_grid_id != null ? String(project.grant_grid_id) : ''
+  if (!gridId) return null
+  const grantId = gridGrantIdByUuid.get(gridId)
+  return grantId != null && grantId.trim() !== '' ? grantId.trim() : null
 }
 
 function grantNameForProject(
@@ -102,9 +117,14 @@ function grantNameForProject(
 async function loadGrantNameMaps(
   supabase: ReturnType<typeof getSupabaseRouteClient>,
   projects: Record<string, unknown>[]
-): Promise<{ gridById: Map<string, string>; gridByGrantKey: Map<string, string> }> {
+): Promise<{
+  gridById: Map<string, string>
+  gridByGrantKey: Map<string, string>
+  gridGrantIdByUuid: Map<string, string>
+}> {
   const gridById = new Map<string, string>()
   const gridByGrantKey = new Map<string, string>()
+  const gridGrantIdByUuid = new Map<string, string>()
 
   const gridIds = [
     ...new Set(
@@ -131,9 +151,14 @@ async function loadGrantNameMaps(
         .select('id, project_name, grant_id')
         .in('id', batch)
       for (const row of data || []) {
+        const id = String((row as { id: string }).id)
         const name = (row as { project_name?: string }).project_name
+        const grantId = (row as { grant_id?: string | null }).grant_id
+        if (grantId != null && String(grantId).trim() !== '') {
+          gridGrantIdByUuid.set(id, String(grantId).trim())
+        }
         if (name) {
-          gridById.set(String((row as { id: string }).id), name)
+          gridById.set(id, name)
         }
       }
     }
@@ -155,7 +180,7 @@ async function loadGrantNameMaps(
     }
   }
 
-  return { gridById, gridByGrantKey }
+  return { gridById, gridByGrantKey, gridGrantIdByUuid }
 }
 
 function grantAmountUsd(project: Record<string, unknown>): number {
@@ -175,8 +200,9 @@ function hasGrantReference(project: Record<string, unknown>): boolean {
 function isEligibleWithoutF4Report(project: Record<string, unknown>, hasSummary: boolean): boolean {
   if (hasSummary) return false
 
+  // Marked complete in err_projects but no uploaded F4 — include as complete_no_report
   const f4Status = project.f4_status != null ? String(project.f4_status).trim().toLowerCase() : null
-  if (f4Status === 'completed') return false
+  if (f4Status === 'completed') return true
 
   const status = String(project.status ?? '').trim().toLowerCase()
   if (status === 'active') return true
@@ -276,7 +302,7 @@ export async function GET() {
     let projectsQuery = supabase
       .from('err_projects')
       .select(projectSelect)
-      .in('status', ['active', 'approved'])
+      .in('status', ['active', 'approved', 'completed'])
 
     if (allowedStateNames !== null && allowedStateNames.length > 0) {
       projectsQuery = projectsQuery.in('state', allowedStateNames)
@@ -326,7 +352,7 @@ export async function GET() {
     const summaries = await fetchPortalSummaries(supabase, allowedStateNames, portalSelect)
 
     const allProjectsForGrants = Array.from(projectById.values())
-    const { gridById, gridByGrantKey } = await loadGrantNameMaps(supabase, allProjectsForGrants)
+    const { gridById, gridByGrantKey, gridGrantIdByUuid } = await loadGrantNameMaps(supabase, allProjectsForGrants)
 
     // Historical F4 reports (unchanged)
     const { data: historicalSummaries } = await supabase
@@ -489,6 +515,7 @@ export async function GET() {
         err_id: project.err_id ?? null,
         grant_serial_id: project.grant_serial_id ?? project.grant_id ?? null,
         grant_id: project.grant_id ?? null,
+        grant_call_id: grantCallIdForProject(project, gridGrantIdByUuid),
         grant_name: grantNameForProject(project, gridById, gridByGrantKey),
         state: project.state ?? null,
         donor: donorLabel(project),
@@ -509,6 +536,7 @@ export async function GET() {
           has_f4_report: true,
           activities_raw_import_id: null,
           review_status: s.review_status || 'pending_review',
+          f4_status: project.f4_status,
         }),
       })
     }
@@ -530,6 +558,7 @@ export async function GET() {
         err_id: project.err_id ?? null,
         grant_serial_id: project.grant_serial_id ?? project.grant_id ?? null,
         grant_id: project.grant_id ?? null,
+        grant_call_id: grantCallIdForProject(project, gridGrantIdByUuid),
         grant_name: grantNameForProject(project, gridById, gridByGrantKey),
         state: project.state ?? null,
         donor: donorLabel(project),
@@ -550,6 +579,7 @@ export async function GET() {
           has_f4_report: false,
           activities_raw_import_id: null,
           review_status: null,
+          f4_status: project.f4_status,
         }),
       })
     }
@@ -574,6 +604,7 @@ export async function GET() {
         err_id: hist['ERR CODE'] || hist['ERR Name'] || null,
         grant_serial_id: serial,
         grant_id: serial,
+        grant_call_id: null,
         grant_name: serial,
         state: hist['State'] || null,
         donor: hist['Project Donor'] || null,

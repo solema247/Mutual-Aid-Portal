@@ -36,7 +36,7 @@
       "err": "غرفة الطوارئ",
       "state": "الولاية",
       "donor": "المانح",
-      "grant": "نداء المنحة",
+      "grant": "المنحة",
       "all": "الكل",
       "reset": "إعادة تعيين"
     },
@@ -46,7 +46,7 @@
       "grant_id": "معرّف المنحة",
       "grant_name": "اسم المنحة",
       "state": "الولاية",
-      "grant": "نداء المنحة",
+      "grant": "المنحة",
       "donor": "المانح",
       "payment_date": "تاريخ الدفع",
       "amount_sdg": "المبلغ (جنيه)",
@@ -64,6 +64,7 @@
     "empty": "لا توجد سجلات بعد",
     "report_status": {
       "not_uploaded": "لم يُرفع",
+      "complete_no_report": "مُعلَّم كمكتمل (بدون تقرير)",
       "pending_review": "قيد المراجعة",
       "accepted": "مقبول",
       "rejected": "مرفوض",
@@ -152,10 +153,11 @@
       "grant_name_placeholder": "ابحث باسم المنحة أو الرقم التسلسلي",
       "base_room": "الغرفة الأساسية",
       "report_status": "حالة التقرير",
+      "end_activity_status": "حالة تاريخ انتهاء النشاط",
       "err": "غرفة الطوارئ",
       "state": "الولاية",
       "donor": "المانح",
-      "grant": "نداء المنحة",
+      "grant": "المنحة",
       "all": "الكل",
       "reset": "إعادة تعيين"
     },
@@ -165,7 +167,7 @@
       "grant_id": "معرّف المنحة",
       "grant_name": "اسم المنحة",
       "state": "الولاية",
-      "grant": "نداء المنحة",
+      "grant": "المنحة",
       "donor": "المانح",
       "payment_date": "تاريخ الدفع",
       "amount_sdg": "المبلغ (جنيه)",
@@ -180,7 +182,12 @@
     "empty": "لا توجد سجلات بعد",
     "report_status": {
       "not_uploaded": "لم يُرفع",
+      "complete_no_report": "مُعلَّم كمكتمل (بدون تقرير)",
       "uploaded": "مُرفوع"
+    },
+    "end_activity_status": {
+      "complete": "مكتمل",
+      "missing": "مفقود"
     },
     "preview": {
       "tabs": { "edit_form": "تحرير النموذج", "view_file": "عرض الملف", "tables": "الجداول المستخرجة" },

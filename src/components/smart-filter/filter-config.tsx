@@ -303,19 +303,19 @@ export function getF3MousFilterFields(options: {
 export function getF4ReportingFilterFields(options: {
   baseRoomOptions: string[]
   stateOptions: string[]
-  donorOptions: string[]
+  grantOptions: FilterSelectOption[]
   reportStatusOptions: FilterSelectOption[]
   labels: {
     grantId: string
     grantIdPlaceholder: string
     baseRoom: string
     state: string
-    donor: string
+    grant: string
     reportStatus: string
     all: string
   }
 }): FilterFieldConfig[] {
-  const { baseRoomOptions, stateOptions, donorOptions, reportStatusOptions, labels } = options
+  const { baseRoomOptions, stateOptions, grantOptions, reportStatusOptions, labels } = options
   return [
     {
       id: 'grant_id',
@@ -341,12 +341,12 @@ export function getF4ReportingFilterFields(options: {
       accessorKey: 'state',
     },
     {
-      id: 'donor',
-      label: labels.donor,
+      id: 'grant',
+      label: labels.grant,
       type: 'multi_select',
-      options: donorOptions.map((s) => ({ value: s, label: s })),
+      options: grantOptions,
       placeholder: labels.all,
-      accessorKey: 'donor',
+      accessorKey: 'grant_call_id',
     },
     {
       id: 'report_status',
@@ -355,6 +355,49 @@ export function getF4ReportingFilterFields(options: {
       options: reportStatusOptions,
       placeholder: labels.all,
       accessorKey: 'report_status',
+    },
+  ]
+}
+
+/** F5 reporting: F4 fields plus End Activity Status */
+export function getF5ReportingFilterFields(options: {
+  baseRoomOptions: string[]
+  stateOptions: string[]
+  grantOptions: FilterSelectOption[]
+  reportStatusOptions: FilterSelectOption[]
+  endActivityStatusOptions: FilterSelectOption[]
+  labels: {
+    grantId: string
+    grantIdPlaceholder: string
+    baseRoom: string
+    state: string
+    grant: string
+    reportStatus: string
+    endActivityStatus: string
+    all: string
+  }
+}): FilterFieldConfig[] {
+  const { endActivityStatusOptions, labels, ...shared } = options
+  return [
+    ...getF4ReportingFilterFields({
+      ...shared,
+      labels: {
+        grantId: labels.grantId,
+        grantIdPlaceholder: labels.grantIdPlaceholder,
+        baseRoom: labels.baseRoom,
+        state: labels.state,
+        grant: labels.grant,
+        reportStatus: labels.reportStatus,
+        all: labels.all,
+      },
+    }),
+    {
+      id: 'end_activity_status',
+      label: labels.endActivityStatus,
+      type: 'multi_select',
+      options: endActivityStatusOptions,
+      placeholder: labels.all,
+      accessorKey: 'end_activity_status',
     },
   ]
 }

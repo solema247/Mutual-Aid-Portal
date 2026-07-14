@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { applyReportingStatusUpdates } from '@/lib/projectStatus'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
+import { syncProjectEndDateFromF5 } from '@/lib/syncProjectEndDateFromF5'
 import { translateF5Report, translateF5Reach } from '@/lib/translateHelper'
 
 export async function POST(req: Request) {
@@ -197,6 +198,11 @@ export async function POST(req: Request) {
         .select('id')
       if (reachErr) throw reachErr
       reach_ids = (reachRows || []).map((r: any) => r.id)
+    }
+
+    const endDateResult = await syncProjectEndDateFromF5(supabase, project_id)
+    if (!endDateResult.ok) {
+      console.warn('F5 save: failed to sync project end_date', endDateResult.error)
     }
 
     return NextResponse.json({ report_id, reach_ids })

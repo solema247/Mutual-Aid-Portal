@@ -36,7 +36,7 @@
       "err": "ERR",
       "state": "State",
       "donor": "Donor",
-      "grant": "Grant Call",
+      "grant": "Grant",
       "all": "All",
       "reset": "Reset"
     },
@@ -46,7 +46,7 @@
       "grant_id": "Grant ID",
       "grant_name": "Grant Name",
       "state": "State",
-      "grant": "Grant Call",
+      "grant": "Grant",
       "donor": "Donor",
       "payment_date": "Payment Date",
       "amount_sdg": "Amount (SDG)",
@@ -64,6 +64,7 @@
     "empty": "No records yet",
     "report_status": {
       "not_uploaded": "Not uploaded",
+      "complete_no_report": "Marked Complete (No report)",
       "pending_review": "Pending review",
       "accepted": "Accepted",
       "rejected": "Rejected",
@@ -152,10 +153,11 @@
       "grant_name_placeholder": "Search by grant name or serial",
       "base_room": "Base Room",
       "report_status": "Report Status",
+      "end_activity_status": "End Activity Status",
       "err": "ERR",
       "state": "State",
       "donor": "Donor",
-      "grant": "Grant Call",
+      "grant": "Grant",
       "all": "All",
       "reset": "Reset"
     },
@@ -165,7 +167,7 @@
       "grant_id": "Grant ID",
       "grant_name": "Grant Name",
       "state": "State",
-      "grant": "Grant Call",
+      "grant": "Grant",
       "donor": "Donor",
       "payment_date": "Payment Date",
       "amount_sdg": "Amount (SDG)",
@@ -180,7 +182,12 @@
     "empty": "No records yet",
     "report_status": {
       "not_uploaded": "Not uploaded",
+      "complete_no_report": "Marked Complete (No report)",
       "uploaded": "Uploaded"
+    },
+    "end_activity_status": {
+      "complete": "Complete",
+      "missing": "Missing"
     },
     "preview": {
       "tabs": { "edit_form": "Edit Form", "view_file": "View File", "tables": "Extracted Tables" },

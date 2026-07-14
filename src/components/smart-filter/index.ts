@@ -28,6 +28,7 @@ export {
   getF3MousFilterFields,
   getF4F5ReportingFilterFields,
   getF4ReportingFilterFields,
+  getF5ReportingFilterFields,
   STATUS_OPTIONS,
 } from './filter-config'
 export { STATUS_DISPLAY, getStatusDisplay } from './status-config'

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { requirePermission } from '@/lib/requirePermission'
+import { syncProjectEndDateFromF5 } from '@/lib/syncProjectEndDateFromF5'
 
 export async function GET(
   _req: Request,
@@ -81,12 +82,19 @@ export async function DELETE(
       )
     }
 
+    const projectId = row.project_id as string
+
     const { error: reachErr } = await supabase.from('err_program_reach').delete().eq('report_id', id)
     if (reachErr) throw reachErr
     const { error: filesErr } = await supabase.from('err_program_files').delete().eq('report_id', id)
     if (filesErr) throw filesErr
     const { error: repErr } = await supabase.from('err_program_report').delete().eq('id', id)
     if (repErr) throw repErr
+
+    const endDateResult = await syncProjectEndDateFromF5(supabase, projectId)
+    if (!endDateResult.ok) {
+      console.warn('F5 delete: failed to sync project end_date', endDateResult.error)
+    }
 
     return NextResponse.json({ success: true })
   } catch (e) {

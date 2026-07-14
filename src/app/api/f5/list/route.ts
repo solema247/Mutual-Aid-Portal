@@ -68,6 +68,16 @@ function donorLabel(project: Record<string, unknown>): string | null {
   return donor?.name || donor?.short_name || null
 }
 
+function grantCallIdForProject(
+  project: Record<string, unknown>,
+  gridGrantIdByUuid: Map<string, string>
+): string | null {
+  const gridId = project.grant_grid_id != null ? String(project.grant_grid_id) : ''
+  if (!gridId) return null
+  const grantId = gridGrantIdByUuid.get(gridId)
+  return grantId != null && grantId.trim() !== '' ? grantId.trim() : null
+}
+
 function grantNameForProject(
   project: Record<string, unknown>,
   gridById: Map<string, string>,
@@ -89,9 +99,14 @@ function grantNameForProject(
 async function loadGrantNameMaps(
   supabase: ReturnType<typeof getSupabaseRouteClient>,
   projects: Record<string, unknown>[]
-): Promise<{ gridById: Map<string, string>; gridByGrantKey: Map<string, string> }> {
+): Promise<{
+  gridById: Map<string, string>
+  gridByGrantKey: Map<string, string>
+  gridGrantIdByUuid: Map<string, string>
+}> {
   const gridById = new Map<string, string>()
   const gridByGrantKey = new Map<string, string>()
+  const gridGrantIdByUuid = new Map<string, string>()
 
   const gridIds = [
     ...new Set(
@@ -118,9 +133,14 @@ async function loadGrantNameMaps(
         .select('id, project_name, grant_id')
         .in('id', batch)
       for (const row of data || []) {
+        const id = String((row as { id: string }).id)
         const name = (row as { project_name?: string }).project_name
+        const grantId = (row as { grant_id?: string | null }).grant_id
+        if (grantId != null && String(grantId).trim() !== '') {
+          gridGrantIdByUuid.set(id, String(grantId).trim())
+        }
         if (name) {
-          gridById.set(String((row as { id: string }).id), name)
+          gridById.set(id, name)
         }
       }
     }
@@ -142,7 +162,7 @@ async function loadGrantNameMaps(
     }
   }
 
-  return { gridById, gridByGrantKey }
+  return { gridById, gridByGrantKey, gridGrantIdByUuid }
 }
 
 function grantAmountUsd(project: Record<string, unknown>): number {
@@ -161,8 +181,9 @@ function hasGrantReference(project: Record<string, unknown>): boolean {
 function isEligibleWithoutF5Report(project: Record<string, unknown>, hasReport: boolean): boolean {
   if (hasReport) return false
 
+  // Marked complete in err_projects but no uploaded F5 — include as complete_no_report
   const f5Status = project.f5_status != null ? String(project.f5_status).trim().toLowerCase() : null
-  if (f5Status === 'completed') return false
+  if (f5Status === 'completed') return true
 
   const status = String(project.status ?? '').trim().toLowerCase()
   if (status === 'active') return true
@@ -232,6 +253,7 @@ function buildProjectRowFields(
   projectId: string,
   gridById: Map<string, string>,
   gridByGrantKey: Map<string, string>,
+  gridGrantIdByUuid: Map<string, string>,
   transferDateByProject: Record<string, string>,
   rateByProject: Record<string, number>
 ) {
@@ -245,6 +267,7 @@ function buildProjectRowFields(
     err_id: project.err_id ?? null,
     grant_serial_id: project.grant_serial_id ?? project.grant_id ?? null,
     grant_id: project.grant_id ?? null,
+    grant_call_id: grantCallIdForProject(project, gridGrantIdByUuid),
     grant_name: grantNameForProject(project, gridById, gridByGrantKey),
     state: project.state ?? null,
     donor: donorLabel(project),
@@ -287,7 +310,7 @@ export async function GET() {
     let projectsQuery = supabase
       .from('err_projects')
       .select(projectSelect)
-      .in('status', ['active', 'approved'])
+      .in('status', ['active', 'approved', 'completed'])
 
     if (allowedStateNames !== null && allowedStateNames.length > 0) {
       projectsQuery = projectsQuery.in('state', allowedStateNames)
@@ -330,7 +353,7 @@ export async function GET() {
     const reports = await fetchPortalReports(supabase, allowedStateNames, portalSelect)
 
     const allProjectsForGrants = Array.from(projectById.values())
-    const { gridById, gridByGrantKey } = await loadGrantNameMaps(supabase, allProjectsForGrants)
+    const { gridById, gridByGrantKey, gridGrantIdByUuid } = await loadGrantNameMaps(supabase, allProjectsForGrants)
 
     const mouIds = Array.from(
       new Set(
@@ -396,16 +419,20 @@ export async function GET() {
     }
 
     const reachCounts: Record<string, number> = {}
+    const reachHasEndDate: Record<string, boolean> = {}
     const reportIds = reports.map((r) => r.id).filter(Boolean) as string[]
     if (reportIds.length) {
       for (const batch of chunkIds(reportIds)) {
         const { data: reach } = await supabase
           .from('err_program_reach')
-          .select('report_id')
+          .select('report_id, end_date')
           .in('report_id', batch)
         for (const row of reach || []) {
           const sid = String((row as { report_id: string }).report_id)
           reachCounts[sid] = (reachCounts[sid] || 0) + 1
+          if ((row as { end_date: string | null }).end_date) {
+            reachHasEndDate[sid] = true
+          }
         }
       }
     }
@@ -417,12 +444,21 @@ export async function GET() {
       const projectId = r.project_id ? String(r.project_id) : null
       const project = (projectId && projectById.get(projectId)) || prj || {}
       const fields = projectId
-        ? buildProjectRowFields(project, projectId, gridById, gridByGrantKey, transferDateByProject, rateByProject)
+        ? buildProjectRowFields(
+            project,
+            projectId,
+            gridById,
+            gridByGrantKey,
+            gridGrantIdByUuid,
+            transferDateByProject,
+            rateByProject
+          )
         : {
             base_room_name: baseRoomLabel(project),
             err_id: project.err_id ?? null,
             grant_serial_id: project.grant_serial_id ?? project.grant_id ?? null,
             grant_id: project.grant_id ?? null,
+            grant_call_id: grantCallIdForProject(project, gridGrantIdByUuid),
             grant_name: grantNameForProject(project, gridById, gridByGrantKey),
             state: project.state ?? null,
             donor: donorLabel(project),
@@ -431,15 +467,17 @@ export async function GET() {
             exchange_rate: null,
           }
 
+      const reportId = String(r.id)
       rows.push({
         id: r.id,
         project_id: projectId,
         ...fields,
         report_date: r.report_date ?? null,
-        activities_count: reachCounts[String(r.id)] || 0,
+        activities_count: reachCounts[reportId] || 0,
         updated_at: r.created_at,
         has_f5_report: true,
         report_status: 'uploaded',
+        end_activity_status: reachHasEndDate[reportId] ? 'complete' : 'missing',
       })
     }
 
@@ -447,15 +485,27 @@ export async function GET() {
       if (reportProjectIds.has(projectId)) continue
       if (!isEligibleWithoutF5Report(project, false)) continue
 
+      const f5Status =
+        project.f5_status != null ? String(project.f5_status).trim().toLowerCase() : null
+
       rows.push({
         id: null,
         project_id: projectId,
-        ...buildProjectRowFields(project, projectId, gridById, gridByGrantKey, transferDateByProject, rateByProject),
+        ...buildProjectRowFields(
+          project,
+          projectId,
+          gridById,
+          gridByGrantKey,
+          gridGrantIdByUuid,
+          transferDateByProject,
+          rateByProject
+        ),
         report_date: null,
         activities_count: 0,
         updated_at: null,
         has_f5_report: false,
-        report_status: 'not_uploaded',
+        report_status: f5Status === 'completed' ? 'complete_no_report' : 'not_uploaded',
+        end_activity_status: null,
       })
     }
 

@@ -11,6 +11,7 @@ import {
   SmartFilter,
   applyFilters,
   getF4ReportingFilterFields,
+  getF5ReportingFilterFields,
   type ActiveFilter,
 } from '@/components/smart-filter'
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '@/components/ui/table'
@@ -48,6 +49,8 @@ interface F4Row {
   reviewed_at?: string | null
   grant_serial_id?: string | null
   grant_id?: string | null
+  /** grants_grid_view.grant_id via err_projects.grant_grid_id */
+  grant_call_id?: string | null
   grant_name?: string | null
   report_status?: string | null
   has_f4_report?: boolean
@@ -63,6 +66,8 @@ interface F5Row {
   err_name?: string | null
   grant_serial_id?: string | null
   grant_id?: string | null
+  /** grants_grid_view.grant_id via err_projects.grant_grid_id */
+  grant_call_id?: string | null
   grant_name?: string | null
   state?: string | null
   donor?: string | null
@@ -74,6 +79,8 @@ interface F5Row {
   updated_at: string | null
   report_status?: string | null
   has_f5_report?: boolean
+  /** complete = uploaded with ≥1 activity end_date; missing = uploaded without; null = not uploaded */
+  end_activity_status?: 'complete' | 'missing' | null
 }
 
 type SortDirection = 'asc' | 'desc'
@@ -114,6 +121,19 @@ function grantSearchText(r: {
   return [r.grant_serial_id, r.grant_id]
     .filter((v) => v != null && String(v).trim() !== '')
     .map((v) => String(v).toLowerCase().trim())
+}
+
+function grantGridFilterOptions(
+  rows: { grant_call_id?: string | null }[]
+) {
+  const values = new Set<string>()
+  for (const r of rows) {
+    const id = r.grant_call_id != null ? String(r.grant_call_id).trim() : ''
+    if (id) values.add(id)
+  }
+  return Array.from(values)
+    .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }))
+    .map((value) => ({ value, label: value }))
 }
 
 function formatMoneyTwoDecimals(n: number | null | undefined) {
@@ -239,10 +259,7 @@ function F4F5ReportingPageContent() {
     () => Array.from(new Set(rows.map((r) => r.state).filter(Boolean) as string[])).sort(),
     [rows]
   )
-  const f4DonorOptions = useMemo(
-    () => Array.from(new Set(rows.map((r) => r.donor).filter(Boolean) as string[])).sort(),
-    [rows]
-  )
+  const f4GrantOptions = useMemo(() => grantGridFilterOptions(rows), [rows])
 
   const f5BaseRoomOptions = useMemo(
     () => Array.from(new Set(f5Rows.map((r) => r.base_room_name).filter(Boolean) as string[])).sort(),
@@ -252,14 +269,12 @@ function F4F5ReportingPageContent() {
     () => Array.from(new Set(f5Rows.map((r) => r.state).filter(Boolean) as string[])).sort(),
     [f5Rows]
   )
-  const f5DonorOptions = useMemo(
-    () => Array.from(new Set(f5Rows.map((r) => r.donor).filter(Boolean) as string[])).sort(),
-    [f5Rows]
-  )
+  const f5GrantOptions = useMemo(() => grantGridFilterOptions(f5Rows), [f5Rows])
 
   const f4ReportStatusOptions = useMemo(
     () => [
       { value: 'not_uploaded', label: t('f4.report_status.not_uploaded') },
+      { value: 'complete_no_report', label: t('f4.report_status.complete_no_report') },
       { value: 'pending_review', label: t('f4.report_status.pending_review') },
       { value: 'accepted', label: t('f4.report_status.accepted') },
       { value: 'rejected', label: t('f4.report_status.rejected') },
@@ -273,47 +288,57 @@ function F4F5ReportingPageContent() {
       getF4ReportingFilterFields({
         baseRoomOptions: f4BaseRoomOptions,
         stateOptions: f4StateOptions,
-        donorOptions: f4DonorOptions,
+        grantOptions: f4GrantOptions,
         reportStatusOptions: f4ReportStatusOptions,
         labels: {
           grantId: t('f4.filters.grant_id'),
           grantIdPlaceholder: t('f4.filters.grant_id_placeholder'),
           baseRoom: t('f4.filters.base_room'),
           state: t('f4.filters.state'),
-          donor: t('f4.filters.donor'),
+          grant: t('f4.filters.grant'),
           reportStatus: t('f4.filters.report_status'),
           all: t('f4.filters.all'),
         },
       }),
-    [f4BaseRoomOptions, f4StateOptions, f4DonorOptions, f4ReportStatusOptions, t]
+    [f4BaseRoomOptions, f4StateOptions, f4GrantOptions, f4ReportStatusOptions, t]
   )
 
   const f5ReportStatusOptions = useMemo(
     () => [
       { value: 'not_uploaded', label: t('f5.report_status.not_uploaded') },
+      { value: 'complete_no_report', label: t('f5.report_status.complete_no_report') },
       { value: 'uploaded', label: t('f5.report_status.uploaded') },
+    ],
+    [t]
+  )
+  const f5EndActivityStatusOptions = useMemo(
+    () => [
+      { value: 'complete', label: t('f5.end_activity_status.complete') },
+      { value: 'missing', label: t('f5.end_activity_status.missing') },
     ],
     [t]
   )
 
   const f5FilterFields = useMemo(
     () =>
-      getF4ReportingFilterFields({
+      getF5ReportingFilterFields({
         baseRoomOptions: f5BaseRoomOptions,
         stateOptions: f5StateOptions,
-        donorOptions: f5DonorOptions,
+        grantOptions: f5GrantOptions,
         reportStatusOptions: f5ReportStatusOptions,
+        endActivityStatusOptions: f5EndActivityStatusOptions,
         labels: {
           grantId: t('f5.filters.grant_id'),
           grantIdPlaceholder: t('f5.filters.grant_id_placeholder'),
           baseRoom: t('f5.filters.base_room'),
           state: t('f5.filters.state'),
-          donor: t('f5.filters.donor'),
+          grant: t('f5.filters.grant'),
           reportStatus: t('f5.filters.report_status'),
+          endActivityStatus: t('f5.filters.end_activity_status'),
           all: t('f5.filters.all'),
         },
       }),
-    [f5BaseRoomOptions, f5StateOptions, f5DonorOptions, f5ReportStatusOptions, t]
+    [f5BaseRoomOptions, f5StateOptions, f5GrantOptions, f5ReportStatusOptions, f5EndActivityStatusOptions, t]
   )
 
   const getF4FieldValue = useCallback((row: F4Row, fieldId: string): string | null | undefined => {
@@ -323,7 +348,7 @@ function F4F5ReportingPageContent() {
     }
     if (fieldId === 'base_room') return row.base_room_name ?? ''
     if (fieldId === 'state') return row.state ?? ''
-    if (fieldId === 'donor') return row.donor ?? ''
+    if (fieldId === 'grant') return row.grant_call_id ?? ''
     if (fieldId === 'report_status') return row.report_status ?? ''
     return null
   }, [])
@@ -335,8 +360,9 @@ function F4F5ReportingPageContent() {
     }
     if (fieldId === 'base_room') return row.base_room_name ?? ''
     if (fieldId === 'state') return row.state ?? ''
-    if (fieldId === 'donor') return row.donor ?? ''
+    if (fieldId === 'grant') return row.grant_call_id ?? ''
     if (fieldId === 'report_status') return row.report_status ?? ''
+    if (fieldId === 'end_activity_status') return row.end_activity_status ?? ''
     return null
   }, [])
 
