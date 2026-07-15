@@ -67,9 +67,6 @@ export default function ProjectManagement() {
   const [f4Reports, setF4Reports] = useState<any[]>([])
   const [f5Reports, setF5Reports] = useState<any[]>([])
   const [loadingReports, setLoadingReports] = useState(false)
-  // Store portal F4/F5 counts per project (for historical projects, only count portal uploads)
-  const [portalF4Counts, setPortalF4Counts] = useState<Record<string, number>>({})
-  const [portalF5Counts, setPortalF5Counts] = useState<Record<string, number>>({})
   const [completingProjectId, setCompletingProjectId] = useState<string | null>(null)
   const [statusDialogOpen, setStatusDialogOpen] = useState(false)
   const [statusDialogRow, setStatusDialogRow] = useState<{ project_id: string; f4_status: string; f5_status: string } | null>(null)
@@ -81,67 +78,10 @@ export default function ProjectManagement() {
       const j = await res.json()
       setKpis(j.kpis || {})
       setAllRows(j.rows || [])
-      
-      // Load portal F4 and F5 counts for all projects
-      await loadPortalReportCounts()
     } catch (e) {
       console.error(e)
     } finally {
       setLoading(false)
-    }
-  }
-
-  const loadPortalReportCounts = async () => {
-    try {
-      // Fetch F4 reports
-      const f4Res = await fetch('/api/f4/list')
-      const f4Data = await f4Res.json()
-      
-      // Fetch F5 reports
-      const f5Res = await fetch('/api/f5/list')
-      const f5Data = await f5Res.json()
-      
-      // Build counts map: project_id -> count
-      const f4Counts: Record<string, number> = {}
-      const f5Counts: Record<string, number> = {}
-      
-      // Count F4 reports by project_id or activities_raw_import_id
-      // Use a Set to track which F4 IDs we've already counted to prevent duplicates
-      const countedF4Ids = new Set<number>()
-      for (const f4 of (f4Data || [])) {
-        // Skip if we've already counted this F4 (by its id)
-        if (f4.id && countedF4Ids.has(f4.id)) continue
-        
-        // Count for portal project if it has project_id (and no activities_raw_import_id, though query should prevent this)
-        if (f4.project_id && !f4.activities_raw_import_id) {
-          f4Counts[f4.project_id] = (f4Counts[f4.project_id] || 0) + 1
-          if (f4.id) countedF4Ids.add(f4.id)
-        }
-        // Count for historical project if it has activities_raw_import_id (and no project_id, though query should prevent this)
-        else if (f4.activities_raw_import_id && !f4.project_id) {
-          const historicalId = `historical_${f4.activities_raw_import_id}`
-          f4Counts[historicalId] = (f4Counts[historicalId] || 0) + 1
-          if (f4.id) countedF4Ids.add(f4.id)
-        }
-        // If somehow both are set (shouldn't happen with query filters, but handle gracefully)
-        else if (f4.project_id && f4.activities_raw_import_id) {
-          // Count only for portal project to avoid double counting
-          f4Counts[f4.project_id] = (f4Counts[f4.project_id] || 0) + 1
-          if (f4.id) countedF4Ids.add(f4.id)
-        }
-      }
-      
-      // Count F5 reports by project_id (F5 doesn't support historical projects yet)
-      for (const f5 of (f5Data || [])) {
-        if (f5.project_id) {
-          f5Counts[f5.project_id] = (f5Counts[f5.project_id] || 0) + 1
-        }
-      }
-      
-      setPortalF4Counts(f4Counts)
-      setPortalF5Counts(f5Counts)
-    } catch (e) {
-      console.error('Failed to load portal report counts', e)
     }
   }
 
@@ -998,7 +938,7 @@ export default function ProjectManagement() {
                             >F4 {(() => {
                               // For historical projects, only show count if there are portal uploads
                               if (r.is_historical) {
-                                const portalCount = portalF4Counts[r.project_id] || 0
+                                const portalCount = r.portal_f4_count || 0
                                 return portalCount > 0 ? `(${portalCount})` : ''
                               }
                               // For portal projects, use the count from rollup
@@ -1316,7 +1256,19 @@ export default function ProjectManagement() {
           </DialogHeader>
           <div className="space-y-2 max-h-[400px] overflow-y-auto">
             {f4Reports.length === 0 ? (
-              <p className="text-muted-foreground text-center py-4">No F4 reports found</p>
+              <div className="text-center py-8 space-y-4">
+                <p className="text-muted-foreground">No F4 reports found for this project</p>
+                {canUploadF4 && (
+                  <Button
+                    onClick={() => {
+                      setF4ListOpen(false);
+                      setUploadF4Open(true);
+                    }}
+                  >
+                    Upload F4 Report
+                  </Button>
+                )}
+              </div>
             ) : (
               f4Reports.map((f4: any) => (
                 <div key={f4.id} className="flex items-center justify-between p-3 border rounded">
@@ -1340,6 +1292,19 @@ export default function ProjectManagement() {
               ))
             )}
           </div>
+          {canUploadF4 && f4Reports.length > 0 && (
+            <div className="border-t pt-4 flex justify-center">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setF4ListOpen(false);
+                  setUploadF4Open(true);
+                }}
+              >
+                Upload Another F4 Report
+              </Button>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 
@@ -1351,7 +1316,19 @@ export default function ProjectManagement() {
           </DialogHeader>
           <div className="space-y-2 max-h-[400px] overflow-y-auto">
             {f5Reports.length === 0 ? (
-              <p className="text-muted-foreground text-center py-4">No F5 reports found</p>
+              <div className="text-center py-8 space-y-4">
+                <p className="text-muted-foreground">No F5 reports found for this project</p>
+                {canUploadF5 && (
+                  <Button
+                    onClick={() => {
+                      setF5ListOpen(false);
+                      setUploadF5Open(true);
+                    }}
+                  >
+                    Upload F5 Report
+                  </Button>
+                )}
+              </div>
             ) : (
               f5Reports.map((f5: any) => (
                 <div key={f5.id} className="flex items-center justify-between p-3 border rounded">
@@ -1375,6 +1352,19 @@ export default function ProjectManagement() {
               ))
             )}
           </div>
+          {canUploadF5 && f5Reports.length > 0 && (
+            <div className="border-t pt-4 flex justify-center">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setF5ListOpen(false);
+                  setUploadF5Open(true);
+                }}
+              >
+                Upload Another F5 Report
+              </Button>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>

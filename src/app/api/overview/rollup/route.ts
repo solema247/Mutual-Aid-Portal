@@ -455,8 +455,10 @@ export async function GET(request: Request) {
         individuals,
         burn,
         f4_count: agg.count,
+        portal_f4_count: agg.count, // For portal projects, all F4s are portal F4s
         last_report_date: agg.last,
         f5_count: f5Agg.count,
+        portal_f5_count: f5Agg.count, // For portal projects, all F5s are portal F5s
         last_f5_date: f5Agg.last,
         status: p.status || null,
         is_historical: false,
@@ -529,8 +531,10 @@ export async function GET(request: Request) {
         individuals, // From activities_raw_import "Target (Ind.)" (same as card)
         burn: usd > 0 ? actual / usd : 0,
         f4_count: totalF4Count, // F4='Completed' from sheet + F4s uploaded through portal
+        portal_f4_count: f4CountFromPortal, // Only F4s uploaded through portal (for UI display on historical projects)
         last_report_date: f4Agg.last || reportDate || null, // Prefer date from err_summary
         f5_count: f5Completed ? 1 : 0, // F5='Completed' from activities_raw_import
+        portal_f5_count: 0, // Historical projects don't have portal-uploaded F5s yet
         last_f5_date: reportDate || null, // Use same date if available
         is_historical: true,
         f4_status, // For % Tracker: completed | waiting | under review | partial
