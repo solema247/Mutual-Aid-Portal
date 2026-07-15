@@ -71,10 +71,11 @@ export default function ProjectManagement() {
   const [statusDialogOpen, setStatusDialogOpen] = useState(false)
   const [statusDialogRow, setStatusDialogRow] = useState<{ project_id: string; f4_status: string; f5_status: string } | null>(null)
 
-  const loadRollup = async () => {
+  const loadRollup = async (forceRefresh = false) => {
     setLoading(true)
     try {
-      const res = await fetch(`/api/overview/rollup`)
+      const url = forceRefresh ? `/api/overview/rollup?refresh=true` : `/api/overview/rollup`
+      const res = await fetch(url)
       const j = await res.json()
       setKpis(j.kpis || {})
       setAllRows(j.rows || [])
@@ -119,7 +120,7 @@ export default function ProjectManagement() {
   }, [])
 
   const handleRefresh = async () => {
-    await loadRollup()
+    await loadRollup(true) // Force refresh to bypass cache
   }
 
   useEffect(() => {
@@ -504,7 +505,7 @@ export default function ProjectManagement() {
       }
 
       // Refresh the data to show updated status
-      await loadRollup()
+      await loadRollup(true) // Force refresh after completing project
     } catch (error: any) {
       console.error('Error completing project:', error)
       alert(error.message || 'Failed to complete project')
@@ -1199,7 +1200,7 @@ export default function ProjectManagement() {
                     })
                     setStatusDialogOpen(false)
                     setStatusDialogRow(null)
-                    await loadRollup()
+                    await loadRollup(true) // Force refresh after updating status
                   } catch (e) {
                     console.error(e)
                   }
@@ -1217,7 +1218,7 @@ export default function ProjectManagement() {
           setUploadF4Open(v); 
           if (!v) setSelectedProjectId(null);
         }} 
-        onSaved={loadRollup}
+        onSaved={() => loadRollup(true)} // Force refresh after F4 upload
         initialProjectId={selectedProjectId}
       />
       <UploadF5Modal 
@@ -1226,7 +1227,7 @@ export default function ProjectManagement() {
           setUploadF5Open(v); 
           if (!v) setSelectedProjectId(null);
         }} 
-        onSaved={loadRollup}
+        onSaved={() => loadRollup(true)} // Force refresh after F5 upload
         initialProjectId={selectedProjectId}
       />
       <ViewF4Modal 
@@ -1236,7 +1237,7 @@ export default function ProjectManagement() {
           setViewF4Open(v); 
           if (!v) setSelectedF4Id(null);
         }} 
-        onSaved={loadRollup}
+        onSaved={() => loadRollup(true)} // Force refresh after F4 edit
       />
       <ViewF5Modal 
         reportId={selectedF5Id} 
@@ -1245,7 +1246,7 @@ export default function ProjectManagement() {
           setViewF5Open(v); 
           if (!v) setSelectedF5Id(null);
         }} 
-        onSaved={loadRollup}
+        onSaved={() => loadRollup(true)} // Force refresh after F5 edit
       />
 
       {/* F4 Reports List Modal */}

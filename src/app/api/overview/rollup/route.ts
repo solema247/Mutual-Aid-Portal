@@ -10,6 +10,37 @@ import {
 /** PostgREST `.in()` with hundreds of UUIDs can exceed URL limits and return empty data. */
 const SUPABASE_IN_BATCH = 80
 
+/** Cache duration in milliseconds (3 minutes) */
+const CACHE_DURATION_MS = 3 * 60 * 1000
+
+/** In-memory cache for rollup data */
+interface CacheEntry {
+  data: any
+  timestamp: number
+  allowedStates: string[] | null
+}
+
+let rollupCache: CacheEntry | null = null
+
+function getCacheKey(allowedStates: string[] | null): string {
+  if (!allowedStates || allowedStates.length === 0) return 'all_states'
+  return allowedStates.sort().join(',')
+}
+
+function isCacheValid(entry: CacheEntry | null, allowedStates: string[] | null): boolean {
+  if (!entry) return false
+  
+  const now = Date.now()
+  const isExpired = now - entry.timestamp > CACHE_DURATION_MS
+  if (isExpired) return false
+  
+  // Check if state access matches
+  const currentKey = getCacheKey(allowedStates)
+  const cachedKey = getCacheKey(entry.allowedStates)
+  
+  return currentKey === cachedKey
+}
+
 function chunkIds<T extends string | number>(ids: T[]): T[][] {
   if (!ids.length) return []
   const out: T[][] = []
@@ -230,6 +261,18 @@ export async function GET(request: Request) {
 
     // Get user's state access rights
     const { allowedStateNames } = await getUserStateAccess()
+    
+    // Check for cache bypass parameter
+    const url = new URL(request.url)
+    const bypassCache = url.searchParams.get('refresh') === 'true'
+    
+    // Check cache if not bypassing
+    if (!bypassCache && isCacheValid(rollupCache, allowedStateNames)) {
+      console.log('[rollup] Returning cached data')
+      return NextResponse.json(rollupCache!.data)
+    }
+    
+    console.log('[rollup] Cache miss or bypass - fetching fresh data')
 
     // Build project filter (include more statuses to catch F5 projects and completed projects)
     let projectQuery = supabase
@@ -579,7 +622,17 @@ export async function GET(request: Request) {
     kpis.variance = kpis.plan - kpis.actual
     kpis.burn = kpis.plan > 0 ? kpis.actual / kpis.plan : 0
 
-    return NextResponse.json({ kpis, rows: allRows })
+    const result = { kpis, rows: allRows }
+    
+    // Cache the result
+    rollupCache = {
+      data: result,
+      timestamp: Date.now(),
+      allowedStates: allowedStateNames
+    }
+    console.log('[rollup] Data cached successfully')
+
+    return NextResponse.json(result)
   } catch (e) {
     console.error('overview/rollup error', e)
     return NextResponse.json({ error: 'Failed to load rollup' }, { status: 500 })
