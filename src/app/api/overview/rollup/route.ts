@@ -622,7 +622,149 @@ export async function GET(request: Request) {
     kpis.variance = kpis.plan - kpis.actual
     kpis.burn = kpis.plan > 0 ? kpis.actual / kpis.plan : 0
 
-    const result = { kpis, rows: allRows }
+    // Pre-calculate state aggregations for frontend
+    const stateAggregations = new Map<string, any>()
+    for (const r of allRows) {
+      const key = r.state || '—'
+      const curr = stateAggregations.get(key) || { 
+        state: key, plan: 0, actual: 0, variance: 0, burn: 0, 
+        f4_count: 0, f5_count: 0, total_projects: 0, 
+        projects_with_f4: 0, projects_with_f5: 0, tracker_sum: 0, 
+        individuals: 0, last_report_date: null, last_f5_date: null, 
+        overdue_count: 0 
+      }
+      curr.plan += Number(r.plan) || 0
+      curr.actual += Number(r.actual) || 0
+      curr.f4_count += Number(r.f4_count) || 0
+      curr.f5_count += Number(r.f5_count) || 0
+      curr.total_projects += 1
+      if (Number(r.f4_count || 0) > 0) curr.projects_with_f4 += 1
+      if (Number(r.f5_count || 0) > 0) curr.projects_with_f5 += 1
+      curr.individuals += Number(r.individuals) || 0
+      if (r.is_overdue) curr.overdue_count += 1
+      
+      // Track latest dates
+      if (r.last_report_date) {
+        if (!curr.last_report_date || new Date(r.last_report_date) > new Date(curr.last_report_date)) {
+          curr.last_report_date = r.last_report_date
+        }
+      }
+      if (r.last_f5_date) {
+        if (!curr.last_f5_date || new Date(r.last_f5_date) > new Date(curr.last_f5_date)) {
+          curr.last_f5_date = r.last_f5_date
+        }
+      }
+      
+      // Calculate tracker score for this row
+      const plan = Number(r.plan || 0)
+      const actual = Number(r.actual ?? 0)
+      const burn = plan > 0 ? actual / plan : 0
+      const hasActual = (typeof r.actual === 'number' && r.actual > 0) || (r.actual != null && String(r.actual).trim() !== '' && Number(r.actual) > 0)
+      const f5Status = r.f5_status != null ? String(r.f5_status).toLowerCase() : null
+      let f5Part: number
+      if (f5Status === 'completed') f5Part = 0.5
+      else if (f5Status === 'under review' || f5Status === 'in review' || f5Status === 'partial') f5Part = 0.25
+      else if (f5Status === 'waiting') f5Part = 0
+      else if (r.is_historical) f5Part = 0
+      else f5Part = Number(r.f5_count || 0) > 0 ? 0.5 : 0
+      
+      const f4Status = r.f4_status != null ? String(r.f4_status).toLowerCase() : null
+      let f4Part: number
+      if (f4Status === 'completed') {
+        if (r.is_historical && hasActual && plan > 0) f4Part = 0.5 * Math.min(1, burn)
+        else if (r.is_historical) f4Part = 0.5
+        else f4Part = 0.5 * Math.min(1, burn)
+      } else if (f4Status === 'under review' || f4Status === 'in review' || f4Status === 'partial') f4Part = 0.25
+      else if (f4Status === 'waiting') f4Part = 0
+      else if (r.is_historical) f4Part = 0
+      else f4Part = 0.5 * Math.min(1, burn)
+      
+      curr.tracker_sum += f4Part + f5Part
+      stateAggregations.set(key, curr)
+    }
+    
+    // Finalize state aggregations
+    const stateRows = Array.from(stateAggregations.values()).map(s => ({
+      ...s,
+      variance: s.plan - s.actual,
+      burn: s.plan > 0 ? s.actual / s.plan : 0
+    }))
+
+    // Pre-calculate room aggregations for frontend
+    const roomAggregations = new Map<string, any>()
+    for (const r of allRows) {
+      const key = `${r.state || '—'}|${r.err_id || '—'}`
+      const curr = roomAggregations.get(key) || { 
+        state: r.state || '—',
+        err_id: r.err_id || '—', 
+        err_name: r.err_name || '—',
+        plan: 0, actual: 0, variance: 0, burn: 0, 
+        f4_count: 0, f5_count: 0, total_projects: 0, 
+        projects_with_f4: 0, projects_with_f5: 0, tracker_sum: 0, 
+        individuals: 0, last_report_date: null, last_f5_date: null, 
+        overdue_count: 0 
+      }
+      curr.plan += Number(r.plan) || 0
+      curr.actual += Number(r.actual) || 0
+      curr.f4_count += Number(r.f4_count) || 0
+      curr.f5_count += Number(r.f5_count) || 0
+      curr.total_projects += 1
+      if (Number(r.f4_count || 0) > 0) curr.projects_with_f4 += 1
+      if (Number(r.f5_count || 0) > 0) curr.projects_with_f5 += 1
+      curr.individuals += Number(r.individuals) || 0
+      if (r.is_overdue) curr.overdue_count += 1
+      
+      if (r.last_report_date) {
+        if (!curr.last_report_date || new Date(r.last_report_date) > new Date(curr.last_report_date)) {
+          curr.last_report_date = r.last_report_date
+        }
+      }
+      if (r.last_f5_date) {
+        if (!curr.last_f5_date || new Date(r.last_f5_date) > new Date(curr.last_f5_date)) {
+          curr.last_f5_date = r.last_f5_date
+        }
+      }
+      
+      // Calculate tracker score
+      const plan = Number(r.plan || 0)
+      const actual = Number(r.actual ?? 0)
+      const burn = plan > 0 ? actual / plan : 0
+      const hasActual = (typeof r.actual === 'number' && r.actual > 0) || (r.actual != null && String(r.actual).trim() !== '' && Number(r.actual) > 0)
+      const f5Status = r.f5_status != null ? String(r.f5_status).toLowerCase() : null
+      let f5Part: number
+      if (f5Status === 'completed') f5Part = 0.5
+      else if (f5Status === 'under review' || f5Status === 'in review' || f5Status === 'partial') f5Part = 0.25
+      else if (f5Status === 'waiting') f5Part = 0
+      else if (r.is_historical) f5Part = 0
+      else f5Part = Number(r.f5_count || 0) > 0 ? 0.5 : 0
+      
+      const f4Status = r.f4_status != null ? String(r.f4_status).toLowerCase() : null
+      let f4Part: number
+      if (f4Status === 'completed') {
+        if (r.is_historical && hasActual && plan > 0) f4Part = 0.5 * Math.min(1, burn)
+        else if (r.is_historical) f4Part = 0.5
+        else f4Part = 0.5 * Math.min(1, burn)
+      } else if (f4Status === 'under review' || f4Status === 'in review' || f4Status === 'partial') f4Part = 0.25
+      else if (f4Status === 'waiting') f4Part = 0
+      else if (r.is_historical) f4Part = 0
+      else f4Part = 0.5 * Math.min(1, burn)
+      
+      curr.tracker_sum += f4Part + f5Part
+      roomAggregations.set(key, curr)
+    }
+    
+    const roomRows = Array.from(roomAggregations.values()).map(s => ({
+      ...s,
+      variance: s.plan - s.actual,
+      burn: s.plan > 0 ? s.actual / s.plan : 0
+    }))
+
+    const result = { 
+      kpis, 
+      rows: allRows,
+      stateAggregations: stateRows,
+      roomAggregations: roomRows
+    }
     
     // Cache the result
     rollupCache = {

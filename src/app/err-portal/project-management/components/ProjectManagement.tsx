@@ -43,6 +43,8 @@ export default function ProjectManagement() {
   const [loading, setLoading] = useState(false)
   const [kpis, setKpis] = useState<any>({})
   const [allRows, setAllRows] = useState<any[]>([])
+  const [preCalcStateRows, setPreCalcStateRows] = useState<any[]>([])
+  const [preCalcRoomRows, setPreCalcRoomRows] = useState<any[]>([])
   const [filters, setFilters] = useState<ActiveFilter[]>([])
   const [grants, setGrants] = useState<Array<{ id: string; grant_id: string; donor_name: string; project_name: string | null }>>([])
 
@@ -79,6 +81,8 @@ export default function ProjectManagement() {
       const j = await res.json()
       setKpis(j.kpis || {})
       setAllRows(j.rows || [])
+      setPreCalcStateRows(j.stateAggregations || [])
+      setPreCalcRoomRows(j.roomAggregations || [])
     } catch (e) {
       console.error(e)
     } finally {
@@ -323,6 +327,12 @@ export default function ProjectManagement() {
 
   // Aggregations for drill-down
   const stateRows = useMemo(() => {
+    // Use pre-calculated aggregations when no filters are active
+    if (filters.length === 0 && rows.length === allRows.length && preCalcStateRows.length > 0) {
+      return preCalcStateRows.sort((a, b) => (a.state || '').localeCompare(b.state || ''))
+    }
+    
+    // Fall back to JavaScript calculation when filters are active
     const byState = new Map<string, { state: string; plan: number; actual: number; variance: number; burn: number; f4_count: number; f5_count: number; total_projects: number; projects_with_f4: number; projects_with_f5: number; tracker_sum: number; individuals: number; last_report_date: string | null; last_f5_date: string | null; overdue_count: number }>()
     for (const r of rows) {
       const key = r.state || '—'
@@ -350,10 +360,17 @@ export default function ProjectManagement() {
     return Array.from(byState.values())
       .map(v => ({ ...v, burn: v.plan > 0 ? v.actual / v.plan : 0 }))
       .sort((a, b) => (a.state || '').localeCompare(b.state || ''))
-  }, [rows])
+  }, [rows, filters, allRows, preCalcStateRows])
 
   const roomRows = useMemo(() => {
     if (!selectedStateName) return [] as any[]
+    
+    // Use pre-calculated aggregations when no filters are active
+    if (filters.length === 0 && rows.length === allRows.length && preCalcRoomRows.length > 0) {
+      return preCalcRoomRows.filter((r:any) => r.state === selectedStateName)
+    }
+    
+    // Fall back to JavaScript calculation when filters are active
     const filtered = rows.filter((r:any) => r.state === selectedStateName)
     const byRoom = new Map<string, { err_id: string; err_name: string | null; state: string; plan: number; actual: number; variance: number; burn: number; f4_count: number; f5_count: number; total_projects: number; projects_with_f4: number; projects_with_f5: number; tracker_sum: number; individuals: number; last_report_date: string | null; last_f5_date: string | null; overdue_count: number }>()
     for (const r of filtered) {
@@ -380,7 +397,7 @@ export default function ProjectManagement() {
       byRoom.set(key, curr)
     }
     return Array.from(byRoom.values()).map(v => ({ ...v, burn: v.plan > 0 ? v.actual / v.plan : 0 }))
-  }, [rows, selectedStateName])
+  }, [rows, selectedStateName, filters, allRows, preCalcRoomRows])
 
   const projectRows = useMemo(() => {
     if (!selectedStateName || !selectedErrId) return [] as any[]
