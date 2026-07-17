@@ -7,7 +7,7 @@ import PageExplainerHeader from '@/components/layout/PageExplainerHeader'
 import { PageExplainerProvider } from '@/contexts/PageExplainerContext'
 import type { SidebarItem, SidebarLinkItem } from '@/components/layout/Sidebar'
 import { useRouter } from 'next/navigation'
-import { Users, ClipboardList, BarChart2, BarChart3, PieChart, UserCog, Home, CheckSquare, BookOpen, PenTool, Cog, FileText, BookMarked, Ticket } from 'lucide-react'
+import { Users, ClipboardList, BarChart2, BarChart3, PieChart, UserCog, Home, CheckSquare, BookOpen, PenTool, Cog, FileText, BookMarked, Ticket, ShieldCheck } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 import { useAllowedFunctions } from '@/hooks/useAllowedFunctions'
 
@@ -28,6 +28,7 @@ export default function ErrPortalLayout({
   const { t } = useTranslation(['err'])
   const [user, setUser] = useState<User | null>(null)
   const [minimizedType, setMinimizedType] = useState<'f4'|'f5'|null>(null)
+  const [compliancePendingCount, setCompliancePendingCount] = useState<number>(0)
   const router = useRouter()
 
   useEffect(() => {
@@ -64,8 +65,21 @@ export default function ErrPortalLayout({
     return () => window.removeEventListener('storage', onStorage)
   }, [])
 
-  const { can } = useAllowedFunctions()
+  const { can, isLoading: permissionsLoading } = useAllowedFunctions()
   const canViewGrantManagement = can('grant_view')
+  const canViewCompliance = can('compliance_view_page')
+
+  useEffect(() => {
+    if (permissionsLoading || !canViewCompliance) return
+    let cancelled = false
+    fetch('/api/compliance/queue?count_only=1')
+      .then(r => (r.ok ? r.json() : { pending_count: 0 }))
+      .then(data => {
+        if (!cancelled) setCompliancePendingCount(data.pending_count ?? 0)
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [permissionsLoading, canViewCompliance])
   const canViewF1 = can('f1_view_page')
   const canViewF2 = can('f2_view_page')
   const canViewF3 = can('f3_view_page')
@@ -168,6 +182,11 @@ export default function ErrPortalLayout({
       href: '/err-portal/f4-f5-reporting',
       label: 'F4 & F5 Reporting',
       icon: <BookOpen className="h-5 w-5" />
+    }] : []),
+    ...(canViewCompliance ? [{
+      href: '/err-portal/compliance',
+      label: compliancePendingCount > 0 ? `Compliance (${compliancePendingCount})` : 'Compliance',
+      icon: <ShieldCheck className="h-5 w-5" />
     }] : []),
     ...(reportingGroupChildren.length > 0 ? [{
       type: 'group' as const,

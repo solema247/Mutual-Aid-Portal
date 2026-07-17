@@ -44,5 +44,8 @@
   { "code": "dashboard_view_page", "module": "dashboard", "label_ar": "عرض لوحة التحكم", "label_en": "View Dashboard page", "description_en": "View the ERR Portal Dashboard page." },
   { "code": "learnings_view_page", "module": "learnings", "label_ar": "عرض صفحة تعلم المساعدة المتبادلة", "label_en": "View Mutual Aid Learnings page", "description_en": "View the Mutual Aid Learnings (stories) page." },
   { "code": "surveys_view_page", "module": "surveys", "label_ar": "عرض صفحة الاستبيانات", "label_en": "View Surveys page", "description_en": "View the Surveys page for user feedback surveys." },
-  { "code": "raise_ticket_page", "module": "tickets", "label_ar": "فتح تذكرة (GitHub)", "label_en": "Raise a ticket", "description_en": "Use Raise a ticket to submit GitHub issues for the Mutual Aid Portal." }
+  { "code": "raise_ticket_page", "module": "tickets", "label_ar": "فتح تذكرة (GitHub)", "label_en": "Raise a ticket", "description_en": "Use Raise a ticket to submit GitHub issues for the Mutual Aid Portal." },
+  { "code": "compliance_view_page", "module": "compliance", "label_ar": "عرض صفحة الامتثال", "label_en": "View Compliance page", "description_en": "View the Visual Compliance (OFAC screening) page and queue." },
+  { "code": "compliance_screen", "module": "compliance", "label_ar": "فحص أسماء المستفيدين", "label_en": "Screen payee names", "description_en": "Clear or flag F1 payee names in the compliance screening queue (visual OFAC check)." },
+  { "code": "compliance_finance_review", "module": "compliance", "label_ar": "مراجعة مالية للمشاريع الموسومة", "label_en": "Finance review flagged F1s", "description_en": "Approve or reject flagged F1s so they can (or cannot) proceed to the committed stage." }
 ]

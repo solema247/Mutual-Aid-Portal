@@ -120,7 +120,8 @@ export default function UncommittedF1sTab() {
 
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
-      setSelectedF1s(f1s.map(f1 => f1.id))
+      // Compliance-blocked F1s cannot be committed, so they are not selectable
+      setSelectedF1s(f1s.filter(f1 => !f1.compliance_blocked).map(f1 => f1.id))
     } else {
       setSelectedF1s([])
     }
@@ -207,7 +208,12 @@ export default function UncommittedF1sTab() {
       })
 
       if (!response.ok) {
-        alert('Failed to commit F1s')
+        const err: { error?: string; code?: string } = await response.json().catch(() => ({}))
+        if (err.code === 'COMPLIANCE_BLOCKED') {
+          alert('Cannot commit: one or more selected F1s are blocked by compliance (missing ID or sanctions match — payment stopped).')
+        } else {
+          alert(err.error || 'Failed to commit F1s')
+        }
         return
       }
 
@@ -370,6 +376,7 @@ export default function UncommittedF1sTab() {
                 <TableHead className="px-2">{t('f2:state')}</TableHead>
                 <TableHead className="px-2">{t('f2:locality')}</TableHead>
                 <TableHead className="text-right px-2">{t('f2:requested_amount')}</TableHead>
+                <TableHead className="px-2">Compliance</TableHead>
                 <TableHead className="px-2">{t('f2:community_approval')}</TableHead>
                 <TableHead className="px-2">{t('f2:actions') || 'Actions'}</TableHead>
                 {/* Status column removed visually */}
@@ -382,6 +389,8 @@ export default function UncommittedF1sTab() {
                     {canCommit && (
                       <Checkbox
                         checked={selectedF1s.includes(f1.id)}
+                        disabled={!!f1.compliance_blocked}
+                        title={f1.compliance_blocked ? 'Flagged by compliance screening — pending finance review' : undefined}
                         onCheckedChange={(checked) => handleSelectF1(f1.id, checked as boolean)}
                       />
                     )}
@@ -463,6 +472,32 @@ export default function UncommittedF1sTab() {
                           </Button>
                         )}
                       </div>
+                    )}
+                  </TableCell>
+                  {/* Compliance screening status */}
+                  <TableCell className="whitespace-nowrap">
+                    {f1.compliance_flag_type === 'sanctions_match' && f1.compliance_blocked ? (
+                      <Badge variant="destructive" className="text-[10px] px-1.5 py-0 font-semibold" title="Potential Descartes/sanctions match — payment must be stopped">
+                        PAYMENT STOPPED
+                      </Badge>
+                    ) : f1.compliance_blocked ? (
+                      <Badge variant="destructive" className="text-[10px] px-1.5 py-0" title="Missing ID — finance must upload the document or dismiss the flag">
+                        {f1.compliance_flag_type === 'missing_id' ? 'Missing ID' : 'Flagged — compliance'}
+                      </Badge>
+                    ) : f1.compliance_status === 'pending_screening' ? (
+                      <Badge variant="secondary" className="text-muted-foreground text-[10px] px-1.5 py-0">
+                        Screening pending
+                      </Badge>
+                    ) : f1.compliance_status === 'flagged' ? (
+                      <Badge variant="default" className="text-[10px] px-1.5 py-0 bg-amber-500">
+                        Finance resolved
+                      </Badge>
+                    ) : f1.compliance_status ? (
+                      <Badge variant="default" className="text-[10px] px-1.5 py-0 bg-green-600">
+                        Cleared
+                      </Badge>
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
                     )}
                   </TableCell>
                   {/* Community Approval */}
