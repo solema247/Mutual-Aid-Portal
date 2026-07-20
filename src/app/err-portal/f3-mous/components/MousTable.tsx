@@ -1,9 +1,11 @@
 ﻿'use client'
 
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Eye, Upload, Receipt, FileSignature, FileCheck, Link2, RefreshCw, ListOrdered, ArrowUp, ArrowDown } from 'lucide-react'
 import { SmartFilter, type ActiveFilter } from '@/components/smart-filter'
 import { cn } from '@/lib/utils'
@@ -73,6 +75,59 @@ export default function MousTable({
   fetchMous,
 }: MousTableProps) {
   const { t, i18n } = useTranslation(['f3', 'common'])
+  const [signedMouEditId, setSignedMouEditId] = useState<string | null>(null)
+  const [pendingSignedFile, setPendingSignedFile] = useState<File | null>(null)
+  const [savingSignedMou, setSavingSignedMou] = useState(false)
+
+  const signedMouBeingEdited = signedMouEditId
+    ? sortedMous.find(m => m.id === signedMouEditId) ?? null
+    : null
+
+  const closeSignedMouDialog = () => {
+    setSignedMouEditId(null)
+    setPendingSignedFile(null)
+  }
+
+  const openSignedMou = async (fileKey: string) => {
+    try {
+      const response = await fetch(`/api/storage/signed-url?path=${encodeURIComponent(fileKey)}`)
+      if (!response.ok) {
+        throw new Error('Failed to get signed URL')
+      }
+      const { url, error } = await response.json()
+      if (error || !url) {
+        throw new Error(error || 'No URL returned')
+      }
+
+      const link = document.createElement('a')
+      link.href = url
+      link.target = '_blank'
+      link.rel = 'noopener noreferrer'
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+    } catch (error) {
+      console.error('Error getting signed URL:', error)
+      alert('Failed to open signed MOU')
+    }
+  }
+
+  const uploadSignedMou = async (mouId: string, file: File, isReplace: boolean) => {
+    const formData = new FormData()
+    formData.append('file', file)
+
+    const response = await fetch(`/api/f3/mous/${mouId}/signed-mou`, {
+      method: 'POST',
+      body: formData
+    })
+
+    if (!response.ok) {
+      throw new Error('Failed to upload signed MOU')
+    }
+
+    await fetchMous()
+    alert(isReplace ? 'Signed MOU replaced successfully' : 'Signed MOU uploaded successfully')
+  }
 
   return (      <Card className="w-full">
         <CardHeader className="pb-4">
@@ -244,31 +299,15 @@ export default function MousTable({
                           accept=".pdf"
                           onChange={async (e) => {
                             const file = e.target.files?.[0]
+                            e.target.value = ''
                             if (!file) return
 
                             try {
-                              const formData = new FormData()
-                              formData.append('file', file)
-
-                              const response = await fetch(`/api/f3/mous/${m.id}/signed-mou`, {
-                                method: 'POST',
-                                body: formData
-                              })
-
-                              if (!response.ok) {
-                                throw new Error('Failed to upload signed MOU')
-                              }
-
-                              // Refresh the MOUs list
-                              await fetchMous()
-                              alert('Signed MOU uploaded successfully')
+                              await uploadSignedMou(m.id, file, false)
                             } catch (error) {
                               console.error('Error uploading signed MOU:', error)
                               alert('Failed to upload signed MOU')
                             }
-
-                            // Clear the input
-                            e.target.value = ''
                           }}
                         />
                         <div className="flex flex-col items-center gap-0.5 min-w-[42px]">
@@ -276,43 +315,26 @@ export default function MousTable({
                             variant="ghost"
                             size="icon"
                             className="h-7 w-7"
-                            onClick={m.signed_mou_file_key ? async () => {
-                            try {
-                              // First get the signed URL
-                              const response = await fetch(`/api/storage/signed-url?path=${encodeURIComponent(m.signed_mou_file_key || '')}`)
-                              if (!response.ok) {
-                                throw new Error('Failed to get signed URL')
+                            onClick={() => {
+                              if (m.signed_mou_file_key) {
+                                setPendingSignedFile(null)
+                                setSignedMouEditId(m.id)
+                              } else {
+                                document.getElementById(`signed-mou-upload-${m.id}`)?.click()
                               }
-                              const { url, error } = await response.json()
-                              if (error || !url) {
-                                throw new Error(error || 'No URL returned')
-                              }
-
-                              // Create a link and click it
-                              const link = document.createElement('a')
-                              link.href = url
-                              link.target = '_blank'
-                              link.rel = 'noopener noreferrer'
-                              document.body.appendChild(link)
-                              link.click()
-                              document.body.removeChild(link)
-                            } catch (error) {
-                              console.error('Error getting signed URL:', error)
-                              alert('Failed to open signed MOU')
-                            }
-                          } : () => {
-                            document.getElementById(`signed-mou-upload-${m.id}`)?.click()
-                          }}
-                          title={m.signed_mou_file_key ? 'View Signed MOU' : 'Upload Signed MOU'}
-                        >
-                          {m.signed_mou_file_key ? (
-                            <FileCheck className="h-3.5 w-3.5 text-green-600" />
-                          ) : (
-                            <FileSignature className="h-3.5 w-3.5 text-amber-600" />
-                          )}
-                        </Button>
-                        <span className="text-[9px] text-muted-foreground text-center leading-tight whitespace-nowrap">{m.signed_mou_file_key ? 'View MOU' : 'Upload MOU'}</span>
-                      </div>
+                            }}
+                            title={m.signed_mou_file_key ? 'View / Edit Signed MOU' : 'Upload Signed MOU'}
+                          >
+                            {m.signed_mou_file_key ? (
+                              <FileCheck className="h-3.5 w-3.5 text-green-600" />
+                            ) : (
+                              <FileSignature className="h-3.5 w-3.5 text-amber-600" />
+                            )}
+                          </Button>
+                          <span className="text-[9px] text-muted-foreground text-center leading-tight whitespace-nowrap">
+                            {m.signed_mou_file_key ? 'View / Edit' : 'Upload MOU'}
+                          </span>
+                        </div>
                         </>
                         )}
                       </div>
@@ -321,6 +343,96 @@ export default function MousTable({
                     ))}
                 </TableBody>
               </Table>
+
+              <Dialog
+                open={Boolean(signedMouEditId)}
+                onOpenChange={(open) => {
+                  if (!open) closeSignedMouDialog()
+                }}
+              >
+                <DialogContent className="sm:max-w-md">
+                  <DialogHeader>
+                    <DialogTitle>View / Edit Signed MOU</DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-4">
+                    <p className="text-sm text-muted-foreground">
+                      {signedMouBeingEdited?.mou_code
+                        ? `MOU ${signedMouBeingEdited.mou_code}`
+                        : 'Signed MOU'}
+                    </p>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="w-full"
+                      onClick={() => {
+                        if (signedMouBeingEdited?.signed_mou_file_key) {
+                          void openSignedMou(signedMouBeingEdited.signed_mou_file_key)
+                        }
+                      }}
+                      disabled={!signedMouBeingEdited?.signed_mou_file_key}
+                    >
+                      <Eye className="mr-2 h-4 w-4" />
+                      View current file
+                    </Button>
+                    <div className="space-y-2">
+                      <input
+                        id="signed-mou-replace-input"
+                        type="file"
+                        accept=".pdf"
+                        className="hidden"
+                        onChange={(e) => {
+                          setPendingSignedFile(e.target.files?.[0] ?? null)
+                          e.target.value = ''
+                        }}
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="w-full"
+                        onClick={() => {
+                          document.getElementById('signed-mou-replace-input')?.click()
+                        }}
+                      >
+                        <Upload className="mr-2 h-4 w-4" />
+                        {pendingSignedFile ? 'Choose a different PDF' : 'Choose a new PDF'}
+                      </Button>
+                      {pendingSignedFile ? (
+                        <p className="text-xs text-muted-foreground truncate" title={pendingSignedFile.name}>
+                          Selected: {pendingSignedFile.name}
+                        </p>
+                      ) : (
+                        <p className="text-xs text-muted-foreground">
+                          Select a PDF to replace the current signed MOU, then save.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  <DialogFooter className="gap-2 sm:gap-0">
+                    <Button type="button" variant="outline" onClick={closeSignedMouDialog} disabled={savingSignedMou}>
+                      Cancel
+                    </Button>
+                    <Button
+                      type="button"
+                      disabled={!pendingSignedFile || savingSignedMou || !signedMouEditId}
+                      onClick={async () => {
+                        if (!pendingSignedFile || !signedMouEditId) return
+                        setSavingSignedMou(true)
+                        try {
+                          await uploadSignedMou(signedMouEditId, pendingSignedFile, true)
+                          closeSignedMouDialog()
+                        } catch (error) {
+                          console.error('Error replacing signed MOU:', error)
+                          alert('Failed to replace signed MOU')
+                        } finally {
+                          setSavingSignedMou(false)
+                        }
+                      }}
+                    >
+                      {savingSignedMou ? 'Saving...' : 'Save Changes'}
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
               
               {/* Pagination Controls */}
               {sortedMous.length > itemsPerPage && (

@@ -94,7 +94,7 @@
   "explainer_action_reassign": "Reassign — change the grant call for an MOU that is already assigned.",
   "explainer_action_preview": "Preview — load the MOU text, edit fields you are allowed to change, export or print.",
   "explainer_action_payment": "Payment — upload or update payment confirmation per linked project.",
-  "explainer_action_signed": "Signed MOU — upload the signed PDF or open the file already stored.",
+  "explainer_action_signed": "Signed MOU — upload the signed PDF, or open View / Edit to view or replace a file already stored.",
   "explainer_section_pool": "🗺️ By grant table",
   "explainer_pool": "Below the list, the grant pool table matches F2: for each grant call, included, historical, assigned, and remaining amounts."
 }
