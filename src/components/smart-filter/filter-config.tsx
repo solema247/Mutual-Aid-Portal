@@ -49,7 +49,7 @@ export function getReportTrackerFilterFields(options?: {
     {
       id: 'grant',
       label: 'Grant',
-      type: 'select',
+      type: 'multi_select',
       options: grantOptions,
       placeholder: 'All grants',
       accessorKey: 'grant',
@@ -57,7 +57,7 @@ export function getReportTrackerFilterFields(options?: {
     {
       id: 'grant_segment',
       label: 'Grant Segment',
-      type: 'select',
+      type: 'multi_select',
       options: [...GRANT_SEGMENT_OPTIONS],
       placeholder: 'All segments',
       accessorKey: 'grant_segment',
@@ -81,7 +81,7 @@ export function getReportTrackerFilterFields(options?: {
     {
       id: 'state',
       label: 'State',
-      type: 'select',
+      type: 'multi_select',
       options: stateOptions,
       placeholder: 'All states',
       accessorKey: 'state',
@@ -96,7 +96,7 @@ export function getReportTrackerFilterFields(options?: {
     {
       id: 'expense_category',
       label: 'Sectors Covered',
-      type: 'select',
+      type: 'multi_select',
       options: expenseCategoryOptions,
       placeholder: 'All sectors',
       accessorKey: 'expense_category_list',
@@ -143,7 +143,7 @@ export function getProjectManagementFilterFields(options?: {
     {
       id: 'state',
       label: 'State',
-      type: 'select',
+      type: 'multi_select',
       options: stateOptions,
       placeholder: 'All states',
       accessorKey: 'state',
@@ -174,7 +174,7 @@ export function getProjectManagementFilterFields(options?: {
     {
       id: 'grant_segment',
       label: 'Grant Segment',
-      type: 'select',
+      type: 'multi_select',
       options: [...(segmentOptions.length ? segmentOptions : GRANT_SEGMENT_OPTIONS.map((o) => ({ value: o.value, label: o.label })))],
       placeholder: 'All segments',
       accessorKey: 'grant_segment',
@@ -182,7 +182,7 @@ export function getProjectManagementFilterFields(options?: {
     {
       id: 'grant',
       label: 'Grant',
-      type: 'select',
+      type: 'multi_select',
       options: grantOptions,
       placeholder: 'All grants',
       accessorKey: 'grant',
@@ -190,7 +190,7 @@ export function getProjectManagementFilterFields(options?: {
     {
       id: 'expense_category',
       label: 'Sectors Covered',
-      type: 'select',
+      type: 'multi_select',
       options: expenseCategoryOptions,
       placeholder: 'All sectors',
       accessorKey: 'expense_category_list',

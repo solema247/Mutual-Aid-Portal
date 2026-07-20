@@ -211,9 +211,17 @@ export default function ProjectManagement() {
       })
     }
     const expenseCategoryFilter = filters.find((f) => f.fieldId === 'expense_category')
-    if (expenseCategoryFilter?.value && String(expenseCategoryFilter.value).trim()) {
-      const val = String(expenseCategoryFilter.value).trim()
-      result = result.filter((r: any) => (r.expense_category_list || []).includes(val))
+    if (expenseCategoryFilter?.value) {
+      const selected = Array.isArray(expenseCategoryFilter.value)
+        ? expenseCategoryFilter.value.map((v) => String(v).trim()).filter(Boolean)
+        : String(expenseCategoryFilter.value).trim()
+          ? [String(expenseCategoryFilter.value).trim()]
+          : []
+      if (selected.length > 0) {
+        result = result.filter((r: any) =>
+          selected.some((s) => (r.expense_category_list || []).includes(s))
+        )
+      }
     }
     const grantSerialFilter = filters.find((f) => f.fieldId === 'grant_serial')
     if (grantSerialFilter && grantSerialFilter.value && String(grantSerialFilter.value).trim()) {
