@@ -572,6 +572,7 @@ export type Database = {
           Decision_Date: string | null
           Decision_ID: string | null
           "Flow Oversight": string | null
+          google_sheet_code: string | null
           Grant_ID: string | null
           last_pushed_at: string | null
           Notes: string | null
@@ -592,6 +593,7 @@ export type Database = {
           Decision_Date?: string | null
           Decision_ID?: string | null
           "Flow Oversight"?: string | null
+          google_sheet_code?: string | null
           Grant_ID?: string | null
           last_pushed_at?: string | null
           Notes?: string | null
@@ -612,6 +614,7 @@ export type Database = {
           Decision_Date?: string | null
           Decision_ID?: string | null
           "Flow Oversight"?: string | null
+          google_sheet_code?: string | null
           Grant_ID?: string | null
           last_pushed_at?: string | null
           Notes?: string | null

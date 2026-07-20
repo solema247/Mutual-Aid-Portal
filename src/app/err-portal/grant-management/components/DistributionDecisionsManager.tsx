@@ -57,6 +57,52 @@ type Allocation = {
   state: string | null
   amount: number | null
   percent_of_decision: number | null
+  notes?: string | null
+}
+
+/** Prefer the review / missing-funds lines when Notes also has other text. */
+function displayNoteLines(notes: string | null | undefined): string[] {
+  if (!notes?.trim()) return []
+  const lines = notes
+    .split(/\n+/)
+    .map((l) => l.trim())
+    .filter(Boolean)
+  const priority = lines.filter(
+    (l) =>
+      /Please Review:/i.test(l) ||
+      /Mutual Aid Calculator/i.test(l) ||
+      /missing a funds request/i.test(l) ||
+      /missing in Lohub Tracker/i.test(l) ||
+      /missing Google Sheet code/i.test(l) ||
+      /Allocation does not match decision document/i.test(l) ||
+      /amount mismatch/i.test(l) ||
+      /state mismatch/i.test(l) ||
+      /\$300,000 tranche/i.test(l) ||
+      /full \$2,000,000/i.test(l)
+  )
+  return priority.length ? priority : lines
+}
+
+function hasReviewNote(notes: string | null | undefined): boolean {
+  return displayNoteLines(notes).some((l) =>
+    /Please Review:|Mutual Aid|missing a funds|missing in Lohub|missing Google Sheet|does not match|amount mismatch|state mismatch|tranche/i.test(
+      l
+    )
+  )
+}
+
+function NotesCallout({ notes }: { notes: string | null | undefined }) {
+  const lines = displayNoteLines(notes)
+  if (!lines.length) {
+    return <span className="text-muted-foreground">—</span>
+  }
+  return (
+    <div className="rounded-md border border-amber-300 bg-amber-50 px-2 py-1.5 text-amber-950 text-xs leading-snug space-y-1 max-w-md">
+      {lines.map((line) => (
+        <p key={line}>{line}</p>
+      ))}
+    </div>
+  )
 }
 
 const decisionSchema = z.object({
@@ -809,13 +855,14 @@ export default function DistributionDecisionsManager() {
                   <TableHead>Remaining</TableHead>
                   <TableHead>Partner</TableHead>
                   <TableHead>Restriction</TableHead>
+                  <TableHead className="min-w-[200px]">Notes</TableHead>
                   <TableHead className="w-[60px] text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {sortedDecisions.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-center text-muted-foreground py-4">
+                    <TableCell colSpan={10} className="text-center text-muted-foreground py-4">
                       No distribution decisions found
                     </TableCell>
                   </TableRow>
@@ -850,6 +897,9 @@ export default function DistributionDecisionsManager() {
                               '—'
                             )}
                           </TableCell>
+                          <TableCell>
+                            <NotesCallout notes={decision.notes} />
+                          </TableCell>
                           <TableCell className="text-right">
                             {(currentUser?.role === 'support' || currentUser?.role === 'admin' || currentUser?.role === 'superadmin') && (
                               <Button
@@ -865,7 +915,7 @@ export default function DistributionDecisionsManager() {
                         </TableRow>
                         {isOpen && (
                           <TableRow>
-                            <TableCell colSpan={9} className="bg-muted/40 py-2 px-2">
+                            <TableCell colSpan={10} className="bg-muted/40 py-2 px-2">
                               <div className="space-y-4">
                                 <div className="flex items-center justify-between">
                                   <div className="font-semibold">State Allocations</div>
@@ -883,19 +933,57 @@ export default function DistributionDecisionsManager() {
                                   <div className="text-muted-foreground">Loading allocations...</div>
                                 ) : (
                                   <div className="space-y-2">
+                                    {(() => {
+                                      const rows = allocationsByDecision[fetchKey] || []
+                                      const flagged = rows.filter((a) => hasReviewNote(a.notes))
+                                      if (!flagged.length && !hasReviewNote(decision.notes)) return null
+                                      return (
+                                        <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-amber-950 text-xs space-y-1">
+                                          {hasReviewNote(decision.notes) && (
+                                            <p className="font-medium">{displayNoteLines(decision.notes).join(' · ')}</p>
+                                          )}
+                                          {flagged.length > 0 ? (
+                                            <ul className="list-disc pl-4 space-y-1">
+                                              {flagged.map((a) => (
+                                                <li key={a.allocation_id}>
+                                                  <span className="font-medium">
+                                                    {a.state || '—'}
+                                                  </span>
+                                                  <span className="text-amber-900/70">
+                                                    {' '}
+                                                    ({a.allocation_id})
+                                                  </span>
+                                                  {displayNoteLines(a.notes).map((line) => (
+                                                    <div key={line} className="font-normal">
+                                                      {line}
+                                                    </div>
+                                                  ))}
+                                                </li>
+                                              ))}
+                                            </ul>
+                                          ) : (
+                                            <p className="text-amber-900/80">
+                                              No specific allocation is flagged yet — expand Notes below or mark the mismatched state row.
+                                            </p>
+                                          )}
+                                        </div>
+                                      )
+                                    })()}
                                     <Table className="text-xs [&_th]:py-1 [&_th]:px-2 [&_td]:py-0.5 [&_td]:px-2">
                                       <TableHeader>
                                         <TableRow>
+                                          <TableHead>Allocation ID</TableHead>
                                           <TableHead>State</TableHead>
                                           <TableHead className="text-right">Amount</TableHead>
                                           <TableHead className="text-right">% of Decision</TableHead>
+                                          <TableHead className="min-w-[220px]">Notes</TableHead>
                                           <TableHead className="w-[140px] text-right"></TableHead>
                                         </TableRow>
                                       </TableHeader>
                                       <TableBody>
                                         {(allocationsByDecision[fetchKey] || []).length === 0 ? (
                                           <TableRow>
-                                            <TableCell colSpan={4} className="text-muted-foreground text-sm">
+                                            <TableCell colSpan={6} className="text-muted-foreground text-sm">
                                               No allocations yet
                                             </TableCell>
                                           </TableRow>
@@ -903,8 +991,15 @@ export default function DistributionDecisionsManager() {
                                           <>
                                             {(allocationsByDecision[fetchKey] || []).map((alloc) => {
                                               const isEditing = editingAllocation === alloc.allocation_id
+                                              const flagged = hasReviewNote(alloc.notes)
                                               return (
-                                                <TableRow key={alloc.allocation_id}>
+                                                <TableRow
+                                                  key={alloc.allocation_id}
+                                                  className={flagged ? 'bg-amber-50/90 border-l-2 border-l-amber-500' : undefined}
+                                                >
+                                                  <TableCell className="font-mono text-[10px] max-w-[160px] truncate" title={alloc.allocation_id}>
+                                                    {alloc.allocation_id}
+                                                  </TableCell>
                                                   <TableCell className="font-medium">
                                                     {isEditing ? (
                                                       <Select
@@ -948,6 +1043,9 @@ export default function DistributionDecisionsManager() {
                                                         ? `${((Number(alloc.amount) / Number(decision.decision_amount)) * 100).toFixed(1)}%`
                                                         : '—'
                                                     )}
+                                                  </TableCell>
+                                                  <TableCell>
+                                                    <NotesCallout notes={alloc.notes} />
                                                   </TableCell>
                                                   <TableCell className="text-right">
                                                     {(currentUser?.role === 'support' || currentUser?.role === 'admin' || currentUser?.role === 'superadmin') && (
@@ -1069,10 +1167,12 @@ export default function DistributionDecisionsManager() {
                                               return (
                                                 <TableRow className="bg-muted/50 font-semibold">
                                                   <TableCell className="font-semibold">Total</TableCell>
+                                                  <TableCell />
                                                   <TableCell className="text-right font-semibold">{formatCurrency(totalAmount)}</TableCell>
                                                   <TableCell className="text-right font-semibold">
                                                     {totalPercent !== '—' ? `${totalPercent}%` : '—'}
                                                   </TableCell>
+                                                  <TableCell />
                                                   <TableCell />
                                                 </TableRow>
                                               )
@@ -1082,6 +1182,7 @@ export default function DistributionDecisionsManager() {
                                         {canEditAllocations &&
                                           allocRows.map((row, idx) => (
                                           <TableRow key={`new-${idx}`}>
+                                            <TableCell className="text-muted-foreground text-[10px]">New</TableCell>
                                             <TableCell>
                                               <Select
                                                 value={row.state}
@@ -1115,6 +1216,7 @@ export default function DistributionDecisionsManager() {
                                               />
                                             </TableCell>
                                             <TableCell className="text-right">—</TableCell>
+                                            <TableCell />
                                             <TableCell className="text-right">
                                               <div className="flex justify-end gap-2">
                                                 <Button

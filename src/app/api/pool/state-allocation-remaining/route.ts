@@ -1,20 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin'
+import { normalizeStateName } from '@/lib/normalizeStateName'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 export const fetchCache = 'force-no-store'
 
 function normalizeState(state: string | null | undefined): string {
-  if (!state || typeof state !== 'string') return ''
-  let s = state.trim()
-  if (!s) return ''
-  const map: Record<string, string> = {
-    'Al Jazeera': 'Al Jazirah',
-    'Gadarif': 'Gadaref',
-    'Sinar': 'Sennar'
-  }
-  return map[s] ?? map[s.toLowerCase()] ?? s
+  const normalized = normalizeStateName(state)
+  return normalized === 'Unknown' ? '' : normalized
 }
 
 async function fetchAllRows<T>(supabase: any, table: string, select: string): Promise<T[]> {

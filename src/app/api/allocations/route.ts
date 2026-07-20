@@ -3,10 +3,10 @@ import { getSupabaseAdmin } from '@/lib/supabaseAdmin'
 import { decisionGroupKey } from '@/lib/grantManagement/resolveDecisionKey'
 
 const ALLOCATIONS_SELECT =
-  'Allocation_ID, Decision_ID, Decision_Date, State, "Allocation Amount", "%_Decision_Amount", Restriction'
+  'Allocation_ID, Decision_ID, Decision_Date, State, "Allocation Amount", "%_Decision_Amount", Restriction, Notes'
 
 const DECISIONS_SELECT =
-  'id, decision_id, decision_id_proposed, decision_date, restriction, airtable_record_id'
+  'id, decision_id, decision_id_proposed, decision_date, restriction, notes, airtable_record_id'
 
 function mapAllocationsRow(row: Record<string, unknown>) {
   const allocationId = row['Allocation_ID'] != null ? String(row['Allocation_ID']) : null
@@ -16,6 +16,7 @@ function mapAllocationsRow(row: Record<string, unknown>) {
     row['Allocation Amount'] != null ? Number(row['Allocation Amount']) : null
   const percent =
     row['%_Decision_Amount'] != null ? Number(row['%_Decision_Amount']) : null
+  const notes = row['Notes'] != null ? String(row['Notes']).trim() : null
 
   return {
     allocation_id: allocationId,
@@ -25,6 +26,7 @@ function mapAllocationsRow(row: Record<string, unknown>) {
     percent_decision_amount: percent != null && !Number.isNaN(percent) ? percent : null,
     restriction: row['Restriction'] ?? null,
     decision_date: row['Decision_Date'] != null ? String(row['Decision_Date']) : null,
+    notes: notes || null,
   }
 }
 
@@ -34,6 +36,7 @@ export type DecisionMeta = {
   decision_id_proposed: string | null
   decision_date: string | null
   restriction: string | null
+  notes: string | null
 }
 
 /**
@@ -83,6 +86,7 @@ export async function GET() {
             row['decision_id_proposed'] != null ? String(row['decision_id_proposed']) : null,
           decision_date: row['decision_date'] != null ? String(row['decision_date']) : null,
           restriction: row['restriction'] != null ? String(row['restriction']) : null,
+          notes: row['notes'] != null ? String(row['notes']).trim() || null : null,
         })
       }
     }

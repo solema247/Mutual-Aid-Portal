@@ -1,42 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
-
-// Helper function to normalize state names consistently
-function normalizeStateName(state: any): string {
-  if (!state) return 'Unknown'
-  const normalized = String(state).trim()
-  return normalized === '' ? 'Unknown' : normalized
-}
-
-// Helper function to normalize state names from activities_raw_import
-// to match the spelling used in err_projects
-function normalizeActivitiesStateName(state: any): string {
-  if (!state) return 'Unknown'
-  let normalized = String(state).trim()
-  if (normalized === '') return 'Unknown'
-  
-  // Normalize specific state name variations from activities_raw_import
-  const stateMappings: Record<string, string> = {
-    'Al Jazeera': 'Al Jazirah',
-    'Gadarif': 'Gadaref',
-    'Sinar': 'Sennar'
-  }
-  
-  // Check for exact match first
-  if (stateMappings[normalized]) {
-    return stateMappings[normalized]
-  }
-  
-  // Check case-insensitive match
-  const lowerNormalized = normalized.toLowerCase()
-  for (const [key, value] of Object.entries(stateMappings)) {
-    if (key.toLowerCase() === lowerNormalized) {
-      return value
-    }
-  }
-  
-  return normalized
-}
+import { normalizeStateName } from '@/lib/normalizeStateName'
 
 // GET /api/distribution-decisions/allocations/by-state
 // Returns aggregated allocations grouped by state
@@ -107,8 +71,7 @@ export async function GET() {
       // Handle both quoted and unquoted keys
       const rawState = row['State'] || row['state'] || row.State
       const rawUSD = row['USD'] || row['usd'] || row.USD
-      // Use normalizeActivitiesStateName to normalize state names from activities_raw_import
-      const state = normalizeActivitiesStateName(rawState)
+      const state = normalizeStateName(rawState)
       
       let usd = 0
       if (rawUSD !== null && rawUSD !== undefined) {

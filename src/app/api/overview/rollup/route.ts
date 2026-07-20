@@ -6,6 +6,7 @@ import {
   computePortalActualsByProject,
   computePortalActualsFromProjectExpenses,
 } from '@/lib/f4ExpenseDisplay'
+import { normalizeStateName } from '@/lib/normalizeStateName'
 
 /** PostgREST `.in()` with hundreds of UUIDs can exceed URL limits and return empty data. */
 const SUPABASE_IN_BATCH = 80
@@ -72,43 +73,6 @@ function sumPlanFromExpenses(expenses: any): number {
   } catch {
     return 0
   }
-}
-
-// Helper function to normalize state names consistently
-function normalizeStateName(state: any): string {
-  if (!state) return 'Unknown'
-  const normalized = String(state).trim()
-  return normalized === '' ? 'Unknown' : normalized
-}
-
-// Helper function to normalize state names from activities_raw_import
-// to match the spelling used in err_projects
-function normalizeActivitiesStateName(state: any): string {
-  if (!state) return 'Unknown'
-  let normalized = String(state).trim()
-  if (normalized === '') return 'Unknown'
-  
-  // Normalize specific state name variations from activities_raw_import
-  const stateMappings: Record<string, string> = {
-    'Al Jazeera': 'Al Jazirah',
-    'Gadarif': 'Gadaref',
-    'Sinar': 'Sennar'
-  }
-  
-  // Check for exact match first
-  if (stateMappings[normalized]) {
-    return stateMappings[normalized]
-  }
-  
-  // Check case-insensitive match
-  const lowerNormalized = normalized.toLowerCase()
-  for (const [key, value] of Object.entries(stateMappings)) {
-    if (key.toLowerCase() === lowerNormalized) {
-      return value
-    }
-  }
-  
-  return normalized
 }
 
 const OVERDUE_DAYS_AFTER_TRANSFER = 32
@@ -274,7 +238,7 @@ export async function GET(request: Request) {
     if (allowedStateNames !== null && allowedStateNames.length > 0) {
       filteredHistoricalData = (allHistoricalData || []).filter((row: any) => {
         const rawState = row['State'] || row['state'] || row.State
-        const normalizedState = normalizeActivitiesStateName(rawState)
+        const normalizedState = normalizeStateName(rawState)
         return allowedStateNames.includes(normalizedState)
       })
     }
@@ -284,7 +248,7 @@ export async function GET(request: Request) {
     for (const row of filteredHistoricalData) {
       if (row.id) {
         const rawState = row['State'] || row['state'] || row.State
-        const normalizedState = normalizeActivitiesStateName(rawState)
+        const normalizedState = normalizeStateName(rawState)
         historicalStateMap.set(row.id, normalizedState)
       }
     }
@@ -514,7 +478,7 @@ export async function GET(request: Request) {
 
       return {
         project_id: historicalProjectId, // Use a prefix to distinguish historical projects
-        state: normalizeActivitiesStateName(row['State'] || row['state'] || row.State),
+        state: normalizeStateName(row['State'] || row['state'] || row.State),
         err_id: row['ERR CODE'] || row['ERR Name'] || row['err_code'] || row['err_name'] || null,
         err_name: row['ERR Name'] || row['err_name'] || null,
         grant_call_id: null, // Historical data doesn't have grant_call_id

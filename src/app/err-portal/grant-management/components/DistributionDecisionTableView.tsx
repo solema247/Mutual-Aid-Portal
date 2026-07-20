@@ -23,6 +23,7 @@ type AllocationRow = {
   percent_decision_amount: number | null
   restriction: string | null
   decision_date: string | null
+  notes: string | null
 }
 
 type DecisionGroup = {
@@ -30,6 +31,7 @@ type DecisionGroup = {
   sumAllocationAmount: number
   restriction: string | null
   decisionDate: string | null
+  notes: string | null
   allocations: AllocationRow[]
 }
 
@@ -39,6 +41,7 @@ type DecisionMeta = {
   decision_id_proposed: string | null
   decision_date: string | null
   restriction: string | null
+  notes: string | null
 }
 
 function formatUsd(value: number | null): string {
@@ -64,6 +67,42 @@ function formatDate(dateStr: string | null): string {
   } catch {
     return dateStr
   }
+}
+
+function displayNoteLines(notes: string | null | undefined): string[] {
+  if (!notes?.trim()) return []
+  const lines = notes
+    .split(/\n+/)
+    .map((l) => l.trim())
+    .filter(Boolean)
+  const priority = lines.filter(
+    (l) =>
+      /Please Review:/i.test(l) ||
+      /Mutual Aid Calculator/i.test(l) ||
+      /missing a funds request/i.test(l) ||
+      /missing in Lohub Tracker/i.test(l) ||
+      /missing Google Sheet code/i.test(l) ||
+      /Allocation does not match decision document/i.test(l) ||
+      /amount mismatch/i.test(l) ||
+      /state mismatch/i.test(l) ||
+      /\$300,000 tranche/i.test(l) ||
+      /full \$2,000,000/i.test(l)
+  )
+  return priority.length ? priority : lines
+}
+
+function NotesCallout({ notes }: { notes: string | null | undefined }) {
+  const lines = displayNoteLines(notes)
+  if (!lines.length) {
+    return <span className="text-muted-foreground">—</span>
+  }
+  return (
+    <div className="rounded-md border border-amber-300 bg-amber-50 px-2 py-1.5 text-amber-950 text-xs leading-snug space-y-1 max-w-sm">
+      {lines.map((line) => (
+        <p key={line}>{line}</p>
+      ))}
+    </div>
+  )
 }
 
 /** Parse date string to timestamp for sorting (null => NaN). */
@@ -108,11 +147,17 @@ export default function DistributionDecisionTableView() {
       )
       const restriction = meta?.restriction ?? rows.map((r) => r.restriction).find(Boolean) ?? null
       const decisionDate = meta?.decision_date ?? rows.map((r) => r.decision_date).find(Boolean) ?? null
+      const notes =
+        meta?.notes ??
+        rows.map((r) => r.notes).find((n) => n && /missing a funds request|Mutual Aid Calculator|missing Google Sheet/i.test(n)) ??
+        rows.map((r) => r.notes).find(Boolean) ??
+        null
       result.push({
         decisionKey,
         sumAllocationAmount,
         restriction,
         decisionDate,
+        notes,
         allocations: rows,
       })
     }
@@ -230,12 +275,13 @@ export default function DistributionDecisionTableView() {
                 </TableHead>
                 <TableHead className="px-2">Sum allocation amount</TableHead>
                 <TableHead className="px-2">Restriction</TableHead>
+                <TableHead className="px-2 min-w-[200px]">Notes</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {decisions.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center py-6 text-muted-foreground text-xs">
+                  <TableCell colSpan={6} className="text-center py-6 text-muted-foreground text-xs">
                     No allocations found
                   </TableCell>
                 </TableRow>
@@ -259,10 +305,13 @@ export default function DistributionDecisionTableView() {
                       <TableCell className="whitespace-nowrap">{formatDate(dec.decisionDate)}</TableCell>
                       <TableCell className="whitespace-nowrap">{formatUsd(dec.sumAllocationAmount)}</TableCell>
                       <TableCell className="max-w-[120px] truncate" title={dec.restriction ?? undefined}>{dec.restriction ?? '—'}</TableCell>
+                      <TableCell onClick={(e) => e.stopPropagation()}>
+                        <NotesCallout notes={dec.notes} />
+                      </TableCell>
                     </TableRow>
                     {expandedKey === dec.decisionKey && (
                       <TableRow>
-                        <TableCell colSpan={5} className="bg-muted/30 p-0">
+                        <TableCell colSpan={6} className="bg-muted/30 p-0">
                           <div className="px-3 py-2">
                             <p className="text-[10px] font-medium text-muted-foreground mb-1.5">
                               State allocations
@@ -273,6 +322,7 @@ export default function DistributionDecisionTableView() {
                                   <TableHead className="px-2">State</TableHead>
                                   <TableHead className="px-2">Allocation amount</TableHead>
                                   <TableHead className="px-2">% of decision</TableHead>
+                                  <TableHead className="px-2 min-w-[200px]">Notes</TableHead>
                                 </TableRow>
                               </TableHeader>
                               <TableBody>
@@ -288,6 +338,9 @@ export default function DistributionDecisionTableView() {
                                       <TableCell>{a.state ?? '—'}</TableCell>
                                       <TableCell className="whitespace-nowrap">{formatUsd(a.allocation_amount)}</TableCell>
                                       <TableCell className="whitespace-nowrap">{formatPercent(percent)}</TableCell>
+                                      <TableCell>
+                                        <NotesCallout notes={a.notes} />
+                                      </TableCell>
                                     </TableRow>
                                   )
                                 })}

@@ -13,7 +13,7 @@ export async function GET() {
     const { data, error } = await supabase
       .from('distribution_decision_master_sheet_1')
       .select(
-        'id, decision_id_proposed, decision_id, grant_name, restriction, sum_allocation_amount, decision_amount, decision_date, partner'
+        'id, decision_id_proposed, decision_id, grant_name, restriction, sum_allocation_amount, decision_amount, decision_date, partner, notes'
       )
       .order('decision_date', { ascending: false })
 
@@ -30,6 +30,7 @@ export async function GET() {
       decision_amount: row.decision_amount != null ? Number(row.decision_amount) : null,
       decision_date: row.decision_date ?? null,
       partner: row.partner ?? null,
+      notes: row.notes ?? null,
     }))
 
     return NextResponse.json(list)

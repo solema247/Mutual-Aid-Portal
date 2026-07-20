@@ -33,7 +33,7 @@ export async function GET(
 
     const { data, error } = await supabase
       .from('allocations_by_date')
-      .select('Allocation_ID, State, "Allocation Amount", "%_Decision_Amount"')
+      .select('Allocation_ID, State, "Allocation Amount", "%_Decision_Amount", Notes')
       .eq('Decision_ID', groupKey)
 
     if (error) throw error
@@ -44,6 +44,7 @@ export async function GET(
       const percent =
         row['%_Decision_Amount'] != null ? Number(row['%_Decision_Amount']) : null
       const allocationId = row['Allocation_ID'] != null ? String(row['Allocation_ID']) : null
+      const notes = row['Notes'] != null ? String(row['Notes']).trim() : null
 
       return {
         allocation_id: allocationId,
@@ -52,6 +53,7 @@ export async function GET(
         allocation_amount: amount != null && !Number.isNaN(amount) ? amount : null,
         percent_of_decision: percent != null && !Number.isNaN(percent) ? percent : null,
         percent_decision_amount: percent != null && !Number.isNaN(percent) ? percent : null,
+        notes: notes || null,
       }
     })
 
