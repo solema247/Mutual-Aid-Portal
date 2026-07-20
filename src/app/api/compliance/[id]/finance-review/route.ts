@@ -6,7 +6,7 @@ import { requirePermission } from '@/lib/requirePermission'
  * POST /api/compliance/[id]/finance-review
  *
  * Actions:
- *  - dismiss  — Ahmed raised the flag erroneously; clear the flag and unblock
+ *  - dismiss  — flag raised erroneously; clear the flag and unblock
  *  - approve  — only for missing_id after an ID has been uploaded (or legacy flags)
  *  - reject   — legacy alias for dismiss
  *
@@ -80,7 +80,7 @@ export async function POST(
     }
 
     if (normalized === 'dismiss') {
-      // Erroneous flag — return to pending so Ahmed can re-screen if needed,
+      // Erroneous flag — return to pending so finance can re-screen if needed,
       // and unblock commit
       const { error: updateError } = await supabase
         .from('compliance_screenings')

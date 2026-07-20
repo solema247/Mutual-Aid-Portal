@@ -19,9 +19,9 @@ export async function sendSanctionsMatchAlert(payload: {
     `*F1 / ERR ID:* ${payload.errId || payload.projectId}`,
     `*Payee names:* ${(payload.names || []).join(', ') || '—'}`,
     `*Flag:* Potential Descartes / sanctions list match`,
-    payload.note ? `*Ahmed's note:* ${payload.note}` : null,
+    payload.note ? `*Screening note:* ${payload.note}` : null,
     '',
-    '_Notify: Finance team, Ahmed, Yara, Josh, Nihal, Santiago_',
+    '_Notify: Finance team, Yara, Josh, Nihal, Santiago_',
     `_Screening ID: ${payload.screeningId}_`
   ]
     .filter(Boolean)

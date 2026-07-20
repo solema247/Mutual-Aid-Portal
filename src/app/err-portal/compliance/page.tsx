@@ -81,6 +81,135 @@ function StatusBadge({ s }: { s: Screening }) {
   return <Badge variant="destructive" className="text-[10px] px-1.5 py-0">Flagged — pending finance review</Badge>
 }
 
+const ITEMS_PER_PAGE = 10
+
+function PaginatedScreeningsTable({
+  rows,
+  emptyText,
+  onView,
+}: {
+  rows: Screening[]
+  emptyText: string
+  onView: (s: Screening) => void
+}) {
+  const [currentPage, setCurrentPage] = useState(1)
+  const totalPages = Math.max(1, Math.ceil(rows.length / ITEMS_PER_PAGE))
+  const safePage = Math.min(currentPage, totalPages)
+  const startIndex = (safePage - 1) * ITEMS_PER_PAGE
+  const endIndex = startIndex + ITEMS_PER_PAGE
+  const pageRows = rows.slice(startIndex, endIndex)
+
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [rows.length])
+
+  return (
+    <div className="space-y-3">
+      <Card>
+        <CardContent className="p-0 overflow-x-auto">
+          <Table className="text-xs min-w-[700px]">
+            <TableHeader>
+              <TableRow className="[&>th]:py-2 [&>th]:px-2 [&>th]:text-xs">
+                <TableHead className="px-2">ERR ID</TableHead>
+                <TableHead className="px-2">Date</TableHead>
+                <TableHead className="px-2">State</TableHead>
+                <TableHead className="px-2">Locality</TableHead>
+                <TableHead className="px-2">Payee names</TableHead>
+                <TableHead className="text-right px-2">Amount</TableHead>
+                <TableHead className="px-2">Status</TableHead>
+                <TableHead className="px-2">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {pageRows.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={8} className="text-center py-6 text-muted-foreground">
+                    {emptyText}
+                  </TableCell>
+                </TableRow>
+              )}
+              {pageRows.map(s => (
+                <TableRow
+                  key={s.id}
+                  className={`[&>td]:py-1.5 [&>td]:px-2 [&>td]:text-xs ${
+                    s.flag_type === 'sanctions_match' && s.finance_review_status === 'pending'
+                      ? 'bg-red-50'
+                      : ''
+                  }`}
+                >
+                  <TableCell className="whitespace-nowrap">{s.err_id || '—'}</TableCell>
+                  <TableCell className="whitespace-nowrap">
+                    {s.date ? new Date(s.date).toLocaleDateString() : '—'}
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap">{s.state || '—'}</TableCell>
+                  <TableCell className="whitespace-nowrap max-w-[100px] truncate" title={s.locality || ''}>
+                    {s.locality || '—'}
+                  </TableCell>
+                  <TableCell className="max-w-[220px]">
+                    {s.names.length > 0 ? (
+                      <span className="truncate block" title={s.names.join(', ')}>
+                        {s.names.join(', ')}
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground italic">No names extracted</span>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-right whitespace-nowrap">
+                    {s.total_amount ? s.total_amount.toLocaleString() : '—'}
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap">
+                    <StatusBadge s={s} />
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-xs px-2"
+                      onClick={() => onView(s)}
+                    >
+                      <Eye className="w-3.5 h-3.5 mr-1" />
+                      View F1
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+
+      {rows.length > ITEMS_PER_PAGE && (
+        <div className="flex items-center justify-between px-1">
+          <div className="text-sm text-muted-foreground">
+            Showing {startIndex + 1} to {Math.min(endIndex, rows.length)} of {rows.length}
+          </div>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentPage(safePage - 1)}
+              disabled={safePage === 1}
+            >
+              Previous
+            </Button>
+            <span className="text-sm text-muted-foreground self-center">
+              Page {safePage} of {totalPages}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentPage(safePage + 1)}
+              disabled={safePage === totalPages}
+            >
+              Next
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function CompliancePage() {
   const router = useRouter()
   const { can, isLoading: permissionsLoading } = useAllowedFunctions()
@@ -263,81 +392,6 @@ export default function CompliancePage() {
       !(s.status === 'flagged' && s.finance_review_status === 'pending')
   )
 
-  const renderTable = (rows: Screening[], emptyText: string) => (
-    <Card>
-      <CardContent className="p-0 overflow-x-auto">
-        <Table className="text-xs min-w-[700px]">
-          <TableHeader>
-            <TableRow className="[&>th]:py-2 [&>th]:px-2 [&>th]:text-xs">
-              <TableHead className="px-2">ERR ID</TableHead>
-              <TableHead className="px-2">Date</TableHead>
-              <TableHead className="px-2">State</TableHead>
-              <TableHead className="px-2">Locality</TableHead>
-              <TableHead className="px-2">Payee names</TableHead>
-              <TableHead className="text-right px-2">Amount</TableHead>
-              <TableHead className="px-2">Status</TableHead>
-              <TableHead className="px-2">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {rows.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={8} className="text-center py-6 text-muted-foreground">
-                  {emptyText}
-                </TableCell>
-              </TableRow>
-            )}
-            {rows.map(s => (
-              <TableRow
-                key={s.id}
-                className={`[&>td]:py-1.5 [&>td]:px-2 [&>td]:text-xs ${
-                  s.flag_type === 'sanctions_match' && s.finance_review_status === 'pending'
-                    ? 'bg-red-50'
-                    : ''
-                }`}
-              >
-                <TableCell className="whitespace-nowrap">{s.err_id || '—'}</TableCell>
-                <TableCell className="whitespace-nowrap">
-                  {s.date ? new Date(s.date).toLocaleDateString() : '—'}
-                </TableCell>
-                <TableCell className="whitespace-nowrap">{s.state || '—'}</TableCell>
-                <TableCell className="whitespace-nowrap max-w-[100px] truncate" title={s.locality || ''}>
-                  {s.locality || '—'}
-                </TableCell>
-                <TableCell className="max-w-[220px]">
-                  {s.names.length > 0 ? (
-                    <span className="truncate block" title={s.names.join(', ')}>
-                      {s.names.join(', ')}
-                    </span>
-                  ) : (
-                    <span className="text-muted-foreground italic">No names extracted</span>
-                  )}
-                </TableCell>
-                <TableCell className="text-right whitespace-nowrap">
-                  {s.total_amount ? s.total_amount.toLocaleString() : '—'}
-                </TableCell>
-                <TableCell className="whitespace-nowrap">
-                  <StatusBadge s={s} />
-                </TableCell>
-                <TableCell className="whitespace-nowrap">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-7 text-xs px-2"
-                    onClick={() => openDetail(s)}
-                  >
-                    <Eye className="w-3.5 h-3.5 mr-1" />
-                    View F1
-                  </Button>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </CardContent>
-    </Card>
-  )
-
   const showScreeningActions =
     canScreen && selected?.status === 'pending_screening'
   const showMissingIdFinance =
@@ -374,7 +428,7 @@ export default function CompliancePage() {
                 RED ALERT — {sanctionsAlerts.length} payment{sanctionsAlerts.length === 1 ? '' : 's'} must be stopped
               </div>
               <p className="text-sm mt-1">
-                Potential Descartes / sanctions list match flagged. Notify Finance, Ahmed, Yara, Josh, Nihal, and Santiago.
+                Potential Descartes / sanctions list match flagged. Notify Finance team, Yara, Josh, Nihal, and Santiago.
                 {' '}
                 {sanctionsAlerts.map(s => s.err_id || s.project_id).join(', ')}
               </p>
@@ -387,7 +441,7 @@ export default function CompliancePage() {
         <CardHeader>
           <CardTitle>OFAC / Descartes Screening</CardTitle>
           <p className="text-sm text-muted-foreground">
-            Ahmed screens payee names. Flag as <strong>Missing ID</strong> (finance uploads the document)
+            Finance team screens payee names. Flag as <strong>Missing ID</strong> (finance uploads the document)
             or <strong>Sanctions match</strong> (payment stopped — red alert). Clear when the name is fine.
           </p>
         </CardHeader>
@@ -404,15 +458,27 @@ export default function CompliancePage() {
             </TabsList>
 
             <TabsContent value="queue" className="mt-6">
-              {renderTable(pending, 'No F1s waiting for screening')}
+              <PaginatedScreeningsTable
+                rows={pending}
+                emptyText="No F1s waiting for screening"
+                onView={openDetail}
+              />
             </TabsContent>
 
             <TabsContent value="finance" className="mt-6">
-              {renderTable(financeQueue, 'No flagged F1s waiting for finance review')}
+              <PaginatedScreeningsTable
+                rows={financeQueue}
+                emptyText="No flagged F1s waiting for finance review"
+                onView={openDetail}
+              />
             </TabsContent>
 
             <TabsContent value="history" className="mt-6">
-              {renderTable(history, 'No screened F1s yet')}
+              <PaginatedScreeningsTable
+                rows={history}
+                emptyText="No screened F1s yet"
+                onView={openDetail}
+              />
             </TabsContent>
           </Tabs>
         </CardContent>
@@ -431,7 +497,7 @@ export default function CompliancePage() {
                 selected.finance_review_status === 'pending' && (
                 <div className="rounded-md border-2 border-red-600 bg-red-50 px-3 py-2 text-sm text-red-950 font-medium">
                   PAYMENT MUST BE STOPPED — potential Descartes / sanctions list match.
-                  Alert recipients: Finance, Ahmed, Yara, Josh, Nihal, Santiago.
+                  Alert recipients: Finance team, Yara, Josh, Nihal, Santiago.
                 </div>
               )}
 

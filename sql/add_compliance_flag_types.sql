@@ -1,5 +1,5 @@
 -- Extend compliance screening for typed flags from demo feedback:
--- 1) missing_id — Ahmed flags missing ID; finance uploads ID or dismisses erroneous flag
+-- 1) missing_id — finance flags missing ID; finance uploads ID or dismisses erroneous flag
 -- 2) sanctions_match — potential Descartes/OFAC match; payment stopped until dismissed
 
 ALTER TABLE compliance_screenings
