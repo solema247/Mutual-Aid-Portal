@@ -3,6 +3,7 @@ import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
 import { normalizeF1DateForDb } from '@/lib/f1WorkplanNormalize'
 import { f1WorkplanCreateSchema } from '@/lib/f1WorkplanSchema'
+import { ensureScreeningsForProjects } from '@/lib/compliance'
 
 function emptyToNull<T extends string | null | undefined> (v: T): string | null {
   if (v === undefined || v === null) return null
@@ -113,6 +114,18 @@ export async function POST (request: Request) {
       const status =
         insertError.code === '23503' || insertError.code === '23514' ? 400 : 500
       return NextResponse.json({ error: msg }, { status })
+    }
+
+    // Queue the new F1 for visual compliance screening (non-fatal on failure;
+    // the compliance queue sweep will pick it up later if this errors)
+    if (inserted?.id) {
+      try {
+        await ensureScreeningsForProjects(supabase, [
+          { id: inserted.id, banking_details: row.banking_details }
+        ])
+      } catch (screeningError) {
+        console.error('f1/workplan compliance screening:', screeningError)
+      }
     }
 
     return NextResponse.json({ success: true, id: inserted?.id })

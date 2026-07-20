@@ -39,6 +39,9 @@ export interface UncommittedF1 {
   grant_id?: string | null
   grant_serial_id?: string | null
   workplan_number?: number | null
+  compliance_status?: 'pending_screening' | 'cleared' | 'flagged' | 'auto_approved' | null
+  compliance_flag_type?: 'missing_id' | 'sanctions_match' | null
+  compliance_blocked?: boolean
 }
 
 export interface CommittedF1 {

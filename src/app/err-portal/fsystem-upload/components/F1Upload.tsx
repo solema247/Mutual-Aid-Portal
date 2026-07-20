@@ -369,7 +369,7 @@ export default function F1Upload() {
       }
 
       // Insert into Supabase with final grant ID and sectors
-      const { error: insertError } = await supabase
+      const { data: insertedProject, error: insertError } = await supabase
         .from('err_projects')
         .insert([{
           ...editedData,
@@ -386,9 +386,25 @@ export default function F1Upload() {
           "Sector (Secondary)": secondarySectorNames,
           project_name: projectName
         }])
+        .select('id')
+        .single()
 
       if (insertError) {
         throw insertError
+      }
+
+      // Queue the new F1 for visual compliance screening (non-fatal;
+      // the compliance queue sweep picks it up if this fails)
+      if (insertedProject?.id) {
+        try {
+          await fetch('/api/compliance/ensure', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ project_ids: [insertedProject.id] })
+          })
+        } catch (e) {
+          console.error('Failed to queue compliance screening:', e)
+        }
       }
 
       // Update Google Sheet with final grant ID and sectors

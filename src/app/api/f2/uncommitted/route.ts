@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { getUserStateAccess } from '@/lib/userStateAccess'
 import { requirePermission } from '@/lib/requirePermission'
+import { getComplianceBlockedProjectIds } from '@/lib/compliance'
 
 // GET /api/f2/uncommitted - Get all uncommitted F1s (optional: state, month_year_from, month_year_to as YYYY-MM)
 export async function GET(request: Request) {
@@ -70,6 +71,39 @@ export async function GET(request: Request) {
 
     if (error) throw error
 
+    // Attach compliance screening status so the UI can badge/block flagged F1s
+    const complianceByProject = new Map<
+      string,
+      { status: string; finance_review_status: string | null; flag_type: string | null }
+    >()
+    const projectIds = (data || []).map((f1) => f1.id as string)
+    for (let i = 0; i < projectIds.length; i += 200) {
+      const chunk = projectIds.slice(i, i + 200)
+      const { data: screenings, error: screeningsError } = await supabase
+        .from('compliance_screenings')
+        .select('project_id, status, finance_review_status, flag_type')
+        .in('project_id', chunk)
+      if (screeningsError) {
+        console.error('Error fetching compliance screenings:', screeningsError)
+        break
+      }
+      for (const s of screenings || []) {
+        complianceByProject.set(s.project_id, {
+          status: s.status,
+          finance_review_status: s.finance_review_status,
+          flag_type: s.flag_type || null
+        })
+      }
+    }
+
+    const isBlocked = (c: { status: string; finance_review_status: string | null; flag_type: string | null } | undefined) => {
+      if (!c || c.status !== 'flagged') return false
+      if (c.finance_review_status === 'rejected') return false
+      if (c.flag_type === 'sanctions_match') return true
+      if (c.flag_type === 'missing_id') return c.finance_review_status !== 'approved'
+      return c.finance_review_status !== 'approved'
+    }
+
     const formattedF1s = (data || []).map((f1: any) => ({
       id: f1.id,
       err_id: f1.err_id,
@@ -89,7 +123,10 @@ export async function GET(request: Request) {
       approval_file_key: f1.approval_file_key || null,
       temp_file_key: f1.temp_file_key || null,
       grant_id: f1.grant_id || null,
-      grant_segment: f1.grant_segment || null
+      grant_segment: f1.grant_segment || null,
+      compliance_status: complianceByProject.get(f1.id)?.status || null,
+      compliance_flag_type: complianceByProject.get(f1.id)?.flag_type || null,
+      compliance_blocked: isBlocked(complianceByProject.get(f1.id))
     }))
 
     return NextResponse.json(formattedF1s)
@@ -158,6 +195,19 @@ export async function POST(request: Request) {
     
     if (!f1_ids || !Array.isArray(f1_ids) || f1_ids.length === 0) {
       return NextResponse.json({ error: 'F1 IDs array is required' }, { status: 400 })
+    }
+
+    // Compliance gate: flagged F1s need finance approval before commit
+    const blocked = await getComplianceBlockedProjectIds(supabase, f1_ids)
+    if (blocked.length > 0) {
+      return NextResponse.json(
+        {
+          error: 'Some F1s are flagged by compliance screening and pending finance review. They cannot be committed.',
+          code: 'COMPLIANCE_BLOCKED',
+          blocked_ids: blocked
+        },
+        { status: 400 }
+      )
     }
 
     const { error } = await supabase
