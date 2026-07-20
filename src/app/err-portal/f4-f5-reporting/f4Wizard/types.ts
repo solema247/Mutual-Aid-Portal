@@ -1,4 +1,5 @@
-export type WizardKind = 'table' | 'questions' | 'receipts'
+/** Guided snip steps: receipts build the expense table; questions fill narrative fields. */
+export type WizardKind = 'receipts' | 'questions'
 
 /** Snip rect is in CSS px relative to the page <img>. refW/refH = img.clientWidth/Height when the box was drawn. */
 export type RegionSelection = {

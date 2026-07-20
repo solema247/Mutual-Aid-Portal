@@ -315,26 +315,47 @@ Rules:
 - If answer appears in later continuation bullet/line, include it.`
 
   const expectedHint = expectedAmounts.length
-    ? `Expected expense totals to validate against (SDG): [${expectedAmounts.join(', ')}].`
-    : 'No expected totals provided.'
-  const receiptInstruction = `You are extracting ONE receipt snippet.
+    ? `Optional hint — known expense amounts (SDG): [${expectedAmounts.join(', ')}]. Prefer a payment total close to one of these when ambiguous.`
+    : 'No prior expected totals provided — extract the receipt payment total as printed.'
+  const receiptInstruction = `You are extracting ONE receipt / bank slip / payment notice snippet (Arabic or English).
+This receipt will become ONE expense row in an F4 financial report.
+
 Return STRICT JSON:
 {
   "amount_value": number | null,
   "currency": "SDG" | "USD" | null,
-  "reference": string | null
+  "reference": string | null,
+  "activity": string | null,
+  "description": string | null,
+  "payment_date": string | null,
+  "payment_method": string | null,
+  "receipt_no": string | null,
+  "seller": string | null
 }
 Rules:
-- Extract ONLY the final total paid/transaction amount for this receipt (NOT phone/account/reference/operation IDs).
-- If multiple numbers exist, choose the amount that represents the total transfer/payment value.
-- Prefer values associated with terms like: مبلغ, القيمة, الإجمالي, total, amount, تحويل.
+- amount_value: ONLY the final total paid/transaction amount (NOT phone/account/operation IDs). Prefer مبلغ, القيمة, الإجمالي, total, amount, تحويل. Numeric, no separators. If unclear, null.
+- currency: SDG or USD when visible; default SDG for Arabic Sudanese receipts when unclear.
+- reference / receipt_no: receipt number, voucher no, or transfer reference when visible (same value is fine for both).
+- seller: merchant, payee, vendor, or recipient name when visible.
+- payment_date: transaction/payment date if visible (keep as printed text).
+- payment_method: e.g. Bank Transfer, Cash, Cheque, mobile money — infer from slip type when labeled; else null.
+- description: brief what was paid for / goods/services if written on the slip; else a short label from seller + amount context; else null.
+- activity: sector/activity label ONLY if explicitly written; otherwise null (do not invent).
 - ${expectedHint}
-- If the detected amount is clearly not a payment total or not reasonably close to any expected total, return amount_value as null.
-- Keep amount numeric without separators.
-- If truly unclear, return amount_value as null.`
+- If the image is not a receipt/slip, still return the JSON with nulls where unknown.`
 
   if (kind === 'receipts') {
-    const receipts: Array<{ amount_value: number | null, currency: 'SDG' | 'USD' | null, reference: string | null }> = []
+    const receipts: Array<{
+      amount_value: number | null
+      currency: 'SDG' | 'USD' | null
+      reference: string | null
+      activity: string | null
+      description: string | null
+      payment_date: string | null
+      payment_method: string | null
+      receipt_no: string | null
+      seller: string | null
+    }> = []
     for (let i = 0; i < files.length; i++) {
       const file = files[i]
       const parts = await toInlineParts([file])
@@ -348,14 +369,22 @@ Rules:
         ] as any
       )
       const parsed = await parseJsonWithRepair(kind, result.response.text())
-      const obj = parsed && typeof parsed === 'object' ? parsed : {}
-      const amount = obj && (obj as any).amount_value != null ? Number((obj as any).amount_value) : null
-      const currency = (obj as any)?.currency === 'USD' ? 'USD' : (obj as any)?.currency === 'SDG' ? 'SDG' : null
-      const reference = (obj as any)?.reference != null ? String((obj as any).reference) : file.name
+      const obj = parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : {}
+      const amount = obj.amount_value != null ? Number(obj.amount_value) : null
+      const currency = obj.currency === 'USD' ? 'USD' : obj.currency === 'SDG' ? 'SDG' : null
+      const strOrNull = (v: unknown) => (v != null && String(v).trim() !== '' ? String(v).trim() : null)
+      const reference = strOrNull(obj.reference) || file.name
+      const receiptNo = strOrNull(obj.receipt_no) || strOrNull(obj.reference)
       receipts.push({
         amount_value: Number.isFinite(amount as number) ? amount : null,
         currency,
         reference,
+        activity: strOrNull(obj.activity),
+        description: strOrNull(obj.description),
+        payment_date: strOrNull(obj.payment_date),
+        payment_method: strOrNull(obj.payment_method),
+        receipt_no: receiptNo,
+        seller: strOrNull(obj.seller),
       })
     }
     return { receipts }
@@ -432,19 +461,54 @@ export async function POST (request: Request) {
       const found = normalizedReceipts.map((r: any) => toFiniteAmount(r?.amount_value))
       const receiptsTotalSdg = found.reduce((sum: number, value: number | null) => sum + (value || 0), 0)
       const detectedCount = found.filter((v: number | null) => v != null).length
-      const expectedTotalSdg = expected.reduce((sum: number, value: number) => sum + value, 0)
+      // Expenses are derived from the same receipt snips (no separate table scan).
+      // expected_* mirrors detected totals when the client did not pass prior table amounts.
+      const expectedTotalSdg =
+        expected.length > 0
+          ? expected.reduce((sum: number, value: number) => sum + value, 0)
+          : receiptsTotalSdg
+      const expectedCount = expected.length > 0 ? expected.length : detectedCount
+
+      const supabase = getSupabaseRouteClient()
+      const sectors = await fetchF4SectorsForMatch(supabase)
+      const expenses = normalizedReceipts.map((r: any) => {
+        const rawActivity =
+          r?.activity != null && String(r.activity).trim() !== '' ? String(r.activity).trim() : ''
+        const activity =
+          rawActivity && sectors.length
+            ? matchRawActivityToSectorNameEn(rawActivity, sectors)
+            : rawActivity
+        return {
+          activity,
+          amount_value: toFiniteAmount(r?.amount_value),
+          currency: r?.currency === 'USD' ? 'USD' : 'SDG',
+          description: r?.description != null ? String(r.description) : null,
+          payment_date: r?.payment_date != null ? String(r.payment_date) : null,
+          payment_method: r?.payment_method != null ? String(r.payment_method) : null,
+          receipt_no:
+            r?.receipt_no != null
+              ? String(r.receipt_no)
+              : r?.reference != null
+                ? String(r.reference)
+                : null,
+          seller: r?.seller != null ? String(r.seller) : null,
+        }
+      })
+
       console.log('[F4 parse-snips] RECEIPT_COMPARE', {
-        expectedCount: expected.length,
+        expectedCount,
         expectedTotalSdg,
         foundCount: detectedCount,
         receiptsTotalSdg,
+        expenseRows: expenses.length,
         normalizedFound: found,
       })
       return NextResponse.json({
         receipts: normalizedReceipts,
+        expenses,
         receipts_total_sdg: receiptsTotalSdg,
         receipts_detected_count: detectedCount,
-        expected_count: expected.length,
+        expected_count: expectedCount,
         expected_total_sdg: expectedTotalSdg,
       })
     }

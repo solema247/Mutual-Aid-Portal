@@ -86,11 +86,10 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
   const [attachmentFile, setAttachmentFile] = useState<File | null>(null)
   const [wizardLoading, setWizardLoading] = useState<WizardKind | null>(null)
   const [receiptValidation, setReceiptValidation] = useState<any | null>(null)
-  const [wizardKind, setWizardKind] = useState<WizardKind>('table')
-  const [wizardProgress, setWizardProgress] = useState<{ table: boolean; questions: boolean; receipts: boolean }>({
-    table: false,
-    questions: false,
+  const [wizardKind, setWizardKind] = useState<WizardKind>('receipts')
+  const [wizardProgress, setWizardProgress] = useState<{ receipts: boolean; questions: boolean }>({
     receipts: false,
+    questions: false,
   })
   const [wizardViewerExpanded, setWizardViewerExpanded] = useState(false)
   const [wizardZoom, setWizardZoom] = useState(1)
@@ -98,9 +97,8 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
   const [wizardPages, setWizardPages] = useState<WizardPageEntry[]>([])
   const [isRenderingPages, setIsRenderingPages] = useState(false)
   const [selectionByKind, setSelectionByKind] = useState<Record<WizardKind, RegionSelection[]>>({
-    table: [],
-    questions: [],
     receipts: [],
+    questions: [],
   })
   const [dragging, setDragging] = useState<WizardDragState>(null)
   const [f4Sectors, setF4Sectors] = useState<F4SectorRow[]>([])
@@ -178,9 +176,9 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
         setEntryMode('upload')
         setAttachmentFile(null)
         setReceiptValidation(null)
-        setSelectionByKind({ table: [], questions: [], receipts: [] })
-        setWizardKind('table')
-        setWizardProgress({ table: false, questions: false, receipts: false })
+        setSelectionByKind({ receipts: [], questions: [] })
+        setWizardKind('receipts')
+        setWizardProgress({ receipts: false, questions: false })
         setWizardViewerExpanded(false)
         setWizardZoom(1)
         setFxRate(null)
@@ -577,9 +575,9 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
       }))
       setExpensesDraft([])
       setReceiptValidation(null)
-      setWizardProgress({ table: false, questions: false, receipts: false })
-      setSelectionByKind({ table: [], questions: [], receipts: [] })
-      setWizardKind('table')
+      setWizardProgress({ receipts: false, questions: false })
+      setSelectionByKind({ receipts: [], questions: [] })
+      setWizardKind('receipts')
       setIsRenderingPages(true)
       setStep('wizard')
     } catch {
@@ -599,7 +597,7 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
     setIsRenderingPages,
   })
 
-  const expectedWizardKind: WizardKind = !wizardProgress.table ? 'table' : !wizardProgress.questions ? 'questions' : 'receipts'
+  const expectedWizardKind: WizardKind = !wizardProgress.receipts ? 'receipts' : 'questions'
   useEffect(() => {
     if (wizardKind !== expectedWizardKind) setWizardKind(expectedWizardKind)
   }, [expectedWizardKind, wizardKind])
@@ -622,16 +620,11 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
       form.append('kind', kind)
       form.append('project_id', String(actualProjectId))
       files.forEach((f) => form.append('files', f))
-      if (kind === 'receipts') {
-        const expenseAmounts = expensesDraft
-          .map((r: any) => Number(r.expense_amount_sdg))
-          .filter((n: number) => Number.isFinite(n) && n > 0)
-        form.append('expense_amounts_sdg', JSON.stringify(expenseAmounts))
-      }
 
       const json = (await f4ParseSnips(form)) as Record<string, unknown>
 
-      if (kind === 'table') {
+      if (kind === 'receipts') {
+        // Receipt snips populate both the expense table and the receipt_check used in preview.
         const rows = Array.isArray(json.expenses) ? json.expenses : []
         const mapped = rows.map((ex: any) => ({
           expense_activity: ex.activity != null ? String(ex.activity).trim() : '',
@@ -642,37 +635,19 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
           payment_method: ex.payment_method != null ? String(ex.payment_method) : 'Bank Transfer',
           receipt_no: ex.receipt_no != null ? String(ex.receipt_no) : '',
           seller: ex.seller != null ? String(ex.seller) : '',
-          is_draft: true
+          is_draft: true,
         }))
         setExpensesDraft(recalcExpenseUsdFromSdg(fxRateRef.current, mapped))
-        setSummaryDraft((prev: any) => ({
-          ...(prev || {}),
-          total_expenses: json.total_expenses_text != null ? Number(String(json.total_expenses_text).replace(/[,\s]/g, '')) || prev?.total_expenses || null : prev?.total_expenses || null,
-          total_grant: json.total_grant_text != null ? Number(String(json.total_grant_text).replace(/[,\s]/g, '')) || prev?.total_grant || null : prev?.total_grant || null,
-          total_other_sources: json.total_other_sources_text != null ? Number(String(json.total_other_sources_text).replace(/[,\s]/g, '')) || prev?.total_other_sources || null : prev?.total_other_sources || null,
-          remainder: json.remainder_text != null ? Number(String(json.remainder_text).replace(/[,\s]/g, '')) || prev?.remainder || null : prev?.remainder || null,
-        }))
-        setWizardProgress(prev => ({ ...prev, table: true }))
-        setWizardKind('questions')
-      } else if (kind === 'questions') {
-        setSummaryDraft((prev: any) => ({
-          ...(prev || {}),
-          excess_expenses: json.excess_expenses ?? prev?.excess_expenses ?? '',
-          surplus_use: json.surplus_use ?? prev?.surplus_use ?? '',
-          lessons: json.lessons ?? prev?.lessons ?? '',
-          training: json.training ?? prev?.training ?? '',
-        }))
-        setWizardProgress(prev => ({ ...prev, questions: true }))
-        setWizardKind('receipts')
-      } else {
         setReceiptValidation(json)
         setSummaryDraft((prev: any) => ({
           ...(prev || {}),
           receipt_check: {
             receipts_total_sdg: Number(json?.receipts_total_sdg) || 0,
             receipts_detected_count: Number(json?.receipts_detected_count) || 0,
-            expected_count: Number(json?.expected_count) || 0,
-            expected_total_sdg: Number(json?.expected_total_sdg) || 0,
+            expected_count: Number(json?.expected_count) || mapped.length,
+            expected_total_sdg:
+              Number(json?.expected_total_sdg) ||
+              mapped.reduce((s: number, r: any) => s + (Number(r.expense_amount_sdg) || 0), 0),
             receipts: Array.isArray(json?.receipts)
               ? json.receipts.map((r: any, idx: number) => ({
                   reference: r?.reference ? String(r.reference) : `receipt-${idx + 1}`,
@@ -684,7 +659,17 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
             confirmed: false,
           },
         }))
-        setWizardProgress(prev => ({ ...prev, receipts: true }))
+        setWizardProgress((prev) => ({ ...prev, receipts: true }))
+        setWizardKind('questions')
+      } else {
+        setSummaryDraft((prev: any) => ({
+          ...(prev || {}),
+          excess_expenses: json.excess_expenses ?? prev?.excess_expenses ?? '',
+          surplus_use: json.surplus_use ?? prev?.surplus_use ?? '',
+          lessons: json.lessons ?? prev?.lessons ?? '',
+          training: json.training ?? prev?.training ?? '',
+        }))
+        setWizardProgress((prev) => ({ ...prev, questions: true }))
       }
     } catch {
       alert('Failed to parse snippet files')
@@ -817,9 +802,9 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
     setEntryMode('upload')
     setAttachmentFile(null)
     setReceiptValidation(null)
-    setSelectionByKind({ table: [], questions: [], receipts: [] })
-    setWizardKind('table')
-    setWizardProgress({ table: false, questions: false, receipts: false })
+    setSelectionByKind({ receipts: [], questions: [] })
+    setWizardKind('receipts')
+    setWizardProgress({ receipts: false, questions: false })
     setWizardViewerExpanded(false)
     setWizardZoom(1)
   }
@@ -852,9 +837,9 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
           setEntryMode('upload')
           setAttachmentFile(null)
           setReceiptValidation(null)
-          setSelectionByKind({ table: [], questions: [], receipts: [] })
-          setWizardKind('table')
-          setWizardProgress({ table: false, questions: false, receipts: false })
+          setSelectionByKind({ receipts: [], questions: [] })
+          setWizardKind('receipts')
+          setWizardProgress({ receipts: false, questions: false })
           setWizardViewerExpanded(false)
           setWizardZoom(1)
           setFxRate(null)
@@ -1009,23 +994,19 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
               zoom={wizardZoom}
               onZoomChange={setWizardZoom}
               steps={[
-                { id: 'table', label: '1) Expense table', completed: wizardProgress.table, isCurrent: expectedWizardKind === 'table' },
+                { id: 'receipts', label: '1) Receipts', completed: wizardProgress.receipts, isCurrent: expectedWizardKind === 'receipts' },
                 { id: 'questions', label: '2) Additional questions', completed: wizardProgress.questions, isCurrent: expectedWizardKind === 'questions' },
-                { id: 'receipts', label: '3) Receipts', completed: wizardProgress.receipts, isCurrent: expectedWizardKind === 'receipts' },
               ]}
               expectedStepId={expectedWizardKind}
               selectionCount={selectionByKind[expectedWizardKind].length}
               wizardLoading={wizardLoading != null}
-              processDisabled={
-                selectionByKind[expectedWizardKind].length === 0 ||
-                (expectedWizardKind === 'receipts' && expensesDraft.length === 0)
-              }
+              processDisabled={selectionByKind[expectedWizardKind].length === 0}
               clearDisabled={selectionByKind[expectedWizardKind].length === 0}
               onProcess={() => runWizardStep(expectedWizardKind)}
               onClearSelections={() => setSelectionByKind((prev) => ({ ...prev, [expectedWizardKind]: [] }))}
               toolbarExtra={
                 <>
-                  {expectedWizardKind === 'table' && (
+                  {expectedWizardKind === 'receipts' && expensesDraft.length > 0 && (
                     <span className="text-[11px] text-muted-foreground whitespace-nowrap">Rows: {expensesDraft.length}</span>
                   )}
                   {expectedWizardKind === 'receipts' && receiptValidation && (
@@ -1061,7 +1042,7 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
               }}
               backDisabled={!!initialProjectId}
               continueDisabled={
-                !wizardProgress.table || !wizardProgress.questions || !wizardProgress.receipts || !isSelectReportDateValid
+                !wizardProgress.receipts || !wizardProgress.questions || !isSelectReportDateValid
               }
             />
           ) : step === 'preview' ? (
