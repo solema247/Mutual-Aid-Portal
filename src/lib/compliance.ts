@@ -36,6 +36,28 @@ export function normalizedNameKey(name: string): string {
     .join('|')
 }
 
+/**
+ * Combined EN+AR "alpha" key: the English key and the Arabic key joined into a
+ * single identity for one beneficiary (e.g. "ahmed:1|ali:1::احمد:1|علي:1").
+ *
+ * This is the most precise, discrepancy-proof match because it requires BOTH the
+ * English and Arabic name to line up — it also disambiguates Arabic names that
+ * share the same token multiset in a different order.
+ *
+ * NOTE: it is intentionally NOT yet used for live screening. Incoming F1 banking
+ * details currently carry only ONE language (~97% English), so a combined key
+ * cannot be built at screening time and would flag every payee for manual review.
+ * We keep it here, ready to switch on once the F1 intake captures a structured
+ * English AND Arabic beneficiary name (with a single-language fallback). Until
+ * then screening stays per-language (see ensureScreeningsForProjects).
+ */
+export function combinedNameKey(nameEn: string, nameAr: string): string | null {
+  const keyEn = normalizedNameKey(nameEn)
+  const keyAr = normalizedNameKey(nameAr)
+  if (!keyEn || !keyAr) return null
+  return `${keyEn}::${keyAr}`
+}
+
 /** Extract candidate payee names from a free-text banking details blob. */
 export function extractNamesFromBanking(text: string | null | undefined): string[] {
   if (!text) return []
