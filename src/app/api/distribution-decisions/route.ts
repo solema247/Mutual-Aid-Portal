@@ -13,7 +13,7 @@ export async function GET() {
     const { data, error } = await supabase
       .from('distribution_decision_master_sheet_1')
       .select(
-        'id, decision_id_proposed, decision_id, grant_name, restriction, sum_allocation_amount, decision_amount, decision_date, partner, notes'
+        'id, decision_id_proposed, decision_id, grant_name, restriction, sum_allocation_amount, decision_amount, decision_date, partner, notes, file_name, file_link'
       )
       .order('decision_date', { ascending: false })
 
@@ -31,6 +31,8 @@ export async function GET() {
       decision_date: row.decision_date ?? null,
       partner: row.partner ?? null,
       notes: row.notes ?? null,
+      file_name: row.file_name ?? null,
+      file_link: row.file_link ?? null,
     }))
 
     return NextResponse.json(list)
@@ -86,7 +88,7 @@ export async function POST(request: Request) {
       .from('distribution_decision_master_sheet_1')
       .insert(row)
       .select(
-        'id, decision_id_proposed, decision_id, grant_name, restriction, sum_allocation_amount, decision_amount, decision_date, partner'
+        'id, decision_id_proposed, decision_id, grant_name, restriction, sum_allocation_amount, decision_amount, decision_date, partner, file_name, file_link'
       )
       .single()
 
@@ -111,6 +113,8 @@ export async function POST(request: Request) {
         decision_amount: data.decision_amount != null ? Number(data.decision_amount) : null,
         decision_date: data.decision_date ?? null,
         partner: data.partner ?? null,
+        file_name: data.file_name ?? null,
+        file_link: data.file_link ?? null,
         ...airtableMeta(push),
       },
       { status: 201 }

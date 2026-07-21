@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useEffect, useMemo, useState } from 'react'
-import { Plus, ChevronDown, ChevronUp, RefreshCw, Upload, FileSpreadsheet, FileText, Pencil, Save, X, Trash2 } from 'lucide-react'
+import { Plus, ChevronDown, ChevronUp, RefreshCw, Upload, FileSpreadsheet, FileText, Pencil, Save, X, Trash2, ExternalLink, Eye } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { supabase } from '@/lib/supabaseClient'
@@ -37,6 +37,10 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import {
+  isExternalDecisionDocLink,
+  resolveDecisionDocumentUrl,
+} from '@/lib/grantManagement/decisionDocument'
 
 type Decision = {
   id: string
@@ -49,6 +53,8 @@ type Decision = {
   decision_date?: string | null
   notes?: string | null
   restriction?: string | null
+  file_name?: string | null
+  file_link?: string | null
 }
 
 type Allocation = {
@@ -145,6 +151,8 @@ export default function DistributionDecisionsManager() {
   const [isUpdatingAllocation, setIsUpdatingAllocation] = useState(false)
   const [isDeletingAllocation, setIsDeletingAllocation] = useState<string | null>(null)
   const [dateSortOrder, setDateSortOrder] = useState<'desc' | 'asc'>('desc')
+  const [isUploadingDoc, setIsUploadingDoc] = useState<Record<string, boolean>>({})
+  const [isOpeningDoc, setIsOpeningDoc] = useState<Record<string, boolean>>({})
 
   const canEditAllocations =
     currentUser?.role === 'support' ||
@@ -552,6 +560,58 @@ export default function DistributionDecisionsManager() {
     return filePath
   }
 
+  const handleViewDecisionDocument = async (decision: Decision) => {
+    if (!decision.file_link) return
+    try {
+      setIsOpeningDoc((prev) => ({ ...prev, [decision.id]: true }))
+      const url = await resolveDecisionDocumentUrl(decision.file_link)
+      if (!url) {
+        alert('Could not open decision document')
+        return
+      }
+      window.open(url, '_blank', 'noopener,noreferrer')
+    } catch (error: any) {
+      console.error(error)
+      alert(error.message || 'Failed to open decision document')
+    } finally {
+      setIsOpeningDoc((prev) => ({ ...prev, [decision.id]: false }))
+    }
+  }
+
+  const handleReplaceDecisionDocument = async (decision: Decision, file: File | null) => {
+    if (!file) return
+    const fetchKey = decision.decision_id_proposed || decision.decision_id || decision.id
+    try {
+      setIsUploadingDoc((prev) => ({ ...prev, [decision.id]: true }))
+      const fileLink = await uploadFileToStorage(file, fetchKey)
+      const res = await fetch(`/api/distribution-decisions/${encodeURIComponent(fetchKey.trim())}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          file_name: file.name,
+          file_link: fileLink,
+        }),
+      })
+      if (!res.ok) {
+        const err = await res.json()
+        throw new Error(err.error || 'Failed to update decision document')
+      }
+      const updated = await res.json()
+      setDecisions((prev) =>
+        prev.map((d) =>
+          d.id === decision.id
+            ? { ...d, file_name: updated.file_name ?? file.name, file_link: updated.file_link ?? fileLink }
+            : d
+        )
+      )
+    } catch (error: any) {
+      console.error(error)
+      alert(error.message || 'Failed to upload decision document')
+    } finally {
+      setIsUploadingDoc((prev) => ({ ...prev, [decision.id]: false }))
+    }
+  }
+
   const sortedDecisions = useMemo(() => {
     return [...decisions].sort((a, b) => {
       const hasA = Boolean(a.decision_date)
@@ -671,14 +731,15 @@ export default function DistributionDecisionsManager() {
                               </div>
                             )}
                             <p className="text-xs text-muted-foreground">
-                              File structure: B2 = Total Amount, C3:P3 = State Names, C36:P36 = Amounts
+                              File structure: B2 = Total Amount, C3:P3 = State Names, C36:P36 = Amounts.
+                              The uploaded file is also stored as the decision document.
                             </p>
                           </div>
                         </TabsContent>
                         
                         <TabsContent value="manual" className="mt-4">
                           <div className="space-y-2">
-                            <FormLabel>Upload File (Optional - for storage only)</FormLabel>
+                            <FormLabel>Decision document (optional)</FormLabel>
                             <Input
                               type="file"
                               accept=".csv,.xlsx,.xls,.pdf"
@@ -692,6 +753,9 @@ export default function DistributionDecisionsManager() {
                                 {manualFile.name}
                               </div>
                             )}
+                            <p className="text-xs text-muted-foreground">
+                              Stored with this decision so it can be viewed or replaced later.
+                            </p>
                           </div>
                         </TabsContent>
                       </Tabs>
@@ -856,13 +920,14 @@ export default function DistributionDecisionsManager() {
                   <TableHead>Partner</TableHead>
                   <TableHead>Restriction</TableHead>
                   <TableHead className="min-w-[200px]">Notes</TableHead>
+                  <TableHead className="min-w-[140px]">Document</TableHead>
                   <TableHead className="w-[60px] text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {sortedDecisions.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={10} className="text-center text-muted-foreground py-4">
+                    <TableCell colSpan={11} className="text-center text-muted-foreground py-4">
                       No distribution decisions found
                     </TableCell>
                   </TableRow>
@@ -876,6 +941,7 @@ export default function DistributionDecisionsManager() {
                         ? decision.decision_amount - allocated
                         : null
                     const isOpen = expandedDecisionId === decision.id
+                    const hasDoc = Boolean(decision.file_link)
                     return (
                       <React.Fragment key={decision.id}>
                         <TableRow>
@@ -900,6 +966,31 @@ export default function DistributionDecisionsManager() {
                           <TableCell>
                             <NotesCallout notes={decision.notes} />
                           </TableCell>
+                          <TableCell>
+                            {hasDoc ? (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 px-2 max-w-[160px]"
+                                onClick={() => handleViewDecisionDocument(decision)}
+                                disabled={isOpeningDoc[decision.id]}
+                                title={decision.file_name || decision.file_link || 'View document'}
+                              >
+                                {isOpeningDoc[decision.id] ? (
+                                  <RefreshCw className="h-3.5 w-3.5 mr-1 animate-spin" />
+                                ) : isExternalDecisionDocLink(decision.file_link || '') ? (
+                                  <ExternalLink className="h-3.5 w-3.5 mr-1 shrink-0" />
+                                ) : (
+                                  <Eye className="h-3.5 w-3.5 mr-1 shrink-0" />
+                                )}
+                                <span className="truncate text-xs">
+                                  {decision.file_name || 'View'}
+                                </span>
+                              </Button>
+                            ) : (
+                              <span className="text-muted-foreground">—</span>
+                            )}
+                          </TableCell>
                           <TableCell className="text-right">
                             {(currentUser?.role === 'support' || currentUser?.role === 'admin' || currentUser?.role === 'superadmin') && (
                               <Button
@@ -915,8 +1006,72 @@ export default function DistributionDecisionsManager() {
                         </TableRow>
                         {isOpen && (
                           <TableRow>
-                            <TableCell colSpan={10} className="bg-muted/40 py-2 px-2">
+                            <TableCell colSpan={11} className="bg-muted/40 py-2 px-2">
                               <div className="space-y-4">
+                                <div className="flex flex-wrap items-center gap-2 text-xs">
+                                  <span className="font-medium text-muted-foreground shrink-0">Document:</span>
+                                  {hasDoc ? (
+                                    <>
+                                      <FileText className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                                      <span className="truncate max-w-[200px]" title={decision.file_name || undefined}>
+                                        {decision.file_name || 'Attached'}
+                                      </span>
+                                      {isExternalDecisionDocLink(decision.file_link || '') && (
+                                        <Badge variant="outline" className="text-[10px] px-1 py-0 h-5">
+                                          External
+                                        </Badge>
+                                      )}
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-6 px-1.5"
+                                        onClick={() => handleViewDecisionDocument(decision)}
+                                        disabled={isOpeningDoc[decision.id]}
+                                      >
+                                        {isOpeningDoc[decision.id] ? (
+                                          <RefreshCw className="h-3 w-3 animate-spin" />
+                                        ) : (
+                                          <Eye className="h-3 w-3" />
+                                        )}
+                                        <span className="ml-1">View</span>
+                                      </Button>
+                                    </>
+                                  ) : (
+                                    <span className="text-muted-foreground">None</span>
+                                  )}
+                                  {canEditAllocations && (
+                                    <>
+                                      <input
+                                        id={`decision-doc-${decision.id}`}
+                                        type="file"
+                                        accept=".csv,.xlsx,.xls,.pdf"
+                                        className="sr-only"
+                                        disabled={isUploadingDoc[decision.id]}
+                                        onChange={(e) => {
+                                          const file = e.target.files?.[0] || null
+                                          handleReplaceDecisionDocument(decision, file)
+                                          e.target.value = ''
+                                        }}
+                                      />
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="h-6 px-2 text-xs"
+                                        disabled={isUploadingDoc[decision.id]}
+                                        onClick={() =>
+                                          document.getElementById(`decision-doc-${decision.id}`)?.click()
+                                        }
+                                      >
+                                        {isUploadingDoc[decision.id] ? (
+                                          <RefreshCw className="h-3 w-3 mr-1 animate-spin" />
+                                        ) : (
+                                          <Upload className="h-3 w-3 mr-1" />
+                                        )}
+                                        {hasDoc ? 'Replace' : 'Upload'}
+                                      </Button>
+                                    </>
+                                  )}
+                                </div>
                                 <div className="flex items-center justify-between">
                                   <div className="font-semibold">State Allocations</div>
                                   <Button
