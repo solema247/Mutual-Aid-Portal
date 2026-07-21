@@ -17,11 +17,15 @@ import {
   type TicketStatusFilter,
   BACKLOG_AGE_BUCKETS,
   BACKLOG_AGE_CHART_COLORS,
+  GITHUB_PROJECT_TEAM_REQUEST_CHART_ORDER,
   SPRINT_ASSIGNEE_CHART_COLORS,
   SPRINT_LEVEL_BUCKETS,
   SPRINT_LEVEL_CHART_COLORS,
+  TEAM_REQUEST_CHART_COLORS,
   isP0ProjectPriority,
+  normalizeProjectTeamRequest,
   type BacklogAgeBucket,
+  type GithubProjectTeamRequest,
   type SprintLevelBucket,
 } from '@/lib/raiseTicketGithub'
 
@@ -39,6 +43,7 @@ export type ProjectItemSnapshot = {
   bigRock: GithubProjectBigRock
   status: string | null
   typeOfTask: string | null
+  teamRequest: GithubProjectTeamRequest
   priority: string | null
   size: string | null
   title: string | null
@@ -61,14 +66,18 @@ export type ActiveIterationTask = {
   status: GithubProjectStatus
   bigRock: GithubProjectBigRock
   typeOfTask: string | null
+  teamRequest: GithubProjectTeamRequest
   priority: string | null
   size: string | null
   assignees: string[]
 }
 
+export type TeamRequestCounts = Record<GithubProjectTeamRequest, number>
+
 export type SprintTaskListReport = {
   tasks: ActiveIterationTask[]
   statusCounts: StatusCounts
+  teamRequestCounts: TeamRequestCounts
   total: number
 }
 
@@ -78,6 +87,7 @@ export type ActiveIterationReport = SprintTaskListReport & {
 }
 
 export type SprintReports = {
+  previous: ActiveIterationReport | null
   active: ActiveIterationReport | null
   planned: ActiveIterationReport | null
   unscheduled: SprintTaskListReport
@@ -103,6 +113,7 @@ export type SprintAnalytics = {
   bySprintLevel: SprintAnalyticsChartRow[]
   byAssignee: SprintAnalyticsChartRow[]
   byBacklogAge: SprintAnalyticsChartRow[]
+  byTeamRequest: SprintAnalyticsChartRow[]
   p0Unassigned: P0UnassignedTaskRow[]
   totals: {
     open: number
@@ -111,9 +122,11 @@ export type SprintAnalytics = {
 }
 
 const CACHE_TTL_MS = 5 * 60 * 1000
+const PROJECT_DATA_CACHE_VERSION = 2
 const BIG_ROCK_FIELD = process.env.GITHUB_PROJECT_BIG_ROCK_FIELD ?? 'Big Rock'
 const STATUS_FIELD = process.env.GITHUB_PROJECT_STATUS_FIELD ?? 'Status'
 const TYPE_OF_TASK_FIELD = process.env.GITHUB_PROJECT_TYPE_OF_TASK_FIELD ?? 'Type of Task'
+const TEAM_REQUEST_FIELD = process.env.GITHUB_PROJECT_TEAM_REQUEST_FIELD ?? 'Team Request'
 const ITERATION_FIELD = process.env.GITHUB_PROJECT_ITERATION_FIELD ?? 'Iteration'
 const PRIORITY_FIELD = process.env.GITHUB_PROJECT_PRIORITY_FIELD ?? 'Priority'
 const SIZE_FIELD = process.env.GITHUB_PROJECT_SIZE_FIELD ?? 'Size'
@@ -207,6 +220,12 @@ query ProjectIterationConfig($login: String!, $number: Int!) {
                 startDate
                 duration
               }
+              completedIterations {
+                id
+                title
+                startDate
+                duration
+              }
             }
           }
         }
@@ -223,6 +242,12 @@ function emptyStatusCounts (): StatusCounts {
   ) as StatusCounts
 }
 
+function emptyTeamRequestCounts (): TeamRequestCounts {
+  return Object.fromEntries(
+    GITHUB_PROJECT_TEAM_REQUEST_CHART_ORDER.map((team) => [team, 0])
+  ) as TeamRequestCounts
+}
+
 function emptyCounts (): BigRockCounts {
   return Object.fromEntries(
     [...GITHUB_PROJECT_BIG_ROCKS, GITHUB_PROJECT_BIG_ROCK_NOT_SET].map((bigRock) => [bigRock, 0])
@@ -230,7 +255,7 @@ function emptyCounts (): BigRockCounts {
 }
 
 function projectCacheKey (project: ProjectRef): string {
-  return `${project.ownerType}:${project.ownerLogin}:${project.projectNumber}`
+  return `v${PROJECT_DATA_CACHE_VERSION}:${project.ownerType}:${project.ownerLogin}:${project.projectNumber}`
 }
 
 export function resolveGithubProjectRef (): ProjectRef {
@@ -291,6 +316,13 @@ type GraphqlPage = {
   }
 }
 
+type GraphqlIterationNode = {
+  id?: string
+  title?: string
+  startDate?: string
+  duration?: number
+}
+
 type GraphqlIterationConfigPage = {
   owner?: {
     projectV2?: {
@@ -298,12 +330,8 @@ type GraphqlIterationConfigPage = {
         nodes?: Array<{
           name?: string
           configuration?: {
-            iterations?: Array<{
-              id?: string
-              title?: string
-              startDate?: string
-              duration?: number
-            }>
+            iterations?: GraphqlIterationNode[]
+            completedIterations?: GraphqlIterationNode[]
           }
         }>
       }
@@ -407,6 +435,10 @@ function readTypeOfTask (item: GraphqlProjectItem): string | null {
   return readSingleSelectField(item, TYPE_OF_TASK_FIELD)
 }
 
+function readTeamRequest (item: GraphqlProjectItem): GithubProjectTeamRequest {
+  return normalizeProjectTeamRequest(readSingleSelectField(item, TEAM_REQUEST_FIELD))
+}
+
 function readPriority (item: GraphqlProjectItem): string | null {
   return readProjectFieldValue(item, PRIORITY_FIELD)
 }
@@ -480,6 +512,36 @@ export function resolvePlannedIteration (
     return null
   }
   return sorted.find((iteration) => isIterationPlanned(iteration, now)) ?? null
+}
+
+export function isIterationCompleted (
+  iteration: Pick<ProjectIteration, 'startDate' | 'duration'>,
+  now = new Date()
+): boolean {
+  const start = new Date(`${iteration.startDate}T12:00:00`)
+  const end = new Date(start)
+  end.setUTCDate(end.getUTCDate() + iteration.duration)
+  return end <= now
+}
+
+export function resolvePreviousIteration (
+  iterations: ProjectIteration[],
+  now = new Date()
+): ProjectIteration | null {
+  const sorted = sortIterationsByStart(iterations)
+  const active = resolveActiveIteration(sorted, now)
+  if (active) {
+    const activeIndex = sorted.findIndex(
+      (iteration) => iteration.iterationId === active.iterationId
+    )
+    if (activeIndex > 0) {
+      return sorted[activeIndex - 1]
+    }
+    return null
+  }
+
+  const completed = sorted.filter((iteration) => isIterationCompleted(iteration, now))
+  return completed.length ? completed[completed.length - 1] : null
 }
 
 export function isIterationActive (
@@ -633,18 +695,27 @@ async function fetchIterationConfig (
 
   for (const field of fields) {
     if (field.name !== ITERATION_FIELD) continue
-    const iterations = field.configuration?.iterations ?? []
-    return iterations
-      .filter(
-        (iteration): iteration is Required<typeof iteration> =>
-          Boolean(iteration.id && iteration.title && iteration.startDate && iteration.duration)
-      )
-      .map((iteration) => ({
-        iterationId: iteration.id!,
-        title: iteration.title!,
-        startDate: iteration.startDate!,
-        duration: iteration.duration!,
-      }))
+    const mapNodes = (nodes: GraphqlIterationNode[]): ProjectIteration[] =>
+      nodes
+        .filter(
+          (iteration): iteration is Required<GraphqlIterationNode> =>
+            Boolean(iteration.id && iteration.title && iteration.startDate && iteration.duration)
+        )
+        .map((iteration) => ({
+          iterationId: iteration.id,
+          title: iteration.title,
+          startDate: iteration.startDate,
+          duration: iteration.duration,
+        }))
+
+    const byId = new Map<string, ProjectIteration>()
+    for (const iteration of [
+      ...mapNodes(field.configuration?.completedIterations ?? []),
+      ...mapNodes(field.configuration?.iterations ?? []),
+    ]) {
+      byId.set(iteration.iterationId, iteration)
+    }
+    return [...byId.values()]
   }
 
   return []
@@ -680,6 +751,7 @@ async function fetchProjectData (
         bigRock: readBigRock(node),
         status: readStatus(node),
         typeOfTask: readTypeOfTask(node),
+        teamRequest: readTeamRequest(node),
         priority: readPriority(node),
         size: readSize(node),
         title,
@@ -755,6 +827,7 @@ function itemToSprintTask (item: ProjectItemSnapshot): ActiveIterationTask {
     status: normalizeProjectStatus(item.status),
     bigRock: item.bigRock,
     typeOfTask: item.typeOfTask,
+    teamRequest: item.teamRequest,
     priority: item.priority,
     size: item.size,
     assignees: item.assignees,
@@ -767,11 +840,13 @@ function buildTasksForIteration (
 ): SprintTaskListReport {
   const tasks: ActiveIterationTask[] = []
   const statusCounts = emptyStatusCounts()
+  const teamRequestCounts = emptyTeamRequestCounts()
 
   for (const item of items) {
     if (item.iteration?.iterationId !== iterationId) continue
     const task = itemToSprintTask(item)
     statusCounts[task.status] += 1
+    teamRequestCounts[task.teamRequest] += 1
     tasks.push(task)
   }
 
@@ -780,6 +855,7 @@ function buildTasksForIteration (
   return {
     tasks,
     statusCounts,
+    teamRequestCounts,
     total: tasks.length,
   }
 }
@@ -789,12 +865,14 @@ export function buildUnscheduledOpenTasksReport (
 ): SprintTaskListReport {
   const tasks: ActiveIterationTask[] = []
   const statusCounts = emptyStatusCounts()
+  const teamRequestCounts = emptyTeamRequestCounts()
 
   for (const item of items) {
     if (item.iteration) continue
     if (!matchesStatusFilter(item.status, 'open')) continue
     const task = itemToSprintTask(item)
     statusCounts[task.status] += 1
+    teamRequestCounts[task.teamRequest] += 1
     tasks.push(task)
   }
 
@@ -803,6 +881,7 @@ export function buildUnscheduledOpenTasksReport (
   return {
     tasks,
     statusCounts,
+    teamRequestCounts,
     total: tasks.length,
   }
 }
@@ -830,8 +909,12 @@ export function buildSprintReports (
 ): SprintReports {
   const activeIteration = resolveActiveIterationFromData(items, iterationConfig)
   const plannedIteration = resolvePlannedIteration(iterationConfig)
+  const previousIteration = resolvePreviousIteration(iterationConfig)
 
   return {
+    previous: previousIteration
+      ? buildIterationReport(items, previousIteration, locale)
+      : null,
     active: activeIteration ? buildIterationReport(items, activeIteration, locale) : null,
     planned: plannedIteration ? buildIterationReport(items, plannedIteration, locale) : null,
     unscheduled: buildUnscheduledOpenTasksReport(items),
@@ -938,6 +1021,7 @@ export function buildSprintAnalytics (
   const backlogAgeCounts = Object.fromEntries(
     BACKLOG_AGE_BUCKETS.map((bucket) => [bucket, 0])
   ) as Record<BacklogAgeBucket, number>
+  const teamRequestCounts = emptyTeamRequestCounts()
   const p0Unassigned: P0UnassignedTaskRow[] = []
 
   let openTotal = 0
@@ -952,6 +1036,7 @@ export function buildSprintAnalytics (
     if (isOpen) {
       const sprintLevel = classifySprintLevel(item, activeIterationId, plannedIterationId)
       sprintLevelCounts[sprintLevel] += 1
+      teamRequestCounts[item.teamRequest] += 1
 
       if (item.assignees.length) {
         for (const assignee of item.assignees) {
@@ -1000,6 +1085,11 @@ export function buildSprintAnalytics (
       key,
       count: backlogAgeCounts[key],
       fill: BACKLOG_AGE_CHART_COLORS[key],
+    })),
+    byTeamRequest: GITHUB_PROJECT_TEAM_REQUEST_CHART_ORDER.map((key) => ({
+      key,
+      count: teamRequestCounts[key],
+      fill: TEAM_REQUEST_CHART_COLORS[key],
     })),
     p0Unassigned,
     totals: {

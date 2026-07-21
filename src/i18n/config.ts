@@ -68,14 +68,13 @@ const resources = {
   }
 }
 
-i18n
-  .use(initReactI18next)
-  .init({
+if (!i18n.isInitialized) {
+  i18n.use(initReactI18next).init({
     resources,
     lng: 'en',
     fallbackLng: 'en',
     interpolation: {
-      escapeValue: false
+      escapeValue: false,
     },
     defaultNS: 'common',
     ns: [
@@ -88,12 +87,20 @@ i18n
       'projects',
       'rooms',
       'users',
-                'fsystem',
+      'fsystem',
       'f2',
       'f1_plans',
       'f3',
-      'f4f5'
-    ]
+      'f4f5',
+    ],
   })
+} else if (process.env.NODE_ENV === 'development') {
+  // HMR re-evaluates this module but i18n.init() only runs once — refresh bundles.
+  for (const [lng, bundles] of Object.entries(resources)) {
+    for (const [ns, bundle] of Object.entries(bundles)) {
+      i18n.addResourceBundle(lng, ns, bundle, true, true)
+    }
+  }
+}
 
 export default i18n 

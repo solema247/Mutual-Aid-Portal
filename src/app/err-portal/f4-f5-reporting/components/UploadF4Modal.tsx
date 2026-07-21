@@ -305,7 +305,7 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
             .from('err_projects')
             .select('id, state, emergency_room_id, emergency_rooms (id, name, name_ar, err_code)')
             .eq('id', initialProjectId)
-            .eq('status', 'active')
+            .in('status', ['active', 'approved', 'completed'])
             .single()
           
           if (error || !projectData) {

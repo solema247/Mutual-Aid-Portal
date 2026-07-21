@@ -11,5 +11,6 @@
   "error_declining_user": "فشل في رفض المستخدم",
   "error_updating_user_status": "فشل في تحديث حالة المستخدم",
   "error_unexpected": "حدث خطأ غير متوقع",
-  "cancel": "إلغاء"
-} 
+  "cancel": "إلغاء",
+  "select_all": "تحديد الكل"
+}

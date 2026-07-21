@@ -11,6 +11,37 @@ import { normalizeStateName } from '@/lib/normalizeStateName'
 /** PostgREST `.in()` with hundreds of UUIDs can exceed URL limits and return empty data. */
 const SUPABASE_IN_BATCH = 80
 
+/** Cache duration in milliseconds (3 minutes) */
+const CACHE_DURATION_MS = 3 * 60 * 1000
+
+/** In-memory cache for rollup data */
+interface CacheEntry {
+  data: any
+  timestamp: number
+  allowedStates: string[] | null
+}
+
+let rollupCache: CacheEntry | null = null
+
+function getCacheKey(allowedStates: string[] | null): string {
+  if (!allowedStates || allowedStates.length === 0) return 'all_states'
+  return allowedStates.sort().join(',')
+}
+
+function isCacheValid(entry: CacheEntry | null, allowedStates: string[] | null): boolean {
+  if (!entry) return false
+  
+  const now = Date.now()
+  const isExpired = now - entry.timestamp > CACHE_DURATION_MS
+  if (isExpired) return false
+  
+  // Check if state access matches
+  const currentKey = getCacheKey(allowedStates)
+  const cachedKey = getCacheKey(entry.allowedStates)
+  
+  return currentKey === cachedKey
+}
+
 function chunkIds<T extends string | number>(ids: T[]): T[][] {
   if (!ids.length) return []
   const out: T[][] = []
@@ -194,6 +225,18 @@ export async function GET(request: Request) {
 
     // Get user's state access rights
     const { allowedStateNames } = await getUserStateAccess()
+    
+    // Check for cache bypass parameter
+    const url = new URL(request.url)
+    const bypassCache = url.searchParams.get('refresh') === 'true'
+    
+    // Check cache if not bypassing
+    if (!bypassCache && isCacheValid(rollupCache, allowedStateNames)) {
+      console.log('[rollup] Returning cached data')
+      return NextResponse.json(rollupCache!.data)
+    }
+    
+    console.log('[rollup] Cache miss or bypass - fetching fresh data')
 
     // Build project filter (include more statuses to catch F5 projects and completed projects)
     let projectQuery = supabase
@@ -419,8 +462,10 @@ export async function GET(request: Request) {
         individuals,
         burn,
         f4_count: agg.count,
+        portal_f4_count: agg.count, // For portal projects, all F4s are portal F4s
         last_report_date: agg.last,
         f5_count: f5Agg.count,
+        portal_f5_count: f5Agg.count, // For portal projects, all F5s are portal F5s
         last_f5_date: f5Agg.last,
         status: p.status || null,
         is_historical: false,
@@ -493,8 +538,10 @@ export async function GET(request: Request) {
         individuals, // From activities_raw_import "Target (Ind.)" (same as card)
         burn: usd > 0 ? actual / usd : 0,
         f4_count: totalF4Count, // F4='Completed' from sheet + F4s uploaded through portal
+        portal_f4_count: f4CountFromPortal, // Only F4s uploaded through portal (for UI display on historical projects)
         last_report_date: f4Agg.last || reportDate || null, // Prefer date from err_summary
         f5_count: f5Completed ? 1 : 0, // F5='Completed' from activities_raw_import
+        portal_f5_count: 0, // Historical projects don't have portal-uploaded F5s yet
         last_f5_date: reportDate || null, // Use same date if available
         is_historical: true,
         f4_status, // For % Tracker: completed | waiting | under review | partial
@@ -539,7 +586,159 @@ export async function GET(request: Request) {
     kpis.variance = kpis.plan - kpis.actual
     kpis.burn = kpis.plan > 0 ? kpis.actual / kpis.plan : 0
 
-    return NextResponse.json({ kpis, rows: allRows })
+    // Pre-calculate state aggregations for frontend
+    const stateAggregations = new Map<string, any>()
+    for (const r of allRows) {
+      const key = r.state || '—'
+      const curr = stateAggregations.get(key) || { 
+        state: key, plan: 0, actual: 0, variance: 0, burn: 0, 
+        f4_count: 0, f5_count: 0, total_projects: 0, 
+        projects_with_f4: 0, projects_with_f5: 0, tracker_sum: 0, 
+        individuals: 0, last_report_date: null, last_f5_date: null, 
+        overdue_count: 0 
+      }
+      curr.plan += Number(r.plan) || 0
+      curr.actual += Number(r.actual) || 0
+      curr.f4_count += Number(r.f4_count) || 0
+      curr.f5_count += Number(r.f5_count) || 0
+      curr.total_projects += 1
+      if (Number(r.f4_count || 0) > 0) curr.projects_with_f4 += 1
+      if (Number(r.f5_count || 0) > 0) curr.projects_with_f5 += 1
+      curr.individuals += Number(r.individuals) || 0
+      if (r.is_overdue) curr.overdue_count += 1
+      
+      // Track latest dates
+      if (r.last_report_date) {
+        if (!curr.last_report_date || new Date(r.last_report_date) > new Date(curr.last_report_date)) {
+          curr.last_report_date = r.last_report_date
+        }
+      }
+      if (r.last_f5_date) {
+        if (!curr.last_f5_date || new Date(r.last_f5_date) > new Date(curr.last_f5_date)) {
+          curr.last_f5_date = r.last_f5_date
+        }
+      }
+      
+      // Calculate tracker score for this row
+      const plan = Number(r.plan || 0)
+      const actual = Number(r.actual ?? 0)
+      const burn = plan > 0 ? actual / plan : 0
+      const hasActual = (typeof r.actual === 'number' && r.actual > 0) || (r.actual != null && String(r.actual).trim() !== '' && Number(r.actual) > 0)
+      const f5Status = r.f5_status != null ? String(r.f5_status).toLowerCase() : null
+      let f5Part: number
+      if (f5Status === 'completed') f5Part = 0.5
+      else if (f5Status === 'under review' || f5Status === 'in review' || f5Status === 'partial') f5Part = 0.25
+      else if (f5Status === 'waiting') f5Part = 0
+      else if (r.is_historical) f5Part = 0
+      else f5Part = Number(r.f5_count || 0) > 0 ? 0.5 : 0
+      
+      const f4Status = r.f4_status != null ? String(r.f4_status).toLowerCase() : null
+      let f4Part: number
+      if (f4Status === 'completed') {
+        if (r.is_historical && hasActual && plan > 0) f4Part = 0.5 * Math.min(1, burn)
+        else if (r.is_historical) f4Part = 0.5
+        else f4Part = 0.5 * Math.min(1, burn)
+      } else if (f4Status === 'under review' || f4Status === 'in review' || f4Status === 'partial') f4Part = 0.25
+      else if (f4Status === 'waiting') f4Part = 0
+      else if (r.is_historical) f4Part = 0
+      else f4Part = 0.5 * Math.min(1, burn)
+      
+      curr.tracker_sum += f4Part + f5Part
+      stateAggregations.set(key, curr)
+    }
+    
+    // Finalize state aggregations
+    const stateRows = Array.from(stateAggregations.values()).map(s => ({
+      ...s,
+      variance: s.plan - s.actual,
+      burn: s.plan > 0 ? s.actual / s.plan : 0
+    }))
+
+    // Pre-calculate room aggregations for frontend
+    const roomAggregations = new Map<string, any>()
+    for (const r of allRows) {
+      const key = `${r.state || '—'}|${r.err_id || '—'}`
+      const curr = roomAggregations.get(key) || { 
+        state: r.state || '—',
+        err_id: r.err_id || '—', 
+        err_name: r.err_name || '—',
+        plan: 0, actual: 0, variance: 0, burn: 0, 
+        f4_count: 0, f5_count: 0, total_projects: 0, 
+        projects_with_f4: 0, projects_with_f5: 0, tracker_sum: 0, 
+        individuals: 0, last_report_date: null, last_f5_date: null, 
+        overdue_count: 0 
+      }
+      curr.plan += Number(r.plan) || 0
+      curr.actual += Number(r.actual) || 0
+      curr.f4_count += Number(r.f4_count) || 0
+      curr.f5_count += Number(r.f5_count) || 0
+      curr.total_projects += 1
+      if (Number(r.f4_count || 0) > 0) curr.projects_with_f4 += 1
+      if (Number(r.f5_count || 0) > 0) curr.projects_with_f5 += 1
+      curr.individuals += Number(r.individuals) || 0
+      if (r.is_overdue) curr.overdue_count += 1
+      
+      if (r.last_report_date) {
+        if (!curr.last_report_date || new Date(r.last_report_date) > new Date(curr.last_report_date)) {
+          curr.last_report_date = r.last_report_date
+        }
+      }
+      if (r.last_f5_date) {
+        if (!curr.last_f5_date || new Date(r.last_f5_date) > new Date(curr.last_f5_date)) {
+          curr.last_f5_date = r.last_f5_date
+        }
+      }
+      
+      // Calculate tracker score
+      const plan = Number(r.plan || 0)
+      const actual = Number(r.actual ?? 0)
+      const burn = plan > 0 ? actual / plan : 0
+      const hasActual = (typeof r.actual === 'number' && r.actual > 0) || (r.actual != null && String(r.actual).trim() !== '' && Number(r.actual) > 0)
+      const f5Status = r.f5_status != null ? String(r.f5_status).toLowerCase() : null
+      let f5Part: number
+      if (f5Status === 'completed') f5Part = 0.5
+      else if (f5Status === 'under review' || f5Status === 'in review' || f5Status === 'partial') f5Part = 0.25
+      else if (f5Status === 'waiting') f5Part = 0
+      else if (r.is_historical) f5Part = 0
+      else f5Part = Number(r.f5_count || 0) > 0 ? 0.5 : 0
+      
+      const f4Status = r.f4_status != null ? String(r.f4_status).toLowerCase() : null
+      let f4Part: number
+      if (f4Status === 'completed') {
+        if (r.is_historical && hasActual && plan > 0) f4Part = 0.5 * Math.min(1, burn)
+        else if (r.is_historical) f4Part = 0.5
+        else f4Part = 0.5 * Math.min(1, burn)
+      } else if (f4Status === 'under review' || f4Status === 'in review' || f4Status === 'partial') f4Part = 0.25
+      else if (f4Status === 'waiting') f4Part = 0
+      else if (r.is_historical) f4Part = 0
+      else f4Part = 0.5 * Math.min(1, burn)
+      
+      curr.tracker_sum += f4Part + f5Part
+      roomAggregations.set(key, curr)
+    }
+    
+    const roomRows = Array.from(roomAggregations.values()).map(s => ({
+      ...s,
+      variance: s.plan - s.actual,
+      burn: s.plan > 0 ? s.actual / s.plan : 0
+    }))
+
+    const result = { 
+      kpis, 
+      rows: allRows,
+      stateAggregations: stateRows,
+      roomAggregations: roomRows
+    }
+    
+    // Cache the result
+    rollupCache = {
+      data: result,
+      timestamp: Date.now(),
+      allowedStates: allowedStateNames
+    }
+    console.log('[rollup] Data cached successfully')
+
+    return NextResponse.json(result)
   } catch (e) {
     console.error('overview/rollup error', e)
     return NextResponse.json({ error: 'Failed to load rollup' }, { status: 500 })

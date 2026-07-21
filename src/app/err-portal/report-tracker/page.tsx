@@ -357,9 +357,17 @@ export default function ReportTrackerPage() {
     const filtersForApply = filters.filter((f) => f.fieldId !== 'expense_category')
     let result = applyFilters({ data: rows, filters: filtersForApply, fields: filterFields, getFieldValue })
     const expenseCategoryFilter = filters.find((f) => f.fieldId === 'expense_category')
-    if (expenseCategoryFilter?.value && String(expenseCategoryFilter.value).trim()) {
-      const val = String(expenseCategoryFilter.value).trim()
-      result = result.filter((r) => (r.expense_category_list ?? []).includes(val))
+    if (expenseCategoryFilter?.value) {
+      const selected = Array.isArray(expenseCategoryFilter.value)
+        ? expenseCategoryFilter.value.map((v) => String(v).trim()).filter(Boolean)
+        : String(expenseCategoryFilter.value).trim()
+          ? [String(expenseCategoryFilter.value).trim()]
+          : []
+      if (selected.length > 0) {
+        result = result.filter((r) =>
+          selected.some((s) => (r.expense_category_list ?? []).includes(s))
+        )
+      }
     }
     return result
   }, [rows, filters, filterFields, getFieldValue])

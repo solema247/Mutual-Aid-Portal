@@ -3,7 +3,7 @@
  * Keep field config separate from UI so it can be shared with server-side or other pages.
  */
 
-import type { FilterFieldConfig } from './types'
+import type { FilterFieldConfig, FilterSelectOption } from './types'
 
 export const STATUS_OPTIONS = [
   { value: 'waiting', label: 'Waiting' },
@@ -49,7 +49,7 @@ export function getReportTrackerFilterFields(options?: {
     {
       id: 'grant',
       label: 'Grant',
-      type: 'select',
+      type: 'multi_select',
       options: grantOptions,
       placeholder: 'All grants',
       accessorKey: 'grant',
@@ -57,7 +57,7 @@ export function getReportTrackerFilterFields(options?: {
     {
       id: 'grant_segment',
       label: 'Grant Segment',
-      type: 'select',
+      type: 'multi_select',
       options: [...GRANT_SEGMENT_OPTIONS],
       placeholder: 'All segments',
       accessorKey: 'grant_segment',
@@ -81,7 +81,7 @@ export function getReportTrackerFilterFields(options?: {
     {
       id: 'state',
       label: 'State',
-      type: 'select',
+      type: 'multi_select',
       options: stateOptions,
       placeholder: 'All states',
       accessorKey: 'state',
@@ -96,7 +96,7 @@ export function getReportTrackerFilterFields(options?: {
     {
       id: 'expense_category',
       label: 'Sectors Covered',
-      type: 'select',
+      type: 'multi_select',
       options: expenseCategoryOptions,
       placeholder: 'All sectors',
       accessorKey: 'expense_category_list',
@@ -143,7 +143,7 @@ export function getProjectManagementFilterFields(options?: {
     {
       id: 'state',
       label: 'State',
-      type: 'select',
+      type: 'multi_select',
       options: stateOptions,
       placeholder: 'All states',
       accessorKey: 'state',
@@ -174,7 +174,7 @@ export function getProjectManagementFilterFields(options?: {
     {
       id: 'grant_segment',
       label: 'Grant Segment',
-      type: 'select',
+      type: 'multi_select',
       options: [...(segmentOptions.length ? segmentOptions : GRANT_SEGMENT_OPTIONS.map((o) => ({ value: o.value, label: o.label })))],
       placeholder: 'All segments',
       accessorKey: 'grant_segment',
@@ -182,7 +182,7 @@ export function getProjectManagementFilterFields(options?: {
     {
       id: 'grant',
       label: 'Grant',
-      type: 'select',
+      type: 'multi_select',
       options: grantOptions,
       placeholder: 'All grants',
       accessorKey: 'grant',
@@ -190,7 +190,7 @@ export function getProjectManagementFilterFields(options?: {
     {
       id: 'expense_category',
       label: 'Sectors Covered',
-      type: 'select',
+      type: 'multi_select',
       options: expenseCategoryOptions,
       placeholder: 'All sectors',
       accessorKey: 'expense_category_list',
@@ -205,21 +205,30 @@ export function getProjectManagementFilterFields(options?: {
   ]
 }
 
-/** F4 / F5 reporting tables: Grant ID (text prefix match), ERR, State, Donor */
+/** F4 / F5 reporting tables: Grant ID (text prefix match), room, State, Donor */
 export function getF4F5ReportingFilterFields(options: {
-  errOptions: string[]
+  roomOptions: string[]
   stateOptions: string[]
   donorOptions: string[]
   labels: {
     grantId: string
     grantIdPlaceholder: string
-    err: string
+    room: string
     state: string
     donor: string
     all: string
   }
+  roomFieldId?: 'base_room' | 'err'
+  roomAccessorKey?: 'base_room_name' | 'err_name'
 }): FilterFieldConfig[] {
-  const { errOptions, stateOptions, donorOptions, labels } = options
+  const {
+    roomOptions,
+    stateOptions,
+    donorOptions,
+    labels,
+    roomFieldId = 'err',
+    roomAccessorKey = 'err_name',
+  } = options
   return [
     {
       id: 'grant_id',
@@ -229,12 +238,12 @@ export function getF4F5ReportingFilterFields(options: {
       accessorKey: 'grant_serial_id',
     },
     {
-      id: 'err',
-      label: labels.err,
+      id: roomFieldId,
+      label: labels.room,
       type: 'select',
-      options: errOptions.map((s) => ({ value: s, label: s })),
+      options: roomOptions.map((s) => ({ value: s, label: s })),
       placeholder: labels.all,
-      accessorKey: 'err_name',
+      accessorKey: roomAccessorKey,
     },
     {
       id: 'state',
@@ -251,6 +260,144 @@ export function getF4F5ReportingFilterFields(options: {
       options: donorOptions.map((s) => ({ value: s, label: s })),
       placeholder: labels.all,
       accessorKey: 'donor',
+    },
+  ]
+}
+
+/** F3 MOUs list: multi-select filters (state, grant ID incl. unassigned) */
+export function getF3MousFilterFields(options: {
+  stateOptions: string[]
+  grantIdOptions: string[]
+  labels: {
+    state: string
+    grantId: string
+    unassignedGrant: string
+    all: string
+  }
+}): FilterFieldConfig[] {
+  const { stateOptions, grantIdOptions, labels } = options
+  return [
+    {
+      id: 'state',
+      label: labels.state,
+      type: 'multi_select',
+      options: stateOptions.map((s) => ({ value: s, label: s })),
+      placeholder: labels.all,
+      accessorKey: 'state',
+    },
+    {
+      id: 'grant_id',
+      label: labels.grantId,
+      type: 'multi_select',
+      options: [
+        { value: '__unassigned__', label: labels.unassignedGrant },
+        ...grantIdOptions.map((s) => ({ value: s, label: s })),
+      ],
+      placeholder: labels.all,
+      accessorKey: 'grant_id',
+    },
+  ]
+}
+
+/** F4 reporting: multi-select filters + report status */
+export function getF4ReportingFilterFields(options: {
+  baseRoomOptions: string[]
+  stateOptions: string[]
+  grantOptions: FilterSelectOption[]
+  reportStatusOptions: FilterSelectOption[]
+  labels: {
+    grantId: string
+    grantIdPlaceholder: string
+    baseRoom: string
+    state: string
+    grant: string
+    reportStatus: string
+    all: string
+  }
+}): FilterFieldConfig[] {
+  const { baseRoomOptions, stateOptions, grantOptions, reportStatusOptions, labels } = options
+  return [
+    {
+      id: 'grant_id',
+      label: labels.grantId,
+      type: 'text',
+      placeholder: labels.grantIdPlaceholder,
+      accessorKey: 'grant_serial_id',
+    },
+    {
+      id: 'base_room',
+      label: labels.baseRoom,
+      type: 'multi_select',
+      options: baseRoomOptions.map((s) => ({ value: s, label: s })),
+      placeholder: labels.all,
+      accessorKey: 'base_room_name',
+    },
+    {
+      id: 'state',
+      label: labels.state,
+      type: 'multi_select',
+      options: stateOptions.map((s) => ({ value: s, label: s })),
+      placeholder: labels.all,
+      accessorKey: 'state',
+    },
+    {
+      id: 'grant',
+      label: labels.grant,
+      type: 'multi_select',
+      options: grantOptions,
+      placeholder: labels.all,
+      accessorKey: 'grant_call_id',
+    },
+    {
+      id: 'report_status',
+      label: labels.reportStatus,
+      type: 'multi_select',
+      options: reportStatusOptions,
+      placeholder: labels.all,
+      accessorKey: 'report_status',
+    },
+  ]
+}
+
+/** F5 reporting: F4 fields plus End Activity Status */
+export function getF5ReportingFilterFields(options: {
+  baseRoomOptions: string[]
+  stateOptions: string[]
+  grantOptions: FilterSelectOption[]
+  reportStatusOptions: FilterSelectOption[]
+  endActivityStatusOptions: FilterSelectOption[]
+  labels: {
+    grantId: string
+    grantIdPlaceholder: string
+    baseRoom: string
+    state: string
+    grant: string
+    reportStatus: string
+    endActivityStatus: string
+    all: string
+  }
+}): FilterFieldConfig[] {
+  const { endActivityStatusOptions, labels, ...shared } = options
+  return [
+    ...getF4ReportingFilterFields({
+      ...shared,
+      labels: {
+        grantId: labels.grantId,
+        grantIdPlaceholder: labels.grantIdPlaceholder,
+        baseRoom: labels.baseRoom,
+        state: labels.state,
+        grant: labels.grant,
+        reportStatus: labels.reportStatus,
+        all: labels.all,
+      },
+    }),
+    {
+      id: 'end_activity_status',
+      label: labels.endActivityStatus,
+      type: 'multi_select',
+      options: endActivityStatusOptions,
+      placeholder: labels.all,
+      accessorKey: 'end_activity_status',
     },
   ]
 }

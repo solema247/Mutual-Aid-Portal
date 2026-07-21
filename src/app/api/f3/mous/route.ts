@@ -1,10 +1,92 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { aggregateObjectives, aggregateBeneficiaries, aggregatePlannedActivities, aggregatePlannedActivitiesDetailed, aggregateLocations, getBankingDetails, getBudgetTable } from '@/lib/mou-aggregation'
+import {
+  aggregateMouEnrichment,
+  sumExpensesByMouId,
+  type MouProjectListRow,
+} from '@/lib/mou-list-enrichment'
 import { getUserStateAccess } from '@/lib/userStateAccess'
 import { requirePermission } from '@/lib/requirePermission'
+import type { SupabaseClient } from '@supabase/supabase-js'
 
-// GET /api/f3/mous - list MOUs (simple)
+function parseMouSignatures(mou: Record<string, unknown>) {
+  if (mou.signatures && typeof mou.signatures === 'string') {
+    try {
+      mou.signatures = JSON.parse(mou.signatures)
+    } catch (e) {
+      console.error('Failed to parse signatures JSON:', e)
+      mou.signatures = null
+    }
+  }
+  return mou
+}
+
+async function fetchProjectEnrichment(
+  supabase: SupabaseClient,
+  mouIds: string[]
+) {
+  if (mouIds.length === 0) {
+    return {
+      totalByMouId: {} as Record<string, number>,
+      enrichment: aggregateMouEnrichment([]),
+    }
+  }
+
+  const { data: projects, error: projErr } = await supabase
+    .from('err_projects')
+    .select('mou_id, expenses, grant_id, grant_grid_id, funding_status, status')
+    .in('mou_id', mouIds)
+
+  if (projErr) throw projErr
+
+  const rows = (projects || []) as MouProjectListRow[]
+  const totalByMouId = sumExpensesByMouId(rows)
+
+  const gridIds = Array.from(
+    new Set(rows.map((p) => p.grant_grid_id).filter(Boolean) as string[])
+  )
+
+  const grantIdByGridId: Record<string, string> = {}
+  if (gridIds.length > 0) {
+    const { data: grants, error: grantsErr } = await supabase
+      .from('grants_grid_view')
+      .select('id, grant_id')
+      .in('id', gridIds)
+
+    if (grantsErr) throw grantsErr
+
+    for (const grant of grants || []) {
+      if (grant.id && grant.grant_id) {
+        grantIdByGridId[grant.id] = grant.grant_id
+      }
+    }
+  }
+
+  return {
+    totalByMouId,
+    enrichment: aggregateMouEnrichment(rows, grantIdByGridId),
+  }
+}
+
+function buildMousListPayload(
+  mous: Record<string, unknown>[],
+  totalByMouId: Record<string, number>
+) {
+  return mous.map((mou) => {
+    const parsed = parseMouSignatures({ ...mou })
+    const totalFromProjects = totalByMouId[parsed.id as string]
+    return {
+      ...parsed,
+      total_amount:
+        totalFromProjects !== undefined
+          ? totalFromProjects
+          : ((parsed.total_amount as number | undefined) ?? 0),
+    }
+  })
+}
+
+// GET /api/f3/mous - list MOUs with project enrichment
 export async function GET(request: Request) {
   try {
     const supabase = getSupabaseRouteClient()
@@ -12,7 +94,6 @@ export async function GET(request: Request) {
     const search = searchParams.get('search')
     const state = searchParams.get('state')
 
-    // Get user's state access rights
     const { allowedStateNames } = await getUserStateAccess()
 
     let query = supabase
@@ -20,60 +101,29 @@ export async function GET(request: Request) {
       .select('*')
       .order('created_at', { ascending: false })
 
-    // Apply state filter from user access rights (if not seeing all states)
     if (allowedStateNames !== null && allowedStateNames.length > 0) {
       query = query.in('state', allowedStateNames)
     }
 
     if (search) {
-      // Client-side filter after fetch for simplicity
       const { data, error } = await query
       if (error) throw error
       const s = search.toLowerCase()
-      const filtered = (data || []).filter((m: any) =>
+      const filtered = (data || []).filter((m: { mou_code?: string; partner_name?: string; err_name?: string }) =>
         m.mou_code?.toLowerCase().includes(s) ||
         m.partner_name?.toLowerCase().includes(s) ||
         m.err_name?.toLowerCase().includes(s)
       )
-      const filteredIds = filtered.map((m: any) => m.id).filter(Boolean)
-      const totalByMouId: Record<string, number> = {}
-      if (filteredIds.length > 0) {
-        const { data: projects } = await supabase
-          .from('err_projects')
-          .select('mou_id, expenses')
-          .in('mou_id', filteredIds)
-        if (projects && projects.length > 0) {
-          const sumExpenses = (exp: any): number => {
-            const arr = typeof exp === 'string' ? JSON.parse(exp || '[]') : (Array.isArray(exp) ? exp : [])
-            return arr.reduce((s: number, e: any) => s + (e?.total_cost || 0), 0)
-          }
-          for (const p of projects) {
-            const id = p.mou_id
-            if (!id) continue
-            totalByMouId[id] = (totalByMouId[id] || 0) + sumExpenses(p.expenses)
-          }
-        }
-      }
-      const parsed = filtered.map((mou: any) => {
-        if (mou.signatures && typeof mou.signatures === 'string') {
-          try {
-            mou.signatures = JSON.parse(mou.signatures)
-          } catch (e) {
-            console.error('Failed to parse signatures JSON:', e)
-            mou.signatures = null
-          }
-        }
-        const totalFromProjects = totalByMouId[mou.id]
-        return {
-          ...mou,
-          total_amount: totalFromProjects !== undefined ? totalFromProjects : (mou.total_amount ?? 0)
-        }
+      const filteredIds = filtered.map((m: { id: string }) => m.id).filter(Boolean)
+      const { totalByMouId, enrichment } = await fetchProjectEnrichment(supabase, filteredIds)
+
+      return NextResponse.json({
+        mous: buildMousListPayload(filtered as Record<string, unknown>[], totalByMouId),
+        ...enrichment,
       })
-      return NextResponse.json(parsed)
     }
 
-    // Apply explicit state filter if provided (further restricts)
-    if (state) {
+    if (state && state !== 'all') {
       query = query.eq('state', state)
     }
 
@@ -81,45 +131,13 @@ export async function GET(request: Request) {
     if (error) throw error
 
     const mous = data || []
-    const mouIds = mous.map((m: any) => m.id).filter(Boolean)
-    const totalByMouId: Record<string, number> = {}
+    const mouIds = mous.map((m: { id: string }) => m.id).filter(Boolean)
+    const { totalByMouId, enrichment } = await fetchProjectEnrichment(supabase, mouIds)
 
-    if (mouIds.length > 0) {
-      const { data: projects, error: projErr } = await supabase
-        .from('err_projects')
-        .select('mou_id, expenses')
-        .in('mou_id', mouIds)
-      if (!projErr && projects && projects.length > 0) {
-        const sumExpenses = (exp: any): number => {
-          const arr = typeof exp === 'string' ? JSON.parse(exp || '[]') : (Array.isArray(exp) ? exp : [])
-          return arr.reduce((s: number, e: any) => s + (e?.total_cost || 0), 0)
-        }
-        for (const p of projects) {
-          const id = p.mou_id
-          if (!id) continue
-          totalByMouId[id] = (totalByMouId[id] || 0) + sumExpenses(p.expenses)
-        }
-      }
-    }
-    
-    // Parse signatures JSON and attach total from err_projects (not mous table)
-    const parsed = mous.map((mou: any) => {
-      if (mou.signatures && typeof mou.signatures === 'string') {
-        try {
-          mou.signatures = JSON.parse(mou.signatures)
-        } catch (e) {
-          console.error('Failed to parse signatures JSON:', e)
-          mou.signatures = null
-        }
-      }
-      const totalFromProjects = totalByMouId[mou.id]
-      return {
-        ...mou,
-        total_amount: totalFromProjects !== undefined ? totalFromProjects : (mou.total_amount ?? 0)
-      }
+    return NextResponse.json({
+      mous: buildMousListPayload(mous as Record<string, unknown>[], totalByMouId),
+      ...enrichment,
     })
-    
-    return NextResponse.json(parsed)
   } catch (error) {
     console.error('Error listing MOUs:', error)
     return NextResponse.json({ error: 'Failed to list MOUs' }, { status: 500 })

@@ -1,0 +1,37 @@
+airtable_allocation_id,partner,decision_date,state,allocation_amount,serial,sheet_link,hinted_sheet_code,hinted_sheet_sequence,amount_mismatch
+LCC.AD.Avaaz.25-06-23.291,rec0zenRjhJso1RvU,2025-06-23,Khartoum,160000,291,none,,,
+LCC.AD.Avaaz.25-06-23.292,rec0zenRjhJso1RvU,2025-06-23,Al Jazirah,40000,292,none,,,
+LCC.AD.Avaaz.25-06-23.293,rec0zenRjhJso1RvU,2025-06-23,North Darfur,97000,293,none,,,
+LCC.AD.Avaaz.25-06-23.294,rec0zenRjhJso1RvU,2025-06-23,Blue Nile,35000,294,none,,,
+LCC.AD.Avaaz.25-06-23.295,rec0zenRjhJso1RvU,2025-06-23,West Kordofan,50000,295,none,,,
+LCC.AD.Avaaz.25-06-23.296,rec0zenRjhJso1RvU,2025-06-23,South Kordofan,43000,296,none,,,
+LCC.AD.Avaaz.25-06-23.297,rec0zenRjhJso1RvU,2025-06-23,White Nile,20000,297,none,,,
+LCC.AD.Avaaz.25-06-23.298,rec0zenRjhJso1RvU,2025-06-23,North Kordofan,40000,298,none,,,
+LCC.AD.Gisa.23-11-15.299,recDQeJx2WBdZ2s9B,2023-11-15,Khartoum,180000,299,none,,,
+LCC.AD.Gisa.23-11-15.300,recDQeJx2WBdZ2s9B,2023-11-15,East Darfur,28000,300,none,,,
+LCC.AD.Gisa.23-11-15.301,recDQeJx2WBdZ2s9B,2023-11-15,North Darfur,58400,301,none,,,
+LCC.AD.Gisa.23-11-15.302,recDQeJx2WBdZ2s9B,2023-11-15,South Darfur,13600,302,none,,,
+LCC.AD.Gisa.23-11-15.303,recDQeJx2WBdZ2s9B,2023-11-15,West Darfur,10000,303,none,,,
+LCC.AD.P2H.25-01-15.1,recAoKLIxff3J74l5,2025-01-15,Contingency Fund,32170,1,none,,,
+LCC.AD.P2H.25-01-16.31,recAoKLIxff3J74l5,2025-01-16,LCC,7000,31,likely_hint_only,LCC.AD.P2H.16-01-25-06,LCC.AD.P2H.16-01-25-06-09,-3950
+LCC.AD.P2H.25-03-08.45,recAoKLIxff3J74l5,2025-03-08,East Darfur,27000,45,likely_hint_only,LCC.AD.DKH.08-03-25-08,LCC.AD.12-11-24-07-03,500
+LCC.AD.P2H.25-03-08.49,recAoKLIxff3J74l5,2025-03-08,South Darfur,27000,49,likely_hint_only,LCC.AD.DKH.08-03-25-08,LCC.AD.12-11-24-07-01,3450
+LCC.AD.P2H.26-02-14.423,recAoKLIxff3J74l5,2026-02-14,Kassala,20000,423,none,,,
+LCC.AD.P2H.26-02-14.424,recAoKLIxff3J74l5,2026-02-14,Khartoum,50000,424,none,,,
+LCC.AD.P2H.26-02-14.470,recAoKLIxff3J74l5,2026-02-14,Al Jazirah,35000,470,none,,,
+LCC.AD.P2H.26-02-14.471,recAoKLIxff3J74l5,2026-02-14,Blue Nile,20000,471,none,,,
+LCC.AD.P2H.26-02-14.472,recAoKLIxff3J74l5,2026-02-14,Central Darfur,60000,472,none,,,
+LCC.AD.P2H.26-02-14.473,recAoKLIxff3J74l5,2026-02-14,East Darfur,12000,473,none,,,
+LCC.AD.P2H.26-02-14.474,recAoKLIxff3J74l5,2026-02-14,North Darfur,35000,474,none,,,
+LCC.AD.P2H.26-02-14.475,recAoKLIxff3J74l5,2026-02-14,North Kordofan,15000,475,none,,,
+LCC.AD.P2H.26-02-14.476,recAoKLIxff3J74l5,2026-02-14,Northern,55000,476,none,,,
+LCC.AD.P2H.26-02-14.477,recAoKLIxff3J74l5,2026-02-14,River Nile,10000,477,none,,,
+LCC.AD.P2H.26-02-14.478,recAoKLIxff3J74l5,2026-02-14,Sennar,25000,478,none,,,
+LCC.AD.P2H.26-02-14.479,recAoKLIxff3J74l5,2026-02-14,South Darfur,123699,479,none,,,
+LCC.AD.P2H.26-02-14.480,recAoKLIxff3J74l5,2026-02-14,South Kordofan,10000,480,none,,,
+LCC.AD.P2H.26-02-14.481,recAoKLIxff3J74l5,2026-02-14,West Darfur,20000,481,none,,,
+LCC.AD.P2H.26-02-14.482,recAoKLIxff3J74l5,2026-02-14,West Kordofan,90000,482,none,,,
+LCC.AD.P2H.26-03-26.466,recAoKLIxff3J74l5,2026-03-26,South Kordofan,14601.79,466,likely_hint_only,LCC.AD.P2H.26-03-26-37,LCC.AD.P2H.26-03-26-37-04,0
+LCC.AD.P2H.26-05-06.538,recAoKLIxff3J74l5,2026-05-06,West Darfur,3000,538,likely_hint_only,MAG.AD.P2H.20-05-26-47,LCC.AD.P2H.20-05-26-47-06,100
+LCC.AD.P2H.26-05-06.541,recAoKLIxff3J74l5,2026-05-06,Contingency Fund,100,541,none,,,
+LCC.AD.P2H.26-06-21.579,recAoKLIxff3J74l5,2026-06-21,North Kordofan,300000,579,none,,,

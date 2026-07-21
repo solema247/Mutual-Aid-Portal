@@ -19,12 +19,15 @@ import {
   type ChartConfig,
 } from '@/components/ui/chart'
 import {
+  GITHUB_PROJECT_TEAM_REQUEST_CHART_ORDER,
   RAISE_TICKET_BIG_ROCK_SHORT_I18N_KEYS,
   RAISE_TICKET_STATUS_I18N_KEYS,
+  RAISE_TICKET_TEAM_REQUEST_I18N_KEYS,
   STATUS_CHART_COLORS,
   STATUS_DATA_KEYS,
   type GithubProjectBigRock,
   type GithubProjectStatus,
+  type GithubProjectTeamRequest,
   type SprintLevelBucket,
 } from '@/lib/raiseTicketGithub'
 
@@ -48,6 +51,7 @@ type SprintAnalytics = {
   bySprintLevel: SprintAnalyticsChartRow[]
   byAssignee: SprintAnalyticsChartRow[]
   byBacklogAge: SprintAnalyticsChartRow[]
+  byTeamRequest: SprintAnalyticsChartRow[]
   p0Unassigned: P0UnassignedTaskRow[]
   totals: {
     open: number
@@ -91,6 +95,7 @@ function SprintMetricChart ({
   loading,
   error,
   emptyMessage,
+  showPercent = false,
 }: {
   title: string
   description: string
@@ -99,15 +104,18 @@ function SprintMetricChart ({
   loading?: boolean
   error?: string | null
   emptyMessage: string
+  showPercent?: boolean
 }) {
   const { t } = useTranslation('err')
+  const total = rows.reduce((sum, row) => sum + row.count, 0)
   const chartData = useMemo(
     () =>
       rows.map((row) => ({
         ...row,
         label: labelForKey(row.key),
+        percent: total > 0 ? Math.round((row.count / total) * 100) : 0,
       })),
-    [rows, labelForKey]
+    [rows, labelForKey, total]
   )
 
   const chartConfig = {
@@ -116,8 +124,6 @@ function SprintMetricChart ({
       color: 'hsl(var(--chart-1))',
     },
   } satisfies ChartConfig
-
-  const total = rows.reduce((sum, row) => sum + row.count, 0)
 
   if (loading) {
     return (
@@ -175,12 +181,16 @@ function SprintMetricChart ({
               <Cell key={row.key} fill={row.fill} />
             ))}
             <LabelList
-              dataKey="count"
+              dataKey={showPercent ? 'percent' : 'count'}
               position="top"
               offset={4}
               className="fill-foreground"
               fontSize={10}
-              formatter={(value) => (Number(value) > 0 ? value : '')}
+              formatter={(value) => {
+                const n = Number(value)
+                if (n <= 0) return ''
+                return showPercent ? `${n}%` : value
+              }}
             />
           </Bar>
         </BarChart>
@@ -248,6 +258,17 @@ export function SprintAnalyticsSection ({ enabled = true }: SprintAnalyticsSecti
     [t]
   )
 
+  const teamRequestLabel = useMemo(
+    () => (key: string) => {
+      if ((GITHUB_PROJECT_TEAM_REQUEST_CHART_ORDER as readonly string[]).includes(key)) {
+        const team = key as GithubProjectTeamRequest
+        return t(RAISE_TICKET_TEAM_REQUEST_I18N_KEYS[team], team)
+      }
+      return key
+    },
+    [t]
+  )
+
   useEffect(() => {
     if (!enabled) return
     let cancelled = false
@@ -297,12 +318,12 @@ export function SprintAnalyticsSection ({ enabled = true }: SprintAnalyticsSecti
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-4">
         <SprintMetricChart
           title={t('raise_ticket_sprint_chart_level_title', 'Tasks by sprint')}
           description={t(
             'raise_ticket_sprint_chart_level_desc',
-            '{{count}} open tasks by iteration assignment',
+            '{{count}} open tasks by sprint assignment',
             { count: rows?.totals.open ?? 0 }
           )}
           rows={rows?.bySprintLevel ?? []}
@@ -312,6 +333,23 @@ export function SprintAnalyticsSection ({ enabled = true }: SprintAnalyticsSecti
           emptyMessage={t(
             'raise_ticket_sprint_chart_level_empty',
             'No open tasks on the board.'
+          )}
+        />
+        <SprintMetricChart
+          title={t('raise_ticket_sprint_chart_team_request_title', 'Team Request')}
+          description={t(
+            'raise_ticket_sprint_chart_team_request_desc',
+            'Share of {{count}} open tasks by requesting team (includes not in sprint)',
+            { count: rows?.totals.open ?? 0 }
+          )}
+          rows={rows?.byTeamRequest ?? []}
+          labelForKey={teamRequestLabel}
+          loading={loading}
+          error={chartError}
+          showPercent
+          emptyMessage={t(
+            'raise_ticket_sprint_chart_team_request_empty',
+            'No open tasks with Team Request data.'
           )}
         />
         <SprintMetricChart

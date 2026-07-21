@@ -30,6 +30,7 @@ with
       m.mou_code,
       m.payment_confirmation_file,
       p.date_transfer,
+      p.date_report_completed,
       p.f4_status,
       p.f5_status,
       ggv.grant_id as grid_grant_id,
@@ -110,7 +111,8 @@ with
       sum(COALESCE(r.female_count, 0))::bigint as female_over_18,
       sum(COALESCE(r.under18_male, 0))::bigint as male_under_18,
       sum(COALESCE(r.under18_female, 0))::bigint as female_under_18,
-      sum(COALESCE(r.people_with_disabilities, 0))::bigint as people_special_needs
+      sum(COALESCE(r.people_with_disabilities, 0))::bigint as people_special_needs,
+      max(r.end_date) as end_date_activity
     from
       err_program_reach r
       inner join err_program_report pr on r.report_id = pr.id
@@ -361,7 +363,7 @@ with
         when cpb.date is not null then cpb.date
         else null::date
       end as start_date_activity,
-      null::date as end_date_activity,
+      cpr.end_date_activity,
       cpb.estimated_timeframe as activity_duration,
       initcap(
         lower(
@@ -381,7 +383,7 @@ with
           )
         )
       ) as f5,
-      null::date as date_report_completed,
+      cpb.date_report_completed,
       null::numeric as reporting_duration,
       case initcap(
           lower(
@@ -550,7 +552,13 @@ select
     else ari."Project Donor"
   end as project_donor,
   ari."Partner" as partner,
-  ari."State" as state,
+  case trim(ari."State")
+    when 'Gadarif' then 'Gadaref'
+    when 'Sinar' then 'Sennar'
+    when 'Northern State' then 'Northern'
+    when 'Al Jazeera' then 'Al Jazirah'
+    else trim(ari."State")
+  end as state,
   ari."Responsible" as responsible,
   ari."Sector (Primary)" as sector_primary,
   ari."Sector (Secondardy" as sector_secondary,

@@ -38,6 +38,7 @@ export async function GET (request: Request) {
     const reports = await fetchSprintReports(token, project, locale)
 
     return NextResponse.json({
+      previous: reports.previous,
       active: reports.active,
       planned: reports.planned,
       unscheduled: reports.unscheduled,

@@ -843,7 +843,7 @@ export default function DirectUpload() {
                       <SelectContent>
                         {rooms.map((room) => (
                           <SelectItem key={room.id} value={room.id}>
-                            {room.name_ar || room.name} {room.err_code ? `(${room.err_code})` : ''}
+                            {room.name || '-'}{room.name_ar ? ` (${room.name_ar})` : ''} {room.err_code ? `[${room.err_code}]` : ''}
                           </SelectItem>
                       ))}
                     </SelectContent>

@@ -132,6 +132,53 @@ export const SPRINT_ASSIGNEE_CHART_COLORS = [
   TICKET_CHART_PASTELS.muted,
 ] as const
 
+/** GitHub Project v2 single-select field: Team Request */
+export const GITHUB_PROJECT_TEAM_REQUESTS = [
+  'Lohub',
+  'P2H',
+  'LCC',
+  'Technical Team',
+] as const
+
+export const GITHUB_PROJECT_TEAM_REQUEST_NOT_SET = 'Not set' as const
+
+export type GithubProjectTeamRequest =
+  | (typeof GITHUB_PROJECT_TEAM_REQUESTS)[number]
+  | typeof GITHUB_PROJECT_TEAM_REQUEST_NOT_SET
+
+export const GITHUB_PROJECT_TEAM_REQUEST_CHART_ORDER: GithubProjectTeamRequest[] = [
+  ...GITHUB_PROJECT_TEAM_REQUESTS,
+  GITHUB_PROJECT_TEAM_REQUEST_NOT_SET,
+]
+
+export const TEAM_REQUEST_CHART_COLORS: Record<GithubProjectTeamRequest, string> = {
+  Lohub: TICKET_CHART_PASTELS.mint,
+  P2H: TICKET_CHART_PASTELS.sky,
+  LCC: TICKET_CHART_PASTELS.lavender,
+  'Technical Team': TICKET_CHART_PASTELS.teal,
+  'Not set': TICKET_CHART_PASTELS.muted,
+}
+
+export const RAISE_TICKET_TEAM_REQUEST_I18N_KEYS: Record<GithubProjectTeamRequest, string> = {
+  Lohub: 'raise_ticket_team_request_lohub',
+  P2H: 'raise_ticket_team_request_p2h',
+  LCC: 'raise_ticket_team_request_lcc',
+  'Technical Team': 'raise_ticket_team_request_technical',
+  'Not set': 'raise_ticket_team_request_not_set',
+}
+
+export function normalizeProjectTeamRequest (
+  value: string | null
+): GithubProjectTeamRequest {
+  if (
+    value != null &&
+    (GITHUB_PROJECT_TEAM_REQUESTS as readonly string[]).includes(value)
+  ) {
+    return value as GithubProjectTeamRequest
+  }
+  return GITHUB_PROJECT_TEAM_REQUEST_NOT_SET
+}
+
 export function isP0ProjectPriority (priority: string | null): boolean {
   if (!priority) return false
   const normalized = priority.trim()

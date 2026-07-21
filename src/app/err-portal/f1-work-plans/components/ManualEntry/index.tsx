@@ -360,7 +360,7 @@ export default function ManualEntry({ onSuccess }: ManualEntryProps) {
               <SelectContent>
                 {rooms.map((r) => (
                   <SelectItem key={r.id} value={r.id}>
-                    {r.name_ar || r.name} {r.err_code ? `(${r.err_code})` : ''}
+                    {r.name || '-'}{r.name_ar ? ` (${r.name_ar})` : ''} {r.err_code ? `[${r.err_code}]` : ''}
                   </SelectItem>
                 ))}
               </SelectContent>

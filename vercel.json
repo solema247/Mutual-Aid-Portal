@@ -13,6 +13,10 @@
       "maxDuration": 600,
       "memory": 512
     },
+    "src/app/api/sheets/sync-financial-report/route.ts": {
+      "maxDuration": 600,
+      "memory": 512
+    },
     "src/app/api/airtable/sync/route.ts": {
       "maxDuration": 600,
       "memory": 512
@@ -22,6 +26,10 @@
     {
       "path": "/api/sheets/sync-activities",
       "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/sheets/sync-financial-report",
+      "schedule": "0 3 * * *"
     }
   ]
 }
