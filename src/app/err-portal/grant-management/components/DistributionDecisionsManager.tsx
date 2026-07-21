@@ -103,16 +103,25 @@ function displayNoteLines(notes: string | null | undefined): string[] {
       /amount mismatch/i.test(l) ||
       /state mismatch/i.test(l) ||
       /\$300,000 tranche/i.test(l) ||
-      /full \$2,000,000/i.test(l)
+      /full \$2,000,000/i.test(l) ||
+      /Decision envelope/i.test(l) ||
+      /First tranche/i.test(l) ||
+      /later tranches/i.test(l)
   )
   return priority.length ? priority : lines
 }
 
 function hasReviewNote(notes: string | null | undefined): boolean {
   return displayNoteLines(notes).some((l) =>
-    /Please Review:|Mutual Aid|missing a funds|missing in Lohub|missing Google Sheet|does not match|amount mismatch|state mismatch|tranche/i.test(
+    /Please Review:|Mutual Aid|missing a funds|missing in Lohub|missing Google Sheet|does not match|amount mismatch|state mismatch/i.test(
       l
     )
+  )
+}
+
+function hasInfoNote(notes: string | null | undefined): boolean {
+  return displayNoteLines(notes).some((l) =>
+    /Decision envelope|First tranche|later tranches|tranche/i.test(l)
   )
 }
 
@@ -121,8 +130,15 @@ function NotesCallout({ notes }: { notes: string | null | undefined }) {
   if (!lines.length) {
     return <span className="text-muted-foreground">—</span>
   }
+  const review = hasReviewNote(notes)
+  const info = !review && hasInfoNote(notes)
+  const className = review
+    ? 'rounded-md border border-amber-300 bg-amber-50 px-2 py-1.5 text-amber-950 text-xs leading-snug space-y-1 max-w-md'
+    : info
+      ? 'rounded-md border border-sky-200 bg-sky-50 px-2 py-1.5 text-sky-950 text-xs leading-snug space-y-1 max-w-md'
+      : 'rounded-md border border-amber-300 bg-amber-50 px-2 py-1.5 text-amber-950 text-xs leading-snug space-y-1 max-w-md'
   return (
-    <div className="rounded-md border border-amber-300 bg-amber-50 px-2 py-1.5 text-amber-950 text-xs leading-snug space-y-1 max-w-md">
+    <div className={className}>
       {lines.map((line) => (
         <p key={line}>{line}</p>
       ))}
@@ -1009,7 +1025,7 @@ export default function DistributionDecisionsManager() {
                       )}
                     </button>
                   </TableHead>
-                  <TableHead>Amount</TableHead>
+                  <TableHead>Decision amount</TableHead>
                   <TableHead>Allocated</TableHead>
                   <TableHead>Remaining</TableHead>
                   <TableHead>Partner</TableHead>
@@ -1210,6 +1226,27 @@ export default function DistributionDecisionsManager() {
                                     Refresh
                                   </Button>
                                 </div>
+                                {remaining != null && remaining > 0 && (
+                                  <div className="rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-sky-950 text-xs leading-snug">
+                                    <p>
+                                      Decision amount{' '}
+                                      <span className="font-semibold">{formatCurrency(decision.decision_amount)}</span>
+                                      {' '}· allocated{' '}
+                                      <span className="font-semibold">{formatCurrency(allocated)}</span>
+                                      {' '}· remaining to allocate{' '}
+                                      <span className="font-semibold">{formatCurrency(remaining)}</span>.
+                                    </p>
+                                    <p className="mt-0.5 text-sky-900/80">
+                                      You can add more state allocations below until they total the decision amount (e.g. later funding tranches).
+                                    </p>
+                                  </div>
+                                )}
+                                {remaining != null && remaining < 0 && (
+                                  <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-amber-950 text-xs">
+                                    Allocations exceed the decision amount by{' '}
+                                    <span className="font-semibold">{formatCurrency(Math.abs(remaining))}</span>.
+                                  </div>
+                                )}
                                 {isAllocLoading[fetchKey] ? (
                                   <div className="text-muted-foreground">Loading allocations...</div>
                                 ) : (
@@ -1536,15 +1573,19 @@ export default function DistributionDecisionsManager() {
                                           <Button
                                             type="button"
                                             variant="outline"
+                                            size="sm"
+                                            className="h-7 text-xs"
                                             onClick={() => setAllocRows([{ state: '', amount: '' }])}
                                           >
-                                            <Plus className="h-4 w-4 mr-2" />
+                                            <Plus className="h-3 w-3 mr-1" />
                                             Add state allocation
                                           </Button>
                                         ) : (
                                           validPendingAllocRows(allocRows).length > 0 && (
                                             <Button
                                               type="button"
+                                              size="sm"
+                                              className="h-7 text-xs"
                                               onClick={() => handleAddAllocation(fetchKey)}
                                             >
                                               Save allocations
