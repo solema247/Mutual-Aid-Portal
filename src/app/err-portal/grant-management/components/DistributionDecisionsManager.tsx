@@ -40,6 +40,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
   isExternalDecisionDocLink,
   resolveDecisionDocumentUrl,
+  type DecisionDocument,
 } from '@/lib/grantManagement/decisionDocument'
 
 type Decision = {
@@ -55,6 +56,24 @@ type Decision = {
   restriction?: string | null
   file_name?: string | null
   file_link?: string | null
+  documents?: DecisionDocument[]
+}
+
+function decisionDocuments(decision: Decision): DecisionDocument[] {
+  if (Array.isArray(decision.documents) && decision.documents.length > 0) {
+    return decision.documents
+  }
+  if (decision.file_link?.trim()) {
+    return [
+      {
+        id: `legacy-${decision.id}`,
+        file_name: decision.file_name?.trim() || 'Document',
+        file_link: decision.file_link.trim(),
+        source: isExternalDecisionDocLink(decision.file_link) ? 'airtable' : 'portal',
+      },
+    ]
+  }
+  return []
 }
 
 type Allocation = {
@@ -142,7 +161,8 @@ export default function DistributionDecisionsManager() {
   const itemsPerPage = 10
   const [useCsvUpload, setUseCsvUpload] = useState(false)
   const [csvFile, setCsvFile] = useState<File | null>(null)
-  const [manualFile, setManualFile] = useState<File | null>(null)
+  const [manualFiles, setManualFiles] = useState<File[]>([])
+  const [extraCreateFiles, setExtraCreateFiles] = useState<File[]>([])
   const [isParsingCsv, setIsParsingCsv] = useState(false)
   const [currentUser, setCurrentUser] = useState<{ id: string; role: string } | null>(null)
   const [editingAllocation, setEditingAllocation] = useState<string | null>(null)
@@ -228,23 +248,23 @@ export default function DistributionDecisionsManager() {
 
   const handleCreateDecision = async (values: z.infer<typeof decisionSchema>) => {
     try {
-      let fileLink: string | null = null
-      let fileName: string | null = null
-      
-      // Upload file if provided (either CSV for processing or manual file)
-      const fileToUpload = useCsvUpload ? csvFile : manualFile
-      if (fileToUpload) {
-        const decisionId = values.decision_id_proposed || values.decision_id || ''
-        fileLink = await uploadFileToStorage(fileToUpload, decisionId)
-        fileName = fileToUpload.name
+      const decisionId = values.decision_id_proposed || values.decision_id || ''
+      const filesToUpload: File[] = useCsvUpload
+        ? [...(csvFile ? [csvFile] : []), ...extraCreateFiles]
+        : [...manualFiles]
+
+      const documents: Array<{ file_name: string; file_link: string }> = []
+      for (let i = 0; i < filesToUpload.length; i++) {
+        const file = filesToUpload[i]
+        const fileLink = await uploadFileToStorage(file, `${decisionId}-${i}`)
+        documents.push({ file_name: file.name, file_link: fileLink })
       }
-      
+
       // If user only enters proposed ID, use it for both fields
       const payload = {
         ...values,
         decision_id: values.decision_id_proposed, // mirror proposed into decision_id
-        file_name: fileName,
-        file_link: fileLink,
+        documents,
       }
       const res = await fetch('/api/distribution-decisions', {
         method: 'POST',
@@ -287,7 +307,8 @@ export default function DistributionDecisionsManager() {
       decisionForm.reset()
       setUseCsvUpload(false)
       setCsvFile(null)
-      setManualFile(null)
+      setManualFiles([])
+      setExtraCreateFiles([])
       setAllocRows([])
       fetchDecisions()
     } catch (error: any) {
@@ -560,11 +581,12 @@ export default function DistributionDecisionsManager() {
     return filePath
   }
 
-  const handleViewDecisionDocument = async (decision: Decision) => {
-    if (!decision.file_link) return
+  const handleViewDecisionDocument = async (decisionId: string, doc: DecisionDocument) => {
+    if (!doc.file_link) return
+    const openKey = `${decisionId}:${doc.id}`
     try {
-      setIsOpeningDoc((prev) => ({ ...prev, [decision.id]: true }))
-      const url = await resolveDecisionDocumentUrl(decision.file_link)
+      setIsOpeningDoc((prev) => ({ ...prev, [openKey]: true }))
+      const url = await resolveDecisionDocumentUrl(doc.file_link)
       if (!url) {
         alert('Could not open decision document')
         return
@@ -574,39 +596,81 @@ export default function DistributionDecisionsManager() {
       console.error(error)
       alert(error.message || 'Failed to open decision document')
     } finally {
-      setIsOpeningDoc((prev) => ({ ...prev, [decision.id]: false }))
+      setIsOpeningDoc((prev) => ({ ...prev, [openKey]: false }))
     }
   }
 
-  const handleReplaceDecisionDocument = async (decision: Decision, file: File | null) => {
-    if (!file) return
+  const handleAddDecisionDocuments = async (decision: Decision, files: FileList | File[] | null) => {
+    const list = files ? Array.from(files) : []
+    if (list.length === 0) return
     const fetchKey = decision.decision_id_proposed || decision.decision_id || decision.id
     try {
       setIsUploadingDoc((prev) => ({ ...prev, [decision.id]: true }))
-      const fileLink = await uploadFileToStorage(file, fetchKey)
+      const add_documents: Array<{ file_name: string; file_link: string }> = []
+      for (let i = 0; i < list.length; i++) {
+        const file = list[i]
+        const fileLink = await uploadFileToStorage(file, `${fetchKey}-${i}`)
+        add_documents.push({ file_name: file.name, file_link: fileLink })
+      }
       const res = await fetch(`/api/distribution-decisions/${encodeURIComponent(fetchKey.trim())}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          file_name: file.name,
-          file_link: fileLink,
-        }),
+        body: JSON.stringify({ add_documents }),
       })
       if (!res.ok) {
         const err = await res.json()
-        throw new Error(err.error || 'Failed to update decision document')
+        throw new Error(err.error || 'Failed to add decision documents')
       }
       const updated = await res.json()
       setDecisions((prev) =>
         prev.map((d) =>
           d.id === decision.id
-            ? { ...d, file_name: updated.file_name ?? file.name, file_link: updated.file_link ?? fileLink }
+            ? {
+                ...d,
+                file_name: updated.file_name ?? d.file_name,
+                file_link: updated.file_link ?? d.file_link,
+                documents: updated.documents ?? d.documents,
+              }
             : d
         )
       )
     } catch (error: any) {
       console.error(error)
-      alert(error.message || 'Failed to upload decision document')
+      alert(error.message || 'Failed to upload decision documents')
+    } finally {
+      setIsUploadingDoc((prev) => ({ ...prev, [decision.id]: false }))
+    }
+  }
+
+  const handleRemoveDecisionDocument = async (decision: Decision, documentId: string) => {
+    const fetchKey = decision.decision_id_proposed || decision.decision_id || decision.id
+    try {
+      setIsUploadingDoc((prev) => ({ ...prev, [decision.id]: true }))
+      const res = await fetch(`/api/distribution-decisions/${encodeURIComponent(fetchKey.trim())}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ remove_document_ids: [documentId] }),
+      })
+      if (!res.ok) {
+        const err = await res.json()
+        throw new Error(err.error || 'Failed to remove decision document')
+      }
+      const updated = await res.json()
+      setDecisions((prev) =>
+        prev.map((d) =>
+          d.id === decision.id
+            ? {
+                ...d,
+                file_name: updated.file_name ?? null,
+                file_link: updated.file_link ?? null,
+                documents: updated.documents ?? [],
+              }
+            : d
+        )
+      )
+    } catch (error: any) {
+      console.error(error)
+      alert(error.message || 'Failed to remove decision document')
     } finally {
       setIsUploadingDoc((prev) => ({ ...prev, [decision.id]: false }))
     }
@@ -669,7 +733,8 @@ export default function DistributionDecisionsManager() {
                   decisionForm.reset()
                   setUseCsvUpload(false)
                   setCsvFile(null)
-                  setManualFile(null)
+                  setManualFiles([])
+                  setExtraCreateFiles([])
                   setAllocRows([])
                 }
               }}>
@@ -694,9 +759,10 @@ export default function DistributionDecisionsManager() {
                           const isCsv = value === 'csv'
                           setUseCsvUpload(isCsv)
                           if (isCsv) {
-                            setManualFile(null)
+                            setManualFiles([])
                           } else {
                             setCsvFile(null)
+                            setExtraCreateFiles([])
                             setAllocRows([])
                           }
                         }}
@@ -708,53 +774,81 @@ export default function DistributionDecisionsManager() {
                         </TabsList>
                         
                         <TabsContent value="csv" className="mt-4">
-                          <div className="space-y-2 p-4 border rounded-md">
-                            <FormLabel>Upload CSV/Excel File</FormLabel>
-                            <div className="flex items-center gap-2">
+                          <div className="space-y-3 p-4 border rounded-md">
+                            <div className="space-y-2">
+                              <FormLabel>Upload CSV/Excel File</FormLabel>
+                              <div className="flex items-center gap-2">
+                                <Input
+                                  type="file"
+                                  accept=".csv,.xlsx,.xls"
+                                  onChange={(e) => {
+                                    const file = e.target.files?.[0] || null
+                                    handleCsvFileSelect(file)
+                                  }}
+                                  disabled={isParsingCsv}
+                                />
+                                {isParsingCsv && (
+                                  <RefreshCw className="h-4 w-4 animate-spin" />
+                                )}
+                              </div>
+                              {csvFile && (
+                                <div className="text-sm text-muted-foreground flex items-center gap-2">
+                                  <FileSpreadsheet className="h-4 w-4" />
+                                  {csvFile.name}
+                                </div>
+                              )}
+                              <p className="text-xs text-muted-foreground">
+                                File structure: B2 = Total Amount, C3:P3 = State Names, C36:P36 = Amounts.
+                                The uploaded file is also stored as a decision document.
+                              </p>
+                            </div>
+                            <div className="space-y-2">
+                              <FormLabel>Additional decision documents (optional)</FormLabel>
                               <Input
                                 type="file"
-                                accept=".csv,.xlsx,.xls"
+                                accept=".csv,.xlsx,.xls,.pdf"
+                                multiple
                                 onChange={(e) => {
-                                  const file = e.target.files?.[0] || null
-                                  handleCsvFileSelect(file)
+                                  setExtraCreateFiles(Array.from(e.target.files || []))
                                 }}
-                                disabled={isParsingCsv}
                               />
-                              {isParsingCsv && (
-                                <RefreshCw className="h-4 w-4 animate-spin" />
+                              {extraCreateFiles.length > 0 && (
+                                <ul className="text-xs text-muted-foreground space-y-0.5">
+                                  {extraCreateFiles.map((f) => (
+                                    <li key={f.name} className="flex items-center gap-1">
+                                      <Upload className="h-3 w-3" />
+                                      {f.name}
+                                    </li>
+                                  ))}
+                                </ul>
                               )}
                             </div>
-                            {csvFile && (
-                              <div className="text-sm text-muted-foreground flex items-center gap-2">
-                                <FileSpreadsheet className="h-4 w-4" />
-                                {csvFile.name}
-                              </div>
-                            )}
-                            <p className="text-xs text-muted-foreground">
-                              File structure: B2 = Total Amount, C3:P3 = State Names, C36:P36 = Amounts.
-                              The uploaded file is also stored as the decision document.
-                            </p>
                           </div>
                         </TabsContent>
                         
                         <TabsContent value="manual" className="mt-4">
                           <div className="space-y-2">
-                            <FormLabel>Decision document (optional)</FormLabel>
+                            <FormLabel>Decision documents (optional)</FormLabel>
                             <Input
                               type="file"
                               accept=".csv,.xlsx,.xls,.pdf"
+                              multiple
                               onChange={(e) => {
-                                setManualFile(e.target.files?.[0] || null)
+                                setManualFiles(Array.from(e.target.files || []))
                               }}
                             />
-                            {manualFile && (
-                              <div className="text-sm text-muted-foreground flex items-center gap-2">
-                                <Upload className="h-4 w-4" />
-                                {manualFile.name}
-                              </div>
+                            {manualFiles.length > 0 && (
+                              <ul className="text-sm text-muted-foreground space-y-0.5">
+                                {manualFiles.map((f) => (
+                                  <li key={f.name} className="flex items-center gap-2">
+                                    <Upload className="h-4 w-4" />
+                                    {f.name}
+                                  </li>
+                                ))}
+                              </ul>
                             )}
                             <p className="text-xs text-muted-foreground">
-                              Stored with this decision so it can be viewed or replaced later.
+                              You can select multiple files. They are stored with this decision and can be viewed or changed later.
                             </p>
                           </div>
                         </TabsContent>
@@ -867,7 +961,8 @@ export default function DistributionDecisionsManager() {
                           decisionForm.reset()
                           setUseCsvUpload(false)
                           setCsvFile(null)
-                          setManualFile(null)
+                          setManualFiles([])
+                          setExtraCreateFiles([])
                           setAllocRows([])
                         }}
                       >
@@ -920,7 +1015,7 @@ export default function DistributionDecisionsManager() {
                   <TableHead>Partner</TableHead>
                   <TableHead>Restriction</TableHead>
                   <TableHead className="min-w-[200px]">Notes</TableHead>
-                  <TableHead className="min-w-[140px]">Document</TableHead>
+                  <TableHead className="min-w-[140px]">Decision Documents</TableHead>
                   <TableHead className="w-[60px] text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -941,7 +1036,9 @@ export default function DistributionDecisionsManager() {
                         ? decision.decision_amount - allocated
                         : null
                     const isOpen = expandedDecisionId === decision.id
-                    const hasDoc = Boolean(decision.file_link)
+                    const docs = decisionDocuments(decision)
+                    const hasDoc = docs.length > 0
+                    const primaryDoc = docs[0]
                     return (
                       <React.Fragment key={decision.id}>
                         <TableRow>
@@ -967,24 +1064,30 @@ export default function DistributionDecisionsManager() {
                             <NotesCallout notes={decision.notes} />
                           </TableCell>
                           <TableCell>
-                            {hasDoc ? (
+                            {hasDoc && primaryDoc ? (
                               <Button
                                 variant="ghost"
                                 size="sm"
                                 className="h-7 px-2 max-w-[160px]"
-                                onClick={() => handleViewDecisionDocument(decision)}
-                                disabled={isOpeningDoc[decision.id]}
-                                title={decision.file_name || decision.file_link || 'View document'}
+                                onClick={() => handleViewDecisionDocument(decision.id, primaryDoc)}
+                                disabled={isOpeningDoc[`${decision.id}:${primaryDoc.id}`]}
+                                title={
+                                  docs.length > 1
+                                    ? `${docs.length} documents — open first`
+                                    : primaryDoc.file_name || primaryDoc.file_link
+                                }
                               >
-                                {isOpeningDoc[decision.id] ? (
+                                {isOpeningDoc[`${decision.id}:${primaryDoc.id}`] ? (
                                   <RefreshCw className="h-3.5 w-3.5 mr-1 animate-spin" />
-                                ) : isExternalDecisionDocLink(decision.file_link || '') ? (
+                                ) : isExternalDecisionDocLink(primaryDoc.file_link) ? (
                                   <ExternalLink className="h-3.5 w-3.5 mr-1 shrink-0" />
                                 ) : (
                                   <Eye className="h-3.5 w-3.5 mr-1 shrink-0" />
                                 )}
                                 <span className="truncate text-xs">
-                                  {decision.file_name || 'View'}
+                                  {docs.length > 1
+                                    ? `${docs.length} files`
+                                    : primaryDoc.file_name || 'View'}
                                 </span>
                               </Button>
                             ) : (
@@ -1008,69 +1111,92 @@ export default function DistributionDecisionsManager() {
                           <TableRow>
                             <TableCell colSpan={11} className="bg-muted/40 py-2 px-2">
                               <div className="space-y-4">
-                                <div className="flex flex-wrap items-center gap-2 text-xs">
-                                  <span className="font-medium text-muted-foreground shrink-0">Document:</span>
-                                  {hasDoc ? (
-                                    <>
-                                      <FileText className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                                      <span className="truncate max-w-[200px]" title={decision.file_name || undefined}>
-                                        {decision.file_name || 'Attached'}
-                                      </span>
-                                      {isExternalDecisionDocLink(decision.file_link || '') && (
-                                        <Badge variant="outline" className="text-[10px] px-1 py-0 h-5">
-                                          External
-                                        </Badge>
-                                      )}
-                                      <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        className="h-6 px-1.5"
-                                        onClick={() => handleViewDecisionDocument(decision)}
-                                        disabled={isOpeningDoc[decision.id]}
+                                <div className="space-y-1.5">
+                                  <div className="flex flex-wrap items-center gap-2 text-xs">
+                                    <span className="font-medium text-muted-foreground shrink-0">
+                                      Documents{docs.length ? ` (${docs.length})` : ''}:
+                                    </span>
+                                    {!hasDoc && (
+                                      <span className="text-muted-foreground">None</span>
+                                    )}
+                                    {canEditAllocations && (
+                                      <>
+                                        <input
+                                          id={`decision-doc-${decision.id}`}
+                                          type="file"
+                                          accept=".csv,.xlsx,.xls,.pdf"
+                                          multiple
+                                          className="sr-only"
+                                          disabled={isUploadingDoc[decision.id]}
+                                          onChange={(e) => {
+                                            handleAddDecisionDocuments(decision, e.target.files)
+                                            e.target.value = ''
+                                          }}
+                                        />
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          className="h-6 px-2 text-xs"
+                                          disabled={isUploadingDoc[decision.id]}
+                                          onClick={() =>
+                                            document.getElementById(`decision-doc-${decision.id}`)?.click()
+                                          }
+                                        >
+                                          {isUploadingDoc[decision.id] ? (
+                                            <RefreshCw className="h-3 w-3 mr-1 animate-spin" />
+                                          ) : (
+                                            <Upload className="h-3 w-3 mr-1" />
+                                          )}
+                                          Add
+                                        </Button>
+                                      </>
+                                    )}
+                                  </div>
+                                  {docs.map((doc) => {
+                                    const openKey = `${decision.id}:${doc.id}`
+                                    return (
+                                      <div
+                                        key={doc.id}
+                                        className="flex flex-wrap items-center gap-1.5 text-xs pl-1"
                                       >
-                                        {isOpeningDoc[decision.id] ? (
-                                          <RefreshCw className="h-3 w-3 animate-spin" />
-                                        ) : (
-                                          <Eye className="h-3 w-3" />
+                                        <FileText className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                                        <span className="truncate max-w-[220px]" title={doc.file_name}>
+                                          {doc.file_name || 'Attached'}
+                                        </span>
+                                        {isExternalDecisionDocLink(doc.file_link) && (
+                                          <Badge variant="outline" className="text-[10px] px-1 py-0 h-5">
+                                            External
+                                          </Badge>
                                         )}
-                                        <span className="ml-1">View</span>
-                                      </Button>
-                                    </>
-                                  ) : (
-                                    <span className="text-muted-foreground">None</span>
-                                  )}
-                                  {canEditAllocations && (
-                                    <>
-                                      <input
-                                        id={`decision-doc-${decision.id}`}
-                                        type="file"
-                                        accept=".csv,.xlsx,.xls,.pdf"
-                                        className="sr-only"
-                                        disabled={isUploadingDoc[decision.id]}
-                                        onChange={(e) => {
-                                          const file = e.target.files?.[0] || null
-                                          handleReplaceDecisionDocument(decision, file)
-                                          e.target.value = ''
-                                        }}
-                                      />
-                                      <Button
-                                        variant="outline"
-                                        size="sm"
-                                        className="h-6 px-2 text-xs"
-                                        disabled={isUploadingDoc[decision.id]}
-                                        onClick={() =>
-                                          document.getElementById(`decision-doc-${decision.id}`)?.click()
-                                        }
-                                      >
-                                        {isUploadingDoc[decision.id] ? (
-                                          <RefreshCw className="h-3 w-3 mr-1 animate-spin" />
-                                        ) : (
-                                          <Upload className="h-3 w-3 mr-1" />
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          className="h-6 px-1.5"
+                                          onClick={() => handleViewDecisionDocument(decision.id, doc)}
+                                          disabled={isOpeningDoc[openKey]}
+                                        >
+                                          {isOpeningDoc[openKey] ? (
+                                            <RefreshCw className="h-3 w-3 animate-spin" />
+                                          ) : (
+                                            <Eye className="h-3 w-3" />
+                                          )}
+                                          <span className="ml-1">View</span>
+                                        </Button>
+                                        {canEditAllocations && (
+                                          <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            className="h-6 px-1.5 text-destructive hover:text-destructive"
+                                            disabled={isUploadingDoc[decision.id]}
+                                            onClick={() => handleRemoveDecisionDocument(decision, doc.id)}
+                                          >
+                                            <X className="h-3 w-3" />
+                                            <span className="ml-1">Remove</span>
+                                          </Button>
                                         )}
-                                        {hasDoc ? 'Replace' : 'Upload'}
-                                      </Button>
-                                    </>
-                                  )}
+                                      </div>
+                                    )
+                                  })}
                                 </div>
                                 <div className="flex items-center justify-between">
                                   <div className="font-semibold">State Allocations</div>

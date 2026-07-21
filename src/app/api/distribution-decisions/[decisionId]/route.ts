@@ -7,6 +7,12 @@ import {
   syncDecisionToAirtable,
 } from '@/lib/grantManagement/pushToAirtable'
 import { SYNC_STATUS } from '@/lib/grantManagement/syncStatus'
+import {
+  buildDecisionDocument,
+  normalizeDecisionDocuments,
+  primaryFileFields,
+  type DecisionDocument,
+} from '@/lib/grantManagement/decisionDocument'
 
 function mapDecisionRow(row: {
   id: string
@@ -21,7 +27,10 @@ function mapDecisionRow(row: {
   notes: string | null
   file_name: string | null
   file_link: string | null
+  decision_documents?: unknown
 }) {
+  const documents = normalizeDecisionDocuments(row)
+  const primary = primaryFileFields(documents)
   return {
     id: row.id,
     decision_id: row.decision_id ?? null,
@@ -34,17 +43,66 @@ function mapDecisionRow(row: {
     decision_date: row.decision_date ?? null,
     partner: row.partner ?? null,
     notes: row.notes ?? null,
-    file_name: row.file_name ?? null,
-    file_link: row.file_link ?? null,
+    file_name: primary.file_name ?? row.file_name ?? null,
+    file_link: primary.file_link ?? row.file_link ?? null,
+    documents,
   }
 }
 
 const DECISION_SELECT =
-  'id, decision_id_proposed, decision_id, grant_name, restriction, sum_allocation_amount, decision_amount, decision_date, partner, notes, file_name, file_link'
+  'id, decision_id_proposed, decision_id, grant_name, restriction, sum_allocation_amount, decision_amount, decision_date, partner, notes, file_name, file_link, decision_documents'
+
+function parseAddDocuments(body: any): DecisionDocument[] {
+  const items = Array.isArray(body.add_documents)
+    ? body.add_documents
+    : Array.isArray(body.documents)
+      ? body.documents
+      : null
+
+  if (!items) {
+    // Legacy single-file replace/add
+    if (typeof body.file_link === 'string' && body.file_link.trim()) {
+      return [
+        buildDecisionDocument({
+          file_name:
+            typeof body.file_name === 'string' && body.file_name.trim()
+              ? body.file_name.trim()
+              : 'Document',
+          file_link: body.file_link.trim(),
+          source: 'portal',
+        }),
+      ]
+    }
+    return []
+  }
+
+  const out: DecisionDocument[] = []
+  for (const item of items) {
+    if (!item || typeof item !== 'object') continue
+    const file_link = typeof item.file_link === 'string' ? item.file_link.trim() : ''
+    if (!file_link) continue
+    out.push(
+      buildDecisionDocument({
+        file_name:
+          typeof item.file_name === 'string' && item.file_name.trim()
+            ? item.file_name.trim()
+            : 'Document',
+        file_link,
+        source: 'portal',
+      })
+    )
+  }
+  return out
+}
 
 /**
  * PATCH /api/distribution-decisions/[decisionId]
- * Update decision document fields (and optionally other editable metadata).
+ * Add/remove decision documents (multi-file). Keeps file_name/file_link as primary for Airtable.
+ *
+ * Body:
+ * - add_documents: [{ file_name, file_link }]
+ * - remove_document_ids: string[]
+ * - legacy: file_name + file_link (appends one document)
  */
 export async function PATCH(
   request: Request,
@@ -61,30 +119,56 @@ export async function PATCH(
       return NextResponse.json({ error: 'Distribution decision not found' }, { status: 404 })
     }
 
+    const { data: current, error: currentError } = await auth.ctx.supabase
+      .from('distribution_decision_master_sheet_1')
+      .select(DECISION_SELECT)
+      .eq('id', decision.id)
+      .single()
+
+    if (currentError || !current) {
+      return NextResponse.json({ error: 'Distribution decision not found' }, { status: 404 })
+    }
+
     const body = await request.json()
-    const updates: Record<string, string | null> = {}
+    let documents = normalizeDecisionDocuments(current)
 
-    if ('file_name' in body) {
-      updates.file_name =
-        typeof body.file_name === 'string' ? body.file_name.trim() || null : null
-    }
-    if ('file_link' in body) {
-      updates.file_link =
-        typeof body.file_link === 'string' ? body.file_link.trim() || null : null
+    const removeIds = Array.isArray(body.remove_document_ids)
+      ? body.remove_document_ids
+          .filter((id: unknown): id is string => typeof id === 'string' && Boolean(id.trim()))
+          .map((id: string) => id.trim())
+      : typeof body.remove_document_id === 'string' && body.remove_document_id.trim()
+        ? [body.remove_document_id.trim()]
+        : []
+
+    if (removeIds.length > 0) {
+      const removeSet = new Set(removeIds)
+      documents = documents.filter((d) => !removeSet.has(d.id))
     }
 
-    if (Object.keys(updates).length === 0) {
+    const toAdd = parseAddDocuments(body)
+    if (toAdd.length > 0) {
+      documents = [...documents, ...toAdd]
+    }
+
+    if (removeIds.length === 0 && toAdd.length === 0) {
       return NextResponse.json(
-        { error: 'No supported fields to update (file_name, file_link)' },
+        {
+          error:
+            'No document changes provided (add_documents / remove_document_ids / file_name+file_link)',
+        },
         { status: 400 }
       )
     }
 
-    updates.sync_status = SYNC_STATUS.PENDING
-
+    const primary = primaryFileFields(documents)
     const { data, error } = await auth.ctx.supabase
       .from('distribution_decision_master_sheet_1')
-      .update(updates)
+      .update({
+        decision_documents: documents,
+        file_name: primary.file_name,
+        file_link: primary.file_link,
+        sync_status: SYNC_STATUS.PENDING,
+      })
       .eq('id', decision.id)
       .select(DECISION_SELECT)
       .single()

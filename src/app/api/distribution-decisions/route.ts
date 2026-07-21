@@ -3,6 +3,87 @@ import { getSupabaseAdmin } from '@/lib/supabaseAdmin'
 import { requireGrantEditor } from '@/lib/grantManagement/requireGrantEditor'
 import { airtableMeta, syncDecisionToAirtable } from '@/lib/grantManagement/pushToAirtable'
 import { SYNC_STATUS } from '@/lib/grantManagement/syncStatus'
+import {
+  buildDecisionDocument,
+  normalizeDecisionDocuments,
+  primaryFileFields,
+  type DecisionDocument,
+} from '@/lib/grantManagement/decisionDocument'
+
+function parseIncomingDocuments(body: any): DecisionDocument[] {
+  const docs: DecisionDocument[] = []
+
+  if (Array.isArray(body.documents)) {
+    for (const item of body.documents) {
+      if (!item || typeof item !== 'object') continue
+      const file_link = typeof item.file_link === 'string' ? item.file_link.trim() : ''
+      const file_name = typeof item.file_name === 'string' ? item.file_name.trim() : ''
+      if (!file_link) continue
+      docs.push(
+        buildDecisionDocument({
+          file_name: file_name || 'Document',
+          file_link,
+          source: 'portal',
+        })
+      )
+    }
+  }
+
+  // Legacy single-file create payload
+  if (docs.length === 0) {
+    const file_link = typeof body.file_link === 'string' ? body.file_link.trim() : ''
+    const file_name = typeof body.file_name === 'string' ? body.file_name.trim() : ''
+    if (file_link) {
+      docs.push(
+        buildDecisionDocument({
+          file_name: file_name || 'Document',
+          file_link,
+          source: 'portal',
+        })
+      )
+    }
+  }
+
+  return docs
+}
+
+function mapDecisionRow(row: {
+  id: string
+  decision_id: string | null
+  decision_id_proposed: string | null
+  grant_name: string | null
+  restriction: string | null
+  sum_allocation_amount: number | null
+  decision_amount: number | null
+  decision_date: string | null
+  partner: string | null
+  notes?: string | null
+  file_name: string | null
+  file_link: string | null
+  decision_documents?: unknown
+}) {
+  const documents = normalizeDecisionDocuments(row)
+  const primary = primaryFileFields(documents)
+  return {
+    id: row.id,
+    decision_id: row.decision_id ?? null,
+    decision_id_proposed: row.decision_id_proposed ?? null,
+    grant_name: row.grant_name ?? null,
+    restriction: row.restriction ?? null,
+    sum_allocation_amount:
+      row.sum_allocation_amount != null ? Number(row.sum_allocation_amount) : null,
+    decision_amount: row.decision_amount != null ? Number(row.decision_amount) : null,
+    decision_date: row.decision_date ?? null,
+    partner: row.partner ?? null,
+    notes: row.notes ?? null,
+    file_name: primary.file_name ?? row.file_name ?? null,
+    file_link: primary.file_link ?? row.file_link ?? null,
+    documents,
+  }
+}
+
+const DECISION_LIST_SELECT =
+  'id, decision_id_proposed, decision_id, grant_name, restriction, sum_allocation_amount, decision_amount, decision_date, partner, notes, file_name, file_link, decision_documents'
 
 /**
  * GET /api/distribution-decisions - List distribution decisions from canonical master sheet.
@@ -12,30 +93,12 @@ export async function GET() {
     const supabase = getSupabaseAdmin()
     const { data, error } = await supabase
       .from('distribution_decision_master_sheet_1')
-      .select(
-        'id, decision_id_proposed, decision_id, grant_name, restriction, sum_allocation_amount, decision_amount, decision_date, partner, notes, file_name, file_link'
-      )
+      .select(DECISION_LIST_SELECT)
       .order('decision_date', { ascending: false })
 
     if (error) throw error
 
-    const list = (data || []).map((row) => ({
-      id: row.id,
-      decision_id: row.decision_id ?? null,
-      decision_id_proposed: row.decision_id_proposed ?? null,
-      grant_name: row.grant_name ?? null,
-      restriction: row.restriction ?? null,
-      sum_allocation_amount:
-        row.sum_allocation_amount != null ? Number(row.sum_allocation_amount) : null,
-      decision_amount: row.decision_amount != null ? Number(row.decision_amount) : null,
-      decision_date: row.decision_date ?? null,
-      partner: row.partner ?? null,
-      notes: row.notes ?? null,
-      file_name: row.file_name ?? null,
-      file_link: row.file_link ?? null,
-    }))
-
-    return NextResponse.json(list)
+    return NextResponse.json((data || []).map(mapDecisionRow))
   } catch (error) {
     console.error('Error fetching distribution decisions:', error)
     return NextResponse.json({ error: 'Failed to fetch distribution decisions' }, { status: 500 })
@@ -69,6 +132,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'decision_amount must be a positive number' }, { status: 400 })
     }
 
+    const documents = parseIncomingDocuments(body)
+    const primary = primaryFileFields(documents)
+
     const row = {
       decision_id_proposed,
       decision_id,
@@ -78,8 +144,9 @@ export async function POST(request: Request) {
       restriction: typeof body.restriction === 'string' ? body.restriction.trim() || null : null,
       notes: typeof body.notes === 'string' ? body.notes.trim() || null : null,
       grant_name: typeof body.grant_name === 'string' ? body.grant_name.trim() || null : null,
-      file_name: typeof body.file_name === 'string' ? body.file_name.trim() || null : null,
-      file_link: typeof body.file_link === 'string' ? body.file_link.trim() || null : null,
+      file_name: primary.file_name,
+      file_link: primary.file_link,
+      decision_documents: documents,
       sum_allocation_amount: 0,
       sync_status: SYNC_STATUS.PENDING,
     }
@@ -87,9 +154,7 @@ export async function POST(request: Request) {
     const { data, error } = await auth.ctx.supabase
       .from('distribution_decision_master_sheet_1')
       .insert(row)
-      .select(
-        'id, decision_id_proposed, decision_id, grant_name, restriction, sum_allocation_amount, decision_amount, decision_date, partner, file_name, file_link'
-      )
+      .select(DECISION_LIST_SELECT)
       .single()
 
     if (error) {
@@ -103,18 +168,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json(
       {
-        id: data.id,
-        decision_id: data.decision_id ?? null,
-        decision_id_proposed: data.decision_id_proposed ?? null,
-        grant_name: data.grant_name ?? null,
-        restriction: data.restriction ?? null,
-        sum_allocation_amount:
-          data.sum_allocation_amount != null ? Number(data.sum_allocation_amount) : null,
-        decision_amount: data.decision_amount != null ? Number(data.decision_amount) : null,
-        decision_date: data.decision_date ?? null,
-        partner: data.partner ?? null,
-        file_name: data.file_name ?? null,
-        file_link: data.file_link ?? null,
+        ...mapDecisionRow(data),
         ...airtableMeta(push),
       },
       { status: 201 }

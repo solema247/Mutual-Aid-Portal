@@ -926,6 +926,7 @@ export type Database = {
           decision_date: string | null
           decision_id: string | null
           decision_id_proposed: string | null
+          decision_documents: Json
           file_link: string | null
           file_name: string | null
           fund_request: string | null
@@ -948,6 +949,7 @@ export type Database = {
           decision_date?: string | null
           decision_id?: string | null
           decision_id_proposed?: string | null
+          decision_documents?: Json
           file_link?: string | null
           file_name?: string | null
           fund_request?: string | null
@@ -970,6 +972,7 @@ export type Database = {
           decision_date?: string | null
           decision_id?: string | null
           decision_id_proposed?: string | null
+          decision_documents?: Json
           file_link?: string | null
           file_name?: string | null
           fund_request?: string | null
