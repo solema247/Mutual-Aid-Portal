@@ -9,6 +9,11 @@ import {
   primaryFileFields,
   type DecisionDocument,
 } from '@/lib/grantManagement/decisionDocument'
+import {
+  AD_DECISION_SERIAL_FLOOR,
+  buildAdDecisionId,
+  extractAdHyphenSerial,
+} from '@/lib/grantManagement/adDecisionIds'
 
 function parseIncomingDocuments(body: any): DecisionDocument[] {
   const docs: DecisionDocument[] = []
@@ -57,6 +62,8 @@ function mapDecisionRow(row: {
   decision_amount: number | null
   decision_date: string | null
   partner: string | null
+  decision_maker?: string | null
+  flow_oversight?: string | null
   notes?: string | null
   file_name: string | null
   file_link: string | null
@@ -75,6 +82,8 @@ function mapDecisionRow(row: {
     decision_amount: row.decision_amount != null ? Number(row.decision_amount) : null,
     decision_date: row.decision_date ?? null,
     partner: row.partner ?? null,
+    decision_maker: row.decision_maker ?? null,
+    flow_oversight: row.flow_oversight ?? null,
     notes: row.notes ?? null,
     file_name: primary.file_name ?? row.file_name ?? null,
     file_link: primary.file_link ?? row.file_link ?? null,
@@ -83,7 +92,7 @@ function mapDecisionRow(row: {
 }
 
 const DECISION_LIST_SELECT =
-  'id, decision_id_proposed, decision_id, grant_name, restriction, sum_allocation_amount, decision_amount, decision_date, partner, notes, file_name, file_link, decision_documents'
+  'id, decision_id_proposed, decision_id, grant_name, restriction, sum_allocation_amount, decision_amount, decision_date, partner, decision_maker, flow_oversight, notes, file_name, file_link, decision_documents'
 
 /**
  * GET /api/distribution-decisions - List distribution decisions from canonical master sheet.
@@ -115,15 +124,17 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json()
-    const decision_id_proposed =
-      typeof body.decision_id_proposed === 'string' ? body.decision_id_proposed.trim() : ''
-    const decision_id =
-      typeof body.decision_id === 'string' && body.decision_id.trim()
-        ? body.decision_id.trim()
-        : decision_id_proposed
+    const partner = typeof body.partner === 'string' ? body.partner.trim() || null : null
+    const decision_date = typeof body.decision_date === 'string' ? body.decision_date || null : null
 
-    if (!decision_id_proposed) {
-      return NextResponse.json({ error: 'decision_id_proposed is required' }, { status: 400 })
+    if (!partner) {
+      return NextResponse.json({ error: 'partner is required to generate Decision ID' }, { status: 400 })
+    }
+    if (!decision_date) {
+      return NextResponse.json(
+        { error: 'decision_date is required to generate Decision ID' },
+        { status: 400 }
+      )
     }
 
     const decision_amount =
@@ -132,6 +143,23 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'decision_amount must be a positive number' }, { status: 400 })
     }
 
+    // Auto Decision ID: LCC.AD.{Partner}.{YY-MM-DD}-{last+1}
+    const { data: existingDecisions, error: serialError } = await auth.ctx.supabase
+      .from('distribution_decision_master_sheet_1')
+      .select('decision_id_proposed, decision_id')
+    if (serialError) throw serialError
+
+    let maxSerial = AD_DECISION_SERIAL_FLOOR
+    for (const row of existingDecisions || []) {
+      for (const id of [row.decision_id_proposed, row.decision_id]) {
+        const n = extractAdHyphenSerial(id)
+        if (n != null && n > maxSerial) maxSerial = n
+      }
+    }
+    const nextSerial = maxSerial + 1
+    const decision_id_proposed = buildAdDecisionId(partner, decision_date, nextSerial)
+    const decision_id = decision_id_proposed
+
     const documents = parseIncomingDocuments(body)
     const primary = primaryFileFields(documents)
 
@@ -139,8 +167,12 @@ export async function POST(request: Request) {
       decision_id_proposed,
       decision_id,
       decision_amount,
-      decision_date: typeof body.decision_date === 'string' ? body.decision_date || null : null,
-      partner: typeof body.partner === 'string' ? body.partner.trim() || null : null,
+      decision_date,
+      partner,
+      decision_maker:
+        typeof body.decision_maker === 'string' ? body.decision_maker.trim() || null : null,
+      flow_oversight:
+        typeof body.flow_oversight === 'string' ? body.flow_oversight.trim() || null : null,
       restriction: typeof body.restriction === 'string' ? body.restriction.trim() || null : null,
       notes: typeof body.notes === 'string' ? body.notes.trim() || null : null,
       grant_name: typeof body.grant_name === 'string' ? body.grant_name.trim() || null : null,
@@ -175,6 +207,7 @@ export async function POST(request: Request) {
     )
   } catch (error) {
     console.error('Error creating distribution decision:', error)
-    return NextResponse.json({ error: 'Failed to create distribution decision' }, { status: 500 })
+    const message = error instanceof Error ? error.message : 'Failed to create distribution decision'
+    return NextResponse.json({ error: message }, { status: 500 })
   }
 }

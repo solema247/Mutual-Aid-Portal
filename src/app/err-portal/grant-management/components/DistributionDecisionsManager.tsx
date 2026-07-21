@@ -147,13 +147,14 @@ function NotesCallout({ notes }: { notes: string | null | undefined }) {
 }
 
 const decisionSchema = z.object({
-  // User enters proposed; we’ll mirror to decision_id on submit
-  decision_id_proposed: z.string().min(1, 'Decision ID (proposed) is required'),
+  // Auto-generated from partner + date + serial; shown read-only in the form
+  decision_id_proposed: z.string().optional(),
   decision_id: z.string().optional(),
   decision_amount: z.coerce.number().positive('Amount must be > 0'),
-  decision_date: z.string().optional(),
-  partner: z.string().optional(),
+  decision_date: z.string().min(1, 'Decision date is required'),
+  partner: z.string().min(1, 'Partner is required'),
   decision_maker: z.string().optional(),
+  flow_oversight: z.string().optional(),
   restriction: z.string().optional(),
   notes: z.string().optional(),
 })
@@ -189,6 +190,21 @@ export default function DistributionDecisionsManager() {
   const [dateSortOrder, setDateSortOrder] = useState<'desc' | 'asc'>('desc')
   const [isUploadingDoc, setIsUploadingDoc] = useState<Record<string, boolean>>({})
   const [isOpeningDoc, setIsOpeningDoc] = useState<Record<string, boolean>>({})
+  const [opsPartnerOptions, setOpsPartnerOptions] = useState<string[]>([])
+  const [decisionMakerOptions, setDecisionMakerOptions] = useState<string[]>([])
+  const [flowOversightOptions, setFlowOversightOptions] = useState<string[]>([])
+  const [restrictionOptions, setRestrictionOptions] = useState<string[]>([])
+  const [addingPartner, setAddingPartner] = useState(false)
+  const [newPartnerName, setNewPartnerName] = useState('')
+  const [addingDecisionMaker, setAddingDecisionMaker] = useState(false)
+  const [newDecisionMakerName, setNewDecisionMakerName] = useState('')
+  const [addingFlowOversight, setAddingFlowOversight] = useState(false)
+  const [newFlowOversightName, setNewFlowOversightName] = useState('')
+  const [addingRestriction, setAddingRestriction] = useState(false)
+  const [newRestrictionName, setNewRestrictionName] = useState('')
+  const [isSavingLookup, setIsSavingLookup] = useState(false)
+  const [previewDecisionId, setPreviewDecisionId] = useState<string | null>(null)
+  const [isPreviewingId, setIsPreviewingId] = useState(false)
 
   const canEditAllocations =
     currentUser?.role === 'support' ||
@@ -209,6 +225,7 @@ export default function DistributionDecisionsManager() {
       decision_date: '',
       partner: '',
       decision_maker: '',
+      flow_oversight: '',
       restriction: '',
       notes: '',
     },
@@ -259,12 +276,229 @@ export default function DistributionDecisionsManager() {
         console.error('Failed to load states', e)
       }
     }
+    const loadOpsPartners = async () => {
+      try {
+        const res = await fetch('/api/ops-partners')
+        if (!res.ok) throw new Error('Failed to load ops partners')
+        const data = await res.json()
+        const names = (data || [])
+          .map((p: { name?: string }) => p.name)
+          .filter((n: unknown): n is string => typeof n === 'string' && Boolean(n.trim()))
+        setOpsPartnerOptions(names)
+      } catch (e) {
+        console.error('Failed to load ops partners', e)
+      }
+    }
+    const loadDecisionMakers = async () => {
+      try {
+        const res = await fetch('/api/distribution-decision-makers')
+        if (!res.ok) throw new Error('Failed to load decision makers')
+        const data = await res.json()
+        const names = (data || [])
+          .map((p: { name?: string }) => p.name)
+          .filter((n: unknown): n is string => typeof n === 'string' && Boolean(n.trim()))
+        setDecisionMakerOptions(names)
+      } catch (e) {
+        console.error('Failed to load decision makers', e)
+      }
+    }
+    const loadFlowOversightOptions = async () => {
+      try {
+        const res = await fetch('/api/flow-oversight-options')
+        if (!res.ok) throw new Error('Failed to load flow oversight options')
+        const data = await res.json()
+        const names = (data || [])
+          .map((p: { name?: string }) => p.name)
+          .filter((n: unknown): n is string => typeof n === 'string' && Boolean(n.trim()))
+        setFlowOversightOptions(names)
+      } catch (e) {
+        console.error('Failed to load flow oversight options', e)
+      }
+    }
+    const loadRestrictionOptions = async () => {
+      try {
+        const res = await fetch('/api/distribution-restriction-options')
+        if (!res.ok) throw new Error('Failed to load restriction options')
+        const data = await res.json()
+        const names = (data || [])
+          .map((p: { name?: string }) => p.name)
+          .filter((n: unknown): n is string => typeof n === 'string' && Boolean(n.trim()))
+        setRestrictionOptions(names)
+      } catch (e) {
+        console.error('Failed to load restriction options', e)
+      }
+    }
     loadStates()
+    loadOpsPartners()
+    loadDecisionMakers()
+    loadFlowOversightOptions()
+    loadRestrictionOptions()
   }, [])
+
+  const handleAddOpsPartner = async () => {
+    const name = newPartnerName.trim()
+    if (!name) return
+    try {
+      setIsSavingLookup(true)
+      const res = await fetch('/api/ops-partners', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error || 'Failed to add partner')
+      }
+      const created = await res.json()
+      const createdName = created.name || name
+      setOpsPartnerOptions((prev) =>
+        prev.includes(createdName) ? prev : [...prev, createdName].sort((a, b) => a.localeCompare(b))
+      )
+      decisionForm.setValue('partner', createdName)
+      setNewPartnerName('')
+      setAddingPartner(false)
+    } catch (error: any) {
+      alert(error.message || 'Failed to add partner')
+    } finally {
+      setIsSavingLookup(false)
+    }
+  }
+
+  const handleAddDecisionMaker = async () => {
+    const name = newDecisionMakerName.trim()
+    if (!name) return
+    try {
+      setIsSavingLookup(true)
+      const res = await fetch('/api/distribution-decision-makers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error || 'Failed to add decision maker')
+      }
+      const created = await res.json()
+      const createdName = created.name || name
+      setDecisionMakerOptions((prev) =>
+        prev.includes(createdName) ? prev : [...prev, createdName].sort((a, b) => a.localeCompare(b))
+      )
+      decisionForm.setValue('decision_maker', createdName)
+      setNewDecisionMakerName('')
+      setAddingDecisionMaker(false)
+    } catch (error: any) {
+      alert(error.message || 'Failed to add decision maker')
+    } finally {
+      setIsSavingLookup(false)
+    }
+  }
+
+  const handleAddFlowOversight = async () => {
+    const name = newFlowOversightName.trim()
+    if (!name) return
+    try {
+      setIsSavingLookup(true)
+      const res = await fetch('/api/flow-oversight-options', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error || 'Failed to add flow oversight option')
+      }
+      const created = await res.json()
+      const createdName = created.name || name
+      setFlowOversightOptions((prev) =>
+        prev.includes(createdName) ? prev : [...prev, createdName].sort((a, b) => a.localeCompare(b))
+      )
+      decisionForm.setValue('flow_oversight', createdName)
+      setNewFlowOversightName('')
+      setAddingFlowOversight(false)
+    } catch (error: any) {
+      alert(error.message || 'Failed to add flow oversight option')
+    } finally {
+      setIsSavingLookup(false)
+    }
+  }
+
+  const handleAddRestriction = async () => {
+    const name = newRestrictionName.trim()
+    if (!name) return
+    try {
+      setIsSavingLookup(true)
+      const res = await fetch('/api/distribution-restriction-options', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error || 'Failed to add restriction option')
+      }
+      const created = await res.json()
+      const createdName = created.name || name
+      setRestrictionOptions((prev) =>
+        prev.includes(createdName) ? prev : [...prev, createdName].sort((a, b) => a.localeCompare(b))
+      )
+      decisionForm.setValue('restriction', createdName)
+      setNewRestrictionName('')
+      setAddingRestriction(false)
+    } catch (error: any) {
+      alert(error.message || 'Failed to add restriction option')
+    } finally {
+      setIsSavingLookup(false)
+    }
+  }
+
+  const watchedPartner = decisionForm.watch('partner')
+  const watchedDate = decisionForm.watch('decision_date')
+
+  useEffect(() => {
+    let cancelled = false
+    const partner = watchedPartner?.trim()
+    const date = watchedDate?.trim()
+    if (!partner || !date) {
+      setPreviewDecisionId(null)
+      return
+    }
+
+    const t = setTimeout(async () => {
+      try {
+        setIsPreviewingId(true)
+        const params = new URLSearchParams({ partner, date })
+        const res = await fetch(`/api/distribution-decisions/next-id?${params}`)
+        if (!res.ok) {
+          if (!cancelled) setPreviewDecisionId(null)
+          return
+        }
+        const data = await res.json()
+        if (!cancelled) {
+          const id = typeof data.decision_id_proposed === 'string' ? data.decision_id_proposed : null
+          setPreviewDecisionId(id)
+          if (id) decisionForm.setValue('decision_id_proposed', id)
+        }
+      } catch {
+        if (!cancelled) setPreviewDecisionId(null)
+      } finally {
+        if (!cancelled) setIsPreviewingId(false)
+      }
+    }, 250)
+
+    return () => {
+      cancelled = true
+      clearTimeout(t)
+    }
+  }, [watchedPartner, watchedDate, decisionForm])
 
   const handleCreateDecision = async (values: z.infer<typeof decisionSchema>) => {
     try {
-      const decisionId = values.decision_id_proposed || values.decision_id || ''
+      if (!values.partner?.trim() || !values.decision_date?.trim()) {
+        alert('Partner and Decision Date are required to generate the Decision ID')
+        return
+      }
+
+      const decisionId = previewDecisionId || values.decision_id_proposed || ''
       const filesToUpload: File[] = useCsvUpload
         ? [...(csvFile ? [csvFile] : []), ...extraCreateFiles]
         : [...manualFiles]
@@ -272,14 +506,12 @@ export default function DistributionDecisionsManager() {
       const documents: Array<{ file_name: string; file_link: string }> = []
       for (let i = 0; i < filesToUpload.length; i++) {
         const file = filesToUpload[i]
-        const fileLink = await uploadFileToStorage(file, `${decisionId}-${i}`)
+        const fileLink = await uploadFileToStorage(file, `${decisionId || 'decision'}-${i}`)
         documents.push({ file_name: file.name, file_link: fileLink })
       }
 
-      // If user only enters proposed ID, use it for both fields
       const payload = {
         ...values,
-        decision_id: values.decision_id_proposed, // mirror proposed into decision_id
         documents,
       }
       const res = await fetch('/api/distribution-decisions', {
@@ -310,12 +542,10 @@ export default function DistributionDecisionsManager() {
             if (!allocRes.ok) {
               const allocErr = await allocRes.json()
               console.error('Failed to add allocations:', allocErr)
-              // Don't throw - decision was created successfully
             }
           }
         } catch (allocError) {
           console.error('Error adding allocations:', allocError)
-          // Don't throw - decision was created successfully
         }
       }
       
@@ -326,6 +556,7 @@ export default function DistributionDecisionsManager() {
       setManualFiles([])
       setExtraCreateFiles([])
       setAllocRows([])
+      setPreviewDecisionId(null)
       fetchDecisions()
     } catch (error: any) {
       console.error(error)
@@ -752,6 +983,14 @@ export default function DistributionDecisionsManager() {
                   setManualFiles([])
                   setExtraCreateFiles([])
                   setAllocRows([])
+                  setAddingPartner(false)
+                  setNewPartnerName('')
+                  setAddingDecisionMaker(false)
+                  setNewDecisionMakerName('')
+                  setAddingFlowOversight(false)
+                  setNewFlowOversightName('')
+                  setAddingRestriction(false)
+                  setNewRestrictionName('')
                 }
               }}>
                 <DialogTrigger asChild>
@@ -765,10 +1004,10 @@ export default function DistributionDecisionsManager() {
                   <DialogTitle>Create Distribution Decision</DialogTitle>
                 </DialogHeader>
                 <Form {...decisionForm}>
-                  <form className="space-y-4" onSubmit={decisionForm.handleSubmit(handleCreateDecision)}>
+                  <form className="space-y-2" onSubmit={decisionForm.handleSubmit(handleCreateDecision)}>
                     {/* Allocation Input Method - Moved to top */}
-                    <div className="space-y-4">
-                      <FormLabel>Allocation Input Method</FormLabel>
+                    <div className="space-y-1.5">
+                      <FormLabel className="text-sm">Allocation Input Method</FormLabel>
                       <Tabs 
                         value={useCsvUpload ? 'csv' : 'manual'} 
                         onValueChange={(value) => {
@@ -784,19 +1023,20 @@ export default function DistributionDecisionsManager() {
                         }}
                         className="w-full"
                       >
-                        <TabsList className="grid w-full grid-cols-2">
-                          <TabsTrigger value="manual">Manual Entry</TabsTrigger>
-                          <TabsTrigger value="csv">Upload CSV/Excel</TabsTrigger>
+                        <TabsList className="grid w-full grid-cols-2 h-8">
+                          <TabsTrigger value="manual" className="text-xs">Manual Entry</TabsTrigger>
+                          <TabsTrigger value="csv" className="text-xs">Upload CSV/Excel</TabsTrigger>
                         </TabsList>
                         
-                        <TabsContent value="csv" className="mt-4">
-                          <div className="space-y-3 p-4 border rounded-md">
-                            <div className="space-y-2">
-                              <FormLabel>Upload CSV/Excel File</FormLabel>
+                        <TabsContent value="csv" className="mt-2">
+                          <div className="space-y-2 p-2.5 border rounded-md">
+                            <div className="space-y-1">
+                              <FormLabel className="text-sm">Upload CSV/Excel File</FormLabel>
                               <div className="flex items-center gap-2">
                                 <Input
                                   type="file"
                                   accept=".csv,.xlsx,.xls"
+                                  className="h-8 text-xs"
                                   onChange={(e) => {
                                     const file = e.target.files?.[0] || null
                                     handleCsvFileSelect(file)
@@ -808,22 +1048,22 @@ export default function DistributionDecisionsManager() {
                                 )}
                               </div>
                               {csvFile && (
-                                <div className="text-sm text-muted-foreground flex items-center gap-2">
-                                  <FileSpreadsheet className="h-4 w-4" />
+                                <div className="text-xs text-muted-foreground flex items-center gap-2">
+                                  <FileSpreadsheet className="h-3.5 w-3.5" />
                                   {csvFile.name}
                                 </div>
                               )}
-                              <p className="text-xs text-muted-foreground">
-                                File structure: B2 = Total Amount, C3:P3 = State Names, C36:P36 = Amounts.
-                                The uploaded file is also stored as a decision document.
+                              <p className="text-[11px] text-muted-foreground">
+                                B2 = Total Amount, C3:P3 = States, C36:P36 = Amounts. File is also stored as a document.
                               </p>
                             </div>
-                            <div className="space-y-2">
-                              <FormLabel>Additional decision documents (optional)</FormLabel>
+                            <div className="space-y-1">
+                              <FormLabel className="text-sm">Additional documents (optional)</FormLabel>
                               <Input
                                 type="file"
                                 accept=".csv,.xlsx,.xls,.pdf"
                                 multiple
+                                className="h-8 text-xs"
                                 onChange={(e) => {
                                   setExtraCreateFiles(Array.from(e.target.files || []))
                                 }}
@@ -842,58 +1082,42 @@ export default function DistributionDecisionsManager() {
                           </div>
                         </TabsContent>
                         
-                        <TabsContent value="manual" className="mt-4">
-                          <div className="space-y-2">
-                            <FormLabel>Decision documents (optional)</FormLabel>
+                        <TabsContent value="manual" className="mt-2">
+                          <div className="space-y-1">
+                            <FormLabel className="text-sm">Decision documents (optional)</FormLabel>
                             <Input
                               type="file"
                               accept=".csv,.xlsx,.xls,.pdf"
                               multiple
+                              className="h-8 text-xs"
                               onChange={(e) => {
                                 setManualFiles(Array.from(e.target.files || []))
                               }}
                             />
                             {manualFiles.length > 0 && (
-                              <ul className="text-sm text-muted-foreground space-y-0.5">
+                              <ul className="text-xs text-muted-foreground space-y-0.5">
                                 {manualFiles.map((f) => (
-                                  <li key={f.name} className="flex items-center gap-2">
-                                    <Upload className="h-4 w-4" />
+                                  <li key={f.name} className="flex items-center gap-1.5">
+                                    <Upload className="h-3.5 w-3.5" />
                                     {f.name}
                                   </li>
                                 ))}
                               </ul>
                             )}
-                            <p className="text-xs text-muted-foreground">
-                              You can select multiple files. They are stored with this decision and can be viewed or changed later.
-                            </p>
                           </div>
                         </TabsContent>
                       </Tabs>
                     </div>
 
-                    <FormField
-                      control={decisionForm.control}
-                      name="decision_id_proposed"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Decision ID (proposed)</FormLabel>
-                          <FormControl>
-                            <Input {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    {/* Only keep proposed Decision ID as the user input field */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-3 gap-y-1.5">
                       <FormField
                         control={decisionForm.control}
                         name="decision_amount"
                         render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Decision Amount *</FormLabel>
+                          <FormItem className="gap-0.5">
+                            <FormLabel className="text-xs">Decision Amount *</FormLabel>
                             <FormControl>
-                              <Input type="number" {...field} />
+                              <Input type="number" className="h-8" {...field} />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -903,26 +1127,95 @@ export default function DistributionDecisionsManager() {
                         control={decisionForm.control}
                         name="decision_date"
                         render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Decision Date</FormLabel>
+                          <FormItem className="gap-0.5">
+                            <FormLabel className="text-xs">Decision Date *</FormLabel>
                             <FormControl>
-                              <Input type="date" {...field} />
+                              <Input type="date" className="h-8" {...field} />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
                         )}
                       />
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-3 gap-y-1.5">
                       <FormField
                         control={decisionForm.control}
                         name="partner"
                         render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Partner</FormLabel>
-                            <FormControl>
-                              <Input {...field} />
-                            </FormControl>
+                          <FormItem className="gap-0.5">
+                            <FormLabel className="text-xs">Partner *</FormLabel>
+                            {addingPartner ? (
+                              <div className="flex items-center gap-1">
+                                <Input
+                                  value={newPartnerName}
+                                  onChange={(e) => setNewPartnerName(e.target.value)}
+                                  placeholder="New partner name"
+                                  className="h-8"
+                                  autoFocus
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      e.preventDefault()
+                                      handleAddOpsPartner()
+                                    }
+                                    if (e.key === 'Escape') {
+                                      setAddingPartner(false)
+                                      setNewPartnerName('')
+                                    }
+                                  }}
+                                />
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  className="h-8"
+                                  disabled={isSavingLookup || !newPartnerName.trim()}
+                                  onClick={handleAddOpsPartner}
+                                >
+                                  Save
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8"
+                                  onClick={() => {
+                                    setAddingPartner(false)
+                                    setNewPartnerName('')
+                                  }}
+                                >
+                                  <X className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-1">
+                                <Select
+                                  value={field.value || undefined}
+                                  onValueChange={field.onChange}
+                                >
+                                  <FormControl>
+                                    <SelectTrigger size="sm" className="h-8 w-full">
+                                      <SelectValue placeholder="Select partner" />
+                                    </SelectTrigger>
+                                  </FormControl>
+                                  <SelectContent>
+                                    {opsPartnerOptions.map((name) => (
+                                      <SelectItem key={name} value={name}>
+                                        {name}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="icon"
+                                  className="h-8 w-8 shrink-0"
+                                  title="Add partner"
+                                  onClick={() => setAddingPartner(true)}
+                                >
+                                  <Plus className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            )}
                             <FormMessage />
                           </FormItem>
                         )}
@@ -931,47 +1224,287 @@ export default function DistributionDecisionsManager() {
                         control={decisionForm.control}
                         name="decision_maker"
                         render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Decision Maker</FormLabel>
-                            <FormControl>
-                              <Input {...field} />
-                            </FormControl>
+                          <FormItem className="gap-0.5">
+                            <FormLabel className="text-xs">Decision Maker</FormLabel>
+                            {addingDecisionMaker ? (
+                              <div className="flex items-center gap-1">
+                                <Input
+                                  value={newDecisionMakerName}
+                                  onChange={(e) => setNewDecisionMakerName(e.target.value)}
+                                  placeholder="New decision maker"
+                                  className="h-8"
+                                  autoFocus
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      e.preventDefault()
+                                      handleAddDecisionMaker()
+                                    }
+                                    if (e.key === 'Escape') {
+                                      setAddingDecisionMaker(false)
+                                      setNewDecisionMakerName('')
+                                    }
+                                  }}
+                                />
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  className="h-8"
+                                  disabled={isSavingLookup || !newDecisionMakerName.trim()}
+                                  onClick={handleAddDecisionMaker}
+                                >
+                                  Save
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8"
+                                  onClick={() => {
+                                    setAddingDecisionMaker(false)
+                                    setNewDecisionMakerName('')
+                                  }}
+                                >
+                                  <X className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-1">
+                                <Select
+                                  value={field.value || undefined}
+                                  onValueChange={field.onChange}
+                                >
+                                  <FormControl>
+                                    <SelectTrigger size="sm" className="h-8 w-full">
+                                      <SelectValue placeholder="Select decision maker" />
+                                    </SelectTrigger>
+                                  </FormControl>
+                                  <SelectContent>
+                                    {decisionMakerOptions.map((name) => (
+                                      <SelectItem key={name} value={name}>
+                                        {name}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="icon"
+                                  className="h-8 w-8 shrink-0"
+                                  title="Add decision maker"
+                                  onClick={() => setAddingDecisionMaker(true)}
+                                >
+                                  <Plus className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            )}
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={decisionForm.control}
+                        name="flow_oversight"
+                        render={({ field }) => (
+                          <FormItem className="gap-0.5">
+                            <FormLabel className="text-xs">Flow Oversight</FormLabel>
+                            {addingFlowOversight ? (
+                              <div className="flex items-center gap-1">
+                                <Input
+                                  value={newFlowOversightName}
+                                  onChange={(e) => setNewFlowOversightName(e.target.value)}
+                                  placeholder="New flow oversight"
+                                  className="h-8"
+                                  autoFocus
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      e.preventDefault()
+                                      handleAddFlowOversight()
+                                    }
+                                    if (e.key === 'Escape') {
+                                      setAddingFlowOversight(false)
+                                      setNewFlowOversightName('')
+                                    }
+                                  }}
+                                />
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  className="h-8"
+                                  disabled={isSavingLookup || !newFlowOversightName.trim()}
+                                  onClick={handleAddFlowOversight}
+                                >
+                                  Save
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8"
+                                  onClick={() => {
+                                    setAddingFlowOversight(false)
+                                    setNewFlowOversightName('')
+                                  }}
+                                >
+                                  <X className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-1">
+                                <Select
+                                  value={field.value || undefined}
+                                  onValueChange={field.onChange}
+                                >
+                                  <FormControl>
+                                    <SelectTrigger size="sm" className="h-8 w-full">
+                                      <SelectValue placeholder="Select flow oversight" />
+                                    </SelectTrigger>
+                                  </FormControl>
+                                  <SelectContent>
+                                    {flowOversightOptions.map((name) => (
+                                      <SelectItem key={name} value={name}>
+                                        {name}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="icon"
+                                  className="h-8 w-8 shrink-0"
+                                  title="Add flow oversight"
+                                  onClick={() => setAddingFlowOversight(true)}
+                                >
+                                  <Plus className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            )}
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={decisionForm.control}
+                        name="restriction"
+                        render={({ field }) => (
+                          <FormItem className="gap-0.5">
+                            <FormLabel className="text-xs">Restriction</FormLabel>
+                            {addingRestriction ? (
+                              <div className="flex items-center gap-1">
+                                <Input
+                                  value={newRestrictionName}
+                                  onChange={(e) => setNewRestrictionName(e.target.value)}
+                                  placeholder="New restriction"
+                                  className="h-8"
+                                  autoFocus
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      e.preventDefault()
+                                      handleAddRestriction()
+                                    }
+                                    if (e.key === 'Escape') {
+                                      setAddingRestriction(false)
+                                      setNewRestrictionName('')
+                                    }
+                                  }}
+                                />
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  className="h-8"
+                                  disabled={isSavingLookup || !newRestrictionName.trim()}
+                                  onClick={handleAddRestriction}
+                                >
+                                  Save
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8"
+                                  onClick={() => {
+                                    setAddingRestriction(false)
+                                    setNewRestrictionName('')
+                                  }}
+                                >
+                                  <X className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-1">
+                                <Select
+                                  value={field.value || undefined}
+                                  onValueChange={field.onChange}
+                                >
+                                  <FormControl>
+                                    <SelectTrigger size="sm" className="h-8 w-full">
+                                      <SelectValue placeholder="Select restriction" />
+                                    </SelectTrigger>
+                                  </FormControl>
+                                  <SelectContent>
+                                    {restrictionOptions.map((name) => (
+                                      <SelectItem key={name} value={name}>
+                                        {name}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="icon"
+                                  className="h-8 w-8 shrink-0"
+                                  title="Add restriction"
+                                  onClick={() => setAddingRestriction(true)}
+                                >
+                                  <Plus className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            )}
                             <FormMessage />
                           </FormItem>
                         )}
                       />
                     </div>
-                    <FormField
-                      control={decisionForm.control}
-                      name="restriction"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Restriction</FormLabel>
-                          <FormControl>
-                            <Input {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+
+                    <div className="space-y-0.5">
+                      <FormLabel className="text-xs">Decision ID (auto)</FormLabel>
+                      <div className="h-8 px-2.5 rounded-md border bg-muted/40 flex items-center text-xs font-mono">
+                        {isPreviewingId ? (
+                          <span className="text-muted-foreground flex items-center gap-1.5">
+                            <RefreshCw className="h-3 w-3 animate-spin" />
+                            Generating…
+                          </span>
+                        ) : previewDecisionId ? (
+                          previewDecisionId
+                        ) : (
+                          <span className="text-muted-foreground">
+                            Select partner and date to generate (LCC.AD.Partner.YY-MM-DD-N)
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
                     <FormField
                       control={decisionForm.control}
                       name="notes"
                       render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Notes</FormLabel>
+                        <FormItem className="gap-0.5">
+                          <FormLabel className="text-xs">Notes</FormLabel>
                           <FormControl>
-                            <Textarea rows={3} {...field} />
+                            <Textarea rows={2} className="text-sm" {...field} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
                       )}
                     />
 
-                    <div className="flex justify-end gap-2">
+                    <div className="flex justify-end gap-2 pt-1">
                       <Button 
                         variant="outline" 
-                        type="button" 
+                        type="button"
+                        size="sm"
                         onClick={() => {
                           setIsCreateOpen(false)
                           decisionForm.reset()
@@ -980,13 +1513,28 @@ export default function DistributionDecisionsManager() {
                           setManualFiles([])
                           setExtraCreateFiles([])
                           setAllocRows([])
+                          setAddingPartner(false)
+                          setNewPartnerName('')
+                          setAddingDecisionMaker(false)
+                          setNewDecisionMakerName('')
+                          setAddingFlowOversight(false)
+                          setNewFlowOversightName('')
+                          setAddingRestriction(false)
+                          setNewRestrictionName('')
+                          setPreviewDecisionId(null)
                         }}
                       >
                         Cancel
                       </Button>
                       <Button
                         type="submit"
-                        disabled={useCsvUpload && !csvFile}
+                        size="sm"
+                        disabled={
+                          (useCsvUpload && !csvFile) ||
+                          !watchedPartner ||
+                          !watchedDate ||
+                          !previewDecisionId
+                        }
                       >
                         Create
                       </Button>
@@ -1510,7 +2058,7 @@ export default function DistributionDecisionsManager() {
                                                   )
                                                 }
                                               >
-                                                <SelectTrigger>
+                                                <SelectTrigger className="h-8">
                                                   <SelectValue placeholder="Select state" />
                                                 </SelectTrigger>
                                                 <SelectContent>

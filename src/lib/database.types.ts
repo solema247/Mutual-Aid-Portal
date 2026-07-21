@@ -927,8 +927,10 @@ export type Database = {
           decision_id: string | null
           decision_id_proposed: string | null
           decision_documents: Json
+          decision_maker: string | null
           file_link: string | null
           file_name: string | null
+          flow_oversight: string | null
           fund_request: string | null
           grant_name: string | null
           id: string
@@ -950,8 +952,10 @@ export type Database = {
           decision_id?: string | null
           decision_id_proposed?: string | null
           decision_documents?: Json
+          decision_maker?: string | null
           file_link?: string | null
           file_name?: string | null
+          flow_oversight?: string | null
           fund_request?: string | null
           grant_name?: string | null
           id?: string
@@ -973,8 +977,10 @@ export type Database = {
           decision_id?: string | null
           decision_id_proposed?: string | null
           decision_documents?: Json
+          decision_maker?: string | null
           file_link?: string | null
           file_name?: string | null
+          flow_oversight?: string | null
           fund_request?: string | null
           grant_name?: string | null
           id?: string
@@ -2865,6 +2871,114 @@ export type Database = {
         Update: {
           current_project_id?: string | null
           id?: string
+        }
+        Relationships: []
+      }
+      distribution_decision_maker: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean
+          name: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      flow_oversight_options: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean
+          name: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      distribution_restriction_options: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean
+          name: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      ops_partners: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean
+          name: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          sort_order?: number
+          updated_at?: string
         }
         Relationships: []
       }

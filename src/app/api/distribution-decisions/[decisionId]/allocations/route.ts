@@ -13,6 +13,12 @@ import {
   syncDecisionToAirtableByGroupKey,
 } from '@/lib/grantManagement/pushToAirtable'
 import { SYNC_STATUS } from '@/lib/grantManagement/syncStatus'
+import {
+  buildAdAllocationId,
+  extractAdHyphenSerial,
+  formatAdDateYyMmDd,
+  partnerCodeForId,
+} from '@/lib/grantManagement/adDecisionIds'
 
 /**
  * GET /api/distribution-decisions/[decisionId]/allocations - Allocations for one decision.
@@ -88,14 +94,54 @@ export async function POST(
     const groupKey = (await resolveDecisionGroupKey(auth.ctx.supabase, decisionId)) || decisionId
     const decisionAmount = decision.decision_amount ?? null
     const decisionDate = decision.decision_date ?? null
+    const partner = decision.partner || null
 
-    const rowsToInsert = allocations.map((alloc: Record<string, unknown>) => {
+    // Next allocation serial for this partner+date prefix (01, 02, …)
+    let nextAllocSerial = 1
+    const code = partnerCodeForId(partner)
+    const datePart = formatAdDateYyMmDd(decisionDate)
+    if (code && datePart) {
+      const prefix = `LCC.AD.${code}.${datePart}-`
+      const { data: existingAllocs } = await auth.ctx.supabase
+        .from('allocations_by_date')
+        .select('Allocation_ID')
+        .like('Allocation_ID', `${prefix}%`)
+
+      let maxAlloc = 0
+      for (const row of existingAllocs || []) {
+        const n = extractAdHyphenSerial(row.Allocation_ID)
+        // Allocation serials are typically small (01–99); decision serials are larger (63+).
+        // Prefer numbers already used as short allocation suffixes under this date prefix.
+        if (n != null && n < 100 && n > maxAlloc) maxAlloc = n
+      }
+      // Also count allocations already on this decision (any ID style)
+      const { data: decisionAllocs } = await auth.ctx.supabase
+        .from('allocations_by_date')
+        .select('Allocation_ID')
+        .eq('Decision_ID', groupKey)
+      const decisionCount = decisionAllocs?.length ?? 0
+      nextAllocSerial = Math.max(maxAlloc, decisionCount) + 1
+    }
+
+    const rowsToInsert = allocations.map((alloc: Record<string, unknown>, index: number) => {
       const amountNum = alloc?.amount !== undefined ? Number(alloc.amount) : null
       const percent =
         amountNum && decisionAmount ? (amountNum / Number(decisionAmount)) * 100 : null
 
+      const allocSerial = nextAllocSerial + index
+      let allocationId: string
+      try {
+        if (partner && decisionDate) {
+          allocationId = buildAdAllocationId(partner, decisionDate, allocSerial)
+        } else {
+          allocationId = crypto.randomUUID()
+        }
+      } catch {
+        allocationId = crypto.randomUUID()
+      }
+
       return {
-        Allocation_ID: crypto.randomUUID(),
+        Allocation_ID: allocationId,
         Decision_ID: groupKey,
         Decision_Date:
           typeof alloc?.decision_date === 'string' ? alloc.decision_date : decisionDate,
@@ -105,15 +151,20 @@ export async function POST(
         Decision_Amount: decisionAmount,
         Grant_ID: typeof alloc?.grant_id === 'string' ? alloc.grant_id : null,
         Partner:
-          typeof alloc?.partner === 'string' ? alloc.partner : decision.partner || null,
+          typeof alloc?.partner === 'string' ? alloc.partner : partner,
         'Decision Maker':
-          typeof alloc?.decision_maker === 'string' ? alloc.decision_maker : null,
+          typeof alloc?.decision_maker === 'string'
+            ? alloc.decision_maker
+            : decision.decision_maker || null,
         Restriction:
           typeof alloc?.restriction === 'string' ? alloc.restriction : decision.restriction || null,
         Notes: typeof alloc?.notes === 'string' ? alloc.notes : null,
         Status: typeof alloc?.status === 'string' ? alloc.status : 'new',
-        'Flow Oversight': typeof alloc?.flow_oversight === 'string' ? alloc.flow_oversight : null,
-        Serial: alloc?.serial ?? null,
+        'Flow Oversight':
+          typeof alloc?.flow_oversight === 'string'
+            ? alloc.flow_oversight
+            : decision.flow_oversight || null,
+        Serial: alloc?.serial ?? allocSerial,
         sync_status: SYNC_STATUS.PENDING,
       }
     })

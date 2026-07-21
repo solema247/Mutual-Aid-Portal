@@ -8,6 +8,8 @@ export type DecisionRow = {
   decision_date: string | null
   partner: string | null
   restriction: string | null
+  decision_maker: string | null
+  flow_oversight: string | null
 }
 
 /** Grouping / FK key used on allocations_by_date.Decision_ID */
@@ -27,7 +29,7 @@ async function findDecisionRow(
   if (!trimmed) return null
 
   const select =
-    'id, decision_id_proposed, decision_id, decision_amount, decision_date, partner, restriction'
+    'id, decision_id_proposed, decision_id, decision_amount, decision_date, partner, restriction, decision_maker, flow_oversight'
 
   const attempts = [
     () => supabase.from('distribution_decision_master_sheet_1').select(select).eq('decision_id_proposed', trimmed).maybeSingle(),
