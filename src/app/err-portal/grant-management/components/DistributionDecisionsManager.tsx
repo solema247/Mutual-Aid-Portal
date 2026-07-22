@@ -59,6 +59,17 @@ type Decision = {
   documents?: DecisionDocument[]
 }
 
+/** Format YYYY-MM-DD as a calendar date (no UTC midnight → prior-day shift in NA). */
+function formatDecisionDate(dateStr: string | null | undefined): string {
+  if (!dateStr?.trim()) return '—'
+  const m = dateStr.trim().match(/^(\d{4})-(\d{2})-(\d{2})/)
+  const d = m
+    ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]))
+    : new Date(dateStr)
+  if (Number.isNaN(d.getTime())) return dateStr
+  return d.toLocaleDateString()
+}
+
 function decisionDocuments(decision: Decision): DecisionDocument[] {
   if (Array.isArray(decision.documents) && decision.documents.length > 0) {
     return decision.documents
@@ -925,14 +936,12 @@ export default function DistributionDecisionsManager() {
 
   const sortedDecisions = useMemo(() => {
     return [...decisions].sort((a, b) => {
-      const hasA = Boolean(a.decision_date)
-      const hasB = Boolean(b.decision_date)
-      if (!hasA && !hasB) return 0
-      if (!hasA) return 1
-      if (!hasB) return -1
-      const da = new Date(a.decision_date!).getTime()
-      const db = new Date(b.decision_date!).getTime()
-      return dateSortOrder === 'desc' ? db - da : da - db
+      const da = a.decision_date?.trim() || ''
+      const db = b.decision_date?.trim() || ''
+      if (!da && !db) return 0
+      if (!da) return 1
+      if (!db) return -1
+      return dateSortOrder === 'desc' ? db.localeCompare(da) : da.localeCompare(db)
     })
   }, [decisions, dateSortOrder])
 
@@ -1612,7 +1621,7 @@ export default function DistributionDecisionsManager() {
                             </Button>
                           </TableCell>
                           <TableCell className="font-medium">{displayId}</TableCell>
-                          <TableCell>{decision.decision_date ? new Date(decision.decision_date).toLocaleDateString() : '—'}</TableCell>
+                          <TableCell>{formatDecisionDate(decision.decision_date)}</TableCell>
                           <TableCell>{formatCurrency(decision.decision_amount)}</TableCell>
                           <TableCell className="text-green-700">{formatCurrency(allocated)}</TableCell>
                           <TableCell className="text-orange-700">{formatCurrency(remaining)}</TableCell>

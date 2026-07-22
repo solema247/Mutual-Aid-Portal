@@ -58,10 +58,15 @@ function formatPercent(value: number | null): string {
   return `${Number(value).toFixed(1)}%`
 }
 
+/** Format a calendar date (YYYY-MM-DD) without UTC timezone shift. */
 function formatDate(dateStr: string | null): string {
   if (!dateStr) return '—'
   try {
-    const d = new Date(dateStr)
+    const m = String(dateStr).trim().match(/^(\d{4})-(\d{2})-(\d{2})/)
+    // Date-only strings parse as UTC midnight; use local Y/M/D so NA doesn't show prior day.
+    const d = m
+      ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]))
+      : new Date(dateStr)
     if (Number.isNaN(d.getTime())) return dateStr
     return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
   } catch {
