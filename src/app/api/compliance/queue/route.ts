@@ -20,13 +20,21 @@ export async function GET(request: Request) {
     const countOnly = searchParams.get('count_only') === '1'
 
     if (countOnly) {
-      // Lightweight path for the sidebar badge: no sweep, just the count
-      const { count, error } = await supabase
+      // Lightweight path for the sidebar badge: count pending screenings that
+      // actually have an F1 file attached (matches the hidden-no-F1 filter below)
+      const { data, error } = await supabase
         .from('compliance_screenings')
-        .select('id', { count: 'exact', head: true })
+        .select('id, err_projects!inner(file_key, temp_file_key)')
         .eq('status', 'pending_screening')
       if (error) throw error
-      return NextResponse.json({ pending_count: count || 0 })
+      const count = (data || []).filter((r) => {
+        const raw = (r as { err_projects?: unknown }).err_projects
+        const p = (Array.isArray(raw) ? raw[0] : raw) as
+          | { file_key?: string | null; temp_file_key?: string | null }
+          | undefined
+        return !!(p && (p.file_key || p.temp_file_key))
+      }).length
+      return NextResponse.json({ pending_count: count })
     }
 
     try {
@@ -63,6 +71,7 @@ export async function GET(request: Request) {
           intended_beneficiaries,
           project_objectives,
           expenses,
+          file_key,
           temp_file_key,
           identity_document_file_key,
           emergency_rooms (err_code, name_ar, name)
@@ -90,6 +99,7 @@ export async function GET(request: Request) {
       intended_beneficiaries?: string | null
       project_objectives?: string | null
       expenses?: unknown
+      file_key?: string | null
       temp_file_key?: string | null
       identity_document_file_key?: string | null
       emergency_rooms?: RoomJoin | RoomJoin[] | null
@@ -132,12 +142,18 @@ export async function GET(request: Request) {
         intended_beneficiaries: p.intended_beneficiaries || null,
         project_objectives: p.project_objectives || null,
         total_amount: expenses.reduce((sum, e) => sum + (e.total_cost || 0), 0),
+        f1_file_key: p.file_key || null,
         temp_file_key: p.temp_file_key || null,
         identity_document_file_key: p.identity_document_file_key || null
       }
     })
 
-    return NextResponse.json(formatted)
+    // Only surface screenings that actually have an F1 document attached
+    // (Ahmed's request: hide records with no F1 file). The real F1 lives in
+    // err_projects.file_key; some legacy/in-progress uploads use temp_file_key.
+    const withF1 = formatted.filter(r => r.f1_file_key || r.temp_file_key)
+
+    return NextResponse.json(withF1)
   } catch (error) {
     console.error('Error fetching compliance queue:', error)
     return NextResponse.json({ error: 'Failed to fetch compliance queue' }, { status: 500 })

@@ -47,9 +47,13 @@ export async function POST(
       return NextResponse.json({ error: 'Screening not found' }, { status: 404 })
     }
 
+    // On clear, the note is an optional caveat/comment (e.g. "Cleared but no
+    // account number included"); on flag it's the required reason. Either way
+    // we persist it in flag_note so the queue/history shows the officer's note.
+    const trimmedNote = note ? String(note).trim() : ''
     const update: Record<string, unknown> = {
       status: action === 'clear' ? 'cleared' : 'flagged',
-      flag_note: action === 'flag' ? String(note).trim() : null,
+      flag_note: trimmedNote || null,
       flag_type: action === 'flag' ? flag_type : null,
       screened_by: perm.user.id,
       screened_at: new Date().toISOString(),
