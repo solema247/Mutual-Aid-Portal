@@ -39,6 +39,7 @@ interface Screening {
   intended_beneficiaries: string | null
   project_objectives: string | null
   total_amount: number
+  f1_file_key: string | null
   temp_file_key: string | null
   identity_document_file_key: string | null
 }
@@ -497,11 +498,11 @@ export default function CompliancePage() {
               )}
 
               <div className="flex flex-wrap gap-2">
-                {selected.temp_file_key && (
+                {(selected.f1_file_key || selected.temp_file_key) && (
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => openFile(selected.temp_file_key as string)}
+                    onClick={() => openFile((selected.f1_file_key || selected.temp_file_key) as string)}
                   >
                     <FileText className="w-4 h-4 mr-1" />
                     Open original F1 file
@@ -521,8 +522,20 @@ export default function CompliancePage() {
 
               {selected.flag_note && (
                 <div>
-                  <div className="text-xs text-muted-foreground mb-1">Screening flag note</div>
-                  <p className="text-sm bg-red-50 text-red-900 rounded-md p-3">{selected.flag_note}</p>
+                  <div className="text-xs text-muted-foreground mb-1">
+                    {selected.status === 'cleared' || selected.status === 'auto_approved'
+                      ? 'Clearance note'
+                      : 'Screening flag note'}
+                  </div>
+                  <p
+                    className={`text-sm rounded-md p-3 ${
+                      selected.status === 'cleared' || selected.status === 'auto_approved'
+                        ? 'bg-muted text-foreground'
+                        : 'bg-red-50 text-red-900'
+                    }`}
+                  >
+                    {selected.flag_note}
+                  </p>
                 </div>
               )}
 
@@ -540,7 +553,7 @@ export default function CompliancePage() {
                 <div className="space-y-2 border-t pt-4 sticky bottom-0 bg-white dark:bg-slate-950 pb-1">
                   <div className="text-xs text-muted-foreground">
                     {showScreeningActions
-                      ? 'Note (required when flagging)'
+                      ? 'Note (required to flag or to clear with a comment)'
                       : 'Finance note (optional)'}
                   </div>
                   <Textarea
@@ -568,16 +581,9 @@ export default function CompliancePage() {
                   )}
 
                   {showScreeningActions && (
-                    <div className="flex flex-wrap justify-end gap-2">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        disabled={isSubmitting}
-                        onClick={() => submitDecision('flag', 'missing_id')}
-                      >
-                        <IdCard className="w-4 h-4 mr-1" />
-                        Flag: Missing ID
-                      </Button>
+                    <div className="flex items-center justify-between gap-2">
+                      {/* Sanctions match kept far left and separated to avoid
+                          accidental clicks (Ahmed's request) */}
                       <Button
                         type="button"
                         variant="destructive"
@@ -587,14 +593,35 @@ export default function CompliancePage() {
                         <Siren className="w-4 h-4 mr-1" />
                         Flag: Sanctions match
                       </Button>
-                      <Button
-                        type="button"
-                        disabled={isSubmitting}
-                        onClick={() => submitDecision('clear')}
-                      >
-                        <ShieldCheck className="w-4 h-4 mr-1" />
-                        Clear
-                      </Button>
+                      <div className="flex flex-wrap justify-end gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          disabled={isSubmitting}
+                          onClick={() => submitDecision('flag', 'missing_id')}
+                        >
+                          <IdCard className="w-4 h-4 mr-1" />
+                          Flag: Missing ID
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          disabled={isSubmitting || !note.trim()}
+                          title={!note.trim() ? 'Add a comment first' : 'Clear with a comment'}
+                          onClick={() => submitDecision('clear')}
+                        >
+                          <ShieldCheck className="w-4 h-4 mr-1" />
+                          Clear with note
+                        </Button>
+                        <Button
+                          type="button"
+                          disabled={isSubmitting}
+                          onClick={() => submitDecision('clear')}
+                        >
+                          <ShieldCheck className="w-4 h-4 mr-1" />
+                          Clear
+                        </Button>
+                      </div>
                     </div>
                   )}
 
