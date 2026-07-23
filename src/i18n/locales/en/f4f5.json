@@ -97,6 +97,8 @@
         "empty": "No expenses parsed",
         "add": "Add expense",
         "sector_placeholder": "Select sector",
+        "popover_cancel": "Cancel",
+        "popover_apply": "Apply",
         "cols": {
           "activity": "Activity",
           "description": "Description",

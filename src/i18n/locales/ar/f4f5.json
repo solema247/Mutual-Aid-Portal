@@ -97,6 +97,8 @@
         "empty": "لا توجد مصروفات مستخرجة",
         "add": "إضافة مصروف",
         "sector_placeholder": "اختر القطاع",
+        "popover_cancel": "إلغاء",
+        "popover_apply": "تطبيق",
         "cols": {
           "activity": "النشاط",
           "description": "الوصف",

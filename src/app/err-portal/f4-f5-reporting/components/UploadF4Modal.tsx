@@ -25,7 +25,8 @@ import {
   normalizeReportDateInput,
 } from '@/lib/reportUploadDate'
 import { type F4SectorRow } from '@/lib/f4ExpenseSectors'
-import { F4ExpenseSectorSelect } from './F4ExpenseSectorSelect'
+import { F4ExpensesEditableTable } from './F4ExpensesEditableTable'
+import { F4ExpandableTextInput, F4FormattedAmountInput } from './F4ExpenseCellEditors'
 import { WizardFullscreenShell, WIZARD_FULLSCREEN_DIALOG_CLASS } from './WizardFullscreenShell'
 
 interface UploadF4ModalProps {
@@ -1210,209 +1211,13 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
                   } as any]))}
                 >{t('f4.preview.expenses.add')}</Button>
               </div>
-              <div className="border rounded overflow-hidden select-text">
-                {expensesDraft.length === 0 ? (
-                  <div className="p-3 text-sm text-muted-foreground">{t('f4.preview.expenses.empty')}</div>
-                ) : (
-                  <Table className="select-text">
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="w-[14%] py-1 px-2 text-xs">{t('f4.preview.expenses.cols.activity')}</TableHead>
-                        <TableHead className="w-[20%] py-1 px-2 text-xs">{t('f4.preview.expenses.cols.description')}</TableHead>
-                        <TableHead className="w-[10%] py-1 px-2 text-right text-xs">Amount (SDG)</TableHead>
-                        <TableHead className="w-[10%] py-1 px-2 text-right text-xs">Amount (USD)</TableHead>
-                        <TableHead className="w-[12%] py-1 px-2 text-xs">{t('f4.preview.expenses.cols.payment_date')}</TableHead>
-                        <TableHead className="w-[10%] py-1 px-2 text-xs">{t('f4.preview.expenses.cols.method')}</TableHead>
-                        <TableHead className="w-[10%] py-1 px-2 text-xs">{t('f4.preview.expenses.cols.receipt_no')}</TableHead>
-                        <TableHead className="w-[14%] py-1 px-2 text-xs">{t('f4.preview.expenses.cols.seller')}</TableHead>
-                        <TableHead className="w-[8%] py-1 px-2 text-xs text-right">{t('f4.preview.expenses.cols.actions')}</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {expensesDraft.map((ex, idx) => (
-                        <TableRow key={idx} className="text-sm">
-                          <TableCell className="py-1 px-2" style={{ userSelect: 'text' }}>
-                            <F4ExpenseSectorSelect
-                              sectors={f4Sectors}
-                              valueEn={ex.expense_activity || ''}
-                              onChangeEn={(sectorNameEn) => {
-                                const arr = [...expensesDraft]
-                                arr[idx] = { ...arr[idx], expense_activity: sectorNameEn }
-                                setExpensesDraft(arr)
-                              }}
-                              placeholder={t('f4.preview.expenses.sector_placeholder') as string}
-                              className="h-8 w-full"
-                            />
-                          </TableCell>
-                          <TableCell className="py-1 px-2" style={{ userSelect: 'text' }}>
-                            <Input 
-                              className="h-8 select-text selection:bg-blue-200 selection:text-blue-900 dark:selection:bg-blue-800 dark:selection:text-blue-100" 
-                              style={selectableInputStyle}
-                              placeholder={t('f4.preview.expenses.cols.description') as string} 
-                              value={ex.expense_description || ''} 
-                              onMouseDown={(e) => {
-                                // Removed logging(`Expense ${idx} Description onMouseDown`, e.target as HTMLInputElement, e)
-                              }}
-                              onSelect={(e) => {
-                                // Removed logging(`Expense ${idx} Description onSelect`, e.target as HTMLInputElement, e)
-                              }}
-                              onFocus={(e) => {
-                                // Removed logging(`Expense ${idx} Description onFocus`, e.target as HTMLInputElement, e)
-                              }}
-                              onChange={(e)=>{
-                                const arr=[...expensesDraft]; arr[idx]={...arr[idx], expense_description: e.target.value}; setExpensesDraft(arr)
-                              }} 
-                            />
-                          </TableCell>
-                          <TableCell className="py-1 px-2 text-right" style={{ userSelect: 'text' }}>
-                            <Input 
-                              className="h-8 select-text selection:bg-blue-200 selection:text-blue-900 dark:selection:bg-blue-800 dark:selection:text-blue-100" 
-                              style={selectableInputStyle}
-                              type="number" 
-                              placeholder="SDG" 
-                              value={ex.expense_amount_sdg != null ? String(ex.expense_amount_sdg) : ''} 
-                              onMouseDown={(e) => {
-                                // Removed logging(`Expense ${idx} SDG Amount onMouseDown`, e.target as HTMLInputElement, e)
-                              }}
-                              onSelect={(e) => {
-                                // Removed logging(`Expense ${idx} SDG Amount onSelect`, e.target as HTMLInputElement, e)
-                              }}
-                              onFocus={(e) => {
-                                // Removed logging(`Expense ${idx} SDG Amount onFocus`, e.target as HTMLInputElement, e)
-                              }}
-                              onChange={(e)=>{
-                                const enteredValue = parseFloat(e.target.value) || 0
-                                const arr = [...expensesDraft]
-                                arr[idx] = {
-                                  ...arr[idx],
-                                  expense_amount_sdg: enteredValue || null,
-                                  // Auto-calculate USD if exchange rate is set
-                                  expense_amount: (fxRate && fxRate > 0 && enteredValue > 0) ? +(enteredValue / fxRate).toFixed(2) : arr[idx].expense_amount
-                                }
-                                setExpensesDraft(arr)
-                              }} 
-                            />
-                          </TableCell>
-                          <TableCell className="py-1 px-2 text-right" style={{ userSelect: 'text' }}>
-                            <Input 
-                              className="h-8 select-text selection:bg-blue-200 selection:text-blue-900 dark:selection:bg-blue-800 dark:selection:text-blue-100" 
-                              style={selectableInputStyle}
-                              type="number" 
-                              placeholder="USD" 
-                              value={ex.expense_amount != null ? String(ex.expense_amount) : ''} 
-                              onMouseDown={(e) => {
-                                // Removed logging(`Expense ${idx} USD Amount onMouseDown`, e.target as HTMLInputElement, e)
-                              }}
-                              onSelect={(e) => {
-                                // Removed logging(`Expense ${idx} USD Amount onSelect`, e.target as HTMLInputElement, e)
-                              }}
-                              onFocus={(e) => {
-                                // Removed logging(`Expense ${idx} USD Amount onFocus`, e.target as HTMLInputElement, e)
-                              }}
-                              onChange={(e)=>{
-                                const enteredValue = parseFloat(e.target.value) || 0
-                                const arr = [...expensesDraft]
-                                arr[idx] = {
-                                  ...arr[idx],
-                                  expense_amount: enteredValue || null,
-                                  // Auto-calculate SDG if exchange rate is set
-                                  expense_amount_sdg: (fxRate && fxRate > 0 && enteredValue > 0) ? +(enteredValue * fxRate).toFixed(2) : arr[idx].expense_amount_sdg
-                                }
-                                setExpensesDraft(arr)
-                              }} 
-                            />
-                          </TableCell>
-                          <TableCell className="py-1 px-2" style={{ userSelect: 'text' }}>
-                            <Input 
-                              className="h-8 select-text selection:bg-blue-200 selection:text-blue-900 dark:selection:bg-blue-800 dark:selection:text-blue-100" 
-                              style={selectableInputStyle}
-                              type="date" 
-                              placeholder={t('f4.preview.expenses.cols.payment_date') as string} 
-                              value={ex.payment_date || ''} 
-                              onMouseDown={(e) => {
-                                // Removed logging(`Expense ${idx} Payment Date onMouseDown`, e.target as HTMLInputElement, e)
-                              }}
-                              onSelect={(e) => {
-                                // Removed logging(`Expense ${idx} Payment Date onSelect`, e.target as HTMLInputElement, e)
-                              }}
-                              onFocus={(e) => {
-                                // Removed logging(`Expense ${idx} Payment Date onFocus`, e.target as HTMLInputElement, e)
-                              }}
-                              onChange={(e)=>{
-                                const arr=[...expensesDraft]; arr[idx]={...arr[idx], payment_date: e.target.value}; setExpensesDraft(arr)
-                              }} 
-                            />
-                          </TableCell>
-                          <TableCell className="py-1 px-2">
-                            <Select value={ex.payment_method || 'Bank Transfer'} onValueChange={(v)=>{
-                              const arr=[...expensesDraft]; arr[idx]={...arr[idx], payment_method: v}; setExpensesDraft(arr)
-                            }}>
-                              <SelectTrigger className="h-8 w-full">
-                                <SelectValue placeholder={t('f4.preview.expenses.cols.method') as string} />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="Bank Transfer">Bank Transfer</SelectItem>
-                                <SelectItem value="Cash">Cash</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </TableCell>
-                          <TableCell className="py-1 px-2" style={{ userSelect: 'text' }}>
-                            <Input 
-                              className="h-8 select-text selection:bg-blue-200 selection:text-blue-900 dark:selection:bg-blue-800 dark:selection:text-blue-100" 
-                              style={selectableInputStyle}
-                              placeholder={t('f4.preview.expenses.cols.receipt_no') as string} 
-                              value={ex.receipt_no || ''} 
-                              onMouseDown={(e) => {
-                                // Removed logging(`Expense ${idx} Receipt No onMouseDown`, e.target as HTMLInputElement, e)
-                              }}
-                              onSelect={(e) => {
-                                // Removed logging(`Expense ${idx} Receipt No onSelect`, e.target as HTMLInputElement, e)
-                              }}
-                              onFocus={(e) => {
-                                // Removed logging(`Expense ${idx} Receipt No onFocus`, e.target as HTMLInputElement, e)
-                              }}
-                              onChange={(e)=>{
-                                const arr=[...expensesDraft]; arr[idx]={...arr[idx], receipt_no: e.target.value}; setExpensesDraft(arr)
-                              }} 
-                            />
-                          </TableCell>
-                          <TableCell className="py-1 px-2" style={{ userSelect: 'text' }}>
-                            <Input 
-                              className="h-8 select-text selection:bg-blue-200 selection:text-blue-900 dark:selection:bg-blue-800 dark:selection:text-blue-100" 
-                              style={selectableInputStyle}
-                              placeholder={t('f4.preview.expenses.cols.seller') as string} 
-                              value={ex.seller || ''} 
-                              onMouseDown={(e) => {
-                                // Removed logging(`Expense ${idx} Seller onMouseDown`, e.target as HTMLInputElement, e)
-                              }}
-                              onSelect={(e) => {
-                                // Removed logging(`Expense ${idx} Seller onSelect`, e.target as HTMLInputElement, e)
-                              }}
-                              onFocus={(e) => {
-                                // Removed logging(`Expense ${idx} Seller onFocus`, e.target as HTMLInputElement, e)
-                              }}
-                              onChange={(e)=>{
-                                const arr=[...expensesDraft]; arr[idx]={...arr[idx], seller: e.target.value}; setExpensesDraft(arr)
-                              }} 
-                            />
-                          </TableCell>
-                          <TableCell className="py-1 px-2 text-right">
-                            <Button
-                              variant="destructive"
-                              size="sm"
-                              onClick={() => {
-                                const arr = [...expensesDraft]
-                                arr.splice(idx, 1)
-                                setExpensesDraft(arr)
-                              }}
-                            >{t('f4.preview.expenses.cols.delete')}</Button>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                )}
-              </div>
+              <F4ExpensesEditableTable
+                expenses={expensesDraft}
+                onChange={setExpensesDraft}
+                sectors={f4Sectors}
+                fxRate={fxRate}
+                editable
+              />
             </div>
 
             {/* Financials */}
@@ -1533,11 +1338,11 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
                               receiptRows.map((row: any, idx: number) => (
                                 <TableRow key={`receipt-row-${idx}`}>
                                   <TableCell>
-                                    <Input
+                                    <F4ExpandableTextInput
                                       value={row?.reference || ''}
-                                      onChange={(e) => {
+                                      onChange={(v) => {
                                         const nextRows = [...receiptRows]
-                                        nextRows[idx] = { ...nextRows[idx], reference: e.target.value }
+                                        nextRows[idx] = { ...nextRows[idx], reference: v }
                                         setSummaryDraft((s: any) => ({
                                           ...(s || {}),
                                           receipt_check: { ...(s?.receipt_check || {}), receipts: nextRows, confirmed: false },
@@ -1547,13 +1352,11 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
                                     />
                                   </TableCell>
                                   <TableCell>
-                                    <Input
-                                      type="number"
-                                      value={row?.amount_sdg != null ? String(row.amount_sdg) : ''}
-                                      onChange={(e) => {
+                                    <F4FormattedAmountInput
+                                      value={row?.amount_sdg != null ? Number(row.amount_sdg) : null}
+                                      onChange={(num) => {
                                         const nextRows = [...receiptRows]
-                                        const num = parseFloat(e.target.value)
-                                        nextRows[idx] = { ...nextRows[idx], amount_sdg: Number.isFinite(num) ? num : null }
+                                        nextRows[idx] = { ...nextRows[idx], amount_sdg: num }
                                         setSummaryDraft((s: any) => ({
                                           ...(s || {}),
                                           receipt_check: { ...(s?.receipt_check || {}), receipts: nextRows, confirmed: false },
