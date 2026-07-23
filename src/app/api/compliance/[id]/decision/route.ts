@@ -3,6 +3,7 @@ import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { requirePermission } from '@/lib/requirePermission'
 import { normalizedNameKey, type FlagType } from '@/lib/compliance'
 import { sendSanctionsMatchAlert } from '@/lib/complianceAlerts'
+import { logComplianceEvent } from '@/lib/complianceAudit'
 
 const VALID_FLAG_TYPES: FlagType[] = ['missing_id', 'sanctions_match']
 
@@ -69,6 +70,24 @@ export async function POST(
       .update(update)
       .eq('id', params.id)
     if (updateError) throw updateError
+
+    await logComplianceEvent(supabase, {
+      screeningId: screening.id,
+      projectId: screening.project_id,
+      action:
+        action === 'clear'
+          ? 'clear'
+          : flag_type === 'sanctions_match'
+            ? 'flag_sanctions_match'
+            : 'flag_missing_id',
+      actorId: perm.user.id,
+      note: trimmedNote || null,
+      metadata: {
+        names: Array.isArray(screening.names) ? screening.names : [],
+        previous_status: screening.status,
+        flag_type: action === 'flag' ? flag_type : null
+      }
+    })
 
     // Whitelist cleared names for future auto-approval
     if (action === 'clear') {

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { requirePermission } from '@/lib/requirePermission'
+import { logComplianceEvent } from '@/lib/complianceAudit'
 
 /**
  * POST /api/compliance/[id]/upload-id
@@ -54,6 +55,15 @@ export async function POST(
       })
       .eq('id', params.id)
     if (screeningError) throw screeningError
+
+    await logComplianceEvent(supabase, {
+      screeningId: screening.id,
+      projectId: screening.project_id,
+      action: 'upload_id',
+      actorId: perm.user.id,
+      note: note ? String(note).trim() : 'Identity document uploaded',
+      metadata: { file_key }
+    })
 
     return NextResponse.json({
       success: true,

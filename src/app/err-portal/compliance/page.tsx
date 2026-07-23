@@ -15,6 +15,19 @@ import { supabase } from '@/lib/supabaseClient'
 
 type FlagType = 'missing_id' | 'sanctions_match'
 
+interface AuditEvent {
+  id: string
+  screening_id: string
+  project_id: string
+  action: string
+  actor_id: string | null
+  actor_name: string | null
+  note: string | null
+  metadata: Record<string, unknown>
+  created_at: string
+  err_id: string | null
+}
+
 interface Screening {
   id: string
   project_id: string
@@ -219,6 +232,7 @@ export default function CompliancePage() {
   const canFinanceReview = can('compliance_finance_review')
 
   const [screenings, setScreenings] = useState<Screening[]>([])
+  const [auditEvents, setAuditEvents] = useState<AuditEvent[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [selected, setSelected] = useState<Screening | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -247,9 +261,24 @@ export default function CompliancePage() {
     }
   }, [])
 
+  const fetchAudit = useCallback(async () => {
+    try {
+      const res = await fetch('/api/compliance/audit?limit=200')
+      if (!res.ok) return
+      const data = await res.json()
+      setAuditEvents(Array.isArray(data) ? data : [])
+    } catch (e) {
+      console.error('Error fetching compliance audit log:', e)
+    }
+  }, [])
+
+  const refreshAll = useCallback(async () => {
+    await Promise.all([fetchQueue(), fetchAudit()])
+  }, [fetchQueue, fetchAudit])
+
   useEffect(() => {
-    fetchQueue()
-  }, [fetchQueue])
+    void refreshAll()
+  }, [refreshAll])
 
   const openDetail = (s: Screening) => {
     setSelected(s)
@@ -294,7 +323,7 @@ export default function CompliancePage() {
       setDialogOpen(false)
       setSelected(null)
       setNote('')
-      await fetchQueue()
+      await refreshAll()
     } catch (e) {
       console.error('Error recording decision:', e)
       setActionError('Failed to record decision — check your connection and try again.')
@@ -319,7 +348,7 @@ export default function CompliancePage() {
         return
       }
       setDialogOpen(false)
-      await fetchQueue()
+      await refreshAll()
     } catch (e) {
       console.error('Error recording finance review:', e)
       setActionError('Failed to record finance review')
@@ -351,7 +380,7 @@ export default function CompliancePage() {
         return
       }
       setDialogOpen(false)
-      await fetchQueue()
+      await refreshAll()
     } catch (e) {
       console.error('Error uploading ID:', e)
       setActionError('Failed to upload identity document')
@@ -448,7 +477,7 @@ export default function CompliancePage() {
         </CardHeader>
         <CardContent>
           <Tabs defaultValue="queue" className="w-full">
-            <TabsList className="grid w-full grid-cols-3">
+            <TabsList className="grid w-full grid-cols-4">
               <TabsTrigger value="queue">
                 Screening queue{pending.length > 0 ? ` (${pending.length})` : ''}
               </TabsTrigger>
@@ -456,6 +485,9 @@ export default function CompliancePage() {
                 Finance review{financeQueue.length > 0 ? ` (${financeQueue.length})` : ''}
               </TabsTrigger>
               <TabsTrigger value="history">History</TabsTrigger>
+              <TabsTrigger value="audit">
+                Audit log{auditEvents.length > 0 ? ` (${auditEvents.length})` : ''}
+              </TabsTrigger>
             </TabsList>
 
             <TabsContent value="queue" className="mt-6">
@@ -480,6 +512,61 @@ export default function CompliancePage() {
                 emptyText="No screened F1s yet"
                 onView={openDetail}
               />
+            </TabsContent>
+
+            <TabsContent value="audit" className="mt-6">
+              <Card>
+                <CardContent className="p-0 overflow-x-auto">
+                  <Table className="text-xs min-w-[800px]">
+                    <TableHeader>
+                      <TableRow className="[&>th]:py-2 [&>th]:px-2 [&>th]:text-xs">
+                        <TableHead className="px-2">When</TableHead>
+                        <TableHead className="px-2">Who</TableHead>
+                        <TableHead className="px-2">Action</TableHead>
+                        <TableHead className="px-2">ERR ID</TableHead>
+                        <TableHead className="px-2">Note</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {auditEvents.length === 0 && (
+                        <TableRow>
+                          <TableCell colSpan={5} className="text-center py-6 text-muted-foreground">
+                            No audit events yet
+                          </TableCell>
+                        </TableRow>
+                      )}
+                      {auditEvents.map(ev => (
+                        <TableRow key={ev.id} className="[&>td]:py-1.5 [&>td]:px-2 [&>td]:text-xs">
+                          <TableCell className="whitespace-nowrap">
+                            {new Date(ev.created_at).toLocaleString()}
+                          </TableCell>
+                          <TableCell className="whitespace-nowrap">
+                            {ev.actor_name || '—'}
+                          </TableCell>
+                          <TableCell className="whitespace-nowrap">
+                            <Badge
+                              variant={
+                                ev.action === 'flag_sanctions_match'
+                                  ? 'destructive'
+                                  : ev.action === 'clear' || ev.action === 'finance_approve' || ev.action === 'upload_id'
+                                    ? 'default'
+                                    : 'secondary'
+                              }
+                              className="text-[10px] px-1.5 py-0"
+                            >
+                              {ev.action.replace(/_/g, ' ')}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="whitespace-nowrap">{ev.err_id || '—'}</TableCell>
+                          <TableCell className="max-w-[320px] truncate" title={ev.note || ''}>
+                            {ev.note || '—'}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
             </TabsContent>
           </Tabs>
         </CardContent>

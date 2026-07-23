@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { requirePermission } from '@/lib/requirePermission'
+import { logComplianceEvent } from '@/lib/complianceAudit'
 
 /**
  * POST /api/compliance/[id]/finance-review
@@ -97,6 +98,17 @@ export async function POST(
         })
         .eq('id', params.id)
       if (updateError) throw updateError
+      await logComplianceEvent(supabase, {
+        screeningId: screening.id,
+        projectId: screening.project_id,
+        action: 'finance_dismiss',
+        actorId: perm.user.id,
+        note: note ? String(note).trim() : null,
+        metadata: {
+          previous_flag_type: screening.flag_type,
+          previous_status: screening.status
+        }
+      })
       return NextResponse.json({ success: true, action: 'dismissed' })
     }
 
@@ -111,6 +123,18 @@ export async function POST(
       })
       .eq('id', params.id)
     if (updateError) throw updateError
+
+    await logComplianceEvent(supabase, {
+      screeningId: screening.id,
+      projectId: screening.project_id,
+      action: 'finance_approve',
+      actorId: perm.user.id,
+      note: note ? String(note).trim() : null,
+      metadata: {
+        previous_flag_type: screening.flag_type,
+        previous_status: screening.status
+      }
+    })
 
     return NextResponse.json({ success: true, action: 'approved' })
   } catch (error) {
