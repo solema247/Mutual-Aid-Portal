@@ -15,6 +15,10 @@ export async function POST(
   try {
     const perm = await requirePermission('compliance_screen')
     if (perm instanceof NextResponse) return perm
+    const actorLogin = perm.user.email?.trim()
+    if (!actorLogin) {
+      return NextResponse.json({ error: 'Logged-in user has no email/login' }, { status: 400 })
+    }
 
     const supabase = getSupabaseRouteClient()
     const { action, note, flag_type } = await request.json()
@@ -55,7 +59,7 @@ export async function POST(
       status: action === 'clear' ? 'cleared' : 'flagged',
       flag_note: trimmedNote || null,
       flag_type: action === 'flag' ? flag_type : null,
-      screened_by: perm.user.id,
+      screened_by: actorLogin,
       screened_at: new Date().toISOString(),
       finance_review_status: action === 'flag' ? 'pending' : null,
       finance_review_note: null,

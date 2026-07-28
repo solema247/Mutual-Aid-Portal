@@ -5,7 +5,7 @@ import { getOverridesForUser } from '@/lib/userOverridesDb'
 
 export async function requirePermission(
   functionCode: string
-): Promise<{ user: { id: string; role: string } } | NextResponse> {
+): Promise<{ user: { id: string; role: string; email: string | null } } | NextResponse> {
   const supabase = getSupabaseRouteClient()
   const {
     data: { session },
@@ -38,5 +38,11 @@ export async function requirePermission(
       { status: 403 }
     )
   }
-  return { user: { id: userRow.id, role: userRow.role } }
+  return {
+    user: {
+      id: userRow.id,
+      role: userRow.role,
+      email: session.user.email ?? null
+    }
+  }
 }
