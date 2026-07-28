@@ -1,31 +1,6 @@
-/**
- * Best-effort Slack alert for sanctions-match flags.
- * Uses SLACK_BOT_TOKEN. Optional COMPLIANCE_ALERT_SLACK_CHANNEL (e.g. C0123...).
- * If no channel is configured, logs the alert payload and returns false.
- */
-export async function sendSanctionsMatchAlert(payload: {
-  errId: string | null
-  projectId: string
-  names: string[]
-  note: string | null
-  screeningId: string
-}): Promise<{ sent: boolean; detail: string }> {
+async function postComplianceSlack(text: string): Promise<{ sent: boolean; detail: string }> {
   const token = process.env.SLACK_BOT_TOKEN
   const channel = process.env.COMPLIANCE_ALERT_SLACK_CHANNEL
-
-  const text = [
-    ':rotating_light: *COMPLIANCE RED ALERT — PAYMENT MUST BE STOPPED*',
-    '',
-    `*F1 / ERR ID:* ${payload.errId || payload.projectId}`,
-    `*Payee names:* ${(payload.names || []).join(', ') || '—'}`,
-    `*Flag:* Potential Descartes / sanctions list match`,
-    payload.note ? `*Screening note:* ${payload.note}` : null,
-    '',
-    '_Notify: Finance team, Yara, Josh, Nihal, Santiago_',
-    `_Screening ID: ${payload.screeningId}_`
-  ]
-    .filter(Boolean)
-    .join('\n')
 
   if (!token) {
     console.warn('[compliance-alert] SLACK_BOT_TOKEN not set; alert not sent to Slack')
@@ -61,4 +36,66 @@ export async function sendSanctionsMatchAlert(payload: {
     console.error('[compliance-alert] Failed to post to Slack:', e)
     return { sent: false, detail: 'Slack request failed' }
   }
+}
+
+/**
+ * Best-effort Slack alert for sanctions-match flags.
+ * Uses SLACK_BOT_TOKEN. Optional COMPLIANCE_ALERT_SLACK_CHANNEL (e.g. C0123...).
+ * If no channel is configured, logs the alert payload and returns false.
+ */
+export async function sendSanctionsMatchAlert(payload: {
+  errId: string | null
+  projectId: string
+  names: string[]
+  note: string | null
+  screeningId: string
+}): Promise<{ sent: boolean; detail: string }> {
+  const text = [
+    ':rotating_light: *COMPLIANCE RED ALERT — PAYMENT MUST BE STOPPED*',
+    '',
+    `*F1 / ERR ID:* ${payload.errId || payload.projectId}`,
+    `*Payee names:* ${(payload.names || []).join(', ') || '—'}`,
+    `*Flag:* Potential Descartes / sanctions list match`,
+    payload.note ? `*Screening note:* ${payload.note}` : null,
+    '',
+    '_Notify: Finance team, Yara, Josh, Nihal, Santiago_',
+    `_Screening ID: ${payload.screeningId}_`
+  ]
+    .filter(Boolean)
+    .join('\n')
+
+  return postComplianceSlack(text)
+}
+
+/**
+ * Notify compliance when finance uploads a missing ID — F1 returns to the
+ * Screening queue for Clear (not History / Finance review).
+ */
+export async function sendIdUploadedAlert(payload: {
+  errId: string | null
+  projectId: string
+  screeningId: string
+  names: string[]
+  screenedByLogin: string | null
+  uploadedByLogin: string
+  note: string | null
+}): Promise<{ sent: boolean; detail: string }> {
+  const text = [
+    ':clipboard: *Compliance — ID uploaded, ready for clearance*',
+    '',
+    `*F1 / ERR ID:* ${payload.errId || payload.projectId}`,
+    `*Payee names:* ${(payload.names || []).join(', ') || '—'}`,
+    `*Uploaded by:* ${payload.uploadedByLogin}`,
+    payload.screenedByLogin
+      ? `*Original screener:* ${payload.screenedByLogin}`
+      : null,
+    payload.note ? `*Finance note:* ${payload.note}` : null,
+    '',
+    '_Returned to the Compliance Screening queue — review the ID and Clear (or re-flag)._',
+    `_Screening ID: ${payload.screeningId}_`
+  ]
+    .filter(Boolean)
+    .join('\n')
+
+  return postComplianceSlack(text)
 }

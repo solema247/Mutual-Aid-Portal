@@ -24,7 +24,7 @@ interface Screening {
   flag_note: string | null
   alerted_at: string | null
   screened_at: string | null
-  finance_review_status: 'pending' | 'approved' | 'rejected' | null
+  finance_review_status: 'pending' | 'approved' | 'rejected' | 'id_uploaded' | null
   finance_review_note: string | null
   finance_reviewed_at: string | null
   created_at: string
@@ -65,6 +65,9 @@ function StatusBadge({ s }: { s: Screening }) {
     )
   }
   if (s.flag_type === 'missing_id') {
+    if (s.finance_review_status === 'id_uploaded') {
+      return <Badge variant="default" className="text-[10px] px-1.5 py-0 bg-amber-500">ID uploaded — awaiting clearance</Badge>
+    }
     if (s.finance_review_status === 'approved') {
       return <Badge variant="default" className="text-[10px] px-1.5 py-0 bg-green-600">Missing ID — document uploaded</Badge>
     }
@@ -377,7 +380,14 @@ export default function CompliancePage() {
   if (!canViewPage) return null
   if (isLoading) return <div className="text-center py-8">Loading...</div>
 
-  const pending = screenings.filter(s => s.status === 'pending_screening')
+  const awaitingIdClearance = (s: Screening) =>
+    s.status === 'flagged' &&
+    s.flag_type === 'missing_id' &&
+    s.finance_review_status === 'id_uploaded'
+
+  const pending = screenings.filter(
+    s => s.status === 'pending_screening' || awaitingIdClearance(s)
+  )
   const financeQueue = screenings.filter(
     s => s.status === 'flagged' && s.finance_review_status === 'pending'
   )
@@ -390,11 +400,14 @@ export default function CompliancePage() {
   const history = screenings.filter(
     s =>
       s.status !== 'pending_screening' &&
+      !awaitingIdClearance(s) &&
       !(s.status === 'flagged' && s.finance_review_status === 'pending')
   )
 
   const showScreeningActions =
-    canScreen && selected?.status === 'pending_screening'
+    canScreen &&
+    (selected?.status === 'pending_screening' ||
+      (selected != null && awaitingIdClearance(selected)))
   const showMissingIdFinance =
     canFinanceReview &&
     selected?.status === 'flagged' &&
@@ -442,8 +455,9 @@ export default function CompliancePage() {
         <CardHeader>
           <CardTitle>OFAC / Descartes Screening</CardTitle>
           <p className="text-sm text-muted-foreground">
-            Finance team screens payee names. Flag as <strong>Missing ID</strong> (finance uploads the document)
-            or <strong>Sanctions match</strong> (payment stopped — red alert). Clear when the name is fine.
+            Ahmed screens payee names. Flag as <strong>Missing ID</strong> (finance uploads the document,
+            then it returns here for Ahmed to Clear) or <strong>Sanctions match</strong> (payment stopped — red alert).
+            Clear when the name is fine.
           </p>
         </CardHeader>
         <CardContent>
@@ -499,6 +513,14 @@ export default function CompliancePage() {
                 <div className="rounded-md border-2 border-red-600 bg-red-50 px-3 py-2 text-sm text-red-950 font-medium">
                   PAYMENT MUST BE STOPPED — potential Descartes / sanctions list match.
                   Alert recipients: Finance team, Yara, Josh, Nihal, Santiago.
+                </div>
+              )}
+
+              {selected.flag_type === 'missing_id' &&
+                selected.finance_review_status === 'id_uploaded' && (
+                <div className="rounded-md border border-amber-500 bg-amber-50 px-3 py-2 text-sm text-amber-950">
+                  Finance uploaded an identity document. Review the ID against the payee name,
+                  then <strong>Clear</strong> to approve — or flag again if it still does not match.
                 </div>
               )}
 
