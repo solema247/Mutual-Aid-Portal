@@ -7,7 +7,7 @@ import PageExplainerHeader from '@/components/layout/PageExplainerHeader'
 import { PageExplainerProvider } from '@/contexts/PageExplainerContext'
 import type { SidebarItem, SidebarLinkItem } from '@/components/layout/Sidebar'
 import { useRouter } from 'next/navigation'
-import { Users, ClipboardList, BarChart2, BarChart3, PieChart, UserCog, Home, CheckSquare, BookOpen, PenTool, Cog, FileText, BookMarked, Ticket, ShieldCheck } from 'lucide-react'
+import { Users, ClipboardList, BarChart2, BarChart3, PieChart, UserCog, Home, CheckSquare, BookOpen, PenTool, Cog, FileText, BookMarked, Ticket, ShieldCheck, Archive } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 import { useAllowedFunctions } from '@/hooks/useAllowedFunctions'
 
@@ -91,6 +91,7 @@ export default function ErrPortalLayout({
   const canViewDashboard = can('dashboard_view_page')
   const canViewSurveys = can('surveys_view_page')
   const canRaiseTicket = can('raise_ticket_page')
+  const canViewDataArchive = can('data_archive_view_page')
 
   const reportingGroupChildren: SidebarLinkItem[] = []
   if (canViewF4F5) {
@@ -105,6 +106,13 @@ export default function ErrPortalLayout({
       href: '/err-portal/project-management',
       label: t('err:project_management'),
       icon: <Cog className="h-5 w-5" />
+    })
+  }
+  if (canViewDataArchive) {
+    reportingGroupChildren.push({
+      href: '/err-portal/data-archive',
+      label: 'Data Archive',
+      icon: <Archive className="h-5 w-5" />
     })
   }
   if (canViewDashboard) {

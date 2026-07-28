@@ -1025,9 +1025,12 @@ export default function ProjectManagement() {
                               </Button>
                             )}
                             {!r.is_historical && r.status === 'completed' && (
-                              <div className="flex items-center gap-0.5 text-xs text-muted-foreground shrink-0">
+                              <div
+                                className="flex items-center gap-0.5 text-xs text-muted-foreground shrink-0"
+                                title={r.completed_at ? `Completed on ${new Date(r.completed_at).toLocaleDateString()}` : 'No completion date recorded'}
+                              >
                                 <CheckCircle className="h-3 w-3 shrink-0" />
-                                <span>Done</span>
+                                <span>Done{r.completed_at ? ` ${new Date(r.completed_at).toLocaleDateString()}` : ''}</span>
                               </div>
                             )}
                           </div>
