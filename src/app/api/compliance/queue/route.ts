@@ -20,12 +20,17 @@ export async function GET(request: Request) {
     const countOnly = searchParams.get('count_only') === '1'
 
     if (countOnly) {
-      // Sidebar badge: pending screenings that still need Ahmed's attention —
-      // must have an F1 file, and must not already be past the commit gate.
+      // Sidebar badge: items that still need Ahmed's attention —
+      // pending screening OR missing-ID with ID uploaded awaiting his Clear.
+      // Must have an F1 file, and must not already be past the commit gate.
       const { data, error } = await supabase
         .from('compliance_screenings')
-        .select('id, err_projects!inner(file_key, temp_file_key, funding_status, status)')
-        .eq('status', 'pending_screening')
+        .select(
+          'id, status, flag_type, finance_review_status, err_projects!inner(file_key, temp_file_key, funding_status, status)'
+        )
+        .or(
+          'status.eq.pending_screening,and(status.eq.flagged,flag_type.eq.missing_id,finance_review_status.eq.id_uploaded)'
+        )
       if (error) throw error
       const count = (data || []).filter((r) => {
         const raw = (r as { err_projects?: unknown }).err_projects
@@ -159,16 +164,17 @@ export async function GET(request: Request) {
 
     // Visibility rules (Ahmed feedback):
     // 1) Always require an F1 document (file_key, with temp_file_key fallback).
-    //    Production previously only checked temp_file_key, so rows like
-    //    ERR-SK-64-155 appeared "without an F1" even though file_key existed.
-    // 2) Active work (pending screening / pending finance review) should not
-    //    include projects that already committed or are completed/declined —
-    //    those are past the compliance gate and clutter the queue.
+    // 2) Active work should not include projects that already committed or are
+    //    completed/declined. Active = pending screening, pending finance review,
+    //    or missing-ID with ID uploaded awaiting Ahmed's Clear.
     const visible = formatted.filter((r) => {
       if (!(r.f1_file_key || r.temp_file_key)) return false
       const isActiveWork =
         r.status === 'pending_screening' ||
-        (r.status === 'flagged' && r.finance_review_status === 'pending')
+        (r.status === 'flagged' && r.finance_review_status === 'pending') ||
+        (r.status === 'flagged' &&
+          r.flag_type === 'missing_id' &&
+          r.finance_review_status === 'id_uploaded')
       if (isActiveWork) {
         if (r.funding_status === 'committed') return false
         if (r.project_status === 'completed' || r.project_status === 'declined') return false

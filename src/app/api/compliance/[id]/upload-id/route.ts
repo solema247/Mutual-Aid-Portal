@@ -6,7 +6,10 @@ import { requirePermission } from '@/lib/requirePermission'
  * POST /api/compliance/[id]/upload-id
  * Finance uploads a missing ID document for a missing_id flag.
  * Body: { file_key: string } — storage path already uploaded to the images bucket.
- * Saves the key onto err_projects.identity_document_file_key and marks the flag approved.
+ *
+ * Saves the key onto err_projects.identity_document_file_key and returns the
+ * screening to Ahmed's compliance queue (finance_review_status = id_uploaded).
+ * Does NOT auto-approve into History — Ahmed must Clear after reviewing the ID.
  */
 export async function POST(
   request: Request,
@@ -44,11 +47,15 @@ export async function POST(
       .eq('id', screening.project_id)
     if (projectError) throw projectError
 
+    const trimmedNote = note ? String(note).trim() : ''
     const { error: screeningError } = await supabase
       .from('compliance_screenings')
       .update({
-        finance_review_status: 'approved',
-        finance_review_note: note || 'Identity document uploaded',
+        // Stay flagged/missing_id so commit remains blocked, but mark finance's
+        // step done so the row returns to Ahmed's screening queue for Clear.
+        finance_review_status: 'id_uploaded',
+        finance_review_note:
+          trimmedNote || 'Identity document uploaded — awaiting compliance clearance',
         finance_reviewed_by: perm.user.id,
         finance_reviewed_at: new Date().toISOString()
       })
@@ -57,7 +64,8 @@ export async function POST(
 
     return NextResponse.json({
       success: true,
-      identity_document_file_key: file_key
+      identity_document_file_key: file_key,
+      awaiting_compliance_clearance: true
     })
   } catch (error) {
     console.error('Error uploading identity document:', error)
