@@ -64,18 +64,13 @@ export async function POST(
         )
       }
       if (screening.flag_type === 'missing_id') {
-        // ID must already be on the project (uploaded via upload-id)
-        const { data: project } = await supabase
-          .from('err_projects')
-          .select('identity_document_file_key')
-          .eq('id', screening.project_id)
-          .single()
-        if (!project?.identity_document_file_key) {
-          return NextResponse.json(
-            { error: 'Upload the missing ID document before approving this flag' },
-            { status: 400 }
-          )
-        }
+        return NextResponse.json(
+          {
+            error:
+              'Missing-ID flags are resolved by uploading the ID (returns to compliance for clearance), not by finance approve.'
+          },
+          { status: 400 }
+        )
       }
     }
 
