@@ -241,7 +241,7 @@ export async function GET(request: Request) {
     // Build project filter (include more statuses to catch F5 projects and completed projects)
     let projectQuery = supabase
       .from('err_projects')
-      .select('id, state, grant_call_id, grant_grid_id, grant_id, grant_segment, emergency_rooms (id, name, name_ar, err_code), planned_activities, expenses, source, status, funding_status, mou_id, f4_status, f5_status, date, date_transfer')
+      .select('id, state, grant_call_id, grant_grid_id, grant_id, grant_segment, emergency_rooms (id, name, name_ar, err_code), planned_activities, expenses, source, status, funding_status, mou_id, f4_status, f5_status, date, date_transfer, completed_at')
       .in('status', ['approved', 'active', 'pending', 'completed'])
       .in('funding_status', ['committed', 'allocated'])
 
@@ -468,6 +468,7 @@ export async function GET(request: Request) {
         portal_f5_count: f5Agg.count, // For portal projects, all F5s are portal F5s
         last_f5_date: f5Agg.last,
         status: p.status || null,
+        completed_at: p.completed_at || null,
         is_historical: false,
         f4_status,
         f5_status,
