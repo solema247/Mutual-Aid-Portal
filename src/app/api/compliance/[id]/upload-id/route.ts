@@ -15,6 +15,10 @@ export async function POST(
   try {
     const perm = await requirePermission('compliance_finance_review')
     if (perm instanceof NextResponse) return perm
+    const actorLogin = perm.user.email?.trim()
+    if (!actorLogin) {
+      return NextResponse.json({ error: 'Logged-in user has no email/login' }, { status: 400 })
+    }
 
     const supabase = getSupabaseRouteClient()
     const { file_key, note } = await request.json()
@@ -49,7 +53,7 @@ export async function POST(
       .update({
         finance_review_status: 'approved',
         finance_review_note: note || 'Identity document uploaded',
-        finance_reviewed_by: perm.user.id,
+        finance_reviewed_by: actorLogin,
         finance_reviewed_at: new Date().toISOString()
       })
       .eq('id', params.id)
