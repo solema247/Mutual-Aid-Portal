@@ -18,7 +18,7 @@ config({ path: resolve(process.cwd(), '.env.local') })
 
 const CSV_PATH = resolve(
   process.cwd(),
-  "data/imports/LCC_ERRs_LoHub & Partner Grant Tracker - ERR's-Grants_Allocation - LCC_ERRs_LoHub & Partner Grant Tracker - ERR's-Grants_Allocation.csv"
+  "data/imports/LCC_ERRs_LoHub & Partner Grant Tracker - ERR's-Grants_Allocation (1) - LCC_ERRs_LoHub & Partner Grant Tracker - ERR's-Grants_Allocation (1).csv"
 )
 const OUTPUT_PATH = resolve(process.cwd(), 'data/imports/sheet-airtable-allocation-match.csv')
 
@@ -46,10 +46,19 @@ function jsonbToText(value: unknown): string | null {
 
 /** Allow ±2 cents for sheet vs Airtable rounding differences */
 const AMOUNT_TOLERANCE_CENTS = 2
-/** Allow ±$1 when one sheet row is split across two Airtable decision dates */
-const SPLIT_AMOUNT_TOLERANCE_CENTS = 100
-/** Allow up to ±$100 for split pairs that bridge an established sibling decision date */
-const SPLIT_BRIDGING_TOLERANCE_CENTS = 10000
+/** Allow ±$1 for near single-row matches and split sums */
+const NEAR_AMOUNT_TOLERANCE_CENTS = 100
+/** Allow up to ±$100 when batch siblings anchor a decision date */
+const NEAR_BRIDGING_TOLERANCE_CENTS = 10000
+
+/** @deprecated use NEAR_AMOUNT_TOLERANCE_CENTS */
+const SPLIT_AMOUNT_TOLERANCE_CENTS = NEAR_AMOUNT_TOLERANCE_CENTS
+/** @deprecated use NEAR_BRIDGING_TOLERANCE_CENTS */
+const SPLIT_BRIDGING_TOLERANCE_CENTS = NEAR_BRIDGING_TOLERANCE_CENTS
+
+function isNonZeroAmount(amount: number | null | undefined): amount is number {
+  return amount != null && amountCents(amount) !== 0
+}
 
 function fdwIdsFromMatch(id: string): string[] {
   return id.split(';').map((s) => s.trim()).filter(Boolean)
@@ -421,6 +430,7 @@ async function main() {
   let noDateMatch = 0
   let batchDisambigMatch = 0
   let secondPassMatch = 0
+  let nearAmountMatch = 0
   let splitMatch = 0
   let unmatched = 0
   const matchedPairs: Array<{
@@ -618,8 +628,70 @@ async function main() {
   }
 
   /**
-   * One sheet row split across two Airtable allocations (same partner+state,
-   * amounts sum to sheet). E.g. 14-05-25-11 North Darfur $33199 = .80+$8375 + .73+$24824.
+   * Match one sheet row to a single non-zero Airtable allocation when amounts
+   * are close (e.g. 26-02-14 legs zeroed out; full amount lives on 26-07-08).
+   */
+  function tryNearSingleMatch(s: SheetAlloc & { yymmddCandidates: string[] }): boolean {
+    if (!s.partner || !s.state || s.amount == null) return false
+
+    const stateNorm = normState(s.state)
+    const pool = fdw.filter(
+      (f) =>
+        !usedFdw.has(f.id) &&
+        f.partner === s.partner &&
+        normState(f.state) === stateNorm &&
+        isNonZeroAmount(f.amount)
+    )
+    if (!pool.length) return false
+
+    const siblingDates = batchDecisionDates(s.code)
+    const codeDates = new Set(codeDateCandidates(s.code))
+
+    const attempt = (tolCents: number): string | null => {
+      let near = pool.filter(
+        (f) => Math.abs(amountCents(f.amount!) - amountCents(s.amount!)) <= tolCents
+      )
+      if (!near.length) return null
+
+      if (s.yymmddCandidates.length) {
+        const byDate = near.filter((f) => f.yymmdd && s.yymmddCandidates.includes(f.yymmdd))
+        if (byDate.length) near = byDate
+      }
+
+      if (near.length > 1 && codeDates.size) {
+        const byCode = near.filter((f) => f.yymmdd && codeDates.has(f.yymmdd))
+        if (byCode.length) near = byCode
+      }
+
+      if (near.length > 1 && siblingDates.size) {
+        const byBatch = near.filter((f) => f.yymmdd && siblingDates.has(f.yymmdd))
+        if (byBatch.length) near = byBatch
+      }
+
+      if (near.length > 1) {
+        const minDiff = Math.min(...near.map((f) => amountDiffCents(f.amount!, s.amount!)))
+        near = near.filter((f) => amountDiffCents(f.amount!, s.amount!) === minDiff)
+      }
+
+      return near.length === 1 ? near[0].id : null
+    }
+
+    let id = attempt(NEAR_AMOUNT_TOLERANCE_CENTS)
+    if (!id && (siblingDates.size || codeDates.size)) {
+      id = attempt(NEAR_BRIDGING_TOLERANCE_CENTS)
+    }
+    if (!id) return false
+
+    usedFdw.add(id)
+    recordMatch(s, id, 'partner+state+near_amount')
+    nearAmountMatch++
+    return true
+  }
+
+  /**
+   * One sheet row split across two non-zero Airtable allocations (same partner+state,
+   * amounts sum to sheet). E.g. 15-04-26-40 Khartoum = 26-04-15 + 26-04-17.
+   * Zero-amount rows (e.g. zeroed 26-02-14) are excluded — use near single match instead.
    */
   function trySplitMatch(s: SheetAlloc): boolean {
     if (!s.partner || !s.state || s.amount == null) return false
@@ -630,7 +702,7 @@ async function main() {
         !usedFdw.has(f.id) &&
         f.partner === s.partner &&
         normState(f.state) === stateNorm &&
-        f.amount != null
+        isNonZeroAmount(f.amount)
     )
     if (candidates.length < 2) return false
 
@@ -656,10 +728,10 @@ async function main() {
       return siblingDates.has(a.yymmdd) || siblingDates.has(b.yymmdd)
     }
 
-    let pairs = collectPairs(SPLIT_AMOUNT_TOLERANCE_CENTS)
+    let pairs = collectPairs(NEAR_AMOUNT_TOLERANCE_CENTS)
     // Near-miss splits (e.g. Khartoum/Kassala on 15-04-26-40): allow larger gap if pair bridges sibling date
     if (!pairs.length && siblingDates.size) {
-      pairs = collectPairs(SPLIT_BRIDGING_TOLERANCE_CENTS).filter(([a, b]) => isBridging(a, b))
+      pairs = collectPairs(NEAR_BRIDGING_TOLERANCE_CENTS).filter(([a, b]) => isBridging(a, b))
     }
     if (!pairs.length) return false
 
@@ -720,7 +792,18 @@ async function main() {
     }
   }
 
-  // Sheet amount split across two Airtable decision dates (same partner+state)
+  // Single non-zero Airtable row when historical split legs are now $0
+  for (const s of sheetAll) {
+    if (isMatched(s.sequence)) continue
+    if (tryNearSingleMatch(s)) unmatched--
+  }
+
+  for (const s of sheetAll) {
+    if (isMatched(s.sequence)) continue
+    if (tryNearSingleMatch(s)) unmatched--
+  }
+
+  // Sheet amount split across two non-zero Airtable decision dates (same partner+state)
   for (const s of sheetAll) {
     if (isMatched(s.sequence)) continue
     if (trySplitMatch(s)) unmatched--
@@ -745,6 +828,7 @@ async function main() {
   console.log(`Match (p+state+amount):    ${noDateMatch}`)
   console.log(`Batch disambiguated:       ${batchDisambigMatch}`)
   console.log(`Second pass (batch retry): ${secondPassMatch}`)
+  console.log(`Near amount (single row):  ${nearAmountMatch}`)
   console.log(`Split amount (1 sheet→2):  ${splitMatch}`)
   console.log(`Sheet unmatched:           ${unmatched}`)
   console.log(`FDW unmatched:             ${fdwUnmatched.length}`)
