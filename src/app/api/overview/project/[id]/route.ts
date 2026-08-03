@@ -408,6 +408,22 @@ export async function GET(
         }
       }
 
+      let supportingDocuments: any[] = []
+      try {
+        const { data: docs, error: docsErr } = await supabase
+          .from('err_project_documents')
+          .select('id, project_id, file_name, file_key, uploaded_at, uploaded_by')
+          .eq('project_id', id)
+          .order('uploaded_at', { ascending: false })
+        if (docsErr) {
+          console.warn('[overview/project] supporting documents', docsErr.message)
+        } else {
+          supportingDocuments = docs || []
+        }
+      } catch (e) {
+        console.warn('[overview/project] supporting documents unavailable', e)
+      }
+
       // Compute overdue for portal project: due = transfer + 32 days; overdue when past due and not (F4 and F5 complete)
       const effectiveTransferDate = project.date_transfer || transferDateFromMou || null
       const f4Complete = (summariesWithExpenses?.length ?? 0) > 0 || isStatusCompleteForOverdue(project.f4_status)
@@ -433,7 +449,8 @@ export async function GET(
           signed_mou: mouFileKeys?.signed_mou_file_key || null
         },
         f4_files: f4FileAttachments,
-        f5_files: f5FileAttachments
+        f5_files: f5FileAttachments,
+        supporting_documents: supportingDocuments || [],
       })
     }
   } catch (e) {

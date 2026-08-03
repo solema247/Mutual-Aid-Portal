@@ -215,6 +215,14 @@
         "seller": "Seller",
         "no_reports": "No reports",
         "no_expenses": "No expenses"
+      },
+      "supporting_documents": {
+        "title": "Additional documents",
+        "help": "Progress reports and other files from the ERR/WRR that are not F1–F5 forms.",
+        "upload": "Upload",
+        "uploading": "Uploading…",
+        "empty": "No additional documents yet.",
+        "delete": "Delete document"
       }
     }
   },

@@ -6,13 +6,23 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Label } from '@/components/ui/label'
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
-import { FileText, FileCheck, Receipt, FileSignature, CheckCircle, AlertCircle } from 'lucide-react'
+import { FileText, FileCheck, Receipt, FileSignature, CheckCircle, AlertCircle, Upload, Trash2 } from 'lucide-react'
 import {
   filterF4ExpensesForDisplay,
   formatF4SdgAmount,
   formatF4UsdAmount,
   sumF4ExpenseDisplayAmounts,
 } from '@/lib/f4ExpenseDisplay'
+import { supabase } from '@/lib/supabaseClient'
+
+interface SupportingDocument {
+  id: string
+  project_id: string
+  file_name: string
+  file_key: string
+  uploaded_at: string
+  uploaded_by: string | null
+}
 
 interface ProjectDetailModalProps {
   projectId: string | null
@@ -25,6 +35,9 @@ export default function ProjectDetailModal({ projectId, open, onOpenChange }: Pr
   const [loading, setLoading] = useState(false)
   const [data, setData] = useState<any | null>(null)
   const [completing, setCompleting] = useState(false)
+  const [supportingDocs, setSupportingDocs] = useState<SupportingDocument[]>([])
+  const [uploadingDoc, setUploadingDoc] = useState(false)
+  const [deletingDocId, setDeletingDocId] = useState<string | null>(null)
 
   useEffect(() => {
     if (!open || !projectId) { setData(null); return }
@@ -35,14 +48,24 @@ export default function ProjectDetailModal({ projectId, open, onOpenChange }: Pr
         const j = await res.json()
         if (!res.ok) throw new Error(j.error || 'Failed to load project')
         setData(j)
+        setSupportingDocs(Array.isArray(j.supporting_documents) ? j.supporting_documents : [])
       } catch (e) {
         console.error(e)
         setData(null)
+        setSupportingDocs([])
       } finally {
         setLoading(false)
       }
     })()
   }, [open, projectId])
+
+  useEffect(() => {
+    if (!open) {
+      setSupportingDocs([])
+      setUploadingDoc(false)
+      setDeletingDocId(null)
+    }
+  }, [open])
 
   const project = data?.project
   const room = project?.emergency_rooms
@@ -106,11 +129,69 @@ export default function ProjectDetailModal({ projectId, open, onOpenChange }: Pr
       const j = await res.json()
       if (!res.ok) throw new Error(j.error || 'Failed to reload project')
       setData(j)
+      setSupportingDocs(Array.isArray(j.supporting_documents) ? j.supporting_documents : [])
     } catch (error: any) {
       console.error('Error completing project:', error)
       alert(error.message || 'Failed to complete project')
     } finally {
       setCompleting(false)
+    }
+  }
+
+  const safeFileSegment = (name: string) =>
+    name.replace(/[\\/:*?"<>|]+/g, '-').replace(/\s+/g, ' ').trim().slice(0, 120) || 'document'
+
+  const handleUploadSupportingDocs = async (files: FileList | null) => {
+    if (!projectId || isHistorical || !files?.length) return
+    setUploadingDoc(true)
+    try {
+      const uploaded: SupportingDocument[] = []
+      for (const file of Array.from(files)) {
+        const ext = (file.name.split('.').pop() || 'bin').toLowerCase().replace(/[^a-z0-9]/g, '') || 'bin'
+        const key = `projects/${projectId}/supporting/${Date.now()}-${crypto.randomUUID()}.${ext}`
+        const { error: upErr } = await supabase.storage.from('images').upload(key, file, {
+          cacheControl: '3600',
+          upsert: false,
+        })
+        if (upErr) throw upErr
+
+        const res = await fetch(`/api/projects/${projectId}/documents`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            file_name: safeFileSegment(file.name),
+            file_key: key,
+          }),
+        })
+        const j = await res.json()
+        if (!res.ok) throw new Error(j.error || 'Failed to save document')
+        if (j.document) uploaded.push(j.document)
+      }
+      if (uploaded.length) {
+        setSupportingDocs((prev) => [...uploaded, ...prev])
+      }
+    } catch (error: any) {
+      console.error('Error uploading supporting document:', error)
+      alert(error.message || 'Failed to upload document')
+    } finally {
+      setUploadingDoc(false)
+    }
+  }
+
+  const handleDeleteSupportingDoc = async (doc: SupportingDocument) => {
+    if (!projectId || isHistorical) return
+    if (!confirm(`Delete "${doc.file_name}"?`)) return
+    setDeletingDocId(doc.id)
+    try {
+      const res = await fetch(`/api/projects/${projectId}/documents/${doc.id}`, { method: 'DELETE' })
+      const j = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(j.error || 'Failed to delete document')
+      setSupportingDocs((prev) => prev.filter((d) => d.id !== doc.id))
+    } catch (error: any) {
+      console.error('Error deleting supporting document:', error)
+      alert(error.message || 'Failed to delete document')
+    } finally {
+      setDeletingDocId(null)
     }
   }
 
@@ -728,6 +809,85 @@ export default function ProjectDetailModal({ projectId, open, onOpenChange }: Pr
                     </div>
                   </div>
                 )}
+
+                {/* Additional supporting documents (not F1–F5) */}
+                <div>
+                  <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                    <Label className="text-base font-semibold">
+                      {t('management.detail_modal.supporting_documents.title')}
+                    </Label>
+                    <div>
+                      <input
+                        id="project-supporting-docs-input"
+                        type="file"
+                        multiple
+                        className="hidden"
+                        disabled={uploadingDoc}
+                        onChange={(e) => {
+                          void handleUploadSupportingDocs(e.target.files)
+                          e.target.value = ''
+                        }}
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={uploadingDoc}
+                        className="flex items-center gap-2"
+                        onClick={() => document.getElementById('project-supporting-docs-input')?.click()}
+                      >
+                        <Upload className="h-4 w-4" />
+                        {uploadingDoc
+                          ? t('management.detail_modal.supporting_documents.uploading')
+                          : t('management.detail_modal.supporting_documents.upload')}
+                      </Button>
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground mb-3">
+                    {t('management.detail_modal.supporting_documents.help')}
+                  </p>
+                  {supportingDocs.length === 0 ? (
+                    <div className="text-sm text-muted-foreground py-2">
+                      {t('management.detail_modal.supporting_documents.empty')}
+                    </div>
+                  ) : (
+                    <ul className="space-y-2">
+                      {supportingDocs.map((doc) => (
+                        <li
+                          key={doc.id}
+                          className="flex flex-wrap items-center justify-between gap-2 rounded border px-3 py-2"
+                        >
+                          <button
+                            type="button"
+                            className="flex items-center gap-2 text-sm text-left hover:underline min-w-0"
+                            onClick={() => handleFileClick(doc.file_key, doc.file_name)}
+                          >
+                            <FileText className="h-4 w-4 shrink-0" />
+                            <span className="truncate">{doc.file_name}</span>
+                          </button>
+                          <div className="flex items-center gap-2 shrink-0">
+                            {doc.uploaded_at && (
+                              <span className="text-xs text-muted-foreground">
+                                {new Date(doc.uploaded_at).toLocaleDateString()}
+                              </span>
+                            )}
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive"
+                              disabled={deletingDocId === doc.id}
+                              onClick={() => void handleDeleteSupportingDoc(doc)}
+                              aria-label={t('management.detail_modal.supporting_documents.delete')}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
 
                 {/* F1 Project Budget Table */}
                 {(project?.planned_activities || project?.expenses) && (

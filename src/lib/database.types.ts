@@ -1575,6 +1575,41 @@ export type Database = {
           },
         ]
       }
+      err_project_documents: {
+        Row: {
+          id: string
+          project_id: string
+          file_name: string
+          file_key: string
+          uploaded_at: string
+          uploaded_by: string | null
+        }
+        Insert: {
+          id?: string
+          project_id: string
+          file_name: string
+          file_key: string
+          uploaded_at?: string
+          uploaded_by?: string | null
+        }
+        Update: {
+          id?: string
+          project_id?: string
+          file_name?: string
+          file_key?: string
+          uploaded_at?: string
+          uploaded_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "err_project_documents_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "err_projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       err_projects: {
         Row: {
           additional_support: string | null
