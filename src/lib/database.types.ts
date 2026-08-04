@@ -3867,6 +3867,10 @@ export type Database = {
     }
     Functions: {
       airtable_fdw_handler: { Args: never; Returns: unknown }
+      allocate_next_workplan_sequence: {
+        Args: { p_donor_name: string; p_grant_id: string }
+        Returns: number
+      }
       airtable_fdw_meta: {
         Args: never
         Returns: {
