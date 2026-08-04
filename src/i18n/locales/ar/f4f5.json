@@ -97,6 +97,7 @@
         "empty": "لا توجد مصروفات مستخرجة",
         "add": "إضافة مصروف",
         "sector_placeholder": "اختر القطاع",
+        "fill_down": "تعبئة لأسفل",
         "popover_cancel": "إلغاء",
         "popover_apply": "تطبيق",
         "cols": {

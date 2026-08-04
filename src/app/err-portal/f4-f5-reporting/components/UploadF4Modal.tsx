@@ -10,7 +10,6 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { supabase } from '@/lib/supabaseClient'
-import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '@/components/ui/table'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { CollapsibleRow } from '@/components/ui/collapsible'
 import type { RegionSelection, WizardKind, WizardPageEntry } from '../f4Wizard/types'
@@ -1066,17 +1065,17 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
               }
             />
           ) : step === 'preview' ? (
-          <div className="space-y-6 select-text">
+          <div className="space-y-6 select-text min-w-0 max-w-full">
             {/* Form Content */}
-            <div className="space-y-6">
+            <div className="space-y-6 min-w-0 max-w-full">
             {/* Summary Header */}
-            <div className="space-y-3">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
+            <div className="space-y-3 min-w-0">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 min-w-0">
+                <div className="min-w-0">
                   <Label>{t('f4.preview.labels.err_room')}</Label>
-                  <div className="h-10 flex items-center px-3 rounded border bg-muted/50">{projectMeta?.roomLabel || '-'}</div>
+                  <div className="h-10 flex items-center px-3 rounded border bg-muted/50 truncate">{projectMeta?.roomLabel || '-'}</div>
                 </div>
-              <div>
+              <div className="min-w-0">
                 <Label>{t('f4.preview.labels.report_date')} *</Label>
                 <Input
                   className="select-text"
@@ -1154,8 +1153,8 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
                 />
               </div>
               {/* FX Rate (moved here) */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 min-w-0">
+                <div className="min-w-0">
                   <Label className="font-bold text-red-600">{t('f4.preview.labels.fx_rate')} *</Label>
                   <p className="text-xs text-muted-foreground mt-0.5 mb-1.5 max-w-md">
                     {t('f4.preview.labels.fx_rate_note')}
@@ -1192,7 +1191,7 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
             </div>
 
             {/* Expenses (move above Financials) */}
-            <div>
+            <div className="min-w-0 max-w-full">
               <div className="flex items-center justify-between mb-2">
                 <Label>{t('f4.preview.expenses.title')}</Label>
                 <Button
@@ -1221,24 +1220,24 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
             </div>
 
             {/* Financials */}
-            <div className="grid grid-cols-2 gap-4">
-              <div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 min-w-0">
+              <div className="min-w-0">
                 <Label>{t('f4.preview.financials.total_grant')} (USD)</Label>
                 <div className="h-10 flex items-center px-3 rounded border bg-muted/50">{(projectMeta?.total_grant_from_project ?? 0).toLocaleString()}</div>
               </div>
-              <div>
+              <div className="min-w-0">
                 <Label>{t('f4.preview.financials.total_expenses')} (USD)</Label>
                 <div className="h-10 flex items-center px-3 rounded border bg-muted/50">{expensesDraft.reduce((s, ex) => s + (Number(ex.expense_amount) || 0), 0).toLocaleString()}</div>
               </div>
-              <div>
+              <div className="min-w-0">
                 <Label>{t('f4.preview.financials.total_expenses')} (SDG)</Label>
                 <div className="h-10 flex items-center px-3 rounded border bg-muted/50">{expensesDraft.reduce((s, ex) => s + (Number(ex.expense_amount_sdg) || 0), 0).toLocaleString()}</div>
               </div>
-              <div>
+              <div className="min-w-0">
                 <Label>{t('f4.preview.financials.remainder')} (USD)</Label>
                 <Input className="select-text" type="number" value={String((projectMeta?.total_grant_from_project || 0) - expensesDraft.reduce((s, ex) => s + (Number(ex.expense_amount) || 0), 0))} readOnly />
               </div>
-              <div>
+              <div className="min-w-0">
                 <Label>{t('f4.preview.financials.total_other_sources')}</Label>
                 <Input 
                   className="select-text selection:bg-blue-200 selection:text-blue-900 dark:selection:bg-blue-800 dark:selection:text-blue-100" 
@@ -1251,7 +1250,7 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
                   onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), total_other_sources: parseFloat(e.target.value)||0 }))} 
                 />
               </div>
-              <div className="col-span-2">
+              <div className="sm:col-span-2 min-w-0">
                 <Label>{t('f4.preview.financials.excess_expenses')}</Label>
                 <Textarea 
                   className="select-text selection:bg-blue-200 selection:text-blue-900 dark:selection:bg-blue-800 dark:selection:text-blue-100 min-h-[100px]" 
@@ -1260,7 +1259,7 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
                   onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), excess_expenses: e.target.value }))} 
                 />
               </div>
-              <div className="col-span-2">
+              <div className="sm:col-span-2 min-w-0">
                 <Label>{t('f4.preview.financials.surplus_use')}</Label>
                 <Textarea 
                   className="select-text selection:bg-blue-200 selection:text-blue-900 dark:selection:bg-blue-800 dark:selection:text-blue-100 min-h-[100px]" 
@@ -1269,7 +1268,7 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
                   onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), surplus_use: e.target.value }))} 
                 />
               </div>
-              <div className="col-span-2">
+              <div className="sm:col-span-2 min-w-0">
                 <Label>{t('f4.preview.financials.lessons_learned')}</Label>
                 <Textarea 
                   className="select-text selection:bg-blue-200 selection:text-blue-900 dark:selection:bg-blue-800 dark:selection:text-blue-100 min-h-[100px]" 
@@ -1278,7 +1277,7 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
                   onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), lessons: e.target.value }))} 
                 />
               </div>
-              <div className="col-span-2">
+              <div className="sm:col-span-2 min-w-0">
                 <Label>{t('f4.preview.financials.training_needs')}</Label>
                 <Textarea 
                   className="select-text selection:bg-blue-200 selection:text-blue-900 dark:selection:bg-blue-800 dark:selection:text-blue-100 min-h-[100px]" 
@@ -1288,7 +1287,7 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
                 />
               </div>
 
-              <div className="col-span-2 rounded border p-3 bg-muted/20 space-y-3">
+              <div className="sm:col-span-2 min-w-0 rounded border p-3 bg-muted/20 space-y-3">
                 <div className="font-medium text-sm">Receipt Check</div>
                 {(() => {
                   const receiptRows = Array.isArray(summaryDraft?.receipt_check?.receipts) ? summaryDraft.receipt_check.receipts : []
@@ -1317,27 +1316,36 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
                       <div className="text-xs text-muted-foreground">
                         Edit extracted receipt amounts as needed, add missing receipts manually, or mark unreadable receipts as missing.
                       </div>
-                      <div className="border rounded overflow-hidden bg-background">
-                        <Table>
-                          <TableHeader>
-                            <TableRow>
-                              <TableHead className="w-[40%]">Receipt / Reference</TableHead>
-                              <TableHead className="w-[25%]">Amount (SDG)</TableHead>
-                              <TableHead className="w-[20%]">Missing</TableHead>
-                              <TableHead className="w-[15%] text-right">Actions</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {receiptRows.length === 0 ? (
-                              <TableRow>
-                                <TableCell colSpan={4} className="text-sm text-muted-foreground">
-                                  No receipt rows yet. Add rows manually if needed.
-                                </TableCell>
-                              </TableRow>
-                            ) : (
-                              receiptRows.map((row: any, idx: number) => (
-                                <TableRow key={`receipt-row-${idx}`}>
-                                  <TableCell>
+                      <div className="bg-background">
+                        {receiptRows.length === 0 ? (
+                          <div className="border rounded p-3 text-sm text-muted-foreground">
+                            No receipt rows yet. Add rows manually if needed.
+                          </div>
+                        ) : (
+                          <>
+                            {/* Receipt rows — stacked cards on all widths (no horizontal scroll) */}
+                            <div className="space-y-3">
+                              {receiptRows.map((row: any, idx: number) => (
+                                <div key={`receipt-card-${idx}`} className="rounded-lg border p-3 space-y-3 min-w-0">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <span className="text-xs font-semibold text-muted-foreground">#{idx + 1}</span>
+                                    <Button
+                                      variant="destructive"
+                                      size="sm"
+                                      onClick={() => {
+                                        const nextRows = [...receiptRows]
+                                        nextRows.splice(idx, 1)
+                                        setSummaryDraft((s: any) => ({
+                                          ...(s || {}),
+                                          receipt_check: { ...(s?.receipt_check || {}), receipts: nextRows, confirmed: false },
+                                        }))
+                                      }}
+                                    >
+                                      Delete
+                                    </Button>
+                                  </div>
+                                  <div className="space-y-1.5 min-w-0">
+                                    <Label className="text-xs text-muted-foreground">Receipt / Reference</Label>
                                     <F4ExpandableTextInput
                                       value={row?.reference || ''}
                                       onChange={(v) => {
@@ -1350,24 +1358,25 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
                                       }}
                                       placeholder={`receipt-${idx + 1}`}
                                     />
-                                  </TableCell>
-                                  <TableCell>
-                                    <F4FormattedAmountInput
-                                      value={row?.amount_sdg != null ? Number(row.amount_sdg) : null}
-                                      onChange={(num) => {
-                                        const nextRows = [...receiptRows]
-                                        nextRows[idx] = { ...nextRows[idx], amount_sdg: num }
-                                        setSummaryDraft((s: any) => ({
-                                          ...(s || {}),
-                                          receipt_check: { ...(s?.receipt_check || {}), receipts: nextRows, confirmed: false },
-                                        }))
-                                      }}
-                                      placeholder="0"
-                                      disabled={Boolean(row?.missing)}
-                                    />
-                                  </TableCell>
-                                  <TableCell>
-                                    <div className="flex items-center gap-2">
+                                  </div>
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 min-w-0">
+                                    <div className="space-y-1.5 min-w-0">
+                                      <Label className="text-xs text-muted-foreground">Amount (SDG)</Label>
+                                      <F4FormattedAmountInput
+                                        value={row?.amount_sdg != null ? Number(row.amount_sdg) : null}
+                                        onChange={(num) => {
+                                          const nextRows = [...receiptRows]
+                                          nextRows[idx] = { ...nextRows[idx], amount_sdg: num }
+                                          setSummaryDraft((s: any) => ({
+                                            ...(s || {}),
+                                            receipt_check: { ...(s?.receipt_check || {}), receipts: nextRows, confirmed: false },
+                                          }))
+                                        }}
+                                        placeholder="0"
+                                        disabled={Boolean(row?.missing)}
+                                      />
+                                    </div>
+                                    <div className="flex items-end gap-2 pb-1">
                                       <Checkbox
                                         checked={Boolean(row?.missing)}
                                         onCheckedChange={(checked) => {
@@ -1385,28 +1394,12 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
                                       />
                                       <span className="text-xs text-muted-foreground">mark missing</span>
                                     </div>
-                                  </TableCell>
-                                  <TableCell className="text-right">
-                                    <Button
-                                      variant="destructive"
-                                      size="sm"
-                                      onClick={() => {
-                                        const nextRows = [...receiptRows]
-                                        nextRows.splice(idx, 1)
-                                        setSummaryDraft((s: any) => ({
-                                          ...(s || {}),
-                                          receipt_check: { ...(s?.receipt_check || {}), receipts: nextRows, confirmed: false },
-                                        }))
-                                      }}
-                                    >
-                                      Delete
-                                    </Button>
-                                  </TableCell>
-                                </TableRow>
-                              ))
-                            )}
-                          </TableBody>
-                        </Table>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </>
+                        )}
                       </div>
                       <div>
                         <Button

@@ -368,8 +368,8 @@ export default function ViewF4Modal({ summaryId, open, onOpenChange, onSaved }: 
             </div>
 
             {/* Summary */}
-            <div className="grid grid-cols-2 gap-4">
-              <div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 min-w-0">
+              <div className="min-w-0">
                 <Label>Report Date</Label>
                 {isEditing ? (
                   <Input type="date" value={summaryDraft?.report_date ? (typeof summaryDraft.report_date === 'string' ? summaryDraft.report_date.split('T')[0] : new Date(summaryDraft.report_date).toISOString().split('T')[0]) : ''} onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), report_date: e.target.value }))} />
@@ -377,7 +377,7 @@ export default function ViewF4Modal({ summaryId, open, onOpenChange, onSaved }: 
                   <div className="h-10 flex items-center px-3 rounded border bg-muted/50">{reportDateDisplay}</div>
                 )}
               </div>
-              <div className={!isEditing ? 'col-span-2' : ''}>
+              <div className={`min-w-0${!isEditing ? ' sm:col-span-2' : ''}`}>
                 <Label>Beneficiaries</Label>
                 {isEditing ? (
                   <Input value={summaryDraft?.beneficiaries || ''} onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), beneficiaries: e.target.value }))} />
@@ -389,8 +389,8 @@ export default function ViewF4Modal({ summaryId, open, onOpenChange, onSaved }: 
 
             {/* FX Rate */}
             {isEditing && (
-              <div className="grid grid-cols-2 gap-4">
-                <div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 min-w-0">
+                <div className="min-w-0">
                   <Label>{t('f4.preview.labels.fx_rate')}</Label>
                   <Input type="number" value={fxRate ?? ''} onChange={(e)=>{
                     const v = parseFloat(e.target.value)
@@ -414,24 +414,24 @@ export default function ViewF4Modal({ summaryId, open, onOpenChange, onSaved }: 
             )}
 
             {/* Financials */}
-            <div className="grid grid-cols-2 gap-4">
-              <div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 min-w-0">
+              <div className="min-w-0">
                 <Label>{t('f4.preview.financials.total_grant')} (USD)</Label>
                 <div className="h-10 flex items-center px-3 rounded border bg-muted/50">{(projectMeta?.total_grant_from_project ?? summary?.total_grant ?? 0).toLocaleString()}</div>
               </div>
-              <div>
+              <div className="min-w-0">
                 <Label>{t('f4.preview.financials.total_expenses')} (USD)</Label>
                 <div className="h-10 flex items-center px-3 rounded border bg-muted/50">{expensesDraft.reduce((s, ex) => s + (Number(ex.expense_amount) || 0), 0).toLocaleString()}</div>
               </div>
-              <div>
+              <div className="min-w-0">
                 <Label>{t('f4.preview.financials.total_expenses')} (SDG)</Label>
                 <div className="h-10 flex items-center px-3 rounded border bg-muted/50">{expensesDraft.reduce((s, ex) => s + (Number(ex.expense_amount_sdg) || 0), 0).toLocaleString()}</div>
               </div>
-              <div>
+              <div className="min-w-0">
                 <Label>{t('f4.preview.financials.remainder')} (USD)</Label>
                 <Input type="number" value={(projectMeta?.total_grant_from_project ?? summary?.total_grant ?? 0) - expensesDraft.reduce((s, ex) => s + (Number(ex.expense_amount) || 0), 0)} readOnly />
               </div>
-              <div>
+              <div className="min-w-0">
                 <Label>{t('f4.preview.financials.total_other_sources')}</Label>
                 {isEditing ? (
                   <Input type="number" value={summaryDraft?.total_other_sources ?? ''} onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), total_other_sources: parseFloat(e.target.value)||0 }))} />
@@ -441,8 +441,8 @@ export default function ViewF4Modal({ summaryId, open, onOpenChange, onSaved }: 
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 min-w-0">
+              <div className="min-w-0">
                 <Label>Excess Expenses (How covered?)</Label>
                 {isEditing ? (
                   <Input value={summaryDraft?.excess_expenses || ''} onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), excess_expenses: e.target.value }))} />
@@ -450,7 +450,7 @@ export default function ViewF4Modal({ summaryId, open, onOpenChange, onSaved }: 
                   <div className="min-h-[40px] max-h-[10rem] overflow-y-auto px-3 py-2 rounded border bg-muted/50 text-sm whitespace-pre-wrap break-words">{summary?.excess_expenses || '-'}</div>
                 )}
               </div>
-              <div>
+              <div className="min-w-0">
                 <Label>Surplus Use</Label>
                 {isEditing ? (
                   <Input value={summaryDraft?.surplus_use || ''} onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), surplus_use: e.target.value }))} />
@@ -458,7 +458,7 @@ export default function ViewF4Modal({ summaryId, open, onOpenChange, onSaved }: 
                   <div className="min-h-[40px] max-h-[10rem] overflow-y-auto px-3 py-2 rounded border bg-muted/50 text-sm whitespace-pre-wrap break-words">{summary?.surplus_use || '-'}</div>
                 )}
               </div>
-              <div>
+              <div className="min-w-0">
                 <Label>Lessons Learned</Label>
                 {isEditing ? (
                   <Input value={summaryDraft?.lessons || ''} onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), lessons: e.target.value }))} />
@@ -466,7 +466,7 @@ export default function ViewF4Modal({ summaryId, open, onOpenChange, onSaved }: 
                   <div className="min-h-[40px] max-h-[10rem] overflow-y-auto px-3 py-2 rounded border bg-muted/50 text-sm whitespace-pre-wrap break-words">{lessonsDisplay}</div>
                 )}
               </div>
-              <div>
+              <div className="min-w-0">
                 <Label>Training Needs</Label>
                 {isEditing ? (
                   <Input value={summaryDraft?.training || ''} onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), training: e.target.value }))} />
@@ -477,7 +477,7 @@ export default function ViewF4Modal({ summaryId, open, onOpenChange, onSaved }: 
             </div>
 
             {/* Expenses */}
-            <div>
+            <div className="min-w-0 max-w-full">
               <div className="flex items-center justify-between mb-2">
                 <Label>Expenses</Label>
                 {isEditing && (
