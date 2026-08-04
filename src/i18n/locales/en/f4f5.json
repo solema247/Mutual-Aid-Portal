@@ -206,6 +206,7 @@
         "empty": "No rows parsed",
         "cols": {
           "activity_name": "Activity Name",
+          "sector": "Sector",
           "activity_goal": "Goal/Details of Activity",
           "location": "Implementation Location",
           "start": "Start",
@@ -214,7 +215,8 @@
           "beneficiaries_families": "Beneficiaries (Families)",
           "actions": "Actions",
           "delete": "Delete"
-        }
+        },
+        "f1_planned_hint": "F1 planned sector(s)"
       },
       "demographics": {
         "title": "Additional Beneficiary Breakdown",

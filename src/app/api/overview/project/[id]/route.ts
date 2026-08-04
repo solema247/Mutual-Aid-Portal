@@ -265,6 +265,8 @@ export async function GET(
           f4_status,
           f5_status,
           grant_segment,
+          implemented_sector,
+          activity_shift_note,
           emergency_rooms ( id, name, name_ar, err_code )
         `)
         .eq('id', id)

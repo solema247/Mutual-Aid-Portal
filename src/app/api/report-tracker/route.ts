@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { getUserStateAccess } from '@/lib/userStateAccess'
 import { getActivityAndCategoryLists, getSectorWithHighestAmount } from '@/lib/plannedActivitiesExpenses'
+import { isActivityShifted } from '@/lib/activityShift'
 import { pickF5TextForEnUi } from '@/lib/storiesEnDisplay'
 
 function sumPlanFromPlannedActivities(planned: any): number {
@@ -130,6 +131,8 @@ export async function GET(request: Request) {
         grant_segment,
         grant_grid_id,
         estimated_beneficiaries,
+        implemented_sector,
+        activity_shift_note,
         emergency_rooms ( err_code ),
         donors ( name, short_name )
       `)
@@ -365,6 +368,11 @@ export async function GET(request: Request) {
       const donor = donorRow?.name ?? donorRow?.short_name ?? null
       const { activity_list, expense_category_list } = getActivityAndCategoryLists(p.planned_activities, p.expenses)
       const sector_highest_amount = getSectorWithHighestAmount(p.planned_activities, p.expenses)
+      const planned_sector = sector_highest_amount
+      const implemented_sector = p.implemented_sector != null && String(p.implemented_sector).trim() !== ''
+        ? String(p.implemented_sector).trim()
+        : null
+      const activity_shifted = isActivityShifted(p.planned_activities, p.expenses, implemented_sector)
       return {
         id: p.id,
         grant_id: p.grant_id ?? '',
@@ -389,6 +397,10 @@ export async function GET(request: Request) {
         activity_list,
         expense_category_list,
         sector_highest_amount,
+        planned_sector,
+        implemented_sector,
+        activity_shifted,
+        activity_shift_note: p.activity_shift_note ?? null,
         estimated_beneficiaries: p.estimated_beneficiaries != null ? Number(p.estimated_beneficiaries) : null,
         f5_reported_individuals: f5ReportedIndividualsByProject[p.id] ?? 0,
         f5_reported_households: f5ReportedHouseholdsByProject[p.id] ?? 0,

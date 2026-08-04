@@ -172,6 +172,10 @@ interface ReportTrackerRow {
   activity_list?: string[]
   expense_category_list?: string[]
   sector_highest_amount?: string | null
+  planned_sector?: string | null
+  implemented_sector?: string | null
+  activity_shifted?: boolean
+  activity_shift_note?: string | null
   estimated_beneficiaries: number | null
   f5_reported_individuals: number
   f5_reported_households: number
@@ -282,6 +286,10 @@ export default function ReportTrackerPage() {
               activity_list: r.activity_list ?? [],
               expense_category_list: r.expense_category_list ?? [],
               sector_highest_amount: r.sector_highest_amount ?? null,
+              planned_sector: r.planned_sector ?? r.sector_highest_amount ?? null,
+              implemented_sector: r.implemented_sector ?? null,
+              activity_shifted: !!r.activity_shifted,
+              activity_shift_note: r.activity_shift_note ?? null,
               estimated_beneficiaries: r.estimated_beneficiaries != null ? Number(r.estimated_beneficiaries) : null,
               f5_reported_individuals: Number(r.f5_reported_individuals) || 0,
               f5_reported_households: Number(r.f5_reported_households) || 0,
@@ -576,7 +584,9 @@ export default function ReportTrackerPage() {
                       { key: 'overdue', header: 'Overdue' },
                       { key: 'state', header: 'State' },
                       { key: 'locality', header: 'Locality' },
-                      { key: 'sector_highest_amount', header: 'Main Activity', format: (v) => (v != null && v !== '' ? String(v) : '') },
+                      { key: 'sector_highest_amount', header: 'Planned Sector', format: (v) => (v != null && v !== '' ? String(v) : '') },
+                      { key: 'implemented_sector', header: 'Implemented Sector', format: (v) => (v != null && v !== '' ? String(v) : '') },
+                      { key: 'activity_shifted', header: 'Shifted', format: (v) => (v ? 'Yes' : '') },
                       { key: 'transfer_date', header: 'Transfer Date', format: (v) => formatDate(v) },
                       { key: 'amount_usd', header: 'USD', format: (v) => formatAmount(v) },
                       { key: 'rate', header: 'Rate', format: (v) => formatAmount(v) },
@@ -704,7 +714,9 @@ export default function ReportTrackerPage() {
                     <TableHead className="text-center" dir="ltr">Overdue</TableHead>
                     <TableHead className="text-left" dir="ltr">State</TableHead>
                     <TableHead className="text-left" dir="ltr">Locality</TableHead>
-                    <TableHead className="text-left" dir="ltr">Main Activity</TableHead>
+                    <TableHead className="text-left" dir="ltr">Planned Sector</TableHead>
+                    <TableHead className="text-left" dir="ltr">Implemented</TableHead>
+                    <TableHead className="text-left" dir="ltr">Shifted</TableHead>
                     <TableHead className="text-left" dir="ltr">Transfer Date</TableHead>
                     <TableHead className="text-center tabular-nums" dir="ltr">USD</TableHead>
                     <TableHead className="text-center tabular-nums" dir="ltr">Rate</TableHead>
@@ -758,10 +770,34 @@ export default function ReportTrackerPage() {
                         </TableCell>
                         <TableCell>{row.state}</TableCell>
                         <TableCell>{row.locality}</TableCell>
-                        <TableCell className="max-w-[180px]">
-                          {row.sector_highest_amount ? (
-                            <span className="inline-flex items-center rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground border border-border/60">
-                              {row.sector_highest_amount}
+                        <TableCell className="max-w-[140px]">
+                          {row.sector_highest_amount || row.planned_sector ? (
+                            <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground border border-border/60">
+                              {row.sector_highest_amount || row.planned_sector}
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground text-sm">—</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="max-w-[140px]">
+                          {row.implemented_sector ? (
+                            <span
+                              className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground border border-border/60"
+                              title={row.activity_shift_note || undefined}
+                            >
+                              {row.implemented_sector}
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground text-sm">—</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {row.activity_shifted ? (
+                            <span
+                              className="inline-flex items-center rounded-full bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 px-2 py-0.5 text-xs font-medium border border-amber-200 dark:border-amber-800"
+                              title={row.activity_shift_note || 'Implemented sector differs from F1 plan'}
+                            >
+                              Shifted
                             </span>
                           ) : (
                             <span className="text-muted-foreground text-sm">—</span>

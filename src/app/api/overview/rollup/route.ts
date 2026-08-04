@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin'
-import { getActivityAndCategoryLists } from '@/lib/plannedActivitiesExpenses'
+import { getActivityAndCategoryLists, getSectorWithHighestAmount } from '@/lib/plannedActivitiesExpenses'
+import { isActivityShifted } from '@/lib/activityShift'
 import {
   computePortalActualsByProject,
   computePortalActualsFromProjectExpenses,
@@ -271,7 +272,7 @@ export async function GET(request: Request) {
     // Build project filter (include more statuses to catch F5 projects and completed projects)
     let projectQuery = supabase
       .from('err_projects')
-      .select('id, state, grant_call_id, grant_grid_id, grant_id, grant_segment, emergency_rooms (id, name, name_ar, err_code), planned_activities, expenses, source, status, funding_status, mou_id, f4_status, f5_status, date, date_transfer, completed_at, estimated_beneficiaries')
+      .select('id, state, grant_call_id, grant_grid_id, grant_id, grant_segment, emergency_rooms (id, name, name_ar, err_code), planned_activities, expenses, source, status, funding_status, mou_id, f4_status, f5_status, date, date_transfer, completed_at, estimated_beneficiaries, implemented_sector, activity_shift_note')
       .in('status', ['approved', 'active', 'pending', 'completed'])
       .in('funding_status', ['committed', 'allocated', 'unassigned'])
 
@@ -482,6 +483,11 @@ export async function GET(request: Request) {
       const effectiveTransferDate = p.date_transfer || transferDateByProject[p.id] || null
       const { is_overdue, days_overdue } = computeOverdue(effectiveTransferDate, f4Complete, f5Complete)
       const { activity_list, expense_category_list } = getActivityAndCategoryLists(p.planned_activities, p.expenses)
+      const planned_sector = getSectorWithHighestAmount(p.planned_activities, p.expenses)
+      const implemented_sector = p.implemented_sector != null && String(p.implemented_sector).trim() !== ''
+        ? String(p.implemented_sector).trim()
+        : null
+      const activity_shifted = isActivityShifted(p.planned_activities, p.expenses, implemented_sector)
       return {
         project_id: p.id,
         state: p.state,
@@ -502,6 +508,10 @@ export async function GET(request: Request) {
         actual_families,
         // Back-compat alias used by older clients / KPIs
         individuals: actual_individuals,
+        planned_sector,
+        implemented_sector,
+        activity_shifted,
+        activity_shift_note: p.activity_shift_note ?? null,
         burn,
         f4_count: agg.count,
         portal_f4_count: agg.count, // For portal projects, all F4s are portal F4s
@@ -602,6 +612,10 @@ export async function GET(request: Request) {
         overdue: overdueDisplay,
         activity_list: [], // Historical projects from activities_raw_import do not have planned_activities
         expense_category_list: [],
+        planned_sector: null,
+        implemented_sector: null,
+        activity_shifted: false,
+        activity_shift_note: null,
       }
     })
 

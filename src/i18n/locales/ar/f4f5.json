@@ -206,6 +206,7 @@
         "empty": "لا توجد صفوف مستخرجة",
         "cols": {
           "activity_name": "اسم النشاط",
+          "sector": "القطاع",
           "activity_goal": "هدف/تفاصيل النشاط",
           "location": "مكان التنفيذ",
           "start": "البداية",
@@ -214,7 +215,8 @@
           "beneficiaries_families": "المستفيدون (أسر)",
           "actions": "الإجراءات",
           "delete": "حذف"
-        }
+        },
+        "f1_planned_hint": "قطاعات F1 المخططة"
       },
       "demographics": {
         "title": "تفصيل إضافي للمستفيدين",

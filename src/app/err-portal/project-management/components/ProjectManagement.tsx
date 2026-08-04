@@ -689,6 +689,7 @@ export default function ProjectManagement() {
                           { key: 'plan', header: t('management.table.plan'), format: (v) => Number(v || 0).toLocaleString(undefined, { maximumFractionDigits: 0 }) },
                           { key: 'actual', header: t('management.table.actuals'), format: (v) => Number(v || 0).toLocaleString(undefined, { maximumFractionDigits: 0 }) },
                           { key: 'variance', header: t('management.table.variance'), format: (v) => Number(v || 0).toLocaleString(undefined, { maximumFractionDigits: 0 }) },
+                          { key: 'activity_shifted', header: t('management.table.activity_changed'), format: (v) => (v ? 'Yes' : '') },
                           { key: 'target_individuals', header: t('management.table.target_ind'), format: (v) => Number(v || 0).toLocaleString() },
                           { key: 'target_families', header: t('management.table.target_fam'), format: (v) => Number(v || 0).toLocaleString() },
                           { key: 'actual_individuals', header: t('management.table.actual_ind'), format: (v, r) => Number(v ?? r.individuals ?? 0).toLocaleString() },
@@ -845,7 +846,26 @@ export default function ProjectManagement() {
                   >
                     {searchRows || level === 'project' ? (
                       <>
-                        <TableCell>
+                        <TableCell
+                          className={cn(r.activity_shifted && 'relative')}
+                          title={
+                            r.activity_shifted
+                              ? ([
+                                  r.planned_sector && `${t('management.table.planned_sector')}: ${r.planned_sector}`,
+                                  r.implemented_sector && `${t('management.table.implemented_sector')}: ${r.implemented_sector}`,
+                                  r.activity_shift_note,
+                                ]
+                                  .filter(Boolean)
+                                  .join(' · ') || t('management.table.shifted_tooltip'))
+                              : undefined
+                          }
+                        >
+                          {r.activity_shifted && (
+                            <span
+                              className="pointer-events-none absolute top-0 end-0 h-0 w-0 border-t-[7px] border-t-amber-500 border-s-[7px] border-s-transparent"
+                              aria-label={t('management.table.activity_changed')}
+                            />
+                          )}
                           <div className="flex flex-col items-start gap-0.5">
                             <span>{r.err_id || '-'}</span>
                             {r.is_historical && (
