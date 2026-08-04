@@ -97,6 +97,36 @@ function sumPlanFromPlannedActivities(planned: any): number {
   }
 }
 
+/** Sum F1 planned-activity target individuals/families. */
+function sumTargetsFromPlannedActivities(planned: any): { individuals: number; families: number } {
+  try {
+    const arr = Array.isArray(planned) ? planned : (typeof planned === 'string' ? JSON.parse(planned || '[]') : [])
+    let individuals = 0
+    let families = 0
+    for (const a of arr || []) {
+      if (!a || typeof a !== 'object') continue
+      if ((a as any).individuals != null && Number.isFinite(Number((a as any).individuals))) {
+        individuals += Number((a as any).individuals)
+      }
+      if ((a as any).families != null && Number.isFinite(Number((a as any).families))) {
+        families += Number((a as any).families)
+      }
+    }
+    return { individuals, families }
+  } catch {
+    return { individuals: 0, families: 0 }
+  }
+}
+
+function parseNumericField(value: unknown): number {
+  if (value == null || value === '') return 0
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0
+  const cleaned = String(value).replace(/,/g, '').trim()
+  if (!cleaned) return 0
+  const n = Number(cleaned)
+  return Number.isFinite(n) ? n : 0
+}
+
 function sumPlanFromExpenses(expenses: any): number {
   try {
     const arr = Array.isArray(expenses) ? expenses : (typeof expenses === 'string' ? JSON.parse(expenses || '[]') : [])
@@ -241,9 +271,9 @@ export async function GET(request: Request) {
     // Build project filter (include more statuses to catch F5 projects and completed projects)
     let projectQuery = supabase
       .from('err_projects')
-      .select('id, state, grant_call_id, grant_grid_id, grant_id, grant_segment, emergency_rooms (id, name, name_ar, err_code), planned_activities, expenses, source, status, funding_status, mou_id, f4_status, f5_status, date, date_transfer, completed_at')
+      .select('id, state, grant_call_id, grant_grid_id, grant_id, grant_segment, emergency_rooms (id, name, name_ar, err_code), planned_activities, expenses, source, status, funding_status, mou_id, f4_status, f5_status, date, date_transfer, completed_at, estimated_beneficiaries')
       .in('status', ['approved', 'active', 'pending', 'completed'])
-      .in('funding_status', ['committed', 'allocated'])
+      .in('funding_status', ['committed', 'allocated', 'unassigned'])
 
     // Apply state filter from user access rights (if not seeing all states)
     if (allowedStateNames !== null && allowedStateNames.length > 0) {
@@ -273,7 +303,7 @@ export async function GET(request: Request) {
     const allHistoricalData = await fetchAllRows(
       dataSupabase,
       'activities_raw_import',
-      'id,"ERR CODE","ERR Name","State","Project Donor","USD","MOU Signed","F4","F5","Date Report Completed","Date Transfer","Serial Number","Target (Ind.)","Target (Fam.)","Overdue"'
+      'id,"ERR CODE","ERR Name","State","Project Donor","USD","MOU Signed","F4","F5","Date Report Completed","Date Transfer","Serial Number","Target (Ind.)","Target (Fam.)","Individuals","Family","Overdue"'
     )
 
     // Filter historical data by state AFTER normalization (like Pool Overview By State)
@@ -390,17 +420,18 @@ export async function GET(request: Request) {
     const totalIndividuals = f5ReachData.reduce((sum, r) => sum + (Number(r.individual_count) || 0), 0)
     const totalFamilies = f5ReachData.reduce((sum, r) => sum + (Number(r.household_count) || 0), 0)
 
-    // Individuals by project (for portal projects: sum of individual_count from F5 reach via report_id)
+    // Reach by project (portal: sum of F5 err_program_reach via report_id)
     const reportToProject = new Map<number, string>()
     for (const f5 of (f5Reports || [])) {
       reportToProject.set((f5 as any).id, (f5 as any).project_id)
     }
     const individualsByProject = new Map<string, number>()
+    const familiesByProject = new Map<string, number>()
     for (const r of f5ReachData) {
       const pid = reportToProject.get((r as any).report_id)
       if (pid != null) {
-        const prev = individualsByProject.get(pid) || 0
-        individualsByProject.set(pid, prev + (Number((r as any).individual_count) || 0))
+        individualsByProject.set(pid, (individualsByProject.get(pid) || 0) + (Number((r as any).individual_count) || 0))
+        familiesByProject.set(pid, (familiesByProject.get(pid) || 0) + (Number((r as any).household_count) || 0))
       }
     }
 
@@ -435,7 +466,13 @@ export async function GET(request: Request) {
       const f5Agg = f5ByProject.get(p.id) || { count: 0, last: null }
       const variance = plan - agg.actual
       const burn = plan > 0 ? agg.actual / plan : 0
-      const individuals = individualsByProject.get(p.id) || 0
+      const fromPa = sumTargetsFromPlannedActivities(p.planned_activities)
+      const target_individuals = fromPa.individuals > 0
+        ? fromPa.individuals
+        : (Number(p.estimated_beneficiaries) || 0)
+      const target_families = fromPa.families
+      const actual_individuals = individualsByProject.get(p.id) || 0
+      const actual_families = familiesByProject.get(p.id) || 0
       const storedF4 = (p.f4_status != null ? String(p.f4_status).trim().toLowerCase() : null) || 'waiting'
       const storedF5 = (p.f5_status != null ? String(p.f5_status).trim().toLowerCase() : null) || 'waiting'
       const f4_status = agg.count > 0 ? 'completed' : storedF4
@@ -459,7 +496,12 @@ export async function GET(request: Request) {
         plan,
         actual: agg.actual,
         variance,
-        individuals,
+        target_individuals,
+        target_families,
+        actual_individuals,
+        actual_families,
+        // Back-compat alias used by older clients / KPIs
+        individuals: actual_individuals,
         burn,
         f4_count: agg.count,
         portal_f4_count: agg.count, // For portal projects, all F4s are portal F4s
@@ -508,7 +550,10 @@ export async function GET(request: Request) {
       const f4CountFromSheet = f4Completed ? 1 : 0
       const f4CountFromPortal = f4Agg.count || 0
       const totalF4Count = f4CountFromSheet + f4CountFromPortal
-      const individuals = Number(row['Target (Ind.)'] ?? row['target_ind'] ?? row['Target (Ind.)'] ?? 0) || 0
+      const target_individuals = parseNumericField(row['Target (Ind.)'] ?? row['target_ind'])
+      const target_families = parseNumericField(row['Target (Fam.)'] ?? row['target_fam'])
+      const actual_individuals = parseNumericField(row['Individuals'] ?? row['individuals'])
+      const actual_families = parseNumericField(row['Family'] ?? row['family'])
       // F4/F5 status for % Tracker: Completed | Waiting | Under Review | Partial (from activities_raw_import)
       const f4StatusRaw = f4Value != null ? String(f4Value).trim() : ''
       const f4_status = f4StatusRaw.toLowerCase() || null
@@ -536,7 +581,11 @@ export async function GET(request: Request) {
         plan: usd,
         actual, // From historical_financial_reports.total_errs_expenditure_usd (match budget_items = serial) or err_summary
         variance: usd - actual,
-        individuals, // From activities_raw_import "Target (Ind.)" (same as card)
+        target_individuals,
+        target_families,
+        actual_individuals,
+        actual_families,
+        individuals: actual_individuals, // Back-compat alias
         burn: usd > 0 ? actual / usd : 0,
         f4_count: totalF4Count, // F4='Completed' from sheet + F4s uploaded through portal
         portal_f4_count: f4CountFromPortal, // Only F4s uploaded through portal (for UI display on historical projects)
@@ -559,15 +608,13 @@ export async function GET(request: Request) {
     // Combine err_projects and historical data
     const allRows = [...projRows, ...historicalRows]
 
-    // Calculate target individuals and families from filtered historical data
-    const historicalTargetIndividuals = filteredHistoricalData.reduce((sum, row: any) => {
-      const targetInd = row['Target (Ind.)'] || row['target_ind'] || row['Target (Ind.)']
-      return sum + (Number(targetInd) || 0)
+    // KPI reach totals: F5 actuals for portal + Individuals/Family for historical
+    const historicalActualIndividuals = filteredHistoricalData.reduce((sum, row: any) => {
+      return sum + parseNumericField(row['Individuals'] ?? row['individuals'])
     }, 0)
     
-    const historicalTargetFamilies = filteredHistoricalData.reduce((sum, row: any) => {
-      const targetFam = row['Target (Fam.)'] || row['target_fam'] || row['Target (Fam.)']
-      return sum + (Number(targetFam) || 0)
+    const historicalActualFamilies = filteredHistoricalData.reduce((sum, row: any) => {
+      return sum + parseNumericField(row['Family'] ?? row['family'])
     }, 0)
 
     // Roll up for KPIs in current slice
@@ -581,8 +628,8 @@ export async function GET(request: Request) {
       last_report_date: allRows.map(r=> r.last_report_date).filter(Boolean).sort().slice(-1)[0] || null,
       f5_count: allRows.reduce((s,r)=> s + r.f5_count, 0),
       last_f5_date: allRows.map(r=> r.last_f5_date).filter(Boolean).sort().slice(-1)[0] || null,
-      f5_total_individuals: totalIndividuals + historicalTargetIndividuals,
-      f5_total_families: totalFamilies + historicalTargetFamilies
+      f5_total_individuals: totalIndividuals + historicalActualIndividuals,
+      f5_total_families: totalFamilies + historicalActualFamilies
     }
     kpis.variance = kpis.plan - kpis.actual
     kpis.burn = kpis.plan > 0 ? kpis.actual / kpis.plan : 0
@@ -595,6 +642,8 @@ export async function GET(request: Request) {
         state: key, plan: 0, actual: 0, variance: 0, burn: 0, 
         f4_count: 0, f5_count: 0, total_projects: 0, 
         projects_with_f4: 0, projects_with_f5: 0, tracker_sum: 0, 
+        target_individuals: 0, target_families: 0,
+        actual_individuals: 0, actual_families: 0,
         individuals: 0, last_report_date: null, last_f5_date: null, 
         overdue_count: 0 
       }
@@ -605,7 +654,11 @@ export async function GET(request: Request) {
       curr.total_projects += 1
       if (Number(r.f4_count || 0) > 0) curr.projects_with_f4 += 1
       if (Number(r.f5_count || 0) > 0) curr.projects_with_f5 += 1
-      curr.individuals += Number(r.individuals) || 0
+      curr.target_individuals += Number(r.target_individuals) || 0
+      curr.target_families += Number(r.target_families) || 0
+      curr.actual_individuals += Number(r.actual_individuals) || 0
+      curr.actual_families += Number(r.actual_families) || 0
+      curr.individuals += Number(r.actual_individuals ?? r.individuals) || 0
       if (r.is_overdue) curr.overdue_count += 1
       
       // Track latest dates
@@ -666,6 +719,8 @@ export async function GET(request: Request) {
         plan: 0, actual: 0, variance: 0, burn: 0, 
         f4_count: 0, f5_count: 0, total_projects: 0, 
         projects_with_f4: 0, projects_with_f5: 0, tracker_sum: 0, 
+        target_individuals: 0, target_families: 0,
+        actual_individuals: 0, actual_families: 0,
         individuals: 0, last_report_date: null, last_f5_date: null, 
         overdue_count: 0 
       }
@@ -676,7 +731,11 @@ export async function GET(request: Request) {
       curr.total_projects += 1
       if (Number(r.f4_count || 0) > 0) curr.projects_with_f4 += 1
       if (Number(r.f5_count || 0) > 0) curr.projects_with_f5 += 1
-      curr.individuals += Number(r.individuals) || 0
+      curr.target_individuals += Number(r.target_individuals) || 0
+      curr.target_families += Number(r.target_families) || 0
+      curr.actual_individuals += Number(r.actual_individuals) || 0
+      curr.actual_families += Number(r.actual_families) || 0
+      curr.individuals += Number(r.actual_individuals ?? r.individuals) || 0
       if (r.is_overdue) curr.overdue_count += 1
       
       if (r.last_report_date) {
