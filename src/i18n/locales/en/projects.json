@@ -195,6 +195,7 @@
       "labels": {
         "err": "ERR",
         "state": "State",
+        "grant_segment": "Grant Segment",
         "project_objectives": "Project Objectives",
         "intended_beneficiaries": "Intended Beneficiaries",
         "estimated_beneficiaries": "Estimated Beneficiaries",

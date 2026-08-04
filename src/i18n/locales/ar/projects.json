@@ -194,6 +194,7 @@
       "labels": {
         "err": "غرفة الطوارئ",
         "state": "الولاية",
+        "grant_segment": "قطاع المنحة",
         "project_objectives": "أهداف المشروع",
         "intended_beneficiaries": "المستفيدون المستهدفون",
         "estimated_beneficiaries": "المستفيدون المقدرون",

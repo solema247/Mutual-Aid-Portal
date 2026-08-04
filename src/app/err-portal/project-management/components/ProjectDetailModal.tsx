@@ -14,6 +14,7 @@ import {
   sumF4ExpenseDisplayAmounts,
 } from '@/lib/f4ExpenseDisplay'
 import { supabase } from '@/lib/supabaseClient'
+import { GrantSegmentSelect } from '@/app/err-portal/f1-work-plans/components/GrantSegmentSelect'
 
 interface SupportingDocument {
   id: string
@@ -38,6 +39,7 @@ export default function ProjectDetailModal({ projectId, open, onOpenChange }: Pr
   const [supportingDocs, setSupportingDocs] = useState<SupportingDocument[]>([])
   const [uploadingDoc, setUploadingDoc] = useState(false)
   const [deletingDocId, setDeletingDocId] = useState<string | null>(null)
+  const [updatingGrantSegment, setUpdatingGrantSegment] = useState(false)
 
   useEffect(() => {
     if (!open || !projectId) { setData(null); return }
@@ -64,6 +66,7 @@ export default function ProjectDetailModal({ projectId, open, onOpenChange }: Pr
       setSupportingDocs([])
       setUploadingDoc(false)
       setDeletingDocId(null)
+      setUpdatingGrantSegment(false)
     }
   }, [open])
 
@@ -76,6 +79,41 @@ export default function ProjectDetailModal({ projectId, open, onOpenChange }: Pr
   const fileKeys = data?.file_keys || {}
   const f4Files = data?.f4_files || []
   const f5Files = data?.f5_files || []
+
+  const handleGrantSegmentChange = async (value: string | undefined) => {
+    if (!projectId || isHistorical) return
+    const next = value ?? null
+    const prev = project?.grant_segment ?? null
+    if (next === prev) return
+
+    setUpdatingGrantSegment(true)
+    setData((prevData: any) =>
+      prevData
+        ? { ...prevData, project: { ...prevData.project, grant_segment: next } }
+        : prevData
+    )
+    try {
+      const response = await fetch(`/api/projects/${projectId}/grant-segment`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ grant_segment: next }),
+      })
+      const errorBody = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        throw new Error(errorBody.error || 'Failed to update grant segment')
+      }
+    } catch (error: any) {
+      console.error('Error updating grant segment:', error)
+      setData((prevData: any) =>
+        prevData
+          ? { ...prevData, project: { ...prevData.project, grant_segment: prev } }
+          : prevData
+      )
+      alert(error.message || 'Failed to update grant segment')
+    } finally {
+      setUpdatingGrantSegment(false)
+    }
+  }
 
   const handleFileClick = async (fileKey: string, fileName: string) => {
     if (!fileKey) return
@@ -707,6 +745,15 @@ export default function ProjectDetailModal({ projectId, open, onOpenChange }: Pr
                     <Label>{t('management.detail_modal.labels.state')}</Label>
                     <div className="h-10 flex items-center px-3 rounded border bg-muted/50">{project?.state || '-'}</div>
                   </div>
+                </div>
+                <div>
+                  <Label>{t('management.detail_modal.labels.grant_segment')}</Label>
+                  <GrantSegmentSelect
+                    triggerClassName="w-full max-w-md"
+                    value={project?.grant_segment ?? undefined}
+                    disabled={updatingGrantSegment}
+                    onValueChange={handleGrantSegmentChange}
+                  />
                 </div>
                 <div>
                   <Label>{t('management.detail_modal.labels.project_objectives')}</Label>

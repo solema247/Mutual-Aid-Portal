@@ -70,6 +70,7 @@ export interface MouProjectRow {
   state: string
   locality: string | null
   grant_id: string | null
+  grant_segment: string | null
   amount_usd: number
   categories: string
   project_objectives: string | null
