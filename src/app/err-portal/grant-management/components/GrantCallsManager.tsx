@@ -323,7 +323,7 @@ export default function GrantCallsManager() {
           >
             <Building2 className="h-5 w-5" />
             Grants Table
-            {isCollapsed && grants.length > 0 && (
+            {grants.length > 0 && (
               <span className="text-sm font-normal text-muted-foreground ml-2">
                 ({grants.length} {grants.length === 1 ? 'grant' : 'grants'})
               </span>
@@ -625,11 +625,38 @@ export default function GrantCallsManager() {
                 <TableHead className="px-2">Sum Transfer Fee (USD)</TableHead>
                 {canEditGrants && isEditMode && <TableHead className="px-2">Actions</TableHead>}
               </TableRow>
+              {grants.length > 0 && (
+                <TableRow className="bg-muted/50 hover:bg-muted/50">
+                  <TableHead className="px-2 font-semibold text-foreground whitespace-nowrap">
+                    Total ({grants.length} {grants.length === 1 ? 'row' : 'rows'})
+                  </TableHead>
+                  <TableHead className="px-2" />
+                  <TableHead className="px-2" />
+                  <TableHead className="px-2" />
+                  <TableHead className="px-2" />
+                  <TableHead className="px-2 text-right font-semibold text-foreground whitespace-nowrap">
+                    {formatCurrency(
+                      grants.reduce((s, g) => s + (Number(g.total_transferred_amount_usd) || 0), 0)
+                    )}
+                  </TableHead>
+                  <TableHead className="px-2 text-right font-semibold text-foreground whitespace-nowrap">
+                    {formatCurrency(
+                      grants.reduce((s, g) => s + (Number(g.sum_activity_amount) || 0), 0)
+                    )}
+                  </TableHead>
+                  <TableHead className="px-2 text-right font-semibold text-foreground whitespace-nowrap">
+                    {formatCurrency(
+                      grants.reduce((s, g) => s + (Number(g.sum_transfer_fee_amount) || 0), 0)
+                    )}
+                  </TableHead>
+                  {canEditGrants && isEditMode && <TableHead className="px-2" />}
+                </TableRow>
+              )}
             </TableHeader>
             <TableBody>
               {grants.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={canEditGrants && isEditMode ? 10 : 9} className="text-center py-6 text-muted-foreground text-xs">
+                  <TableCell colSpan={canEditGrants && isEditMode ? 9 : 8} className="text-center py-6 text-muted-foreground text-xs">
                     No grants found
                   </TableCell>
                 </TableRow>

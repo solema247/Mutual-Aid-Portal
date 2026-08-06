@@ -950,6 +950,20 @@ export default function DistributionDecisionsManager() {
   const endIndex = startIndex + itemsPerPage
   const paginatedDecisions = sortedDecisions.slice(startIndex, endIndex)
 
+  const decisionTotals = useMemo(() => {
+    return sortedDecisions.reduce(
+      (acc, d) => {
+        const decisionAmount = Number(d.decision_amount) || 0
+        const allocated = Number(d.sum_allocation_amount) || 0
+        acc.decisionAmount += decisionAmount
+        acc.allocated += allocated
+        acc.remaining += decisionAmount - allocated
+        return acc
+      },
+      { decisionAmount: 0, allocated: 0, remaining: 0 }
+    )
+  }, [sortedDecisions])
+
   // Reset to page 1 when decisions change or sort order changes
   useEffect(() => {
     setCurrentPage(1)
@@ -965,7 +979,7 @@ export default function DistributionDecisionsManager() {
           >
             <FileText className="h-5 w-5" />
             Distribution Decisions
-            {isCollapsed && decisions.length > 0 && (
+            {decisions.length > 0 && (
               <span className="text-sm font-normal text-muted-foreground ml-2">
                 ({decisions.length} {decisions.length === 1 ? 'decision' : 'decisions'})
               </span>
@@ -1591,6 +1605,30 @@ export default function DistributionDecisionsManager() {
                   <TableHead className="min-w-[140px]">Decision Documents</TableHead>
                   <TableHead className="w-[60px] text-right">Actions</TableHead>
                 </TableRow>
+                {sortedDecisions.length > 0 && (
+                  <TableRow className="bg-muted/50 hover:bg-muted/50">
+                    <TableHead />
+                    <TableHead className="font-semibold text-foreground whitespace-nowrap">
+                      Total ({sortedDecisions.length}{' '}
+                      {sortedDecisions.length === 1 ? 'row' : 'rows'})
+                    </TableHead>
+                    <TableHead />
+                    <TableHead className="font-semibold text-foreground whitespace-nowrap">
+                      {formatCurrency(decisionTotals.decisionAmount)}
+                    </TableHead>
+                    <TableHead className="font-semibold text-foreground whitespace-nowrap">
+                      {formatCurrency(decisionTotals.allocated)}
+                    </TableHead>
+                    <TableHead className="font-semibold text-foreground whitespace-nowrap">
+                      {formatCurrency(decisionTotals.remaining)}
+                    </TableHead>
+                    <TableHead />
+                    <TableHead />
+                    <TableHead />
+                    <TableHead />
+                    <TableHead />
+                  </TableRow>
+                )}
               </TableHeader>
               <TableBody>
                 {sortedDecisions.length === 0 ? (
@@ -2168,13 +2206,14 @@ export default function DistributionDecisionsManager() {
         {sortedDecisions.length > itemsPerPage && (
           <div className="flex items-center justify-between mt-4">
             <div className="text-sm text-muted-foreground">
-              Showing {startIndex + 1}-{Math.min(endIndex, sortedDecisions.length)} of {sortedDecisions.length}
+              Showing {startIndex + 1}-{Math.min(endIndex, sortedDecisions.length)} of{' '}
+              {sortedDecisions.length} decisions
             </div>
             <div className="flex items-center gap-2">
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
                 disabled={currentPage === 1}
               >
                 Previous
@@ -2185,7 +2224,7 @@ export default function DistributionDecisionsManager() {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
                 disabled={currentPage === totalPages}
               >
                 Next

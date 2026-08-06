@@ -2016,6 +2016,195 @@ export type Database = {
         }
         Relationships: []
       }
+      fsps: {
+        Row: {
+          airtable_record_id: string | null
+          contact_email: string | null
+          contact_person: string | null
+          contract_filename: string | null
+          contract_signed: string | null
+          contract_url: string | null
+          created_at: string
+          id: string
+          name: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          airtable_record_id?: string | null
+          contact_email?: string | null
+          contact_person?: string | null
+          contract_filename?: string | null
+          contract_signed?: string | null
+          contract_url?: string | null
+          created_at?: string
+          id?: string
+          name: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          airtable_record_id?: string | null
+          contact_email?: string | null
+          contact_person?: string | null
+          contract_filename?: string | null
+          contract_signed?: string | null
+          contract_url?: string | null
+          created_at?: string
+          id?: string
+          name?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      fund_requests: {
+        Row: {
+          airtable_record_id: string | null
+          created_at: string
+          date_submitted: string | null
+          file_link: string | null
+          file_name: string | null
+          id: string
+          partner_name: string | null
+          request_id: string
+          requested_amount: number | null
+          updated_at: string
+        }
+        Insert: {
+          airtable_record_id?: string | null
+          created_at?: string
+          date_submitted?: string | null
+          file_link?: string | null
+          file_name?: string | null
+          id?: string
+          partner_name?: string | null
+          request_id: string
+          requested_amount?: number | null
+          updated_at?: string
+        }
+        Update: {
+          airtable_record_id?: string | null
+          created_at?: string
+          date_submitted?: string | null
+          file_link?: string | null
+          file_name?: string | null
+          id?: string
+          partner_name?: string | null
+          request_id?: string
+          requested_amount?: number | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      fund_request_decisions: {
+        Row: {
+          decision_id_proposed: string
+          fund_request_id: string
+        }
+        Insert: {
+          decision_id_proposed: string
+          fund_request_id: string
+        }
+        Update: {
+          decision_id_proposed?: string
+          fund_request_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fund_request_decisions_decision_id_proposed_fkey"
+            columns: ["decision_id_proposed"]
+            isOneToOne: false
+            referencedRelation: "distribution_decision_master_sheet_1"
+            referencedColumns: ["decision_id_proposed"]
+          },
+          {
+            foreignKeyName: "fund_request_decisions_fund_request_id_fkey"
+            columns: ["fund_request_id"]
+            isOneToOne: false
+            referencedRelation: "fund_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      transfer_segments: {
+        Row: {
+          activity_amount: number | null
+          airtable_record_id: string | null
+          auto_number: number | null
+          comment: string | null
+          created_at: string
+          decision_id_proposed: string | null
+          fsp_id: string | null
+          fund_request_id: string | null
+          grant_id: string | null
+          id: string
+          partner_name: string | null
+          purpose: string | null
+          request_id: string | null
+          status: string | null
+          transfer_fee_amount: number | null
+          transfer_id: string
+          transfer_received_date: string | null
+          updated_at: string
+        }
+        Insert: {
+          activity_amount?: number | null
+          airtable_record_id?: string | null
+          auto_number?: number | null
+          comment?: string | null
+          created_at?: string
+          decision_id_proposed?: string | null
+          fsp_id?: string | null
+          fund_request_id?: string | null
+          grant_id?: string | null
+          id?: string
+          partner_name?: string | null
+          purpose?: string | null
+          request_id?: string | null
+          status?: string | null
+          transfer_fee_amount?: number | null
+          transfer_id: string
+          transfer_received_date?: string | null
+          updated_at?: string
+        }
+        Update: {
+          activity_amount?: number | null
+          airtable_record_id?: string | null
+          auto_number?: number | null
+          comment?: string | null
+          created_at?: string
+          decision_id_proposed?: string | null
+          fsp_id?: string | null
+          fund_request_id?: string | null
+          grant_id?: string | null
+          id?: string
+          partner_name?: string | null
+          purpose?: string | null
+          request_id?: string | null
+          status?: string | null
+          transfer_fee_amount?: number | null
+          transfer_id?: string
+          transfer_received_date?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "transfer_segments_fsp_id_fkey"
+            columns: ["fsp_id"]
+            isOneToOne: false
+            referencedRelation: "fsps"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transfer_segments_fund_request_id_fkey"
+            columns: ["fund_request_id"]
+            isOneToOne: false
+            referencedRelation: "fund_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       fund_request: {
         Row: {
           date_submitted: string | null
