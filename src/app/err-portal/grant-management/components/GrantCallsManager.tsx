@@ -102,7 +102,7 @@ export default function GrantCallsManager() {
   const [editingGrant, setEditingGrant] = useState<GrantCall | null>(null)
   const [statusFilter, setStatusFilter] = useState<'all' | 'Active' | 'Complete'>('all')
   const [currentUser, setCurrentUser] = useState<User | null>(null)
-  const [isCollapsed, setIsCollapsed] = useState(true)
+  const [isCollapsed, setIsCollapsed] = useState(false)
   const [isEditMode, setIsEditMode] = useState(false)
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
   const [deleteConfirmText, setDeleteConfirmText] = useState('')

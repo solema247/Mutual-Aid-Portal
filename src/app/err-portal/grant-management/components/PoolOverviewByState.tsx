@@ -12,7 +12,7 @@ export default function PoolOverviewByState() {
   const [totalAllocations, setTotalAllocations] = useState(0)
   const [sortColumn, setSortColumn] = useState<string | null>(null)
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc')
-  const [isCollapsed, setIsCollapsed] = useState(true)
+  const [isCollapsed, setIsCollapsed] = useState(false)
 
   useEffect(() => {
     loadData()

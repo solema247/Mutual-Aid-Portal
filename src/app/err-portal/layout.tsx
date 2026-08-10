@@ -7,7 +7,7 @@ import PageExplainerHeader from '@/components/layout/PageExplainerHeader'
 import { PageExplainerProvider } from '@/contexts/PageExplainerContext'
 import type { SidebarItem, SidebarLinkItem } from '@/components/layout/Sidebar'
 import { useRouter } from 'next/navigation'
-import { Users, ClipboardList, BarChart2, BarChart3, PieChart, UserCog, Home, CheckSquare, BookOpen, PenTool, Cog, FileText, BookMarked, Ticket, ShieldCheck, Archive } from 'lucide-react'
+import { Users, ClipboardList, BarChart2, BarChart3, PieChart, UserCog, Home, CheckSquare, BookOpen, PenTool, Cog, FileText, BookMarked, Ticket, ShieldCheck, Archive, Split, ArrowLeftRight } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 import { useAllowedFunctions } from '@/hooks/useAllowedFunctions'
 
@@ -93,70 +93,127 @@ export default function ErrPortalLayout({
   const canRaiseTicket = can('raise_ticket_page')
   const canViewDataArchive = can('data_archive_view_page')
 
+  const fSystemChildren: SidebarLinkItem[] = []
+  if (canViewF1) {
+    fSystemChildren.push({
+      href: '/err-portal/f1-work-plans',
+      label: t('err:f1_work_plans'),
+      icon: <ClipboardList className="h-5 w-5" />,
+    })
+  }
+  if (canViewF2) {
+    fSystemChildren.push({
+      href: '/err-portal/f2-approvals',
+      label: t('err:f2_approvals'),
+      icon: <CheckSquare className="h-5 w-5" />,
+    })
+  }
+  if (canViewF3) {
+    fSystemChildren.push({
+      href: '/err-portal/f3-mous',
+      label: 'F3 MOUs',
+      icon: <PenTool className="h-5 w-5" />,
+    })
+  }
+  if (canViewF4F5) {
+    fSystemChildren.push({
+      href: '/err-portal/f4-f5-reporting',
+      label: 'F4 & F5 Reporting',
+      icon: <BookOpen className="h-5 w-5" />,
+    })
+  }
+
   const reportingGroupChildren: SidebarLinkItem[] = []
   if (canViewF4F5) {
     reportingGroupChildren.push({
       href: '/err-portal/report-tracker',
       label: 'Report Tracker',
-      icon: <BarChart3 className="h-5 w-5" />
+      icon: <BarChart3 className="h-5 w-5" />,
     })
   }
   if (canViewProjectManagement) {
     reportingGroupChildren.push({
       href: '/err-portal/project-management',
       label: t('err:project_management'),
-      icon: <Cog className="h-5 w-5" />
-    })
-  }
-  if (canViewDataArchive) {
-    reportingGroupChildren.push({
-      href: '/err-portal/data-archive',
-      label: 'Data Archive',
-      icon: <Archive className="h-5 w-5" />
+      icon: <Cog className="h-5 w-5" />,
     })
   }
   if (canViewDashboard) {
     reportingGroupChildren.push({
       href: '/err-portal/dashboard',
       label: t('err:dashboard'),
-      icon: <BarChart2 className="h-5 w-5" />
+      icon: <BarChart2 className="h-5 w-5" />,
     })
   }
   if (canViewLearnings) {
     reportingGroupChildren.push({
       href: '/err-portal/stories',
       label: 'Mutual Aid Learnings',
-      icon: <BookMarked className="h-5 w-5" />
+      icon: <BookMarked className="h-5 w-5" />,
     })
   }
+  if (canViewDataArchive) {
+    reportingGroupChildren.push({
+      href: '/err-portal/data-archive',
+      label: 'Data Archive',
+      icon: <Archive className="h-5 w-5" />,
+    })
+  }
+
+  const grantManagementChildren: SidebarLinkItem[] = canViewGrantManagement
+    ? [
+        {
+          href: '/err-portal/grant-management/decisions',
+          label: 'Decisions',
+          icon: <Split className="h-5 w-5" />,
+        },
+        {
+          href: '/err-portal/grant-management/grants',
+          label: 'Grants',
+          icon: <PieChart className="h-5 w-5" />,
+        },
+        {
+          href: '/err-portal/grant-management/allocation-management',
+          label: 'Allocation Management',
+          icon: <ArrowLeftRight className="h-5 w-5" />,
+        },
+      ]
+    : []
 
   const adminGroupChildren: SidebarLinkItem[] = []
   if (canViewRooms) {
     adminGroupChildren.push({
       href: '/err-portal/room-management',
       label: t('err:room_management'),
-      icon: <Users className="h-5 w-5" />
+      icon: <Users className="h-5 w-5" />,
     })
   }
   if (canViewUserManagement) {
     adminGroupChildren.push({
       href: '/err-portal/user-management',
       label: t('err:user_management'),
-      icon: <UserCog className="h-5 w-5" />
+      icon: <UserCog className="h-5 w-5" />,
+    })
+  }
+  if (canViewCompliance) {
+    adminGroupChildren.push({
+      href: '/err-portal/compliance',
+      label: compliancePendingCount > 0 ? `Compliance (${compliancePendingCount})` : 'Compliance',
+      icon: <ShieldCheck className="h-5 w-5" />,
     })
   }
   if (canRaiseTicket) {
     adminGroupChildren.push({
       href: '/err-portal/raise-a-ticket',
       label: t('err:raise_ticket_title', 'Raise a ticket'),
-      icon: <Ticket className="h-5 w-5" />
+      icon: <Ticket className="h-5 w-5" />,
     })
   }
   if (canViewSurveys) {
     adminGroupChildren.push({
       href: '/err-portal/surveys',
       label: t('err:surveys', 'Surveys'),
-      icon: <FileText className="h-5 w-5" />
+      icon: <FileText className="h-5 w-5" />,
     })
   }
 
@@ -164,48 +221,44 @@ export default function ErrPortalLayout({
     {
       href: '/err-portal',
       label: t('err:home'),
-      icon: <Home className="h-5 w-5" />
+      icon: <Home className="h-5 w-5" />,
     },
-    ...(canViewGrantManagement ? [{
-      href: '/err-portal/grant-management',
-      label: t('err:grant_management'),
-      icon: <PieChart className="h-5 w-5" />
-    }] : []),
-    ...(canViewF1 ? [{
-      href: '/err-portal/f1-work-plans',
-      label: t('err:f1_work_plans'),
-      icon: <ClipboardList className="h-5 w-5" />
-    }] : []),
-    ...(canViewF2 ? [{
-      href: '/err-portal/f2-approvals',
-      label: t('err:f2_approvals'),
-      icon: <CheckSquare className="h-5 w-5" />
-    }] : []),
-    ...(canViewF3 ? [{
-      href: '/err-portal/f3-mous',
-      label: 'F3 MOUs',
-      icon: <PenTool className="h-5 w-5" />
-    }] : []),
-    ...(canViewF4F5 ? [{
-      href: '/err-portal/f4-f5-reporting',
-      label: 'F4 & F5 Reporting',
-      icon: <BookOpen className="h-5 w-5" />
-    }] : []),
-    ...(canViewCompliance ? [{
-      href: '/err-portal/compliance',
-      label: compliancePendingCount > 0 ? `Compliance (${compliancePendingCount})` : 'Compliance',
-      icon: <ShieldCheck className="h-5 w-5" />
-    }] : []),
-    ...(reportingGroupChildren.length > 0 ? [{
-      type: 'group' as const,
-      label: 'Reporting & learnings',
-      children: reportingGroupChildren
-    }] : []),
-    ...(adminGroupChildren.length > 0 ? [{
-      type: 'group' as const,
-      label: 'Admin',
-      children: adminGroupChildren
-    }] : [])
+    ...(grantManagementChildren.length > 0
+      ? [
+          {
+            type: 'group' as const,
+            label: t('err:grant_management'),
+            children: grantManagementChildren,
+          },
+        ]
+      : []),
+    ...(fSystemChildren.length > 0
+      ? [
+          {
+            type: 'group' as const,
+            label: 'F-System',
+            children: fSystemChildren,
+          },
+        ]
+      : []),
+    ...(reportingGroupChildren.length > 0
+      ? [
+          {
+            type: 'group' as const,
+            label: 'Reporting & learnings',
+            children: reportingGroupChildren,
+          },
+        ]
+      : []),
+    ...(adminGroupChildren.length > 0
+      ? [
+          {
+            type: 'group' as const,
+            label: 'Admin',
+            children: adminGroupChildren,
+          },
+        ]
+      : []),
   ]
 
   return (

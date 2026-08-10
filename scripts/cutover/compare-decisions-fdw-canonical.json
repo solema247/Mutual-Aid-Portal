@@ -1,0 +1,2470 @@
+{
+  "summary": {
+    "fdw_count": 81,
+    "canon_count": 79,
+    "matched": 71,
+    "fdw_only": 10,
+    "canon_only": 8,
+    "with_field_mismatches": 7
+  },
+  "rows": [
+    {
+      "key": "LCC.AD.P2H.01-07-26-59",
+      "fdw_rec": null,
+      "canon_uuid": "ca3b36fd-a2dc-4157-9984-c66f383d00d0",
+      "status": "canon_only",
+      "mismatches": [
+        "no FDW row"
+      ],
+      "fdw": {
+        "decision_id_proposed": null,
+        "decision_id": null,
+        "decision_amount": null,
+        "sum_allocation_amount": null,
+        "decision_date": null,
+        "restriction": null,
+        "partner": null,
+        "grant_name": null
+      },
+      "canonical": {
+        "decision_id_proposed": "LCC.AD.P2H.01-07-26-59",
+        "decision_id": "LCC.AD.P2H.01-07-26-59",
+        "decision_amount": 500000,
+        "sum_allocation_amount": 500000,
+        "decision_date": "2026-07-01",
+        "restriction": "Flexible",
+        "partner": "P2H",
+        "grant_name": null
+      }
+    },
+    {
+      "key": "LCC.AD.P2H.01-07-26-60",
+      "fdw_rec": null,
+      "canon_uuid": "11a7ae7f-4099-4102-90de-e6c8ef23b3bd",
+      "status": "canon_only",
+      "mismatches": [
+        "no FDW row"
+      ],
+      "fdw": {
+        "decision_id_proposed": null,
+        "decision_id": null,
+        "decision_amount": null,
+        "sum_allocation_amount": null,
+        "decision_date": null,
+        "restriction": null,
+        "partner": null,
+        "grant_name": null
+      },
+      "canonical": {
+        "decision_id_proposed": "LCC.AD.P2H.01-07-26-60",
+        "decision_id": "LCC.AD.P2H.01-07-26-60",
+        "decision_amount": 200000,
+        "sum_allocation_amount": 200000,
+        "decision_date": "2026-07-01",
+        "restriction": "Flexible",
+        "partner": "P2H",
+        "grant_name": null
+      }
+    },
+    {
+      "key": "LCC.AD.P2H.08-07-26-61",
+      "fdw_rec": null,
+      "canon_uuid": "1685a9fc-dc43-49e9-87ce-5c398f08f88f",
+      "status": "canon_only",
+      "mismatches": [
+        "no FDW row"
+      ],
+      "fdw": {
+        "decision_id_proposed": null,
+        "decision_id": null,
+        "decision_amount": null,
+        "sum_allocation_amount": null,
+        "decision_date": null,
+        "restriction": null,
+        "partner": null,
+        "grant_name": null
+      },
+      "canonical": {
+        "decision_id_proposed": "LCC.AD.P2H.08-07-26-61",
+        "decision_id": "LCC.AD.P2H.08-07-26-61",
+        "decision_amount": 100000,
+        "sum_allocation_amount": 100000,
+        "decision_date": "2026-07-08",
+        "restriction": "Flexible",
+        "partner": "P2H",
+        "grant_name": null
+      }
+    },
+    {
+      "key": "LCC.AD.P2H.08-07-26-62",
+      "fdw_rec": null,
+      "canon_uuid": "f1a9f6ed-1d1e-43fa-948a-20c7ce301738",
+      "status": "canon_only",
+      "mismatches": [
+        "no FDW row"
+      ],
+      "fdw": {
+        "decision_id_proposed": null,
+        "decision_id": null,
+        "decision_amount": null,
+        "sum_allocation_amount": null,
+        "decision_date": null,
+        "restriction": null,
+        "partner": null,
+        "grant_name": null
+      },
+      "canonical": {
+        "decision_id_proposed": "LCC.AD.P2H.08-07-26-62",
+        "decision_id": "LCC.AD.P2H.08-07-26-62",
+        "decision_amount": 500000,
+        "sum_allocation_amount": 500000,
+        "decision_date": "2026-07-08",
+        "restriction": "Flexible",
+        "partner": "P2H",
+        "grant_name": null
+      }
+    },
+    {
+      "key": "LCC.AD.P2H.15-07-26-63",
+      "fdw_rec": null,
+      "canon_uuid": "f6f02719-89e7-4502-9564-5eb38310e413",
+      "status": "canon_only",
+      "mismatches": [
+        "no FDW row"
+      ],
+      "fdw": {
+        "decision_id_proposed": null,
+        "decision_id": null,
+        "decision_amount": null,
+        "sum_allocation_amount": null,
+        "decision_date": null,
+        "restriction": null,
+        "partner": null,
+        "grant_name": null
+      },
+      "canonical": {
+        "decision_id_proposed": "LCC.AD.P2H.15-07-26-63",
+        "decision_id": "LCC.AD.P2H.15-07-26-63",
+        "decision_amount": 500000,
+        "sum_allocation_amount": 500000,
+        "decision_date": "2026-07-15",
+        "restriction": "Flexible",
+        "partner": "P2H",
+        "grant_name": null
+      }
+    },
+    {
+      "key": "LCC.AD.P2H.18-03-26-36",
+      "fdw_rec": null,
+      "canon_uuid": "dc65924e-78a4-49fd-9eff-78b471666851",
+      "status": "canon_only",
+      "mismatches": [
+        "no FDW row"
+      ],
+      "fdw": {
+        "decision_id_proposed": null,
+        "decision_id": null,
+        "decision_amount": null,
+        "sum_allocation_amount": null,
+        "decision_date": null,
+        "restriction": null,
+        "partner": null,
+        "grant_name": null
+      },
+      "canonical": {
+        "decision_id_proposed": "LCC.AD.P2H.18-03-26-36",
+        "decision_id": "LCC.AD.P2H.18-03-26-36",
+        "decision_amount": 250000,
+        "sum_allocation_amount": 250000,
+        "decision_date": "2026-03-18",
+        "restriction": "Flexible",
+        "partner": "P2H",
+        "grant_name": null
+      }
+    },
+    {
+      "key": "LCC.AD.P2H.26-07-29-64",
+      "fdw_rec": null,
+      "canon_uuid": "2254a429-92f9-4771-8113-2a058fc4c6d9",
+      "status": "canon_only",
+      "mismatches": [
+        "no FDW row"
+      ],
+      "fdw": {
+        "decision_id_proposed": null,
+        "decision_id": null,
+        "decision_amount": null,
+        "sum_allocation_amount": null,
+        "decision_date": null,
+        "restriction": null,
+        "partner": null,
+        "grant_name": null
+      },
+      "canonical": {
+        "decision_id_proposed": "LCC.AD.P2H.26-07-29-64",
+        "decision_id": "LCC.AD.P2H.26-07-29-64",
+        "decision_amount": 500000,
+        "sum_allocation_amount": 500000.06999999995,
+        "decision_date": "2026-07-29",
+        "restriction": "Flexible",
+        "partner": "P2H",
+        "grant_name": null
+      }
+    },
+    {
+      "key": "LCC.Avaaz.2025-06-23.",
+      "fdw_rec": "recRR8hOl4uktXvEe",
+      "canon_uuid": "d9e00ee8-e042-4a8e-9715-933cf1e61f6d",
+      "status": "matched",
+      "mismatches": [],
+      "fdw": {
+        "decision_id_proposed": "LCC.Avaaz.2025-06-23.",
+        "decision_id": "LCC.Avaaz.2025-06-23.",
+        "decision_amount": 485000,
+        "sum_allocation_amount": 485000,
+        "decision_date": "2025-06-23",
+        "restriction": null,
+        "partner": "rec0zenRjhJso1RvU",
+        "grant_name": null
+      },
+      "canonical": {
+        "decision_id_proposed": "LCC.Avaaz.2025-06-23.",
+        "decision_id": "LCC.Avaaz.2025-06-23.",
+        "decision_amount": 485000,
+        "sum_allocation_amount": 485000,
+        "decision_date": "2025-06-23",
+        "restriction": null,
+        "partner": "Avaaz",
+        "grant_name": null
+      }
+    },
+    {
+      "key": "LCC.Avaaz.2026-06-02.Flex",
+      "fdw_rec": "rec6ozLV6DwxS1NWj",
+      "canon_uuid": "20997be1-0db7-4d3e-b6e8-f0c80b76d770",
+      "status": "matched",
+      "mismatches": [],
+      "fdw": {
+        "decision_id_proposed": "LCC.Avaaz.2026-06-02.Flex",
+        "decision_id": "LCC.Avaaz.2026-06-02.Flex",
+        "decision_amount": 237500,
+        "sum_allocation_amount": 237500,
+        "decision_date": "2026-06-02",
+        "restriction": "Flexible",
+        "partner": "rec0zenRjhJso1RvU",
+        "grant_name": null
+      },
+      "canonical": {
+        "decision_id_proposed": "LCC.Avaaz.2026-06-02.Flex",
+        "decision_id": "LCC.Avaaz.2026-06-02.Flex",
+        "decision_amount": 237500,
+        "sum_allocation_amount": 237500,
+        "decision_date": "2026-06-02",
+        "restriction": "Flexible",
+        "partner": "Avaaz",
+        "grant_name": null
+      }
+    },
+    {
+      "key": "LCC.Avaaz.2026-06-03.Flex",
+      "fdw_rec": "recypURCzqOAyKgEf",
+      "canon_uuid": "7151dca1-80ed-4ade-a3e3-15ad714ef7b4",
+      "status": "matched",
+      "mismatches": [],
+      "fdw": {
+        "decision_id_proposed": "LCC.Avaaz.2026-06-03.Flex",
+        "decision_id": "LCC.Avaaz.2026-06-03.Flex",
+        "decision_amount": 237500,
+        "sum_allocation_amount": 237500,
+        "decision_date": "2026-06-03",
+        "restriction": "Flexible",
+        "partner": "rec0zenRjhJso1RvU",
+        "grant_name": null
+      },
+      "canonical": {
+        "decision_id_proposed": "LCC.Avaaz.2026-06-03.Flex",
+        "decision_id": "LCC.Avaaz.2026-06-03.Flex",
+        "decision_amount": 237500,
+        "sum_allocation_amount": 237500,
+        "decision_date": "2026-06-03",
+        "restriction": "Flexible",
+        "partner": "Avaaz",
+        "grant_name": null
+      }
+    },
+    {
+      "key": "LCC.Gisa.2023-11-15.Flex",
+      "fdw_rec": "recBawaykvWhORAqI",
+      "canon_uuid": "c8d52002-c86d-4960-89c4-5d624b229989",
+      "status": "matched",
+      "mismatches": [],
+      "fdw": {
+        "decision_id_proposed": "LCC.Gisa.2023-11-15.Flex",
+        "decision_id": "LCC.Gisa.2023-11-15.Flex",
+        "decision_amount": 290000,
+        "sum_allocation_amount": 290000,
+        "decision_date": "2023-11-15",
+        "restriction": "Flexible",
+        "partner": "recDQeJx2WBdZ2s9B",
+        "grant_name": null
+      },
+      "canonical": {
+        "decision_id_proposed": "LCC.Gisa.2023-11-15.Flex",
+        "decision_id": "LCC.Gisa.2023-11-15.Flex",
+        "decision_amount": 290000,
+        "sum_allocation_amount": 290000,
+        "decision_date": "2023-11-15",
+        "restriction": "Flexible",
+        "partner": "Gisa",
+        "grant_name": null
+      }
+    },
+    {
+      "key": "LCC.P2H.2024-07-26.Flex",
+      "fdw_rec": "recIWzbLp2DMdoHJq",
+      "canon_uuid": "b5ea9ad2-ded3-42d2-99fe-b9e1adc3da47",
+      "status": "matched",
+      "mismatches": [],
+      "fdw": {
+        "decision_id_proposed": "LCC.P2H.2024-07-26.Flex",
+        "decision_id": "LCC.P2H.2024-07-26.Flex",
+        "decision_amount": 186200,
+        "sum_allocation_amount": 186200,
+        "decision_date": "2024-07-26",
+        "restriction": "Flexible",
+        "partner": "recAoKLIxff3J74l5",
+        "grant_name": "Vitol"
+      },
+      "canonical": {
+        "decision_id_proposed": "LCC.P2H.2024-07-26.Flex",
+        "decision_id": "LCC.P2H.2024-07-26.Flex",
+        "decision_amount": 186200,
+        "sum_allocation_amount": 186200,
+        "decision_date": "2024-07-26",
+        "restriction": "Flexible",
+        "partner": "P2H",
+        "grant_name": "Vitol"
+      }
+    },
+    {
+      "key": "LCC.P2H.2024-08-12.Flex",
+      "fdw_rec": "recFfwml4Twh9ZKt4",
+      "canon_uuid": "9bbfaabf-ff9a-4295-99ad-4bbd45faa334",
+      "status": "matched",
+      "mismatches": [],
+      "fdw": {
+        "decision_id_proposed": "LCC.P2H.2024-08-12.Flex",
+        "decision_id": "LCC.P2H.2024-08-12.Flex",
+        "decision_amount": 488736,
+        "sum_allocation_amount": 488735.96,
+        "decision_date": "2024-08-12",
+        "restriction": "Flexible",
+        "partner": "recAoKLIxff3J74l5",
+        "grant_name": "DKH"
+      },
+      "canonical": {
+        "decision_id_proposed": "LCC.P2H.2024-08-12.Flex",
+        "decision_id": "LCC.P2H.2024-08-12.Flex",
+        "decision_amount": 488736,
+        "sum_allocation_amount": 488735.96,
+        "decision_date": "2024-08-12",
+        "restriction": "Flexible",
+        "partner": "P2H",
+        "grant_name": "DKH"
+      }
+    },
+    {
+      "key": "LCC.P2H.2024-11-12.Prot",
+      "fdw_rec": "recN2x8YCznUa0lxF",
+      "canon_uuid": "fb696046-c75d-4bf1-aa32-bcc0ac4410ca",
+      "status": "matched",
+      "mismatches": [],
+      "fdw": {
+        "decision_id_proposed": "LCC.P2H.2024-11-12.Prot",
+        "decision_id": "LCC.P2H.2024-11-12.Prot",
+        "decision_amount": 19600,
+        "sum_allocation_amount": 19600,
+        "decision_date": "2024-11-12",
+        "restriction": "Protection",
+        "partner": "recAoKLIxff3J74l5",
+        "grant_name": "P2H"
+      },
+      "canonical": {
+        "decision_id_proposed": "LCC.P2H.2024-11-12.Prot",
+        "decision_id": "LCC.P2H.2024-11-12.Prot",
+        "decision_amount": 19600,
+        "sum_allocation_amount": 19600,
+        "decision_date": "2024-11-12",
+        "restriction": "Protection",
+        "partner": "P2H",
+        "grant_name": "P2H"
+      }
+    },
+    {
+      "key": "LCC.P2H.2024-12-08.Flex",
+      "fdw_rec": "recVHbdUFwywwzKX7",
+      "canon_uuid": "fe1b27e1-dae8-4a65-b215-093e4711476f",
+      "status": "matched",
+      "mismatches": [],
+      "fdw": {
+        "decision_id_proposed": "LCC.P2H.2024-12-08.Flex",
+        "decision_id": "LCC.P2H.2024-12-08.Flex",
+        "decision_amount": 100000,
+        "sum_allocation_amount": 100000,
+        "decision_date": "2024-12-08",
+        "restriction": "Flexible",
+        "partner": "recAoKLIxff3J74l5",
+        "grant_name": "P2H"
+      },
+      "canonical": {
+        "decision_id_proposed": "LCC.P2H.2024-12-08.Flex",
+        "decision_id": "LCC.P2H.2024-12-08.Flex",
+        "decision_amount": 100000,
+        "sum_allocation_amount": 100000,
+        "decision_date": "2024-12-08",
+        "restriction": "Flexible",
+        "partner": "P2H",
+        "grant_name": "P2H"
+      }
+    },
+    {
+      "key": "LCC.P2H.2024-12-18.Flex",
+      "fdw_rec": "recAAbNdtPm3XIWmt",
+      "canon_uuid": "f29e4b69-b5a6-4aae-9ca3-95579c9d44fd",
+      "status": "matched",
+      "mismatches": [],
+      "fdw": {
+        "decision_id_proposed": "LCC.P2H.2024-12-18.Flex",
+        "decision_id": "LCC.P2H.2024-12-18.Flex",
+        "decision_amount": 200000,
+        "sum_allocation_amount": 200000,
+        "decision_date": "2024-12-18",
+        "restriction": "Flexible",
+        "partner": "recAoKLIxff3J74l5",
+        "grant_name": "P2H"
+      },
+      "canonical": {
+        "decision_id_proposed": "LCC.P2H.2024-12-18.Flex",
+        "decision_id": "LCC.P2H.2024-12-18.Flex",
+        "decision_amount": 200000,
+        "sum_allocation_amount": 200000,
+        "decision_date": "2024-12-18",
+        "restriction": "Flexible",
+        "partner": "P2H",
+        "grant_name": "P2H"
+      }
+    },
+    {
+      "key": "LCC.P2H.2025-01-15.Prot",
+      "fdw_rec": "recMLwBRZQS1OC2NA",
+      "canon_uuid": "c5c2277b-b847-46a4-81b6-9af1345933e2",
+      "status": "matched",
+      "mismatches": [],
+      "fdw": {
+        "decision_id_proposed": "LCC.P2H.2025-01-15.Prot",
+        "decision_id": "LCC.P2H.2025-01-15.Prot",
+        "decision_amount": 32170,
+        "sum_allocation_amount": 32170,
+        "decision_date": "2025-01-15",
+        "restriction": "Protection",
+        "partner": "recAoKLIxff3J74l5",
+        "grant_name": "P2H"
+      },
+      "canonical": {
+        "decision_id_proposed": "LCC.P2H.2025-01-15.Prot",
+        "decision_id": "LCC.P2H.2025-01-15.Prot",
+        "decision_amount": 32170,
+        "sum_allocation_amount": 32170,
+        "decision_date": "2025-01-15",
+        "restriction": "Protection",
+        "partner": "P2H",
+        "grant_name": "P2H"
+      }
+    },
+    {
+      "key": "LCC.P2H.2025-01-16.Flex",
+      "fdw_rec": "recrPERuILcxyUPxX",
+      "canon_uuid": null,
+      "status": "fdw_only",
+      "mismatches": [
+        "no canonical row"
+      ],
+      "fdw": {
+        "decision_id_proposed": "LCC.P2H.2025-01-16.Flex",
+        "decision_id": "LCC.P2H.2025-01-16.Flex",
+        "decision_amount": 430000,
+        "sum_allocation_amount": 430000,
+        "decision_date": "2025-01-16",
+        "restriction": "Flexible",
+        "partner": "recAoKLIxff3J74l5",
+        "grant_name": "P2H"
+      },
+      "canonical": {
+        "decision_id_proposed": null,
+        "decision_id": null,
+        "decision_amount": null,
+        "sum_allocation_amount": null,
+        "decision_date": null,
+        "restriction": null,
+        "partner": null,
+        "grant_name": null
+      }
+    },
+    {
+      "key": "LCC.P2H.2025-01-16.Flex",
+      "fdw_rec": null,
+      "canon_uuid": "6abb366a-6b41-4862-8373-c83d5a0fb95c",
+      "status": "canon_only",
+      "mismatches": [
+        "no FDW row"
+      ],
+      "fdw": {
+        "decision_id_proposed": null,
+        "decision_id": null,
+        "decision_amount": null,
+        "sum_allocation_amount": null,
+        "decision_date": null,
+        "restriction": null,
+        "partner": null,
+        "grant_name": null
+      },
+      "canonical": {
+        "decision_id_proposed": "LCC.P2H.2025-01-16.Flex",
+        "decision_id": "LCC.P2H.2025-01-16.Flex",
+        "decision_amount": 430000,
+        "sum_allocation_amount": 430000,
+        "decision_date": "2025-01-16",
+        "restriction": "Flexible",
+        "partner": "P2H",
+        "grant_name": "P2H"
+      }
+    },
+    {
+      "key": "LCC.P2H.2025-02-24.Flex",
+      "fdw_rec": "reco804d5WLhp7Nov",
+      "canon_uuid": "dc8c6028-8191-4c41-a892-bd98f6391f59",
+      "status": "matched",
+      "mismatches": [],
+      "fdw": {
+        "decision_id_proposed": "LCC.P2H.2025-02-24.Flex",
+        "decision_id": "LCC.P2H.2025-02-24.Flex",
+        "decision_amount": 215000,
+        "sum_allocation_amount": 215000,
+        "decision_date": "2025-02-24",
+        "restriction": "Flexible",
+        "partner": "recAoKLIxff3J74l5",
+        "grant_name": "Legatum"
+      },
+      "canonical": {
+        "decision_id_proposed": "LCC.P2H.2025-02-24.Flex",
+        "decision_id": "LCC.P2H.2025-02-24.Flex",
+        "decision_amount": 215000,
+        "sum_allocation_amount": 215000,
+        "decision_date": "2025-02-24",
+        "restriction": "Flexible",
+        "partner": "P2H",
+        "grant_name": "Legatum"
+      }
+    },
+    {
+      "key": "LCC.P2H.2025-03-08.ADJU",
+      "fdw_rec": "recI7LfTvPsUkKa6I",
+      "canon_uuid": null,
+      "status": "fdw_only",
+      "mismatches": [
+        "no canonical row"
+      ],
+      "fdw": {
+        "decision_id_proposed": "LCC.P2H.2025-03-08.ADJU",
+        "decision_id": "LCC.P2H.2025-03-08.ADJU",
+        "decision_amount": 0,
+        "sum_allocation_amount": 0,
+        "decision_date": "2025-03-08",
+        "restriction": "ADJUSTMENT",
+        "partner": "recAoKLIxff3J74l5",
+        "grant_name": null
+      },
+      "canonical": {
+        "decision_id_proposed": null,
+        "decision_id": null,
+        "decision_amount": null,
+        "sum_allocation_amount": null,
+        "decision_date": null,
+        "restriction": null,
+        "partner": null,
+        "grant_name": null
+      }
+    },
+    {
+      "key": "LCC.P2H.2025-03-08.Flex",
+      "fdw_rec": "rec1ESS8ummOsDyTV",
+      "canon_uuid": "086041cb-a7bb-4c4a-88cc-8c8e5fcd6908",
+      "status": "matched",
+      "mismatches": [],
+      "fdw": {
+        "decision_id_proposed": "LCC.P2H.2025-03-08.Flex",
+        "decision_id": "LCC.P2H.2025-03-08.Flex",
+        "decision_amount": 353200,
+        "sum_allocation_amount": 353200,
+        "decision_date": "2025-03-08",
+        "restriction": "Flexible",
+        "partner": "recAoKLIxff3J74l5",
+        "grant_name": "DKH 2"
+      },
+      "canonical": {
+        "decision_id_proposed": "LCC.P2H.2025-03-08.Flex",
+        "decision_id": "LCC.P2H.2025-03-08.Flex",
+        "decision_amount": 353200,
+        "sum_allocation_amount": 353200,
+        "decision_date": "2025-03-08",
+        "restriction": "Flexible",
+        "partner": "P2H",
+        "grant_name": "DKH 2"
+      }
+    },
+    {
+      "key": "LCC.P2H.2025-04-15.Flex",
+      "fdw_rec": "reciYyLshzjyJDw0l",
+      "canon_uuid": "c664bd76-57c3-4694-a18b-34a5cda328c6",
+      "status": "matched",
+      "mismatches": [],
+      "fdw": {
+        "decision_id_proposed": "LCC.P2H.2025-04-15.Flex",
+        "decision_id": "LCC.P2H.2025-04-15.Flex",
+        "decision_amount": 214000,
+        "sum_allocation_amount": 214000,
+        "decision_date": "2025-04-15",
+        "restriction": "Flexible",
+        "partner": "recAoKLIxff3J74l5",
+        "grant_name": "P2H"
+      },
+      "canonical": {
+        "decision_id_proposed": "LCC.P2H.2025-04-15.Flex",
+        "decision_id": "LCC.P2H.2025-04-15.Flex",
+        "decision_amount": 214000,
+        "sum_allocation_amount": 214000,
+        "decision_date": "2025-04-15",
+        "restriction": "Flexible",
+        "partner": "P2H",
+        "grant_name": "P2H"
+      }
+    },
+    {
+      "key": "LCC.P2H.2025-05-14.Flex",
+      "fdw_rec": "recKpQzssI4HinIL6",
+      "canon_uuid": "e5aff461-73b9-421b-aac9-6178d2cbb930",
+      "status": "matched",
+      "mismatches": [
+        "sum_allocation_amount: FDW=100867 canon=100000"
+      ],
+      "fdw": {
+        "decision_id_proposed": "LCC.P2H.2025-05-14.Flex",
+        "decision_id": "LCC.P2H.2025-05-14.Flex",
+        "decision_amount": 100000,
+        "sum_allocation_amount": 100867,
+        "decision_date": "2025-05-14",
+        "restriction": "Flexible",
+        "partner": "recAoKLIxff3J74l5",
+        "grant_name": "P2H"
+      },
+      "canonical": {
+        "decision_id_proposed": "LCC.P2H.2025-05-14.Flex",
+        "decision_id": "LCC.P2H.2025-05-14.Flex",
+        "decision_amount": 100000,
+        "sum_allocation_amount": 100000,
+        "decision_date": "2025-05-14",
+        "restriction": "Flexible",
+        "partner": "P2H",
+        "grant_name": "P2H"
+      }
+    },
+    {
+      "key": "LCC.P2H.2025-05-21.Flex",
+      "fdw_rec": "rec1O2QOTvj6GjA4Y",
+      "canon_uuid": "a3ffe502-14ce-4c6a-a532-bbcdf328e468",
+      "status": "matched",
+      "mismatches": [],
+      "fdw": {
+        "decision_id_proposed": "LCC.P2H.2025-05-21.Flex",
+        "decision_id": "LCC.P2H.2025-05-21.Flex",
+        "decision_amount": 100000,
+        "sum_allocation_amount": 100000,
+        "decision_date": "2025-05-21",
+        "restriction": "Flexible",
+        "partner": "recAoKLIxff3J74l5",
+        "grant_name": "P2H"
+      },
+      "canonical": {
+        "decision_id_proposed": "LCC.P2H.2025-05-21.Flex",
+        "decision_id": "LCC.P2H.2025-05-21.Flex",
+        "decision_amount": 100000,
+        "sum_allocation_amount": 100000,
+        "decision_date": "2025-05-21",
+        "restriction": "Flexible",
+        "partner": "P2H",
+        "grant_name": "P2H"
+      }
+    },
+    {
+      "key": "LCC.P2H.2025-05-28.Flex",
+      "fdw_rec": "recZLb1MFsJkBPPJs",
+      "canon_uuid": "c302f909-2b5a-49fc-94bf-3996c15332f0",
+      "status": "matched",
+      "mismatches": [],
+      "fdw": {
+        "decision_id_proposed": "LCC.P2H.2025-05-28.Flex",
+        "decision_id": "LCC.P2H.2025-05-28.Flex",
+        "decision_amount": 200000,
+        "sum_allocation_amount": 200001,
+        "decision_date": "2025-05-28",
+        "restriction": "Flexible",
+        "partner": "recAoKLIxff3J74l5",
+        "grant_name": "P2H"
+      },
+      "canonical": {
+        "decision_id_proposed": "LCC.P2H.2025-05-28.Flex",
+        "decision_id": "LCC.P2H.2025-05-28.Flex",
+        "decision_amount": 200000,
+        "sum_allocation_amount": 200001,
+        "decision_date": "2025-05-28",
+        "restriction": "Flexible",
+        "partner": "P2H",
+        "grant_name": "P2H"
+      }
+    },
+    {
+      "key": "LCC.P2H.2025-06-11.Flex",
+      "fdw_rec": "reczzX5ulf3NDBmve",
+      "canon_uuid": "59370bd3-f8ac-42f8-94dd-3e2d926569af",
+      "status": "matched",
+      "mismatches": [],
+      "fdw": {
+        "decision_id_proposed": "LCC.P2H.2025-06-11.Flex",
+        "decision_id": "LCC.P2H.2025-06-11.Flex",
+        "decision_amount": 100000,
+        "sum_allocation_amount": 100000,
+        "decision_date": "2025-06-11",
+        "restriction": "Flexible",
+        "partner": "recAoKLIxff3J74l5",
+        "grant_name": "P2H"
+      },
+      "canonical": {
+        "decision_id_proposed": "LCC.P2H.2025-06-11.Flex",
+        "decision_id": "LCC.P2H.2025-06-11.Flex",
+        "decision_amount": 100000,
+        "sum_allocation_amount": 100000,
+        "decision_date": "2025-06-11",
+        "restriction": "Flexible",
+        "partner": "P2H",
+        "grant_name": "P2H"
+      }
+    },
+    {
+      "key": "LCC.P2H.2025-06-18.Flex",
+      "fdw_rec": "recBfFvVNhwG5zHXk",
+      "canon_uuid": "32f98b11-d570-47f8-ba4f-77ade1f50d3c",
+      "status": "matched",
+      "mismatches": [],
+      "fdw": {
+        "decision_id_proposed": "LCC.P2H.2025-06-18.Flex",
+        "decision_id": "LCC.P2H.2025-06-18.Flex",
+        "decision_amount": 100000,
+        "sum_allocation_amount": 100000,
+        "decision_date": "2025-06-18",
+        "restriction": "Flexible",
+        "partner": "recAoKLIxff3J74l5",
+        "grant_name": "P2H"
+      },
+      "canonical": {
+        "decision_id_proposed": "LCC.P2H.2025-06-18.Flex",
+        "decision_id": "LCC.P2H.2025-06-18.Flex",
+        "decision_amount": 100000,
+        "sum_allocation_amount": 100000,
+        "decision_date": "2025-06-18",
+        "restriction": "Flexible",
+        "partner": "P2H",
+        "grant_name": "P2H"
+      }
+    },
+    {
+      "key": "LCC.P2H.2025-07-02.Flex",
+      "fdw_rec": "recfxlNorVUYN8pJK",
+      "canon_uuid": "8da45258-7138-4b23-b692-4731de3363d8",
+      "status": "matched",
+      "mismatches": [],
+      "fdw": {
+        "decision_id_proposed": "LCC.P2H.2025-07-02.Flex",
+        "decision_id": "LCC.P2H.2025-07-02.Flex",
+        "decision_amount": 200000,
+        "sum_allocation_amount": 200000,
+        "decision_date": "2025-07-02",
+        "restriction": "Flexible",
+        "partner": "recAoKLIxff3J74l5",
+        "grant_name": "P2H"
+      },
+      "canonical": {
+        "decision_id_proposed": "LCC.P2H.2025-07-02.Flex",
+        "decision_id": "LCC.P2H.2025-07-02.Flex",
+        "decision_amount": 200000,
+        "sum_allocation_amount": 200000,
+        "decision_date": "2025-07-02",
+        "restriction": "Flexible",
+        "partner": "P2H",
+        "grant_name": "P2H"
+      }
+    },
+    {
+      "key": "LCC.P2H.2025-07-16.Flex",
+      "fdw_rec": "recAb5X4SzB8WSzrh",
+      "canon_uuid": "b7f9429e-e0fd-4760-bdbe-95be51ec9c20",
+      "status": "matched",
+      "mismatches": [
+        "decision_amount: FDW=380000 canon=200000"
+      ],
+      "fdw": {
+        "decision_id_proposed": "LCC.P2H.2025-07-16.Flex",
+        "decision_id": "LCC.P2H.2025-07-16.Flex",
+        "decision_amount": 380000,
+        "sum_allocation_amount": 200000,
+        "decision_date": "2025-07-16",
+        "restriction": "Flexible",
+        "partner": "recAoKLIxff3J74l5",
+        "grant_name": "P2H"
+      },
+      "canonical": {
+        "decision_id_proposed": "LCC.P2H.2025-07-16.Flex",
+        "decision_id": "LCC.P2H.2025-07-16.Flex",
+        "decision_amount": 200000,
+        "sum_allocation_amount": 200000,
+        "decision_date": "2025-07-16",
+        "restriction": "Flexible",
+        "partner": "P2H",
+        "grant_name": "P2H"
+      }
+    },
+    {
+      "key": "LCC.P2H.2025-07-30.Flex",
+      "fdw_rec": "recqARFB84IfBeWCs",
+      "canon_uuid": "1ea86d0e-1094-4abf-81d6-4678abc13bf2",
+      "status": "matched",
+      "mismatches": [],
+      "fdw": {
+        "decision_id_proposed": "LCC.P2H.2025-07-30.Flex",
+        "decision_id": "LCC.P2H.2025-07-30.Flex",
+        "decision_amount": 200000,
+        "sum_allocation_amount": 200000,
+        "decision_date": "2025-07-30",
+        "restriction": "Flexible",
+        "partner": "recAoKLIxff3J74l5",
+        "grant_name": "Denver Foundation"
+      },
+      "canonical": {
+        "decision_id_proposed": "LCC.P2H.2025-07-30.Flex",
+        "decision_id": "LCC.P2H.2025-07-30.Flex",
+        "decision_amount": 200000,
+        "sum_allocation_amount": 200000,
+        "decision_date": "2025-07-30",
+        "restriction": "Flexible",
+        "partner": "P2H",
+        "grant_name": "Denver Foundation"
+      }
+    },
+    {
+      "key": "LCC.P2H.2025-08-13.Flex",
+      "fdw_rec": "recnHabtZK1oXwSaJ",
+      "canon_uuid": "e605a0a6-154b-4a54-a78a-16194061bcfe",
+      "status": "matched",
+      "mismatches": [],
+      "fdw": {
+        "decision_id_proposed": "LCC.P2H.2025-08-13.Flex",
+        "decision_id": "LCC.P2H.2025-08-13.Flex",
+        "decision_amount": 144400,
+        "sum_allocation_amount": 144400,
+        "decision_date": "2025-08-13",
+        "restriction": "Flexible",
+        "partner": "recAoKLIxff3J74l5",
+        "grant_name": "SV"
+      },
+      "canonical": {
+        "decision_id_proposed": "LCC.P2H.2025-08-13.Flex",
+        "decision_id": "LCC.P2H.2025-08-13.Flex",
+        "decision_amount": 144400,
+        "sum_allocation_amount": 144400,
+        "decision_date": "2025-08-13",
+        "restriction": "Flexible",
+        "partner": "P2H",
+        "grant_name": "SV"
+      }
+    },
+    {
+      "key": "LCC.P2H.2025-08-20.Flex",
+      "fdw_rec": "recCBELjdJYH3QoSm",
+      "canon_uuid": "140221f3-c281-498d-a636-e70e3fc854c2",
+      "status": "matched",
+      "mismatches": [],
+      "fdw": {
+        "decision_id_proposed": "LCC.P2H.2025-08-20.Flex",
+        "decision_id": "LCC.P2H.2025-08-20.Flex",
+        "decision_amount": 145098.08,
+        "sum_allocation_amount": 145098.08,
+        "decision_date": "2025-08-20",
+        "restriction": "Flexible",
+        "partner": "recAoKLIxff3J74l5",
+        "grant_name": "SV"
+      },
+      "canonical": {
+        "decision_id_proposed": "LCC.P2H.2025-08-20.Flex",
+        "decision_id": "LCC.P2H.2025-08-20.Flex",
+        "decision_amount": 145098.08,
+        "sum_allocation_amount": 145098.08,
+        "decision_date": "2025-08-20",
+        "restriction": "Flexible",
+        "partner": "P2H",
+        "grant_name": "SV"
+      }
+    },
+    {
+      "key": "LCC.P2H.2025-09-03.Flex",
+      "fdw_rec": "recA2JJAKrqC6zoox",
+      "canon_uuid": "48fffafc-8834-469b-b861-60a97070d185",
+      "status": "matched",
+      "mismatches": [],
+      "fdw": {
+        "decision_id_proposed": "LCC.P2H.2025-09-03.Flex",
+        "decision_id": "LCC.P2H.2025-09-03.Flex",
+        "decision_amount": 200000,
+        "sum_allocation_amount": 200000,
+        "decision_date": "2025-09-03",
+        "restriction": "Flexible",
+        "partner": "recAoKLIxff3J74l5",
+        "grant_name": "DKH 2"
+      },
+      "canonical": {
+        "decision_id_proposed": "LCC.P2H.2025-09-03.Flex",
+        "decision_id": "LCC.P2H.2025-09-03.Flex",
+        "decision_amount": 200000,
+        "sum_allocation_amount": 200000,
+        "decision_date": "2025-09-03",
+        "restriction": "Flexible",
+        "partner": "P2H",
+        "grant_name": "DKH 2"
+      }
+    },
+    {
+      "key": "LCC.P2H.2025-09-10.Flex",
+      "fdw_rec": "rectNwvBFbG01ruvE",
+      "canon_uuid": "38855ee0-8416-479e-a9c5-48e9aede960d",
+      "status": "matched",
+      "mismatches": [],
+      "fdw": {
+        "decision_id_proposed": "LCC.P2H.2025-09-10.Flex",
+        "decision_id": "LCC.P2H.2025-09-10.Flex",
+        "decision_amount": 209804,
+        "sum_allocation_amount": 209803.93,
+        "decision_date": "2025-09-10",
+        "restriction": "Flexible",
+        "partner": "recAoKLIxff3J74l5",
+        "grant_name": "DKH 2"
+      },
+      "canonical": {
+        "decision_id_proposed": "LCC.P2H.2025-09-10.Flex",
+        "decision_id": "LCC.P2H.2025-09-10.Flex",
+        "decision_amount": 209804,
+        "sum_allocation_amount": 209803.93,
+        "decision_date": "2025-09-10",
+        "restriction": "Flexible",
+        "partner": "P2H",
+        "grant_name": "DKH 2"
+      }
+    },
+    {
+      "key": "LCC.P2H.2025-09-17.Flex",
+      "fdw_rec": "recv9jfclDdTc5ryE",
+      "canon_uuid": "711bfeca-d11f-46fc-bd86-d9a7b6abe2f9",
+      "status": "matched",
+      "mismatches": [],
+      "fdw": {
+        "decision_id_proposed": "LCC.P2H.2025-09-17.Flex",
+        "decision_id": "LCC.P2H.2025-09-17.Flex",
+        "decision_amount": 100000,
+        "sum_allocation_amount": 100000,
+        "decision_date": "2025-09-17",
+        "restriction": "Flexible",
+        "partner": "recAoKLIxff3J74l5",
+        "grant_name": "P2H"
+      },
+      "canonical": {
+        "decision_id_proposed": "LCC.P2H.2025-09-17.Flex",
+        "decision_id": "LCC.P2H.2025-09-17.Flex",
+        "decision_amount": 100000,
+        "sum_allocation_amount": 100000,
+        "decision_date": "2025-09-17",
+        "restriction": "Flexible",
+        "partner": "P2H",
+        "grant_name": "P2H"
+      }
+    },
+    {
+      "key": "LCC.P2H.2025-09-17.WRR",
+      "fdw_rec": "reclRbP4BAufSmzOA",
+      "canon_uuid": "7126212e-31f3-4ec8-a366-c1bb128c417e",
+      "status": "matched",
+      "mismatches": [],
+      "fdw": {
+        "decision_id_proposed": "LCC.P2H.2025-09-17.WRR",
+        "decision_id": "LCC.P2H.2025-09-17.WRR",
+        "decision_amount": 98000,
+        "sum_allocation_amount": 98000,
+        "decision_date": "2025-09-17",
+        "restriction": "WRR",
+        "partner": "recAoKLIxff3J74l5",
+        "grant_name": "Denver Foundation"
+      },
+      "canonical": {
+        "decision_id_proposed": "LCC.P2H.2025-09-17.WRR",
+        "decision_id": "LCC.P2H.2025-09-17.WRR",
+        "decision_amount": 98000,
+        "sum_allocation_amount": 98000,
+        "decision_date": "2025-09-17",
+        "restriction": "WRR",
+        "partner": "P2H",
+        "grant_name": "Denver Foundation"
+      }
+    },
+    {
+      "key": "LCC.P2H.2025-09-24.Emer",
+      "fdw_rec": "recpTWPU9ciTgjotl",
+      "canon_uuid": "5f3cc7b5-5b5b-4f18-859e-e92f5da90065",
+      "status": "matched",
+      "mismatches": [],
+      "fdw": {
+        "decision_id_proposed": "LCC.P2H.2025-09-24.Emer",
+        "decision_id": "LCC.P2H.2025-09-24.Emer",
+        "decision_amount": 200000,
+        "sum_allocation_amount": 200000,
+        "decision_date": "2025-09-24",
+        "restriction": "Emergency",
+        "partner": "recAoKLIxff3J74l5",
+        "grant_name": "FCDO"
+      },
+      "canonical": {
+        "decision_id_proposed": "LCC.P2H.2025-09-24.Emer",
+        "decision_id": "LCC.P2H.2025-09-24.Emer",
+        "decision_amount": 200000,
+        "sum_allocation_amount": 200000,
+        "decision_date": "2025-09-24",
+        "restriction": "Emergency",
+        "partner": "P2H",
+        "grant_name": "FCDO"
+      }
+    },
+    {
+      "key": "LCC.P2H.2025-09-24.Flex",
+      "fdw_rec": "recn1XThJeKV22aBz",
+      "canon_uuid": "756a72c4-fd7b-4d02-975d-0d1ffc6ddd72",
+      "status": "matched",
+      "mismatches": [],
+      "fdw": {
+        "decision_id_proposed": "LCC.P2H.2025-09-24.Flex",
+        "decision_id": "LCC.P2H.2025-09-24.Flex",
+        "decision_amount": 100000,
+        "sum_allocation_amount": 100000,
+        "decision_date": "2025-09-24",
+        "restriction": "Flexible",
+        "partner": "recAoKLIxff3J74l5",
+        "grant_name": "FCDO"
+      },
+      "canonical": {
+        "decision_id_proposed": "LCC.P2H.2025-09-24.Flex",
+        "decision_id": "LCC.P2H.2025-09-24.Flex",
+        "decision_amount": 100000,
+        "sum_allocation_amount": 100000,
+        "decision_date": "2025-09-24",
+        "restriction": "Flexible",
+        "partner": "P2H",
+        "grant_name": "FCDO"
+      }
+    },
+    {
+      "key": "LCC.P2H.2025-09-24.WRR",
+      "fdw_rec": "recTwNaojdP2d3O6T",
+      "canon_uuid": "ddae050b-9198-4319-9937-90d9b6064568",
+      "status": "matched",
+      "mismatches": [],
+      "fdw": {
+        "decision_id_proposed": "LCC.P2H.2025-09-24.WRR",
+        "decision_id": "LCC.P2H.2025-09-24.WRR",
+        "decision_amount": 100000,
+        "sum_allocation_amount": 100000,
+        "decision_date": "2025-09-24",
+        "restriction": "WRR",
+        "partner": "recAoKLIxff3J74l5",
+        "grant_name": "Denver Foundation"
+      },
+      "canonical": {
+        "decision_id_proposed": "LCC.P2H.2025-09-24.WRR",
+        "decision_id": "LCC.P2H.2025-09-24.WRR",
+        "decision_amount": 100000,
+        "sum_allocation_amount": 100000,
+        "decision_date": "2025-09-24",
+        "restriction": "WRR",
+        "partner": "P2H",
+        "grant_name": "Denver Foundation"
+      }
+    },
+    {
+      "key": "LCC.P2H.2025-09-26.WRR",
+      "fdw_rec": "recz2Ie2vUyNFy0zp",
+      "canon_uuid": "8c2a1830-f260-44fe-88aa-e43744fa4dfa",
+      "status": "matched",
+      "mismatches": [],
+      "fdw": {
+        "decision_id_proposed": "LCC.P2H.2025-09-26.WRR",
+        "decision_id": "LCC.P2H.2025-09-26.WRR",
+        "decision_amount": 47000,
+        "sum_allocation_amount": 47000,
+        "decision_date": "2025-09-26",
+        "restriction": "WRR",
+        "partner": "recAoKLIxff3J74l5",
+        "grant_name": "Denver Foundation"
+      },
+      "canonical": {
+        "decision_id_proposed": "LCC.P2H.2025-09-26.WRR",
+        "decision_id": "LCC.P2H.2025-09-26.WRR",
+        "decision_amount": 47000,
+        "sum_allocation_amount": 47000,
+        "decision_date": "2025-09-26",
+        "restriction": "WRR",
+        "partner": "P2H",
+        "grant_name": "Denver Foundation"
+      }
+    },
+    {
+      "key": "LCC.P2H.2025-10-03.Flex",
+      "fdw_rec": "recleAbME3Weo7smI",
+      "canon_uuid": "976606f5-46dd-4419-9f86-806ed633a594",
+      "status": "matched",
+      "mismatches": [],
+      "fdw": {
+        "decision_id_proposed": "LCC.P2H.2025-10-03.Flex",
+        "decision_id": "LCC.P2H.2025-10-03.Flex",
+        "decision_amount": 200000,
+        "sum_allocation_amount": 200000,
+        "decision_date": "2025-10-03",
+        "restriction": "Flexible",
+        "partner": "recAoKLIxff3J74l5",
+        "grant_name": "FCDO"
+      },
+      "canonical": {
+        "decision_id_proposed": "LCC.P2H.2025-10-03.Flex",
+        "decision_id": "LCC.P2H.2025-10-03.Flex",
+        "decision_amount": 200000,
+        "sum_allocation_amount": 200000,
+        "decision_date": "2025-10-03",
+        "restriction": "Flexible",
+        "partner": "P2H",
+        "grant_name": "FCDO"
+      }
+    },
+    {
+      "key": "LCC.P2H.2025-10-08.Flex",
+      "fdw_rec": "recTIiKdfF13YWoeL",
+      "canon_uuid": "0aa517f3-0f69-4baf-9304-4abf55bb9625",
+      "status": "matched",
+      "mismatches": [],
+      "fdw": {
+        "decision_id_proposed": "LCC.P2H.2025-10-08.Flex",
+        "decision_id": "LCC.P2H.2025-10-08.Flex",
+        "decision_amount": 200000,
+        "sum_allocation_amount": 200000,
+        "decision_date": "2025-10-08",
+        "restriction": "Flexible",
+        "partner": "recAoKLIxff3J74l5",
+        "grant_name": "FCDO"
+      },
+      "canonical": {
+        "decision_id_proposed": "LCC.P2H.2025-10-08.Flex",
+        "decision_id": "LCC.P2H.2025-10-08.Flex",
+        "decision_amount": 200000,
+        "sum_allocation_amount": 200000,
+        "decision_date": "2025-10-08",
+        "restriction": "Flexible",
+        "partner": "P2H",
+        "grant_name": "FCDO"
+      }
+    },
+    {
+      "key": "LCC.P2H.2025-10-22.Flex",
+      "fdw_rec": "recAvT5U163jEl6i3",
+      "canon_uuid": "ea8cfc3a-2549-49b4-a2bc-a5cf5e2ef294",
+      "status": "matched",
+      "mismatches": [],
+      "fdw": {
+        "decision_id_proposed": "LCC.P2H.2025-10-22.Flex",
+        "decision_id": "LCC.P2H.2025-10-22.Flex",
+        "decision_amount": 225000,
+        "sum_allocation_amount": 224999.99,
+        "decision_date": "2025-10-22",
+        "restriction": "Flexible",
+        "partner": "recAoKLIxff3J74l5",
+        "grant_name": "FCDO"
+      },
+      "canonical": {
+        "decision_id_proposed": "LCC.P2H.2025-10-22.Flex",
+        "decision_id": "LCC.P2H.2025-10-22.Flex",
+        "decision_amount": 225000,
+        "sum_allocation_amount": 224999.99,
+        "decision_date": "2025-10-22",
+        "restriction": "Flexible",
+        "partner": "P2H",
+        "grant_name": "FCDO"
+      }
+    },
+    {
+      "key": "LCC.P2H.2025-10-22.Flex-2",
+      "fdw_rec": "recsZuJxAFUjMFllQ",
+      "canon_uuid": "e064e886-e323-4f87-a95f-b6f2ceb7095d",
+      "status": "matched",
+      "mismatches": [
+        "decision_id_proposed: suffix disambiguation (LCC.P2H.2025-10-22.Flex → LCC.P2H.2025-10-22.Flex-2)"
+      ],
+      "fdw": {
+        "decision_id_proposed": "LCC.P2H.2025-10-22.Flex",
+        "decision_id": "LCC.P2H.2025-10-22.Flex",
+        "decision_amount": 175000,
+        "sum_allocation_amount": 175000,
+        "decision_date": "2025-10-22",
+        "restriction": "Flexible",
+        "partner": "recAoKLIxff3J74l5",
+        "grant_name": "FCDO"
+      },
+      "canonical": {
+        "decision_id_proposed": "LCC.P2H.2025-10-22.Flex-2",
+        "decision_id": "LCC.P2H.2025-10-22.Flex",
+        "decision_amount": 175000,
+        "sum_allocation_amount": 175000,
+        "decision_date": "2025-10-22",
+        "restriction": "Flexible",
+        "partner": "P2H",
+        "grant_name": "FCDO"
+      }
+    },
+    {
+      "key": "LCC.P2H.2025-11-05.Emer",
+      "fdw_rec": "rec67MvMKEVMujQcQ",
+      "canon_uuid": "c8c4de39-18d1-4685-b83b-55f75bf237e7",
+      "status": "matched",
+      "mismatches": [],
+      "fdw": {
+        "decision_id_proposed": "LCC.P2H.2025-11-05.Emer",
+        "decision_id": "LCC.P2H.2025-11-05.Emer",
+        "decision_amount": 340000,
+        "sum_allocation_amount": 340000,
+        "decision_date": "2025-11-05",
+        "restriction": "Emergency",
+        "partner": "recAoKLIxff3J74l5",
+        "grant_name": "FCDO"
+      },
+      "canonical": {
+        "decision_id_proposed": "LCC.P2H.2025-11-05.Emer",
+        "decision_id": "LCC.P2H.2025-11-05.Emer",
+        "decision_amount": 340000,
+        "sum_allocation_amount": 340000,
+        "decision_date": "2025-11-05",
+        "restriction": "Emergency",
+        "partner": "P2H",
+        "grant_name": "FCDO"
+      }
+    },
+    {
+      "key": "LCC.P2H.2025-11-05.Flex",
+      "fdw_rec": "recD3OuOlicA8u7Rk",
+      "canon_uuid": "2625a873-1f13-427d-8cdd-80df37ba08ba",
+      "status": "matched",
+      "mismatches": [
+        "sum_allocation_amount: FDW=360000 canon=360000.01"
+      ],
+      "fdw": {
+        "decision_id_proposed": "LCC.P2H.2025-11-05.Flex",
+        "decision_id": "LCC.P2H.2025-11-05.Flex",
+        "decision_amount": 360000,
+        "sum_allocation_amount": 360000,
+        "decision_date": "2025-11-05",
+        "restriction": "Flexible",
+        "partner": "recAoKLIxff3J74l5",
+        "grant_name": "FCDO"
+      },
+      "canonical": {
+        "decision_id_proposed": "LCC.P2H.2025-11-05.Flex",
+        "decision_id": "LCC.P2H.2025-11-05.Flex",
+        "decision_amount": 360000,
+        "sum_allocation_amount": 360000.01,
+        "decision_date": "2025-11-05",
+        "restriction": "Flexible",
+        "partner": "P2H",
+        "grant_name": "FCDO"
+      }
+    },
+    {
+      "key": "LCC.P2H.2025-11-19.Emer",
+      "fdw_rec": "recikwMTGYBVYvisI",
+      "canon_uuid": "c3e3e9cc-1de7-4cc0-aca3-e7d6fa0f41f0",
+      "status": "matched",
+      "mismatches": [],
+      "fdw": {
+        "decision_id_proposed": "LCC.P2H.2025-11-19.Emer",
+        "decision_id": "LCC.P2H.2025-11-19.Emer",
+        "decision_amount": 168000,
+        "sum_allocation_amount": 168000,
+        "decision_date": "2025-11-19",
+        "restriction": "Emergency",
+        "partner": "recAoKLIxff3J74l5",
+        "grant_name": "FCDO"
+      },
+      "canonical": {
+        "decision_id_proposed": "LCC.P2H.2025-11-19.Emer",
+        "decision_id": "LCC.P2H.2025-11-19.Emer",
+        "decision_amount": 168000,
+        "sum_allocation_amount": 168000,
+        "decision_date": "2025-11-19",
+        "restriction": "Emergency",
+        "partner": "P2H",
+        "grant_name": "FCDO"
+      }
+    },
+    {
+      "key": "LCC.P2H.2025-11-19.Flex",
+      "fdw_rec": "recrnqi6fAbWe24fY",
+      "canon_uuid": "0b7840e2-05a5-4f5e-82ab-a2df36f0cb60",
+      "status": "matched",
+      "mismatches": [],
+      "fdw": {
+        "decision_id_proposed": "LCC.P2H.2025-11-19.Flex",
+        "decision_id": "LCC.P2H.2025-11-19.Flex",
+        "decision_amount": 228000,
+        "sum_allocation_amount": 227999.98,
+        "decision_date": "2025-11-19",
+        "restriction": "Flexible",
+        "partner": "recAoKLIxff3J74l5",
+        "grant_name": "FCDO"
+      },
+      "canonical": {
+        "decision_id_proposed": "LCC.P2H.2025-11-19.Flex",
+        "decision_id": "LCC.P2H.2025-11-19.Flex",
+        "decision_amount": 228000,
+        "sum_allocation_amount": 227999.98,
+        "decision_date": "2025-11-19",
+        "restriction": "Flexible",
+        "partner": "P2H",
+        "grant_name": "FCDO"
+      }
+    },
+    {
+      "key": "LCC.P2H.2025-12-03.Flex",
+      "fdw_rec": "recwpuTGFnklU6mXx",
+      "canon_uuid": "45a02868-3a21-4c8c-92b8-b75d680f4dda",
+      "status": "matched",
+      "mismatches": [],
+      "fdw": {
+        "decision_id_proposed": "LCC.P2H.2025-12-03.Flex",
+        "decision_id": "LCC.P2H.2025-12-03.Flex",
+        "decision_amount": 500000,
+        "sum_allocation_amount": 500000,
+        "decision_date": "2025-12-03",
+        "restriction": "Flexible",
+        "partner": "recAoKLIxff3J74l5",
+        "grant_name": "FCDO"
+      },
+      "canonical": {
+        "decision_id_proposed": "LCC.P2H.2025-12-03.Flex",
+        "decision_id": "LCC.P2H.2025-12-03.Flex",
+        "decision_amount": 500000,
+        "sum_allocation_amount": 500000,
+        "decision_date": "2025-12-03",
+        "restriction": "Flexible",
+        "partner": "P2H",
+        "grant_name": "FCDO"
+      }
+    },
+    {
+      "key": "LCC.P2H.2025-12-17.Emer",
+      "fdw_rec": "rec4AvG8Dd1CQ3S8k",
+      "canon_uuid": "6e948560-3c30-4ace-a224-3f78315fd36e",
+      "status": "matched",
+      "mismatches": [],
+      "fdw": {
+        "decision_id_proposed": "LCC.P2H.2025-12-17.Emer",
+        "decision_id": "LCC.P2H.2025-12-17.Emer",
+        "decision_amount": 340000,
+        "sum_allocation_amount": 340000.02,
+        "decision_date": "2025-12-17",
+        "restriction": "Emergency",
+        "partner": "recAoKLIxff3J74l5",
+        "grant_name": "FCDO"
+      },
+      "canonical": {
+        "decision_id_proposed": "LCC.P2H.2025-12-17.Emer",
+        "decision_id": "LCC.P2H.2025-12-17.Emer",
+        "decision_amount": 340000,
+        "sum_allocation_amount": 340000.02,
+        "decision_date": "2025-12-17",
+        "restriction": "Emergency",
+        "partner": "P2H",
+        "grant_name": "FCDO"
+      }
+    },
+    {
+      "key": "LCC.P2H.2025-12-17.Flex",
+      "fdw_rec": "recB7S7TygseHSKWw",
+      "canon_uuid": "2ba3eb92-43d9-48fc-95be-79966d4c1dc5",
+      "status": "matched",
+      "mismatches": [
+        "sum_allocation_amount: FDW=160000 canon=175912.71"
+      ],
+      "fdw": {
+        "decision_id_proposed": "LCC.P2H.2025-12-17.Flex",
+        "decision_id": "LCC.P2H.2025-12-17.Flex",
+        "decision_amount": 160000,
+        "sum_allocation_amount": 160000,
+        "decision_date": "2025-12-17",
+        "restriction": "Flexible",
+        "partner": "recAoKLIxff3J74l5",
+        "grant_name": "FCDO"
+      },
+      "canonical": {
+        "decision_id_proposed": "LCC.P2H.2025-12-17.Flex",
+        "decision_id": "LCC.P2H.2025-12-17.Flex",
+        "decision_amount": 160000,
+        "sum_allocation_amount": 175912.71,
+        "decision_date": "2025-12-17",
+        "restriction": "Flexible",
+        "partner": "P2H",
+        "grant_name": "FCDO"
+      }
+    },
+    {
+      "key": "LCC.P2H.2025-12-31.Emer",
+      "fdw_rec": "recnvZgA2UBTzgHik",
+      "canon_uuid": "dfb16196-0ec2-4a6a-b879-ffb0de0ee6ca",
+      "status": "matched",
+      "mismatches": [],
+      "fdw": {
+        "decision_id_proposed": "LCC.P2H.2025-12-31.Emer",
+        "decision_id": "LCC.P2H.2025-12-31.Emer",
+        "decision_amount": 30000,
+        "sum_allocation_amount": 30000,
+        "decision_date": "2025-12-31",
+        "restriction": "Emergency",
+        "partner": "recAoKLIxff3J74l5",
+        "grant_name": null
+      },
+      "canonical": {
+        "decision_id_proposed": "LCC.P2H.2025-12-31.Emer",
+        "decision_id": "LCC.P2H.2025-12-31.Emer",
+        "decision_amount": 30000,
+        "sum_allocation_amount": 30000,
+        "decision_date": "2025-12-31",
+        "restriction": "Emergency",
+        "partner": "P2H",
+        "grant_name": null
+      }
+    },
+    {
+      "key": "LCC.P2H.2025-12-31.Flex",
+      "fdw_rec": "recHwd1FrcgBTdTBp",
+      "canon_uuid": "95da6a46-efbb-4a3c-9041-80ce3a3fc6da",
+      "status": "matched",
+      "mismatches": [],
+      "fdw": {
+        "decision_id_proposed": "LCC.P2H.2025-12-31.Flex",
+        "decision_id": "LCC.P2H.2025-12-31.Flex",
+        "decision_amount": 470000,
+        "sum_allocation_amount": 470000,
+        "decision_date": "2025-12-31",
+        "restriction": "Flexible",
+        "partner": "recAoKLIxff3J74l5",
+        "grant_name": "FCDO"
+      },
+      "canonical": {
+        "decision_id_proposed": "LCC.P2H.2025-12-31.Flex",
+        "decision_id": "LCC.P2H.2025-12-31.Flex",
+        "decision_amount": 470000,
+        "sum_allocation_amount": 470000,
+        "decision_date": "2025-12-31",
+        "restriction": "Flexible",
+        "partner": "P2H",
+        "grant_name": "FCDO"
+      }
+    },
+    {
+      "key": "LCC.P2H.2026-01-14.Emer",
+      "fdw_rec": "recQhfGnhGcsBSAVr",
+      "canon_uuid": "b52ab237-21b2-480d-8bf2-188ade1a9398",
+      "status": "matched",
+      "mismatches": [],
+      "fdw": {
+        "decision_id_proposed": "LCC.P2H.2026-01-14.Emer",
+        "decision_id": "LCC.P2H.2026-01-14.Emer",
+        "decision_amount": 10000,
+        "sum_allocation_amount": 10000,
+        "decision_date": "2026-01-14",
+        "restriction": "Emergency",
+        "partner": "recAoKLIxff3J74l5",
+        "grant_name": "P2H"
+      },
+      "canonical": {
+        "decision_id_proposed": "LCC.P2H.2026-01-14.Emer",
+        "decision_id": "LCC.P2H.2026-01-14.Emer",
+        "decision_amount": 10000,
+        "sum_allocation_amount": 10000,
+        "decision_date": "2026-01-14",
+        "restriction": "Emergency",
+        "partner": "P2H",
+        "grant_name": "P2H"
+      }
+    },
+    {
+      "key": "LCC.P2H.2026-01-14.Flex",
+      "fdw_rec": "rec2L9RL0aqUYFzpv",
+      "canon_uuid": "20d17915-7d0c-4416-bbb6-89c4a050a802",
+      "status": "matched",
+      "mismatches": [],
+      "fdw": {
+        "decision_id_proposed": "LCC.P2H.2026-01-14.Flex",
+        "decision_id": "LCC.P2H.2026-01-14.Flex",
+        "decision_amount": 500000,
+        "sum_allocation_amount": 500000,
+        "decision_date": "2026-01-14",
+        "restriction": "Flexible",
+        "partner": "recAoKLIxff3J74l5",
+        "grant_name": "FCDO"
+      },
+      "canonical": {
+        "decision_id_proposed": "LCC.P2H.2026-01-14.Flex",
+        "decision_id": "LCC.P2H.2026-01-14.Flex",
+        "decision_amount": 500000,
+        "sum_allocation_amount": 500000,
+        "decision_date": "2026-01-14",
+        "restriction": "Flexible",
+        "partner": "P2H",
+        "grant_name": "FCDO"
+      }
+    },
+    {
+      "key": "LCC.P2H.2026-01-28.Flex",
+      "fdw_rec": "recvHcxG9LOOFEKSq",
+      "canon_uuid": "68f29dd1-51b1-4c5e-b489-1a63e0b97940",
+      "status": "matched",
+      "mismatches": [],
+      "fdw": {
+        "decision_id_proposed": "LCC.P2H.2026-01-28.Flex",
+        "decision_id": "LCC.P2H.2026-01-28.Flex",
+        "decision_amount": 500000,
+        "sum_allocation_amount": 500000,
+        "decision_date": "2026-01-28",
+        "restriction": "Flexible",
+        "partner": "recAoKLIxff3J74l5",
+        "grant_name": "FCDO"
+      },
+      "canonical": {
+        "decision_id_proposed": "LCC.P2H.2026-01-28.Flex",
+        "decision_id": "LCC.P2H.2026-01-28.Flex",
+        "decision_amount": 500000,
+        "sum_allocation_amount": 500000,
+        "decision_date": "2026-01-28",
+        "restriction": "Flexible",
+        "partner": "P2H",
+        "grant_name": "FCDO"
+      }
+    },
+    {
+      "key": "LCC.P2H.2026-02-14.Flex",
+      "fdw_rec": "recGC8BIM6s55zIpk",
+      "canon_uuid": "e7211ef1-4947-4098-a727-8ffebfaf5137",
+      "status": "matched",
+      "mismatches": [],
+      "fdw": {
+        "decision_id_proposed": "LCC.P2H.2026-02-14.Flex",
+        "decision_id": "LCC.P2H.2026-02-14.Flex",
+        "decision_amount": 1000000,
+        "sum_allocation_amount": 1000000,
+        "decision_date": "2026-02-14",
+        "restriction": "Flexible",
+        "partner": "recAoKLIxff3J74l5",
+        "grant_name": "FCDO"
+      },
+      "canonical": {
+        "decision_id_proposed": "LCC.P2H.2026-02-14.Flex",
+        "decision_id": "LCC.P2H.2026-02-14.Flex",
+        "decision_amount": 1000000,
+        "sum_allocation_amount": 1000000,
+        "decision_date": "2026-02-14",
+        "restriction": "Flexible",
+        "partner": "P2H",
+        "grant_name": "FCDO"
+      }
+    },
+    {
+      "key": "LCC.P2H.2026-02-14.WRR",
+      "fdw_rec": "recNri6UJHIHdHcCI",
+      "canon_uuid": "fa6fbadc-ecc9-47ec-b50b-f4942b08ab9d",
+      "status": "matched",
+      "mismatches": [
+        "sum_allocation_amount: FDW=0 canon=580699"
+      ],
+      "fdw": {
+        "decision_id_proposed": "LCC.P2H.2026-02-14.WRR",
+        "decision_id": "LCC.P2H.2026-02-14.WRR",
+        "decision_amount": 500000,
+        "sum_allocation_amount": 0,
+        "decision_date": "2026-02-14",
+        "restriction": "WRR",
+        "partner": "recAoKLIxff3J74l5",
+        "grant_name": "FCDO"
+      },
+      "canonical": {
+        "decision_id_proposed": "LCC.P2H.2026-02-14.WRR",
+        "decision_id": "LCC.P2H.2026-02-14.WRR",
+        "decision_amount": 500000,
+        "sum_allocation_amount": 580699,
+        "decision_date": "2026-02-14",
+        "restriction": "WRR",
+        "partner": "P2H",
+        "grant_name": "FCDO"
+      }
+    },
+    {
+      "key": "LCC.P2H.2026-03-04.Flex",
+      "fdw_rec": "rec3FkLQPPGP4u6bG",
+      "canon_uuid": "dfc1b86e-5d6c-47a1-9df4-2ba133b4642e",
+      "status": "matched",
+      "mismatches": [],
+      "fdw": {
+        "decision_id_proposed": "LCC.P2H.2026-03-04.Flex",
+        "decision_id": "LCC.P2H.2026-03-04.Flex",
+        "decision_amount": 250000,
+        "sum_allocation_amount": 250000,
+        "decision_date": "2026-03-04",
+        "restriction": "Flexible",
+        "partner": "recAoKLIxff3J74l5",
+        "grant_name": "FCDO"
+      },
+      "canonical": {
+        "decision_id_proposed": "LCC.P2H.2026-03-04.Flex",
+        "decision_id": "LCC.P2H.2026-03-04.Flex",
+        "decision_amount": 250000,
+        "sum_allocation_amount": 250000,
+        "decision_date": "2026-03-04",
+        "restriction": "Flexible",
+        "partner": "P2H",
+        "grant_name": "FCDO"
+      }
+    },
+    {
+      "key": "LCC.P2H.2026-03-11.Flex",
+      "fdw_rec": "recWrcVFthxNr8bMN",
+      "canon_uuid": "8d90d9bb-ecf7-485c-a461-232baa95803a",
+      "status": "matched",
+      "mismatches": [],
+      "fdw": {
+        "decision_id_proposed": "LCC.P2H.2026-03-11.Flex",
+        "decision_id": "LCC.P2H.2026-03-11.Flex",
+        "decision_amount": 250000,
+        "sum_allocation_amount": 250000,
+        "decision_date": "2026-03-11",
+        "restriction": "Flexible",
+        "partner": "recAoKLIxff3J74l5",
+        "grant_name": "FCDO"
+      },
+      "canonical": {
+        "decision_id_proposed": "LCC.P2H.2026-03-11.Flex",
+        "decision_id": "LCC.P2H.2026-03-11.Flex",
+        "decision_amount": 250000,
+        "sum_allocation_amount": 250000,
+        "decision_date": "2026-03-11",
+        "restriction": "Flexible",
+        "partner": "P2H",
+        "grant_name": "FCDO"
+      }
+    },
+    {
+      "key": "LCC.P2H.2026-03-26.ADJU",
+      "fdw_rec": "recfXrbb18NIhqhji",
+      "canon_uuid": null,
+      "status": "fdw_only",
+      "mismatches": [
+        "no canonical row"
+      ],
+      "fdw": {
+        "decision_id_proposed": "LCC.P2H.2026-03-26.ADJU",
+        "decision_id": "LCC.P2H.2026-03-26.ADJU",
+        "decision_amount": 0,
+        "sum_allocation_amount": 0,
+        "decision_date": "2026-03-26",
+        "restriction": "ADJUSTMENT",
+        "partner": "recAoKLIxff3J74l5",
+        "grant_name": null
+      },
+      "canonical": {
+        "decision_id_proposed": null,
+        "decision_id": null,
+        "decision_amount": null,
+        "sum_allocation_amount": null,
+        "decision_date": null,
+        "restriction": null,
+        "partner": null,
+        "grant_name": null
+      }
+    },
+    {
+      "key": "LCC.P2H.2026-03-26.Flex",
+      "fdw_rec": "recrvknZkCcEl9lvW",
+      "canon_uuid": "9e156c50-7965-4fd7-9053-5ab32c874b00",
+      "status": "matched",
+      "mismatches": [],
+      "fdw": {
+        "decision_id_proposed": "LCC.P2H.2026-03-26.Flex",
+        "decision_id": "LCC.P2H.2026-03-26.Flex",
+        "decision_amount": 250000,
+        "sum_allocation_amount": 250000,
+        "decision_date": "2026-03-26",
+        "restriction": "Flexible",
+        "partner": "recAoKLIxff3J74l5",
+        "grant_name": "FCDO"
+      },
+      "canonical": {
+        "decision_id_proposed": "LCC.P2H.2026-03-26.Flex",
+        "decision_id": "LCC.P2H.2026-03-26.Flex",
+        "decision_amount": 250000,
+        "sum_allocation_amount": 250000,
+        "decision_date": "2026-03-26",
+        "restriction": "Flexible",
+        "partner": "P2H",
+        "grant_name": "FCDO"
+      }
+    },
+    {
+      "key": "LCC.P2H.2026-04-02.Flex",
+      "fdw_rec": "recs0MIVQxHbjCR1S",
+      "canon_uuid": "e76d1e27-7b8e-4447-b839-a199dc775fac",
+      "status": "matched",
+      "mismatches": [],
+      "fdw": {
+        "decision_id_proposed": "LCC.P2H.2026-04-02.Flex",
+        "decision_id": "LCC.P2H.2026-04-02.Flex",
+        "decision_amount": 249999.99,
+        "sum_allocation_amount": 249999.99,
+        "decision_date": "2026-04-02",
+        "restriction": "Flexible",
+        "partner": "recAoKLIxff3J74l5",
+        "grant_name": null
+      },
+      "canonical": {
+        "decision_id_proposed": "LCC.P2H.2026-04-02.Flex",
+        "decision_id": "LCC.P2H.2026-04-02.Flex",
+        "decision_amount": 249999.99,
+        "sum_allocation_amount": 249999.99,
+        "decision_date": "2026-04-02",
+        "restriction": "Flexible",
+        "partner": "P2H",
+        "grant_name": null
+      }
+    },
+    {
+      "key": "LCC.P2H.2026-04-08.Flex",
+      "fdw_rec": "recwXVQR7b78AQ8hf",
+      "canon_uuid": "cf3eb317-d72a-484f-9f77-07e7754bd29f",
+      "status": "matched",
+      "mismatches": [],
+      "fdw": {
+        "decision_id_proposed": "LCC.P2H.2026-04-08.Flex",
+        "decision_id": "LCC.P2H.2026-04-08.Flex",
+        "decision_amount": 249999.99,
+        "sum_allocation_amount": 249999.99,
+        "decision_date": "2026-04-08",
+        "restriction": "Flexible",
+        "partner": "recAoKLIxff3J74l5",
+        "grant_name": null
+      },
+      "canonical": {
+        "decision_id_proposed": "LCC.P2H.2026-04-08.Flex",
+        "decision_id": "LCC.P2H.2026-04-08.Flex",
+        "decision_amount": 249999.99,
+        "sum_allocation_amount": 249999.99,
+        "decision_date": "2026-04-08",
+        "restriction": "Flexible",
+        "partner": "P2H",
+        "grant_name": null
+      }
+    },
+    {
+      "key": "LCC.P2H.2026-04-15.Flex",
+      "fdw_rec": "recVUyKDgDVddjkVj",
+      "canon_uuid": "f4dcd3b9-06c3-4bcf-84ea-ed4de7b63476",
+      "status": "matched",
+      "mismatches": [],
+      "fdw": {
+        "decision_id_proposed": "LCC.P2H.2026-04-15.Flex",
+        "decision_id": "LCC.P2H.2026-04-15.Flex",
+        "decision_amount": 250000,
+        "sum_allocation_amount": 250000.01,
+        "decision_date": "2026-04-15",
+        "restriction": "Flexible",
+        "partner": "recAoKLIxff3J74l5",
+        "grant_name": null
+      },
+      "canonical": {
+        "decision_id_proposed": "LCC.P2H.2026-04-15.Flex",
+        "decision_id": "LCC.P2H.2026-04-15.Flex",
+        "decision_amount": 250000,
+        "sum_allocation_amount": 250000.01,
+        "decision_date": "2026-04-15",
+        "restriction": "Flexible",
+        "partner": "P2H",
+        "grant_name": null
+      }
+    },
+    {
+      "key": "LCC.P2H.2026-04-17.Flex",
+      "fdw_rec": "recsDafnBAY5GPjLm",
+      "canon_uuid": "45488076-0e81-4f7c-b473-c7b997086819",
+      "status": "matched",
+      "mismatches": [],
+      "fdw": {
+        "decision_id_proposed": "LCC.P2H.2026-04-17.Flex",
+        "decision_id": "LCC.P2H.2026-04-17.Flex",
+        "decision_amount": 243000,
+        "sum_allocation_amount": 243000,
+        "decision_date": "2026-04-17",
+        "restriction": "Flexible",
+        "partner": "recAoKLIxff3J74l5",
+        "grant_name": null
+      },
+      "canonical": {
+        "decision_id_proposed": "LCC.P2H.2026-04-17.Flex",
+        "decision_id": "LCC.P2H.2026-04-17.Flex",
+        "decision_amount": 243000,
+        "sum_allocation_amount": 243000,
+        "decision_date": "2026-04-17",
+        "restriction": "Flexible",
+        "partner": "P2H",
+        "grant_name": null
+      }
+    },
+    {
+      "key": "LCC.P2H.2026-04-22.Flex",
+      "fdw_rec": "recaovJ3LMXoQOTNM",
+      "canon_uuid": "e74ea986-92af-4058-a8ef-2f85662849b2",
+      "status": "matched",
+      "mismatches": [
+        "sum_allocation_amount: FDW=496500 canon=496000"
+      ],
+      "fdw": {
+        "decision_id_proposed": "LCC.P2H.2026-04-22.Flex",
+        "decision_id": "LCC.P2H.2026-04-22.Flex",
+        "decision_amount": 496000,
+        "sum_allocation_amount": 496500,
+        "decision_date": "2026-04-22",
+        "restriction": "Flexible",
+        "partner": "recAoKLIxff3J74l5",
+        "grant_name": null
+      },
+      "canonical": {
+        "decision_id_proposed": "LCC.P2H.2026-04-22.Flex",
+        "decision_id": "LCC.P2H.2026-04-22.Flex",
+        "decision_amount": 496000,
+        "sum_allocation_amount": 496000,
+        "decision_date": "2026-04-22",
+        "restriction": "Flexible",
+        "partner": "P2H",
+        "grant_name": null
+      }
+    },
+    {
+      "key": "LCC.P2H.2026-05-04.Flex",
+      "fdw_rec": "recF4HZ2ppy94PvvU",
+      "canon_uuid": "d20c85a7-88cd-4400-bfec-b9e0a505dc9e",
+      "status": "matched",
+      "mismatches": [],
+      "fdw": {
+        "decision_id_proposed": "LCC.P2H.2026-05-04.Flex",
+        "decision_id": "LCC.P2H.2026-05-04.Flex",
+        "decision_amount": 503500,
+        "sum_allocation_amount": 503500,
+        "decision_date": "2026-05-04",
+        "restriction": "Flexible",
+        "partner": "recAoKLIxff3J74l5",
+        "grant_name": null
+      },
+      "canonical": {
+        "decision_id_proposed": "LCC.P2H.2026-05-04.Flex",
+        "decision_id": "LCC.P2H.2026-05-04.Flex",
+        "decision_amount": 503500,
+        "sum_allocation_amount": 503500,
+        "decision_date": "2026-05-04",
+        "restriction": "Flexible",
+        "partner": "P2H",
+        "grant_name": null
+      }
+    },
+    {
+      "key": "LCC.P2H.2026-05-05.WRR",
+      "fdw_rec": "recOk3KqxDk6cqfOm",
+      "canon_uuid": "6cf2ac19-bfe8-4501-8b35-0c4ad6ec30c9",
+      "status": "matched",
+      "mismatches": [],
+      "fdw": {
+        "decision_id_proposed": "LCC.P2H.2026-05-05.WRR",
+        "decision_id": "LCC.P2H.2026-05-05.WRR",
+        "decision_amount": 1000000,
+        "sum_allocation_amount": 1000000,
+        "decision_date": "2026-05-05",
+        "restriction": "WRR",
+        "partner": "recAoKLIxff3J74l5",
+        "grant_name": "FCDO"
+      },
+      "canonical": {
+        "decision_id_proposed": "LCC.P2H.2026-05-05.WRR",
+        "decision_id": "LCC.P2H.2026-05-05.WRR",
+        "decision_amount": 1000000,
+        "sum_allocation_amount": 1000000,
+        "decision_date": "2026-05-05",
+        "restriction": "WRR",
+        "partner": "P2H",
+        "grant_name": "FCDO"
+      }
+    },
+    {
+      "key": "LCC.P2H.2026-05-06.WRR",
+      "fdw_rec": "recKWGwdZeY6gDkKl",
+      "canon_uuid": "21559b6a-5727-48bd-97ec-70e46f9ccc58",
+      "status": "matched",
+      "mismatches": [],
+      "fdw": {
+        "decision_id_proposed": "LCC.P2H.2026-05-06.WRR",
+        "decision_id": "LCC.P2H.2026-05-06.WRR",
+        "decision_amount": 93100,
+        "sum_allocation_amount": 93100,
+        "decision_date": "2026-05-06",
+        "restriction": "WRR",
+        "partner": "recAoKLIxff3J74l5",
+        "grant_name": "Malala Fund"
+      },
+      "canonical": {
+        "decision_id_proposed": "LCC.P2H.2026-05-06.WRR",
+        "decision_id": "LCC.P2H.2026-05-06.WRR",
+        "decision_amount": 93100,
+        "sum_allocation_amount": 93100,
+        "decision_date": "2026-05-06",
+        "restriction": "WRR",
+        "partner": "P2H",
+        "grant_name": "Malala Fund"
+      }
+    },
+    {
+      "key": "LCC.P2H.2026-05-07.Flex",
+      "fdw_rec": "recbB5WXovUlvT6fz",
+      "canon_uuid": "dbba8b2d-3d03-40cf-89cc-8acae683d8dd",
+      "status": "matched",
+      "mismatches": [],
+      "fdw": {
+        "decision_id_proposed": "LCC.P2H.2026-05-07.Flex",
+        "decision_id": "LCC.P2H.2026-05-07.Flex",
+        "decision_amount": 506837.7,
+        "sum_allocation_amount": 506837.7,
+        "decision_date": "2026-05-07",
+        "restriction": "Flexible",
+        "partner": "recAoKLIxff3J74l5",
+        "grant_name": null
+      },
+      "canonical": {
+        "decision_id_proposed": "LCC.P2H.2026-05-07.Flex",
+        "decision_id": "LCC.P2H.2026-05-07.Flex",
+        "decision_amount": 506837.7,
+        "sum_allocation_amount": 506837.7,
+        "decision_date": "2026-05-07",
+        "restriction": "Flexible",
+        "partner": "P2H",
+        "grant_name": null
+      }
+    },
+    {
+      "key": "LCC.P2H.2026-05-13.Flex",
+      "fdw_rec": "reciCYhovXQdMBrep",
+      "canon_uuid": "d27651ef-144e-405d-84b2-6185dc6a94d8",
+      "status": "matched",
+      "mismatches": [],
+      "fdw": {
+        "decision_id_proposed": "LCC.P2H.2026-05-13.Flex",
+        "decision_id": "LCC.P2H.2026-05-13.Flex",
+        "decision_amount": 500000,
+        "sum_allocation_amount": 500000,
+        "decision_date": "2026-05-13",
+        "restriction": "Flexible",
+        "partner": "recAoKLIxff3J74l5",
+        "grant_name": null
+      },
+      "canonical": {
+        "decision_id_proposed": "LCC.P2H.2026-05-13.Flex",
+        "decision_id": "LCC.P2H.2026-05-13.Flex",
+        "decision_amount": 500000,
+        "sum_allocation_amount": 500000,
+        "decision_date": "2026-05-13",
+        "restriction": "Flexible",
+        "partner": "P2H",
+        "grant_name": null
+      }
+    },
+    {
+      "key": "LCC.P2H.2026-05-20.Flex",
+      "fdw_rec": "reckuXgmBsLaqcO7l",
+      "canon_uuid": "4fc856d1-8d84-4c64-92a3-3090023ef742",
+      "status": "matched",
+      "mismatches": [],
+      "fdw": {
+        "decision_id_proposed": "LCC.P2H.2026-05-20.Flex",
+        "decision_id": "LCC.P2H.2026-05-20.Flex",
+        "decision_amount": 500000,
+        "sum_allocation_amount": 500000,
+        "decision_date": "2026-05-20",
+        "restriction": "Flexible",
+        "partner": "recAoKLIxff3J74l5",
+        "grant_name": null
+      },
+      "canonical": {
+        "decision_id_proposed": "LCC.P2H.2026-05-20.Flex",
+        "decision_id": "LCC.P2H.2026-05-20.Flex",
+        "decision_amount": 500000,
+        "sum_allocation_amount": 500000,
+        "decision_date": "2026-05-20",
+        "restriction": "Flexible",
+        "partner": "P2H",
+        "grant_name": null
+      }
+    },
+    {
+      "key": "LCC.P2H.2026-05-24.CHAD",
+      "fdw_rec": "recYPxWeen2A8JTx4",
+      "canon_uuid": "0bc795ae-2b40-4e28-88c4-023fad535213",
+      "status": "matched",
+      "mismatches": [],
+      "fdw": {
+        "decision_id_proposed": "LCC.P2H.2026-05-24.CHAD",
+        "decision_id": "LCC.P2H.2026-05-24.CHAD",
+        "decision_amount": 91000,
+        "sum_allocation_amount": 91000,
+        "decision_date": "2026-05-24",
+        "restriction": "CHAD",
+        "partner": "recAoKLIxff3J74l5",
+        "grant_name": null
+      },
+      "canonical": {
+        "decision_id_proposed": "LCC.P2H.2026-05-24.CHAD",
+        "decision_id": "LCC.P2H.2026-05-24.CHAD",
+        "decision_amount": 91000,
+        "sum_allocation_amount": 91000,
+        "decision_date": "2026-05-24",
+        "restriction": "CHAD",
+        "partner": "P2H",
+        "grant_name": null
+      }
+    },
+    {
+      "key": "LCC.P2H.2026-06-02.Flex",
+      "fdw_rec": "recPgum20L8WmBIuZ",
+      "canon_uuid": "2d7e8dee-9df3-4ce6-80c9-e1f578a0b25a",
+      "status": "matched",
+      "mismatches": [],
+      "fdw": {
+        "decision_id_proposed": "LCC.P2H.2026-06-02.Flex",
+        "decision_id": "LCC.P2H.2026-06-02.Flex",
+        "decision_amount": 500000,
+        "sum_allocation_amount": 500000,
+        "decision_date": "2026-06-02",
+        "restriction": "Flexible",
+        "partner": "recAoKLIxff3J74l5",
+        "grant_name": null
+      },
+      "canonical": {
+        "decision_id_proposed": "LCC.P2H.2026-06-02.Flex",
+        "decision_id": "LCC.P2H.2026-06-02.Flex",
+        "decision_amount": 500000,
+        "sum_allocation_amount": 500000,
+        "decision_date": "2026-06-02",
+        "restriction": "Flexible",
+        "partner": "P2H",
+        "grant_name": null
+      }
+    },
+    {
+      "key": "LCC.P2H.2026-06-03.Flex",
+      "fdw_rec": "recx8daC9TsDsUpJG",
+      "canon_uuid": "cd35df55-ff0d-471c-8d14-21657d25d1ec",
+      "status": "matched",
+      "mismatches": [],
+      "fdw": {
+        "decision_id_proposed": "LCC.P2H.2026-06-03.Flex",
+        "decision_id": "LCC.P2H.2026-06-03.Flex",
+        "decision_amount": 500000,
+        "sum_allocation_amount": 500000,
+        "decision_date": "2026-06-03",
+        "restriction": "Flexible",
+        "partner": "recAoKLIxff3J74l5",
+        "grant_name": null
+      },
+      "canonical": {
+        "decision_id_proposed": "LCC.P2H.2026-06-03.Flex",
+        "decision_id": "LCC.P2H.2026-06-03.Flex",
+        "decision_amount": 500000,
+        "sum_allocation_amount": 500000,
+        "decision_date": "2026-06-03",
+        "restriction": "Flexible",
+        "partner": "P2H",
+        "grant_name": null
+      }
+    },
+    {
+      "key": "LCC.P2H.2026-06-11.Flex",
+      "fdw_rec": "recbvIGZf0v6XC4jm",
+      "canon_uuid": "6bdd71fa-492e-4412-a944-9020ae84acfc",
+      "status": "matched",
+      "mismatches": [],
+      "fdw": {
+        "decision_id_proposed": "LCC.P2H.2026-06-11.Flex",
+        "decision_id": "LCC.P2H.2026-06-11.Flex",
+        "decision_amount": 500000,
+        "sum_allocation_amount": 500000.01,
+        "decision_date": "2026-06-11",
+        "restriction": "Flexible",
+        "partner": "recAoKLIxff3J74l5",
+        "grant_name": "FCDO"
+      },
+      "canonical": {
+        "decision_id_proposed": "LCC.P2H.2026-06-11.Flex",
+        "decision_id": "LCC.P2H.2026-06-11.Flex",
+        "decision_amount": 500000,
+        "sum_allocation_amount": 500000.01,
+        "decision_date": "2026-06-11",
+        "restriction": "Flexible",
+        "partner": "P2H",
+        "grant_name": "FCDO"
+      }
+    },
+    {
+      "key": "LCC.P2H.2026-06-17.Flex",
+      "fdw_rec": "recUU954mja3nCIAU",
+      "canon_uuid": "cfc04e30-a7c7-4436-b680-a8409bd3281e",
+      "status": "matched",
+      "mismatches": [],
+      "fdw": {
+        "decision_id_proposed": "LCC.P2H.2026-06-17.Flex",
+        "decision_id": "LCC.P2H.2026-06-17.Flex",
+        "decision_amount": 500000,
+        "sum_allocation_amount": 500000,
+        "decision_date": "2026-06-17",
+        "restriction": "Flexible",
+        "partner": "recAoKLIxff3J74l5",
+        "grant_name": "FCDO"
+      },
+      "canonical": {
+        "decision_id_proposed": "LCC.P2H.2026-06-17.Flex",
+        "decision_id": "LCC.P2H.2026-06-17.Flex",
+        "decision_amount": 500000,
+        "sum_allocation_amount": 500000,
+        "decision_date": "2026-06-17",
+        "restriction": "Flexible",
+        "partner": "P2H",
+        "grant_name": "FCDO"
+      }
+    },
+    {
+      "key": "LCC.P2H.2026-06-21.Emer",
+      "fdw_rec": "recLufyMJksxPtnTY",
+      "canon_uuid": "4facaa06-667e-48b3-b1de-9236bfb35168",
+      "status": "matched",
+      "mismatches": [
+        "sum_allocation_amount: FDW=1000000 canon=600000",
+        "grant_name: FDW=\"FCDO\" canon=null"
+      ],
+      "fdw": {
+        "decision_id_proposed": "LCC.P2H.2026-06-21.Emer",
+        "decision_id": "LCC.P2H.2026-06-21.Emer",
+        "decision_amount": 2000000,
+        "sum_allocation_amount": 1000000,
+        "decision_date": "2026-06-21",
+        "restriction": "Emergency",
+        "partner": "recAoKLIxff3J74l5",
+        "grant_name": "FCDO"
+      },
+      "canonical": {
+        "decision_id_proposed": "LCC.P2H.2026-06-21.Emer",
+        "decision_id": "LCC.P2H.2026-06-21.Emer",
+        "decision_amount": 2000000,
+        "sum_allocation_amount": 600000,
+        "decision_date": "2026-06-21",
+        "restriction": "Emergency",
+        "partner": "P2H",
+        "grant_name": null
+      }
+    },
+    {
+      "key": "LCC.P2H.2026-06-24.Flex",
+      "fdw_rec": "recega7mtW6QCfyNH",
+      "canon_uuid": "7990cfef-0ef2-4169-85a5-3287965fa77b",
+      "status": "matched",
+      "mismatches": [],
+      "fdw": {
+        "decision_id_proposed": "LCC.P2H.2026-06-24.Flex",
+        "decision_id": "LCC.P2H.2026-06-24.Flex",
+        "decision_amount": 500000,
+        "sum_allocation_amount": 500000.01,
+        "decision_date": "2026-06-24",
+        "restriction": "Flexible",
+        "partner": "recAoKLIxff3J74l5",
+        "grant_name": "FCDO"
+      },
+      "canonical": {
+        "decision_id_proposed": "LCC.P2H.2026-06-24.Flex",
+        "decision_id": "LCC.P2H.2026-06-24.Flex",
+        "decision_amount": 500000,
+        "sum_allocation_amount": 500000.01,
+        "decision_date": "2026-06-24",
+        "restriction": "Flexible",
+        "partner": "P2H",
+        "grant_name": "FCDO"
+      }
+    },
+    {
+      "key": "LCC.P2H.2026-06-24.Flex-2",
+      "fdw_rec": "recfNEk4i6SCjU9V1",
+      "canon_uuid": "f73eba5c-e8b0-46f4-92fe-8d9b83663165",
+      "status": "matched",
+      "mismatches": [
+        "decision_id_proposed: suffix disambiguation (LCC.P2H.2026-06-24.Flex → LCC.P2H.2026-06-24.Flex-2)"
+      ],
+      "fdw": {
+        "decision_id_proposed": "LCC.P2H.2026-06-24.Flex",
+        "decision_id": "LCC.P2H.2026-06-24.Flex",
+        "decision_amount": 200000,
+        "sum_allocation_amount": 200000,
+        "decision_date": "2026-06-24",
+        "restriction": "Flexible",
+        "partner": "recAoKLIxff3J74l5",
+        "grant_name": "FCDO"
+      },
+      "canonical": {
+        "decision_id_proposed": "LCC.P2H.2026-06-24.Flex-2",
+        "decision_id": "LCC.P2H.2026-06-24.Flex",
+        "decision_amount": 200000,
+        "sum_allocation_amount": 200000,
+        "decision_date": "2026-06-24",
+        "restriction": "Flexible",
+        "partner": "P2H",
+        "grant_name": "FCDO"
+      }
+    },
+    {
+      "key": "LCC.P2H.2026-07-01.Flex",
+      "fdw_rec": "recUz5FBW7YrXU5Bl",
+      "canon_uuid": null,
+      "status": "fdw_only",
+      "mismatches": [
+        "no canonical row"
+      ],
+      "fdw": {
+        "decision_id_proposed": "LCC.P2H.2026-07-01.Flex",
+        "decision_id": "LCC.P2H.2026-07-01.Flex",
+        "decision_amount": 200000,
+        "sum_allocation_amount": 200000,
+        "decision_date": "2026-07-01",
+        "restriction": "Flexible",
+        "partner": "recAoKLIxff3J74l5",
+        "grant_name": null
+      },
+      "canonical": {
+        "decision_id_proposed": null,
+        "decision_id": null,
+        "decision_amount": null,
+        "sum_allocation_amount": null,
+        "decision_date": null,
+        "restriction": null,
+        "partner": null,
+        "grant_name": null
+      }
+    },
+    {
+      "key": "LCC.P2H.2026-07-01.Flex",
+      "fdw_rec": "recvfwCmTT753EBKt",
+      "canon_uuid": null,
+      "status": "fdw_only",
+      "mismatches": [
+        "no canonical row"
+      ],
+      "fdw": {
+        "decision_id_proposed": "LCC.P2H.2026-07-01.Flex",
+        "decision_id": "LCC.P2H.2026-07-01.Flex",
+        "decision_amount": 500000,
+        "sum_allocation_amount": 499999.99,
+        "decision_date": "2026-07-01",
+        "restriction": "Flexible",
+        "partner": "recAoKLIxff3J74l5",
+        "grant_name": "FCDO"
+      },
+      "canonical": {
+        "decision_id_proposed": null,
+        "decision_id": null,
+        "decision_amount": null,
+        "sum_allocation_amount": null,
+        "decision_date": null,
+        "restriction": null,
+        "partner": null,
+        "grant_name": null
+      }
+    },
+    {
+      "key": "LCC.P2H.2026-07-08.Flex",
+      "fdw_rec": "recGdf1YbcDnMXFQu",
+      "canon_uuid": null,
+      "status": "fdw_only",
+      "mismatches": [
+        "no canonical row"
+      ],
+      "fdw": {
+        "decision_id_proposed": "LCC.P2H.2026-07-08.Flex",
+        "decision_id": "LCC.P2H.2026-07-08.Flex",
+        "decision_amount": 100000,
+        "sum_allocation_amount": 100000,
+        "decision_date": "2026-07-08",
+        "restriction": "Flexible",
+        "partner": "recAoKLIxff3J74l5",
+        "grant_name": null
+      },
+      "canonical": {
+        "decision_id_proposed": null,
+        "decision_id": null,
+        "decision_amount": null,
+        "sum_allocation_amount": null,
+        "decision_date": null,
+        "restriction": null,
+        "partner": null,
+        "grant_name": null
+      }
+    },
+    {
+      "key": "LCC.P2H.2026-07-08.Flex",
+      "fdw_rec": "recJl9ckxhFEV0cmH",
+      "canon_uuid": null,
+      "status": "fdw_only",
+      "mismatches": [
+        "no canonical row"
+      ],
+      "fdw": {
+        "decision_id_proposed": "LCC.P2H.2026-07-08.Flex",
+        "decision_id": "LCC.P2H.2026-07-08.Flex",
+        "decision_amount": 500000,
+        "sum_allocation_amount": 499999,
+        "decision_date": "2026-07-08",
+        "restriction": "Flexible",
+        "partner": "recAoKLIxff3J74l5",
+        "grant_name": null
+      },
+      "canonical": {
+        "decision_id_proposed": null,
+        "decision_id": null,
+        "decision_amount": null,
+        "sum_allocation_amount": null,
+        "decision_date": null,
+        "restriction": null,
+        "partner": null,
+        "grant_name": null
+      }
+    },
+    {
+      "key": "LCC.P2H.2026-07-15.Flex",
+      "fdw_rec": "recq2uvCeN7hxIui2",
+      "canon_uuid": null,
+      "status": "fdw_only",
+      "mismatches": [
+        "no canonical row"
+      ],
+      "fdw": {
+        "decision_id_proposed": "LCC.P2H.2026-07-15.Flex",
+        "decision_id": "LCC.P2H.2026-07-15.Flex",
+        "decision_amount": 500000,
+        "sum_allocation_amount": 500000,
+        "decision_date": "2026-07-15",
+        "restriction": "Flexible",
+        "partner": "recAoKLIxff3J74l5",
+        "grant_name": null
+      },
+      "canonical": {
+        "decision_id_proposed": null,
+        "decision_id": null,
+        "decision_amount": null,
+        "sum_allocation_amount": null,
+        "decision_date": null,
+        "restriction": null,
+        "partner": null,
+        "grant_name": null
+      }
+    },
+    {
+      "key": "LCC.P2H.2026-07-22.Flex",
+      "fdw_rec": "recR3me0Z6qShUh5g",
+      "canon_uuid": null,
+      "status": "fdw_only",
+      "mismatches": [
+        "no canonical row"
+      ],
+      "fdw": {
+        "decision_id_proposed": "LCC.P2H.2026-07-22.Flex",
+        "decision_id": "LCC.P2H.2026-07-22.Flex",
+        "decision_amount": 500000,
+        "sum_allocation_amount": 500000,
+        "decision_date": "2026-07-22",
+        "restriction": "Flexible",
+        "partner": "recAoKLIxff3J74l5",
+        "grant_name": null
+      },
+      "canonical": {
+        "decision_id_proposed": null,
+        "decision_id": null,
+        "decision_amount": null,
+        "sum_allocation_amount": null,
+        "decision_date": null,
+        "restriction": null,
+        "partner": null,
+        "grant_name": null
+      }
+    },
+    {
+      "key": "recxnYC1Zo9rc2t1y",
+      "fdw_rec": "recxnYC1Zo9rc2t1y",
+      "canon_uuid": null,
+      "status": "fdw_only",
+      "mismatches": [
+        "#ERROR! or missing proposed"
+      ],
+      "fdw": {
+        "decision_id_proposed": "#ERROR!",
+        "decision_id": "#ERROR!",
+        "decision_amount": 485000,
+        "sum_allocation_amount": 0,
+        "decision_date": null,
+        "restriction": null,
+        "partner": "rec0zenRjhJso1RvU",
+        "grant_name": null
+      },
+      "canonical": {
+        "decision_id_proposed": null,
+        "decision_id": null,
+        "decision_amount": null,
+        "sum_allocation_amount": null,
+        "decision_date": null,
+        "restriction": null,
+        "partner": null,
+        "grant_name": null
+      }
+    }
+  ]
+}

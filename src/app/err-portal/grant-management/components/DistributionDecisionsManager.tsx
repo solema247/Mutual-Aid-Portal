@@ -181,7 +181,7 @@ export default function DistributionDecisionsManager() {
   const [allocRows, setAllocRows] = useState<Array<{ state: string; amount: string }>>([])
   const [stateOptions, setStateOptions] = useState<string[]>([])
   const [isDeleting, setIsDeleting] = useState<Record<string, boolean>>({})
-  const [isCollapsed, setIsCollapsed] = useState(true)
+  const [isCollapsed, setIsCollapsed] = useState(false)
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
   const [deleteConfirmText, setDeleteConfirmText] = useState('')
   const [decisionToDelete, setDecisionToDelete] = useState<string | null>(null)

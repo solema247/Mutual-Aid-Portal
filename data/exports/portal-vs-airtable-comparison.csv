@@ -1,0 +1,57 @@
+table,entity,key,portal,airtable,delta_portal_minus_at,notes
+headline,Grants,row_count,30,28,2,Portal-only: Avaaz 2; Silicon Valley Foundation. Matched 28 grant_ids.
+headline,Grants,total_transferred_amount_usd,22687603.14,22154353.14,533250.00,Financial fields PASS on all 28 matched grants. Portal total includes portal-only grants.
+headline,Grants,sum_activity_amount,22214441.88,21706843.84,507598.04,Matched FDW activity equals portal for those 28 IDs.
+headline,Grants,sum_transfer_fee_amount,473161.26,447509.30,25651.96,Matched FDW fees equal portal for those 28 IDs.
+headline,Decisions,row_count,79,81,-2,Matched by airtable_record_id: 71. FDW-only: 10. Portal-only: 8.
+headline,Decisions,decision_amount,24622645.76,25037645.76,-415000.00,Includes dual ID naming (LCC.AD.* portal vs LCC.P2H.* AT display).
+headline,Allocations,row_count,593,592,1,Portal allocations_by_date vs FDW allocations.
+headline,Allocations,allocation_amount,23319258.46,22874012.66,445245.80,Portal about $445k above AT.
+headline,Transfer segments,row_count,123,124,-1,Portal transfer_segments vs FDW transfer_segment.
+headline,Transfer segments,activity_plus_fee_total,22791853.14,22825103.14,-33250.00,Portal activity+fee vs AT transfer_amount.
+grants_detail,Grants,matched_by_grant_id,28,28,0,PASS — all FDW grants match canonical financial fields.
+grants_detail,Grants,portal_only,,Avaaz 2; Silicon Valley Foundation,,Avaaz 2 has sync_target=none.
+grants_detail,Grants,portal_with_airtable_record_id,0,,,All 30 portal grants currently sync_status=legacy.
+grants_detail,Grants,sync_model,Portal to Portal_Grants push; FDW financial pull,,,Metadata portal-owned; pull does not delete.
+decisions_gap,Decisions,LCC.AD.P2H.01-07-26-59,500000,,500000,portal_only — new AD-series ID; AT still uses old Flex ID style for July.
+decisions_gap,Decisions,LCC.AD.P2H.01-07-26-60,200000,,200000,portal_only
+decisions_gap,Decisions,LCC.AD.P2H.08-07-26-61,100000,,100000,portal_only
+decisions_gap,Decisions,LCC.AD.P2H.08-07-26-62,500000,,500000,portal_only
+decisions_gap,Decisions,LCC.AD.P2H.15-07-26-63,500000,,500000,portal_only
+decisions_gap,Decisions,LCC.AD.P2H.18-03-26-36,250000,,250000,portal_only
+decisions_gap,Decisions,LCC.AD.P2H.26-07-29-64,500000,,500000,portal_only
+decisions_gap,Decisions,LCC.P2H.2025-01-16.Flex,430000,,,portal_only — also listed as fdw_only under same proposed id (match-key issue)
+decisions_gap,Decisions,LCC.P2H.2025-01-16.Flex,,430000,,fdw_only
+decisions_gap,Decisions,LCC.P2H.2025-03-08.ADJU,,0,,fdw_only — adjustment row missing in portal
+decisions_gap,Decisions,LCC.P2H.2026-03-26.ADJU,,0,,fdw_only — adjustment row missing in portal
+decisions_gap,Decisions,LCC.P2H.2026-07-01.Flex,,200000,,fdw_only — likely same money as portal LCC.AD.P2H.01-07-26-60
+decisions_gap,Decisions,LCC.P2H.2026-07-01.Flex,,500000,,fdw_only — likely same money as portal LCC.AD.P2H.01-07-26-59
+decisions_gap,Decisions,LCC.P2H.2026-07-08.Flex,,100000,,fdw_only
+decisions_gap,Decisions,LCC.P2H.2026-07-08.Flex,,500000,,fdw_only
+decisions_gap,Decisions,LCC.P2H.2026-07-15.Flex,,500000,,fdw_only
+decisions_gap,Decisions,LCC.P2H.2026-07-22.Flex,,500000,,fdw_only
+decisions_gap,Decisions,recxnYC1Zo9rc2t1y,,485000,,fdw_only — AT #ERROR! or missing decision_id_proposed
+decisions_gap,Decisions,LCC.P2H.2025-05-14.Flex,100000,100000,0,matched — sum_allocation AT=100867 portal=100000
+decisions_gap,Decisions,LCC.P2H.2025-07-16.Flex,200000,380000,-180000,matched — decision_amount mismatch
+decisions_gap,Decisions,LCC.P2H.2025-10-22.Flex-2,175000,175000,0,matched — suffix disambiguation from LCC.P2H.2025-10-22.Flex
+decisions_gap,Decisions,LCC.P2H.2025-11-05.Flex,360000,360000,0,matched — sum_allocation penny diff
+decisions_gap,Decisions,LCC.P2H.2025-12-17.Flex,160000,160000,0,matched — sum_allocation AT=160000 portal=175912.71
+decisions_gap,Decisions,LCC.P2H.2026-02-14.WRR,500000,500000,0,matched — sum_allocation AT=0 portal=580699
+decisions_gap,Decisions,LCC.P2H.2026-04-22.Flex,496000,496000,0,matched — sum_allocation AT=496500 portal=496000
+decisions_gap,Decisions,LCC.P2H.2026-06-21.Emer,2000000,2000000,0,matched — sum_allocation AT=1000000 portal=600000
+allocations_detail,Allocations,portal_with_google_sheet_code,557,,,Strong sheet-code coverage on portal
+allocations_detail,Allocations,portal_with_airtable_record_id,8,,,Almost no Portal_Allocations push linkage yet
+allocations_detail,Allocations,sync_model,Portal to Portal_Allocations push; no ongoing FDW pull,,,
+transfers_detail,Transfer segments,activity_amount,22331843.84,22364441.88,-32598.04,
+transfers_detail,Transfer segments,transfer_fee_amount,460009.30,460661.26,-651.96,
+transfers_detail,Transfer segments,linked_to_fund_request,123,,,
+transfers_detail,Transfer segments,linked_to_fsp,108,,,
+transfers_detail,Transfer segments,linked_to_grant_id,0,,,Backfill did not resolve grant links — all grant_id null
+transfers_detail,Transfer segments,portal_with_airtable_record_id,123,,,All native rows keep AT record id from backfill
+transfers_detail,Transfer segments,legacy_grouping_table_rows,64,,,"transfer_segment_partner_grouping_1 is stale/partial vs native 123"
+transfers_detail,Transfer segments,sync_model,One-time AT API backfill; no Portal_* push yet,,,
+meta,All,as_of,2026-08-06,,,Portal vs Airtable display FDW (not Portal_* inbox tables)
+meta,Grants,source,validate-grants-financial.ts,,,public.grants vs grants_grid_view
+meta,Decisions,source,compare-decisions-fdw-canonical.json,,,distribution_decision vs distribution_decision_master_sheet_1
+meta,Allocations,source,service-role query,,,allocations vs allocations_by_date
+meta,Transfer segments,source,service-role query,,,transfer_segment vs transfer_segments
