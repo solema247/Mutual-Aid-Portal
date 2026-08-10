@@ -1588,6 +1588,7 @@ export type Database = {
           date: string | null
           date_report_completed: string | null
           date_transfer: string | null
+          completed_at: string | null
           donor_id: string | null
           emergency_room_id: string | null
           end_date: string | null
@@ -1647,6 +1648,7 @@ export type Database = {
           date?: string | null
           date_report_completed?: string | null
           date_transfer?: string | null
+          completed_at?: string | null
           donor_id?: string | null
           emergency_room_id?: string | null
           end_date?: string | null
@@ -1706,6 +1708,7 @@ export type Database = {
           date?: string | null
           date_report_completed?: string | null
           date_transfer?: string | null
+          completed_at?: string | null
           donor_id?: string | null
           emergency_room_id?: string | null
           end_date?: string | null

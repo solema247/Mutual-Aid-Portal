@@ -27,6 +27,7 @@ export type ApplyReportingStatusResult =
       ok: true
       applied: ReportingStatusChanges & {
         status?: 'completed'
+        completed_at?: string | null
         date_report_completed?: string | null
       }
     }
@@ -79,7 +80,7 @@ export async function applyReportingStatusUpdates(
 
   const { data: project, error: fetchError } = await supabase
     .from('err_projects')
-    .select('status, f4_status, f5_status, date_report_completed')
+    .select('status, f4_status, f5_status, date_report_completed, completed_at')
     .eq('id', projectId)
     .single()
 
@@ -99,6 +100,10 @@ export async function applyReportingStatusUpdates(
 
   if (shouldAutoCompleteProject(project.status, nextF4, nextF5)) {
     update.status = 'completed'
+    // Data Archive + Project Management rely on completed_at; keep any existing stamp.
+    if (!project.completed_at) {
+      update.completed_at = new Date().toISOString()
+    }
   }
 
   if (bothCompleted) {
@@ -123,7 +128,26 @@ export async function applyReportingStatusUpdates(
     ok: true,
     applied: update as ReportingStatusChanges & {
       status?: 'completed'
+      completed_at?: string | null
       date_report_completed?: string | null
     },
   }
+}
+
+/**
+ * Effective project completion timestamp for archive filtering and display.
+ * Prefers completed_at (when marked completed); falls back to date_report_completed for legacy rows.
+ */
+export function resolveProjectCompletionDate(
+  completedAt: string | null | undefined,
+  dateReportCompleted: string | null | undefined
+): string | null {
+  if (completedAt) return completedAt
+  if (!dateReportCompleted) return null
+  const raw = String(dateReportCompleted).trim()
+  if (!raw) return null
+  // date_report_completed is stored as YYYY-MM-DD; treat as UTC midnight for month bucketing.
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return `${raw}T00:00:00.000Z`
+  const d = new Date(raw)
+  return isNaN(d.getTime()) ? null : d.toISOString()
 }

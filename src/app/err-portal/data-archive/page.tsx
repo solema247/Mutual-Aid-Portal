@@ -19,14 +19,14 @@ interface ArchiveRow {
   grant_serial_id: string | null
   state: string | null
   completed_at: string | null
+  date_report_completed: string | null
+  project_completion_date: string | null
   err_code: string | null
   err_name: string | null
   donor_id: string | null
   donor_name: string | null
-  donor_short_name: string | null
   grant_call_id: string | null
-  grant_call_name: string | null
-  grant_call_shortname: string | null
+  grant_name: string | null
   files: {
     f1: boolean
     f2: boolean
@@ -80,7 +80,7 @@ export default function DataArchivePage() {
   const [fromDate, setFromDate] = useState<string>('')
   const [toDate, setToDate] = useState<string>('')
   const [includeUndated, setIncludeUndated] = useState(false)
-  const [donorFilter, setDonorFilter] = useState<string>('all')
+  const [grantFilter, setGrantFilter] = useState<string>('all')
 
   const [loading, setLoading] = useState(false)
   const [rows, setRows] = useState<ArchiveRow[]>([])
@@ -122,18 +122,23 @@ export default function DataArchivePage() {
     if (!permissionsLoading && canViewPage) loadRows()
   }, [permissionsLoading, canViewPage, loadRows])
 
-  const donorOptions = useMemo(() => {
+  const grantOptions = useMemo(() => {
     const map = new Map<string, string>()
     for (const r of rows) {
-      if (r.donor_id) map.set(r.donor_id, r.donor_short_name || r.donor_name || r.donor_id)
+      if (r.grant_call_id && r.grant_name) map.set(r.grant_call_id, r.grant_name)
+      else if (!r.grant_call_id && r.grant_name) map.set(`name:${r.grant_name}`, r.grant_name)
     }
     return Array.from(map.entries()).sort((a, b) => a[1].localeCompare(b[1]))
   }, [rows])
 
   const filteredRows = useMemo(() => {
-    if (donorFilter === 'all') return rows
-    return rows.filter((r) => r.donor_id === donorFilter)
-  }, [rows, donorFilter])
+    if (grantFilter === 'all') return rows
+    if (grantFilter.startsWith('name:')) {
+      const name = grantFilter.slice(5)
+      return rows.filter((r) => !r.grant_call_id && r.grant_name === name)
+    }
+    return rows.filter((r) => r.grant_call_id === grantFilter)
+  }, [rows, grantFilter])
 
   const allSelected = filteredRows.length > 0 && filteredRows.every((r) => selected.has(r.id))
 
@@ -204,14 +209,14 @@ export default function DataArchivePage() {
 
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-base">Export period</CardTitle>
+          <CardTitle className="text-base">Export by project completion date</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="flex flex-wrap items-end gap-4">
             <div className="space-y-1.5">
-              <Label className="text-sm">Period</Label>
+              <Label className="text-sm">Project Completion Date</Label>
               <Select value={periodMode} onValueChange={(v) => setPeriodMode(v as PeriodMode)}>
-                <SelectTrigger className="h-9 w-40">
+                <SelectTrigger className="h-9 w-44">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -240,14 +245,14 @@ export default function DataArchivePage() {
               </>
             )}
             <div className="space-y-1.5">
-              <Label className="text-sm">Backdonor grant</Label>
-              <Select value={donorFilter} onValueChange={setDonorFilter}>
-                <SelectTrigger className="h-9 w-52">
+              <Label className="text-sm">Grant name</Label>
+              <Select value={grantFilter} onValueChange={setGrantFilter}>
+                <SelectTrigger className="h-9 w-64">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All donors</SelectItem>
-                  {donorOptions.map(([id, label]) => (
+                  <SelectItem value="all">All grants</SelectItem>
+                  {grantOptions.map(([id, label]) => (
                     <SelectItem key={id} value={id}>{label}</SelectItem>
                   ))}
                 </SelectContent>
@@ -274,15 +279,15 @@ export default function DataArchivePage() {
           </div>
           <p className="text-xs text-muted-foreground mt-3">
             Only microgrants marked as completed are available for export. Files are organized as
-            Month (YYYY-MM) &gt; Backdonor Grant &gt; Serial Number, with a manifest recording original
-            file locations and completion metadata in each folder.
+            Month (YYYY-MM) &gt; Grant Name &gt; Serial Number, with a manifest recording original
+            file locations and project completion date in each folder.
           </p>
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-4 flex-wrap">
             <CardTitle className="text-base">
               Completed microgrants
               <span className="ml-2 text-sm font-normal text-muted-foreground">
@@ -291,24 +296,30 @@ export default function DataArchivePage() {
               </span>
             </CardTitle>
             {canDownload && (
-              <div className="flex items-center gap-2">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={exporting || selected.size === 0}
-                  onClick={() => runExport(Array.from(selected))}
-                >
-                  <Download className={cn('h-4 w-4 mr-2', exporting && 'animate-pulse')} />
-                  Export selected
-                </Button>
-                <Button
-                  size="sm"
-                  disabled={exporting || filteredRows.length === 0}
-                  onClick={() => runExport(filteredRows.map((r) => r.id))}
-                >
-                  <Download className={cn('h-4 w-4 mr-2', exporting && 'animate-pulse')} />
-                  {exporting ? 'Preparing zip…' : 'Export all'}
-                </Button>
+              <div className="flex flex-col items-end gap-1.5">
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={exporting || selected.size === 0}
+                    onClick={() => runExport(Array.from(selected))}
+                  >
+                    <Download className={cn('h-4 w-4 mr-2', exporting && 'animate-pulse')} />
+                    Export selected
+                  </Button>
+                  <Button
+                    size="sm"
+                    disabled={exporting || filteredRows.length === 0}
+                    onClick={() => runExport(filteredRows.map((r) => r.id))}
+                  >
+                    <Download className={cn('h-4 w-4 mr-2', exporting && 'animate-pulse')} />
+                    {exporting ? 'Preparing zip…' : 'Export all'}
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground max-w-md text-right">
+                  Large exports (for example hundreds of projects) can take a long time while the system
+                  retrieves each original source file. Please keep this tab open until the download finishes.
+                </p>
               </div>
             )}
           </div>
@@ -326,10 +337,10 @@ export default function DataArchivePage() {
                       <Checkbox checked={allSelected} onCheckedChange={toggleAll} aria-label="Select all" />
                     </TableHead>
                     <TableHead className="whitespace-nowrap">Serial Number</TableHead>
-                    <TableHead className="whitespace-nowrap">Backdonor Grant</TableHead>
+                    <TableHead className="whitespace-nowrap">Grant name</TableHead>
                     <TableHead className="whitespace-nowrap">ERR</TableHead>
                     <TableHead className="whitespace-nowrap">State</TableHead>
-                    <TableHead className="whitespace-nowrap">Completed</TableHead>
+                    <TableHead className="whitespace-nowrap">Project Completion Date</TableHead>
                     <TableHead className="whitespace-nowrap">Files</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -337,7 +348,7 @@ export default function DataArchivePage() {
                   {filteredRows.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={7} className="text-center text-muted-foreground py-6">
-                        No completed microgrants found for this period.
+                        No completed microgrants found for this project completion date.
                       </TableCell>
                     </TableRow>
                   ) : (
@@ -353,16 +364,16 @@ export default function DataArchivePage() {
                         <TableCell className="font-medium whitespace-nowrap">
                           {r.grant_id || r.grant_serial_id || '—'}
                         </TableCell>
-                        <TableCell className="whitespace-nowrap">
-                          {r.donor_short_name || r.donor_name || '—'}
-                          {r.grant_call_shortname || r.grant_call_name ? (
-                            <span className="text-muted-foreground"> · {r.grant_call_shortname || r.grant_call_name}</span>
-                          ) : null}
+                        <TableCell className="whitespace-nowrap" title={r.grant_name || undefined}>
+                          {r.grant_name || '—'}
                         </TableCell>
                         <TableCell className="whitespace-nowrap">{r.err_code || r.err_name || '—'}</TableCell>
                         <TableCell className="whitespace-nowrap">{r.state || '—'}</TableCell>
-                        <TableCell className="whitespace-nowrap" title={r.completed_at || 'No completion date recorded'}>
-                          {formatDate(r.completed_at)}
+                        <TableCell
+                          className="whitespace-nowrap"
+                          title={r.project_completion_date || 'No completion date recorded'}
+                        >
+                          {formatDate(r.project_completion_date)}
                         </TableCell>
                         <TableCell>
                           <div className="flex flex-wrap gap-1">
