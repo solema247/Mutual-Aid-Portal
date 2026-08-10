@@ -83,6 +83,8 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved, initialProj
   const [adjustDialogOpen, setAdjustDialogOpen] = useState(false)
   const [adjustDialogTitle, setAdjustDialogTitle] = useState<string>('')
   const [minimized, setMinimized] = useState(false)
+  const [sectors, setSectors] = useState<Array<{ id: string; sector_name_en: string; sector_name_ar: string | null }>>([])
+  const [plannedSectorHint, setPlannedSectorHint] = useState<string>('')
   const isMinimizingRef = useRef(false)
   const isRestoringRef = useRef(false)
   const [isRestoring, setIsRestoring] = useState(false)
@@ -229,7 +231,50 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved, initialProj
       const uniq = Array.from(new Set(((data as any[]) || []).map((r:any)=>r.state).filter(Boolean))) as string[]
       setStates(uniq)
     })()
+    ;(async () => {
+      try {
+        const { data: sectorsData } = await supabase
+          .from('sectors')
+          .select('id, sector_name_en, sector_name_ar')
+          .order('sector_name_en')
+        setSectors(sectorsData || [])
+      } catch (e) {
+        console.error('Error loading sectors for F5:', e)
+      }
+    })()
   }, [open])
+
+  useEffect(() => {
+    const pid = projectId || initialProjectId
+    if (!pid || String(pid).startsWith('historical_')) {
+      setPlannedSectorHint('')
+      return
+    }
+    ;(async () => {
+      try {
+        const { data } = await supabase
+          .from('err_projects')
+          .select('planned_activities')
+          .eq('id', pid)
+          .maybeSingle()
+        const plannedArr = Array.isArray((data as any)?.planned_activities)
+          ? (data as any).planned_activities
+          : (typeof (data as any)?.planned_activities === 'string'
+            ? JSON.parse((data as any).planned_activities || '[]')
+            : [])
+        const cats = Array.from(
+          new Set(
+            (Array.isArray(plannedArr) ? plannedArr : [])
+              .map((a: any) => (a?.category != null ? String(a.category).trim() : ''))
+              .filter(Boolean)
+          )
+        )
+        setPlannedSectorHint(cats.join(', '))
+      } catch {
+        setPlannedSectorHint('')
+      }
+    })()
+  }, [projectId, initialProjectId])
 
   // Try restore from snapshot when opening
   useEffect(() => {
@@ -593,6 +638,7 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved, initialProj
         setReachDraft(rows.map((r: any) => ({
           activity_name: r.activity_name != null ? String(r.activity_name) : '',
           activity_goal: r.activity_goal != null ? String(r.activity_goal) : '',
+          category: r.category != null ? String(r.category) : null,
           location: r.location != null ? String(r.location) : '',
           start_date: r.start_date != null ? String(r.start_date) : '',
           end_date: r.end_date != null ? String(r.end_date) : '',
@@ -1066,13 +1112,21 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved, initialProj
             {/* Activities Table */}
             <div>
               <div className="flex items-center justify-between mb-2">
-                <Label className="select-text" style={{ userSelect: 'text' }}>{t('f5.preview.activities.title')}</Label>
+                <div className="min-w-0">
+                  <Label className="select-text" style={{ userSelect: 'text' }}>{t('f5.preview.activities.title')}</Label>
+                  {plannedSectorHint ? (
+                    <div className="text-[11px] text-muted-foreground mt-0.5">
+                      {t('f5.preview.activities.f1_planned_hint')}: {plannedSectorHint}
+                    </div>
+                  ) : null}
+                </div>
                 <Button
                   variant="secondary"
                   size="sm"
                   onClick={() => setReachDraft(prev => ([...prev, {
                     activity_name: '',
                     activity_goal: '',
+                    category: null,
                     location: '',
                     start_date: '',
                     end_date: '',
@@ -1095,6 +1149,7 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved, initialProj
                     <TableHeader>
                       <TableRow>
                         <TableHead className="py-1 px-2 text-xs select-text" style={{ userSelect: 'text' }}>{t('f5.preview.activities.cols.activity_name')}</TableHead>
+                        <TableHead className="py-1 px-2 text-xs select-text" style={{ userSelect: 'text' }}>{t('f5.preview.activities.cols.sector')}</TableHead>
                         <TableHead className="py-1 px-2 text-xs select-text" style={{ userSelect: 'text' }}>{t('f5.preview.activities.cols.activity_goal')}</TableHead>
                         <TableHead className="py-1 px-2 text-xs select-text" style={{ userSelect: 'text' }}>{t('f5.preview.activities.cols.location')}</TableHead>
                         <TableHead className="py-1 px-2 text-xs select-text" style={{ userSelect: 'text' }}>{t('f5.preview.activities.cols.start')}</TableHead>
@@ -1115,6 +1170,31 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved, initialProj
                               value={row.activity_name || ''} 
                               onChange={(e)=>{ const arr=[...reachDraft]; arr[idx]={...arr[idx], activity_name: e.target.value}; setReachDraft(arr) }} 
                             />
+                          </TableCell>
+                          <TableCell className="py-1 px-2 min-w-[9rem]" style={{ userSelect: 'text' }}>
+                            <Select
+                              value={sectors.find(s => s.sector_name_en === row.category)?.id || undefined}
+                              onValueChange={(value) => {
+                                const selectedSector = sectors.find(s => s.id === value)
+                                const arr = [...reachDraft]
+                                arr[idx] = {
+                                  ...arr[idx],
+                                  category: selectedSector ? selectedSector.sector_name_en : null,
+                                }
+                                setReachDraft(arr)
+                              }}
+                            >
+                              <SelectTrigger className="h-8 w-full">
+                                <SelectValue placeholder={t('f5.preview.activities.cols.sector') as string} />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {sectors.map((sector) => (
+                                  <SelectItem key={sector.id} value={sector.id}>
+                                    {sector.sector_name_en}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
                           </TableCell>
                           <TableCell className="py-1 px-2" style={{ userSelect: 'text' }}>
                             <Input 

@@ -20,13 +20,30 @@ export async function GET(request: Request) {
     const countOnly = searchParams.get('count_only') === '1'
 
     if (countOnly) {
-      // Lightweight path for the sidebar badge: no sweep, just the count
-      const { count, error } = await supabase
+      // Sidebar badge: pending screenings that still need Ahmed's attention —
+      // must have an F1 file, and must not already be past the commit gate.
+      const { data, error } = await supabase
         .from('compliance_screenings')
-        .select('id', { count: 'exact', head: true })
+        .select('id, err_projects!inner(file_key, temp_file_key, funding_status, status)')
         .eq('status', 'pending_screening')
       if (error) throw error
-      return NextResponse.json({ pending_count: count || 0 })
+      const count = (data || []).filter((r) => {
+        const raw = (r as { err_projects?: unknown }).err_projects
+        const p = (Array.isArray(raw) ? raw[0] : raw) as
+          | {
+              file_key?: string | null
+              temp_file_key?: string | null
+              funding_status?: string | null
+              status?: string | null
+            }
+          | undefined
+        if (!p) return false
+        if (!(p.file_key || p.temp_file_key)) return false
+        if (p.funding_status === 'committed') return false
+        if (p.status === 'completed' || p.status === 'declined') return false
+        return true
+      }).length
+      return NextResponse.json({ pending_count: count })
     }
 
     try {
@@ -63,6 +80,7 @@ export async function GET(request: Request) {
           intended_beneficiaries,
           project_objectives,
           expenses,
+          file_key,
           temp_file_key,
           identity_document_file_key,
           emergency_rooms (err_code, name_ar, name)
@@ -90,6 +108,7 @@ export async function GET(request: Request) {
       intended_beneficiaries?: string | null
       project_objectives?: string | null
       expenses?: unknown
+      file_key?: string | null
       temp_file_key?: string | null
       identity_document_file_key?: string | null
       emergency_rooms?: RoomJoin | RoomJoin[] | null
@@ -132,12 +151,32 @@ export async function GET(request: Request) {
         intended_beneficiaries: p.intended_beneficiaries || null,
         project_objectives: p.project_objectives || null,
         total_amount: expenses.reduce((sum, e) => sum + (e.total_cost || 0), 0),
+        f1_file_key: p.file_key || null,
         temp_file_key: p.temp_file_key || null,
         identity_document_file_key: p.identity_document_file_key || null
       }
     })
 
-    return NextResponse.json(formatted)
+    // Visibility rules (Ahmed feedback):
+    // 1) Always require an F1 document (file_key, with temp_file_key fallback).
+    //    Production previously only checked temp_file_key, so rows like
+    //    ERR-SK-64-155 appeared "without an F1" even though file_key existed.
+    // 2) Active work (pending screening / pending finance review) should not
+    //    include projects that already committed or are completed/declined —
+    //    those are past the compliance gate and clutter the queue.
+    const visible = formatted.filter((r) => {
+      if (!(r.f1_file_key || r.temp_file_key)) return false
+      const isActiveWork =
+        r.status === 'pending_screening' ||
+        (r.status === 'flagged' && r.finance_review_status === 'pending')
+      if (isActiveWork) {
+        if (r.funding_status === 'committed') return false
+        if (r.project_status === 'completed' || r.project_status === 'declined') return false
+      }
+      return true
+    })
+
+    return NextResponse.json(visible)
   } catch (error) {
     console.error('Error fetching compliance queue:', error)
     return NextResponse.json({ error: 'Failed to fetch compliance queue' }, { status: 500 })

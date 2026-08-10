@@ -20,6 +20,10 @@
     "src/app/api/airtable/sync/route.ts": {
       "maxDuration": 600,
       "memory": 512
+    },
+    "src/app/api/grants/pull-from-fdw/route.ts": {
+      "maxDuration": 300,
+      "memory": 512
     }
   },
   "crons": [
@@ -30,6 +34,10 @@
     {
       "path": "/api/sheets/sync-financial-report",
       "schedule": "0 3 * * *"
+    },
+    {
+      "path": "/api/grants/pull-from-fdw",
+      "schedule": "0 * * * *"
     }
   ]
 }

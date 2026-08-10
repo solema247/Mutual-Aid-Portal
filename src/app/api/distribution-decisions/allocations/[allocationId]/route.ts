@@ -113,6 +113,13 @@ export async function DELETE(
 
     if (error) throw error
 
+    console.info('[grant-audit] allocation deleted', {
+      actorUserId: auth.ctx.user.id,
+      actorRole: auth.ctx.user.role,
+      allocationId: params.allocationId,
+      decisionId: groupKey,
+    })
+
     await refreshDecisionAllocationSum(auth.ctx.supabase, groupKey)
 
     return NextResponse.json({ success: true, ...airtableMeta(push) })

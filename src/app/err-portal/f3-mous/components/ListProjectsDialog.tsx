@@ -4,6 +4,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Plus } from 'lucide-react'
+import { GrantSegmentSelect } from '@/app/err-portal/f1-work-plans/components/GrantSegmentSelect'
 import type { useListProjectsModal } from '../hooks/useListProjectsModal'
 
 type ListProjectsDialogProps = ReturnType<typeof useListProjectsModal>
@@ -17,6 +18,7 @@ export default function ListProjectsDialog(props: ListProjectsDialogProps) {
     listProjectsAddMode,
     listProjectsList,
     listProjectsActionLoading,
+    updatingGrantSegmentId,
     candidatesForAdd,
     selectedCandidates,
     setSelectedCandidates,
@@ -25,9 +27,22 @@ export default function ListProjectsDialog(props: ListProjectsDialogProps) {
     startAddMode,
     addSelectedProjects,
     setListProjectsAddMode,
+    updateProjectGrantSegment,
   } = props
 
-  return (      <Dialog open={listProjectsModalOpen} onOpenChange={handleListProjectsModalOpenChange}>
+  const grantSegmentCell = (projectId: string, grantSegment: string | null) => (
+    <TableCell className="min-w-[160px]" onClick={(e) => e.stopPropagation()}>
+      <GrantSegmentSelect
+        triggerClassName="h-8 text-xs w-full min-w-[140px]"
+        value={grantSegment ?? undefined}
+        disabled={updatingGrantSegmentId === projectId || listProjectsActionLoading}
+        onValueChange={(v) => updateProjectGrantSegment(projectId, v)}
+      />
+    </TableCell>
+  )
+
+  return (
+      <Dialog open={listProjectsModalOpen} onOpenChange={handleListProjectsModalOpenChange}>
         <DialogContent className="max-w-6xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Projects in {listProjectsMouCode || 'MOU'}</DialogTitle>
@@ -37,7 +52,7 @@ export default function ListProjectsDialog(props: ListProjectsDialogProps) {
               <p className="text-sm text-muted-foreground">Loading…</p>
             ) : listProjectsMouAssigned ? (
               <>
-                <p className="text-sm text-muted-foreground">This MOU is assigned to a grant. Projects are read-only.</p>
+                <p className="text-sm text-muted-foreground">This MOU is assigned to a grant. Projects cannot be added or removed.</p>
                 <div className="border rounded-md overflow-auto max-h-[50vh]">
                   <Table className="text-xs">
                     <TableHeader>
@@ -47,13 +62,14 @@ export default function ListProjectsDialog(props: ListProjectsDialogProps) {
                         <TableHead className="px-2">Locality</TableHead>
                         <TableHead className="text-right px-2">USD</TableHead>
                         <TableHead className="px-2">Categories</TableHead>
+                        <TableHead className="px-2">Grant Segment</TableHead>
                         <TableHead className="px-2">Grant ID</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {listProjectsList.length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={6} className="text-center text-muted-foreground py-6 text-xs">No projects linked</TableCell>
+                          <TableCell colSpan={7} className="text-center text-muted-foreground py-6 text-xs">No projects linked</TableCell>
                         </TableRow>
                       ) : (
                         listProjectsList.map((p) => (
@@ -63,6 +79,7 @@ export default function ListProjectsDialog(props: ListProjectsDialogProps) {
                             <TableCell className="max-w-[100px] truncate" title={p.locality ?? ''}>{p.locality ?? '-'}</TableCell>
                             <TableCell className="text-right font-mono whitespace-nowrap">{p.amount_usd != null ? p.amount_usd.toLocaleString() : '—'}</TableCell>
                             <TableCell className="max-w-[120px] truncate" title={p.categories}>{p.categories}</TableCell>
+                            {grantSegmentCell(p.id, p.grant_segment)}
                             <TableCell className="font-mono whitespace-nowrap">{p.grant_id ?? '-'}</TableCell>
                           </TableRow>
                         ))
@@ -85,13 +102,14 @@ export default function ListProjectsDialog(props: ListProjectsDialogProps) {
                             <TableHead className="px-2">Locality</TableHead>
                             <TableHead className="text-right px-2">USD</TableHead>
                             <TableHead className="px-2">Categories</TableHead>
+                            <TableHead className="px-2">Grant Segment</TableHead>
                             <TableHead className="w-[70px] px-2">Actions</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
                           {listProjectsList.length === 0 ? (
                             <TableRow>
-                              <TableCell colSpan={6} className="text-center text-muted-foreground py-6 text-xs">No projects linked</TableCell>
+                              <TableCell colSpan={7} className="text-center text-muted-foreground py-6 text-xs">No projects linked</TableCell>
                             </TableRow>
                           ) : (
                             listProjectsList.map((p) => (
@@ -101,6 +119,7 @@ export default function ListProjectsDialog(props: ListProjectsDialogProps) {
                                 <TableCell className="max-w-[100px] truncate" title={p.locality ?? ''}>{p.locality ?? '-'}</TableCell>
                                 <TableCell className="text-right font-mono whitespace-nowrap">{p.amount_usd != null ? p.amount_usd.toLocaleString() : '—'}</TableCell>
                                 <TableCell className="max-w-[120px] truncate" title={p.categories}>{p.categories}</TableCell>
+                                {grantSegmentCell(p.id, p.grant_segment)}
                                 <TableCell>
                                   <Button
                                     variant="ghost"

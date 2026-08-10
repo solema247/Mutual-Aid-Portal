@@ -341,10 +341,10 @@ export default function ProjectManagement() {
     }
     
     // Fall back to JavaScript calculation when filters are active
-    const byState = new Map<string, { state: string; plan: number; actual: number; variance: number; burn: number; f4_count: number; f5_count: number; total_projects: number; projects_with_f4: number; projects_with_f5: number; tracker_sum: number; individuals: number; last_report_date: string | null; last_f5_date: string | null; overdue_count: number }>()
+    const byState = new Map<string, { state: string; plan: number; actual: number; variance: number; burn: number; f4_count: number; f5_count: number; total_projects: number; projects_with_f4: number; projects_with_f5: number; tracker_sum: number; target_individuals: number; target_families: number; actual_individuals: number; actual_families: number; individuals: number; last_report_date: string | null; last_f5_date: string | null; overdue_count: number }>()
     for (const r of rows) {
       const key = r.state || '—'
-      const curr = byState.get(key) || { state: key, plan: 0, actual: 0, variance: 0, burn: 0, f4_count: 0, f5_count: 0, total_projects: 0, projects_with_f4: 0, projects_with_f5: 0, tracker_sum: 0, individuals: 0, last_report_date: null as string | null, last_f5_date: null as string | null, overdue_count: 0 }
+      const curr = byState.get(key) || { state: key, plan: 0, actual: 0, variance: 0, burn: 0, f4_count: 0, f5_count: 0, total_projects: 0, projects_with_f4: 0, projects_with_f5: 0, tracker_sum: 0, target_individuals: 0, target_families: 0, actual_individuals: 0, actual_families: 0, individuals: 0, last_report_date: null as string | null, last_f5_date: null as string | null, overdue_count: 0 }
       curr.plan += Number(r.plan || 0)
       curr.actual += Number(r.actual || 0)
       curr.variance = curr.plan - curr.actual
@@ -352,7 +352,11 @@ export default function ProjectManagement() {
       curr.f5_count += Number(r.f5_count || 0)
       curr.total_projects += 1
       curr.tracker_sum += trackerScore(r)
-      curr.individuals += Number(r.individuals || 0)
+      curr.target_individuals += Number(r.target_individuals || 0)
+      curr.target_families += Number(r.target_families || 0)
+      curr.actual_individuals += Number(r.actual_individuals ?? r.individuals ?? 0)
+      curr.actual_families += Number(r.actual_families || 0)
+      curr.individuals += Number(r.actual_individuals ?? r.individuals ?? 0)
       if (Number(r.f4_count || 0) > 0) curr.projects_with_f4 += 1
       if (Number(r.f5_count || 0) > 0) curr.projects_with_f5 += 1
       if (r.is_overdue) curr.overdue_count += 1
@@ -380,10 +384,10 @@ export default function ProjectManagement() {
     
     // Fall back to JavaScript calculation when filters are active
     const filtered = rows.filter((r:any) => r.state === selectedStateName)
-    const byRoom = new Map<string, { err_id: string; err_name: string | null; state: string; plan: number; actual: number; variance: number; burn: number; f4_count: number; f5_count: number; total_projects: number; projects_with_f4: number; projects_with_f5: number; tracker_sum: number; individuals: number; last_report_date: string | null; last_f5_date: string | null; overdue_count: number }>()
+    const byRoom = new Map<string, { err_id: string; err_name: string | null; state: string; plan: number; actual: number; variance: number; burn: number; f4_count: number; f5_count: number; total_projects: number; projects_with_f4: number; projects_with_f5: number; tracker_sum: number; target_individuals: number; target_families: number; actual_individuals: number; actual_families: number; individuals: number; last_report_date: string | null; last_f5_date: string | null; overdue_count: number }>()
     for (const r of filtered) {
       const key = r.err_id || '—'
-      const curr = byRoom.get(key) || { err_id: key, err_name: null as string | null, state: selectedStateName, plan: 0, actual: 0, variance: 0, burn: 0, f4_count: 0, f5_count: 0, total_projects: 0, projects_with_f4: 0, projects_with_f5: 0, tracker_sum: 0, individuals: 0, last_report_date: null as string | null, last_f5_date: null as string | null, overdue_count: 0 }
+      const curr = byRoom.get(key) || { err_id: key, err_name: null as string | null, state: selectedStateName, plan: 0, actual: 0, variance: 0, burn: 0, f4_count: 0, f5_count: 0, total_projects: 0, projects_with_f4: 0, projects_with_f5: 0, tracker_sum: 0, target_individuals: 0, target_families: 0, actual_individuals: 0, actual_families: 0, individuals: 0, last_report_date: null as string | null, last_f5_date: null as string | null, overdue_count: 0 }
       if (curr.err_name == null && r.err_name != null) curr.err_name = r.err_name
       curr.plan += Number(r.plan || 0)
       curr.actual += Number(r.actual || 0)
@@ -392,7 +396,11 @@ export default function ProjectManagement() {
       curr.f5_count += Number(r.f5_count || 0)
       curr.total_projects += 1
       curr.tracker_sum += trackerScore(r)
-      curr.individuals += Number(r.individuals || 0)
+      curr.target_individuals += Number(r.target_individuals || 0)
+      curr.target_families += Number(r.target_families || 0)
+      curr.actual_individuals += Number(r.actual_individuals ?? r.individuals ?? 0)
+      curr.actual_families += Number(r.actual_families || 0)
+      curr.individuals += Number(r.actual_individuals ?? r.individuals ?? 0)
       if (Number(r.f4_count || 0) > 0) curr.projects_with_f4 += 1
       if (Number(r.f5_count || 0) > 0) curr.projects_with_f5 += 1
       if (r.is_overdue) curr.overdue_count += 1
@@ -441,7 +449,10 @@ export default function ProjectManagement() {
         projects_with_f4: 0,
         projects_with_f5: 0,
         pctTracker: 0,
-        individuals: 0,
+        target_individuals: 0,
+        target_families: 0,
+        actual_individuals: 0,
+        actual_families: 0,
         overdue_count: 0
       }
     }
@@ -456,7 +467,10 @@ export default function ProjectManagement() {
     const projectsWithF5 = displayed.reduce((sum, r) => sum + (Number(r.projects_with_f5 || (Number(r.f5_count || 0) > 0 ? 1 : 0))), 0)
     const trackerSum = displayed.reduce((sum, r) => sum + (r.tracker_sum ?? trackerScore(r)), 0)
     const pctTracker = totalProjects > 0 ? (trackerSum / totalProjects) * 100 : 0
-    const individuals = displayed.reduce((sum, r) => sum + (Number(r.individuals || 0)), 0)
+    const target_individuals = displayed.reduce((sum, r) => sum + (Number(r.target_individuals || 0)), 0)
+    const target_families = displayed.reduce((sum, r) => sum + (Number(r.target_families || 0)), 0)
+    const actual_individuals = displayed.reduce((sum, r) => sum + (Number(r.actual_individuals ?? r.individuals ?? 0)), 0)
+    const actual_families = displayed.reduce((sum, r) => sum + (Number(r.actual_families || 0)), 0)
     const overdue_count = displayed.reduce((sum, r) => sum + (Number(r.overdue_count ?? (r.is_overdue ? 1 : 0))), 0)
     return {
       plan: totalPlan,
@@ -469,7 +483,10 @@ export default function ProjectManagement() {
       projects_with_f4: projectsWithF4,
       projects_with_f5: projectsWithF5,
       pctTracker,
-      individuals,
+      target_individuals,
+      target_families,
+      actual_individuals,
+      actual_families,
       overdue_count
     }
   }, [displayed])
@@ -669,10 +686,14 @@ export default function ProjectManagement() {
                           cols.push({ key: 'err_name', header: t('management.table.err_name') })
                         }
                         cols.push(
-                          { key: 'plan', header: t('management.table.plan'), format: (v) => Number(v || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) },
-                          { key: 'actual', header: t('management.table.actuals'), format: (v) => Number(v || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) },
-                          { key: 'variance', header: t('management.table.variance'), format: (v) => Number(v || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) },
-                          { key: 'individuals', header: t('management.table.individuals'), format: (v) => Number(v || 0).toLocaleString() },
+                          { key: 'plan', header: t('management.table.plan'), format: (v) => Number(v || 0).toLocaleString(undefined, { maximumFractionDigits: 0 }) },
+                          { key: 'actual', header: t('management.table.actuals'), format: (v) => Number(v || 0).toLocaleString(undefined, { maximumFractionDigits: 0 }) },
+                          { key: 'variance', header: t('management.table.variance'), format: (v) => Number(v || 0).toLocaleString(undefined, { maximumFractionDigits: 0 }) },
+                          { key: 'activity_shifted', header: t('management.table.activity_changed'), format: (v) => (v ? 'Yes' : '') },
+                          { key: 'target_individuals', header: t('management.table.target_ind'), format: (v) => Number(v || 0).toLocaleString() },
+                          { key: 'target_families', header: t('management.table.target_fam'), format: (v) => Number(v || 0).toLocaleString() },
+                          { key: 'actual_individuals', header: t('management.table.actual_ind'), format: (v, r) => Number(v ?? r.individuals ?? 0).toLocaleString() },
+                          { key: 'actual_families', header: t('management.table.actual_fam'), format: (v) => Number(v || 0).toLocaleString() },
                           { key: 'overdue_count', header: t('management.table.overdue'), format: (v, r) => r.overdue_count ?? (r.is_overdue ? 1 : 0) },
                           { key: 'f4_count', header: t('management.table.f4s'), format: (v, r) => r.f4_count ?? 0 },
                           { key: 'burn', header: t('management.table.f4_complete'), format: (v, r) => (r.plan > 0 ? ((r.burn ?? 0) * 100).toFixed(0) + '%' : '0%') },
@@ -733,41 +754,44 @@ export default function ProjectManagement() {
             <div className="py-8 text-center text-muted-foreground">{t('management.table.loading')}</div>
               ) : (
                 <div className="overflow-x-auto w-full">
-                <Table className="min-w-[760px] text-xs [&_th]:py-1.5 [&_td]:py-1 [&_th]:px-2 [&_td]:px-2 [&_td]:text-xs">
+                <Table className="w-full text-[11px] [&_th]:py-1 [&_td]:py-0.5 [&_th]:px-1 [&_td]:px-1 [&_th]:leading-tight">
                   <TableHeader>
                     <TableRow>
                   {searchRows || level === 'project' ? (
                     <>
-                      <TableHead className="text-xs whitespace-nowrap">{t('management.table.err')}</TableHead>
-                      {searchRows ? <TableHead className="text-xs whitespace-nowrap">{t('management.table.state')}</TableHead> : null}
-                      <TableHead className="text-xs whitespace-nowrap">Grant Serial</TableHead>
+                      <TableHead className="whitespace-nowrap">{t('management.table.err')}</TableHead>
+                      {searchRows ? <TableHead className="whitespace-nowrap">{t('management.table.state')}</TableHead> : null}
+                      <TableHead className="whitespace-nowrap">Grant Serial</TableHead>
                     </>
                   ) : level === 'state' ? (
                     <>
-                      <TableHead className="text-xs whitespace-nowrap">{t('management.table.state')}</TableHead>
+                      <TableHead className="whitespace-nowrap">{t('management.table.state')}</TableHead>
                     </>
                   ) : (
                     <>
-                      <TableHead className="text-xs whitespace-nowrap">{t('management.table.err')}</TableHead>
-                      <TableHead className="text-xs whitespace-nowrap">{t('management.table.err_name')}</TableHead>
+                      <TableHead className="whitespace-nowrap">{t('management.table.err')}</TableHead>
+                      <TableHead className="whitespace-nowrap">{t('management.table.err_name')}</TableHead>
                     </>
                   )}
-                  <TableHead className="text-right text-xs whitespace-nowrap">{t('management.table.plan')}</TableHead>
-                  <TableHead className="text-right text-xs whitespace-nowrap">{t('management.table.actuals')}</TableHead>
-                  <TableHead className="text-right text-xs whitespace-nowrap">{t('management.table.variance')}</TableHead>
-                  <TableHead className="text-right text-xs whitespace-nowrap">{t('management.table.individuals')}</TableHead>
-                  <TableHead className="text-right w-14 text-xs whitespace-nowrap" title={t('management.table.overdue_tooltip')}>{t('management.table.overdue')}</TableHead>
-                  <TableHead className="w-10 text-xs">{t('management.table.f4s')}</TableHead>
-                  <TableHead className="text-right w-12 text-xs" title={t('management.table.f4_complete_tooltip')}>{t('management.table.f4_complete')}</TableHead>
-                  <TableHead className="w-10 text-xs">{t('management.table.f5s')}</TableHead>
-                  <TableHead className="text-right w-12 text-xs" title={t('management.table.f5_complete_tooltip')}>{t('management.table.f5_complete')}</TableHead>
-                  <TableHead className="text-right w-12 text-xs whitespace-nowrap" title={t('management.table.pct_tracker_tooltip')}>{t('management.table.pct_tracker')}</TableHead>
-                  {(searchRows || level === 'project') && <TableHead className="sticky right-0 bg-card text-xs shadow-[-4px_0_6px_rgba(0,0,0,0.04)]">{t('management.table.actions')}</TableHead>}
+                  <TableHead className="text-right whitespace-nowrap">{t('management.table.plan')}</TableHead>
+                  <TableHead className="text-right whitespace-nowrap">{t('management.table.actuals')}</TableHead>
+                  <TableHead className="text-right whitespace-nowrap">{t('management.table.variance')}</TableHead>
+                  <TableHead className="text-right whitespace-nowrap" title={t('management.table.target_ind_tooltip')}>{t('management.table.target_ind')}</TableHead>
+                  <TableHead className="text-right whitespace-nowrap" title={t('management.table.target_fam_tooltip')}>{t('management.table.target_fam')}</TableHead>
+                  <TableHead className="text-right whitespace-nowrap" title={t('management.table.actual_ind_tooltip')}>{t('management.table.actual_ind')}</TableHead>
+                  <TableHead className="text-right whitespace-nowrap" title={t('management.table.actual_fam_tooltip')}>{t('management.table.actual_fam')}</TableHead>
+                  <TableHead className="text-right whitespace-nowrap" title={t('management.table.overdue_tooltip')}>{t('management.table.overdue')}</TableHead>
+                  <TableHead className="whitespace-nowrap">{t('management.table.f4s')}</TableHead>
+                  <TableHead className="text-right whitespace-nowrap" title={t('management.table.f4_complete_tooltip')}>{t('management.table.f4_complete')}</TableHead>
+                  <TableHead className="whitespace-nowrap">{t('management.table.f5s')}</TableHead>
+                  <TableHead className="text-right whitespace-nowrap" title={t('management.table.f5_complete_tooltip')}>{t('management.table.f5_complete')}</TableHead>
+                  <TableHead className="text-right whitespace-nowrap" title={t('management.table.pct_tracker_tooltip')}>{t('management.table.pct_tracker')}</TableHead>
+                  {(searchRows || level === 'project') && <TableHead className="sticky right-0 bg-card shadow-[-4px_0_6px_rgba(0,0,0,0.04)]">{t('management.table.actions')}</TableHead>}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                 {(displayed||[]).length===0 ? (
-                  <TableRow><TableCell colSpan={searchRows ? 14 : (level==='project' ? 13 : (level==='room'?11:12))} className="text-center text-muted-foreground">{t('management.table.no_data')}</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={searchRows ? 17 : (level==='project' ? 16 : (level==='room'?14:15))} className="text-center text-muted-foreground">{t('management.table.no_data')}</TableCell></TableRow>
                 ) : (
                   <>
                     {/* Total Row */}
@@ -788,23 +812,26 @@ export default function ProjectManagement() {
                           <TableCell></TableCell>
                         </>
                       )}
-                      <TableCell className="text-right font-semibold">{Number(totals.plan || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
-                      <TableCell className="text-right font-semibold">{Number(totals.actual || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
-                      <TableCell className="text-right font-semibold">{Number(totals.variance || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
-                      <TableCell className="text-right font-semibold">{Number(totals.individuals || 0).toLocaleString()}</TableCell>
-                      <TableCell className="text-right font-semibold w-14">{totals.overdue_count ?? 0}</TableCell>
-                      <TableCell className="font-semibold w-12">{totals.f4_count || 0}</TableCell>
-                      <TableCell className="text-right font-semibold w-16">
+                      <TableCell className="text-right font-semibold tabular-nums">{Number(totals.plan || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}</TableCell>
+                      <TableCell className="text-right font-semibold tabular-nums">{Number(totals.actual || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}</TableCell>
+                      <TableCell className="text-right font-semibold tabular-nums">{Number(totals.variance || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}</TableCell>
+                      <TableCell className="text-right font-semibold tabular-nums">{Number(totals.target_individuals || 0).toLocaleString()}</TableCell>
+                      <TableCell className="text-right font-semibold tabular-nums">{Number(totals.target_families || 0).toLocaleString()}</TableCell>
+                      <TableCell className="text-right font-semibold tabular-nums">{Number(totals.actual_individuals || 0).toLocaleString()}</TableCell>
+                      <TableCell className="text-right font-semibold tabular-nums">{Number(totals.actual_families || 0).toLocaleString()}</TableCell>
+                      <TableCell className="text-right font-semibold">{totals.overdue_count ?? 0}</TableCell>
+                      <TableCell className="font-semibold">{totals.f4_count || 0}</TableCell>
+                      <TableCell className="text-right font-semibold">
                         {totals.plan > 0 ? (totals.burn * 100).toFixed(0) + '%' : '0%'}
                       </TableCell>
-                      <TableCell className="font-semibold w-12">{totals.f5_count || 0}</TableCell>
-                      <TableCell className="text-right font-semibold w-16">
+                      <TableCell className="font-semibold">{totals.f5_count || 0}</TableCell>
+                      <TableCell className="text-right font-semibold">
                         {(searchRows || level === 'project')
                           ? (totals.f5_count > 0 ? '100%' : '0%')
                           : `${totals.total_projects > 0 ? Math.round((totals.projects_with_f5 / totals.total_projects) * 100) : 0}%`
                         }
                       </TableCell>
-                      <TableCell className="text-right font-semibold w-12">
+                      <TableCell className="text-right font-semibold">
                         {totals.pctTracker != null ? totals.pctTracker.toFixed(0) + '%' : '0%'}
                       </TableCell>
                       {(searchRows || level === 'project') && <TableCell className="sticky right-0 bg-muted/50"></TableCell>}
@@ -819,7 +846,26 @@ export default function ProjectManagement() {
                   >
                     {searchRows || level === 'project' ? (
                       <>
-                        <TableCell>
+                        <TableCell
+                          className={cn(r.activity_shifted && 'relative')}
+                          title={
+                            r.activity_shifted
+                              ? ([
+                                  r.planned_sector && `${t('management.table.planned_sector')}: ${r.planned_sector}`,
+                                  r.implemented_sector && `${t('management.table.implemented_sector')}: ${r.implemented_sector}`,
+                                  r.activity_shift_note,
+                                ]
+                                  .filter(Boolean)
+                                  .join(' · ') || t('management.table.shifted_tooltip'))
+                              : undefined
+                          }
+                        >
+                          {r.activity_shifted && (
+                            <span
+                              className="pointer-events-none absolute top-0 end-0 h-0 w-0 border-t-[7px] border-t-amber-500 border-s-[7px] border-s-transparent"
+                              aria-label={t('management.table.activity_changed')}
+                            />
+                          )}
                           <div className="flex flex-col items-start gap-0.5">
                             <span>{r.err_id || '-'}</span>
                             {r.is_historical && (
@@ -852,43 +898,46 @@ export default function ProjectManagement() {
                         <TableCell>{r.err_name || '—'}</TableCell>
                       </>
                     )}
-                    <TableCell className="text-right">{Number(r.plan||0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
-                    <TableCell className="text-right">{Number(r.actual||0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
-                    <TableCell className="text-right">{Number(r.variance||0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
-                    <TableCell className="text-right">{Number(r.individuals || 0).toLocaleString()}</TableCell>
-                    <TableCell className="text-right w-14">
+                    <TableCell className="text-right tabular-nums">{Number(r.plan||0).toLocaleString(undefined, { maximumFractionDigits: 0 })}</TableCell>
+                    <TableCell className="text-right tabular-nums">{Number(r.actual||0).toLocaleString(undefined, { maximumFractionDigits: 0 })}</TableCell>
+                    <TableCell className="text-right tabular-nums">{Number(r.variance||0).toLocaleString(undefined, { maximumFractionDigits: 0 })}</TableCell>
+                    <TableCell className="text-right tabular-nums">{Number(r.target_individuals || 0).toLocaleString()}</TableCell>
+                    <TableCell className="text-right tabular-nums">{Number(r.target_families || 0).toLocaleString()}</TableCell>
+                    <TableCell className="text-right tabular-nums">{Number(r.actual_individuals ?? r.individuals ?? 0).toLocaleString()}</TableCell>
+                    <TableCell className="text-right tabular-nums">{Number(r.actual_families || 0).toLocaleString()}</TableCell>
+                    <TableCell className="text-right">
                       {(searchRows || level === 'project')
                         ? (r.overdue != null ? r.overdue : (r.days_overdue != null ? String(r.days_overdue) : '—'))
                         : (r.overdue_count ?? 0)}
                     </TableCell>
-                    <TableCell className="w-12">
+                    <TableCell>
                       {level === 'project' && r.f4_status != null && String(r.f4_status).trim() !== ''
                         ? (() => {
                             const s = String(r.f4_status).toLowerCase()
-                            return s === 'completed' ? 'Completed' : s === 'in review' ? 'In review' : s === 'partial' ? 'Partial' : 'Waiting'
+                            return s === 'completed' ? 'Done' : s === 'in review' ? 'Review' : s === 'partial' ? 'Partial' : 'Wait'
                           })()
                         : (r.f4_count ?? 0)}
                     </TableCell>
-                    <TableCell className="text-right w-16">
+                    <TableCell className="text-right">
                       {r.is_historical && Number(r.f4_count || 0) >= 1
                         ? '100%'
                         : (Number(r.plan || 0) > 0 ? (r.burn != null ? (r.burn * 100).toFixed(0) : (Number(r.actual || 0) / Number(r.plan || 0) * 100).toFixed(0)) + '%' : '0%')}
                     </TableCell>
-                    <TableCell className="w-12">
+                    <TableCell>
                       {level === 'project' && r.f5_status != null && String(r.f5_status).trim() !== ''
                         ? (() => {
                             const s = String(r.f5_status).toLowerCase()
-                            return s === 'completed' ? 'Completed' : s === 'in review' ? 'In review' : s === 'partial' ? 'Partial' : 'Waiting'
+                            return s === 'completed' ? 'Done' : s === 'in review' ? 'Review' : s === 'partial' ? 'Partial' : 'Wait'
                           })()
                         : (r.f5_count ?? 0)}
                     </TableCell>
-                    <TableCell className="text-right w-16">
+                    <TableCell className="text-right">
                       {level === 'project' 
                         ? (r.f5_count > 0 ? '100%' : '0%')
                         : `${r.total_projects > 0 ? Math.round((r.projects_with_f5 / r.total_projects) * 100) : 0}%`
                       }
                     </TableCell>
-                    <TableCell className="text-right w-12">
+                    <TableCell className="text-right">
                       {level === 'project'
                         ? (trackerScore(r) * 100).toFixed(0) + '%'
                         : (r.total_projects > 0 && r.tracker_sum != null ? ((r.tracker_sum / r.total_projects) * 100).toFixed(0) : '0') + '%'
@@ -1025,9 +1074,12 @@ export default function ProjectManagement() {
                               </Button>
                             )}
                             {!r.is_historical && r.status === 'completed' && (
-                              <div className="flex items-center gap-0.5 text-xs text-muted-foreground shrink-0">
+                              <div
+                                className="flex items-center gap-0.5 text-xs text-muted-foreground shrink-0"
+                                title={r.completed_at ? `Completed on ${new Date(r.completed_at).toLocaleDateString()}` : 'No completion date recorded'}
+                              >
                                 <CheckCircle className="h-3 w-3 shrink-0" />
-                                <span>Done</span>
+                                <span>Done{r.completed_at ? ` ${new Date(r.completed_at).toLocaleDateString()}` : ''}</span>
                               </div>
                             )}
                           </div>

@@ -6,13 +6,28 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Label } from '@/components/ui/label'
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
-import { FileText, FileCheck, Receipt, FileSignature, CheckCircle, AlertCircle } from 'lucide-react'
+import { Textarea } from '@/components/ui/textarea'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { FileText, FileCheck, Receipt, FileSignature, CheckCircle, AlertCircle, Upload, Trash2 } from 'lucide-react'
 import {
   filterF4ExpensesForDisplay,
   formatF4SdgAmount,
   formatF4UsdAmount,
   sumF4ExpenseDisplayAmounts,
 } from '@/lib/f4ExpenseDisplay'
+import { getSectorWithHighestAmount } from '@/lib/plannedActivitiesExpenses'
+import { isActivityShifted } from '@/lib/activityShift'
+import { supabase } from '@/lib/supabaseClient'
+import { GrantSegmentSelect } from '@/app/err-portal/f1-work-plans/components/GrantSegmentSelect'
+
+interface SupportingDocument {
+  id: string
+  project_id: string
+  file_name: string
+  file_key: string
+  uploaded_at: string
+  uploaded_by: string | null
+}
 
 interface ProjectDetailModalProps {
   projectId: string | null
@@ -25,6 +40,29 @@ export default function ProjectDetailModal({ projectId, open, onOpenChange }: Pr
   const [loading, setLoading] = useState(false)
   const [data, setData] = useState<any | null>(null)
   const [completing, setCompleting] = useState(false)
+  const [supportingDocs, setSupportingDocs] = useState<SupportingDocument[]>([])
+  const [uploadingDoc, setUploadingDoc] = useState(false)
+  const [deletingDocId, setDeletingDocId] = useState<string | null>(null)
+  const [updatingGrantSegment, setUpdatingGrantSegment] = useState(false)
+  const [sectors, setSectors] = useState<Array<{ id: string; sector_name_en: string }>>([])
+  const [updatingImplementedSector, setUpdatingImplementedSector] = useState(false)
+  const [shiftNoteDraft, setShiftNoteDraft] = useState('')
+  const [shiftNoteStatus, setShiftNoteStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
+
+  useEffect(() => {
+    if (!open) return
+    ;(async () => {
+      try {
+        const { data } = await supabase
+          .from('sectors')
+          .select('id, sector_name_en')
+          .order('sector_name_en')
+        setSectors(data || [])
+      } catch (e) {
+        console.error('Error loading sectors:', e)
+      }
+    })()
+  }, [open])
 
   useEffect(() => {
     if (!open || !projectId) { setData(null); return }
@@ -35,14 +73,26 @@ export default function ProjectDetailModal({ projectId, open, onOpenChange }: Pr
         const j = await res.json()
         if (!res.ok) throw new Error(j.error || 'Failed to load project')
         setData(j)
+        setSupportingDocs(Array.isArray(j.supporting_documents) ? j.supporting_documents : [])
       } catch (e) {
         console.error(e)
         setData(null)
+        setSupportingDocs([])
       } finally {
         setLoading(false)
       }
     })()
   }, [open, projectId])
+
+  useEffect(() => {
+    if (!open) {
+      setSupportingDocs([])
+      setUploadingDoc(false)
+      setDeletingDocId(null)
+      setUpdatingGrantSegment(false)
+      setUpdatingImplementedSector(false)
+    }
+  }, [open])
 
   const project = data?.project
   const room = project?.emergency_rooms
@@ -53,6 +103,118 @@ export default function ProjectDetailModal({ projectId, open, onOpenChange }: Pr
   const fileKeys = data?.file_keys || {}
   const f4Files = data?.f4_files || []
   const f5Files = data?.f5_files || []
+  const plannedSector = getSectorWithHighestAmount(project?.planned_activities, project?.expenses)
+  const activityShifted = isActivityShifted(
+    project?.planned_activities,
+    project?.expenses,
+    project?.implemented_sector
+  )
+
+  useEffect(() => {
+    setShiftNoteDraft(project?.activity_shift_note ?? '')
+    setShiftNoteStatus('idle')
+  }, [project?.activity_shift_note, project?.id])
+
+  const handleGrantSegmentChange = async (value: string | undefined) => {
+    if (!projectId || isHistorical) return
+    const next = value ?? null
+    const prev = project?.grant_segment ?? null
+    if (next === prev) return
+
+    setUpdatingGrantSegment(true)
+    setData((prevData: any) =>
+      prevData
+        ? { ...prevData, project: { ...prevData.project, grant_segment: next } }
+        : prevData
+    )
+    try {
+      const response = await fetch(`/api/projects/${projectId}/grant-segment`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ grant_segment: next }),
+      })
+      const errorBody = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        throw new Error(errorBody.error || 'Failed to update grant segment')
+      }
+    } catch (error: any) {
+      console.error('Error updating grant segment:', error)
+      setData((prevData: any) =>
+        prevData
+          ? { ...prevData, project: { ...prevData.project, grant_segment: prev } }
+          : prevData
+      )
+      alert(error.message || 'Failed to update grant segment')
+    } finally {
+      setUpdatingGrantSegment(false)
+    }
+  }
+
+  const saveImplementedSector = async (
+    nextSector: string | null,
+    note?: string | null
+  ): Promise<boolean> => {
+    if (!projectId || isHistorical) return false
+    setUpdatingImplementedSector(true)
+    const prevSector = project?.implemented_sector ?? null
+    const prevNote = project?.activity_shift_note ?? null
+    setData((prevData: any) =>
+      prevData
+        ? {
+            ...prevData,
+            project: {
+              ...prevData.project,
+              implemented_sector: nextSector,
+              activity_shift_note: note !== undefined ? note : prevData.project.activity_shift_note,
+            },
+          }
+        : prevData
+    )
+    try {
+      const body: Record<string, unknown> = { implemented_sector: nextSector }
+      if (note !== undefined) body.activity_shift_note = note
+      const response = await fetch(`/api/projects/${projectId}/implemented-sector`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      const errorBody = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        throw new Error(errorBody.error || 'Failed to update implemented sector')
+      }
+      return true
+    } catch (error: any) {
+      console.error('Error updating implemented sector:', error)
+      setData((prevData: any) =>
+        prevData
+          ? {
+              ...prevData,
+              project: {
+                ...prevData.project,
+                implemented_sector: prevSector,
+                activity_shift_note: prevNote,
+              },
+            }
+          : prevData
+      )
+      alert(error.message || 'Failed to update implemented sector')
+      return false
+    } finally {
+      setUpdatingImplementedSector(false)
+    }
+  }
+
+  const saveShiftNote = async () => {
+    const next = shiftNoteDraft.trim() || null
+    const prev = project?.activity_shift_note ?? null
+    if (next === prev) {
+      setShiftNoteStatus('saved')
+      return
+    }
+    setShiftNoteStatus('saving')
+    const ok = await saveImplementedSector(project?.implemented_sector ?? null, next)
+    setShiftNoteStatus(ok ? 'saved' : 'error')
+  }
 
   const handleFileClick = async (fileKey: string, fileName: string) => {
     if (!fileKey) return
@@ -106,6 +268,7 @@ export default function ProjectDetailModal({ projectId, open, onOpenChange }: Pr
       const j = await res.json()
       if (!res.ok) throw new Error(j.error || 'Failed to reload project')
       setData(j)
+      setSupportingDocs(Array.isArray(j.supporting_documents) ? j.supporting_documents : [])
     } catch (error: any) {
       console.error('Error completing project:', error)
       alert(error.message || 'Failed to complete project')
@@ -114,12 +277,69 @@ export default function ProjectDetailModal({ projectId, open, onOpenChange }: Pr
     }
   }
 
+  const safeFileSegment = (name: string) =>
+    name.replace(/[\\/:*?"<>|]+/g, '-').replace(/\s+/g, ' ').trim().slice(0, 120) || 'document'
+
+  const handleUploadSupportingDocs = async (files: FileList | null) => {
+    if (!projectId || isHistorical || !files?.length) return
+    setUploadingDoc(true)
+    try {
+      const uploaded: SupportingDocument[] = []
+      for (const file of Array.from(files)) {
+        const ext = (file.name.split('.').pop() || 'bin').toLowerCase().replace(/[^a-z0-9]/g, '') || 'bin'
+        const key = `projects/${projectId}/supporting/${Date.now()}-${crypto.randomUUID()}.${ext}`
+        const { error: upErr } = await supabase.storage.from('images').upload(key, file, {
+          cacheControl: '3600',
+          upsert: false,
+        })
+        if (upErr) throw upErr
+
+        const res = await fetch(`/api/projects/${projectId}/documents`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            file_name: safeFileSegment(file.name),
+            file_key: key,
+          }),
+        })
+        const j = await res.json()
+        if (!res.ok) throw new Error(j.error || 'Failed to save document')
+        if (j.document) uploaded.push(j.document)
+      }
+      if (uploaded.length) {
+        setSupportingDocs((prev) => [...uploaded, ...prev])
+      }
+    } catch (error: any) {
+      console.error('Error uploading supporting document:', error)
+      alert(error.message || 'Failed to upload document')
+    } finally {
+      setUploadingDoc(false)
+    }
+  }
+
+  const handleDeleteSupportingDoc = async (doc: SupportingDocument) => {
+    if (!projectId || isHistorical) return
+    if (!confirm(`Delete "${doc.file_name}"?`)) return
+    setDeletingDocId(doc.id)
+    try {
+      const res = await fetch(`/api/projects/${projectId}/documents/${doc.id}`, { method: 'DELETE' })
+      const j = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(j.error || 'Failed to delete document')
+      setSupportingDocs((prev) => prev.filter((d) => d.id !== doc.id))
+    } catch (error: any) {
+      console.error('Error deleting supporting document:', error)
+      alert(error.message || 'Failed to delete document')
+    } finally {
+      setDeletingDocId(null)
+    }
+  }
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-5xl w-[95vw] max-h-[85vh] overflow-y-auto">
+      <DialogContent className="max-w-[min(95vw,52rem)] w-full max-h-[85vh] overflow-x-hidden overflow-y-auto p-4 sm:p-6 min-w-0 [&>*]:min-w-0">
         <DialogHeader>
-          <div className="flex items-center justify-between">
-            <DialogTitle>
+          <div className="flex flex-wrap items-center justify-between gap-2 pr-8">
+            <DialogTitle className="min-w-0 break-words">
               {t('management.detail_modal.title')}
               {isHistorical && <span className="ml-2 text-sm text-muted-foreground font-normal">(Historical Project)</span>}
             </DialogTitle>
@@ -128,14 +348,15 @@ export default function ProjectDetailModal({ projectId, open, onOpenChange }: Pr
                 onClick={handleCompleteProject}
                 disabled={completing}
                 variant="default"
-                className="flex items-center gap-2"
+                size="sm"
+                className="flex items-center gap-2 shrink-0"
               >
                 <CheckCircle className="h-4 w-4" />
                 {completing ? 'Completing...' : 'Complete Project'}
               </Button>
             )}
             {!isHistorical && project?.status === 'completed' && (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground shrink-0">
                 <CheckCircle className="h-4 w-4" />
                 <span>Completed</span>
               </div>
@@ -147,7 +368,7 @@ export default function ProjectDetailModal({ projectId, open, onOpenChange }: Pr
         ) : !project ? (
           <div className="py-8 text-center text-muted-foreground">{t('management.detail_modal.no_data')}</div>
         ) : (
-          <div className="space-y-6">
+          <div className="space-y-6 min-w-0 max-w-full overflow-x-hidden">
             {/* Overdue banner: show when overdue > 0 */}
             {(() => {
               const overdueDays = project?.days_overdue ?? (project?.overdue != null ? parseInt(String(project.overdue), 10) : null)
@@ -174,7 +395,7 @@ export default function ProjectDetailModal({ projectId, open, onOpenChange }: Pr
             {isHistorical ? (
               <>
                 {/* Historical Project Fields */}
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                   <div>
                     <Label>Serial Number</Label>
                     <div className="h-10 flex items-center px-3 rounded border bg-muted/50">{project?.serial_number || '-'}</div>
@@ -184,7 +405,7 @@ export default function ProjectDetailModal({ projectId, open, onOpenChange }: Pr
                     <div className="h-10 flex items-center px-3 rounded border bg-muted/50">{project?.status || '-'}</div>
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                   <div>
                     <Label>{t('management.detail_modal.labels.err')}</Label>
                     <div className="h-10 flex items-center px-3 rounded border bg-muted/50">{room?.name || room?.err_code || '-'}</div>
@@ -194,7 +415,7 @@ export default function ProjectDetailModal({ projectId, open, onOpenChange }: Pr
                     <div className="h-10 flex items-center px-3 rounded border bg-muted/50">{project?.state || '-'}</div>
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                   <div>
                     <Label>Project Donor</Label>
                     <div className="h-10 flex items-center px-3 rounded border bg-muted/50">{project?.project_donor || '-'}</div>
@@ -204,7 +425,7 @@ export default function ProjectDetailModal({ projectId, open, onOpenChange }: Pr
                     <div className="h-10 flex items-center px-3 rounded border bg-muted/50">{project?.partner || '-'}</div>
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                   <div>
                     <Label>Sector (Primary)</Label>
                     <div className="h-10 flex items-center px-3 rounded border bg-muted/50">{project?.sector_primary || '-'}</div>
@@ -218,7 +439,7 @@ export default function ProjectDetailModal({ projectId, open, onOpenChange }: Pr
                   <Label>Description of ERRs activity</Label>
                   <div className="min-h-[40px] px-3 py-2 rounded border bg-muted/50 text-sm whitespace-pre-wrap">{project?.project_objectives || '-'}</div>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                   <div>
                     <Label>Target (Individuals)</Label>
                     <div className="h-10 flex items-center px-3 rounded border bg-muted/50">{project?.estimated_beneficiaries ? Number(project.estimated_beneficiaries).toLocaleString() : '-'}</div>
@@ -228,7 +449,7 @@ export default function ProjectDetailModal({ projectId, open, onOpenChange }: Pr
                     <div className="h-10 flex items-center px-3 rounded border bg-muted/50">{project?.intended_beneficiaries ? (project.intended_beneficiaries.includes('Families:') ? project.intended_beneficiaries.split('Families:')[1].trim() : '-') : '-'}</div>
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                   <div>
                     <Label>MOU Signed</Label>
                     <div className="h-10 flex items-center px-3 rounded border bg-muted/50">{project?.mou_signed || '-'}</div>
@@ -238,7 +459,7 @@ export default function ProjectDetailModal({ projectId, open, onOpenChange }: Pr
                     <div className="h-10 flex items-center px-3 rounded border bg-muted/50">{project?.date_transfer ? new Date(project.date_transfer).toLocaleDateString() : '-'}</div>
                   </div>
                 </div>
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
                   <div>
                     <Label>USD Amount</Label>
                     <div className="h-10 flex items-center px-3 rounded border bg-muted/50">${project?.usd ? Number(project.usd).toLocaleString() : '-'}</div>
@@ -252,7 +473,7 @@ export default function ProjectDetailModal({ projectId, open, onOpenChange }: Pr
                     <div className="h-10 flex items-center px-3 rounded border bg-muted/50">{project?.rate ? Number(project.rate).toLocaleString() : '-'}</div>
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                   <div>
                     <Label>Start Date (Activity)</Label>
                     <div className="h-10 flex items-center px-3 rounded border bg-muted/50">{project?.start_date_activity ? new Date(project.start_date_activity).toLocaleDateString() : '-'}</div>
@@ -262,7 +483,7 @@ export default function ProjectDetailModal({ projectId, open, onOpenChange }: Pr
                     <div className="h-10 flex items-center px-3 rounded border bg-muted/50">{project?.end_date_activity ? new Date(project.end_date_activity).toLocaleDateString() : '-'}</div>
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                   <div>
                     <Label>F1 Status</Label>
                     <div className="h-10 flex items-center px-3 rounded border bg-muted/50">{project?.f1_status || '-'}</div>
@@ -272,7 +493,7 @@ export default function ProjectDetailModal({ projectId, open, onOpenChange }: Pr
                     <div className="h-10 flex items-center px-3 rounded border bg-muted/50">{project?.f1_date_submitted ? new Date(project.f1_date_submitted).toLocaleDateString() : '-'}</div>
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                   <div>
                     <Label>F4 Status</Label>
                     <div className="h-10 flex items-center px-3 rounded border bg-muted/50">{project?.f4_status || '-'}</div>
@@ -496,7 +717,7 @@ export default function ProjectDetailModal({ projectId, open, onOpenChange }: Pr
                      (project?.people_with_special_needs !== null && project?.people_with_special_needs !== undefined) ? (
                       <div className="mb-4">
                         <Label className="text-sm font-medium mb-2">Reach Data</Label>
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                           {(project?.volunteers !== null && project?.volunteers !== undefined) && (
                             <div>
                               <div className="text-sm text-muted-foreground mb-1">Volunteers</div>
@@ -526,7 +747,7 @@ export default function ProjectDetailModal({ projectId, open, onOpenChange }: Pr
                          (project?.female_over_18 !== null && project?.female_over_18 !== undefined) ||
                          (project?.male_under_18 !== null && project?.male_under_18 !== undefined) ||
                          (project?.female_under_18 !== null && project?.female_under_18 !== undefined) ? (
-                          <div className="grid grid-cols-4 gap-4 mt-2">
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-4 mt-2">
                             {(project?.male_over_18 !== null && project?.male_over_18 !== undefined) && (
                               <div>
                                 <div className="text-sm text-muted-foreground mb-1">Male &gt;18</div>
@@ -617,7 +838,7 @@ export default function ProjectDetailModal({ projectId, open, onOpenChange }: Pr
             ) : (
               <>
                 {/* Regular Project Fields */}
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                   <div>
                     <Label>{t('management.detail_modal.labels.err')}</Label>
                     <div className="h-10 flex items-center px-3 rounded border bg-muted/50">{room?.name || room?.name_ar || room?.err_code || '-'}</div>
@@ -628,10 +849,98 @@ export default function ProjectDetailModal({ projectId, open, onOpenChange }: Pr
                   </div>
                 </div>
                 <div>
+                  <Label>{t('management.detail_modal.labels.grant_segment')}</Label>
+                  <GrantSegmentSelect
+                    triggerClassName="w-full"
+                    value={project?.grant_segment ?? undefined}
+                    disabled={updatingGrantSegment}
+                    onValueChange={handleGrantSegmentChange}
+                  />
+                </div>
+                {!isHistorical && (
+                  <div className="rounded border p-3 space-y-3 bg-muted/20">
+                    <div className="flex items-center gap-2">
+                      <Label className="text-base font-semibold mb-0">
+                        {t('management.detail_modal.labels.implemented_sector')}
+                      </Label>
+                      {activityShifted && (
+                        <span className="inline-flex items-center rounded-full bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 px-2 py-0.5 text-[10px] font-medium border border-amber-200 dark:border-amber-800">
+                          {t('management.detail_modal.labels.activity_shifted')}
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {t('management.detail_modal.labels.planned_sector')}: {plannedSector || '—'}
+                    </div>
+                    <Select
+                      value={sectors.find(s => s.sector_name_en === project?.implemented_sector)?.id || '__none__'}
+                      disabled={updatingImplementedSector}
+                      onValueChange={(value) => {
+                        const selected = sectors.find(s => s.id === value)
+                        const next = value === '__none__' ? null : (selected?.sector_name_en ?? null)
+                        void saveImplementedSector(next)
+                      }}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder={t('management.detail_modal.labels.implemented_sector') as string} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">—</SelectItem>
+                        {sectors.map((sector) => (
+                          <SelectItem key={sector.id} value={sector.id}>
+                            {sector.sector_name_en}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <div>
+                      <div className="flex items-center justify-between gap-2 mb-1">
+                        <Label className="text-sm mb-0">{t('management.detail_modal.labels.activity_shift_note')}</Label>
+                        {shiftNoteStatus === 'saving' && (
+                          <span className="text-xs text-muted-foreground">
+                            {t('management.detail_modal.labels.shift_note_saving')}
+                          </span>
+                        )}
+                        {shiftNoteStatus === 'saved' && (
+                          <span className="text-xs text-emerald-600 dark:text-emerald-400">
+                            {t('management.detail_modal.labels.shift_note_saved')}
+                          </span>
+                        )}
+                        {shiftNoteStatus === 'error' && (
+                          <span className="text-xs text-destructive">
+                            {t('management.detail_modal.labels.shift_note_error')}
+                          </span>
+                        )}
+                      </div>
+                      <Textarea
+                        className="min-h-[60px]"
+                        value={shiftNoteDraft}
+                        disabled={updatingImplementedSector}
+                        placeholder={t('management.detail_modal.labels.activity_shift_note_placeholder') as string}
+                        onChange={(e) => {
+                          setShiftNoteDraft(e.target.value)
+                          if (shiftNoteStatus !== 'idle') setShiftNoteStatus('idle')
+                        }}
+                      />
+                      <div className="mt-2 flex justify-end">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          disabled={updatingImplementedSector || shiftNoteStatus === 'saving'}
+                          onClick={() => void saveShiftNote()}
+                        >
+                          {t('management.detail_modal.labels.save_shift_note')}
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                <div>
                   <Label>{t('management.detail_modal.labels.project_objectives')}</Label>
                   <div className="min-h-[40px] px-3 py-2 rounded border bg-muted/50 text-sm whitespace-pre-wrap">{project?.project_objectives || '-'}</div>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                   <div>
                     <Label>{t('management.detail_modal.labels.intended_beneficiaries')}</Label>
                     <div className="min-h-[40px] px-3 py-2 rounded border bg-muted/50 text-sm whitespace-pre-wrap">{project?.intended_beneficiaries || '-'}</div>
@@ -728,6 +1037,85 @@ export default function ProjectDetailModal({ projectId, open, onOpenChange }: Pr
                     </div>
                   </div>
                 )}
+
+                {/* Additional supporting documents (not F1–F5) */}
+                <div>
+                  <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                    <Label className="text-base font-semibold">
+                      {t('management.detail_modal.supporting_documents.title')}
+                    </Label>
+                    <div>
+                      <input
+                        id="project-supporting-docs-input"
+                        type="file"
+                        multiple
+                        className="hidden"
+                        disabled={uploadingDoc}
+                        onChange={(e) => {
+                          void handleUploadSupportingDocs(e.target.files)
+                          e.target.value = ''
+                        }}
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={uploadingDoc}
+                        className="flex items-center gap-2"
+                        onClick={() => document.getElementById('project-supporting-docs-input')?.click()}
+                      >
+                        <Upload className="h-4 w-4" />
+                        {uploadingDoc
+                          ? t('management.detail_modal.supporting_documents.uploading')
+                          : t('management.detail_modal.supporting_documents.upload')}
+                      </Button>
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground mb-3">
+                    {t('management.detail_modal.supporting_documents.help')}
+                  </p>
+                  {supportingDocs.length === 0 ? (
+                    <div className="text-sm text-muted-foreground py-2">
+                      {t('management.detail_modal.supporting_documents.empty')}
+                    </div>
+                  ) : (
+                    <ul className="space-y-2">
+                      {supportingDocs.map((doc) => (
+                        <li
+                          key={doc.id}
+                          className="flex flex-wrap items-center justify-between gap-2 rounded border px-3 py-2"
+                        >
+                          <button
+                            type="button"
+                            className="flex items-center gap-2 text-sm text-left hover:underline min-w-0"
+                            onClick={() => handleFileClick(doc.file_key, doc.file_name)}
+                          >
+                            <FileText className="h-4 w-4 shrink-0" />
+                            <span className="truncate">{doc.file_name}</span>
+                          </button>
+                          <div className="flex items-center gap-2 shrink-0">
+                            {doc.uploaded_at && (
+                              <span className="text-xs text-muted-foreground">
+                                {new Date(doc.uploaded_at).toLocaleDateString()}
+                              </span>
+                            )}
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive"
+                              disabled={deletingDocId === doc.id}
+                              onClick={() => void handleDeleteSupportingDoc(doc)}
+                              aria-label={t('management.detail_modal.supporting_documents.delete')}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
 
                 {/* F1 Project Budget Table */}
                 {(project?.planned_activities || project?.expenses) && (

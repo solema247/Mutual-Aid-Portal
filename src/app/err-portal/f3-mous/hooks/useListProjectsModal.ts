@@ -21,6 +21,33 @@ export function useListProjectsModal({
   const [candidatesForAdd, setCandidatesForAdd] = useState<MouProjectRowWithoutGrant[]>([])
   const [selectedCandidates, setSelectedCandidates] = useState<Set<string>>(new Set())
   const [listProjectsActionLoading, setListProjectsActionLoading] = useState(false)
+  const [updatingGrantSegmentId, setUpdatingGrantSegmentId] = useState<string | null>(null)
+
+  const mapMouProjects = (
+    projects: Array<{
+      id: string
+      err_id?: string | null
+      state?: string
+      locality?: string | null
+      grant_id?: string | null
+      grant_segment?: string | null
+      expenses?: unknown
+      planned_activities?: unknown
+      project_objectives?: string | null
+      emergency_rooms?: { err_code?: string } | null
+    }>
+  ): MouProjectRow[] =>
+    projects.map((p) => ({
+      id: p.id,
+      err_id: p.err_id ?? p.emergency_rooms?.err_code ?? null,
+      state: p.state ?? '',
+      locality: p.locality ?? null,
+      grant_id: p.grant_id ?? null,
+      grant_segment: p.grant_segment ?? null,
+      amount_usd: sumExpensesUsd(p.expenses),
+      categories: getCategoriesFromPlannedActivities(p.planned_activities),
+      project_objectives: p.project_objectives ?? null,
+    }))
 
   const openListProjectsModal = async (mou: MOU) => {
     setListProjectsMouId(mou.id)
@@ -35,28 +62,7 @@ export function useListProjectsModal({
       const res = await fetch(`/api/f3/mous/${mou.id}`)
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to load MOU')
-      const projects = data.projects || []
-      const list = projects.map(
-        (p: {
-          id: string
-          err_id?: string | null
-          state?: string
-          locality?: string | null
-          grant_id?: string | null
-          expenses?: unknown
-          planned_activities?: unknown
-          project_objectives?: string | null
-        }) => ({
-          id: p.id,
-          err_id: p.err_id ?? null,
-          state: p.state ?? '',
-          locality: p.locality ?? null,
-          grant_id: p.grant_id ?? null,
-          amount_usd: sumExpensesUsd(p.expenses),
-          categories: getCategoriesFromPlannedActivities(p.planned_activities),
-          project_objectives: p.project_objectives ?? null,
-        })
-      )
+      const list = mapMouProjects(data.projects || [])
       setListProjectsList(list)
       const isAssigned = list.some(
         (p: MouProjectRow) => p.grant_id && String(p.grant_id).startsWith('LCC-')
@@ -159,36 +165,40 @@ export function useListProjectsModal({
       await fetchMous()
       const refetchRes = await fetch(`/api/f3/mous/${listProjectsMouId}`)
       const refetchData = await refetchRes.json()
-      const projects = refetchData.projects || []
-      setListProjectsList(
-        projects.map(
-          (p: {
-            id: string
-            err_id?: string | null
-            state?: string
-            locality?: string | null
-            grant_id?: string | null
-            expenses?: unknown
-            planned_activities?: unknown
-            project_objectives?: string | null
-            emergency_rooms?: { err_code?: string } | null
-          }) => ({
-            id: p.id,
-            err_id: p.err_id ?? p.emergency_rooms?.err_code ?? null,
-            state: p.state ?? '',
-            locality: p.locality ?? null,
-            grant_id: p.grant_id ?? null,
-            amount_usd: sumExpensesUsd(p.expenses),
-            categories: getCategoriesFromPlannedActivities(p.planned_activities),
-            project_objectives: p.project_objectives ?? null,
-          })
-        )
-      )
+      setListProjectsList(mapMouProjects(refetchData.projects || []))
     } catch (e) {
       console.error(e)
       alert(e instanceof Error ? e.message : 'Failed to add projects')
     } finally {
       setListProjectsActionLoading(false)
+    }
+  }
+
+  const updateProjectGrantSegment = async (projectId: string, grantSegment: string | undefined) => {
+    const next = grantSegment ?? null
+    const prev = listProjectsList.find((p) => p.id === projectId)?.grant_segment ?? null
+    if (next === prev) return
+
+    setUpdatingGrantSegmentId(projectId)
+    setListProjectsList((rows) =>
+      rows.map((p) => (p.id === projectId ? { ...p, grant_segment: next } : p))
+    )
+    try {
+      const res = await fetch(`/api/projects/${projectId}/grant-segment`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ grant_segment: next }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'Failed to update grant segment')
+    } catch (e) {
+      console.error(e)
+      setListProjectsList((rows) =>
+        rows.map((p) => (p.id === projectId ? { ...p, grant_segment: prev } : p))
+      )
+      alert(e instanceof Error ? e.message : 'Failed to update grant segment')
+    } finally {
+      setUpdatingGrantSegmentId(null)
     }
   }
 
@@ -205,10 +215,12 @@ export function useListProjectsModal({
     selectedCandidates,
     setSelectedCandidates,
     listProjectsActionLoading,
+    updatingGrantSegmentId,
     openListProjectsModal,
     handleListProjectsModalOpenChange,
     removeProject,
     startAddMode,
     addSelectedProjects,
+    updateProjectGrantSegment,
   }
 }

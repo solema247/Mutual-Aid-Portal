@@ -1575,6 +1575,41 @@ export type Database = {
           },
         ]
       }
+      err_project_documents: {
+        Row: {
+          id: string
+          project_id: string
+          file_name: string
+          file_key: string
+          uploaded_at: string
+          uploaded_by: string | null
+        }
+        Insert: {
+          id?: string
+          project_id: string
+          file_name: string
+          file_key: string
+          uploaded_at?: string
+          uploaded_by?: string | null
+        }
+        Update: {
+          id?: string
+          project_id?: string
+          file_name?: string
+          file_key?: string
+          uploaded_at?: string
+          uploaded_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "err_project_documents_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "err_projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       err_projects: {
         Row: {
           additional_support: string | null
@@ -3832,6 +3867,10 @@ export type Database = {
     }
     Functions: {
       airtable_fdw_handler: { Args: never; Returns: unknown }
+      allocate_next_workplan_sequence: {
+        Args: { p_donor_name: string; p_grant_id: string }
+        Returns: number
+      }
       airtable_fdw_meta: {
         Args: never
         Returns: {

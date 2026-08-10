@@ -228,6 +228,13 @@ export async function DELETE(
 
     if (deleteError) throw deleteError
 
+    console.info('[grant-audit] decision deleted', {
+      actorUserId: auth.ctx.user.id,
+      actorRole: auth.ctx.user.role,
+      decisionUuid: fullRow.id,
+      decisionIdProposed: fullRow.decision_id_proposed ?? decisionId,
+    })
+
     return NextResponse.json({ success: true, ...airtableMeta(push) })
   } catch (error) {
     console.error('Error deleting distribution decision:', error)

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { syncProjectEndDateFromF5 } from '@/lib/syncProjectEndDateFromF5'
+import { syncImplementedSectorFromF5 } from '@/lib/activityShift'
 import { translateF5Report, translateF5Reach } from '@/lib/translateHelper'
 
 export async function POST(req: Request) {
@@ -99,6 +100,7 @@ export async function POST(req: Request) {
           report_id,
           activity_name: r.activity_name || null,
           activity_goal: r.activity_goal || null,
+          category: r.category != null && String(r.category).trim() !== '' ? String(r.category).trim() : null,
           location: r.location || null,
           start_date: cleanDate(r.start_date),
           end_date: cleanDate(r.end_date),
@@ -162,6 +164,18 @@ export async function POST(req: Request) {
           .delete()
           .in('id', toDelete)
         if (deleteErr) throw deleteErr
+      }
+
+      const sectorResult = await syncImplementedSectorFromF5(
+        supabase,
+        project_id,
+        translatedReach.map((r: any) => ({
+          category: r.category,
+          individual_count: r.individual_count,
+        }))
+      )
+      if (!sectorResult.ok) {
+        console.warn('F5 update: failed to sync implemented_sector', sectorResult.error)
       }
     } else {
       // If no reach data provided, delete all existing

@@ -33,10 +33,14 @@ export async function PATCH(
       return NextResponse.json({ error: 'Project not found' }, { status: 404 })
     }
 
-    // Update the project status
+    // Update the project status, tracking when it was marked completed
+    const newStatus = status || 'completed'
     const { error: updateError } = await supabase
       .from('err_projects')
-      .update({ status: status || 'completed' })
+      .update({
+        status: newStatus,
+        completed_at: newStatus === 'completed' ? new Date().toISOString() : null
+      })
       .eq('id', projectId)
 
     if (updateError) {

@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { allocateNextWorkplanSequence } from '@/lib/allocateNextWorkplanSequence'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { requirePermission } from '@/lib/requirePermission'
 
@@ -44,7 +45,7 @@ export async function POST(
     // Get grant from grants_grid_view
     const { data: grant, error: grantError } = await supabase
       .from('grants_grid_view')
-      .select('id, grant_id, donor_name, donor_id, max_workplan_sequence, activities')
+      .select('id, grant_id, donor_name, donor_id, activities')
       .eq('grant_id', grant_id)
       .eq('donor_name', donor_name)
       .single()
@@ -111,9 +112,6 @@ export async function POST(
       }
     }
     
-    // Get initial workplan sequence from grants_grid_view
-    let currentWorkplanNumber = grant.max_workplan_sequence || 0
-    
     // Process each F1
     let reassignedCount = 0
     const errors: string[] = []
@@ -129,9 +127,8 @@ export async function POST(
         
         const stateShort = stateData?.[0]?.state_short || 'XX'
         
-        // Increment workplan number for this F1
-        currentWorkplanNumber += 1
-        const workplanNumber = currentWorkplanNumber
+        // Atomically allocate next sequence (safe under concurrent Reassign)
+        const workplanNumber = await allocateNextWorkplanSequence(supabase, grant_id, donor_name)
         
         // Generate serial: LCC-DonorShort-StateShort-MMYY-WorkplanSeq
         const generatedSerial = `LCC-${donorShortName}-${stateShort}-${mmyy}-${String(workplanNumber).padStart(4, '0')}`
@@ -175,17 +172,14 @@ export async function POST(
         
         if (updateError) throw updateError
         
-        // Update grants_grid_view: increment max_workplan_sequence and append to activities
+        // Append serial to grant activities (sequence already updated by RPC)
         const updatedActivities = grant.activities 
           ? `${grant.activities},${generatedSerial}`
           : generatedSerial
         
         const { error: updateGrantError } = await supabase
           .from('grants_grid_view')
-          .update({
-            max_workplan_sequence: workplanNumber,
-            activities: updatedActivities
-          })
+          .update({ activities: updatedActivities })
           .eq('grant_id', grant_id)
           .eq('donor_name', donor_name)
         
@@ -195,7 +189,6 @@ export async function POST(
         }
         
         // Update grant reference for next iteration
-        grant.max_workplan_sequence = workplanNumber
         grant.activities = updatedActivities
         
         reassignedCount++

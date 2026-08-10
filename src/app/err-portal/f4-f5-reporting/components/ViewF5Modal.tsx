@@ -5,8 +5,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '@/components/ui/table'
 import { FileText } from 'lucide-react'
+import { supabase } from '@/lib/supabaseClient'
 
 interface ViewF5ModalProps {
   reportId: string | null
@@ -25,6 +27,22 @@ export default function ViewF5Modal({ reportId, open, onOpenChange, onSaved }: V
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [deletePhrase, setDeletePhrase] = useState('')
   const [deleting, setDeleting] = useState(false)
+  const [sectors, setSectors] = useState<Array<{ id: string; sector_name_en: string }>>([])
+
+  useEffect(() => {
+    if (!open) return
+    ;(async () => {
+      try {
+        const { data } = await supabase
+          .from('sectors')
+          .select('id, sector_name_en')
+          .order('sector_name_en')
+        setSectors(data || [])
+      } catch (e) {
+        console.error('Error loading sectors:', e)
+      }
+    })()
+  }, [open])
 
   useEffect(() => {
     if (!open || !reportId) { 
@@ -62,6 +80,7 @@ export default function ViewF5Modal({ reportId, open, onOpenChange, onSaved }: V
           id: r.id,
           activity_name: r.activity_name || '',
           activity_goal: r.activity_goal || '',
+          category: r.category || null,
           location: r.location || '',
           start_date: r.start_date || '',
           end_date: r.end_date || '',
@@ -129,6 +148,7 @@ export default function ViewF5Modal({ reportId, open, onOpenChange, onSaved }: V
           id: r.id,
           activity_name: r.activity_name || '',
           activity_goal: r.activity_goal || '',
+          category: r.category || null,
           location: r.location || '',
           start_date: r.start_date || '',
           end_date: r.end_date || '',
@@ -323,6 +343,7 @@ export default function ViewF5Modal({ reportId, open, onOpenChange, onSaved }: V
                     onClick={() => setReachDraft(prev => ([...prev, {
                       activity_name: '',
                       activity_goal: '',
+                      category: null,
                       location: '',
                       start_date: '',
                       end_date: '',
@@ -330,10 +351,10 @@ export default function ViewF5Modal({ reportId, open, onOpenChange, onSaved }: V
                       household_count: null,
                       male_count: null,
                       female_count: null,
-          under18_male: null,
-          under18_female: null,
-          people_with_disabilities: null
-        }]))}
+                      under18_male: null,
+                      under18_female: null,
+                      people_with_disabilities: null
+                    }]))}
                   >Add Activity</Button>
                 )}
               </div>
@@ -341,6 +362,7 @@ export default function ViewF5Modal({ reportId, open, onOpenChange, onSaved }: V
                 <TableHeader>
                   <TableRow>
                     <TableHead>Activity Name</TableHead>
+                    <TableHead>Sector</TableHead>
                     <TableHead>Goal/Details of Activity</TableHead>
                     <TableHead>Implementation Location</TableHead>
                     <TableHead>Start</TableHead>
@@ -352,7 +374,7 @@ export default function ViewF5Modal({ reportId, open, onOpenChange, onSaved }: V
                 </TableHeader>
                 <TableBody>
                   {reach.length === 0 ? (
-                    <TableRow><TableCell colSpan={isEditing ? 8 : 7} className="text-center text-muted-foreground">No activities</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={isEditing ? 9 : 8} className="text-center text-muted-foreground">No activities</TableCell></TableRow>
                   ) : reach.map((e:any, idx:number)=> (
                     <TableRow key={e.id || idx}>
                       <TableCell>
@@ -362,6 +384,32 @@ export default function ViewF5Modal({ reportId, open, onOpenChange, onSaved }: V
                           }} />
                         ) : (
                           e.activity_name || '-'
+                        )}
+                      </TableCell>
+                      <TableCell className="min-w-[9rem]">
+                        {isEditing ? (
+                          <Select
+                            value={sectors.find(s => s.sector_name_en === e.category)?.id || undefined}
+                            onValueChange={(value) => {
+                              const selected = sectors.find(s => s.id === value)
+                              const arr = [...reachDraft]
+                              arr[idx] = { ...arr[idx], category: selected?.sector_name_en ?? null }
+                              setReachDraft(arr)
+                            }}
+                          >
+                            <SelectTrigger className="h-8 w-full">
+                              <SelectValue placeholder="Sector" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {sectors.map((sector) => (
+                                <SelectItem key={sector.id} value={sector.id}>
+                                  {sector.sector_name_en}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          e.category || '-'
                         )}
                       </TableCell>
                       <TableCell>

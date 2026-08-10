@@ -15,6 +15,10 @@ export async function POST(
   try {
     const perm = await requirePermission('compliance_screen')
     if (perm instanceof NextResponse) return perm
+    const actorLogin = perm.user.email?.trim()
+    if (!actorLogin) {
+      return NextResponse.json({ error: 'Logged-in user has no email/login' }, { status: 400 })
+    }
 
     const supabase = getSupabaseRouteClient()
     const { action, note, flag_type } = await request.json()
@@ -47,11 +51,15 @@ export async function POST(
       return NextResponse.json({ error: 'Screening not found' }, { status: 404 })
     }
 
+    // On clear, the note is an optional caveat/comment (e.g. "Cleared but no
+    // account number included"); on flag it's the required reason. Either way
+    // we persist it in flag_note so the queue/history shows the officer's note.
+    const trimmedNote = note ? String(note).trim() : ''
     const update: Record<string, unknown> = {
       status: action === 'clear' ? 'cleared' : 'flagged',
-      flag_note: action === 'flag' ? String(note).trim() : null,
+      flag_note: trimmedNote || null,
       flag_type: action === 'flag' ? flag_type : null,
-      screened_by: perm.user.id,
+      screened_by: actorLogin,
       screened_at: new Date().toISOString(),
       finance_review_status: action === 'flag' ? 'pending' : null,
       finance_review_note: null,

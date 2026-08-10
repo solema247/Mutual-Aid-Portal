@@ -18,12 +18,12 @@ CREATE TABLE IF NOT EXISTS compliance_screenings (
   status TEXT NOT NULL DEFAULT 'pending_screening'
     CHECK (status IN ('pending_screening', 'cleared', 'flagged', 'auto_approved')),
   flag_note TEXT,
-  screened_by UUID REFERENCES users(id),
+  screened_by TEXT, -- login email of the compliance officer
   screened_at TIMESTAMPTZ,
   finance_review_status TEXT
     CHECK (finance_review_status IN ('pending', 'approved', 'rejected')),
   finance_review_note TEXT,
-  finance_reviewed_by UUID REFERENCES users(id),
+  finance_reviewed_by TEXT, -- login email of the finance reviewer
   finance_reviewed_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
