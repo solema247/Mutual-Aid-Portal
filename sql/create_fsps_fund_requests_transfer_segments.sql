@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS public.fsps (
   contract_filename text,
   contract_url text,
   contract_signed date,
+  transfer_fee_percent numeric,
   airtable_record_id text,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),

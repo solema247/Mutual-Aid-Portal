@@ -5,6 +5,7 @@ import {
   TRANSFER_PURPOSES,
   TRANSFER_STATUSES,
   buildTransferId,
+  computeTransferFeeAmount,
   normalizeTransferStatus,
   transferAmount,
 } from '@/lib/grantManagement/fundTransferHelpers'
@@ -20,6 +21,24 @@ function mapRow(row: Record<string, unknown>) {
       row.transfer_fee_amount as number | null
     ),
   }
+}
+
+async function resolveTransferFeeAmount(
+  supabase: ReturnType<typeof getSupabaseAdmin>,
+  fspId: string | null | undefined,
+  activityAmount: number | null
+): Promise<number | null> {
+  if (activityAmount == null) return null
+  if (!fspId) return computeTransferFeeAmount(activityAmount, 0)
+  const { data } = await supabase
+    .from('fsps')
+    .select('transfer_fee_percent')
+    .eq('id', fspId)
+    .maybeSingle()
+  return computeTransferFeeAmount(
+    activityAmount,
+    (data?.transfer_fee_percent as number | null | undefined) ?? 0
+  )
 }
 
 async function nextAutoNumber(supabase: ReturnType<typeof getSupabaseAdmin>): Promise<number> {
@@ -93,10 +112,12 @@ export async function POST(request: NextRequest) {
 
     const activity_amount =
       body.activity_amount != null && body.activity_amount !== '' ? Number(body.activity_amount) : null
-    const transfer_fee_amount =
-      body.transfer_fee_amount != null && body.transfer_fee_amount !== ''
-        ? Number(body.transfer_fee_amount)
-        : null
+    const fsp_id = body.fsp_id || null
+    const transfer_fee_amount = await resolveTransferFeeAmount(
+      auth.ctx.supabase,
+      fsp_id,
+      activity_amount
+    )
 
     const { data, error } = await auth.ctx.supabase
       .from('transfer_segments')
@@ -106,7 +127,7 @@ export async function POST(request: NextRequest) {
         fund_request_id,
         request_id: fr.request_id,
         grant_id: body.grant_id?.trim() || null,
-        fsp_id: body.fsp_id || null,
+        fsp_id,
         decision_id_proposed: body.decision_id_proposed?.trim() || null,
         purpose,
         status,

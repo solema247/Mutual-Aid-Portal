@@ -38,6 +38,7 @@ import {
   FSP_STATUSES,
   TRANSFER_PURPOSES,
   TRANSFER_STATUSES,
+  computeTransferFeeAmount,
   suggestFundRequestId,
 } from '@/lib/grantManagement/fundTransferHelpers'
 
@@ -47,6 +48,7 @@ type Fsp = {
   status: string
   contact_person: string | null
   contact_email: string | null
+  transfer_fee_percent?: number | null
   total_funds?: number
   activity_funds?: number
   fees?: number
@@ -116,18 +118,30 @@ const emptyTsForm = {
   grant_id: '',
   fsp_id: '',
   purpose: 'ERR Activity Plans',
-  status: 'Requested',
   activity_amount: '',
-  transfer_fee_amount: '',
-  transfer_received_date: '',
   comment: '',
 }
+
+type NewTsRow = {
+  grant_id: string
+  fsp_id: string
+  purpose: string
+  activity_amount: string
+}
+
+const emptyNewTsRow = (): NewTsRow => ({
+  grant_id: '',
+  fsp_id: '',
+  purpose: 'ERR Activity Plans',
+  activity_amount: '',
+})
 
 const emptyFspForm = {
   name: '',
   status: 'Prospect',
   contact_person: '',
   contact_email: '',
+  transfer_fee_percent: '',
 }
 
 const DECISION_RECENT_DAYS = 90
@@ -158,6 +172,8 @@ export default function FundRequestsManager() {
   const [tsParentId, setTsParentId] = useState<string | null>(null)
   const [editingTs, setEditingTs] = useState<Transfer | null>(null)
   const [tsForm, setTsForm] = useState(emptyTsForm)
+  const [newTsRows, setNewTsRows] = useState<Record<string, NewTsRow[]>>({})
+  const [savingNewTs, setSavingNewTs] = useState(false)
 
   const [fspOpen, setFspOpen] = useState(false)
   const [editingFsp, setEditingFsp] = useState<Fsp | null>(null)
@@ -303,10 +319,13 @@ export default function FundRequestsManager() {
   }
 
   const openCreateTs = (fundRequestId: string) => {
-    setTsParentId(fundRequestId)
-    setEditingTs(null)
-    setTsForm(emptyTsForm)
-    setTsOpen(true)
+    setExpanded(fundRequestId)
+    setNewTsRows((prev) => ({
+      ...prev,
+      [fundRequestId]: prev[fundRequestId]?.length
+        ? prev[fundRequestId]
+        : [emptyNewTsRow()],
+    }))
   }
 
   const openEditTs = (fundRequestId: string, t: Transfer) => {
@@ -316,45 +335,105 @@ export default function FundRequestsManager() {
       grant_id: t.grant_id || '',
       fsp_id: t.fsp_id || '',
       purpose: t.purpose || 'ERR Activity Plans',
-      status: t.status || 'Requested',
       activity_amount: t.activity_amount?.toString() || '',
-      transfer_fee_amount: t.transfer_fee_amount?.toString() || '',
-      transfer_received_date: t.transfer_received_date || '',
       comment: t.comment || '',
     })
     setTsOpen(true)
   }
 
   const saveTs = async () => {
-    if (!tsParentId) return
+    if (!tsParentId || !editingTs) return
     const payload = {
       fund_request_id: tsParentId,
       grant_id: tsForm.grant_id || null,
       fsp_id: tsForm.fsp_id || null,
       purpose: tsForm.purpose || null,
-      status: tsForm.status || null,
       activity_amount: tsForm.activity_amount ? Number(tsForm.activity_amount) : null,
-      transfer_fee_amount: tsForm.transfer_fee_amount ? Number(tsForm.transfer_fee_amount) : null,
-      transfer_received_date: tsForm.transfer_received_date || null,
       comment: tsForm.comment || null,
     }
-    const res = editingTs
-      ? await fetch(`/api/transfer-segments/${editingTs.id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        })
-      : await fetch('/api/transfer-segments', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        })
+    const res = await fetch(`/api/transfer-segments/${editingTs.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
     if (!res.ok) {
       const err = await res.json().catch(() => ({}))
       alert(err.error || 'Failed to save transfer')
       return
     }
     setTsOpen(false)
+    await load()
+  }
+
+  const validNewTsRows = (rows: NewTsRow[]) =>
+    rows.filter((r) => r.grant_id.trim() && r.fsp_id.trim())
+
+  const saveNewTsRows = async (fundRequestId: string) => {
+    const rows = validNewTsRows(newTsRows[fundRequestId] || [])
+    if (!rows.length) return
+    setSavingNewTs(true)
+    try {
+      for (const row of rows) {
+        const res = await fetch('/api/transfer-segments', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            fund_request_id: fundRequestId,
+            grant_id: row.grant_id || null,
+            fsp_id: row.fsp_id || null,
+            purpose: row.purpose || null,
+            status: 'Requested',
+            activity_amount: row.activity_amount ? Number(row.activity_amount) : null,
+            transfer_received_date: null,
+          }),
+        })
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}))
+          alert(err.error || 'Failed to save transfer segment')
+          return
+        }
+      }
+      setNewTsRows((prev) => {
+        const next = { ...prev }
+        delete next[fundRequestId]
+        return next
+      })
+      await load()
+    } finally {
+      setSavingNewTs(false)
+    }
+  }
+
+  const updateNewTsRow = (fundRequestId: string, idx: number, patch: Partial<NewTsRow>) => {
+    setNewTsRows((prev) => ({
+      ...prev,
+      [fundRequestId]: (prev[fundRequestId] || []).map((r, i) =>
+        i === idx ? { ...r, ...patch } : r
+      ),
+    }))
+  }
+
+  const feeForNewRow = (row: NewTsRow) => {
+    const activity = row.activity_amount ? Number(row.activity_amount) : null
+    if (activity == null || Number.isNaN(activity)) return null
+    const fsp = fsps.find((f) => f.id === row.fsp_id)
+    return computeTransferFeeAmount(activity, fsp?.transfer_fee_percent ?? 0)
+  }
+
+  const updateTsStatus = async (t: Transfer, status: string) => {
+    const today = new Date().toISOString().slice(0, 10)
+    const transfer_received_date =
+      status === 'Received' ? t.transfer_received_date || today : null
+    const res = await fetch(`/api/transfer-segments/${t.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status, transfer_received_date }),
+    })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      alert(err.error || 'Failed to update status')
+      return
+    }
     await load()
   }
 
@@ -381,6 +460,8 @@ export default function FundRequestsManager() {
       status: f.status,
       contact_person: f.contact_person || '',
       contact_email: f.contact_email || '',
+      transfer_fee_percent:
+        f.transfer_fee_percent != null ? String(f.transfer_fee_percent) : '',
     })
     setFspOpen(true)
   }
@@ -391,6 +472,9 @@ export default function FundRequestsManager() {
       status: fspForm.status,
       contact_person: fspForm.contact_person || null,
       contact_email: fspForm.contact_email || null,
+      transfer_fee_percent: fspForm.transfer_fee_percent
+        ? Number(fspForm.transfer_fee_percent)
+        : null,
     }
     const res = editingFsp
       ? await fetch(`/api/fsps/${editingFsp.id}`, {
@@ -423,6 +507,16 @@ export default function FundRequestsManager() {
   }
 
   const fspName = (id: string | null) => fsps.find((f) => f.id === id)?.name || '—'
+
+  const selectedFsp = useMemo(
+    () => fsps.find((f) => f.id === tsForm.fsp_id) || null,
+    [fsps, tsForm.fsp_id]
+  )
+  const calculatedTransferFee = useMemo(() => {
+    const activity = tsForm.activity_amount ? Number(tsForm.activity_amount) : null
+    if (activity == null || Number.isNaN(activity)) return null
+    return computeTransferFeeAmount(activity, selectedFsp?.transfer_fee_percent ?? 0)
+  }, [tsForm.activity_amount, selectedFsp?.transfer_fee_percent])
 
   const toggleDecision = (id: string) => {
     setFrForm((prev) => ({
@@ -886,9 +980,6 @@ export default function FundRequestsManager() {
                         <TableCell colSpan={9} className="bg-muted/30">
                           <div className="flex items-center justify-between mb-2">
                             <div className="text-xs font-medium">Transfer segments</div>
-                            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => openCreateTs(fr.id)}>
-                              <Plus className="h-3 w-3 mr-1" /> Add transfer (grant + FSP)
-                            </Button>
                           </div>
                           {(fr.decision_ids || []).length > 0 && (
                             <div className="text-xs text-muted-foreground mb-2">
@@ -901,7 +992,8 @@ export default function FundRequestsManager() {
                                 <TableHead>Transfer ID</TableHead>
                                 <TableHead>Grant</TableHead>
                                 <TableHead>FSP</TableHead>
-                                <TableHead>Status</TableHead>
+                                <TableHead className="min-w-[120px]">Status</TableHead>
+                                <TableHead>Received</TableHead>
                                 <TableHead className="text-right">Activity</TableHead>
                                 <TableHead className="text-right">Fee</TableHead>
                                 <TableHead className="text-right">Total</TableHead>
@@ -909,9 +1001,10 @@ export default function FundRequestsManager() {
                               </TableRow>
                             </TableHeader>
                             <TableBody>
-                              {(fr.transfers || []).length === 0 && (
+                              {(fr.transfers || []).length === 0 &&
+                                !(newTsRows[fr.id]?.length) && (
                                 <TableRow>
-                                  <TableCell colSpan={8} className="text-xs text-muted-foreground">
+                                  <TableCell colSpan={9} className="text-xs text-muted-foreground">
                                     No transfers yet
                                   </TableCell>
                                 </TableRow>
@@ -921,7 +1014,33 @@ export default function FundRequestsManager() {
                                   <TableCell>{t.transfer_id}</TableCell>
                                   <TableCell>{t.grant_id || '—'}</TableCell>
                                   <TableCell>{fspName(t.fsp_id)}</TableCell>
-                                  <TableCell>{t.status || '—'}</TableCell>
+                                  <TableCell>
+                                    <Select
+                                      value={t.status || 'Requested'}
+                                      onValueChange={(v) => updateTsStatus(t, v)}
+                                    >
+                                      <SelectTrigger
+                                        size="sm"
+                                        className={`!h-5 w-auto min-w-0 gap-0.5 rounded-full border px-2 py-0 text-[10px] font-medium leading-none shadow-none focus:ring-1 focus-visible:ring-1 data-[size=sm]:!h-5 [&>svg]:size-2.5 ${
+                                          (t.status || 'Requested') === 'Received'
+                                            ? 'border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-50'
+                                            : 'border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-50'
+                                        }`}
+                                      >
+                                        <SelectValue />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        {TRANSFER_STATUSES.map((s) => (
+                                          <SelectItem key={s} value={s}>
+                                            {s}
+                                          </SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                  </TableCell>
+                                  <TableCell className="whitespace-nowrap">
+                                    {t.transfer_received_date || '—'}
+                                  </TableCell>
                                   <TableCell className="text-right">
                                     {money(t.activity_amount)}
                                   </TableCell>
@@ -951,8 +1070,149 @@ export default function FundRequestsManager() {
                                   </TableCell>
                                 </TableRow>
                               ))}
+                              {(newTsRows[fr.id] || []).map((row, idx) => {
+                                const fee = feeForNewRow(row)
+                                const activity = row.activity_amount
+                                  ? Number(row.activity_amount)
+                                  : null
+                                const total =
+                                  activity != null && !Number.isNaN(activity)
+                                    ? activity + (fee ?? 0)
+                                    : fee
+                                const draftRows = newTsRows[fr.id] || []
+                                return (
+                                  <TableRow key={`new-ts-${fr.id}-${idx}`} className="bg-muted/40">
+                                    <TableCell className="text-muted-foreground text-[10px]">
+                                      New
+                                    </TableCell>
+                                    <TableCell>
+                                      <Select
+                                        value={row.grant_id || undefined}
+                                        onValueChange={(v) =>
+                                          updateNewTsRow(fr.id, idx, { grant_id: v })
+                                        }
+                                      >
+                                        <SelectTrigger className="h-7 text-xs w-[120px] min-w-0">
+                                          <SelectValue placeholder="Grant" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          {grants.map((g) => (
+                                            <SelectItem key={g.id} value={g.grant_id}>
+                                              {g.grant_id}
+                                            </SelectItem>
+                                          ))}
+                                        </SelectContent>
+                                      </Select>
+                                    </TableCell>
+                                    <TableCell>
+                                      <Select
+                                        value={row.fsp_id || undefined}
+                                        onValueChange={(v) =>
+                                          updateNewTsRow(fr.id, idx, { fsp_id: v })
+                                        }
+                                      >
+                                        <SelectTrigger className="h-7 text-xs w-[120px] min-w-0">
+                                          <SelectValue placeholder="FSP" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          {fsps.map((f) => (
+                                            <SelectItem key={f.id} value={f.id}>
+                                              {f.name}
+                                            </SelectItem>
+                                          ))}
+                                        </SelectContent>
+                                      </Select>
+                                    </TableCell>
+                                    <TableCell className="text-muted-foreground">Requested</TableCell>
+                                    <TableCell className="text-muted-foreground">—</TableCell>
+                                    <TableCell className="text-right">
+                                      <Input
+                                        type="number"
+                                        className="h-7 text-xs text-right w-[110px] ml-auto"
+                                        value={row.activity_amount}
+                                        onChange={(e) =>
+                                          updateNewTsRow(fr.id, idx, {
+                                            activity_amount: e.target.value,
+                                          })
+                                        }
+                                      />
+                                    </TableCell>
+                                    <TableCell className="text-right text-muted-foreground">
+                                      {money(fee)}
+                                    </TableCell>
+                                    <TableCell className="text-right text-muted-foreground">
+                                      {money(total)}
+                                    </TableCell>
+                                    <TableCell>
+                                      <div className="flex justify-end gap-1">
+                                        <Button
+                                          type="button"
+                                          variant="outline"
+                                          size="sm"
+                                          className="h-7 text-xs"
+                                          onClick={() =>
+                                            draftRows.length > 1
+                                              ? setNewTsRows((prev) => ({
+                                                  ...prev,
+                                                  [fr.id]: draftRows.filter((_, i) => i !== idx),
+                                                }))
+                                              : setNewTsRows((prev) => {
+                                                  const next = { ...prev }
+                                                  delete next[fr.id]
+                                                  return next
+                                                })
+                                          }
+                                        >
+                                          {draftRows.length > 1 ? 'Remove' : 'Cancel'}
+                                        </Button>
+                                        {idx === draftRows.length - 1 && (
+                                          <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                            className="h-7 text-xs"
+                                            onClick={() =>
+                                              setNewTsRows((prev) => ({
+                                                ...prev,
+                                                [fr.id]: [...(prev[fr.id] || []), emptyNewTsRow()],
+                                              }))
+                                            }
+                                          >
+                                            Add row
+                                          </Button>
+                                        )}
+                                      </div>
+                                    </TableCell>
+                                  </TableRow>
+                                )
+                              })}
                             </TableBody>
                           </Table>
+                          <div className="flex justify-end mt-2">
+                            {(newTsRows[fr.id] || []).length === 0 ? (
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="h-7 text-xs"
+                                onClick={() => openCreateTs(fr.id)}
+                              >
+                                <Plus className="h-3 w-3 mr-1" /> Add transfer segment
+                              </Button>
+                            ) : (
+                              validNewTsRows(newTsRows[fr.id] || []).length > 0 && (
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  className="h-7 text-xs"
+                                  disabled={savingNewTs}
+                                  onClick={() => saveNewTsRows(fr.id)}
+                                >
+                                  {savingNewTs ? 'Saving…' : 'Save transfer segments'}
+                                </Button>
+                              )
+                            )}
+                          </div>
                         </TableCell>
                       </TableRow>
                     )}
@@ -1015,6 +1275,7 @@ export default function FundRequestsManager() {
               <TableRow>
                 <TableHead>Name</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead className="text-right">Fee %</TableHead>
                 <TableHead>Contact</TableHead>
                 <TableHead className="text-right">Total</TableHead>
                 <TableHead className="text-right">Activity</TableHead>
@@ -1030,6 +1291,9 @@ export default function FundRequestsManager() {
                     <Badge variant="outline" className="text-[10px] px-1.5 py-0">
                       {f.status}
                     </Badge>
+                  </TableCell>
+                  <TableCell className="text-right whitespace-nowrap">
+                    {f.transfer_fee_percent != null ? `${f.transfer_fee_percent}%` : '—'}
                   </TableCell>
                   <TableCell className="text-xs">
                     {f.contact_person || f.contact_email || '—'}
@@ -1049,7 +1313,7 @@ export default function FundRequestsManager() {
               ))}
               {fsps.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-xs text-muted-foreground">
+                  <TableCell colSpan={8} className="text-xs text-muted-foreground">
                     No FSPs yet. Run the seed script after applying the migration.
                   </TableCell>
                 </TableRow>
@@ -1062,21 +1326,20 @@ export default function FundRequestsManager() {
       <Dialog open={tsOpen} onOpenChange={setTsOpen}>
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>{editingTs ? 'Edit transfer' : 'Add transfer'}</DialogTitle>
+            <DialogTitle>Edit transfer</DialogTitle>
           </DialogHeader>
-          <p className="text-xs text-muted-foreground">
-            Record money received against this fund request: choose the{' '}
-            <span className="font-medium text-foreground">grant</span> (source) and{' '}
-            <span className="font-medium text-foreground">FSP</span> (who moved/held it).
+          <p className="text-xs text-muted-foreground -mt-1 mb-1">
+            Update grant, FSP, purpose, amounts, or comment. Status and received date are edited in
+            the table.
           </p>
-          <div className="space-y-3">
-            <div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-3">
+            <div className="min-w-0 space-y-1">
               <Label>Grant *</Label>
               <Select
                 value={tsForm.grant_id || undefined}
                 onValueChange={(v) => setTsForm({ ...tsForm, grant_id: v })}
               >
-                <SelectTrigger>
+                <SelectTrigger className="w-full min-w-0">
                   <SelectValue placeholder="Select grant" />
                 </SelectTrigger>
                 <SelectContent>
@@ -1088,13 +1351,13 @@ export default function FundRequestsManager() {
                 </SelectContent>
               </Select>
             </div>
-            <div>
+            <div className="min-w-0 space-y-1">
               <Label>FSP *</Label>
               <Select
                 value={tsForm.fsp_id || undefined}
                 onValueChange={(v) => setTsForm({ ...tsForm, fsp_id: v })}
               >
-                <SelectTrigger>
+                <SelectTrigger className="w-full min-w-0">
                   <SelectValue placeholder="Select FSP" />
                 </SelectTrigger>
                 <SelectContent>
@@ -1106,13 +1369,13 @@ export default function FundRequestsManager() {
                 </SelectContent>
               </Select>
             </div>
-            <div>
+            <div className="min-w-0 space-y-1 sm:col-span-2">
               <Label>Purpose</Label>
               <Select
                 value={tsForm.purpose}
                 onValueChange={(v) => setTsForm({ ...tsForm, purpose: v })}
               >
-                <SelectTrigger>
+                <SelectTrigger className="w-full min-w-0">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -1124,25 +1387,7 @@ export default function FundRequestsManager() {
                 </SelectContent>
               </Select>
             </div>
-            <div>
-              <Label>Status</Label>
-              <Select
-                value={tsForm.status}
-                onValueChange={(v) => setTsForm({ ...tsForm, status: v })}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {TRANSFER_STATUSES.map((s) => (
-                    <SelectItem key={s} value={s}>
-                      {s}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
+            <div className="min-w-0 space-y-1">
               <Label>Activity amount</Label>
               <Input
                 type="number"
@@ -1150,32 +1395,33 @@ export default function FundRequestsManager() {
                 onChange={(e) => setTsForm({ ...tsForm, activity_amount: e.target.value })}
               />
             </div>
-            <div>
-              <Label>Transfer fee</Label>
+            <div className="min-w-0 space-y-1">
+              <Label>
+                Transfer fee
+                {selectedFsp?.transfer_fee_percent != null
+                  ? ` (${selectedFsp.transfer_fee_percent}%)`
+                  : ''}
+              </Label>
               <Input
-                type="number"
-                value={tsForm.transfer_fee_amount}
-                onChange={(e) => setTsForm({ ...tsForm, transfer_fee_amount: e.target.value })}
+                type="text"
+                readOnly
+                value={calculatedTransferFee == null ? '—' : money(calculatedTransferFee)}
+                className="bg-muted"
+                title="Calculated from the selected FSP’s transfer fee %"
               />
             </div>
-            <div>
-              <Label>Received date</Label>
-              <Input
-                type="date"
-                value={tsForm.transfer_received_date}
-                onChange={(e) => setTsForm({ ...tsForm, transfer_received_date: e.target.value })}
-              />
-            </div>
-            <div>
+            <div className="min-w-0 space-y-1 sm:col-span-2">
               <Label>Comment</Label>
               <Input
                 value={tsForm.comment}
                 onChange={(e) => setTsForm({ ...tsForm, comment: e.target.value })}
               />
             </div>
-            <Button onClick={saveTs} className="w-full">
-              Save
-            </Button>
+            <div className="sm:col-span-2">
+              <Button onClick={saveTs} className="w-full">
+                Save
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
@@ -1224,6 +1470,22 @@ export default function FundRequestsManager() {
                 value={fspForm.contact_email}
                 onChange={(e) => setFspForm({ ...fspForm, contact_email: e.target.value })}
               />
+            </div>
+            <div>
+              <Label>Transfer fee %</Label>
+              <Input
+                type="number"
+                step="0.01"
+                min="0"
+                value={fspForm.transfer_fee_percent}
+                onChange={(e) =>
+                  setFspForm({ ...fspForm, transfer_fee_percent: e.target.value })
+                }
+                placeholder="e.g. 2.5"
+              />
+              <p className="text-[11px] text-muted-foreground mt-1">
+                Applied to transfer activity amounts as fee = activity × %.
+              </p>
             </div>
             <Button onClick={saveFsp} className="w-full">
               Save

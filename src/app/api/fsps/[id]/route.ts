@@ -3,7 +3,7 @@ import { requireGrantEditor } from '@/lib/grantManagement/requireGrantEditor'
 import { FSP_STATUSES } from '@/lib/grantManagement/fundTransferHelpers'
 
 const FSP_SELECT =
-  'id, name, status, contact_person, contact_email, contract_filename, contract_url, contract_signed, airtable_record_id, created_at, updated_at'
+  'id, name, status, contact_person, contact_email, contract_filename, contract_url, contract_signed, transfer_fee_percent, airtable_record_id, created_at, updated_at'
 
 /** PUT /api/fsps/[id] */
 export async function PUT(
@@ -25,6 +25,12 @@ export async function PUT(
     if ('contract_filename' in body) patch.contract_filename = body.contract_filename?.trim() || null
     if ('contract_url' in body) patch.contract_url = body.contract_url?.trim() || null
     if ('contract_signed' in body) patch.contract_signed = body.contract_signed || null
+    if ('transfer_fee_percent' in body) {
+      patch.transfer_fee_percent =
+        body.transfer_fee_percent != null && body.transfer_fee_percent !== ''
+          ? Number(body.transfer_fee_percent)
+          : null
+    }
 
     const { data, error } = await auth.ctx.supabase
       .from('fsps')

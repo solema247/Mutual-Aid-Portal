@@ -4,7 +4,7 @@ import { requireGrantEditor } from '@/lib/grantManagement/requireGrantEditor'
 import { FSP_STATUSES, transferAmount } from '@/lib/grantManagement/fundTransferHelpers'
 
 const FSP_SELECT =
-  'id, name, status, contact_person, contact_email, contract_filename, contract_url, contract_signed, airtable_record_id, created_at, updated_at'
+  'id, name, status, contact_person, contact_email, contract_filename, contract_url, contract_signed, transfer_fee_percent, airtable_record_id, created_at, updated_at'
 
 async function attachRollups(
   supabase: ReturnType<typeof getSupabaseAdmin>,
@@ -81,6 +81,10 @@ export async function POST(request: NextRequest) {
         contract_filename: body.contract_filename?.trim() || null,
         contract_url: body.contract_url?.trim() || null,
         contract_signed: body.contract_signed || null,
+        transfer_fee_percent:
+          body.transfer_fee_percent != null && body.transfer_fee_percent !== ''
+            ? Number(body.transfer_fee_percent)
+            : null,
         updated_at: new Date().toISOString(),
       })
       .select(FSP_SELECT)

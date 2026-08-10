@@ -232,8 +232,8 @@ async function main() {
   }
   console.log(`Fund requests upserted: ${frOk}`)
 
-  // Refresh grant map by grant_id business key from AT Grants link is complex;
-  // Transfer Grant_ID is link to Grants — resolve via grants_grid_view.airtable_record_id when present.
+  // Prefer resolving via Grants AT rec → Grant_ID text, then portal grants_grid_view.
+  // Fallback: grants_grid_view.airtable_record_id when already stamped.
   const grantByAt = new Map<string, string>()
   for (const g of grants.data || []) {
     if (g.airtable_record_id && g.grant_id) grantByAt.set(g.airtable_record_id, g.grant_id)

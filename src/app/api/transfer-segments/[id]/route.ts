@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { getSupabaseAdmin } from '@/lib/supabaseAdmin'
 import { requireGrantEditor } from '@/lib/grantManagement/requireGrantEditor'
 import {
   TRANSFER_PURPOSES,
+  computeTransferFeeAmount,
   normalizeTransferStatus,
   transferAmount,
 } from '@/lib/grantManagement/fundTransferHelpers'
@@ -17,6 +19,24 @@ function mapRow(row: Record<string, unknown>) {
       row.transfer_fee_amount as number | null
     ),
   }
+}
+
+async function resolveTransferFeeAmount(
+  supabase: ReturnType<typeof getSupabaseAdmin>,
+  fspId: string | null | undefined,
+  activityAmount: number | null
+): Promise<number | null> {
+  if (activityAmount == null) return null
+  if (!fspId) return computeTransferFeeAmount(activityAmount, 0)
+  const { data } = await supabase
+    .from('fsps')
+    .select('transfer_fee_percent')
+    .eq('id', fspId)
+    .maybeSingle()
+  return computeTransferFeeAmount(
+    activityAmount,
+    (data?.transfer_fee_percent as number | null | undefined) ?? 0
+  )
 }
 
 /** PUT /api/transfer-segments/[id] */
@@ -51,18 +71,35 @@ export async function PUT(
           ? Number(body.activity_amount)
           : null
     }
-    if ('transfer_fee_amount' in body) {
-      patch.transfer_fee_amount =
-        body.transfer_fee_amount != null && body.transfer_fee_amount !== ''
-          ? Number(body.transfer_fee_amount)
-          : null
-    }
     if ('transfer_received_date' in body) {
       patch.transfer_received_date = body.transfer_received_date || null
     }
     if ('partner_name' in body) patch.partner_name = body.partner_name?.trim() || null
     if ('comment' in body) patch.comment = body.comment?.trim() || null
     if ('fund_request_id' in body) patch.fund_request_id = body.fund_request_id || null
+
+    // Recalculate fee from FSP % whenever activity or FSP changes.
+    if ('activity_amount' in body || 'fsp_id' in body) {
+      const { data: current, error: currentError } = await auth.ctx.supabase
+        .from('transfer_segments')
+        .select('fsp_id, activity_amount')
+        .eq('id', params.id)
+        .single()
+      if (currentError) throw currentError
+      const fspId =
+        'fsp_id' in body ? ((patch.fsp_id as string | null) ?? null) : (current.fsp_id as string | null)
+      const activityAmount =
+        'activity_amount' in body
+          ? ((patch.activity_amount as number | null) ?? null)
+          : current.activity_amount != null
+            ? Number(current.activity_amount)
+            : null
+      patch.transfer_fee_amount = await resolveTransferFeeAmount(
+        auth.ctx.supabase,
+        fspId,
+        activityAmount
+      )
+    }
 
     const { data, error } = await auth.ctx.supabase
       .from('transfer_segments')

@@ -22,6 +22,18 @@ export function transferAmount(
   return (a ?? 0) + (f ?? 0)
 }
 
+/** Fee = activity × (FSP transfer_fee_percent / 100). Rounded to cents. */
+export function computeTransferFeeAmount(
+  activityAmount: number | null | undefined,
+  feePercent: number | null | undefined
+): number | null {
+  if (activityAmount == null || Number.isNaN(Number(activityAmount))) return null
+  const activity = Number(activityAmount)
+  const pct =
+    feePercent != null && !Number.isNaN(Number(feePercent)) ? Number(feePercent) : 0
+  return Math.round(activity * (pct / 100) * 100) / 100
+}
+
 /**
  * Existing AT pattern: `{YYYY}-{Partner}-{NNN}` e.g. 2025-P2H-030, 2025-Avaaz-07.
  * Next serial = max for that partner+year + 1, zero-padded to at least 3 digits.
