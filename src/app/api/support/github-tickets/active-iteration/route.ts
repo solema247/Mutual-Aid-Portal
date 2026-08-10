@@ -34,11 +34,13 @@ export async function GET (request: Request) {
 
     const { searchParams } = new URL(request.url)
     const locale = searchParams.get('locale') ?? 'en'
+    const iterationId = searchParams.get('iterationId')
     const project = resolveGithubProjectRef()
-    const reports = await fetchSprintReports(token, project, locale)
+    const reports = await fetchSprintReports(token, project, locale, iterationId)
 
     return NextResponse.json({
       previous: reports.previous,
+      previousOptions: reports.previousOptions,
       active: reports.active,
       planned: reports.planned,
       unscheduled: reports.unscheduled,
