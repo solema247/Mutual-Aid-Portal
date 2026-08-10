@@ -8,6 +8,7 @@ import {
   computePortalActualsFromProjectExpenses,
 } from '@/lib/f4ExpenseDisplay'
 import { normalizeStateName } from '@/lib/normalizeStateName'
+import { resolveProjectCompletionDate } from '@/lib/projectStatus'
 
 /** PostgREST `.in()` with hundreds of UUIDs can exceed URL limits and return empty data. */
 const SUPABASE_IN_BATCH = 80
@@ -272,7 +273,7 @@ export async function GET(request: Request) {
     // Build project filter (include more statuses to catch F5 projects and completed projects)
     let projectQuery = supabase
       .from('err_projects')
-      .select('id, state, grant_call_id, grant_grid_id, grant_id, grant_segment, emergency_rooms (id, name, name_ar, err_code), planned_activities, expenses, source, status, funding_status, mou_id, f4_status, f5_status, date, date_transfer, completed_at, estimated_beneficiaries, implemented_sector, activity_shift_note')
+      .select('id, state, grant_call_id, grant_grid_id, grant_id, grant_segment, emergency_rooms (id, name, name_ar, err_code), planned_activities, expenses, source, status, funding_status, mou_id, f4_status, f5_status, date, date_transfer, completed_at, date_report_completed, estimated_beneficiaries, implemented_sector, activity_shift_note')
       .in('status', ['approved', 'active', 'pending', 'completed'])
       .in('funding_status', ['committed', 'allocated', 'unassigned'])
 
@@ -520,7 +521,7 @@ export async function GET(request: Request) {
         portal_f5_count: f5Agg.count, // For portal projects, all F5s are portal F5s
         last_f5_date: f5Agg.last,
         status: p.status || null,
-        completed_at: p.completed_at || null,
+        completed_at: resolveProjectCompletionDate(p.completed_at, p.date_report_completed),
         is_historical: false,
         f4_status,
         f5_status,

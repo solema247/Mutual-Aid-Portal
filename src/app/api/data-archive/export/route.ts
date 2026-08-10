@@ -4,6 +4,7 @@ import archiver from 'archiver'
 import { requirePermission } from '@/lib/requirePermission'
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin'
 import { collectArchiveFiles, safeName, type ArchiveProjectRow } from '@/lib/dataArchive'
+import { resolveProjectCompletionDate } from '@/lib/projectStatus'
 
 export const runtime = 'nodejs'
 export const maxDuration = 300
@@ -38,7 +39,7 @@ export async function POST(req: Request) {
   }
   if (projectIds.length > MAX_PROJECTS_PER_EXPORT) {
     return NextResponse.json(
-      { error: `Too many projects in one export (max ${MAX_PROJECTS_PER_EXPORT}). Narrow the period or grant filter.` },
+      { error: `Too many projects in one export (max ${MAX_PROJECTS_PER_EXPORT}). Narrow the project completion date or grant name filter.` },
       { status: 400 }
     )
   }
@@ -56,6 +57,7 @@ export async function POST(req: Request) {
         state,
         status,
         completed_at,
+        date_report_completed,
         file_key,
         approval_file_key,
         mou_id,
@@ -90,14 +92,14 @@ export async function POST(req: Request) {
   // Fill the archive asynchronously while the response streams.
   ;(async () => {
     for (const p of projects) {
-      const donorLabel = p.donors?.short_name || p.donors?.name || 'Unknown-Donor'
-      const grantLabel = p.grant_calls?.shortname || p.grant_calls?.name || null
-      const grantFolder = safeName(grantLabel ? `${donorLabel} - ${grantLabel}` : donorLabel)
+      // Prefer full grant call name; fall back to full donor name (no short abbreviations).
+      const grantFolder = safeName(p.grant_calls?.name || p.donors?.name || 'Unknown-Grant')
       const serialFolder = safeName(p.grant_id || p.grant_serial_id || p.id)
-      const folder = `${monthFolder(p.completed_at)}/${grantFolder}/${serialFolder}`
+      const projectCompletionDate = resolveProjectCompletionDate(p.completed_at, p.date_report_completed)
+      const folder = `${monthFolder(projectCompletionDate)}/${grantFolder}/${serialFolder}`
 
       const manifestRows: string[] = [
-        ['form', 'file_name', 'original_storage_path', 'status', 'grant_id', 'err_code', 'err_name', 'state', 'completed_at', 'exported_at']
+        ['form', 'file_name', 'original_storage_path', 'status', 'grant_id', 'err_code', 'err_name', 'state', 'project_completion_date', 'exported_at']
           .join(',')
       ]
 
@@ -128,7 +130,7 @@ export async function POST(req: Request) {
             p.emergency_rooms?.err_code || '',
             p.emergency_rooms?.name || '',
             p.state || '',
-            p.completed_at || '',
+            projectCompletionDate || '',
             exportedAt
           ].map(csvCell).join(',')
         )
