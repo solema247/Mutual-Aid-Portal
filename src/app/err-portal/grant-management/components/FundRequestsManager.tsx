@@ -99,6 +99,9 @@ const money = (n: number | null | undefined) =>
     ? '—'
     : new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n)
 
+/** Allow requests to exceed decision amount by this factor (e.g. transfer fees). */
+const FUNDING_CAPACITY_MARGIN = 1.05
+
 const emptyFrForm = {
   request_id: '',
   date_submitted: '',
@@ -127,6 +130,15 @@ const emptyFspForm = {
   contact_email: '',
 }
 
+const DECISION_RECENT_DAYS = 90
+
+function daysAgoIso(days: number): string {
+  const d = new Date()
+  d.setHours(0, 0, 0, 0)
+  d.setDate(d.getDate() - days)
+  return d.toISOString().slice(0, 10)
+}
+
 export default function FundRequestsManager() {
   const [requests, setRequests] = useState<FundRequest[]>([])
   const [fsps, setFsps] = useState<Fsp[]>([])
@@ -140,6 +152,7 @@ export default function FundRequestsManager() {
   const [frOpen, setFrOpen] = useState(false)
   const [editingFr, setEditingFr] = useState<FundRequest | null>(null)
   const [frForm, setFrForm] = useState(emptyFrForm)
+  const [showAllDecisions, setShowAllDecisions] = useState(false)
 
   const [tsOpen, setTsOpen] = useState(false)
   const [tsParentId, setTsParentId] = useState<string | null>(null)
@@ -203,6 +216,7 @@ export default function FundRequestsManager() {
 
   const openCreateFr = () => {
     setEditingFr(null)
+    setShowAllDecisions(false)
     const today = new Date().toISOString().slice(0, 10)
     setFrForm({
       ...emptyFrForm,
@@ -220,6 +234,7 @@ export default function FundRequestsManager() {
 
   const openEditFr = (fr: FundRequest) => {
     setEditingFr(fr)
+    setShowAllDecisions(false)
     setFrForm({
       request_id: fr.request_id,
       date_submitted: fr.date_submitted || '',
@@ -418,23 +433,150 @@ export default function FundRequestsManager() {
     }))
   }
 
-  /** Decisions already linked to any fund request (except the one being edited). */
-  const linkedElsewhere = useMemo(() => {
-    const set = new Set<string>()
-    for (const fr of requests) {
-      if (editingFr && fr.id === editingFr.id) continue
-      for (const id of fr.decision_ids || []) set.add(id)
-    }
-    return set
-  }, [requests, editingFr])
-
   const selectableDecisions = useMemo(() => {
-    return decisions.filter(
-      (d) =>
-        !linkedElsewhere.has(d.decision_id_proposed) ||
-        frForm.decision_ids.includes(d.decision_id_proposed)
+    if (showAllDecisions) return decisions
+    const cutoff = daysAgoIso(DECISION_RECENT_DAYS)
+    return decisions.filter((d) => {
+      if (frForm.decision_ids.includes(d.decision_id_proposed)) return true
+      if (!d.decision_date) return false
+      return d.decision_date >= cutoff
+    })
+  }, [decisions, showAllDecisions, frForm.decision_ids])
+
+  /**
+   * Other fund requests linked to each decision (excludes the FR being edited).
+   * Within an FR: split requested amount proportionally by decision amounts.
+   * Across FRs: fill decision capacity in date/id order; capacity = decision × 105%
+   * (5% margin for transfer fees). Anything above capacity is over-linked.
+   */
+  const fundingByDecision = useMemo(() => {
+    const amountByDecision = new Map(
+      decisions.map((d) => [d.decision_id_proposed, Number(d.decision_amount) || 0])
     )
-  }, [decisions, linkedElsewhere, frForm.decision_ids])
+    type FundingLink = {
+      request_id: string
+      requested_amount: number | null
+      transfer_amount_rollup: number
+      decision_count: number
+      attributed: number
+      accepted: number
+      overLinked: number
+      estimated: boolean
+    }
+    const map = new Map<string, FundingLink[]>()
+    const remainingCapacity = new Map<string, number>()
+    for (const [id, amount] of amountByDecision) {
+      if (amount > 0) remainingCapacity.set(id, amount * FUNDING_CAPACITY_MARGIN)
+    }
+
+    const ordered = [...requests]
+      .filter((fr) => !(editingFr && fr.id === editingFr.id))
+      .sort((a, b) => {
+        const da = a.date_submitted || ''
+        const db = b.date_submitted || ''
+        if (da !== db) return da.localeCompare(db)
+        return a.request_id.localeCompare(b.request_id)
+      })
+
+    for (const fr of ordered) {
+      const decisionIds = fr.decision_ids || []
+      if (!decisionIds.length) continue
+      const pool = Number(fr.requested_amount)
+      const attributable = Number.isFinite(pool) ? pool : 0
+      const decisionCount = decisionIds.length
+      const weights = decisionIds.map((id) => amountByDecision.get(id) || 0)
+      const weightSum = weights.reduce((s, w) => s + w, 0)
+      const useProportional = weightSum > 0
+      const estimated = decisionCount > 1
+
+      decisionIds.forEach((decisionId, i) => {
+        const attributed = useProportional
+          ? attributable * (weights[i] / weightSum)
+          : decisionCount > 0
+            ? attributable / decisionCount
+            : 0
+        const room = remainingCapacity.get(decisionId)
+        // No known decision amount → accept full share (nothing to cap against).
+        const accepted =
+          room == null ? attributed : Math.min(attributed, Math.max(0, room))
+        const overLinked = Math.max(0, attributed - accepted)
+        if (room != null) remainingCapacity.set(decisionId, room - accepted)
+
+        const list = map.get(decisionId) || []
+        list.push({
+          request_id: fr.request_id,
+          requested_amount: fr.requested_amount,
+          transfer_amount_rollup: fr.transfer_amount_rollup,
+          decision_count: decisionCount,
+          attributed,
+          accepted,
+          overLinked,
+          estimated,
+        })
+        map.set(decisionId, list)
+      })
+    }
+    return map
+  }, [requests, editingFr, decisions])
+
+  const fundingLabel = (decisionId: string, decisionAmount: number | null) => {
+    const links = fundingByDecision.get(decisionId)
+    const denom = decisionAmount != null && decisionAmount > 0 ? decisionAmount : 0
+    const capacity = denom > 0 ? denom * FUNDING_CAPACITY_MARGIN : 0
+    if (!links?.length) {
+      return {
+        funded: 0,
+        overLinked: 0,
+        decisionAmount: denom,
+        capacity,
+        hasLinks: false,
+        hasEstimate: false,
+        text: '—',
+        title: undefined as string | undefined,
+      }
+    }
+    const funded = links.reduce((s, l) => s + l.accepted, 0)
+    const overLinked = links.reduce((s, l) => s + l.overLinked, 0)
+    const hasEstimate = links.some((l) => l.estimated)
+    const detail = links
+      .map((l) => {
+        const splitNote =
+          l.decision_count > 1
+            ? ` ≈ ${money(l.attributed)} of ${money(l.requested_amount)} (proportional)`
+            : ` ${money(l.attributed)}`
+        const capNote =
+          l.overLinked > 0
+            ? ` → accepted ${money(l.accepted)}, over-linked ${money(l.overLinked)}`
+            : l.accepted < l.attributed
+              ? ` → accepted ${money(l.accepted)}`
+              : ''
+        return `${l.request_id}:${splitNote}${capNote}`
+      })
+      .join('; ')
+    const pct = denom > 0 ? Math.round((funded / denom) * 100) : null
+    const prefix = hasEstimate ? '≈' : ''
+    const text =
+      denom > 0
+        ? `${prefix}${money(funded)} / ${money(denom)}${pct != null ? ` (${pct}%)` : ''}`
+        : `${prefix}${money(funded)}`
+    const title = [
+      'Fills decision capacity in request-date order (capacity = decision × 105% for fees).',
+      hasEstimate ? 'Multi-decision requests split in proportion to decision amounts.' : null,
+      detail,
+    ]
+      .filter(Boolean)
+      .join(' ')
+    return {
+      funded,
+      overLinked,
+      decisionAmount: denom,
+      capacity,
+      hasLinks: true,
+      hasEstimate,
+      text,
+      title,
+    }
+  }
 
   const totalPages = Math.max(1, Math.ceil(requests.length / itemsPerPage))
   const startIndex = (currentPage - 1) * itemsPerPage
@@ -469,7 +611,7 @@ export default function FundRequestsManager() {
                 <Plus className="h-3 w-3 mr-1" /> New request
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>{editingFr ? 'Edit fund request' : 'Create fund request'}</DialogTitle>
               </DialogHeader>
@@ -499,7 +641,7 @@ export default function FundRequestsManager() {
                   </Select>
                 </div>
                 <div>
-                  <Label>Date submitted *</Label>
+                  <Label>Date of Request *</Label>
                   <Input
                     type="date"
                     value={frForm.date_submitted}
@@ -516,7 +658,7 @@ export default function FundRequestsManager() {
                   />
                   {!editingFr && (
                     <p className="text-[11px] text-muted-foreground mt-1">
-                      Pattern: YYYY-Partner-NNN (matches existing Airtable IDs)
+                      Pattern: YYYY-Partner-NNN
                     </p>
                   )}
                 </div>
@@ -527,32 +669,39 @@ export default function FundRequestsManager() {
                     value={frForm.requested_amount}
                     onChange={(e) => setFrForm({ ...frForm, requested_amount: e.target.value })}
                   />
+                  <p className="text-[11px] text-muted-foreground mt-1">
+                    Request Amount = Activity amount + transfer fees
+                  </p>
                 </div>
                 <div>
-                  <Label>File name</Label>
-                  <Input
-                    value={frForm.file_name}
-                    onChange={(e) => setFrForm({ ...frForm, file_name: e.target.value })}
-                  />
-                </div>
-                <div>
-                  <Label>File link</Label>
-                  <Input
-                    value={frForm.file_link}
-                    onChange={(e) => setFrForm({ ...frForm, file_link: e.target.value })}
-                  />
-                </div>
-                <div>
-                  <Label>Linked decisions</Label>
+                  <div className="flex items-center justify-between gap-2 mb-1">
+                    <Label>Linked decisions</Label>
+                    <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={showAllDecisions}
+                        onChange={(e) => setShowAllDecisions(e.target.checked)}
+                      />
+                      Show all
+                    </label>
+                  </div>
                   <p className="text-[11px] text-muted-foreground mb-1">
-                    Only decisions not already linked to another fund request are shown.
+                    {showAllDecisions
+                      ? 'Showing all decisions. A decision can be linked to more than one fund request.'
+                      : `Showing decisions from the last ${DECISION_RECENT_DAYS} days (plus any already selected).`}{' '}
+                    <span className="block mt-0.5">
+                      Funding* shows how much other fund requests already cover this decision
+                      (excluding the one you&apos;re editing). Amounts are applied oldest-first, with
+                      5% extra room for fees; multi-decision requests are split by decision size.
+                      * Reference only.
+                    </span>
                   </p>
                   <div className="max-h-56 overflow-y-auto border rounded">
                     {selectableDecisions.length === 0 ? (
                       <div className="p-2 text-xs text-muted-foreground">
                         {decisions.length === 0
                           ? 'No decisions loaded'
-                          : 'No unlinked decisions available'}
+                          : `No decisions in the last ${DECISION_RECENT_DAYS} days — turn on “Show all” to browse older ones.`}
                       </div>
                     ) : (
                       <Table className="text-xs [&_th]:py-1 [&_th]:px-2 [&_td]:py-0.5 [&_td]:px-2">
@@ -564,11 +713,24 @@ export default function FundRequestsManager() {
                             <TableHead>Partner</TableHead>
                             <TableHead className="text-right">Amount</TableHead>
                             <TableHead>Restriction</TableHead>
+                            <TableHead
+                              className="min-w-[160px]"
+                              title="Reference only — estimated coverage from other fund requests"
+                            >
+                              Funding*
+                            </TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
                           {selectableDecisions.map((d) => {
                             const checked = frForm.decision_ids.includes(d.decision_id_proposed)
+                            const funding = fundingLabel(d.decision_id_proposed, d.decision_amount)
+                            const barMax =
+                              funding.capacity > 0
+                                ? funding.capacity
+                                : Math.max(funding.decisionAmount, funding.funded, 0)
+                            const fillPct =
+                              barMax > 0 ? Math.min(100, (funding.funded / barMax) * 100) : 0
                             return (
                               <TableRow
                                 key={d.decision_id_proposed}
@@ -593,6 +755,23 @@ export default function FundRequestsManager() {
                                 </TableCell>
                                 <TableCell className="max-w-[100px] truncate" title={d.restriction || undefined}>
                                   {d.restriction || '—'}
+                                </TableCell>
+                                <TableCell title={funding.title} className="min-w-[160px]">
+                                  {!funding.hasLinks ? (
+                                    <span className="text-muted-foreground">—</span>
+                                  ) : (
+                                    <div className="space-y-0.5">
+                                      <div className="h-2 w-full rounded-sm bg-muted overflow-hidden">
+                                        <div
+                                          className="h-full rounded-sm bg-primary"
+                                          style={{ width: `${fillPct}%` }}
+                                        />
+                                      </div>
+                                      <div className="text-[10px] leading-tight truncate text-muted-foreground">
+                                        {funding.text}
+                                      </div>
+                                    </div>
+                                  )}
                                 </TableCell>
                               </TableRow>
                             )
