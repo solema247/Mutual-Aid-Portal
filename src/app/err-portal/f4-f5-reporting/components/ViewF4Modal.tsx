@@ -5,11 +5,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
-import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '@/components/ui/table'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { supabase } from '@/lib/supabaseClient'
 import { fetchF4SectorsForMatch, normalizeF4ExpenseActivitiesToSectors, type F4SectorRow } from '@/lib/f4ExpenseSectors'
-import { F4ExpenseSectorSelect } from './F4ExpenseSectorSelect'
+import { F4ExpensesEditableTable } from './F4ExpensesEditableTable'
 import { useTranslation } from 'react-i18next'
 import { FileText } from 'lucide-react'
 
@@ -370,8 +368,8 @@ export default function ViewF4Modal({ summaryId, open, onOpenChange, onSaved }: 
             </div>
 
             {/* Summary */}
-            <div className="grid grid-cols-2 gap-4">
-              <div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 min-w-0">
+              <div className="min-w-0">
                 <Label>Report Date</Label>
                 {isEditing ? (
                   <Input type="date" value={summaryDraft?.report_date ? (typeof summaryDraft.report_date === 'string' ? summaryDraft.report_date.split('T')[0] : new Date(summaryDraft.report_date).toISOString().split('T')[0]) : ''} onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), report_date: e.target.value }))} />
@@ -379,7 +377,7 @@ export default function ViewF4Modal({ summaryId, open, onOpenChange, onSaved }: 
                   <div className="h-10 flex items-center px-3 rounded border bg-muted/50">{reportDateDisplay}</div>
                 )}
               </div>
-              <div className={!isEditing ? 'col-span-2' : ''}>
+              <div className={`min-w-0${!isEditing ? ' sm:col-span-2' : ''}`}>
                 <Label>Beneficiaries</Label>
                 {isEditing ? (
                   <Input value={summaryDraft?.beneficiaries || ''} onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), beneficiaries: e.target.value }))} />
@@ -391,8 +389,8 @@ export default function ViewF4Modal({ summaryId, open, onOpenChange, onSaved }: 
 
             {/* FX Rate */}
             {isEditing && (
-              <div className="grid grid-cols-2 gap-4">
-                <div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 min-w-0">
+                <div className="min-w-0">
                   <Label>{t('f4.preview.labels.fx_rate')}</Label>
                   <Input type="number" value={fxRate ?? ''} onChange={(e)=>{
                     const v = parseFloat(e.target.value)
@@ -416,24 +414,24 @@ export default function ViewF4Modal({ summaryId, open, onOpenChange, onSaved }: 
             )}
 
             {/* Financials */}
-            <div className="grid grid-cols-2 gap-4">
-              <div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 min-w-0">
+              <div className="min-w-0">
                 <Label>{t('f4.preview.financials.total_grant')} (USD)</Label>
                 <div className="h-10 flex items-center px-3 rounded border bg-muted/50">{(projectMeta?.total_grant_from_project ?? summary?.total_grant ?? 0).toLocaleString()}</div>
               </div>
-              <div>
+              <div className="min-w-0">
                 <Label>{t('f4.preview.financials.total_expenses')} (USD)</Label>
                 <div className="h-10 flex items-center px-3 rounded border bg-muted/50">{expensesDraft.reduce((s, ex) => s + (Number(ex.expense_amount) || 0), 0).toLocaleString()}</div>
               </div>
-              <div>
+              <div className="min-w-0">
                 <Label>{t('f4.preview.financials.total_expenses')} (SDG)</Label>
                 <div className="h-10 flex items-center px-3 rounded border bg-muted/50">{expensesDraft.reduce((s, ex) => s + (Number(ex.expense_amount_sdg) || 0), 0).toLocaleString()}</div>
               </div>
-              <div>
+              <div className="min-w-0">
                 <Label>{t('f4.preview.financials.remainder')} (USD)</Label>
                 <Input type="number" value={(projectMeta?.total_grant_from_project ?? summary?.total_grant ?? 0) - expensesDraft.reduce((s, ex) => s + (Number(ex.expense_amount) || 0), 0)} readOnly />
               </div>
-              <div>
+              <div className="min-w-0">
                 <Label>{t('f4.preview.financials.total_other_sources')}</Label>
                 {isEditing ? (
                   <Input type="number" value={summaryDraft?.total_other_sources ?? ''} onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), total_other_sources: parseFloat(e.target.value)||0 }))} />
@@ -443,8 +441,8 @@ export default function ViewF4Modal({ summaryId, open, onOpenChange, onSaved }: 
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 min-w-0">
+              <div className="min-w-0">
                 <Label>Excess Expenses (How covered?)</Label>
                 {isEditing ? (
                   <Input value={summaryDraft?.excess_expenses || ''} onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), excess_expenses: e.target.value }))} />
@@ -452,7 +450,7 @@ export default function ViewF4Modal({ summaryId, open, onOpenChange, onSaved }: 
                   <div className="min-h-[40px] max-h-[10rem] overflow-y-auto px-3 py-2 rounded border bg-muted/50 text-sm whitespace-pre-wrap break-words">{summary?.excess_expenses || '-'}</div>
                 )}
               </div>
-              <div>
+              <div className="min-w-0">
                 <Label>Surplus Use</Label>
                 {isEditing ? (
                   <Input value={summaryDraft?.surplus_use || ''} onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), surplus_use: e.target.value }))} />
@@ -460,7 +458,7 @@ export default function ViewF4Modal({ summaryId, open, onOpenChange, onSaved }: 
                   <div className="min-h-[40px] max-h-[10rem] overflow-y-auto px-3 py-2 rounded border bg-muted/50 text-sm whitespace-pre-wrap break-words">{summary?.surplus_use || '-'}</div>
                 )}
               </div>
-              <div>
+              <div className="min-w-0">
                 <Label>Lessons Learned</Label>
                 {isEditing ? (
                   <Input value={summaryDraft?.lessons || ''} onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), lessons: e.target.value }))} />
@@ -468,7 +466,7 @@ export default function ViewF4Modal({ summaryId, open, onOpenChange, onSaved }: 
                   <div className="min-h-[40px] max-h-[10rem] overflow-y-auto px-3 py-2 rounded border bg-muted/50 text-sm whitespace-pre-wrap break-words">{lessonsDisplay}</div>
                 )}
               </div>
-              <div>
+              <div className="min-w-0">
                 <Label>Training Needs</Label>
                 {isEditing ? (
                   <Input value={summaryDraft?.training || ''} onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), training: e.target.value }))} />
@@ -479,7 +477,7 @@ export default function ViewF4Modal({ summaryId, open, onOpenChange, onSaved }: 
             </div>
 
             {/* Expenses */}
-            <div>
+            <div className="min-w-0 max-w-full">
               <div className="flex items-center justify-between mb-2">
                 <Label>Expenses</Label>
                 {isEditing && (
@@ -499,148 +497,14 @@ export default function ViewF4Modal({ summaryId, open, onOpenChange, onSaved }: 
                   >Add Expense</Button>
                 )}
               </div>
-              <div className="border rounded overflow-hidden">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-[14%] py-1 px-2 text-xs">Activity</TableHead>
-                      <TableHead className="w-[20%] py-1 px-2 text-xs">Description</TableHead>
-                      <TableHead className="w-[10%] py-1 px-2 text-right text-xs">Amount (SDG)</TableHead>
-                      <TableHead className="w-[10%] py-1 px-2 text-right text-xs">Amount (USD)</TableHead>
-                      <TableHead className="w-[12%] py-1 px-2 text-xs">Payment Date</TableHead>
-                      <TableHead className="w-[10%] py-1 px-2 text-xs">Method</TableHead>
-                      <TableHead className="w-[10%] py-1 px-2 text-xs">Receipt</TableHead>
-                      <TableHead className="w-[14%] py-1 px-2 text-xs">Seller</TableHead>
-                      {isEditing && <TableHead className="w-[8%] py-1 px-2 text-xs text-right">Actions</TableHead>}
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {expensesDraft.length === 0 ? (
-                      <TableRow><TableCell colSpan={isEditing ? 9 : 8} className="text-muted-foreground text-center">No expenses</TableCell></TableRow>
-                    ) : expensesDraft.map((ex, idx) => (
-                      <TableRow key={ex.expense_id || idx}>
-                        <TableCell className="py-1 px-2">
-                          {isEditing ? (
-                            <F4ExpenseSectorSelect
-                              sectors={f4Sectors}
-                              valueEn={ex.expense_activity || ''}
-                              onChangeEn={(sectorNameEn) => {
-                                const arr = [...expensesDraft]
-                                arr[idx] = { ...arr[idx], expense_activity: sectorNameEn }
-                                setExpensesDraft(arr)
-                              }}
-                              placeholder={t('f4.preview.expenses.sector_placeholder') as string}
-                              className="h-8 w-full"
-                            />
-                          ) : (
-                            ex.expense_activity || '-'
-                          )}
-                        </TableCell>
-                        <TableCell className="py-1 px-2">
-                          {isEditing ? (
-                            <Input className="h-8" value={ex.expense_description || ''} onChange={(e)=>{
-                              const arr=[...expensesDraft]; arr[idx]={...arr[idx], expense_description: e.target.value}; setExpensesDraft(arr)
-                            }} />
-                          ) : (
-                            ex.expense_description || '-'
-                          )}
-                        </TableCell>
-                        <TableCell className="py-1 px-2 text-right">
-                          {isEditing ? (
-                            <Input className="h-8" type="number" placeholder="SDG" value={ex.expense_amount_sdg ?? ''} onChange={(e)=>{
-                              const enteredValue = parseFloat(e.target.value) || 0
-                              const arr = [...expensesDraft]
-                              arr[idx] = {
-                                ...arr[idx],
-                                expense_amount_sdg: enteredValue || null,
-                                // Auto-calculate USD if exchange rate is set
-                                expense_amount: (fxRate && fxRate > 0 && enteredValue > 0) ? +(enteredValue / fxRate).toFixed(2) : arr[idx].expense_amount
-                              }
-                              setExpensesDraft(arr)
-                            }} />
-                          ) : (
-                            Number(ex.expense_amount_sdg || 0).toLocaleString()
-                          )}
-                        </TableCell>
-                        <TableCell className="py-1 px-2 text-right">
-                          {isEditing ? (
-                            <Input className="h-8" type="number" placeholder="USD" value={ex.expense_amount ?? ''} onChange={(e)=>{
-                              const enteredValue = parseFloat(e.target.value) || 0
-                              const arr = [...expensesDraft]
-                              arr[idx] = {
-                                ...arr[idx],
-                                expense_amount: enteredValue || null,
-                                // Auto-calculate SDG if exchange rate is set
-                                expense_amount_sdg: (fxRate && fxRate > 0 && enteredValue > 0) ? +(enteredValue * fxRate).toFixed(2) : arr[idx].expense_amount_sdg
-                              }
-                              setExpensesDraft(arr)
-                            }} />
-                          ) : (
-                            Number(ex.expense_amount || 0).toLocaleString()
-                          )}
-                        </TableCell>
-                        <TableCell className="py-1 px-2">
-                          {isEditing ? (
-                            <Input className="h-8" type="date" value={ex.payment_date || ''} onChange={(e)=>{
-                              const arr=[...expensesDraft]; arr[idx]={...arr[idx], payment_date: e.target.value}; setExpensesDraft(arr)
-                            }} />
-                          ) : (
-                            ex.payment_date ? new Date(ex.payment_date).toLocaleDateString() : '-'
-                          )}
-                        </TableCell>
-                        <TableCell className="py-1 px-2">
-                          {isEditing ? (
-                            <Select value={ex.payment_method || 'Bank Transfer'} onValueChange={(v)=>{
-                              const arr=[...expensesDraft]; arr[idx]={...arr[idx], payment_method: v}; setExpensesDraft(arr)
-                            }}>
-                              <SelectTrigger className="h-8 w-full">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="Bank Transfer">Bank Transfer</SelectItem>
-                                <SelectItem value="Cash">Cash</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          ) : (
-                            ex.payment_method || '-'
-                          )}
-                        </TableCell>
-                        <TableCell className="py-1 px-2">
-                          {isEditing ? (
-                            <Input className="h-8" value={ex.receipt_no || ''} onChange={(e)=>{
-                              const arr=[...expensesDraft]; arr[idx]={...arr[idx], receipt_no: e.target.value}; setExpensesDraft(arr)
-                            }} />
-                          ) : (
-                            ex.receipt_no || '-'
-                          )}
-                        </TableCell>
-                        <TableCell className="py-1 px-2">
-                          {isEditing ? (
-                            <Input className="h-8" value={ex.seller || ''} onChange={(e)=>{
-                              const arr=[...expensesDraft]; arr[idx]={...arr[idx], seller: e.target.value}; setExpensesDraft(arr)
-                            }} />
-                          ) : (
-                            ex.seller || '-'
-                          )}
-                        </TableCell>
-                        {isEditing && (
-                          <TableCell className="py-1 px-2 text-right">
-                            <Button
-                              variant="destructive"
-                              size="sm"
-                              onClick={() => {
-                                const arr = [...expensesDraft]
-                                arr.splice(idx, 1)
-                                setExpensesDraft(arr)
-                              }}
-                            >Delete</Button>
-                          </TableCell>
-                        )}
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
+              <F4ExpensesEditableTable
+                expenses={expensesDraft}
+                onChange={setExpensesDraft}
+                sectors={f4Sectors}
+                fxRate={fxRate}
+                editable={isEditing}
+                emptyLabel="No expenses"
+              />
             </div>
 
             {/* Attachments */}
