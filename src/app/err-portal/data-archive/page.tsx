@@ -38,13 +38,52 @@ interface ArchiveRow {
   }
 }
 
-type PeriodMode = 'month' | 'range' | 'all'
+type DateFilterMode = 'month' | 'range' | 'all'
 
 function previousMonth(): string {
   const d = new Date()
   d.setUTCDate(1)
   d.setUTCMonth(d.getUTCMonth() - 1)
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`
+}
+
+/** Inclusive calendar [start, end) in UTC ISO, matching the API. */
+function resolveCompletionRange(
+  mode: DateFilterMode,
+  month: string,
+  fromDate: string,
+  toDate: string
+): { start: string; end: string } | null {
+  if (mode === 'all') return null
+  if (mode === 'month' && /^\d{4}-\d{2}$/.test(month)) {
+    const [y, m] = month.split('-').map(Number)
+    const start = new Date(Date.UTC(y, m - 1, 1))
+    const end = new Date(Date.UTC(y, m, 1))
+    return { start: start.toISOString(), end: end.toISOString() }
+  }
+  if (mode === 'range' && fromDate && toDate) {
+    const start = new Date(`${fromDate}T00:00:00.000Z`)
+    const endExclusive = new Date(`${toDate}T00:00:00.000Z`)
+    endExclusive.setUTCDate(endExclusive.getUTCDate() + 1)
+    if (!isNaN(start.getTime()) && !isNaN(endExclusive.getTime())) {
+      return { start: start.toISOString(), end: endExclusive.toISOString() }
+    }
+  }
+  return null
+}
+
+/** Format YYYY-MM-DD / ISO without shifting calendar day across timezones. */
+function formatCompletionDate(iso: string | null) {
+  if (!iso) return '—'
+  const day = iso.slice(0, 10)
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return '—'
+  const [y, m, d] = day.split('-').map(Number)
+  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    timeZone: 'UTC'
+  })
 }
 
 function FileBadge({ label, present }: { label: string; present: boolean }) {
@@ -75,7 +114,7 @@ export default function DataArchivePage() {
     }
   }, [permissionsLoading, canViewPage, router])
 
-  const [periodMode, setPeriodMode] = useState<PeriodMode>('month')
+  const [dateFilterMode, setDateFilterMode] = useState<DateFilterMode>('month')
   const [month, setMonth] = useState<string>(previousMonth())
   const [fromDate, setFromDate] = useState<string>('')
   const [toDate, setToDate] = useState<string>('')
@@ -88,19 +127,28 @@ export default function DataArchivePage() {
   const [exporting, setExporting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  const completionRange = useMemo(
+    () => resolveCompletionRange(dateFilterMode, month, fromDate, toDate),
+    [dateFilterMode, month, fromDate, toDate]
+  )
+
   const loadRows = useCallback(async () => {
-    if (periodMode === 'month' && !month) return
-    if (periodMode === 'range' && (!fromDate || !toDate)) return
+    if (dateFilterMode === 'month' && !month) return
+    if (dateFilterMode === 'range' && (!fromDate || !toDate)) {
+      setRows([])
+      setSelected(new Set())
+      return
+    }
     setLoading(true)
     setError(null)
     try {
       const params = new URLSearchParams()
-      if (periodMode === 'month') params.set('month', month)
-      if (periodMode === 'range') {
+      if (dateFilterMode === 'month') params.set('month', month)
+      if (dateFilterMode === 'range') {
         params.set('from', fromDate)
         params.set('to', toDate)
       }
-      if (periodMode !== 'all' && includeUndated) params.set('include_undated', 'true')
+      if (dateFilterMode !== 'all' && includeUndated) params.set('include_undated', 'true')
       const res = await fetch(`/api/data-archive/completed?${params.toString()}`)
       if (!res.ok) {
         const j = await res.json().catch(() => ({}))
@@ -116,7 +164,7 @@ export default function DataArchivePage() {
     } finally {
       setLoading(false)
     }
-  }, [periodMode, month, fromDate, toDate, includeUndated])
+  }, [dateFilterMode, month, fromDate, toDate, includeUndated])
 
   useEffect(() => {
     if (!permissionsLoading && canViewPage) loadRows()
@@ -132,13 +180,23 @@ export default function DataArchivePage() {
   }, [rows])
 
   const filteredRows = useMemo(() => {
-    if (grantFilter === 'all') return rows
+    // Defense-in-depth: keep only rows whose Project Completion Date is in the selected window.
+    let list = rows.filter((r) => {
+      const effective = r.project_completion_date
+      if (!completionRange) {
+        if (dateFilterMode === 'all') return includeUndated ? true : !!effective
+        return true
+      }
+      if (!effective) return includeUndated
+      return effective >= completionRange.start && effective < completionRange.end
+    })
+    if (grantFilter === 'all') return list
     if (grantFilter.startsWith('name:')) {
       const name = grantFilter.slice(5)
-      return rows.filter((r) => !r.grant_call_id && r.grant_name === name)
+      return list.filter((r) => !r.grant_call_id && r.grant_name === name)
     }
-    return rows.filter((r) => r.grant_call_id === grantFilter)
-  }, [rows, grantFilter])
+    return list.filter((r) => r.grant_call_id === grantFilter)
+  }, [rows, grantFilter, completionRange, dateFilterMode, includeUndated])
 
   const allSelected = filteredRows.length > 0 && filteredRows.every((r) => selected.has(r.id))
 
@@ -193,9 +251,6 @@ export default function DataArchivePage() {
     }
   }
 
-  const formatDate = (iso: string | null) =>
-    iso ? new Date(iso).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : '—'
-
   if (permissionsLoading || !canViewPage) return null
 
   return (
@@ -209,37 +264,37 @@ export default function DataArchivePage() {
 
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-base">Export by project completion date</CardTitle>
+          <CardTitle className="text-base">Filter by Project Completion Date</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="flex flex-wrap items-end gap-4">
             <div className="space-y-1.5">
               <Label className="text-sm">Project Completion Date</Label>
-              <Select value={periodMode} onValueChange={(v) => setPeriodMode(v as PeriodMode)}>
-                <SelectTrigger className="h-9 w-44">
+              <Select value={dateFilterMode} onValueChange={(v) => setDateFilterMode(v as DateFilterMode)}>
+                <SelectTrigger className="h-9 w-52">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="month">Month</SelectItem>
-                  <SelectItem value="range">Custom range</SelectItem>
-                  <SelectItem value="all">All completed</SelectItem>
+                  <SelectItem value="month">By month</SelectItem>
+                  <SelectItem value="range">Custom date range</SelectItem>
+                  <SelectItem value="all">All completion dates</SelectItem>
                 </SelectContent>
               </Select>
             </div>
-            {periodMode === 'month' && (
+            {dateFilterMode === 'month' && (
               <div className="space-y-1.5">
-                <Label className="text-sm">Month</Label>
+                <Label className="text-sm">Completion month</Label>
                 <Input type="month" className="h-9 w-44" value={month} onChange={(e) => setMonth(e.target.value)} />
               </div>
             )}
-            {periodMode === 'range' && (
+            {dateFilterMode === 'range' && (
               <>
                 <div className="space-y-1.5">
-                  <Label className="text-sm">From</Label>
+                  <Label className="text-sm">Completion date from</Label>
                   <Input type="date" className="h-9 w-40" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-sm">To</Label>
+                  <Label className="text-sm">Completion date to</Label>
                   <Input type="date" className="h-9 w-40" value={toDate} onChange={(e) => setToDate(e.target.value)} />
                 </div>
               </>
@@ -258,7 +313,7 @@ export default function DataArchivePage() {
                 </SelectContent>
               </Select>
             </div>
-            {periodMode !== 'all' && (
+            {dateFilterMode !== 'all' && (
               <div className="flex items-center gap-2 pb-2">
                 <Checkbox
                   id="include-undated"
@@ -278,9 +333,8 @@ export default function DataArchivePage() {
             </div>
           </div>
           <p className="text-xs text-muted-foreground mt-3">
-            Only microgrants marked as completed are available for export. Files are organized as
-            Month (YYYY-MM) &gt; Grant Name &gt; Serial Number, with a manifest recording original
-            file locations and project completion date in each folder.
+            Only microgrants marked as completed are listed, filtered by Project Completion Date.
+            Exports are organized as Completion month (YYYY-MM) &gt; Grant Name &gt; Serial Number.
           </p>
         </CardContent>
       </Card>
@@ -348,7 +402,7 @@ export default function DataArchivePage() {
                   {filteredRows.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={7} className="text-center text-muted-foreground py-6">
-                        No completed microgrants found for this project completion date.
+                        No completed microgrants found for this Project Completion Date.
                       </TableCell>
                     </TableRow>
                   ) : (
@@ -373,7 +427,7 @@ export default function DataArchivePage() {
                           className="whitespace-nowrap"
                           title={r.project_completion_date || 'No completion date recorded'}
                         >
-                          {formatDate(r.project_completion_date)}
+                          {formatCompletionDate(r.project_completion_date)}
                         </TableCell>
                         <TableCell>
                           <div className="flex flex-wrap gap-1">

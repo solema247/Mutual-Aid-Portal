@@ -39,7 +39,7 @@ export async function POST(req: Request) {
   }
   if (projectIds.length > MAX_PROJECTS_PER_EXPORT) {
     return NextResponse.json(
-      { error: `Too many projects in one export (max ${MAX_PROJECTS_PER_EXPORT}). Narrow the period or grant filter.` },
+      { error: `Too many projects in one export (max ${MAX_PROJECTS_PER_EXPORT}). Narrow the project completion date or grant name filter.` },
       { status: 400 }
     )
   }

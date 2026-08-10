@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
-import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { requirePermission } from '@/lib/requirePermission'
+import { getSupabaseAdmin } from '@/lib/supabaseAdmin'
 import { collectArchiveFiles, type ArchiveProjectRow } from '@/lib/dataArchive'
 import { resolveProjectCompletionDate } from '@/lib/projectStatus'
 
@@ -21,16 +21,16 @@ const PROJECT_SELECT = `
   grant_calls ( id, name, shortname )
 `
 
+const PAGE = 1000
+
 /** Resolve month=YYYY-MM or from/to (inclusive dates) into an ISO [start, end) range. */
-function resolveRange(url: URL): { start: string; end: string; startDate: string; endDate: string } | null {
+function resolveRange(url: URL): { start: string; end: string } | null {
   const month = url.searchParams.get('month')
   if (month && /^\d{4}-\d{2}$/.test(month)) {
     const [y, m] = month.split('-').map(Number)
     const start = new Date(Date.UTC(y, m - 1, 1))
     const end = new Date(Date.UTC(y, m, 1))
-    const startDate = start.toISOString().slice(0, 10)
-    const endDate = end.toISOString().slice(0, 10)
-    return { start: start.toISOString(), end: end.toISOString(), startDate, endDate }
+    return { start: start.toISOString(), end: end.toISOString() }
   }
   const from = url.searchParams.get('from')
   const to = url.searchParams.get('to')
@@ -39,12 +39,7 @@ function resolveRange(url: URL): { start: string; end: string; startDate: string
     const endExclusive = new Date(`${to}T00:00:00.000Z`)
     endExclusive.setUTCDate(endExclusive.getUTCDate() + 1)
     if (!isNaN(start.getTime()) && !isNaN(endExclusive.getTime())) {
-      return {
-        start: start.toISOString(),
-        end: endExclusive.toISOString(),
-        startDate: from,
-        endDate: endExclusive.toISOString().slice(0, 10)
-      }
+      return { start: start.toISOString(), end: endExclusive.toISOString() }
     }
   }
   return null
@@ -55,47 +50,46 @@ function grantNameLabel(p: any): string | null {
   return p.grant_calls?.name || p.donors?.name || null
 }
 
+async function fetchAllCompleted(supabase: ReturnType<typeof getSupabaseAdmin>, grantCallId: string | null) {
+  const projects: any[] = []
+  for (let from = 0; ; from += PAGE) {
+    let query = supabase
+      .from('err_projects')
+      .select(PROJECT_SELECT)
+      .eq('status', 'completed')
+      .order('id', { ascending: true })
+      .range(from, from + PAGE - 1)
+    if (grantCallId) query = query.eq('grant_call_id', grantCallId)
+    const { data, error } = await query
+    if (error) throw error
+    projects.push(...(data || []))
+    if (!data || data.length < PAGE) break
+  }
+  return projects
+}
+
 export async function GET(req: Request) {
   const perm = await requirePermission('data_archive_view_page')
   if (perm instanceof NextResponse) return perm
 
   try {
-    const supabase = getSupabaseRouteClient()
+    // Use admin after permission check so date filters are not affected by RLS quirks.
+    const supabase = getSupabaseAdmin()
     const url = new URL(req.url)
     const range = resolveRange(url)
     const includeUndated = url.searchParams.get('include_undated') === 'true'
     const grantCallId = url.searchParams.get('grant_call_id')
 
-    let query = supabase
-      .from('err_projects')
-      .select(PROJECT_SELECT)
-      .eq('status', 'completed')
+    const projects = await fetchAllCompleted(supabase, grantCallId)
 
-    if (range) {
-      // Match either completed_at (new) or date_report_completed (legacy / report date).
-      const datedFilter = [
-        `and(completed_at.gte.${range.start},completed_at.lt.${range.end})`,
-        `and(date_report_completed.gte.${range.startDate},date_report_completed.lt.${range.endDate})`
-      ].join(',')
-      if (includeUndated) {
-        query = query.or(`${datedFilter},and(completed_at.is.null,date_report_completed.is.null)`)
-      } else {
-        query = query.or(datedFilter)
-      }
-    }
-    if (grantCallId) query = query.eq('grant_call_id', grantCallId)
-
-    const { data: projects, error } = await query.order('completed_at', {
-      ascending: false,
-      nullsFirst: false
-    })
-    if (error) throw error
-
-    // Keep only rows whose effective Project Completion Date falls in the selected period
-    // (completed_at wins over date_report_completed when both exist and differ).
-    const inRange = (projects || []).filter((p: any) => {
+    // Filter strictly by effective Project Completion Date in application code.
+    // Prefer completed_at; fall back to date_report_completed for legacy rows.
+    const inRange = projects.filter((p: any) => {
       const effective = resolveProjectCompletionDate(p.completed_at, p.date_report_completed)
-      if (!range) return true
+      if (!range) {
+        if (includeUndated) return true
+        return !!effective
+      }
       if (!effective) return includeUndated
       return effective >= range.start && effective < range.end
     })
@@ -134,14 +128,21 @@ export async function GET(req: Request) {
       }
     })
 
-    // Prefer sorting by effective project completion date (newest first).
     rows.sort((a, b) => {
       const aT = a.project_completion_date ? Date.parse(a.project_completion_date) : 0
       const bT = b.project_completion_date ? Date.parse(b.project_completion_date) : 0
       return bT - aT
     })
 
-    return NextResponse.json({ rows })
+    return NextResponse.json({
+      rows,
+      meta: {
+        total_completed: projects.length,
+        matched: rows.length,
+        range,
+        include_undated: includeUndated
+      }
+    })
   } catch (e) {
     console.error('[data-archive/completed] error', e)
     return NextResponse.json({ error: 'Failed to load completed projects' }, { status: 500 })
