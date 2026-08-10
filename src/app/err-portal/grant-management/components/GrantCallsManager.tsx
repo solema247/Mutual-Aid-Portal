@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
-import { Plus, Trash2, Pencil, Building2, ChevronDown, ChevronUp } from 'lucide-react'
+import { Plus, Trash2, Pencil, Building2, ChevronDown, ChevronUp, X } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 
 import {
@@ -47,7 +47,6 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
-import { Checkbox } from '@/components/ui/checkbox'
 
 const formSchema = z.object({
   grant_id: z.string().min(1, "Grant ID is required"),
@@ -58,9 +57,6 @@ const formSchema = z.object({
   grant_start_date: z.string().optional(),
   grant_end_date: z.string().optional(),
   status: z.string().optional(),
-  total_transferred_amount_usd: z.string().optional(),
-  sum_activity_amount: z.string().optional(),
-  sync_to_p2h_airtable: z.boolean(),
 })
 
 type FormData = z.infer<typeof formSchema>
@@ -96,6 +92,7 @@ interface User {
 export default function GrantCallsManager() {
   const { t } = useTranslation(['err', 'common'])
   const [donors, setDonors] = useState<Donor[]>([])
+  const [partnerOptions, setPartnerOptions] = useState<string[]>([])
   const [grants, setGrants] = useState<GrantCall[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isFormOpen, setIsFormOpen] = useState(false)
@@ -107,6 +104,12 @@ export default function GrantCallsManager() {
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
   const [deleteConfirmText, setDeleteConfirmText] = useState('')
   const [grantToDelete, setGrantToDelete] = useState<string | null>(null)
+  const [addingDonor, setAddingDonor] = useState(false)
+  const [newDonorName, setNewDonorName] = useState('')
+  const [newDonorShortName, setNewDonorShortName] = useState('')
+  const [addingPartner, setAddingPartner] = useState(false)
+  const [newPartnerName, setNewPartnerName] = useState('')
+  const [isSavingLookup, setIsSavingLookup] = useState(false)
 
   const canEditGrants =
     currentUser?.role === 'support' ||
@@ -124,9 +127,6 @@ export default function GrantCallsManager() {
       grant_start_date: '',
       grant_end_date: '',
       status: 'Active',
-      total_transferred_amount_usd: '',
-      sum_activity_amount: '',
-      sync_to_p2h_airtable: true,
     },
   })
 
@@ -150,24 +150,102 @@ export default function GrantCallsManager() {
   const fetchData = async () => {
     try {
       setIsLoading(true)
-      
-      // Fetch donors
-      const { data: donorsData, error: donorsError } = await supabase
-        .from('donors')
-        .select('id, name, short_name')
-        .eq('status', 'active')
-        .order('name', { ascending: true })
-      
-      if (donorsError) throw donorsError
-      setDonors(donorsData || [])
 
-      // Fetch grants
+      const [donorsRes, partnersRes] = await Promise.all([
+        fetch('/api/donors', { cache: 'no-store' }),
+        fetch('/api/ops-partners', { cache: 'no-store' }),
+      ])
+
+      if (donorsRes.ok) {
+        const donorsData = await donorsRes.json()
+        setDonors(donorsData || [])
+      } else {
+        const { data: donorsData, error: donorsError } = await supabase
+          .from('donors')
+          .select('id, name, short_name')
+          .eq('status', 'active')
+          .order('name', { ascending: true })
+        if (donorsError) throw donorsError
+        setDonors(donorsData || [])
+      }
+
+      if (partnersRes.ok) {
+        const partnersData = await partnersRes.json()
+        const names = (partnersData || [])
+          .map((p: { name?: string }) => p.name)
+          .filter((n: unknown): n is string => typeof n === 'string' && Boolean(n.trim()))
+        setPartnerOptions(names)
+      }
+
       await fetchGrants()
     } catch (error) {
       console.error('Error fetching data:', error)
       alert('Failed to fetch data')
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  const handleAddDonor = async () => {
+    const name = newDonorName.trim()
+    if (!name) return
+    try {
+      setIsSavingLookup(true)
+      const res = await fetch('/api/donors', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name,
+          short_name: newDonorShortName.trim() || name,
+        }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error || 'Failed to add donor')
+      }
+      const created = await res.json()
+      setDonors((prev) => {
+        if (prev.some((d) => d.id === created.id)) return prev
+        return [...prev, created].sort((a, b) => a.name.localeCompare(b.name))
+      })
+      form.setValue('donor_id', created.id)
+      form.setValue('donor_name', created.name)
+      setNewDonorName('')
+      setNewDonorShortName('')
+      setAddingDonor(false)
+    } catch (error: unknown) {
+      alert(error instanceof Error ? error.message : 'Failed to add donor')
+    } finally {
+      setIsSavingLookup(false)
+    }
+  }
+
+  const handleAddPartner = async () => {
+    const name = newPartnerName.trim()
+    if (!name) return
+    try {
+      setIsSavingLookup(true)
+      const res = await fetch('/api/ops-partners', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error || 'Failed to add partner')
+      }
+      const created = await res.json()
+      const createdName = created.name || name
+      setPartnerOptions((prev) =>
+        prev.includes(createdName) ? prev : [...prev, createdName].sort((a, b) => a.localeCompare(b))
+      )
+      form.setValue('partner_name', createdName)
+      setNewPartnerName('')
+      setAddingPartner(false)
+    } catch (error: unknown) {
+      alert(error instanceof Error ? error.message : 'Failed to add partner')
+    } finally {
+      setIsSavingLookup(false)
     }
   }
 
@@ -192,7 +270,7 @@ export default function GrantCallsManager() {
 
   const onSubmit = async (values: FormData) => {
     try {
-      const payload = {
+      const payload: Record<string, unknown> = {
         grant_id: values.grant_id,
         donor_id: values.donor_id,
         donor_name: values.donor_name,
@@ -201,12 +279,13 @@ export default function GrantCallsManager() {
         grant_start_date: values.grant_start_date || null,
         grant_end_date: values.grant_end_date || null,
         status: values.status || null,
-        total_transferred_amount_usd: values.total_transferred_amount_usd
-          ? parseFloat(values.total_transferred_amount_usd)
-          : null,
-        sum_activity_amount: values.sum_activity_amount
-          ? parseFloat(values.sum_activity_amount)
-          : null,
+      }
+
+      // Preserve financials on edit (no longer editable in the form)
+      if (editingGrant) {
+        payload.total_transferred_amount_usd = editingGrant.total_transferred_amount_usd
+        payload.sum_activity_amount = editingGrant.sum_activity_amount
+        payload.sum_transfer_fee_amount = editingGrant.sum_transfer_fee_amount
       }
 
       if (editingGrant) {
@@ -226,7 +305,7 @@ export default function GrantCallsManager() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             ...payload,
-            sync_to_p2h_airtable: values.sync_to_p2h_airtable,
+            sync_to_p2h_airtable: true,
           }),
         })
         if (!res.ok) {
@@ -239,6 +318,8 @@ export default function GrantCallsManager() {
       form.reset()
       setIsFormOpen(false)
       setEditingGrant(null)
+      setAddingDonor(false)
+      setAddingPartner(false)
       fetchGrants()
     } catch (error: unknown) {
       console.error('Error saving grant:', error)
@@ -248,6 +329,13 @@ export default function GrantCallsManager() {
 
   const handleEdit = (grant: GrantCall) => {
     setEditingGrant(grant)
+    if (grant.partner_name) {
+      setPartnerOptions((prev) =>
+        prev.includes(grant.partner_name!)
+          ? prev
+          : [...prev, grant.partner_name!].sort((a, b) => a.localeCompare(b))
+      )
+    }
     form.reset({
       grant_id: grant.grant_id,
       donor_id: grant.donor_id || '',
@@ -257,10 +345,9 @@ export default function GrantCallsManager() {
       grant_start_date: grant.grant_start_date || '',
       grant_end_date: grant.grant_end_date || '',
       status: grant.status || 'Active',
-      total_transferred_amount_usd: grant.total_transferred_amount_usd?.toString() || '',
-      sum_activity_amount: grant.sum_activity_amount?.toString() || '',
-      sync_to_p2h_airtable: true,
     })
+    setAddingDonor(false)
+    setAddingPartner(false)
     setIsFormOpen(true)
   }
 
@@ -368,6 +455,11 @@ export default function GrantCallsManager() {
                       if (!open) {
                         form.reset()
                         setEditingGrant(null)
+                        setAddingDonor(false)
+                        setAddingPartner(false)
+                        setNewDonorName('')
+                        setNewDonorShortName('')
+                        setNewPartnerName('')
                       }
                     }}>
                       <DialogTrigger asChild>
@@ -384,12 +476,12 @@ export default function GrantCallsManager() {
                 </DialogHeader>
                 <Form {...form}>
                   <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-4 items-start">
                       <FormField
                         control={form.control}
                         name="grant_id"
                         render={({ field }) => (
-                          <FormItem>
+                          <FormItem className="min-w-0">
                             <FormLabel>Grant ID *</FormLabel>
                             <FormControl>
                               <Input {...field} />
@@ -403,42 +495,93 @@ export default function GrantCallsManager() {
                         control={form.control}
                         name="donor_id"
                         render={({ field }) => (
-                          <FormItem>
+                          <FormItem className="min-w-0">
                             <FormLabel>Donor *</FormLabel>
-                            <Select onValueChange={(value) => {
-                              field.onChange(value)
-                              const selectedDonor = donors.find(d => d.id === value)
-                              if (selectedDonor) {
-                                form.setValue('donor_name', selectedDonor.name)
-                              }
-                            }} value={field.value || ''}>
-                              <FormControl>
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Select donor" />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                {donors.map((donor) => (
-                                  <SelectItem key={donor.id} value={donor.id}>
-                                    {donor.name}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-
-                      <FormField
-                        control={form.control}
-                        name="donor_name"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Donor Name *</FormLabel>
-                            <FormControl>
-                              <Input {...field} />
-                            </FormControl>
+                            {addingDonor ? (
+                              <div className="space-y-2">
+                                <Input
+                                  value={newDonorName}
+                                  onChange={(e) => setNewDonorName(e.target.value)}
+                                  placeholder="Donor name"
+                                  autoFocus
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      e.preventDefault()
+                                      handleAddDonor()
+                                    }
+                                    if (e.key === 'Escape') {
+                                      setAddingDonor(false)
+                                      setNewDonorName('')
+                                      setNewDonorShortName('')
+                                    }
+                                  }}
+                                />
+                                <Input
+                                  value={newDonorShortName}
+                                  onChange={(e) => setNewDonorShortName(e.target.value)}
+                                  placeholder="Short name (optional)"
+                                />
+                                <div className="flex items-center gap-1">
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    disabled={isSavingLookup || !newDonorName.trim()}
+                                    onClick={handleAddDonor}
+                                  >
+                                    Save
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8"
+                                    onClick={() => {
+                                      setAddingDonor(false)
+                                      setNewDonorName('')
+                                      setNewDonorShortName('')
+                                    }}
+                                  >
+                                    <X className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-2 min-w-0">
+                                <Select
+                                  onValueChange={(value) => {
+                                    field.onChange(value)
+                                    const selectedDonor = donors.find((d) => d.id === value)
+                                    if (selectedDonor) {
+                                      form.setValue('donor_name', selectedDonor.name)
+                                    }
+                                  }}
+                                  value={field.value || ''}
+                                >
+                                  <FormControl>
+                                    <SelectTrigger className="w-full min-w-0">
+                                      <SelectValue placeholder="Select donor" />
+                                    </SelectTrigger>
+                                  </FormControl>
+                                  <SelectContent>
+                                    {donors.map((donor) => (
+                                      <SelectItem key={donor.id} value={donor.id}>
+                                        {donor.name}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="icon"
+                                  className="h-9 w-9 shrink-0"
+                                  title="Add donor"
+                                  onClick={() => setAddingDonor(true)}
+                                >
+                                  <Plus className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            )}
                             <FormMessage />
                           </FormItem>
                         )}
@@ -448,7 +591,7 @@ export default function GrantCallsManager() {
                         control={form.control}
                         name="project_name"
                         render={({ field }) => (
-                          <FormItem>
+                          <FormItem className="min-w-0">
                             <FormLabel>Project Name</FormLabel>
                             <FormControl>
                               <Input {...field} />
@@ -462,33 +605,80 @@ export default function GrantCallsManager() {
                         control={form.control}
                         name="partner_name"
                         render={({ field }) => (
-                          <FormItem>
+                          <FormItem className="min-w-0">
                             <FormLabel>Partner Name</FormLabel>
-                            <FormControl>
-                              <Input {...field} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-
-                      <FormField
-                        control={form.control}
-                        name="status"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Status</FormLabel>
-                            <Select onValueChange={field.onChange} value={field.value || 'Active'}>
-                              <FormControl>
-                                <SelectTrigger>
-                                  <SelectValue />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                <SelectItem value="Active">Active</SelectItem>
-                                <SelectItem value="Complete">Complete</SelectItem>
-                              </SelectContent>
-                            </Select>
+                            {addingPartner ? (
+                              <div className="flex items-center gap-2 min-w-0">
+                                <Input
+                                  value={newPartnerName}
+                                  onChange={(e) => setNewPartnerName(e.target.value)}
+                                  placeholder="New partner name"
+                                  className="min-w-0"
+                                  autoFocus
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      e.preventDefault()
+                                      handleAddPartner()
+                                    }
+                                    if (e.key === 'Escape') {
+                                      setAddingPartner(false)
+                                      setNewPartnerName('')
+                                    }
+                                  }}
+                                />
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  className="shrink-0"
+                                  disabled={isSavingLookup || !newPartnerName.trim()}
+                                  onClick={handleAddPartner}
+                                >
+                                  Save
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 shrink-0"
+                                  onClick={() => {
+                                    setAddingPartner(false)
+                                    setNewPartnerName('')
+                                  }}
+                                >
+                                  <X className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-2 min-w-0">
+                                <Select
+                                  value={field.value || undefined}
+                                  onValueChange={field.onChange}
+                                >
+                                  <FormControl>
+                                    <SelectTrigger className="w-full min-w-0">
+                                      <SelectValue placeholder="Select partner" />
+                                    </SelectTrigger>
+                                  </FormControl>
+                                  <SelectContent>
+                                    {partnerOptions.map((partner) => (
+                                      <SelectItem key={partner} value={partner}>
+                                        {partner}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="icon"
+                                  className="h-9 w-9 shrink-0"
+                                  title="Add partner"
+                                  onClick={() => setAddingPartner(true)}
+                                >
+                                  <Plus className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            )}
                             <FormMessage />
                           </FormItem>
                         )}
@@ -498,7 +688,7 @@ export default function GrantCallsManager() {
                         control={form.control}
                         name="grant_start_date"
                         render={({ field }) => (
-                          <FormItem>
+                          <FormItem className="min-w-0">
                             <FormLabel>Start Date</FormLabel>
                             <FormControl>
                               <Input type="date" {...field} />
@@ -512,7 +702,7 @@ export default function GrantCallsManager() {
                         control={form.control}
                         name="grant_end_date"
                         render={({ field }) => (
-                          <FormItem>
+                          <FormItem className="min-w-0">
                             <FormLabel>End Date</FormLabel>
                             <FormControl>
                               <Input type="date" {...field} />
@@ -524,64 +714,28 @@ export default function GrantCallsManager() {
 
                       <FormField
                         control={form.control}
-                        name="total_transferred_amount_usd"
+                        name="status"
                         render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Total Transferred Amount (USD)</FormLabel>
-                            <FormControl>
-                              <Input
-                                type="number"
-                                {...field}
-                                value={field.value || ''}
-                                onChange={(e) => field.onChange(e.target.value)}
-                              />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-
-                      <FormField
-                        control={form.control}
-                        name="sum_activity_amount"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Sum Activity Amount</FormLabel>
-                            <FormControl>
-                              <Input
-                                type="number"
-                                {...field}
-                                value={field.value || ''}
-                                onChange={(e) => field.onChange(e.target.value)}
-                              />
-                            </FormControl>
+                          <FormItem className="min-w-0">
+                            <FormLabel>Status</FormLabel>
+                            <Select onValueChange={field.onChange} value={field.value || 'Active'}>
+                              <FormControl>
+                                <SelectTrigger className="w-full">
+                                  <SelectValue />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value="Active">Active</SelectItem>
+                                <SelectItem value="Complete">Complete</SelectItem>
+                              </SelectContent>
+                            </Select>
                             <FormMessage />
                           </FormItem>
                         )}
                       />
                     </div>
 
-                    {!editingGrant && (
-                      <FormField
-                        control={form.control}
-                        name="sync_to_p2h_airtable"
-                        render={({ field }) => (
-                          <FormItem className="flex flex-row items-start gap-3 space-y-0 rounded-md border p-4">
-                            <FormControl>
-                              <Checkbox
-                                checked={field.value}
-                                onCheckedChange={(checked) => field.onChange(checked === true)}
-                              />
-                            </FormControl>
-                            <div className="space-y-1 leading-none">
-                              <FormLabel>Sync to P2H Airtable</FormLabel>
-                            </div>
-                          </FormItem>
-                        )}
-                      />
-                    )}
-
-                    <div className="flex justify-end gap-2">
+                    <div className="flex justify-end gap-2 pt-1">
                       <Button
                         type="button"
                         variant="outline"
