@@ -37,10 +37,12 @@ export function getAllowedSetFromOverrides(
   user: PermissionUser,
   overridesMap: UserOverridesMap
 ): Set<string> {
-  if (user.role === 'support' || user.role === 'superadmin') return new Set(allCodes)
+  // Superadmin/support still start with every function, but per-user
+  // remove overrides must be honored (e.g. finance staff who should not
+  // Clear/Flag on the compliance screening queue).
   const base = getBaseAllowedForRole(user.role)
   const override = overridesMap[user.id]
-  if (!override) return base
+  if (!override) return new Set(base)
   const result = new Set(base)
   if (override.remove?.length) override.remove.forEach((c) => result.delete(c))
   if (override.add?.length) override.add.forEach((c) => result.add(c))
