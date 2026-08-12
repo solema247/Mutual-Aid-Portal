@@ -2831,6 +2831,95 @@ export type Database = {
         }
         Relationships: []
       }
+      mou_payment_confirmations: {
+        Row: {
+          id: string
+          mou_id: string
+          project_id: string
+          exchange_rate: number | null
+          transfer_date: string | null
+          created_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          mou_id: string
+          project_id: string
+          exchange_rate?: number | null
+          transfer_date?: string | null
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          mou_id?: string
+          project_id?: string
+          exchange_rate?: number | null
+          transfer_date?: string | null
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mou_payment_confirmations_mou_id_fkey"
+            columns: ["mou_id"]
+            isOneToOne: false
+            referencedRelation: "mous"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mou_payment_confirmations_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "err_projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      mou_payment_files: {
+        Row: {
+          id: string
+          payment_confirmation_id: string
+          file_path: string
+          original_name: string
+          file_type: string | null
+          file_size: number | null
+          uploaded_by: string | null
+          uploaded_at: string
+        }
+        Insert: {
+          id?: string
+          payment_confirmation_id: string
+          file_path: string
+          original_name: string
+          file_type?: string | null
+          file_size?: number | null
+          uploaded_by?: string | null
+          uploaded_at?: string
+        }
+        Update: {
+          id?: string
+          payment_confirmation_id?: string
+          file_path?: string
+          original_name?: string
+          file_type?: string | null
+          file_size?: number | null
+          uploaded_by?: string | null
+          uploaded_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mou_payment_files_payment_confirmation_id_fkey"
+            columns: ["payment_confirmation_id"]
+            isOneToOne: false
+            referencedRelation: "mou_payment_confirmations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       mous: {
         Row: {
           banking_details_override: string | null

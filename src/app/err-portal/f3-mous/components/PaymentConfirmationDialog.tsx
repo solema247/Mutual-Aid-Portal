@@ -5,366 +5,568 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { parsePaymentConfirmations } from '../lib/payment-confirmations'
-import { parseMousListResponse } from '@/lib/mou-list-enrichment'
 import type { usePaymentModal } from '../hooks/usePaymentModal'
-import type { MOU } from '../types'
+import type { NewPaymentDraft, PaymentConfirmationRecord, PaymentFileRecord } from '../types'
 
 type PaymentConfirmationDialogProps = ReturnType<typeof usePaymentModal>
+
+async function openSignedUrl(filePath: string) {
+  const response = await fetch(
+    `/api/storage/signed-url?path=${encodeURIComponent(filePath)}`
+  )
+  if (!response.ok) throw new Error('Failed to get signed URL')
+  const { url, error } = await response.json()
+  if (error || !url) throw new Error(error || 'No URL returned')
+  const link = document.createElement('a')
+  link.href = url
+  link.target = '_blank'
+  link.rel = 'noopener noreferrer'
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+}
 
 export default function PaymentConfirmationDialog(props: PaymentConfirmationDialogProps) {
   const {
     paymentModalOpen,
     setPaymentModalOpen,
     selectedMouForPayment,
-    setSelectedMouForPayment,
     paymentProjects,
-    paymentConfirmations,
-    setPaymentConfirmations,
-    uploadingPayments,
-    setUploadingPayments,
-    uploadingAllPayments,
-    setUploadingAllPayments,
+    confirmationsByProject,
+    setConfirmationsByProject,
+    newDrafts,
+    setNewDrafts,
+    loadingConfirmations,
+    busyKeys,
+    setBusy,
     bulkPaymentExchangeRate,
     setBulkPaymentExchangeRate,
     bulkPaymentTransferDate,
     setBulkPaymentTransferDate,
     applyBulkPaymentToAllProjects,
     closePaymentModal,
+    refreshConfirmations,
     fetchMous,
   } = props
   const { t } = useTranslation(['f3'])
+  const anyBusy = Object.keys(busyKeys).length > 0
 
-  return (      <Dialog
-        open={paymentModalOpen}
-        onOpenChange={(open) => { setPaymentModalOpen(open); if (!open) closePaymentModal() }}
-      >
-        <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>
-              Payment Confirmations - {selectedMouForPayment?.mou_code}
-            </DialogTitle>
-            <p className="text-sm text-muted-foreground">
-              {paymentProjects.length} project{paymentProjects.length !== 1 ? 's' : ''} in this MOU
-            </p>
-          </DialogHeader>
-          <div className="mt-2 rounded-md border border-border bg-muted/30 p-3">
-            <p className="text-xs text-muted-foreground mb-3">{t('f3:payment_modal.bulk_hint')}</p>
-            <div className="flex flex-wrap items-end gap-3">
-              <div className="space-y-1">
-                <Label htmlFor="bulk-payment-exchange-rate" className="text-xs">
-                  {t('f3:payment_modal.bulk_exchange_rate')}
-                </Label>
-                <Input
-                  id="bulk-payment-exchange-rate"
-                  type="number"
-                  step="0.0001"
-                  value={bulkPaymentExchangeRate}
-                  onChange={(e) => setBulkPaymentExchangeRate(e.target.value)}
-                  placeholder="e.g., 600.5"
-                  className="h-8 w-[160px] text-sm"
-                  disabled={uploadingAllPayments || Object.values(uploadingPayments).some(Boolean)}
-                />
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor="bulk-payment-transfer-date" className="text-xs">
-                  {t('f3:payment_modal.bulk_transfer_date')}
-                </Label>
-                <Input
-                  id="bulk-payment-transfer-date"
-                  type="date"
-                  value={bulkPaymentTransferDate}
-                  onChange={(e) => setBulkPaymentTransferDate(e.target.value)}
-                  className="h-8 w-[160px] text-sm"
-                  disabled={uploadingAllPayments || Object.values(uploadingPayments).some(Boolean)}
-                />
-              </div>
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                className="h-8"
-                onClick={applyBulkPaymentToAllProjects}
-                disabled={
-                  uploadingAllPayments ||
-                  Object.values(uploadingPayments).some(Boolean) ||
-                  paymentProjects.length === 0
-                }
-              >
-                {t('f3:payment_modal.apply_to_all')}
-              </Button>
+  const updateDraft = (projectId: string, patch: Partial<NewPaymentDraft>) => {
+    setNewDrafts((prev) => ({
+      ...prev,
+      [projectId]: {
+        ...(prev[projectId] || { exchange_rate: '', transfer_date: '', files: [] }),
+        ...patch,
+      },
+    }))
+  }
+
+  const patchLocalConfirmation = (
+    projectId: string,
+    confirmationId: string,
+    patch: Partial<PaymentConfirmationRecord>
+  ) => {
+    setConfirmationsByProject((prev) => {
+      const list = prev[projectId] || []
+      return {
+        ...prev,
+        [projectId]: list.map((c) =>
+          c.id === confirmationId ? { ...c, ...patch } : c
+        ),
+      }
+    })
+  }
+
+  const createConfirmation = async (projectId: string) => {
+    const draft = newDrafts[projectId]
+    if (!draft || !selectedMouForPayment) return
+    if (!draft.exchange_rate.trim() && !draft.transfer_date.trim() && draft.files.length === 0) {
+      alert(t('f3:payment_modal.create_required'))
+      return
+    }
+    const key = `create:${projectId}`
+    try {
+      setBusy(key, true)
+      const formData = new FormData()
+      formData.append('project_id', projectId)
+      if (draft.exchange_rate.trim()) formData.append('exchange_rate', draft.exchange_rate.trim())
+      if (draft.transfer_date.trim()) formData.append('transfer_date', draft.transfer_date.trim())
+      for (const file of draft.files) formData.append('files', file)
+
+      const response = await fetch(
+        `/api/f3/mous/${selectedMouForPayment.id}/payment-confirmation`,
+        { method: 'POST', body: formData }
+      )
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}))
+        throw new Error((err as { error?: string }).error || 'Failed to create payment confirmation')
+      }
+
+      updateDraft(projectId, { exchange_rate: '', transfer_date: '', files: [] })
+      await refreshConfirmations(selectedMouForPayment.id)
+      await fetchMous()
+    } catch (e) {
+      console.error(e)
+      alert(e instanceof Error ? e.message : 'Failed to create payment confirmation')
+    } finally {
+      setBusy(key, false)
+    }
+  }
+
+  const saveConfirmationMeta = async (
+    projectId: string,
+    confirmation: PaymentConfirmationRecord
+  ) => {
+    if (!selectedMouForPayment) return
+    const key = `meta:${confirmation.id}`
+    try {
+      setBusy(key, true)
+      const response = await fetch(
+        `/api/f3/mous/${selectedMouForPayment.id}/payment-confirmation/${confirmation.id}`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            exchange_rate: confirmation.exchange_rate,
+            transfer_date: confirmation.transfer_date,
+          }),
+        }
+      )
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}))
+        throw new Error((err as { error?: string }).error || 'Failed to update payment')
+      }
+      await refreshConfirmations(selectedMouForPayment.id)
+      await fetchMous()
+    } catch (e) {
+      console.error(e)
+      alert(e instanceof Error ? e.message : 'Failed to update payment')
+    } finally {
+      setBusy(key, false)
+    }
+  }
+
+  const addFilesToConfirmation = async (
+    projectId: string,
+    confirmationId: string,
+    fileList: FileList | null
+  ) => {
+    if (!selectedMouForPayment || !fileList || fileList.length === 0) return
+    const key = `addfile:${confirmationId}`
+    try {
+      setBusy(key, true)
+      const formData = new FormData()
+      Array.from(fileList).forEach((file) => formData.append('files', file))
+      const response = await fetch(
+        `/api/f3/mous/${selectedMouForPayment.id}/payment-confirmation/${confirmationId}/files`,
+        { method: 'POST', body: formData }
+      )
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}))
+        throw new Error((err as { error?: string }).error || 'Failed to upload file')
+      }
+      await refreshConfirmations(selectedMouForPayment.id)
+      await fetchMous()
+    } catch (e) {
+      console.error(e)
+      alert(e instanceof Error ? e.message : 'Failed to upload file')
+    } finally {
+      setBusy(key, false)
+    }
+  }
+
+  const deleteFile = async (confirmationId: string, file: PaymentFileRecord) => {
+    if (!selectedMouForPayment) return
+    if (!confirm(t('f3:payment_modal.confirm_delete_file'))) return
+    const key = `delfile:${file.id}`
+    try {
+      setBusy(key, true)
+      const response = await fetch(
+        `/api/f3/mous/${selectedMouForPayment.id}/payment-confirmation/${confirmationId}/files/${file.id}`,
+        { method: 'DELETE' }
+      )
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}))
+        throw new Error((err as { error?: string }).error || 'Failed to delete file')
+      }
+      await refreshConfirmations(selectedMouForPayment.id)
+      await fetchMous()
+    } catch (e) {
+      console.error(e)
+      alert(e instanceof Error ? e.message : 'Failed to delete file')
+    } finally {
+      setBusy(key, false)
+    }
+  }
+
+  const deleteConfirmation = async (projectId: string, confirmationId: string) => {
+    if (!selectedMouForPayment) return
+    if (!confirm(t('f3:payment_modal.confirm_delete_payment'))) return
+    const key = `delpay:${confirmationId}`
+    try {
+      setBusy(key, true)
+      const response = await fetch(
+        `/api/f3/mous/${selectedMouForPayment.id}/payment-confirmation/${confirmationId}`,
+        { method: 'DELETE' }
+      )
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}))
+        throw new Error((err as { error?: string }).error || 'Failed to delete payment')
+      }
+      await refreshConfirmations(selectedMouForPayment.id)
+      await fetchMous()
+    } catch (e) {
+      console.error(e)
+      alert(e instanceof Error ? e.message : 'Failed to delete payment')
+    } finally {
+      setBusy(key, false)
+    }
+  }
+
+  return (
+    <Dialog
+      open={paymentModalOpen}
+      onOpenChange={(open) => {
+        setPaymentModalOpen(open)
+        if (!open) closePaymentModal()
+      }}
+    >
+      <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>
+            {t('f3:payment_modal.title')} - {selectedMouForPayment?.mou_code}
+          </DialogTitle>
+          <p className="text-sm text-muted-foreground">
+            {paymentProjects.length}{' '}
+            {paymentProjects.length === 1
+              ? t('f3:payment_modal.project_singular')
+              : t('f3:payment_modal.project_plural')}
+          </p>
+        </DialogHeader>
+
+        <div className="mt-2 rounded-md border border-border bg-muted/30 p-3">
+          <p className="text-xs text-muted-foreground mb-3">{t('f3:payment_modal.bulk_hint')}</p>
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="space-y-1">
+              <Label htmlFor="bulk-payment-exchange-rate" className="text-xs">
+                {t('f3:payment_modal.bulk_exchange_rate')}
+              </Label>
+              <Input
+                id="bulk-payment-exchange-rate"
+                type="number"
+                step="0.0001"
+                value={bulkPaymentExchangeRate}
+                onChange={(e) => setBulkPaymentExchangeRate(e.target.value)}
+                placeholder="e.g., 600.5"
+                className="h-8 w-[160px] text-sm"
+                disabled={anyBusy}
+              />
             </div>
+            <div className="space-y-1">
+              <Label htmlFor="bulk-payment-transfer-date" className="text-xs">
+                {t('f3:payment_modal.bulk_transfer_date')}
+              </Label>
+              <Input
+                id="bulk-payment-transfer-date"
+                type="date"
+                value={bulkPaymentTransferDate}
+                onChange={(e) => setBulkPaymentTransferDate(e.target.value)}
+                className="h-8 w-[160px] text-sm"
+                disabled={anyBusy}
+              />
+            </div>
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              className="h-8"
+              onClick={applyBulkPaymentToAllProjects}
+              disabled={anyBusy || paymentProjects.length === 0}
+            >
+              {t('f3:payment_modal.apply_to_all')}
+            </Button>
           </div>
-          <div className="mt-4 overflow-x-auto">
-            <Table className="text-xs min-w-[700px]">
-              <TableHeader>
-                <TableRow className="[&>th]:py-1.5 [&>th]:px-2 [&>th]:text-xs">
-                  <TableHead className="w-[100px] px-2">Room</TableHead>
-                  <TableHead className="w-[140px] px-2">Grant Serial ID</TableHead>
-                  <TableHead className="w-[110px] px-2">Exchange Rate</TableHead>
-                  <TableHead className="w-[110px] px-2">Transfer Date</TableHead>
-                  <TableHead className="w-[200px] px-2">Payment File</TableHead>
-                  <TableHead className="w-[80px] px-2">Action</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {paymentProjects.map((project) => {
-                  const confirmation = paymentConfirmations[project.id] || { exchange_rate: '', transfer_date: '', file: null, file_path: undefined }
-                  const hasConfirmation = !!confirmation.file_path || (!!confirmation.exchange_rate && !!confirmation.transfer_date)
-                  const isUploading = uploadingPayments[project.id] || false
-                  
-                  return (
-                    <TableRow key={project.id} className="[&>td]:py-1.5 [&>td]:px-2 [&>td]:text-xs">
-                      <TableCell className="font-medium">
-                        <div className="flex items-center gap-2">
-                          {project.emergency_room_name || '-'}
-                          {hasConfirmation && (
-                            <span className="text-xs bg-green-100 text-green-800 px-1.5 py-0.5 rounded">✓</span>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {project.grant_id || '-'}
-                      </TableCell>
-                      <TableCell>
+        </div>
+
+        {loadingConfirmations ? (
+          <p className="text-sm text-muted-foreground mt-4">{t('f3:payment_modal.loading')}</p>
+        ) : (
+          <div className="mt-4 space-y-6">
+            {paymentProjects.map((project) => {
+              const confirmations = confirmationsByProject[project.id] || []
+              const draft = newDrafts[project.id] || {
+                exchange_rate: '',
+                transfer_date: '',
+                files: [],
+              }
+              const creating = !!busyKeys[`create:${project.id}`]
+
+              return (
+                <section
+                  key={project.id}
+                  className="rounded-md border border-border p-4 space-y-4"
+                >
+                  <div className="flex flex-wrap items-baseline justify-between gap-2">
+                    <div>
+                      <h3 className="text-sm font-semibold">
+                        {project.emergency_room_name || '-'}
+                      </h3>
+                      <p className="text-xs text-muted-foreground">
+                        {t('f3:payment_modal.grant_serial')}: {project.grant_id || '-'}
+                      </p>
+                    </div>
+                    <span className="text-xs text-muted-foreground">
+                      {confirmations.length}{' '}
+                      {confirmations.length === 1
+                        ? t('f3:payment_modal.payment_singular')
+                        : t('f3:payment_modal.payment_plural')}
+                    </span>
+                  </div>
+
+                  {confirmations.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">
+                      {t('f3:payment_modal.no_payments')}
+                    </p>
+                  ) : (
+                    <div className="space-y-3">
+                      {confirmations.map((confirmation, index) => {
+                        const metaBusy = !!busyKeys[`meta:${confirmation.id}`]
+                        const addBusy = !!busyKeys[`addfile:${confirmation.id}`]
+                        const delBusy = !!busyKeys[`delpay:${confirmation.id}`]
+                        return (
+                          <div
+                            key={confirmation.id}
+                            className="rounded-md border border-border/80 bg-background p-3 space-y-3"
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="text-sm font-medium">
+                                {t('f3:payment_modal.payment_n', { n: index + 1 })}
+                              </p>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 text-xs text-destructive"
+                                disabled={delBusy || anyBusy}
+                                onClick={() =>
+                                  deleteConfirmation(project.id, confirmation.id)
+                                }
+                              >
+                                {delBusy
+                                  ? '...'
+                                  : t('f3:payment_modal.delete_payment')}
+                              </Button>
+                            </div>
+
+                            <div className="flex flex-wrap items-end gap-3">
+                              <div className="space-y-1">
+                                <Label className="text-xs">
+                                  {t('f3:payment_modal.bulk_exchange_rate')}
+                                </Label>
+                                <Input
+                                  type="number"
+                                  step="0.0001"
+                                  className="h-8 w-[140px] text-sm"
+                                  value={confirmation.exchange_rate ?? ''}
+                                  disabled={metaBusy}
+                                  onChange={(e) => {
+                                    const v = e.target.value
+                                    patchLocalConfirmation(project.id, confirmation.id, {
+                                      exchange_rate: v === '' ? null : Number(v),
+                                    })
+                                  }}
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <Label className="text-xs">
+                                  {t('f3:payment_modal.bulk_transfer_date')}
+                                </Label>
+                                <Input
+                                  type="date"
+                                  className="h-8 w-[150px] text-sm"
+                                  value={confirmation.transfer_date || ''}
+                                  disabled={metaBusy}
+                                  onChange={(e) =>
+                                    patchLocalConfirmation(project.id, confirmation.id, {
+                                      transfer_date: e.target.value || null,
+                                    })
+                                  }
+                                />
+                              </div>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="secondary"
+                                className="h-8"
+                                disabled={metaBusy}
+                                onClick={() =>
+                                  saveConfirmationMeta(project.id, confirmation)
+                                }
+                              >
+                                {metaBusy ? '...' : t('f3:payment_modal.save_meta')}
+                              </Button>
+                            </div>
+
+                            <div className="space-y-1">
+                              <p className="text-xs font-medium">
+                                {t('f3:payment_modal.files')}
+                              </p>
+                              {(confirmation.files || []).length === 0 ? (
+                                <p className="text-xs text-muted-foreground">
+                                  {t('f3:payment_modal.no_files')}
+                                </p>
+                              ) : (
+                                <ul className="space-y-1">
+                                  {(confirmation.files || []).map((file) => {
+                                    const fileBusy = !!busyKeys[`delfile:${file.id}`]
+                                    return (
+                                      <li
+                                        key={file.id}
+                                        className="flex flex-wrap items-center gap-2 text-xs"
+                                      >
+                                        <span className="truncate max-w-[240px]">
+                                          {file.original_name || file.file_path}
+                                        </span>
+                                        <Button
+                                          type="button"
+                                          variant="ghost"
+                                          size="sm"
+                                          className="h-7 text-xs px-2"
+                                          onClick={async () => {
+                                            try {
+                                              await openSignedUrl(file.file_path)
+                                            } catch (err) {
+                                              console.error(err)
+                                              alert(t('f3:payment_modal.open_failed'))
+                                            }
+                                          }}
+                                        >
+                                          {t('f3:payment_modal.view')}
+                                        </Button>
+                                        <Button
+                                          type="button"
+                                          variant="ghost"
+                                          size="sm"
+                                          className="h-7 text-xs px-2 text-destructive"
+                                          disabled={fileBusy}
+                                          onClick={() =>
+                                            deleteFile(confirmation.id, file)
+                                          }
+                                        >
+                                          {fileBusy
+                                            ? '...'
+                                            : t('f3:payment_modal.delete_file')}
+                                        </Button>
+                                      </li>
+                                    )
+                                  })}
+                                </ul>
+                              )}
+                              <div className="pt-1">
+                                <Label className="text-xs">
+                                  {t('f3:payment_modal.add_file')}
+                                </Label>
+                                <Input
+                                  type="file"
+                                  accept=".pdf,.jpg,.jpeg,.png"
+                                  multiple
+                                  className="h-8 text-xs mt-1 max-w-md"
+                                  disabled={addBusy}
+                                  onChange={(e) => {
+                                    const files = e.target.files
+                                    void addFilesToConfirmation(
+                                      project.id,
+                                      confirmation.id,
+                                      files
+                                    )
+                                    e.target.value = ''
+                                  }}
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+
+                  <div className="rounded-md border border-dashed border-border p-3 space-y-3">
+                    <p className="text-sm font-medium">
+                      {t('f3:payment_modal.add_payment')}
+                    </p>
+                    <div className="flex flex-wrap items-end gap-3">
+                      <div className="space-y-1">
+                        <Label className="text-xs">
+                          {t('f3:payment_modal.bulk_exchange_rate')}
+                        </Label>
                         <Input
                           type="number"
                           step="0.0001"
-                          value={confirmation.exchange_rate}
-                          onChange={(e) => {
-                            setPaymentConfirmations(prev => ({
-                              ...prev,
-                              [project.id]: { ...prev[project.id], exchange_rate: e.target.value }
-                            }))
-                          }}
-                          placeholder="e.g., 600.5"
-                          className="h-8 text-sm"
-                          disabled={isUploading}
+                          className="h-8 w-[140px] text-sm"
+                          value={draft.exchange_rate}
+                          disabled={creating}
+                          onChange={(e) =>
+                            updateDraft(project.id, { exchange_rate: e.target.value })
+                          }
                         />
-                      </TableCell>
-                      <TableCell>
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs">
+                          {t('f3:payment_modal.bulk_transfer_date')}
+                        </Label>
                         <Input
                           type="date"
-                          value={confirmation.transfer_date}
-                          onChange={(e) => {
-                            setPaymentConfirmations(prev => ({
-                              ...prev,
-                              [project.id]: { ...prev[project.id], transfer_date: e.target.value }
-                            }))
-                          }}
-                          className="h-8 text-sm"
-                          disabled={isUploading}
+                          className="h-8 w-[150px] text-sm"
+                          value={draft.transfer_date}
+                          disabled={creating}
+                          onChange={(e) =>
+                            updateDraft(project.id, { transfer_date: e.target.value })
+                          }
                         />
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <Input
-                            type="file"
-                            accept=".pdf,.jpg,.jpeg,.png"
-                            onChange={(e) => {
-                              const file = e.target.files?.[0] || null
-                              setPaymentConfirmations(prev => ({
-                                ...prev,
-                                [project.id]: { ...prev[project.id], file }
-                              }))
-                            }}
-                            className="h-8 text-sm text-xs"
-                            disabled={isUploading}
-                          />
-                          {confirmation.file_path && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-8 text-xs px-2"
-                              onClick={async () => {
-                                try {
-                                  const response = await fetch(`/api/storage/signed-url?path=${encodeURIComponent(confirmation.file_path || '')}`)
-                                  if (!response.ok) {
-                                    throw new Error('Failed to get signed URL')
-                                  }
-                                  const { url, error } = await response.json()
-                                  if (error || !url) {
-                                    throw new Error(error || 'No URL returned')
-                                  }
-                                  const link = document.createElement('a')
-                                  link.href = url
-                                  link.target = '_blank'
-                                  link.rel = 'noopener noreferrer'
-                                  document.body.appendChild(link)
-                                  link.click()
-                                  document.body.removeChild(link)
-                                } catch (error) {
-                                  console.error('Error getting signed URL:', error)
-                                  alert('Failed to open payment confirmation')
-                                }
-                              }}
-                            >
-                              View
-                            </Button>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Button
-                          size="sm"
-                          onClick={async () => {
-                            const conf = paymentConfirmations[project.id]
-                            if (!conf?.file && !hasConfirmation && (!conf?.exchange_rate && !conf?.transfer_date)) {
-                              alert('Please provide at least a file, exchange rate, or transfer date')
-                              return
-                            }
-                            
-                            try {
-                              setUploadingPayments(prev => ({ ...prev, [project.id]: true }))
-                              const formData = new FormData()
-                              if (conf.file) {
-                                formData.append('file', conf.file)
-                              }
-                              if (conf.exchange_rate) {
-                                formData.append('exchange_rate', conf.exchange_rate)
-                              }
-                              if (conf.transfer_date) {
-                                formData.append('transfer_date', conf.transfer_date)
-                              }
-                              formData.append('project_id', project.id)
-                              
-                              const response = await fetch(`/api/f3/mous/${selectedMouForPayment?.id}/payment-confirmation`, {
-                                method: 'POST',
-                                body: formData
-                              })
-                              
-                              if (!response.ok) {
-                                throw new Error('Failed to upload payment confirmation')
-                              }
-                              
-                              const result = await response.json()
-                              
-                              // Refresh MOU data to get updated payment confirmations
-                              const mouResponse = await fetch(`/api/f3/mous?state=${selectedMouForPayment?.state || 'all'}`)
-                              const mouData = parseMousListResponse(await mouResponse.json())
-                              const updatedMou = mouData.mous.find((m) => (m as MOU).id === selectedMouForPayment?.id) as MOU | undefined
-                              
-                              if (updatedMou) {
-                                // Re-parse payment confirmations
-                                const existing = parsePaymentConfirmations(updatedMou.payment_confirmation_file)
-                                const updatedConfirmations: Record<string, { exchange_rate: string; transfer_date: string; file: File | null; file_path?: string }> = {}
-                                
-                                paymentProjects.forEach(p => {
-                                  const existingData = existing[p.id]
-                                  updatedConfirmations[p.id] = {
-                                    exchange_rate: existingData?.exchange_rate?.toString() || '',
-                                    transfer_date: existingData?.transfer_date || '',
-                                    file: null,
-                                    file_path: existingData?.file_path
-                                  }
-                                })
-                                
-                                setPaymentConfirmations(updatedConfirmations)
-                                setSelectedMouForPayment(updatedMou)
-                              }
-                              
-                              // Refresh the MOUs list
-                              await fetchMous()
-                              alert('Payment confirmation saved successfully')
-                            } catch (error) {
-                              console.error('Error uploading payment confirmation:', error)
-                              alert('Failed to save payment confirmation')
-                            } finally {
-                              setUploadingPayments(prev => ({ ...prev, [project.id]: false }))
-                            }
-                          }}
-                          disabled={isUploading}
-                          className="h-8 text-xs"
-                        >
-                          {isUploading ? '...' : hasConfirmation ? 'Update' : 'Upload'}
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  )
-                })}
-              </TableBody>
-            </Table>
-            
-            <div className="flex justify-end gap-2 pt-4 border-t mt-4">
-              <Button
-                variant="default"
-                disabled={uploadingAllPayments || Object.values(uploadingPayments).some(Boolean)}
-                onClick={async () => {
-                  const ready = paymentProjects.filter((p) => {
-                    const c = paymentConfirmations[p.id]
-                    const hasFile = !!(c?.file || c?.file_path)
-                    const hasMeta = !!(c?.exchange_rate?.trim() && c?.transfer_date?.trim())
-                    return hasFile && hasMeta
-                  })
-                  if (ready.length === 0) {
-                    alert('No projects ready to upload. Ensure each has a file (or existing file), exchange rate, and transfer date.')
-                    return
-                  }
-                  setUploadingAllPayments(true)
-                  const uploading: Record<string, boolean> = {}
-                  ready.forEach((p) => { uploading[p.id] = true })
-                  setUploadingPayments((prev) => ({ ...prev, ...uploading }))
-                  try {
-                    for (const project of ready) {
-                      const conf = paymentConfirmations[project.id]!
-                      const formData = new FormData()
-                      if (conf.file) formData.append('file', conf.file)
-                      if (conf.exchange_rate) formData.append('exchange_rate', conf.exchange_rate)
-                      if (conf.transfer_date) formData.append('transfer_date', conf.transfer_date)
-                      formData.append('project_id', project.id)
-                      const response = await fetch(`/api/f3/mous/${selectedMouForPayment?.id}/payment-confirmation`, {
-                        method: 'POST',
-                        body: formData
-                      })
-                      if (!response.ok) {
-                        const err = await response.json().catch(() => ({}))
-                        throw new Error((err as { error?: string }).error || 'Failed to upload payment confirmation')
-                      }
-                    }
-                    const mouResponse = await fetch(`/api/f3/mous?state=${selectedMouForPayment?.state || 'all'}`)
-                    const mouData = parseMousListResponse(await mouResponse.json())
-                    const updatedMou = mouData.mous.find((m) => (m as MOU).id === selectedMouForPayment?.id) as MOU | undefined
-                    if (updatedMou) {
-                      const existing = parsePaymentConfirmations(updatedMou.payment_confirmation_file)
-                      const updatedConfirmations: Record<string, { exchange_rate: string; transfer_date: string; file: File | null; file_path?: string }> = {}
-                      paymentProjects.forEach((p) => {
-                        const existingData = existing[p.id]
-                        updatedConfirmations[p.id] = {
-                          exchange_rate: existingData?.exchange_rate?.toString() ?? '',
-                          transfer_date: existingData?.transfer_date ?? '',
-                          file: null,
-                          file_path: existingData?.file_path
-                        }
-                      })
-                      setPaymentConfirmations(updatedConfirmations)
-                      setSelectedMouForPayment(updatedMou)
-                    }
-                    await fetchMous()
-                    alert(`Saved payment confirmations for ${ready.length} project${ready.length !== 1 ? 's' : ''}.`)
-                  } catch (e) {
-                    console.error(e)
-                    alert(e instanceof Error ? e.message : 'Failed to save one or more payment confirmations.')
-                  } finally {
-                    setUploadingAllPayments(false)
-                    setUploadingPayments({})
-                  }
-                }}
-              >
-                {uploadingAllPayments ? 'Uploading all...' : `Upload all (${paymentProjects.filter((p) => {
-                  const c = paymentConfirmations[p.id]
-                  return !!(c?.file || c?.file_path) && !!(c?.exchange_rate?.trim() && c?.transfer_date?.trim())
-                }).length} ready)`}
-              </Button>
-              <Button
-                variant="outline"
-                onClick={closePaymentModal}
-              >
-                Close
-              </Button>
-            </div>
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs">{t('f3:payment_modal.files')}</Label>
+                        <Input
+                          type="file"
+                          accept=".pdf,.jpg,.jpeg,.png"
+                          multiple
+                          className="h-8 text-xs w-[220px]"
+                          disabled={creating}
+                          onChange={(e) =>
+                            updateDraft(project.id, {
+                              files: Array.from(e.target.files || []),
+                            })
+                          }
+                        />
+                      </div>
+                      <Button
+                        type="button"
+                        size="sm"
+                        className="h-8"
+                        disabled={creating}
+                        onClick={() => createConfirmation(project.id)}
+                      >
+                        {creating ? '...' : t('f3:payment_modal.add_payment')}
+                      </Button>
+                    </div>
+                    {draft.files.length > 0 && (
+                      <p className="text-xs text-muted-foreground">
+                        {draft.files.map((f) => f.name).join(', ')}
+                      </p>
+                    )}
+                  </div>
+                </section>
+              )
+            })}
           </div>
-        </DialogContent>
-      </Dialog>
+        )}
+
+        <div className="flex justify-end gap-2 pt-4 border-t mt-4">
+          <Button variant="outline" onClick={closePaymentModal} disabled={anyBusy}>
+            {t('f3:payment_modal.close')}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
   )
 }

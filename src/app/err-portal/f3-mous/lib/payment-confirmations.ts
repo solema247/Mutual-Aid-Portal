@@ -21,18 +21,11 @@ export function formatPaymentConfirmations(
   return JSON.stringify(confirmations)
 }
 
-export function getPaymentConfirmationCount(
-  mou: MOU,
-  projectCount: number
-): { confirmed: number; total: number } {
-  if (!mou.payment_confirmation_file) {
-    return { confirmed: 0, total: projectCount }
-  }
+function countConfirmedFromLegacyJson(mou: MOU): number {
+  if (!mou.payment_confirmation_file) return 0
   try {
     const parsed = JSON.parse(mou.payment_confirmation_file)
-    if (typeof parsed !== 'object' || parsed === null) {
-      return { confirmed: 0, total: projectCount }
-    }
+    if (typeof parsed !== 'object' || parsed === null) return 0
     let confirmed = 0
     for (const projectId of Object.keys(parsed)) {
       const entry = parsed[projectId]
@@ -48,9 +41,25 @@ export function getPaymentConfirmationCount(
       )
       if (hasFile || hasMeta) confirmed += 1
     }
-    const total = Math.max(projectCount, confirmed)
-    return { confirmed, total }
+    return confirmed
   } catch {
-    return { confirmed: 1, total: projectCount }
+    return mou.payment_confirmation_file ? 1 : 0
   }
+}
+
+/**
+ * Count projects with at least one payment confirmation.
+ * Prefers relational enrichment (`paymentConfirmedCounts`) when provided.
+ */
+export function getPaymentConfirmationCount(
+  mou: MOU,
+  projectCount: number,
+  paymentConfirmedCounts?: Record<string, number>
+): { confirmed: number; total: number } {
+  const relational = paymentConfirmedCounts?.[mou.id]
+  const legacy = countConfirmedFromLegacyJson(mou)
+  const confirmed =
+    relational != null ? Math.max(relational, legacy) : legacy
+  const total = Math.max(projectCount, confirmed)
+  return { confirmed, total }
 }

@@ -29,6 +29,7 @@ export interface MousTableProps {
   mouGrantIds: Record<string, string>
   mouProjectCounts: Record<string, number>
   mouPaymentProjectCounts: Record<string, number>
+  mouPaymentConfirmedCounts: Record<string, number>
   mouAssignmentStatus: Record<string, MouAssignmentStatus>
   canManageProjects: boolean
   canAssign: boolean
@@ -60,6 +61,7 @@ export default function MousTable({
   mouGrantIds,
   mouProjectCounts,
   mouPaymentProjectCounts,
+  mouPaymentConfirmedCounts,
   mouAssignmentStatus,
   canManageProjects,
   canAssign,
@@ -235,7 +237,11 @@ export default function MousTable({
                         <div className="flex flex-col items-center gap-0.5 min-w-[42px]">
                           {(() => {
                             const projectCount = mouPaymentProjectCounts[m.id] ?? mouProjectCounts[m.id] ?? 0
-                            const paymentCount = getPaymentConfirmationCount(m, projectCount)
+                            const paymentCount = getPaymentConfirmationCount(
+                              m,
+                              projectCount,
+                              mouPaymentConfirmedCounts
+                            )
                             const isPartial = paymentCount.confirmed > 0 && paymentCount.confirmed < paymentCount.total
                             const missing = paymentCount.total - paymentCount.confirmed
                             return (

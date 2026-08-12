@@ -3,30 +3,66 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { supabase } from '@/lib/supabaseClient'
-import { parsePaymentConfirmations } from '../lib/payment-confirmations'
-import type { MOU, PaymentConfirmationEntry, PaymentProjectRow } from '../types'
+import type {
+  MOU,
+  NewPaymentDraft,
+  PaymentConfirmationRecord,
+  PaymentProjectRow,
+} from '../types'
 
 interface UsePaymentModalOptions {
   fetchMous: () => Promise<void>
 }
+
+const emptyDraft = (): NewPaymentDraft => ({
+  exchange_rate: '',
+  transfer_date: '',
+  files: [],
+})
 
 export function usePaymentModal({ fetchMous }: UsePaymentModalOptions) {
   const { t } = useTranslation(['f3'])
   const [paymentModalOpen, setPaymentModalOpen] = useState(false)
   const [selectedMouForPayment, setSelectedMouForPayment] = useState<MOU | null>(null)
   const [paymentProjects, setPaymentProjects] = useState<PaymentProjectRow[]>([])
-  const [paymentConfirmations, setPaymentConfirmations] = useState<
-    Record<string, PaymentConfirmationEntry>
+  const [confirmationsByProject, setConfirmationsByProject] = useState<
+    Record<string, PaymentConfirmationRecord[]>
   >({})
-  const [uploadingPayments, setUploadingPayments] = useState<Record<string, boolean>>({})
-  const [uploadingAllPayments, setUploadingAllPayments] = useState(false)
+  const [newDrafts, setNewDrafts] = useState<Record<string, NewPaymentDraft>>({})
+  const [loadingConfirmations, setLoadingConfirmations] = useState(false)
+  const [busyKeys, setBusyKeys] = useState<Record<string, boolean>>({})
   const [bulkPaymentExchangeRate, setBulkPaymentExchangeRate] = useState('')
   const [bulkPaymentTransferDate, setBulkPaymentTransferDate] = useState('')
+
+  const setBusy = (key: string, value: boolean) => {
+    setBusyKeys((prev) => {
+      const next = { ...prev }
+      if (value) next[key] = true
+      else delete next[key]
+      return next
+    })
+  }
+
+  const refreshConfirmations = async (mouId: string) => {
+    const response = await fetch(`/api/f3/mous/${mouId}/payment-confirmation`)
+    if (!response.ok) {
+      throw new Error('Failed to load payment confirmations')
+    }
+    const data = await response.json()
+    const byProject: Record<string, PaymentConfirmationRecord[]> =
+      data.by_project || {}
+    setConfirmationsByProject(byProject)
+    return byProject
+  }
 
   const openPaymentModal = async (mou: MOU) => {
     setSelectedMouForPayment(mou)
     setBulkPaymentExchangeRate('')
     setBulkPaymentTransferDate('')
+    setNewDrafts({})
+    setConfirmationsByProject({})
+    setLoadingConfirmations(true)
+    setPaymentModalOpen(true)
 
     try {
       const { data: projects, error } = await supabase
@@ -38,9 +74,8 @@ export function usePaymentModal({ fetchMous }: UsePaymentModalOptions) {
       if (error) {
         console.error('Error fetching MOU projects:', error)
         setPaymentProjects([])
-        setPaymentConfirmations({})
       } else {
-        let projectList = (projects || []).map((p: Record<string, unknown>) => {
+        const projectList = (projects || []).map((p: Record<string, unknown>) => {
           const room = p.emergency_rooms as {
             name?: string
             name_ar?: string
@@ -56,75 +91,27 @@ export function usePaymentModal({ fetchMous }: UsePaymentModalOptions) {
             grant_id: (p.grant_id as string | null) || null,
           }
         })
-
-        const existing = parsePaymentConfirmations(mou.payment_confirmation_file)
-        if (projectList.length === 0 && Object.keys(existing).length > 0) {
-          const projectIds = Object.keys(existing)
-          const { data: fallbackProjects } = await supabase
-            .from('err_projects')
-            .select('id, err_id, state, locality, grant_id, emergency_rooms (name, name_ar, err_code)')
-            .in('id', projectIds)
-          const byId = new Map(
-            (fallbackProjects || []).map((p: Record<string, unknown>) => {
-              const room = p.emergency_rooms as {
-                name?: string
-                name_ar?: string
-                err_code?: string
-              } | null
-              const roomName = room?.name || room?.name_ar || room?.err_code || null
-              return [
-                p.id,
-                {
-                  id: p.id as string,
-                  err_id: (p.err_id as string | null) ?? room?.err_code ?? null,
-                  state: p.state as string,
-                  locality: p.locality as string | null,
-                  emergency_room_name: roomName,
-                  grant_id: (p.grant_id as string | null) || null,
-                },
-              ]
-            })
-          )
-          projectList = projectIds
-            .map((id) => byId.get(id))
-            .filter(Boolean) as PaymentProjectRow[]
-        }
-
         setPaymentProjects(projectList)
-        const confirmations: Record<string, PaymentConfirmationEntry> = {}
+        const drafts: Record<string, NewPaymentDraft> = {}
+        for (const p of projectList) drafts[p.id] = emptyDraft()
+        setNewDrafts(drafts)
+      }
 
-        projectList.forEach((project) => {
-          const existingData = existing[project.id]
-          confirmations[project.id] = {
-            exchange_rate: existingData?.exchange_rate?.toString() || '',
-            transfer_date: existingData?.transfer_date || '',
-            file: null,
-            file_path: existingData?.file_path,
-          }
-        })
-
-        if (
-          mou.payment_confirmation_file &&
-          !mou.payment_confirmation_file.startsWith('{') &&
-          projectList.length > 0
-        ) {
-          confirmations[projectList[0].id] = {
-            exchange_rate: mou.exchange_rate?.toString() || '',
-            transfer_date: mou.transfer_date || '',
-            file: null,
-            file_path: mou.payment_confirmation_file,
-          }
-        }
-
-        setPaymentConfirmations(confirmations)
+      // Confirmations may fail if the migration isn't applied yet — keep projects so
+      // the Add Payment UI still renders.
+      try {
+        await refreshConfirmations(mou.id)
+      } catch (confirmError) {
+        console.error('Error loading payment confirmations:', confirmError)
+        setConfirmationsByProject({})
       }
     } catch (error) {
       console.error('Error opening payment modal:', error)
       setPaymentProjects([])
-      setPaymentConfirmations({})
+      setConfirmationsByProject({})
+    } finally {
+      setLoadingConfirmations(false)
     }
-
-    setPaymentModalOpen(true)
   }
 
   const applyBulkPaymentToAllProjects = () => {
@@ -138,15 +125,10 @@ export function usePaymentModal({ fetchMous }: UsePaymentModalOptions) {
       alert(t('f3:payment_modal.bulk_rate_invalid'))
       return
     }
-    setPaymentConfirmations((prev) => {
+    setNewDrafts((prev) => {
       const next = { ...prev }
       for (const project of paymentProjects) {
-        const current = next[project.id] ?? {
-          exchange_rate: '',
-          transfer_date: '',
-          file: null,
-          file_path: undefined,
-        }
+        const current = next[project.id] ?? emptyDraft()
         next[project.id] = {
           ...current,
           exchange_rate: rate,
@@ -161,10 +143,12 @@ export function usePaymentModal({ fetchMous }: UsePaymentModalOptions) {
     setPaymentModalOpen(false)
     setSelectedMouForPayment(null)
     setPaymentProjects([])
-    setPaymentConfirmations({})
-    setUploadingPayments({})
+    setConfirmationsByProject({})
+    setNewDrafts({})
+    setBusyKeys({})
     setBulkPaymentExchangeRate('')
     setBulkPaymentTransferDate('')
+    setLoadingConfirmations(false)
   }
 
   return {
@@ -173,12 +157,13 @@ export function usePaymentModal({ fetchMous }: UsePaymentModalOptions) {
     selectedMouForPayment,
     setSelectedMouForPayment,
     paymentProjects,
-    paymentConfirmations,
-    setPaymentConfirmations,
-    uploadingPayments,
-    setUploadingPayments,
-    uploadingAllPayments,
-    setUploadingAllPayments,
+    confirmationsByProject,
+    setConfirmationsByProject,
+    newDrafts,
+    setNewDrafts,
+    loadingConfirmations,
+    busyKeys,
+    setBusy,
     bulkPaymentExchangeRate,
     setBulkPaymentExchangeRate,
     bulkPaymentTransferDate,
@@ -186,6 +171,7 @@ export function usePaymentModal({ fetchMous }: UsePaymentModalOptions) {
     openPaymentModal,
     applyBulkPaymentToAllProjects,
     closePaymentModal,
+    refreshConfirmations,
     fetchMous,
   }
 }

@@ -102,6 +102,35 @@ export interface PaymentConfirmationEntry {
   file_path?: string
 }
 
+export interface PaymentFileRecord {
+  id: string
+  payment_confirmation_id: string
+  file_path: string
+  original_name: string
+  file_type: string | null
+  file_size: number | null
+  uploaded_by: string | null
+  uploaded_at: string
+}
+
+export interface PaymentConfirmationRecord {
+  id: string
+  mou_id: string
+  project_id: string
+  exchange_rate: number | null
+  transfer_date: string | null
+  created_by: string | null
+  created_at: string
+  updated_at: string
+  files: PaymentFileRecord[]
+}
+
+export interface NewPaymentDraft {
+  exchange_rate: string
+  transfer_date: string
+  files: File[]
+}
+
 export interface MouAssignmentStatus {
   hasUnassigned: boolean
   hasAssigned: boolean

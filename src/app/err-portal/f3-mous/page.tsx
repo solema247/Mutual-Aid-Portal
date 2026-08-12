@@ -78,6 +78,7 @@ function F3MOUsPageContent() {
         mouGrantIds={list.mouGrantIds}
         mouProjectCounts={list.mouProjectCounts}
         mouPaymentProjectCounts={list.mouPaymentProjectCounts}
+        mouPaymentConfirmedCounts={list.mouPaymentConfirmedCounts}
         mouAssignmentStatus={list.mouAssignmentStatus}
         canManageProjects={canManageProjects}
         canAssign={canAssign}

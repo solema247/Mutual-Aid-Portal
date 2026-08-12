@@ -4,6 +4,7 @@ import { getUserStateAccess } from '@/lib/userStateAccess'
 import { getActivityAndCategoryLists, getSectorWithHighestAmount } from '@/lib/plannedActivitiesExpenses'
 import { isActivityShifted } from '@/lib/activityShift'
 import { pickF5TextForEnUi } from '@/lib/storiesEnDisplay'
+import { loadProjectPaymentSummaries } from '@/lib/mouPaymentConfirmations'
 
 function sumPlanFromPlannedActivities(planned: any): number {
   try {
@@ -160,26 +161,13 @@ export async function GET(request: Request) {
     let transferDateByProject: Record<string, string> = {}
     let rateByProject: Record<string, number> = {}
     if (mouIds.length > 0) {
-      const { data: mousRows } = await supabase
-        .from('mous')
-        .select('id, payment_confirmation_file')
-        .in('id', mouIds)
-      for (const mou of mousRows || []) {
-        const raw = (mou as any)?.payment_confirmation_file
-        if (!raw || typeof raw !== 'string') continue
-        try {
-          const parsed = JSON.parse(raw)
-          if (parsed && typeof parsed === 'object') {
-            for (const [projectId, data] of Object.entries(parsed)) {
-              const d = (data as any)?.transfer_date
-              if (d && typeof d === 'string') transferDateByProject[projectId] = d
-              const rateVal = (data as any)?.exchange_rate
-              if (rateVal != null && !Number.isNaN(Number(rateVal))) rateByProject[projectId] = Number(rateVal)
-            }
-          }
-        } catch {
-          // ignore
-        }
+      const summaries = await loadProjectPaymentSummaries(supabase, {
+        projectIds,
+        mouIds,
+      })
+      for (const [projectId, summary] of Object.entries(summaries)) {
+        if (summary.transfer_date) transferDateByProject[projectId] = summary.transfer_date
+        if (summary.exchange_rate != null) rateByProject[projectId] = summary.exchange_rate
       }
     }
     const amountsByProject: Record<string, { amount_usd: number; amount_sdg: number; f4_count: number }> = {}
