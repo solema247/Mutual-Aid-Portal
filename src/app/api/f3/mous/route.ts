@@ -63,9 +63,34 @@ async function fetchProjectEnrichment(
     }
   }
 
+  const enrichment = aggregateMouEnrichment(rows, grantIdByGridId)
+
+  // Distinct projects with ≥1 relational payment confirmation per MOU
+  const paymentConfirmedCounts: Record<string, number> = {}
+  const { data: confRows, error: confErr } = await supabase
+    .from('mou_payment_confirmations')
+    .select('mou_id, project_id')
+    .in('mou_id', mouIds)
+
+  if (confErr) {
+    console.warn('[f3/mous] payment confirmation counts unavailable', confErr.message)
+  } else {
+    const projectsByMou = new Map<string, Set<string>>()
+    for (const row of confRows || []) {
+      const mouId = (row as { mou_id: string }).mou_id
+      const projectId = (row as { project_id: string }).project_id
+      if (!mouId || !projectId) continue
+      if (!projectsByMou.has(mouId)) projectsByMou.set(mouId, new Set())
+      projectsByMou.get(mouId)!.add(projectId)
+    }
+    for (const [mouId, set] of projectsByMou) {
+      paymentConfirmedCounts[mouId] = set.size
+    }
+  }
+
   return {
     totalByMouId,
-    enrichment: aggregateMouEnrichment(rows, grantIdByGridId),
+    enrichment: { ...enrichment, paymentConfirmedCounts },
   }
 }
 

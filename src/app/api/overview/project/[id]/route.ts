@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { pickF5TextForEnUi, pickReachTextForEnUi } from '@/lib/storiesEnDisplay'
+import { loadProjectPaymentSummaries } from '@/lib/mouPaymentConfirmations'
 
 const OVERDUE_DAYS_AFTER_TRANSFER = 32
 
@@ -28,34 +29,6 @@ function computeOverdue(
   const diffMs = today.getTime() - due.getTime()
   const days = Math.floor(diffMs / (24 * 60 * 60 * 1000))
   return { is_overdue: true, days_overdue: days }
-}
-
-function getPaymentConfirmationForProject(
-  paymentConfirmationRaw: string | null | undefined,
-  projectId: string
-): { filePath: string | null; transferDate: string | null } {
-  if (!paymentConfirmationRaw || typeof paymentConfirmationRaw !== 'string') {
-    return { filePath: null, transferDate: null }
-  }
-
-  try {
-    const parsed = JSON.parse(paymentConfirmationRaw)
-    if (typeof parsed === 'string') {
-      return { filePath: parsed.trim() || null, transferDate: null }
-    }
-
-    if (parsed && typeof parsed === 'object') {
-      const entry = (parsed as Record<string, { file_path?: unknown; transfer_date?: unknown }>)[projectId]
-      const filePath = typeof entry?.file_path === 'string' ? entry.file_path.trim() || null : null
-      const transferDate = typeof entry?.transfer_date === 'string' ? entry.transfer_date : null
-      return { filePath, transferDate }
-    }
-  } catch {
-    // Old records stored a single storage key rather than the per-project JSON map.
-    return { filePath: paymentConfirmationRaw.trim() || null, transferDate: null }
-  }
-
-  return { filePath: null, transferDate: null }
 }
 
 export async function GET(
@@ -274,22 +247,32 @@ export async function GET(
       if (projErr) throw projErr
       console.log('[overview/project] project load', Date.now() - t0, 'ms')
 
-      // Load MOU file keys and per-project transfer date from payment confirmation
+      // Load MOU file keys and per-project transfer date from payment confirmations
       let mouFileKeys: { payment_confirmation_file: string | null; signed_mou_file_key: string | null } | null = null
       let transferDateFromMou: string | null = null
       if (project.mou_id) {
         const { data: mou, error: mouErr } = await supabase
           .from('mous')
-          .select('payment_confirmation_file, signed_mou_file_key')
+          .select('signed_mou_file_key')
           .eq('id', project.mou_id)
           .single()
+        const paymentSummaries = await loadProjectPaymentSummaries(supabase, {
+          projectIds: [id],
+          mouIds: [project.mou_id],
+        })
+        const payment = paymentSummaries[id]
         if (!mouErr && mou) {
-          const paymentConfirmation = getPaymentConfirmationForProject(mou.payment_confirmation_file, id)
           mouFileKeys = {
-            payment_confirmation_file: paymentConfirmation.filePath,
-            signed_mou_file_key: mou.signed_mou_file_key || null
+            payment_confirmation_file: payment?.file_path || null,
+            signed_mou_file_key: mou.signed_mou_file_key || null,
           }
-          transferDateFromMou = paymentConfirmation.transferDate
+          transferDateFromMou = payment?.transfer_date || null
+        } else if (payment) {
+          mouFileKeys = {
+            payment_confirmation_file: payment.file_path || null,
+            signed_mou_file_key: null,
+          }
+          transferDateFromMou = payment.transfer_date || null
         }
       }
 

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { requirePermission } from '@/lib/requirePermission'
+import { loadProjectPaymentSummaries } from '@/lib/mouPaymentConfirmations'
 
 /**
  * GET /api/f4/by-serial?serial=XXX
@@ -39,31 +40,27 @@ export async function GET(request: Request) {
     const mouIds = Array.from(new Set(projects.map((p: any) => p.mou_id).filter(Boolean))) as string[]
 
     let mouCodeById: Record<string, string> = {}
-    let paymentByProjectId: Record<string, { exchange_rate?: number; transfer_date?: string; file_path?: string }> = {}
+    let paymentByProjectId: Record<
+      string,
+      { exchange_rate?: number; transfer_date?: string; file_path?: string }
+    > = {}
     if (mouIds.length) {
       const { data: mous } = await supabase
         .from('mous')
-        .select('id, mou_code, payment_confirmation_file')
+        .select('id, mou_code')
         .in('id', mouIds)
       for (const m of mous || []) {
         mouCodeById[(m as any).id] = (m as any).mou_code || ''
-        const raw = (m as any).payment_confirmation_file
-        if (raw && typeof raw === 'string') {
-          try {
-            const parsed = JSON.parse(raw)
-            if (parsed && typeof parsed === 'object') {
-              for (const [pid, data] of Object.entries(parsed)) {
-                const d = data as any
-                paymentByProjectId[pid] = {
-                  exchange_rate: d?.exchange_rate,
-                  transfer_date: d?.transfer_date,
-                  file_path: d?.file_path
-                }
-              }
-            }
-          } catch {
-            // ignore
-          }
+      }
+      const summaries = await loadProjectPaymentSummaries(supabase, {
+        projectIds,
+        mouIds,
+      })
+      for (const [pid, summary] of Object.entries(summaries)) {
+        paymentByProjectId[pid] = {
+          exchange_rate: summary.exchange_rate ?? undefined,
+          transfer_date: summary.transfer_date ?? undefined,
+          file_path: summary.file_path ?? undefined,
         }
       }
     }

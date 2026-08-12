@@ -9,6 +9,7 @@ import {
 } from '@/lib/f4ExpenseDisplay'
 import { normalizeStateName } from '@/lib/normalizeStateName'
 import { resolveProjectCompletionDate } from '@/lib/projectStatus'
+import { loadProjectPaymentSummaries } from '@/lib/mouPaymentConfirmations'
 
 /** PostgREST `.in()` with hundreds of UUIDs can exceed URL limits and return empty data. */
 const SUPABASE_IN_BATCH = 80
@@ -168,26 +169,6 @@ function computeOverdue(
   return { is_overdue: true, days_overdue: days }
 }
 
-/** Parse MOU payment_confirmation_file JSON and return map of project_id -> transfer_date. */
-function getTransferDateByProjectFromMous(mousRows: any[]): Record<string, string> {
-  const out: Record<string, string> = {}
-  for (const mou of mousRows || []) {
-    const raw = mou?.payment_confirmation_file
-    if (!raw || typeof raw !== 'string') continue
-    try {
-      const parsed = JSON.parse(raw)
-      if (parsed && typeof parsed === 'object') {
-        for (const [projectId, data] of Object.entries(parsed)) {
-          const d = (data as any)?.transfer_date
-          if (d && typeof d === 'string') out[projectId] = d
-        }
-      }
-    } catch {
-      // ignore
-    }
-  }
-  return out
-}
 
 async function fetchRowsByIdColumn(
   supabase: any,
@@ -291,10 +272,13 @@ export async function GET(request: Request) {
     if (mouIds.length) {
       const { data: mousRows } = await supabase
         .from('mous')
-        .select('id, mou_code, payment_confirmation_file')
+        .select('id, mou_code')
         .in('id', mouIds)
-      for (const m of (mousRows || [])) mouCodeById[(m as any).id] = (m as any).mou_code
-      transferDateByProject = getTransferDateByProjectFromMous(mousRows || [])
+      for (const m of mousRows || []) mouCodeById[(m as any).id] = (m as any).mou_code
+      const paymentSummaries = await loadProjectPaymentSummaries(supabase, { mouIds })
+      for (const [projectId, summary] of Object.entries(paymentSummaries)) {
+        if (summary.transfer_date) transferDateByProject[projectId] = summary.transfer_date
+      }
     }
 
     const projectIds = (projects || []).map((p:any)=> p.id)

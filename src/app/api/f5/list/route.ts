@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { getUserStateAccess } from '@/lib/userStateAccess'
+import { loadProjectPaymentSummaries } from '@/lib/mouPaymentConfirmations'
 
 const SUPABASE_IN_BATCH = 80
 
@@ -370,32 +371,25 @@ export async function GET() {
     const rateByProject: Record<string, number> = {}
 
     if (mouIds.length > 0) {
+      const summariesByProject = await loadProjectPaymentSummaries(supabase, { mouIds })
+      for (const [projectId, summary] of Object.entries(summariesByProject)) {
+        if (summary.transfer_date) transferDateByProject[projectId] = summary.transfer_date
+        if (summary.exchange_rate != null) rateByProject[projectId] = summary.exchange_rate
+      }
+
       for (const batch of chunkIds(mouIds)) {
         const { data: mousRows } = await supabase
           .from('mous')
-          .select('id, exchange_rate, payment_confirmation_file')
+          .select('id, exchange_rate')
           .in('id', batch)
         for (const mou of mousRows || []) {
-          const raw = (mou as { payment_confirmation_file?: string }).payment_confirmation_file
-          if (raw && typeof raw === 'string') {
-            try {
-              const parsed = JSON.parse(raw) as Record<string, { transfer_date?: string; exchange_rate?: number }>
-              for (const [projectId, data] of Object.entries(parsed)) {
-                const d = data?.transfer_date
-                if (d && typeof d === 'string') transferDateByProject[projectId] = d
-                const rateVal = data?.exchange_rate
-                if (rateVal != null && !Number.isNaN(Number(rateVal))) {
-                  rateByProject[projectId] = Number(rateVal)
-                }
-              }
-            } catch {
-              // ignore invalid JSON
-            }
-          }
           const mouRate = (mou as { exchange_rate?: number }).exchange_rate
           if (typeof mouRate === 'number' && mouRate > 0) {
             for (const [pid, project] of projectById) {
-              if (String(project.mou_id) === String((mou as { id: string }).id) && rateByProject[pid] == null) {
+              if (
+                String(project.mou_id) === String((mou as { id: string }).id) &&
+                rateByProject[pid] == null
+              ) {
                 rateByProject[pid] = mouRate
               }
             }

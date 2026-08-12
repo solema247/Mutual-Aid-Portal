@@ -73,6 +73,60 @@ export function paymentConfirmationPathForProject(
   return null
 }
 
+async function paymentConfirmationPathsByProject(
+  supabase: SupabaseClient,
+  projectIds: string[],
+  mouById: Map<string, any>,
+  projects: ArchiveProjectRow[]
+): Promise<Map<string, string[]>> {
+  const out = new Map<string, string[]>()
+  if (projectIds.length === 0) return out
+
+  try {
+    const confRows = await fetchIn(
+      supabase,
+      'mou_payment_confirmations',
+      'id, project_id',
+      'project_id',
+      projectIds
+    )
+    const confIds = confRows.map((c: any) => c.id).filter(Boolean)
+    const confProjectById = new Map<string, string>(
+      confRows.map((c: any) => [c.id, c.project_id])
+    )
+    if (confIds.length > 0) {
+      const fileRows = await fetchIn(
+        supabase,
+        'mou_payment_files',
+        'payment_confirmation_id, file_path',
+        'payment_confirmation_id',
+        confIds
+      )
+      for (const f of fileRows) {
+        const pid = confProjectById.get(f.payment_confirmation_id)
+        if (!pid || !f.file_path) continue
+        const list = out.get(pid) || []
+        list.push(f.file_path)
+        out.set(pid, list)
+      }
+    }
+  } catch (e) {
+    console.warn('[dataArchive] relational payment files unavailable', e)
+  }
+
+  // Legacy JSON / single-path fallback for projects with no relational files
+  for (const p of projects) {
+    if ((out.get(p.id) || []).length > 0) continue
+    const mou = p.mou_id ? mouById.get(p.mou_id) : null
+    const legacy = mou
+      ? paymentConfirmationPathForProject(mou.payment_confirmation_file, p.id)
+      : null
+    if (legacy) out.set(p.id, [legacy])
+  }
+
+  return out
+}
+
 /**
  * Collect all original document references (F1-F5 + payment confirmation) for a set of
  * completed projects. Missing documents are returned with storage_path = null so exports
@@ -134,6 +188,13 @@ export async function collectArchiveFiles(
     f5ByProject.set(pid, list)
   }
 
+  const paymentPathsByProject = await paymentConfirmationPathsByProject(
+    supabase,
+    projectIds,
+    mouById,
+    projects
+  )
+
   const out: Record<string, ArchiveFile[]> = {}
   for (const p of projects) {
     const files: ArchiveFile[] = []
@@ -152,7 +213,7 @@ export async function collectArchiveFiles(
     const mou = p.mou_id ? mouById.get(p.mou_id) : null
     const mouGenerated: string | null = mou?.file_key || null
     const mouSigned: string | null = mou?.signed_mou_file_key || null
-    const paymentPath = mou ? paymentConfirmationPathForProject(mou.payment_confirmation_file, p.id) : null
+    const paymentPaths = paymentPathsByProject.get(p.id) || []
     files.push({
       form: 'F3',
       name: mouGenerated ? `F3_MOU.${ext(mouGenerated)}` : 'F3_MOU',
@@ -163,11 +224,22 @@ export async function collectArchiveFiles(
       name: mouSigned ? `F3_MOU_signed.${ext(mouSigned)}` : 'F3_MOU_signed',
       storage_path: mouSigned
     })
-    files.push({
-      form: 'F3',
-      name: paymentPath ? `F3_payment_confirmation.${ext(paymentPath)}` : 'F3_payment_confirmation',
-      storage_path: paymentPath
-    })
+    if (paymentPaths.length === 0) {
+      files.push({
+        form: 'F3',
+        name: 'F3_payment_confirmation',
+        storage_path: null,
+      })
+    } else {
+      paymentPaths.forEach((path, i) => {
+        const suffix = paymentPaths.length > 1 ? `_${i + 1}` : ''
+        files.push({
+          form: 'F3',
+          name: `F3_payment_confirmation${suffix}.${ext(path)}`,
+          storage_path: path,
+        })
+      })
+    }
 
     const f4Paths = f4ByProject.get(p.id) || []
     if (f4Paths.length === 0) {

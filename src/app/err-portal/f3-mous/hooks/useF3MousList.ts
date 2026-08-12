@@ -18,6 +18,7 @@ function applyEnrichment(
     setMouGrantIds: (v: Record<string, string>) => void
     setMouProjectCounts: (v: Record<string, number>) => void
     setMouPaymentProjectCounts: (v: Record<string, number>) => void
+    setMouPaymentConfirmedCounts: (v: Record<string, number>) => void
     setMouAssignmentStatus: (v: Record<string, MouAssignmentStatus>) => void
   },
   enrichment: ReturnType<typeof parseMousListResponse>
@@ -25,6 +26,7 @@ function applyEnrichment(
   setters.setMouGrantIds(enrichment.grantIds)
   setters.setMouProjectCounts(enrichment.projectCounts)
   setters.setMouPaymentProjectCounts(enrichment.paymentProjectCounts)
+  setters.setMouPaymentConfirmedCounts(enrichment.paymentConfirmedCounts)
   setters.setMouAssignmentStatus(enrichment.assignmentStatus)
 }
 
@@ -34,6 +36,9 @@ export function useF3MousList() {
   const [mouGrantIds, setMouGrantIds] = useState<Record<string, string>>({})
   const [mouProjectCounts, setMouProjectCounts] = useState<Record<string, number>>({})
   const [mouPaymentProjectCounts, setMouPaymentProjectCounts] = useState<Record<string, number>>({})
+  const [mouPaymentConfirmedCounts, setMouPaymentConfirmedCounts] = useState<Record<string, number>>(
+    {}
+  )
   const [mousFilters, setMousFilters] = useState<ActiveFilter[]>([])
   const [loading, setLoading] = useState(true)
   const [mouAssignmentStatus, setMouAssignmentStatus] = useState<
@@ -46,6 +51,7 @@ export function useF3MousList() {
     setMouGrantIds,
     setMouProjectCounts,
     setMouPaymentProjectCounts,
+    setMouPaymentConfirmedCounts,
     setMouAssignmentStatus,
   }
 
@@ -136,12 +142,12 @@ export function useF3MousList() {
         const grantId = mouGrantIds[m.id]
         if (!grantId) return false
         const total = mouPaymentProjectCounts[m.id] ?? mouProjectCounts[m.id] ?? 0
-        const { confirmed } = getPaymentConfirmationCount(m, total)
+        const { confirmed } = getPaymentConfirmationCount(m, total, mouPaymentConfirmedCounts)
         return confirmed < total
       })
       .map((m) => {
         const total = mouPaymentProjectCounts[m.id] ?? mouProjectCounts[m.id] ?? 0
-        const pc = getPaymentConfirmationCount(m, total)
+        const pc = getPaymentConfirmationCount(m, total, mouPaymentConfirmedCounts)
         return {
           mou: m,
           confirmed: pc.confirmed,
@@ -149,7 +155,7 @@ export function useF3MousList() {
           missing: pc.total - pc.confirmed,
         }
       })
-  }, [mous, mouGrantIds, mouPaymentProjectCounts, mouProjectCounts])
+  }, [mous, mouGrantIds, mouPaymentProjectCounts, mouProjectCounts, mouPaymentConfirmedCounts])
 
   const paginatedMous = useMemo(() => {
     const startIndex = (currentPage - 1) * ITEMS_PER_PAGE
@@ -165,6 +171,7 @@ export function useF3MousList() {
     mouGrantIds,
     mouProjectCounts,
     mouPaymentProjectCounts,
+    mouPaymentConfirmedCounts,
     mouAssignmentStatus,
     currentPage,
     setCurrentPage,
