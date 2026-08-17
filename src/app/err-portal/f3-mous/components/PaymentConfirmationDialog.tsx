@@ -77,12 +77,12 @@ export default function PaymentConfirmationDialog(props: PaymentConfirmationDial
     })
   }
 
-  const createConfirmation = async (projectId: string) => {
+  const createConfirmation = async (projectId: string, opts?: { silent?: boolean }) => {
     const draft = newDrafts[projectId]
-    if (!draft || !selectedMouForPayment) return
+    if (!draft || !selectedMouForPayment) return false
     if (!draft.exchange_rate.trim() && !draft.transfer_date.trim() && draft.files.length === 0) {
-      alert(t('f3:payment_modal.create_required'))
-      return
+      if (!opts?.silent) alert(t('f3:payment_modal.create_required'))
+      return false
     }
     const key = `create:${projectId}`
     try {
@@ -103,11 +103,63 @@ export default function PaymentConfirmationDialog(props: PaymentConfirmationDial
       }
 
       updateDraft(projectId, { exchange_rate: '', transfer_date: '', files: [] })
-      await refreshConfirmations(selectedMouForPayment.id)
-      await fetchMous()
+      return true
     } catch (e) {
       console.error(e)
-      alert(e instanceof Error ? e.message : 'Failed to create payment confirmation')
+      if (!opts?.silent) {
+        alert(e instanceof Error ? e.message : 'Failed to create payment confirmation')
+      }
+      throw e
+    } finally {
+      setBusy(key, false)
+    }
+  }
+
+  const uploadAllPaymentConfirmations = async () => {
+    if (!selectedMouForPayment) return
+    const ready = paymentProjects.filter((project) => {
+      const draft = newDrafts[project.id]
+      if (!draft) return false
+      return (
+        !!draft.exchange_rate.trim() ||
+        !!draft.transfer_date.trim() ||
+        draft.files.length > 0
+      )
+    })
+    if (ready.length === 0) {
+      alert(t('f3:payment_modal.upload_all_none'))
+      return
+    }
+
+    const key = 'upload-all'
+    const failures: string[] = []
+    try {
+      setBusy(key, true)
+      for (const project of ready) {
+        try {
+          await createConfirmation(project.id, { silent: true })
+        } catch (e) {
+          const label =
+            project.emergency_room_name ||
+            project.grant_id ||
+            project.err_id ||
+            project.id
+          failures.push(
+            `${label}: ${e instanceof Error ? e.message : 'failed'}`
+          )
+        }
+      }
+      await refreshConfirmations(selectedMouForPayment.id)
+      await fetchMous()
+      if (failures.length > 0) {
+        alert(
+          t('f3:payment_modal.upload_all_partial', {
+            ok: ready.length - failures.length,
+            fail: failures.length,
+            details: failures.join('\n'),
+          })
+        )
+      }
     } finally {
       setBusy(key, false)
     }
@@ -543,8 +595,18 @@ export default function PaymentConfirmationDialog(props: PaymentConfirmationDial
                         type="button"
                         size="sm"
                         className="h-8"
-                        disabled={creating}
-                        onClick={() => createConfirmation(project.id)}
+                        disabled={creating || anyBusy}
+                        onClick={async () => {
+                          try {
+                            const ok = await createConfirmation(project.id)
+                            if (ok && selectedMouForPayment) {
+                              await refreshConfirmations(selectedMouForPayment.id)
+                              await fetchMous()
+                            }
+                          } catch {
+                            // error already surfaced
+                          }
+                        }}
                       >
                         {creating ? '...' : t('f3:payment_modal.add_payment')}
                       </Button>
@@ -561,9 +623,18 @@ export default function PaymentConfirmationDialog(props: PaymentConfirmationDial
           </div>
         )}
 
-        <div className="flex justify-end gap-2 pt-4 border-t mt-4">
+        <div className="flex flex-wrap justify-end gap-2 pt-4 border-t mt-4">
           <Button variant="outline" onClick={closePaymentModal} disabled={anyBusy}>
             {t('f3:payment_modal.close')}
+          </Button>
+          <Button
+            type="button"
+            onClick={() => void uploadAllPaymentConfirmations()}
+            disabled={anyBusy || loadingConfirmations || paymentProjects.length === 0}
+          >
+            {busyKeys['upload-all']
+              ? '...'
+              : t('f3:payment_modal.upload_all')}
           </Button>
         </div>
       </DialogContent>

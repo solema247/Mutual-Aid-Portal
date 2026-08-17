@@ -53,12 +53,15 @@
     "confirm_delete_file": "Delete this file? The payment confirmation will remain.",
     "confirm_delete_payment": "Delete this payment confirmation and all of its files?",
     "open_failed": "Failed to open payment confirmation",
-    "bulk_hint": "Enter an exchange rate and transfer date, then apply to all projects' new-payment drafts. You can still adjust each project before creating.",
+    "bulk_hint": "Enter an exchange rate and transfer date, then apply to all projects' new-payment drafts. Prepare files per project, then use Upload All Payment Confirmations, or add one project at a time.",
     "bulk_exchange_rate": "Exchange rate",
     "bulk_transfer_date": "Transfer date",
     "apply_to_all": "Apply to all projects",
     "bulk_required": "Please enter both exchange rate and transfer date.",
-    "bulk_rate_invalid": "Please enter a valid exchange rate greater than zero."
+    "bulk_rate_invalid": "Please enter a valid exchange rate greater than zero.",
+    "upload_all": "Upload All Payment Confirmations",
+    "upload_all_none": "Prepare at least one project draft (exchange rate, transfer date, and/or files) before uploading all.",
+    "upload_all_partial": "Uploaded {{ok}} payment confirmation(s). {{fail}} failed:\n{{details}}"
   },
   "mou_agreement": "Memorandum of Understanding Agreement",
   "between": "Between",

@@ -71,6 +71,91 @@ export function buildPaymentFileStoragePath(opts: {
 }
 
 /**
+ * Load confirmations + files with two flat queries (avoids PostgREST embed/schema-cache
+ * failures that drop files or return empty when nested selects can't resolve FKs).
+ */
+export async function fetchConfirmationsWithFiles(
+  supabase: SupabaseClient,
+  opts: {
+    mouId?: string | null
+    projectId?: string | null
+    projectIds?: string[]
+    mouIds?: string[]
+  }
+): Promise<MouPaymentConfirmationRow[]> {
+  let query = supabase
+    .from('mou_payment_confirmations')
+    .select(
+      'id, mou_id, project_id, exchange_rate, transfer_date, created_by, created_at, updated_at'
+    )
+    .order('transfer_date', { ascending: true, nullsFirst: false })
+    .order('created_at', { ascending: true })
+
+  if (opts.projectId) {
+    query = query.eq('project_id', opts.projectId)
+  } else if (opts.projectIds && opts.projectIds.length > 0) {
+    query = query.in('project_id', opts.projectIds)
+  } else if (opts.mouId) {
+    query = query.eq('mou_id', opts.mouId)
+  } else if (opts.mouIds && opts.mouIds.length > 0) {
+    query = query.in('mou_id', opts.mouIds)
+  } else {
+    return []
+  }
+
+  const { data, error } = await query
+  if (error) {
+    console.warn('[fetchConfirmationsWithFiles] confirmations query failed:', error.message)
+    return []
+  }
+
+  const rows = data || []
+  if (rows.length === 0) return []
+
+  const ids = rows.map((r: any) => r.id as string)
+  const filesByConfirmation = new Map<string, MouPaymentFileRow[]>()
+
+  // Chunk IN queries to stay within URL/limits
+  const chunkSize = 100
+  for (let i = 0; i < ids.length; i += chunkSize) {
+    const chunk = ids.slice(i, i + chunkSize)
+    const { data: files, error: filesError } = await supabase
+      .from('mou_payment_files')
+      .select(
+        'id, payment_confirmation_id, file_path, original_name, file_type, file_size, uploaded_by, uploaded_at'
+      )
+      .in('payment_confirmation_id', chunk)
+      .order('uploaded_at', { ascending: true })
+
+    if (filesError) {
+      console.warn('[fetchConfirmationsWithFiles] files query failed:', filesError.message)
+      continue
+    }
+    for (const f of files || []) {
+      const cid = (f as MouPaymentFileRow).payment_confirmation_id
+      const list = filesByConfirmation.get(cid) || []
+      list.push(f as MouPaymentFileRow)
+      filesByConfirmation.set(cid, list)
+    }
+  }
+
+  return rows.map((row: any) => ({
+    id: row.id,
+    mou_id: row.mou_id,
+    project_id: row.project_id,
+    exchange_rate:
+      row.exchange_rate == null || Number.isNaN(Number(row.exchange_rate))
+        ? null
+        : Number(row.exchange_rate),
+    transfer_date: row.transfer_date,
+    created_by: row.created_by,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+    files: filesByConfirmation.get(row.id) || [],
+  }))
+}
+
+/**
  * Load confirmation summaries keyed by project_id.
  * Prefers relational rows; falls back to mous.payment_confirmation_file JSON for projects
  * with no relational rows yet.
@@ -92,34 +177,10 @@ export async function loadProjectPaymentSummaries(
 
   let confirmations: MouPaymentConfirmationRow[] = []
   if (projectIds.length > 0 || mouIds.length > 0) {
-    let query = supabase
-      .from('mou_payment_confirmations')
-      .select(
-        'id, mou_id, project_id, exchange_rate, transfer_date, created_by, created_at, updated_at, mou_payment_files(id, payment_confirmation_id, file_path, original_name, file_type, file_size, uploaded_by, uploaded_at)'
-      )
-      .order('transfer_date', { ascending: true, nullsFirst: false })
-      .order('created_at', { ascending: true })
-
-    if (projectIds.length > 0) {
-      query = query.in('project_id', projectIds)
-    } else if (mouIds.length > 0) {
-      query = query.in('mou_id', mouIds)
-    }
-
-    const { data, error } = await query
-    if (error) {
-      // Table may not exist yet before migration — fall through to legacy JSON.
-      console.warn('[mouPaymentConfirmations] relational load failed, using legacy', error.message)
-    } else {
-      confirmations = (data || []).map((row: any) => ({
-        ...row,
-        exchange_rate:
-          row.exchange_rate == null || Number.isNaN(Number(row.exchange_rate))
-            ? null
-            : Number(row.exchange_rate),
-        files: Array.isArray(row.mou_payment_files) ? row.mou_payment_files : [],
-      }))
-    }
+    confirmations = await fetchConfirmationsWithFiles(supabase, {
+      projectIds: projectIds.length > 0 ? projectIds : undefined,
+      mouIds: mouIds.length > 0 ? mouIds : undefined,
+    })
   }
 
   const byProject = new Map<string, MouPaymentConfirmationRow[]>()
@@ -244,47 +305,10 @@ export async function listPaymentConfirmationsForMou(
   mouId: string,
   projectId?: string | null
 ): Promise<MouPaymentConfirmationRow[]> {
-  let query = supabase
-    .from('mou_payment_confirmations')
-    .select(
-      'id, mou_id, project_id, exchange_rate, transfer_date, created_by, created_at, updated_at, mou_payment_files(id, payment_confirmation_id, file_path, original_name, file_type, file_size, uploaded_by, uploaded_at)'
-    )
-    .eq('mou_id', mouId)
-    .order('transfer_date', { ascending: true, nullsFirst: false })
-    .order('created_at', { ascending: true })
-
-  if (projectId) {
-    query = query.eq('project_id', projectId)
-  }
-
-  const { data, error } = await query
-  if (error) {
-    // Migration not applied / schema cache stale — return empty so the modal can still
-    // show projects and the Add Payment form instead of wiping the UI.
-    console.warn(
-      '[listPaymentConfirmationsForMou] relational query failed:',
-      error.message
-    )
-    return []
-  }
-
-  return (data || []).map((row: any) => ({
-    id: row.id,
-    mou_id: row.mou_id,
-    project_id: row.project_id,
-    exchange_rate:
-      row.exchange_rate == null || Number.isNaN(Number(row.exchange_rate))
-        ? null
-        : Number(row.exchange_rate),
-    transfer_date: row.transfer_date,
-    created_by: row.created_by,
-    created_at: row.created_at,
-    updated_at: row.updated_at,
-    files: (Array.isArray(row.mou_payment_files) ? row.mou_payment_files : []).sort(
-      (a: MouPaymentFileRow, b: MouPaymentFileRow) =>
-        String(a.uploaded_at).localeCompare(String(b.uploaded_at))
-    ),
-  }))
+  return fetchConfirmationsWithFiles(supabase, {
+    mouId,
+    projectId: projectId || null,
+  })
 }
 
 export async function getSessionUserLabel(
