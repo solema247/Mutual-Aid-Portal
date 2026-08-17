@@ -44,7 +44,7 @@ export type GrantsChartRow = {
 
 /**
  * GET /api/dashboard/grants-chart
- * Fetches from grants (foreign table). Optional query params:
+ * Fetches from grants_grid_view (portal canonical). Optional query params:
  * - from: ISO date (inclusive) – compared to grant_start_date
  * - to: ISO date (inclusive) – compared to grant_end_date
  * Returns one row per grant_id with:
@@ -62,7 +62,7 @@ export async function GET(request: Request) {
 
     const rows = await fetchAllRows<GrantRow>(
       supabase,
-      'grants',
+      'grants_grid_view',
       'grant_id, total_transferred_amount_usd, sum_transfer_fee_amount, sum_activity_amount',
       (q) => {
         let query = q

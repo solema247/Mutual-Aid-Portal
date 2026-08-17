@@ -136,7 +136,7 @@ export default function PoolOverviewByState() {
       </CardHeader>
       {!isCollapsed && (
         <CardContent className="p-0 overflow-x-auto">
-          <Table className="min-w-[700px] text-xs [&_th]:py-1.5 [&_th]:px-2 [&_td]:py-1 [&_td]:px-2">
+          <Table className="min-w-[760px] text-xs [&_th]:py-1.5 [&_th]:px-2 [&_td]:py-1 [&_td]:px-2">
             <TableHeader>
               <TableRow>
                 <TableHead className="px-2">
@@ -146,6 +146,16 @@ export default function PoolOverviewByState() {
                   >
                     <div className="font-semibold text-xs">State</div>
                     {getSortIcon('state_name')}
+                  </button>
+                </TableHead>
+                <TableHead className="text-right px-2">
+                  <button
+                    onClick={() => handleSort('decision_count')}
+                    className="flex items-center justify-end hover:text-primary cursor-pointer w-full"
+                    title="Distinct distribution decisions with an allocation in this state"
+                  >
+                    <div className="font-semibold text-xs">Decisions</div>
+                    {getSortIcon('decision_count')}
                   </button>
                 </TableHead>
                 <TableHead className="text-right px-2">
@@ -207,6 +217,12 @@ export default function PoolOverviewByState() {
                     {sortedByState.length > 0 && (
                       <TableRow className="font-semibold">
                         <TableCell className="px-2">Total</TableCell>
+                        <TableCell
+                          className="text-right whitespace-nowrap"
+                          title="Distinct decisions across all states (not a sum of the rows)"
+                        >
+                          {sortedByState[0]?.overall_decision_count ?? 0}
+                        </TableCell>
                         <TableCell className="text-right whitespace-nowrap">{fmt(totalAllocated)}</TableCell>
                         <TableCell className="text-right">100%</TableCell>
                         <TableCell className="text-right whitespace-nowrap">{fmt(sortedByState.reduce((s, r) => s + (r.historical_commitments || 0), 0))}</TableCell>
@@ -222,6 +238,7 @@ export default function PoolOverviewByState() {
                       return (
                         <TableRow key={r.state_name}>
                           <TableCell className="px-2">{r.state_name}</TableCell>
+                          <TableCell className="text-right whitespace-nowrap">{r.decision_count || 0}</TableCell>
                           <TableCell className="text-right whitespace-nowrap">{fmt(r.allocated)}</TableCell>
                           <TableCell className="text-right">{percentOfTotal.toFixed(1)}%</TableCell>
                           <TableCell className="text-right whitespace-nowrap">{fmt(r.historical_commitments || 0)}</TableCell>

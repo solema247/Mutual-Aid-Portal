@@ -2028,6 +2028,9 @@ export type Database = {
           id: string
           name: string
           status: string
+          transfer_fee_percent: number | null
+          treasury_in_usd: number
+          treasury_out_usd: number
           updated_at: string
         }
         Insert: {
@@ -2041,6 +2044,9 @@ export type Database = {
           id?: string
           name: string
           status?: string
+          transfer_fee_percent?: number | null
+          treasury_in_usd?: number
+          treasury_out_usd?: number
           updated_at?: string
         }
         Update: {
@@ -2054,6 +2060,9 @@ export type Database = {
           id?: string
           name?: string
           status?: string
+          transfer_fee_percent?: number | null
+          treasury_in_usd?: number
+          treasury_out_usd?: number
           updated_at?: string
         }
         Relationships: []

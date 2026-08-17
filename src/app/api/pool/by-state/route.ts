@@ -54,10 +54,12 @@ export async function GET() {
     const allocationsData = await fetchAllRows(
       allocationsSupabase,
       'allocations_by_date',
-      'State,"Allocation Amount"'
+      'State,"Allocation Amount","Decision_ID"'
     )
 
     const allocatedByState = new Map<string, number>()
+    const decisionsByState = new Map<string, Set<string>>()
+    const allDecisionIds = new Set<string>()
     for (const row of allocationsData || []) {
       const rawState = row?.State ?? row?.state
       const state = normalizeStateName(rawState)
@@ -66,6 +68,13 @@ export async function GET() {
       const amount = rawAmount != null ? Number(rawAmount) : 0
       if (!Number.isNaN(amount) && amount > 0) {
         allocatedByState.set(state, (allocatedByState.get(state) || 0) + amount)
+      }
+      const decisionId = String(row?.Decision_ID ?? row?.decision_id ?? '').trim()
+      if (decisionId) {
+        allDecisionIds.add(decisionId)
+        const set = decisionsByState.get(state) || new Set<string>()
+        set.add(decisionId)
+        decisionsByState.set(state, set)
       }
     }
 
@@ -138,9 +147,11 @@ export async function GET() {
         ...Array.from(historicalByState.keys()),
         ...Array.from(committedByState.keys()),
         ...Array.from(pendingByState.keys()),
+        ...Array.from(decisionsByState.keys()),
       ])
     )
 
+    const overallDecisionCount = allDecisionIds.size
     const rows = states
       .map((state) => {
         const allocated = allocatedByState.get(state) || 0
@@ -148,7 +159,17 @@ export async function GET() {
         const committed = committedByState.get(state) || 0
         const pending = pendingByState.get(state) || 0
         const remaining = allocated - historical_commitments - committed - pending
-        return { state_name: state, allocated, historical_commitments, committed, pending, remaining }
+        const decision_count = decisionsByState.get(state)?.size || 0
+        return {
+          state_name: state,
+          allocated,
+          historical_commitments,
+          committed,
+          pending,
+          remaining,
+          decision_count,
+          overall_decision_count: overallDecisionCount,
+        }
       })
       .sort((a, b) => a.state_name.localeCompare(b.state_name))
 

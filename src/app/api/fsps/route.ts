@@ -4,13 +4,24 @@ import { requireGrantEditor } from '@/lib/grantManagement/requireGrantEditor'
 import { FSP_STATUSES, transferAmount } from '@/lib/grantManagement/fundTransferHelpers'
 
 const FSP_SELECT =
-  'id, name, status, contact_person, contact_email, contract_filename, contract_url, contract_signed, transfer_fee_percent, airtable_record_id, created_at, updated_at'
+  'id, name, status, contact_person, contact_email, contract_filename, contract_url, contract_signed, transfer_fee_percent, treasury_in_usd, treasury_out_usd, airtable_record_id, created_at, updated_at'
+
+function withTreasuryBalance(f: Record<string, unknown>) {
+  const inn = f.treasury_in_usd != null ? Number(f.treasury_in_usd) : 0
+  const out = f.treasury_out_usd != null ? Number(f.treasury_out_usd) : 0
+  return {
+    ...f,
+    treasury_in_usd: inn,
+    treasury_out_usd: out,
+    balance: inn - out,
+  }
+}
 
 async function attachRollups(
   supabase: ReturnType<typeof getSupabaseAdmin>,
   fsps: Array<Record<string, unknown>>
 ) {
-  if (!fsps.length) return fsps
+  if (!fsps.length) return fsps.map(withTreasuryBalance)
   const ids = fsps.map((f) => f.id as string)
   const { data: transfers } = await supabase
     .from('transfer_segments')
@@ -33,7 +44,7 @@ async function attachRollups(
   return fsps.map((f) => {
     const r = byFsp.get(f.id as string) || { activity: 0, fees: 0, total: 0 }
     return {
-      ...f,
+      ...withTreasuryBalance(f),
       activity_funds: r.activity,
       fees: r.fees,
       total_funds: r.total,
@@ -41,11 +52,32 @@ async function attachRollups(
   })
 }
 
+function parseTreasuryAmount(value: unknown): number {
+  if (value == null || value === '') return 0
+  const n = Number(value)
+  return Number.isFinite(n) ? n : 0
+}
+
 /** GET /api/fsps */
 export async function GET() {
   try {
     const supabase = getSupabaseAdmin()
-    const { data, error } = await supabase.from('fsps').select(FSP_SELECT).order('name')
+    let { data, error } = await supabase.from('fsps').select(FSP_SELECT).order('name')
+    // Until treasury columns are migrated, fall back so the page still loads.
+    if (error && /treasury_in_usd|treasury_out_usd|column/i.test(error.message)) {
+      const fallback = await supabase
+        .from('fsps')
+        .select(
+          'id, name, status, contact_person, contact_email, contract_filename, contract_url, contract_signed, transfer_fee_percent, airtable_record_id, created_at, updated_at'
+        )
+        .order('name')
+      data = (fallback.data || []).map((row) => ({
+        ...row,
+        treasury_in_usd: 0,
+        treasury_out_usd: 0,
+      }))
+      error = fallback.error
+    }
     if (error) throw error
     const withRollups = await attachRollups(supabase, (data || []) as Record<string, unknown>[])
     return NextResponse.json(withRollups)
@@ -85,13 +117,15 @@ export async function POST(request: NextRequest) {
           body.transfer_fee_percent != null && body.transfer_fee_percent !== ''
             ? Number(body.transfer_fee_percent)
             : null,
+        treasury_in_usd: parseTreasuryAmount(body.treasury_in_usd),
+        treasury_out_usd: parseTreasuryAmount(body.treasury_out_usd),
         updated_at: new Date().toISOString(),
       })
       .select(FSP_SELECT)
       .single()
 
     if (error) throw error
-    return NextResponse.json(data, { status: 201 })
+    return NextResponse.json(withTreasuryBalance(data as Record<string, unknown>), { status: 201 })
   } catch (error) {
     console.error('Error creating fsp:', error)
     return NextResponse.json({ error: 'Failed to create FSP' }, { status: 500 })

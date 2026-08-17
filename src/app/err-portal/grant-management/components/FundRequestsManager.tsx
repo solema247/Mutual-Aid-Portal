@@ -49,6 +49,9 @@ type Fsp = {
   contact_person: string | null
   contact_email: string | null
   transfer_fee_percent?: number | null
+  treasury_in_usd?: number | null
+  treasury_out_usd?: number | null
+  balance?: number
   total_funds?: number
   activity_funds?: number
   fees?: number
@@ -142,6 +145,8 @@ const emptyFspForm = {
   contact_person: '',
   contact_email: '',
   transfer_fee_percent: '',
+  treasury_in_usd: '',
+  treasury_out_usd: '',
 }
 
 const DECISION_RECENT_DAYS = 90
@@ -462,6 +467,8 @@ export default function FundRequestsManager() {
       contact_email: f.contact_email || '',
       transfer_fee_percent:
         f.transfer_fee_percent != null ? String(f.transfer_fee_percent) : '',
+      treasury_in_usd: f.treasury_in_usd != null ? String(f.treasury_in_usd) : '',
+      treasury_out_usd: f.treasury_out_usd != null ? String(f.treasury_out_usd) : '',
     })
     setFspOpen(true)
   }
@@ -475,6 +482,8 @@ export default function FundRequestsManager() {
       transfer_fee_percent: fspForm.transfer_fee_percent
         ? Number(fspForm.transfer_fee_percent)
         : null,
+      treasury_in_usd: fspForm.treasury_in_usd === '' ? 0 : Number(fspForm.treasury_in_usd),
+      treasury_out_usd: fspForm.treasury_out_usd === '' ? 0 : Number(fspForm.treasury_out_usd),
     }
     const res = editingFsp
       ? await fetch(`/api/fsps/${editingFsp.id}`, {
@@ -1277,14 +1286,18 @@ export default function FundRequestsManager() {
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Fee %</TableHead>
                 <TableHead>Contact</TableHead>
-                <TableHead className="text-right">Total</TableHead>
-                <TableHead className="text-right">Activity</TableHead>
-                <TableHead className="text-right">Fees</TableHead>
+                <TableHead className="text-right">In</TableHead>
+                <TableHead className="text-right">Out</TableHead>
+                <TableHead className="text-right">Balance</TableHead>
                 <TableHead />
               </TableRow>
             </TableHeader>
             <TableBody>
-              {fsps.map((f) => (
+              {fsps.map((f) => {
+                const inn = Number(f.treasury_in_usd) || 0
+                const out = Number(f.treasury_out_usd) || 0
+                const bal = f.balance != null ? Number(f.balance) : inn - out
+                return (
                 <TableRow key={f.id}>
                   <TableCell className="font-medium">{f.name}</TableCell>
                   <TableCell>
@@ -1298,9 +1311,15 @@ export default function FundRequestsManager() {
                   <TableCell className="text-xs">
                     {f.contact_person || f.contact_email || '—'}
                   </TableCell>
-                  <TableCell className="text-right">{money(f.total_funds)}</TableCell>
-                  <TableCell className="text-right">{money(f.activity_funds)}</TableCell>
-                  <TableCell className="text-right">{money(f.fees)}</TableCell>
+                  <TableCell className="text-right">{money(inn)}</TableCell>
+                  <TableCell className="text-right">{money(out)}</TableCell>
+                  <TableCell
+                    className={`text-right font-medium ${
+                      bal < 0 ? 'text-red-700' : bal > 0 ? 'text-green-700' : ''
+                    }`}
+                  >
+                    {money(bal)}
+                  </TableCell>
                   <TableCell className="whitespace-nowrap">
                     <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEditFsp(f)}>
                       <Pencil className="h-3.5 w-3.5" />
@@ -1310,14 +1329,21 @@ export default function FundRequestsManager() {
                     </Button>
                   </TableCell>
                 </TableRow>
-              ))}
-              {fsps.length === 0 && (
+                )
+              })}
+              {loading ? (
+                <TableRow>
+                  <TableCell colSpan={8} className="text-xs text-muted-foreground">
+                    Loading…
+                  </TableCell>
+                </TableRow>
+              ) : fsps.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={8} className="text-xs text-muted-foreground">
                     No FSPs yet. Run the seed script after applying the migration.
                   </TableCell>
                 </TableRow>
-              )}
+              ) : null}
             </TableBody>
           </Table>
         </CardContent>
@@ -1487,6 +1513,37 @@ export default function FundRequestsManager() {
                 Applied to transfer activity amounts as fee = activity × %.
               </p>
             </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Treasury In (USD)</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={fspForm.treasury_in_usd}
+                  onChange={(e) =>
+                    setFspForm({ ...fspForm, treasury_in_usd: e.target.value })
+                  }
+                  placeholder="0"
+                />
+              </div>
+              <div>
+                <Label>Treasury Out (USD)</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={fspForm.treasury_out_usd}
+                  onChange={(e) =>
+                    setFspForm({ ...fspForm, treasury_out_usd: e.target.value })
+                  }
+                  placeholder="0"
+                />
+              </div>
+            </div>
+            <p className="text-[11px] text-muted-foreground -mt-1">
+              Balance = In − Out (cash at this FSP). Guidance only — does not block fund requests.
+            </p>
             <Button onClick={saveFsp} className="w-full">
               Save
             </Button>

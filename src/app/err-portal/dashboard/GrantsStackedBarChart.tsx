@@ -21,9 +21,9 @@ import {
 } from '@/components/ui/chart'
 
 const STACK_COLORS = {
-  sum_transfer_fee_amount: '#7ec8e3',   // sky blue
-  sum_activity_amount: '#d4a5d4',       // lavender
-  balance: '#9ee6c2',                    // mint
+  sum_transfer_fee_amount: '#7ec8e3', // sky blue
+  sum_activity_amount: '#d4a5d4', // lavender
+  balance: '#9ee6c2', // mint
 }
 
 type GrantsChartRow = {
@@ -37,6 +37,8 @@ type GrantsChartRow = {
 interface GrantsStackedBarChartProps {
   dateFrom?: string
   dateTo?: string
+  /** `horizontal` = one bar per grant row (left→right). Default `vertical` for dashboard. */
+  orientation?: 'horizontal' | 'vertical'
 }
 
 const chartConfig = {
@@ -54,12 +56,20 @@ const chartConfig = {
   },
 } satisfies ChartConfig
 
-export function GrantsStackedBarChart({ dateFrom, dateTo }: GrantsStackedBarChartProps) {
+const moneyTick = (v: number) =>
+  v >= 1e6 ? `${(v / 1e6).toFixed(1)}M` : v >= 1e3 ? `${(v / 1e3).toFixed(0)}k` : String(v)
+
+export function GrantsStackedBarChart({
+  dateFrom,
+  dateTo,
+  orientation = 'vertical',
+}: GrantsStackedBarChartProps) {
   const [data, setData] = useState<GrantsChartRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   const config = useMemo(() => chartConfig, [])
+  const horizontal = orientation === 'horizontal'
 
   const handleDownloadCsv = useCallback(() => {
     const headers: [keyof GrantsChartRow, string][] = [
@@ -77,6 +87,7 @@ export function GrantsStackedBarChart({ dateFrom, dateTo }: GrantsStackedBarChar
     let cancelled = false
     async function fetchData() {
       try {
+        setLoading(true)
         const params = new URLSearchParams()
         if (dateFrom) params.set('from', dateFrom)
         if (dateTo) params.set('to', dateTo)
@@ -85,7 +96,10 @@ export function GrantsStackedBarChart({ dateFrom, dateTo }: GrantsStackedBarChar
         const res = await fetch(url)
         if (!res.ok) throw new Error('Failed to load data')
         const json = await res.json()
-        if (!cancelled) setData(Array.isArray(json) ? json : [])
+        if (!cancelled) {
+          setData(Array.isArray(json) ? json : [])
+          setError(null)
+        }
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : 'Failed to load')
       } finally {
@@ -93,7 +107,9 @@ export function GrantsStackedBarChart({ dateFrom, dateTo }: GrantsStackedBarChar
       }
     }
     fetchData()
-    return () => { cancelled = true }
+    return () => {
+      cancelled = true
+    }
   }, [dateFrom, dateTo])
 
   if (loading) {
@@ -115,7 +131,7 @@ export function GrantsStackedBarChart({ dateFrom, dateTo }: GrantsStackedBarChar
       <Card>
         <CardHeader>
           <CardTitle>Grants by Amount</CardTitle>
-          <CardDescription>From grants table</CardDescription>
+          <CardDescription>From grants_grid_view</CardDescription>
         </CardHeader>
         <CardContent className="min-h-[200px] flex items-center justify-center text-destructive">
           {error}
@@ -129,7 +145,7 @@ export function GrantsStackedBarChart({ dateFrom, dateTo }: GrantsStackedBarChar
       <Card>
         <CardHeader>
           <CardTitle>Grants by Amount</CardTitle>
-          <CardDescription>From grants table</CardDescription>
+          <CardDescription>From grants_grid_view</CardDescription>
         </CardHeader>
         <CardContent className="min-h-[200px] flex items-center justify-center text-muted-foreground">
           No data available
@@ -139,6 +155,11 @@ export function GrantsStackedBarChart({ dateFrom, dateTo }: GrantsStackedBarChar
   }
 
   const totalTransferred = data.reduce((s, r) => s + r.total_transferred_amount_usd, 0)
+  const maxLabelLen = data.reduce((m, r) => Math.max(m, String(r.grant_id).length), 0)
+  const yAxisWidth = horizontal
+    ? Math.min(280, Math.max(72, Math.ceil(maxLabelLen * 7.2) + 12))
+    : undefined
+  const barChartHeight = horizontal ? Math.max(240, data.length * 28) : undefined
 
   return (
     <Card>
@@ -173,65 +194,132 @@ export function GrantsStackedBarChart({ dateFrom, dateTo }: GrantsStackedBarChar
             </div>
           ))}
         </div>
-        <ChartContainer config={config} className="min-h-[280px] w-full">
-          <BarChart
-            accessibilityLayer
-            data={data}
-            margin={{ left: 12, right: 12 }}
-          >
-            <CartesianGrid vertical={false} />
-            <XAxis
-              dataKey="grant_id"
-              tickLine={false}
-              axisLine={false}
-              tickMargin={8}
-              tickFormatter={(v) => (v.length > 10 ? `${v.slice(0, 8)}…` : v)}
-            />
-            <YAxis
-              tickLine={false}
-              axisLine={false}
-              tickMargin={8}
-              tickFormatter={(v) =>
-                v >= 1e6 ? `${(v / 1e6).toFixed(1)}M` : v >= 1e3 ? `${(v / 1e3).toFixed(0)}k` : String(v)
-              }
-            />
-            <ChartTooltip
-              content={
-                <ChartTooltipContent
-                  formatter={(value) =>
-                    Number(value).toLocaleString('en-US', {
-                      style: 'currency',
-                      currency: 'USD',
-                      maximumFractionDigits: 0,
-                    })
-                  }
-                />
-              }
-            />
-            <Bar
-              dataKey="sum_transfer_fee_amount"
-              stackId="a"
-              fill={STACK_COLORS.sum_transfer_fee_amount}
-              radius={[0, 0, 4, 4]}
-            />
-            <Bar
-              dataKey="sum_activity_amount"
-              stackId="a"
-              fill={STACK_COLORS.sum_activity_amount}
-              radius={0}
-            />
-            <Bar
-              dataKey="balance"
-              stackId="a"
-              fill={STACK_COLORS.balance}
-              radius={[4, 4, 0, 0]}
-            />
-          </BarChart>
+        <ChartContainer
+          config={config}
+          className={
+            horizontal ? 'aspect-auto max-h-none w-full' : 'min-h-[280px] w-full'
+          }
+          style={horizontal ? { height: barChartHeight } : undefined}
+        >
+          {horizontal ? (
+            <BarChart
+              accessibilityLayer
+              data={data}
+              layout="vertical"
+              margin={{ left: 4, right: 16, top: 4, bottom: 4 }}
+              barCategoryGap={4}
+              barGap={0}
+            >
+              <CartesianGrid horizontal={false} strokeDasharray="3 3" />
+              <YAxis
+                dataKey="grant_id"
+                type="category"
+                tickLine={false}
+                axisLine={false}
+                width={yAxisWidth}
+                tickMargin={6}
+                interval={0}
+                tick={{ fontSize: 11 }}
+              />
+              <XAxis
+                type="number"
+                tickLine={false}
+                axisLine={false}
+                tickMargin={8}
+                tickFormatter={moneyTick}
+                tick={{ fontSize: 11 }}
+              />
+              <ChartTooltip
+                content={
+                  <ChartTooltipContent
+                    formatter={(value) =>
+                      Number(value).toLocaleString('en-US', {
+                        style: 'currency',
+                        currency: 'USD',
+                        maximumFractionDigits: 0,
+                      })
+                    }
+                  />
+                }
+              />
+              <Bar
+                dataKey="sum_transfer_fee_amount"
+                stackId="a"
+                fill={STACK_COLORS.sum_transfer_fee_amount}
+                radius={[4, 0, 0, 4]}
+              />
+              <Bar
+                dataKey="sum_activity_amount"
+                stackId="a"
+                fill={STACK_COLORS.sum_activity_amount}
+                radius={0}
+              />
+              <Bar
+                dataKey="balance"
+                stackId="a"
+                fill={STACK_COLORS.balance}
+                radius={[0, 4, 4, 0]}
+              />
+            </BarChart>
+          ) : (
+            <BarChart accessibilityLayer data={data} margin={{ left: 12, right: 12 }}>
+              <CartesianGrid vertical={false} />
+              <XAxis
+                dataKey="grant_id"
+                tickLine={false}
+                axisLine={false}
+                tickMargin={8}
+                tickFormatter={(v) => (v.length > 10 ? `${v.slice(0, 8)}…` : v)}
+              />
+              <YAxis
+                tickLine={false}
+                axisLine={false}
+                tickMargin={8}
+                tickFormatter={moneyTick}
+              />
+              <ChartTooltip
+                content={
+                  <ChartTooltipContent
+                    formatter={(value) =>
+                      Number(value).toLocaleString('en-US', {
+                        style: 'currency',
+                        currency: 'USD',
+                        maximumFractionDigits: 0,
+                      })
+                    }
+                  />
+                }
+              />
+              <Bar
+                dataKey="sum_transfer_fee_amount"
+                stackId="a"
+                fill={STACK_COLORS.sum_transfer_fee_amount}
+                radius={[0, 0, 4, 4]}
+              />
+              <Bar
+                dataKey="sum_activity_amount"
+                stackId="a"
+                fill={STACK_COLORS.sum_activity_amount}
+                radius={0}
+              />
+              <Bar
+                dataKey="balance"
+                stackId="a"
+                fill={STACK_COLORS.balance}
+                radius={[4, 4, 0, 0]}
+              />
+            </BarChart>
+          )}
         </ChartContainer>
       </CardContent>
       <CardFooter className="flex-col items-start gap-2 text-sm">
         <div className="text-muted-foreground leading-none">
-          Total transferred (all grants): {totalTransferred.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })}
+          Total transferred (all grants):{' '}
+          {totalTransferred.toLocaleString('en-US', {
+            style: 'currency',
+            currency: 'USD',
+            maximumFractionDigits: 0,
+          })}
         </div>
       </CardFooter>
     </Card>

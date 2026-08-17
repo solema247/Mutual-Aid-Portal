@@ -3,7 +3,24 @@ import { requireGrantEditor } from '@/lib/grantManagement/requireGrantEditor'
 import { FSP_STATUSES } from '@/lib/grantManagement/fundTransferHelpers'
 
 const FSP_SELECT =
-  'id, name, status, contact_person, contact_email, contract_filename, contract_url, contract_signed, transfer_fee_percent, airtable_record_id, created_at, updated_at'
+  'id, name, status, contact_person, contact_email, contract_filename, contract_url, contract_signed, transfer_fee_percent, treasury_in_usd, treasury_out_usd, airtable_record_id, created_at, updated_at'
+
+function withTreasuryBalance(f: Record<string, unknown>) {
+  const inn = f.treasury_in_usd != null ? Number(f.treasury_in_usd) : 0
+  const out = f.treasury_out_usd != null ? Number(f.treasury_out_usd) : 0
+  return {
+    ...f,
+    treasury_in_usd: inn,
+    treasury_out_usd: out,
+    balance: inn - out,
+  }
+}
+
+function parseTreasuryAmount(value: unknown): number {
+  if (value == null || value === '') return 0
+  const n = Number(value)
+  return Number.isFinite(n) ? n : 0
+}
 
 /** PUT /api/fsps/[id] */
 export async function PUT(
@@ -31,6 +48,8 @@ export async function PUT(
           ? Number(body.transfer_fee_percent)
           : null
     }
+    if ('treasury_in_usd' in body) patch.treasury_in_usd = parseTreasuryAmount(body.treasury_in_usd)
+    if ('treasury_out_usd' in body) patch.treasury_out_usd = parseTreasuryAmount(body.treasury_out_usd)
 
     const { data, error } = await auth.ctx.supabase
       .from('fsps')
@@ -40,7 +59,7 @@ export async function PUT(
       .single()
 
     if (error) throw error
-    return NextResponse.json(data)
+    return NextResponse.json(withTreasuryBalance(data as Record<string, unknown>))
   } catch (error) {
     console.error('Error updating fsp:', error)
     return NextResponse.json({ error: 'Failed to update FSP' }, { status: 500 })
