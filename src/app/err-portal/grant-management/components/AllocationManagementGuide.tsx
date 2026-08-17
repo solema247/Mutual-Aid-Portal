@@ -130,8 +130,7 @@ export default function AllocationManagementGuide() {
           value: Number(r.remaining) || 0,
           warn: (Number(r.remaining) || 0) < 0,
         }))
-        .sort((a, b) => b.value - a.value)
-        .slice(0, 12),
+        .sort((a, b) => b.value - a.value),
     [states]
   )
 
@@ -144,8 +143,7 @@ export default function AllocationManagementGuide() {
           value: Number(r.balance) || 0,
           warn: (Number(r.balance) || 0) < 0,
         }))
-        .sort((a, b) => b.value - a.value)
-        .slice(0, 12),
+        .sort((a, b) => b.value - a.value),
     [grants]
   )
 

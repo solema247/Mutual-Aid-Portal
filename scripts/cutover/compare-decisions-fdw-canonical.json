@@ -2183,14 +2183,14 @@
       "canon_uuid": "4facaa06-667e-48b3-b1de-9236bfb35168",
       "status": "matched",
       "mismatches": [
-        "sum_allocation_amount: FDW=1000000 canon=600000",
+        "sum_allocation_amount: FDW=1300000 canon=600000",
         "grant_name: FDW=\"FCDO\" canon=null"
       ],
       "fdw": {
         "decision_id_proposed": "LCC.P2H.2026-06-21.Emer",
         "decision_id": "LCC.P2H.2026-06-21.Emer",
         "decision_amount": 2000000,
-        "sum_allocation_amount": 1000000,
+        "sum_allocation_amount": 1300000,
         "decision_date": "2026-06-21",
         "restriction": "Emergency",
         "partner": "recAoKLIxff3J74l5",

@@ -16,9 +16,10 @@ import { getSupabaseAdmin } from '../../src/lib/supabaseAdmin'
 
 config({ path: resolve(process.cwd(), '.env.local') })
 
+/** Prefer CLI path, else the latest export name, else legacy LoHub export. */
 const CSV_PATH = resolve(
   process.cwd(),
-  "data/imports/LCC_ERRs_LoHub & Partner Grant Tracker - ERR's-Grants_Allocation (1) - LCC_ERRs_LoHub & Partner Grant Tracker - ERR's-Grants_Allocation (1).csv"
+  process.argv[2] || 'data/imports/Google Sheet Allocations.csv'
 )
 const OUTPUT_PATH = resolve(process.cwd(), 'data/imports/sheet-airtable-allocation-match.csv')
 
