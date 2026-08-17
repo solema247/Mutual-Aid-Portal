@@ -952,7 +952,7 @@ export default function ProjectDetailModal({ projectId, open, onOpenChange }: Pr
                 </div>
 
                 {/* File Links */}
-                {(fileKeys.f1_file || fileKeys.f2_approval || fileKeys.payment_confirmation || fileKeys.signed_mou || f4Files.length > 0 || f5Files.length > 0) && (
+                {(fileKeys.f1_file || fileKeys.f2_approval || fileKeys.payment_confirmation || (data?.payment_confirmations?.length ?? 0) > 0 || fileKeys.signed_mou || f4Files.length > 0 || f5Files.length > 0) && (
                   <div>
                     <Label className="text-base font-semibold mb-3">Project Files</Label>
                     <div className="flex flex-wrap gap-2">
@@ -978,17 +978,81 @@ export default function ProjectDetailModal({ projectId, open, onOpenChange }: Pr
                           F2 Community Approval
                         </Button>
                       )}
-                      {fileKeys.payment_confirmation && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleFileClick(fileKeys.payment_confirmation, 'Payment Confirmation')}
-                          className="flex items-center gap-2"
-                        >
-                          <Receipt className="h-4 w-4" />
-                          Payment Confirmation
-                        </Button>
-                      )}
+                      {(data?.payment_confirmations || []).length > 0
+                        ? (data.payment_confirmations as Array<{
+                            id: string
+                            exchange_rate: number | null
+                            transfer_date: string | null
+                            files?: Array<{
+                              id: string
+                              file_path: string
+                              original_name: string | null
+                            }>
+                          }>).map((payment, paymentIdx: number) => {
+                            const files = payment.files || []
+                            if (files.length === 0) {
+                              return (
+                                <div
+                                  key={payment.id}
+                                  className="w-full text-xs text-muted-foreground border rounded px-2 py-1.5"
+                                >
+                                  Payment #{paymentIdx + 1}
+                                  {payment.transfer_date ? ` · ${payment.transfer_date}` : ''}
+                                  {payment.exchange_rate != null
+                                    ? ` · rate ${payment.exchange_rate}`
+                                    : ''}
+                                  {' · no files'}
+                                </div>
+                              )
+                            }
+                            return files.map((file, fileIdx) => (
+                              <Button
+                                key={file.id}
+                                variant="outline"
+                                size="sm"
+                                onClick={() =>
+                                  handleFileClick(
+                                    file.file_path,
+                                    `Payment #${paymentIdx + 1} file ${fileIdx + 1}`
+                                  )
+                                }
+                                className="flex items-center gap-2"
+                                title={[
+                                  `Payment #${paymentIdx + 1}`,
+                                  payment.transfer_date
+                                    ? `Transfer ${payment.transfer_date}`
+                                    : null,
+                                  payment.exchange_rate != null
+                                    ? `Rate ${payment.exchange_rate}`
+                                    : null,
+                                  file.original_name || file.file_path,
+                                ]
+                                  .filter(Boolean)
+                                  .join(' · ')}
+                              >
+                                <Receipt className="h-4 w-4" />
+                                {files.length > 1
+                                  ? `Payment #${paymentIdx + 1} · ${file.original_name || `File ${fileIdx + 1}`}`
+                                  : `Payment #${paymentIdx + 1}${file.original_name ? ` · ${file.original_name}` : ''}`}
+                              </Button>
+                            ))
+                          })
+                        : fileKeys.payment_confirmation && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() =>
+                                handleFileClick(
+                                  fileKeys.payment_confirmation,
+                                  'Payment Confirmation'
+                                )
+                              }
+                              className="flex items-center gap-2"
+                            >
+                              <Receipt className="h-4 w-4" />
+                              Payment Confirmation
+                            </Button>
+                          )}
                       {fileKeys.signed_mou && (
                         <Button
                           variant="outline"

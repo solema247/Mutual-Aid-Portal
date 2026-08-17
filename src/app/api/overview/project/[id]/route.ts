@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { pickF5TextForEnUi, pickReachTextForEnUi } from '@/lib/storiesEnDisplay'
-import { loadProjectPaymentSummaries } from '@/lib/mouPaymentConfirmations'
+import { loadProjectPaymentSummaries, listPaymentConfirmationsForMou } from '@/lib/mouPaymentConfirmations'
 
 const OVERDUE_DAYS_AFTER_TRANSFER = 32
 
@@ -250,6 +250,9 @@ export async function GET(
       // Load MOU file keys and per-project transfer date from payment confirmations
       let mouFileKeys: { payment_confirmation_file: string | null; signed_mou_file_key: string | null } | null = null
       let transferDateFromMou: string | null = null
+      let paymentConfirmations: Awaited<
+        ReturnType<typeof listPaymentConfirmationsForMou>
+      > = []
       if (project.mou_id) {
         const { data: mou, error: mouErr } = await supabase
           .from('mous')
@@ -261,6 +264,11 @@ export async function GET(
           mouIds: [project.mou_id],
         })
         const payment = paymentSummaries[id]
+        paymentConfirmations = await listPaymentConfirmationsForMou(
+          supabase,
+          project.mou_id,
+          id
+        )
         if (!mouErr && mou) {
           mouFileKeys = {
             payment_confirmation_file: payment?.file_path || null,
@@ -434,6 +442,7 @@ export async function GET(
           payment_confirmation: mouFileKeys?.payment_confirmation_file || null,
           signed_mou: mouFileKeys?.signed_mou_file_key || null
         },
+        payment_confirmations: paymentConfirmations,
         f4_files: f4FileAttachments,
         f5_files: f5FileAttachments,
         supporting_documents: supportingDocuments || [],
