@@ -24,6 +24,7 @@ import {
   Download,
   Hand,
   MousePointer2,
+  RefreshCw,
 } from 'lucide-react'
 import { useAllowedFunctions } from '@/hooks/useAllowedFunctions'
 import {
@@ -179,6 +180,11 @@ interface ReportTrackerRow {
   estimated_beneficiaries: number | null
   f5_reported_individuals: number
   f5_reported_households: number
+  f5_reported_male: number
+  f5_reported_female: number
+  f5_reported_under18_male: number
+  f5_reported_under18_female: number
+  f5_reported_pwd: number
   f5_challenges: string | null
   f5_recommendations: string | null
   f5_lessons_learned: string | null
@@ -245,6 +251,7 @@ export default function ReportTrackerPage() {
   const [rows, setRows] = useState<ReportTrackerRow[]>([])
   const [grants, setGrants] = useState<Array<{ id: string; grant_id: string; donor_name: string; project_name: string | null }>>([])
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [updatingId, setUpdatingId] = useState<string | null>(null)
   const [filters, setFilters] = useState<ActiveFilter[]>([])
@@ -253,8 +260,10 @@ export default function ReportTrackerPage() {
   /** Pan = drag-scroll table; Select = pointer/text selection and controls without accidental drag */
   const [tableInteractionMode, setTableInteractionMode] = useState<'pan' | 'select'>('pan')
 
-  const load = async () => {
-    setLoading(true)
+  const load = async (opts?: { soft?: boolean }) => {
+    const soft = !!opts?.soft
+    if (soft) setRefreshing(true)
+    else setLoading(true)
     setError(null)
     try {
       const res = await fetch(`/api/report-tracker?locale=${encodeURIComponent(i18n.language)}`)
@@ -293,6 +302,11 @@ export default function ReportTrackerPage() {
               estimated_beneficiaries: r.estimated_beneficiaries != null ? Number(r.estimated_beneficiaries) : null,
               f5_reported_individuals: Number(r.f5_reported_individuals) || 0,
               f5_reported_households: Number(r.f5_reported_households) || 0,
+              f5_reported_male: Number(r.f5_reported_male) || 0,
+              f5_reported_female: Number(r.f5_reported_female) || 0,
+              f5_reported_under18_male: Number(r.f5_reported_under18_male) || 0,
+              f5_reported_under18_female: Number(r.f5_reported_under18_female) || 0,
+              f5_reported_pwd: Number(r.f5_reported_pwd) || 0,
               f5_challenges: r.f5_challenges ?? null,
               f5_recommendations: r.f5_recommendations ?? null,
               f5_lessons_learned: r.f5_lessons_learned ?? null,
@@ -303,6 +317,7 @@ export default function ReportTrackerPage() {
       setError(e instanceof Error ? e.message : 'Error loading report tracker')
     } finally {
       setLoading(false)
+      setRefreshing(false)
     }
   }
 
@@ -568,8 +583,18 @@ export default function ReportTrackerPage() {
           )}
         </CardHeader>
         <CardContent>
-          {!loading && filteredRows.length > 0 && (
-            <div className="flex justify-end mb-2">
+          {!loading && (
+            <div className="flex justify-end gap-2 mb-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => load({ soft: true })}
+                disabled={refreshing}
+              >
+                <RefreshCw className={cn('h-4 w-4 mr-2', refreshing && 'animate-spin')} />
+                Refresh
+              </Button>
+              {filteredRows.length > 0 && (
               <Button
                 variant="outline"
                 size="sm"
@@ -594,6 +619,11 @@ export default function ReportTrackerPage() {
                     { key: 'estimated_beneficiaries', header: 'Planned Individuals', format: (v) => (v != null && v !== '' ? Number(v).toLocaleString() : '') },
                     { key: 'f5_reported_individuals', header: 'F5 Reported Individuals', format: (v) => (v != null ? Number(v).toLocaleString() : '0') },
                     { key: 'f5_reported_households', header: 'F5 Reported Households', format: (v) => (v != null ? Number(v).toLocaleString() : '0') },
+                    { key: 'f5_reported_male', header: 'F5 Male', format: (v) => (v != null ? Number(v).toLocaleString() : '0') },
+                    { key: 'f5_reported_female', header: 'F5 Female', format: (v) => (v != null ? Number(v).toLocaleString() : '0') },
+                    { key: 'f5_reported_under18_male', header: 'F5 Male <18', format: (v) => (v != null ? Number(v).toLocaleString() : '0') },
+                    { key: 'f5_reported_under18_female', header: 'F5 Female <18', format: (v) => (v != null ? Number(v).toLocaleString() : '0') },
+                    { key: 'f5_reported_pwd', header: 'F5 People with Disabilities', format: (v) => (v != null ? Number(v).toLocaleString() : '0') },
                     { key: 'f5_challenges', header: 'F5 Challenges' },
                     { key: 'f5_recommendations', header: 'F5 Recommendations' },
                     { key: 'f5_lessons_learned', header: 'F5 Lessons learned' },
@@ -609,6 +639,7 @@ export default function ReportTrackerPage() {
                 <Download className="h-4 w-4 mr-2" />
                 Download CSV
               </Button>
+              )}
             </div>
           )}
           {error && (
@@ -724,6 +755,11 @@ export default function ReportTrackerPage() {
                     <TableHead className="text-center tabular-nums" dir="ltr">Planned Individuals</TableHead>
                     <TableHead className="text-center tabular-nums" dir="ltr">F5 Reported Individuals</TableHead>
                     <TableHead className="text-center tabular-nums" dir="ltr">F5 Reported Households</TableHead>
+                    <TableHead className="text-center tabular-nums" dir="ltr">F5 Male</TableHead>
+                    <TableHead className="text-center tabular-nums" dir="ltr">F5 Female</TableHead>
+                    <TableHead className="text-center tabular-nums" dir="ltr">F5 Male &lt;18</TableHead>
+                    <TableHead className="text-center tabular-nums" dir="ltr">F5 Female &lt;18</TableHead>
+                    <TableHead className="text-center tabular-nums" dir="ltr">F5 PwD</TableHead>
                     <TableHead className="text-left min-w-[200px] max-w-[240px]" dir="ltr">F5 Challenges</TableHead>
                     <TableHead className="text-left min-w-[200px] max-w-[240px]" dir="ltr">F5 Recommendations</TableHead>
                     <TableHead className="text-left min-w-[200px] max-w-[240px]" dir="ltr">F5 Lessons learned</TableHead>
@@ -735,7 +771,7 @@ export default function ReportTrackerPage() {
                 <TableBody>
                   {paginatedRows.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={22} className="text-muted-foreground text-center py-8">
+                      <TableCell colSpan={29} className="text-muted-foreground text-center py-8">
                         {rows.length === 0 ? 'No projects found.' : 'No rows match the selected filters.'}
                       </TableCell>
                     </TableRow>
@@ -813,6 +849,21 @@ export default function ReportTrackerPage() {
                           {row.f5_reported_households != null
                             ? Number(row.f5_reported_households).toLocaleString()
                             : '0'}
+                        </TableCell>
+                        <TableCell className="text-center tabular-nums" dir="ltr">
+                          {Number(row.f5_reported_male || 0).toLocaleString()}
+                        </TableCell>
+                        <TableCell className="text-center tabular-nums" dir="ltr">
+                          {Number(row.f5_reported_female || 0).toLocaleString()}
+                        </TableCell>
+                        <TableCell className="text-center tabular-nums" dir="ltr">
+                          {Number(row.f5_reported_under18_male || 0).toLocaleString()}
+                        </TableCell>
+                        <TableCell className="text-center tabular-nums" dir="ltr">
+                          {Number(row.f5_reported_under18_female || 0).toLocaleString()}
+                        </TableCell>
+                        <TableCell className="text-center tabular-nums" dir="ltr">
+                          {Number(row.f5_reported_pwd || 0).toLocaleString()}
                         </TableCell>
                         <TableCell>
                           <F5TextCell value={row.f5_challenges} />

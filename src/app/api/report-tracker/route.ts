@@ -154,9 +154,19 @@ export async function GET(request: Request) {
     const mouIds = Array.from(new Set((rows || []).map((p: any) => p.mou_id).filter(Boolean))) as string[]
     const f5ReportedIndividualsByProject: Record<string, number> = {}
     const f5ReportedHouseholdsByProject: Record<string, number> = {}
+    const f5ReportedMaleByProject: Record<string, number> = {}
+    const f5ReportedFemaleByProject: Record<string, number> = {}
+    const f5ReportedUnder18MaleByProject: Record<string, number> = {}
+    const f5ReportedUnder18FemaleByProject: Record<string, number> = {}
+    const f5ReportedPwdByProject: Record<string, number> = {}
     for (const id of projectIds) {
       f5ReportedIndividualsByProject[id] = 0
       f5ReportedHouseholdsByProject[id] = 0
+      f5ReportedMaleByProject[id] = 0
+      f5ReportedFemaleByProject[id] = 0
+      f5ReportedUnder18MaleByProject[id] = 0
+      f5ReportedUnder18FemaleByProject[id] = 0
+      f5ReportedPwdByProject[id] = 0
     }
     let transferDateByProject: Record<string, string> = {}
     let rateByProject: Record<string, number> = {}
@@ -269,7 +279,9 @@ export async function GET(request: Request) {
         for (const batch of chunkIds(f5ReportIds)) {
           const { data: batchReach, error: reachErr } = await supabase
             .from('err_program_reach')
-            .select('report_id, individual_count, household_count')
+            .select(
+              'report_id, individual_count, household_count, male_count, female_count, under18_male, under18_female, people_with_disabilities'
+            )
             .in('report_id', batch)
           if (reachErr) console.error('Report tracker err_program_reach fetch:', reachErr)
           reachRows.push(...(batchReach || []))
@@ -277,16 +289,21 @@ export async function GET(request: Request) {
         for (const r of reachRows) {
           const reportId = (r as any).report_id
           const pid = reportId ? reportToProject.get(reportId) : null
+          if (!pid) continue
           const ind = Number((r as any).individual_count) || 0
           const hh = Number((r as any).household_count) || 0
-          if (pid) {
-            if (!Number.isNaN(ind)) {
-              f5ReportedIndividualsByProject[pid] = (f5ReportedIndividualsByProject[pid] ?? 0) + ind
-            }
-            if (!Number.isNaN(hh)) {
-              f5ReportedHouseholdsByProject[pid] = (f5ReportedHouseholdsByProject[pid] ?? 0) + hh
-            }
-          }
+          const male = Number((r as any).male_count) || 0
+          const female = Number((r as any).female_count) || 0
+          const u18Male = Number((r as any).under18_male) || 0
+          const u18Female = Number((r as any).under18_female) || 0
+          const pwd = Number((r as any).people_with_disabilities) || 0
+          f5ReportedIndividualsByProject[pid] = (f5ReportedIndividualsByProject[pid] ?? 0) + ind
+          f5ReportedHouseholdsByProject[pid] = (f5ReportedHouseholdsByProject[pid] ?? 0) + hh
+          f5ReportedMaleByProject[pid] = (f5ReportedMaleByProject[pid] ?? 0) + male
+          f5ReportedFemaleByProject[pid] = (f5ReportedFemaleByProject[pid] ?? 0) + female
+          f5ReportedUnder18MaleByProject[pid] = (f5ReportedUnder18MaleByProject[pid] ?? 0) + u18Male
+          f5ReportedUnder18FemaleByProject[pid] = (f5ReportedUnder18FemaleByProject[pid] ?? 0) + u18Female
+          f5ReportedPwdByProject[pid] = (f5ReportedPwdByProject[pid] ?? 0) + pwd
         }
       }
 
@@ -392,6 +409,11 @@ export async function GET(request: Request) {
         estimated_beneficiaries: p.estimated_beneficiaries != null ? Number(p.estimated_beneficiaries) : null,
         f5_reported_individuals: f5ReportedIndividualsByProject[p.id] ?? 0,
         f5_reported_households: f5ReportedHouseholdsByProject[p.id] ?? 0,
+        f5_reported_male: f5ReportedMaleByProject[p.id] ?? 0,
+        f5_reported_female: f5ReportedFemaleByProject[p.id] ?? 0,
+        f5_reported_under18_male: f5ReportedUnder18MaleByProject[p.id] ?? 0,
+        f5_reported_under18_female: f5ReportedUnder18FemaleByProject[p.id] ?? 0,
+        f5_reported_pwd: f5ReportedPwdByProject[p.id] ?? 0,
         f5_challenges: latestF5NarrativeByProject[p.id]?.challenges ?? null,
         f5_recommendations: latestF5NarrativeByProject[p.id]?.recommendations ?? null,
         f5_lessons_learned: latestF5NarrativeByProject[p.id]?.lessons ?? null,
