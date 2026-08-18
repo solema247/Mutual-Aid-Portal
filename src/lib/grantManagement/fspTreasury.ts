@@ -1,6 +1,7 @@
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin'
 import { transferAmount } from '@/lib/grantManagement/fundTransferHelpers'
 import { sumDisbursedToErrsByFsp } from '@/lib/grantPaymentDisbursement'
+import { loadConfirmedProjectIds } from '@/lib/mouPaymentConfirmations'
 
 type AdminClient = ReturnType<typeof getSupabaseAdmin>
 
@@ -93,7 +94,10 @@ export async function attachFspTreasuryRollups<T extends Record<string, unknown>
       expenses: unknown
       submitted_at: string | null
     }>
-    outByFsp = sumDisbursedToErrsByFsp(projects, mous)
+    const confirmedProjectIds = await loadConfirmedProjectIds(supabase, {
+      mouIds: mous.map((m) => m.id),
+    })
+    outByFsp = sumDisbursedToErrsByFsp(projects, mous, confirmedProjectIds)
   }
 
   return fsps.map((f) => {

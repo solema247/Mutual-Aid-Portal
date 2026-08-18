@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin'
 import { sumDisbursedToErrsByGrant } from '@/lib/grantPaymentDisbursement'
+import { loadConfirmedProjectIds } from '@/lib/mouPaymentConfirmations'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -113,12 +114,15 @@ export async function GET(request: Request) {
       }>(supabase, 'activities_raw_import', '"Project Donor",USD'),
     ])
 
+    const confirmedProjectIds = await loadConfirmedProjectIds(supabase, {
+      mouIds: mous.map((m) => m.id),
+    })
     const disbursedByGrant = sumDisbursedToErrsByGrant(
       projects,
-      mous,
       gridIdToGrantId,
       historicalRows,
-      canonicalGrantIds
+      canonicalGrantIds,
+      confirmedProjectIds
     )
 
     const chartData: GrantsChartRow[] = (rows ?? [])

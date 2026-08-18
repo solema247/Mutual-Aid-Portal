@@ -13,6 +13,8 @@ export interface MouListEnrichment {
   grantIds: Record<string, string>
   projectCounts: Record<string, number>
   paymentProjectCounts: Record<string, number>
+  /** Distinct projects with ≥1 payment confirmation (relational, preferred over JSON). */
+  paymentConfirmedCounts: Record<string, number>
   assignmentStatus: Record<string, MouAssignmentStatus>
 }
 
@@ -21,6 +23,7 @@ export interface MousListApiResponse {
   grantIds: Record<string, string>
   projectCounts: Record<string, number>
   paymentProjectCounts: Record<string, number>
+  paymentConfirmedCounts: Record<string, number>
   assignmentStatus: Record<string, MouAssignmentStatus>
 }
 
@@ -82,7 +85,13 @@ export function aggregateMouEnrichment(
     }
   }
 
-  return { grantIds, projectCounts, paymentProjectCounts, assignmentStatus }
+  return {
+    grantIds,
+    projectCounts,
+    paymentProjectCounts,
+    paymentConfirmedCounts: {},
+    assignmentStatus,
+  }
 }
 
 export function sumExpensesByMouId(projects: MouProjectListRow[]): Record<string, number> {
@@ -99,6 +108,7 @@ const emptyEnrichment = (): MouListEnrichment => ({
   grantIds: {},
   projectCounts: {},
   paymentProjectCounts: {},
+  paymentConfirmedCounts: {},
   assignmentStatus: {},
 })
 
@@ -114,6 +124,7 @@ export function parseMousListResponse(data: unknown): MousListApiResponse {
       grantIds: payload.grantIds ?? {},
       projectCounts: payload.projectCounts ?? {},
       paymentProjectCounts: payload.paymentProjectCounts ?? {},
+      paymentConfirmedCounts: payload.paymentConfirmedCounts ?? {},
       assignmentStatus: payload.assignmentStatus ?? {},
     }
   }

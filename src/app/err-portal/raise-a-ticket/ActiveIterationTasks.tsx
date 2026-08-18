@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { ExternalLink } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -12,6 +12,13 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import {
   GITHUB_PROJECT_STATUS_CHART_ORDER,
   GITHUB_PROJECT_TEAM_REQUEST_CHART_ORDER,
@@ -58,8 +65,17 @@ type ActiveIterationReport = SprintTaskListReport & {
   dateRange: string
 }
 
+type PreviousIterationOption = {
+  iterationId: string
+  title: string
+  startDate: string
+  duration: number
+  dateRange: string
+}
+
 type ApiResponse = {
   previous: ActiveIterationReport | null
+  previousOptions?: PreviousIterationOption[]
   active: ActiveIterationReport | null
   planned: ActiveIterationReport | null
   unscheduled: SprintTaskListReport
@@ -366,17 +382,22 @@ function IterationSection ({
   heading,
   report,
   emptyMessage,
+  headerAction,
 }: {
   heading: string
   report: ActiveIterationReport
   emptyMessage: string
+  headerAction?: ReactNode
 }) {
   const { t } = useTranslation('err')
 
   return (
     <section className="space-y-2">
       <div className="space-y-1">
-        <h3 className="text-sm font-semibold text-foreground">{heading}</h3>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <h3 className="text-sm font-semibold text-foreground">{heading}</h3>
+          {headerAction}
+        </div>
         <p className="text-xs text-muted-foreground">
           {t('raise_ticket_sprint_iteration_meta', '{{title}} · {{range}} · {{count}} tasks', {
             title: report.iteration.title,
@@ -392,14 +413,31 @@ function IterationSection ({
   )
 }
 
+function parseApiError (body: unknown, fallback: string): string {
+  if (body && typeof body === 'object') {
+    if ('detail' in body && typeof (body as { detail?: string }).detail === 'string') {
+      return (body as { detail: string }).detail
+    }
+    if ('error' in body && typeof (body as { error?: string }).error === 'string') {
+      return (body as { error: string }).error
+    }
+  }
+  return fallback
+}
+
 export function ActiveIterationTasks ({ enabled = true }: ActiveIterationTasksProps) {
   const { t, i18n } = useTranslation('err')
   const [previous, setPrevious] = useState<ActiveIterationReport | null>(null)
+  const [previousOptions, setPreviousOptions] = useState<PreviousIterationOption[]>([])
+  const [selectedPreviousId, setSelectedPreviousId] = useState<string | null>(null)
   const [active, setActive] = useState<ActiveIterationReport | null>(null)
   const [planned, setPlanned] = useState<ActiveIterationReport | null>(null)
   const [unscheduled, setUnscheduled] = useState<SprintTaskListReport | null>(null)
   const [loading, setLoading] = useState(true)
+  const [previousLoading, setPreviousLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  const locale = i18n.language?.startsWith('ar') ? 'ar' : 'en'
 
   useEffect(() => {
     if (!enabled) return
@@ -409,29 +447,21 @@ export function ActiveIterationTasks ({ enabled = true }: ActiveIterationTasksPr
       setLoading(true)
       setError(null)
       try {
-        const locale = i18n.language?.startsWith('ar') ? 'ar' : 'en'
         const res = await fetch(
           `/api/support/github-tickets/active-iteration?locale=${encodeURIComponent(locale)}`
         )
         if (!res.ok) {
           const body = await res.json().catch(() => null)
-          const msg =
-            body &&
-            typeof body === 'object' &&
-            'detail' in body &&
-            typeof (body as { detail?: string }).detail === 'string'
-              ? (body as { detail: string }).detail
-              : body &&
-                typeof body === 'object' &&
-                'error' in body &&
-                typeof (body as { error?: string }).error === 'string'
-                ? (body as { error: string }).error
-                : 'Failed to load sprint tasks'
-          throw new Error(msg)
+          throw new Error(parseApiError(body, 'Failed to load sprint tasks'))
         }
         const json = (await res.json()) as ApiResponse
         if (!cancelled) {
+          const options = json.previousOptions ?? []
           setPrevious(json.previous ?? null)
+          setPreviousOptions(options)
+          setSelectedPreviousId(
+            json.previous?.iteration.iterationId ?? options[0]?.iterationId ?? null
+          )
           setActive(json.active ?? null)
           setPlanned(json.planned ?? null)
           setUnscheduled(json.unscheduled)
@@ -449,11 +479,60 @@ export function ActiveIterationTasks ({ enabled = true }: ActiveIterationTasksPr
     return () => {
       cancelled = true
     }
-  }, [enabled, i18n.language])
+  }, [enabled, locale])
+
+  async function handlePreviousSprintChange (iterationId: string) {
+    if (iterationId === selectedPreviousId) return
+    setSelectedPreviousId(iterationId)
+    setPreviousLoading(true)
+    setError(null)
+    try {
+      const res = await fetch(
+        `/api/support/github-tickets/active-iteration?locale=${encodeURIComponent(locale)}&iterationId=${encodeURIComponent(iterationId)}`
+      )
+      if (!res.ok) {
+        const body = await res.json().catch(() => null)
+        throw new Error(parseApiError(body, 'Failed to load sprint tasks'))
+      }
+      const json = (await res.json()) as ApiResponse
+      setPrevious(json.previous ?? null)
+      if (json.previousOptions?.length) {
+        setPreviousOptions(json.previousOptions)
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to load sprint tasks')
+    } finally {
+      setPreviousLoading(false)
+    }
+  }
 
   if (!enabled) return null
 
   const title = t('raise_ticket_sprint_title', 'Sprints')
+  const previousSelect =
+    previousOptions.length > 1 ? (
+      <Select
+        value={selectedPreviousId ?? undefined}
+        onValueChange={handlePreviousSprintChange}
+        disabled={previousLoading}
+      >
+        <SelectTrigger
+          aria-label={t('raise_ticket_sprint_previous_select_label', 'Select previous sprint')}
+          className="h-8 w-full max-w-[16rem] text-xs"
+        >
+          <SelectValue
+            placeholder={t('raise_ticket_sprint_previous_select_placeholder', 'Select a sprint')}
+          />
+        </SelectTrigger>
+        <SelectContent>
+          {previousOptions.map((option) => (
+            <SelectItem key={option.iterationId} value={option.iterationId} className="text-xs">
+              {option.title} · {option.dateRange}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    ) : null
 
   return (
     <Card>
@@ -471,21 +550,46 @@ export function ActiveIterationTasks ({ enabled = true }: ActiveIterationTasksPr
           <div className="min-h-[120px] flex items-center justify-center text-sm text-muted-foreground">
             {t('raise_ticket_chart_loading', 'Loading chart data…')}
           </div>
-        ) : error ? (
+        ) : error && !previous && !active && !planned && !unscheduled ? (
           <div className="min-h-[120px] flex items-center justify-center text-sm text-destructive px-2 text-center">
             {error}
           </div>
         ) : (
           <>
+            {error ? (
+              <div className="rounded-lg px-3 py-2 text-center text-sm text-destructive ring-1 ring-destructive/30">
+                {error}
+              </div>
+            ) : null}
             {previous ? (
-              <IterationSection
-                heading={t('raise_ticket_sprint_previous_heading', 'Previous sprint')}
-                report={previous}
-                emptyMessage={t(
-                  'raise_ticket_sprint_previous_empty',
-                  'No tasks are assigned to the previous sprint.'
-                )}
-              />
+              <div className={previousLoading ? 'opacity-60 pointer-events-none' : undefined}>
+                <IterationSection
+                  heading={t('raise_ticket_sprint_previous_heading', 'Previous sprint')}
+                  report={previous}
+                  headerAction={previousSelect}
+                  emptyMessage={t(
+                    'raise_ticket_sprint_previous_empty',
+                    'No tasks are assigned to the previous sprint.'
+                  )}
+                />
+              </div>
+            ) : previousOptions.length > 1 ? (
+              <section className="space-y-2">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <h3 className="text-sm font-semibold text-foreground">
+                    {t('raise_ticket_sprint_previous_heading', 'Previous sprint')}
+                  </h3>
+                  {previousSelect}
+                </div>
+                <div className="rounded-lg px-3 py-6 text-center text-sm text-muted-foreground ring-1 ring-border/50">
+                  {previousLoading
+                    ? t('raise_ticket_chart_loading', 'Loading chart data…')
+                    : t(
+                        'raise_ticket_sprint_previous_empty',
+                        'No tasks are assigned to the previous sprint.'
+                      )}
+                </div>
+              </section>
             ) : null}
             {active ? (
               <IterationSection

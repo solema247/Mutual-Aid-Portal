@@ -8,6 +8,8 @@ import {
   computePortalActualsFromProjectExpenses,
 } from '@/lib/f4ExpenseDisplay'
 import { normalizeStateName } from '@/lib/normalizeStateName'
+import { resolveProjectCompletionDate } from '@/lib/projectStatus'
+import { loadProjectPaymentSummaries } from '@/lib/mouPaymentConfirmations'
 
 /** PostgREST `.in()` with hundreds of UUIDs can exceed URL limits and return empty data. */
 const SUPABASE_IN_BATCH = 80
@@ -167,26 +169,6 @@ function computeOverdue(
   return { is_overdue: true, days_overdue: days }
 }
 
-/** Parse MOU payment_confirmation_file JSON and return map of project_id -> transfer_date. */
-function getTransferDateByProjectFromMous(mousRows: any[]): Record<string, string> {
-  const out: Record<string, string> = {}
-  for (const mou of mousRows || []) {
-    const raw = mou?.payment_confirmation_file
-    if (!raw || typeof raw !== 'string') continue
-    try {
-      const parsed = JSON.parse(raw)
-      if (parsed && typeof parsed === 'object') {
-        for (const [projectId, data] of Object.entries(parsed)) {
-          const d = (data as any)?.transfer_date
-          if (d && typeof d === 'string') out[projectId] = d
-        }
-      }
-    } catch {
-      // ignore
-    }
-  }
-  return out
-}
 
 async function fetchRowsByIdColumn(
   supabase: any,
@@ -272,7 +254,7 @@ export async function GET(request: Request) {
     // Build project filter (include more statuses to catch F5 projects and completed projects)
     let projectQuery = supabase
       .from('err_projects')
-      .select('id, state, grant_call_id, grant_grid_id, grant_id, grant_segment, emergency_rooms (id, name, name_ar, err_code), planned_activities, expenses, source, status, funding_status, mou_id, f4_status, f5_status, date, date_transfer, completed_at, estimated_beneficiaries, implemented_sector, activity_shift_note')
+      .select('id, state, grant_call_id, grant_grid_id, grant_id, grant_segment, emergency_rooms (id, name, name_ar, err_code), planned_activities, expenses, source, status, funding_status, mou_id, f4_status, f5_status, date, date_transfer, completed_at, date_report_completed, estimated_beneficiaries, implemented_sector, activity_shift_note')
       .in('status', ['approved', 'active', 'pending', 'completed'])
       .in('funding_status', ['committed', 'allocated', 'unassigned'])
 
@@ -290,10 +272,13 @@ export async function GET(request: Request) {
     if (mouIds.length) {
       const { data: mousRows } = await supabase
         .from('mous')
-        .select('id, mou_code, payment_confirmation_file')
+        .select('id, mou_code')
         .in('id', mouIds)
-      for (const m of (mousRows || [])) mouCodeById[(m as any).id] = (m as any).mou_code
-      transferDateByProject = getTransferDateByProjectFromMous(mousRows || [])
+      for (const m of mousRows || []) mouCodeById[(m as any).id] = (m as any).mou_code
+      const paymentSummaries = await loadProjectPaymentSummaries(supabase, { mouIds })
+      for (const [projectId, summary] of Object.entries(paymentSummaries)) {
+        if (summary.transfer_date) transferDateByProject[projectId] = summary.transfer_date
+      }
     }
 
     const projectIds = (projects || []).map((p:any)=> p.id)
@@ -520,7 +505,7 @@ export async function GET(request: Request) {
         portal_f5_count: f5Agg.count, // For portal projects, all F5s are portal F5s
         last_f5_date: f5Agg.last,
         status: p.status || null,
-        completed_at: p.completed_at || null,
+        completed_at: resolveProjectCompletionDate(p.completed_at, p.date_report_completed),
         is_historical: false,
         f4_status,
         f5_status,

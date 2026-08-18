@@ -86,8 +86,13 @@ export type ActiveIterationReport = SprintTaskListReport & {
   dateRange: string
 }
 
+export type PreviousIterationOption = ProjectIteration & {
+  dateRange: string
+}
+
 export type SprintReports = {
   previous: ActiveIterationReport | null
+  previousOptions: PreviousIterationOption[]
   active: ActiveIterationReport | null
   planned: ActiveIterationReport | null
   unscheduled: SprintTaskListReport
@@ -524,24 +529,28 @@ export function isIterationCompleted (
   return end <= now
 }
 
-export function resolvePreviousIteration (
+export function listPreviousIterations (
   iterations: ProjectIteration[],
   now = new Date()
-): ProjectIteration | null {
+): ProjectIteration[] {
   const sorted = sortIterationsByStart(iterations)
   const active = resolveActiveIteration(sorted, now)
   if (active) {
     const activeIndex = sorted.findIndex(
       (iteration) => iteration.iterationId === active.iterationId
     )
-    if (activeIndex > 0) {
-      return sorted[activeIndex - 1]
-    }
-    return null
+    if (activeIndex <= 0) return []
+    return sorted.slice(0, activeIndex).reverse()
   }
 
-  const completed = sorted.filter((iteration) => isIterationCompleted(iteration, now))
-  return completed.length ? completed[completed.length - 1] : null
+  return sorted.filter((iteration) => isIterationCompleted(iteration, now)).reverse()
+}
+
+export function resolvePreviousIteration (
+  iterations: ProjectIteration[],
+  now = new Date()
+): ProjectIteration | null {
+  return listPreviousIterations(iterations, now)[0] ?? null
 }
 
 export function isIterationActive (
@@ -905,16 +914,30 @@ function resolveActiveIterationFromData (
 export function buildSprintReports (
   items: ProjectItemSnapshot[],
   iterationConfig: ProjectIteration[],
-  locale = 'en'
+  locale = 'en',
+  selectedPreviousIterationId?: string | null
 ): SprintReports {
   const activeIteration = resolveActiveIterationFromData(items, iterationConfig)
   const plannedIteration = resolvePlannedIteration(iterationConfig)
-  const previousIteration = resolvePreviousIteration(iterationConfig)
+  const previousIterations = listPreviousIterations(iterationConfig)
+  const previousOptions: PreviousIterationOption[] = previousIterations.map((iteration) => ({
+    ...iteration,
+    dateRange: formatIterationDateRange(iteration.startDate, iteration.duration, locale),
+  }))
+  const selectedPrevious =
+    (selectedPreviousIterationId
+      ? previousIterations.find(
+          (iteration) => iteration.iterationId === selectedPreviousIterationId
+        )
+      : null) ??
+    previousIterations[0] ??
+    null
 
   return {
-    previous: previousIteration
-      ? buildIterationReport(items, previousIteration, locale)
+    previous: selectedPrevious
+      ? buildIterationReport(items, selectedPrevious, locale)
       : null,
+    previousOptions,
     active: activeIteration ? buildIterationReport(items, activeIteration, locale) : null,
     planned: plannedIteration ? buildIterationReport(items, plannedIteration, locale) : null,
     unscheduled: buildUnscheduledOpenTasksReport(items),
@@ -932,10 +955,11 @@ export function buildActiveIterationReport (
 export async function fetchSprintReports (
   token: string,
   project = resolveGithubProjectRef(),
-  locale = 'en'
+  locale = 'en',
+  selectedPreviousIterationId?: string | null
 ): Promise<SprintReports> {
   const { items, iterationConfig } = await fetchProjectData(token, project)
-  return buildSprintReports(items, iterationConfig, locale)
+  return buildSprintReports(items, iterationConfig, locale, selectedPreviousIterationId)
 }
 
 export async function fetchActiveIterationReport (

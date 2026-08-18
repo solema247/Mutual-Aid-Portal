@@ -1,6 +1,5 @@
 import { projectExpenseTotal } from '@/lib/poolProjectClassification'
 import { normalizeProjectDonorToGrantId } from '@/lib/normalizeGrantId'
-import { getPaymentConfirmedProjectIds } from '@/app/err-portal/f3-mous/lib/payment-confirmations'
 
 type ProjectRow = {
   id: string
@@ -105,49 +104,14 @@ function mergeDisbursedTotals(
   return totals
 }
 
-function confirmedProjectIdsForMous(
-  projects: ProjectRow[],
-  mous: MouRow[]
-): Set<string> {
-  const mouById = new Map(mous.map((m) => [m.id, m]))
-  const projectsByMou = new Map<string, ProjectRow[]>()
-
-  for (const project of projects) {
-    if (!project.mou_id) continue
-    const list = projectsByMou.get(project.mou_id) ?? []
-    list.push(project)
-    projectsByMou.set(project.mou_id, list)
-  }
-
-  const confirmedProjectIds = new Set<string>()
-  for (const [mouId, mouProjects] of projectsByMou) {
-    const mou = mouById.get(mouId)
-    if (!mou) continue
-    const ordered = [...mouProjects].sort((a, b) => {
-      const aTs = a.submitted_at ?? ''
-      const bTs = b.submitted_at ?? ''
-      return aTs.localeCompare(bTs) || a.id.localeCompare(b.id)
-    })
-    const ids = getPaymentConfirmedProjectIds(
-      mou.payment_confirmation_file,
-      ordered.map((p) => p.id),
-      { exchange_rate: mou.exchange_rate, transfer_date: mou.transfer_date }
-    )
-    ids.forEach((id) => confirmedProjectIds.add(id))
-  }
-  return confirmedProjectIds
-}
-
 /** Portal payment confirmations + historical activities_raw_import USD. */
 export function sumDisbursedToErrsByGrant(
   projects: ProjectRow[],
-  mous: MouRow[],
   gridIdToGrantId: Map<string, string>,
   historicalRows: HistoricalRow[] = [],
-  grantIds: string[] = []
+  grantIds: string[] = [],
+  confirmedProjectIds: Set<string> = new Set()
 ): Record<string, number> {
-  const confirmedProjectIds = confirmedProjectIdsForMous(projects, mous)
-
   const portalTotals: Record<string, number> = {}
   for (const project of projects) {
     if (!confirmedProjectIds.has(project.id)) continue
@@ -163,10 +127,10 @@ export function sumDisbursedToErrsByGrant(
 /** F3 payment confirmations grouped by the MOU's FSP. Zero until mous.fsp_id is backfilled. */
 export function sumDisbursedToErrsByFsp(
   projects: ProjectRow[],
-  mous: MouRow[]
+  mous: MouRow[],
+  confirmedProjectIds: Set<string> = new Set()
 ): Record<string, number> {
   const mouById = new Map(mous.map((m) => [m.id, m]))
-  const confirmedProjectIds = confirmedProjectIdsForMous(projects, mous)
   const totals: Record<string, number> = {}
 
   for (const project of projects) {

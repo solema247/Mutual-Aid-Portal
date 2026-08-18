@@ -5,6 +5,7 @@ import { airtableMeta, syncGrantToAirtable } from '@/lib/grantManagement/pushToA
 import { SYNC_STATUS } from '@/lib/grantManagement/syncStatus'
 import { parseSyncTargetFromBody, SYNC_TARGET } from '@/lib/grantManagement/syncTarget'
 import { sumDisbursedToErrsByGrant } from '@/lib/grantPaymentDisbursement'
+import { loadConfirmedProjectIds } from '@/lib/mouPaymentConfirmations'
 
 const GRANT_SELECT =
   'id, grant_id, donor_id, donor_name, partner_name, project_name, grant_start_date, grant_end_date, status, total_transferred_amount_usd, sum_activity_amount, sum_transfer_fee_amount'
@@ -179,12 +180,15 @@ export async function GET(request: NextRequest) {
       }>(supabase, 'activities_raw_import', '"Project Donor",USD'),
     ])
 
+    const confirmedProjectIds = await loadConfirmedProjectIds(supabase, {
+      mouIds: mous.map((m) => m.id),
+    })
     const disbursedByGrant = sumDisbursedToErrsByGrant(
       projects,
-      mous,
       gridIdToGrantId,
       historicalRows,
-      canonicalGrantIds
+      canonicalGrantIds,
+      confirmedProjectIds
     )
 
     return NextResponse.json(

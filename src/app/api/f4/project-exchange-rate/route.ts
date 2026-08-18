@@ -1,25 +1,11 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
-
-function rateFromPaymentFile(
-  paymentConfirmationRaw: string | null | undefined,
-  projectId: string
-): number | null {
-  if (!paymentConfirmationRaw || typeof paymentConfirmationRaw !== 'string') return null
-  try {
-    const parsed = JSON.parse(paymentConfirmationRaw)
-    if (!parsed || typeof parsed !== 'object' || !(projectId in parsed)) return null
-    const er = (parsed as Record<string, { exchange_rate?: number }>)[projectId]?.exchange_rate
-    if (typeof er === 'number' && er > 0 && Number.isFinite(er)) return er
-  } catch {
-    // ignore invalid JSON
-  }
-  return null
-}
+import { loadProjectPaymentSummaries } from '@/lib/mouPaymentConfirmations'
 
 /**
  * GET /api/f4/project-exchange-rate?project_id=<uuid>
- * Returns SDG per 1 USD from the project's MOU (payment confirmation or MOU-level rate).
+ * Returns SDG per 1 USD from the project's payment confirmations or MOU-level rate.
+ * When multiple confirmations exist, uses the latest rate (by transfer_date / created_at).
  */
 export async function GET(request: Request) {
   try {
@@ -41,9 +27,15 @@ export async function GET(request: Request) {
       return NextResponse.json({ exchange_rate: null, source: null as 'payment_confirmation' | 'mou' | null })
     }
 
+    const summaries = await loadProjectPaymentSummaries(supabase, {
+      projectIds: [projectId],
+      mouIds: [project.mou_id],
+    })
+    const fromPayment = summaries[projectId]?.exchange_rate ?? null
+
     const { data: mou, error: mouErr } = await supabase
       .from('mous')
-      .select('exchange_rate, payment_confirmation_file')
+      .select('exchange_rate')
       .eq('id', project.mou_id)
       .maybeSingle()
 
@@ -52,7 +44,6 @@ export async function GET(request: Request) {
       return NextResponse.json({ exchange_rate: null, source: null as 'payment_confirmation' | 'mou' | null })
     }
 
-    const fromPayment = rateFromPaymentFile(mou.payment_confirmation_file, projectId)
     const fromMouCol =
       typeof mou.exchange_rate === 'number' && mou.exchange_rate > 0 && Number.isFinite(mou.exchange_rate)
         ? mou.exchange_rate

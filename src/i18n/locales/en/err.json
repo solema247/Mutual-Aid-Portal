@@ -308,6 +308,8 @@
   "raise_ticket_sprint_title": "Sprints",
   "raise_ticket_sprint_intro": "Work is organised in two-week sprint cycles on the GitHub project board. Progress is reviewed weekly and tasks move between the previous, current, and planned sprints.",
   "raise_ticket_sprint_previous_heading": "Previous sprint",
+  "raise_ticket_sprint_previous_select_label": "Select previous sprint",
+  "raise_ticket_sprint_previous_select_placeholder": "Select a sprint",
   "raise_ticket_sprint_current_heading": "Current sprint",
   "raise_ticket_sprint_planned_heading": "Planned sprint",
   "raise_ticket_sprint_iteration_meta": "{{title}} · {{range}} · {{count}} tasks",

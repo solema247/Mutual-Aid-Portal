@@ -308,6 +308,8 @@
   "raise_ticket_sprint_title": "الدورات",
   "raise_ticket_sprint_intro": "يُنظَّم العمل في دورات مدتها أسبوعان على لوحة مشروع GitHub. تُراجع التقدّمات أسبوعياً وتنتقل المهام بين الدورة السابقة والحالية والمخطَّطة.",
   "raise_ticket_sprint_previous_heading": "الدورة السابقة",
+  "raise_ticket_sprint_previous_select_label": "اختر الدورة السابقة",
+  "raise_ticket_sprint_previous_select_placeholder": "اختر دورة",
   "raise_ticket_sprint_current_heading": "الدورة الحالية",
   "raise_ticket_sprint_planned_heading": "الدورة المخطَّطة",
   "raise_ticket_sprint_iteration_meta": "{{title}} · {{range}} · {{count}} مهمة",

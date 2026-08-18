@@ -19,14 +19,14 @@ interface ArchiveRow {
   grant_serial_id: string | null
   state: string | null
   completed_at: string | null
+  date_report_completed: string | null
+  project_completion_date: string | null
   err_code: string | null
   err_name: string | null
   donor_id: string | null
   donor_name: string | null
-  donor_short_name: string | null
   grant_call_id: string | null
-  grant_call_name: string | null
-  grant_call_shortname: string | null
+  grant_name: string | null
   files: {
     f1: boolean
     f2: boolean
@@ -38,13 +38,52 @@ interface ArchiveRow {
   }
 }
 
-type PeriodMode = 'month' | 'range' | 'all'
+type DateFilterMode = 'month' | 'range' | 'all'
 
 function previousMonth(): string {
   const d = new Date()
   d.setUTCDate(1)
   d.setUTCMonth(d.getUTCMonth() - 1)
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`
+}
+
+/** Inclusive calendar [start, end) in UTC ISO, matching the API. */
+function resolveCompletionRange(
+  mode: DateFilterMode,
+  month: string,
+  fromDate: string,
+  toDate: string
+): { start: string; end: string } | null {
+  if (mode === 'all') return null
+  if (mode === 'month' && /^\d{4}-\d{2}$/.test(month)) {
+    const [y, m] = month.split('-').map(Number)
+    const start = new Date(Date.UTC(y, m - 1, 1))
+    const end = new Date(Date.UTC(y, m, 1))
+    return { start: start.toISOString(), end: end.toISOString() }
+  }
+  if (mode === 'range' && fromDate && toDate) {
+    const start = new Date(`${fromDate}T00:00:00.000Z`)
+    const endExclusive = new Date(`${toDate}T00:00:00.000Z`)
+    endExclusive.setUTCDate(endExclusive.getUTCDate() + 1)
+    if (!isNaN(start.getTime()) && !isNaN(endExclusive.getTime())) {
+      return { start: start.toISOString(), end: endExclusive.toISOString() }
+    }
+  }
+  return null
+}
+
+/** Format YYYY-MM-DD / ISO without shifting calendar day across timezones. */
+function formatCompletionDate(iso: string | null) {
+  if (!iso) return '—'
+  const day = iso.slice(0, 10)
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return '—'
+  const [y, m, d] = day.split('-').map(Number)
+  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    timeZone: 'UTC'
+  })
 }
 
 function FileBadge({ label, present }: { label: string; present: boolean }) {
@@ -75,12 +114,12 @@ export default function DataArchivePage() {
     }
   }, [permissionsLoading, canViewPage, router])
 
-  const [periodMode, setPeriodMode] = useState<PeriodMode>('month')
+  const [dateFilterMode, setDateFilterMode] = useState<DateFilterMode>('month')
   const [month, setMonth] = useState<string>(previousMonth())
   const [fromDate, setFromDate] = useState<string>('')
   const [toDate, setToDate] = useState<string>('')
   const [includeUndated, setIncludeUndated] = useState(false)
-  const [donorFilter, setDonorFilter] = useState<string>('all')
+  const [grantFilter, setGrantFilter] = useState<string>('all')
 
   const [loading, setLoading] = useState(false)
   const [rows, setRows] = useState<ArchiveRow[]>([])
@@ -88,19 +127,28 @@ export default function DataArchivePage() {
   const [exporting, setExporting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  const completionRange = useMemo(
+    () => resolveCompletionRange(dateFilterMode, month, fromDate, toDate),
+    [dateFilterMode, month, fromDate, toDate]
+  )
+
   const loadRows = useCallback(async () => {
-    if (periodMode === 'month' && !month) return
-    if (periodMode === 'range' && (!fromDate || !toDate)) return
+    if (dateFilterMode === 'month' && !month) return
+    if (dateFilterMode === 'range' && (!fromDate || !toDate)) {
+      setRows([])
+      setSelected(new Set())
+      return
+    }
     setLoading(true)
     setError(null)
     try {
       const params = new URLSearchParams()
-      if (periodMode === 'month') params.set('month', month)
-      if (periodMode === 'range') {
+      if (dateFilterMode === 'month') params.set('month', month)
+      if (dateFilterMode === 'range') {
         params.set('from', fromDate)
         params.set('to', toDate)
       }
-      if (periodMode !== 'all' && includeUndated) params.set('include_undated', 'true')
+      if (dateFilterMode !== 'all' && includeUndated) params.set('include_undated', 'true')
       const res = await fetch(`/api/data-archive/completed?${params.toString()}`)
       if (!res.ok) {
         const j = await res.json().catch(() => ({}))
@@ -116,24 +164,39 @@ export default function DataArchivePage() {
     } finally {
       setLoading(false)
     }
-  }, [periodMode, month, fromDate, toDate, includeUndated])
+  }, [dateFilterMode, month, fromDate, toDate, includeUndated])
 
   useEffect(() => {
     if (!permissionsLoading && canViewPage) loadRows()
   }, [permissionsLoading, canViewPage, loadRows])
 
-  const donorOptions = useMemo(() => {
+  const grantOptions = useMemo(() => {
     const map = new Map<string, string>()
     for (const r of rows) {
-      if (r.donor_id) map.set(r.donor_id, r.donor_short_name || r.donor_name || r.donor_id)
+      if (r.grant_call_id && r.grant_name) map.set(r.grant_call_id, r.grant_name)
+      else if (!r.grant_call_id && r.grant_name) map.set(`name:${r.grant_name}`, r.grant_name)
     }
     return Array.from(map.entries()).sort((a, b) => a[1].localeCompare(b[1]))
   }, [rows])
 
   const filteredRows = useMemo(() => {
-    if (donorFilter === 'all') return rows
-    return rows.filter((r) => r.donor_id === donorFilter)
-  }, [rows, donorFilter])
+    // Defense-in-depth: keep only rows whose Project Completion Date is in the selected window.
+    let list = rows.filter((r) => {
+      const effective = r.project_completion_date
+      if (!completionRange) {
+        if (dateFilterMode === 'all') return includeUndated ? true : !!effective
+        return true
+      }
+      if (!effective) return includeUndated
+      return effective >= completionRange.start && effective < completionRange.end
+    })
+    if (grantFilter === 'all') return list
+    if (grantFilter.startsWith('name:')) {
+      const name = grantFilter.slice(5)
+      return list.filter((r) => !r.grant_call_id && r.grant_name === name)
+    }
+    return list.filter((r) => r.grant_call_id === grantFilter)
+  }, [rows, grantFilter, completionRange, dateFilterMode, includeUndated])
 
   const allSelected = filteredRows.length > 0 && filteredRows.every((r) => selected.has(r.id))
 
@@ -188,9 +251,6 @@ export default function DataArchivePage() {
     }
   }
 
-  const formatDate = (iso: string | null) =>
-    iso ? new Date(iso).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : '—'
-
   if (permissionsLoading || !canViewPage) return null
 
   return (
@@ -204,56 +264,56 @@ export default function DataArchivePage() {
 
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-base">Export period</CardTitle>
+          <CardTitle className="text-base">Filter by Project Completion Date</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="flex flex-wrap items-end gap-4">
             <div className="space-y-1.5">
-              <Label className="text-sm">Period</Label>
-              <Select value={periodMode} onValueChange={(v) => setPeriodMode(v as PeriodMode)}>
-                <SelectTrigger className="h-9 w-40">
+              <Label className="text-sm">Project Completion Date</Label>
+              <Select value={dateFilterMode} onValueChange={(v) => setDateFilterMode(v as DateFilterMode)}>
+                <SelectTrigger className="h-9 w-52">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="month">Month</SelectItem>
-                  <SelectItem value="range">Custom range</SelectItem>
-                  <SelectItem value="all">All completed</SelectItem>
+                  <SelectItem value="month">By month</SelectItem>
+                  <SelectItem value="range">Custom date range</SelectItem>
+                  <SelectItem value="all">All completion dates</SelectItem>
                 </SelectContent>
               </Select>
             </div>
-            {periodMode === 'month' && (
+            {dateFilterMode === 'month' && (
               <div className="space-y-1.5">
-                <Label className="text-sm">Month</Label>
+                <Label className="text-sm">Completion month</Label>
                 <Input type="month" className="h-9 w-44" value={month} onChange={(e) => setMonth(e.target.value)} />
               </div>
             )}
-            {periodMode === 'range' && (
+            {dateFilterMode === 'range' && (
               <>
                 <div className="space-y-1.5">
-                  <Label className="text-sm">From</Label>
+                  <Label className="text-sm">Completion date from</Label>
                   <Input type="date" className="h-9 w-40" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-sm">To</Label>
+                  <Label className="text-sm">Completion date to</Label>
                   <Input type="date" className="h-9 w-40" value={toDate} onChange={(e) => setToDate(e.target.value)} />
                 </div>
               </>
             )}
             <div className="space-y-1.5">
-              <Label className="text-sm">Backdonor grant</Label>
-              <Select value={donorFilter} onValueChange={setDonorFilter}>
-                <SelectTrigger className="h-9 w-52">
+              <Label className="text-sm">Grant name</Label>
+              <Select value={grantFilter} onValueChange={setGrantFilter}>
+                <SelectTrigger className="h-9 w-64">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All donors</SelectItem>
-                  {donorOptions.map(([id, label]) => (
+                  <SelectItem value="all">All grants</SelectItem>
+                  {grantOptions.map(([id, label]) => (
                     <SelectItem key={id} value={id}>{label}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
-            {periodMode !== 'all' && (
+            {dateFilterMode !== 'all' && (
               <div className="flex items-center gap-2 pb-2">
                 <Checkbox
                   id="include-undated"
@@ -273,16 +333,15 @@ export default function DataArchivePage() {
             </div>
           </div>
           <p className="text-xs text-muted-foreground mt-3">
-            Only microgrants marked as completed are available for export. Files are organized as
-            Month (YYYY-MM) &gt; Backdonor Grant &gt; Serial Number, with a manifest recording original
-            file locations and completion metadata in each folder.
+            Only microgrants marked as completed are listed, filtered by Project Completion Date.
+            Exports are organized as Completion month (YYYY-MM) &gt; Grant Name &gt; Serial Number.
           </p>
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-4 flex-wrap">
             <CardTitle className="text-base">
               Completed microgrants
               <span className="ml-2 text-sm font-normal text-muted-foreground">
@@ -291,24 +350,30 @@ export default function DataArchivePage() {
               </span>
             </CardTitle>
             {canDownload && (
-              <div className="flex items-center gap-2">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={exporting || selected.size === 0}
-                  onClick={() => runExport(Array.from(selected))}
-                >
-                  <Download className={cn('h-4 w-4 mr-2', exporting && 'animate-pulse')} />
-                  Export selected
-                </Button>
-                <Button
-                  size="sm"
-                  disabled={exporting || filteredRows.length === 0}
-                  onClick={() => runExport(filteredRows.map((r) => r.id))}
-                >
-                  <Download className={cn('h-4 w-4 mr-2', exporting && 'animate-pulse')} />
-                  {exporting ? 'Preparing zip…' : 'Export all'}
-                </Button>
+              <div className="flex flex-col items-end gap-1.5">
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={exporting || selected.size === 0}
+                    onClick={() => runExport(Array.from(selected))}
+                  >
+                    <Download className={cn('h-4 w-4 mr-2', exporting && 'animate-pulse')} />
+                    Export selected
+                  </Button>
+                  <Button
+                    size="sm"
+                    disabled={exporting || filteredRows.length === 0}
+                    onClick={() => runExport(filteredRows.map((r) => r.id))}
+                  >
+                    <Download className={cn('h-4 w-4 mr-2', exporting && 'animate-pulse')} />
+                    {exporting ? 'Preparing zip…' : 'Export all'}
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground max-w-md text-right">
+                  Large exports (for example hundreds of projects) can take a long time while the system
+                  retrieves each original source file. Please keep this tab open until the download finishes.
+                </p>
               </div>
             )}
           </div>
@@ -326,10 +391,10 @@ export default function DataArchivePage() {
                       <Checkbox checked={allSelected} onCheckedChange={toggleAll} aria-label="Select all" />
                     </TableHead>
                     <TableHead className="whitespace-nowrap">Serial Number</TableHead>
-                    <TableHead className="whitespace-nowrap">Backdonor Grant</TableHead>
+                    <TableHead className="whitespace-nowrap">Grant name</TableHead>
                     <TableHead className="whitespace-nowrap">ERR</TableHead>
                     <TableHead className="whitespace-nowrap">State</TableHead>
-                    <TableHead className="whitespace-nowrap">Completed</TableHead>
+                    <TableHead className="whitespace-nowrap">Project Completion Date</TableHead>
                     <TableHead className="whitespace-nowrap">Files</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -337,7 +402,7 @@ export default function DataArchivePage() {
                   {filteredRows.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={7} className="text-center text-muted-foreground py-6">
-                        No completed microgrants found for this period.
+                        No completed microgrants found for this Project Completion Date.
                       </TableCell>
                     </TableRow>
                   ) : (
@@ -353,16 +418,16 @@ export default function DataArchivePage() {
                         <TableCell className="font-medium whitespace-nowrap">
                           {r.grant_id || r.grant_serial_id || '—'}
                         </TableCell>
-                        <TableCell className="whitespace-nowrap">
-                          {r.donor_short_name || r.donor_name || '—'}
-                          {r.grant_call_shortname || r.grant_call_name ? (
-                            <span className="text-muted-foreground"> · {r.grant_call_shortname || r.grant_call_name}</span>
-                          ) : null}
+                        <TableCell className="whitespace-nowrap" title={r.grant_name || undefined}>
+                          {r.grant_name || '—'}
                         </TableCell>
                         <TableCell className="whitespace-nowrap">{r.err_code || r.err_name || '—'}</TableCell>
                         <TableCell className="whitespace-nowrap">{r.state || '—'}</TableCell>
-                        <TableCell className="whitespace-nowrap" title={r.completed_at || 'No completion date recorded'}>
-                          {formatDate(r.completed_at)}
+                        <TableCell
+                          className="whitespace-nowrap"
+                          title={r.project_completion_date || 'No completion date recorded'}
+                        >
+                          {formatCompletionDate(r.project_completion_date)}
                         </TableCell>
                         <TableCell>
                           <div className="flex flex-wrap gap-1">
