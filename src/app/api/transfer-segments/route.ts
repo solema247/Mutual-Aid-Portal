@@ -11,7 +11,7 @@ import {
 } from '@/lib/grantManagement/fundTransferHelpers'
 
 const TS_SELECT =
-  'id, transfer_id, auto_number, fund_request_id, request_id, grant_id, fsp_id, decision_id_proposed, purpose, status, activity_amount, transfer_fee_amount, transfer_received_date, partner_name, comment, airtable_record_id, created_at, updated_at'
+  'id, transfer_id, auto_number, fund_request_id, request_id, grant_id, fsp_id, decision_id_proposed, purpose, status, activity_amount, transfer_fee_amount, transfer_received_date, partner_name, comment, file_name, file_link, airtable_record_id, created_at, updated_at'
 
 function mapRow(row: Record<string, unknown>) {
   return {
@@ -136,6 +136,8 @@ export async function POST(request: NextRequest) {
         transfer_received_date: body.transfer_received_date || null,
         partner_name,
         comment: body.comment?.trim() || null,
+        file_name: typeof body.file_name === 'string' ? body.file_name.trim() || null : null,
+        file_link: typeof body.file_link === 'string' ? body.file_link.trim() || null : null,
         updated_at: new Date().toISOString(),
       })
       .select(TS_SELECT)

@@ -17,7 +17,7 @@ async function enrichFundRequests(
     supabase.from('fund_request_decisions').select('fund_request_id, decision_id_proposed').in('fund_request_id', ids),
     supabase
       .from('transfer_segments')
-      .select('id, fund_request_id, transfer_id, activity_amount, transfer_fee_amount, status, grant_id, fsp_id')
+      .select('id, fund_request_id, transfer_id, activity_amount, transfer_fee_amount, status, grant_id, fsp_id, transfer_received_date, purpose, comment, file_name, file_link')
       .in('fund_request_id', ids),
   ])
 

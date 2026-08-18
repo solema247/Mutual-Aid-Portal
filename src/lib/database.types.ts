@@ -2145,6 +2145,8 @@ export type Database = {
           created_at: string
           decision_id_proposed: string | null
           fsp_id: string | null
+          file_link: string | null
+          file_name: string | null
           fund_request_id: string | null
           grant_id: string | null
           id: string
@@ -2165,6 +2167,8 @@ export type Database = {
           created_at?: string
           decision_id_proposed?: string | null
           fsp_id?: string | null
+          file_link?: string | null
+          file_name?: string | null
           fund_request_id?: string | null
           grant_id?: string | null
           id?: string
@@ -2185,6 +2189,8 @@ export type Database = {
           created_at?: string
           decision_id_proposed?: string | null
           fsp_id?: string | null
+          file_link?: string | null
+          file_name?: string | null
           fund_request_id?: string | null
           grant_id?: string | null
           id?: string

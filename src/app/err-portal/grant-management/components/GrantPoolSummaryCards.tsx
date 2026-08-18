@@ -41,11 +41,11 @@ export default function GrantPoolSummaryCards() {
   return (
     <div className="space-y-3">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-2">
-        <div className="lg:col-span-3 text-center py-2 bg-slate-50 rounded-md border">
+        <div className="lg:col-span-3 text-center py-2 bg-slate-50 rounded-none border">
           <div className="text-xs font-semibold">Allocation Pool Overview</div>
           <div className="text-[10px] text-muted-foreground">Distribution allocations and current usage</div>
         </div>
-        <div className="lg:col-span-3 text-center py-2 bg-sky-100 rounded-md border">
+        <div className="lg:col-span-3 text-center py-2 bg-slate-50 rounded-none border">
           <div className="text-xs font-semibold">Pipeline</div>
           <div className="text-[10px] text-muted-foreground">Projects in approval and assignment workflow</div>
         </div>

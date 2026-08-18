@@ -9,7 +9,7 @@ import {
 } from '@/lib/grantManagement/fundTransferHelpers'
 
 const TS_SELECT =
-  'id, transfer_id, auto_number, fund_request_id, request_id, grant_id, fsp_id, decision_id_proposed, purpose, status, activity_amount, transfer_fee_amount, transfer_received_date, partner_name, comment, airtable_record_id, created_at, updated_at'
+  'id, transfer_id, auto_number, fund_request_id, request_id, grant_id, fsp_id, decision_id_proposed, purpose, status, activity_amount, transfer_fee_amount, transfer_received_date, partner_name, comment, file_name, file_link, airtable_record_id, created_at, updated_at'
 
 function mapRow(row: Record<string, unknown>) {
   return {
@@ -76,6 +76,12 @@ export async function PUT(
     }
     if ('partner_name' in body) patch.partner_name = body.partner_name?.trim() || null
     if ('comment' in body) patch.comment = body.comment?.trim() || null
+    if ('file_name' in body) {
+      patch.file_name = typeof body.file_name === 'string' ? body.file_name.trim() || null : null
+    }
+    if ('file_link' in body) {
+      patch.file_link = typeof body.file_link === 'string' ? body.file_link.trim() || null : null
+    }
     if ('fund_request_id' in body) patch.fund_request_id = body.fund_request_id || null
 
     // Recalculate fee from FSP % whenever activity or FSP changes.

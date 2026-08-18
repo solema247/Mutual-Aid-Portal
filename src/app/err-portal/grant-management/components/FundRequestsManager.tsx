@@ -1,8 +1,12 @@
 'use client'
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
-import { Plus, Pencil, Trash2, ChevronDown, ChevronUp, Info } from 'lucide-react'
+import Link from 'next/link'
+import { Plus, Pencil, Trash2, ChevronDown, ChevronUp, Info, Paperclip, X, AlertTriangle } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { supabase } from '@/lib/supabaseClient'
+import { resolveDecisionDocumentUrl } from '@/lib/grantManagement/decisionDocument'
+import { normalizeRestrictionLabel } from '@/lib/poolRestrictionLabel'
 import {
   Card,
   CardContent,
@@ -58,7 +62,17 @@ type Fsp = {
   fees?: number
 }
 
-type GrantOption = { id: string; grant_id: string }
+type GrantOption = {
+  id: string
+  grant_id: string
+  total_transferred_amount_usd?: number | null
+  sum_disbursed_to_errs?: number | null
+}
+
+type RestrictionBalance = {
+  restriction: string
+  remaining: number
+}
 
 type DecisionOption = {
   decision_id_proposed: string
@@ -83,6 +97,8 @@ type Transfer = {
   transfer_received_date: string | null
   decision_id_proposed: string | null
   comment: string | null
+  file_name: string | null
+  file_link: string | null
 }
 
 type FundRequest = {
@@ -104,6 +120,21 @@ const money = (n: number | null | undefined) =>
   n == null
     ? '—'
     : new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n)
+
+const remainingClass = (n: number) =>
+  n < 0 ? 'text-red-700' : n === 0 ? 'text-amber-800' : 'text-emerald-800'
+
+function grantPayoutRemaining(g: GrantOption | undefined): number | null {
+  if (!g) return null
+  return (Number(g.total_transferred_amount_usd) || 0) - (Number(g.sum_disbursed_to_errs) || 0)
+}
+
+function grantNamesMatch(grantId: string, grantName: string | null | undefined): boolean {
+  if (!grantName?.trim()) return false
+  const a = grantId.trim().toLowerCase().replace(/[\s_]+/g, '-')
+  const b = grantName.trim().toLowerCase().replace(/[\s_]+/g, '-')
+  return a === b || a.includes(b) || b.includes(a)
+}
 
 /** Allow requests to exceed decision amount by this factor (e.g. transfer fees). */
 const FUNDING_CAPACITY_MARGIN = 1.05
@@ -131,6 +162,7 @@ type NewTsRow = {
   fsp_id: string
   purpose: string
   activity_amount: string
+  file: File | null
 }
 
 const emptyNewTsRow = (): NewTsRow => ({
@@ -138,6 +170,7 @@ const emptyNewTsRow = (): NewTsRow => ({
   fsp_id: '',
   purpose: 'ERR Activity Plans',
   activity_amount: '',
+  file: null,
 })
 
 const emptyFspForm = {
@@ -162,6 +195,7 @@ export default function FundRequestsManager() {
   const [requests, setRequests] = useState<FundRequest[]>([])
   const [fsps, setFsps] = useState<Fsp[]>([])
   const [grants, setGrants] = useState<GrantOption[]>([])
+  const [restrictions, setRestrictions] = useState<RestrictionBalance[]>([])
   const [decisions, setDecisions] = useState<DecisionOption[]>([])
   const [loading, setLoading] = useState(true)
   const [expanded, setExpanded] = useState<string | null>(null)
@@ -179,6 +213,7 @@ export default function FundRequestsManager() {
   const [tsForm, setTsForm] = useState(emptyTsForm)
   const [newTsRows, setNewTsRows] = useState<Record<string, NewTsRow[]>>({})
   const [savingNewTs, setSavingNewTs] = useState(false)
+  const [uploadingTsId, setUploadingTsId] = useState<string | null>(null)
 
   const [fspOpen, setFspOpen] = useState(false)
   const [editingFsp, setEditingFsp] = useState<Fsp | null>(null)
@@ -187,17 +222,38 @@ export default function FundRequestsManager() {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const [frRes, fspRes, grantRes, decRes] = await Promise.all([
+      const [frRes, fspRes, grantRes, decRes, restRes] = await Promise.all([
         fetch('/api/fund-requests', { cache: 'no-store' }),
         fetch('/api/fsps', { cache: 'no-store' }),
         fetch('/api/grants', { cache: 'no-store' }),
         fetch('/api/distribution-decisions', { cache: 'no-store' }),
+        fetch('/api/pool/by-restriction', { cache: 'no-store' }),
       ])
       if (frRes.ok) setRequests(await frRes.json())
       if (fspRes.ok) setFsps(await fspRes.json())
       if (grantRes.ok) {
         const g = await grantRes.json()
-        setGrants((g || []).map((x: GrantOption) => ({ id: x.id, grant_id: x.grant_id })))
+        setGrants(
+          (g || []).map(
+            (x: GrantOption) => ({
+              id: x.id,
+              grant_id: x.grant_id,
+              total_transferred_amount_usd: x.total_transferred_amount_usd ?? null,
+              sum_disbursed_to_errs: x.sum_disbursed_to_errs ?? 0,
+            })
+          )
+        )
+      }
+      if (restRes.ok) {
+        const rows = await restRes.json()
+        setRestrictions(
+          Array.isArray(rows)
+            ? rows.map((r: { restriction?: string; remaining?: number; balance?: number }) => ({
+                restriction: normalizeRestrictionLabel(r.restriction),
+                remaining: Number(r.remaining ?? r.balance) || 0,
+              }))
+            : []
+        )
       }
       if (decRes.ok) {
         const d = await decRes.json()
@@ -397,6 +453,25 @@ export default function FundRequestsManager() {
           alert(err.error || 'Failed to save transfer segment')
           return
         }
+        const created = await res.json().catch(() => null)
+        if (row.file && created?.id) {
+          try {
+            const file_link = await uploadTransferFile(
+              row.file,
+              created.transfer_id || created.id
+            )
+            const fileRes = await fetch(`/api/transfer-segments/${created.id}`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ file_name: row.file.name, file_link }),
+            })
+            if (!fileRes.ok) {
+              alert('Transfer saved, but attaching the file failed. Open the row and attach it again.')
+            }
+          } catch {
+            alert('Transfer saved, but attaching the file failed. Open the row and attach it again.')
+          }
+        }
       }
       setNewTsRows((prev) => {
         const next = { ...prev }
@@ -425,6 +500,85 @@ export default function FundRequestsManager() {
     return computeTransferFeeAmount(activity, fsp?.transfer_fee_percent ?? 0)
   }
 
+  const patchTransferInState = (id: string, patch: Partial<Transfer>) => {
+    setRequests((prev) =>
+      prev.map((fr) => ({
+        ...fr,
+        transfers: (fr.transfers || []).map((row) => (row.id === id ? { ...row, ...patch } : row)),
+      }))
+    )
+  }
+
+  const uploadTransferFile = async (file: File, key: string) => {
+    const ext = file.name.split('.').pop() || 'bin'
+    const filePath = `f0-transfer-segments/${key}-${Date.now()}.${ext}`
+    const { error } = await supabase.storage.from('images').upload(filePath, file, {
+      cacheControl: '3600',
+    })
+    if (error) throw error
+    return filePath
+  }
+
+  const openTransferFile = async (fileLink: string | null | undefined) => {
+    if (!fileLink) return
+    try {
+      const url = await resolveDecisionDocumentUrl(fileLink)
+      if (!url) {
+        alert('Could not open file')
+        return
+      }
+      window.open(url, '_blank', 'noopener,noreferrer')
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : 'Failed to open file')
+    }
+  }
+
+  const saveTransferFile = async (t: Transfer, file: File) => {
+    setUploadingTsId(t.id)
+    try {
+      const file_link = await uploadTransferFile(file, t.transfer_id || t.id)
+      const res = await fetch(`/api/transfer-segments/${t.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ file_name: file.name, file_link }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error || 'Failed to save file. Apply sql/add_transfer_segments_file.sql if the columns are missing.')
+      }
+      const updated = await res.json().catch(() => null)
+      patchTransferInState(t.id, {
+        file_name: updated?.file_name ?? file.name,
+        file_link: updated?.file_link ?? file_link,
+      })
+      if (editingTs?.id === t.id) {
+        setEditingTs((prev) =>
+          prev ? { ...prev, file_name: file.name, file_link } : prev
+        )
+      }
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : 'Failed to attach file')
+    } finally {
+      setUploadingTsId(null)
+    }
+  }
+
+  const clearTransferFile = async (t: Transfer) => {
+    const res = await fetch(`/api/transfer-segments/${t.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ file_name: null, file_link: null }),
+    })
+    if (!res.ok) {
+      alert('Failed to remove file')
+      return
+    }
+    patchTransferInState(t.id, { file_name: null, file_link: null })
+    if (editingTs?.id === t.id) {
+      setEditingTs((prev) => (prev ? { ...prev, file_name: null, file_link: null } : prev))
+    }
+  }
+
   const updateTsStatus = async (t: Transfer, status: string) => {
     const today = new Date().toISOString().slice(0, 10)
     const transfer_received_date =
@@ -439,7 +593,24 @@ export default function FundRequestsManager() {
       alert(err.error || 'Failed to update status')
       return
     }
-    await load()
+    const updated = await res.json().catch(() => null)
+    setRequests((prev) =>
+      prev.map((fr) => ({
+        ...fr,
+        transfers: (fr.transfers || []).map((row) =>
+          row.id === t.id
+            ? {
+                ...row,
+                status: updated?.status ?? status,
+                transfer_received_date:
+                  updated?.transfer_received_date !== undefined
+                    ? updated.transfer_received_date
+                    : transfer_received_date,
+              }
+            : row
+        ),
+      }))
+    )
   }
 
   const deleteTs = async (id: string) => {
@@ -522,6 +693,112 @@ export default function FundRequestsManager() {
     if (activity == null || Number.isNaN(activity)) return null
     return computeTransferFeeAmount(activity, selectedFsp?.transfer_fee_percent ?? 0)
   }, [tsForm.activity_amount, selectedFsp?.transfer_fee_percent])
+
+  const restrictionRemainingByKey = useMemo(() => {
+    const map = new Map<string, number>()
+    for (const r of restrictions) map.set(r.restriction, r.remaining)
+    return map
+  }, [restrictions])
+
+  const restrictionCuesForFr = (
+    fr: FundRequest,
+    selectedGrantId?: string
+  ): Array<{ restriction: string; remaining: number }> => {
+    const linked = decisions.filter((d) => (fr.decision_ids || []).includes(d.decision_id_proposed))
+    const matched = selectedGrantId
+      ? linked.filter((d) => grantNamesMatch(selectedGrantId, d.grant_name))
+      : []
+    const source = matched.length ? matched : linked
+    const keys = [...new Set(source.map((d) => normalizeRestrictionLabel(d.restriction)))]
+    return keys
+      .filter((restriction) => restrictionRemainingByKey.has(restriction))
+      .map((restriction) => ({
+        restriction,
+        remaining: restrictionRemainingByKey.get(restriction) ?? 0,
+      }))
+  }
+
+  const transferBalanceCue = (
+    grantId: string | undefined,
+    activityAmount: number | null,
+    fr: FundRequest
+  ) => {
+    const grant = grantId ? grants.find((g) => g.grant_id === grantId) : undefined
+    const grantRemaining = grantPayoutRemaining(grant)
+    const afterGrant =
+      grantRemaining != null && activityAmount != null && !Number.isNaN(activityAmount)
+        ? grantRemaining - activityAmount
+        : grantRemaining
+    const restrictionCues = restrictionCuesForFr(fr, grantId)
+    const overdrawn = restrictionCues.filter((r) => r.remaining < 0)
+    const exceedsGrant =
+      grantRemaining != null &&
+      grantRemaining >= 0 &&
+      activityAmount != null &&
+      !Number.isNaN(activityAmount) &&
+      activityAmount > grantRemaining
+    if (!grantId && restrictionCues.length === 0) return null
+    const tone = overdrawn.length
+      ? 'border-amber-300 bg-amber-50 text-amber-950'
+      : exceedsGrant
+        ? 'border-sky-200 bg-sky-50 text-sky-950'
+        : 'border-border bg-muted/40 text-foreground'
+    return (
+      <div className={`rounded-md border px-2 py-1.5 text-[11px] leading-snug ${tone}`}>
+        <div className="flex flex-wrap gap-x-4 gap-y-0.5">
+          {grantId ? (
+            <span>
+              Grant remaining{' '}
+              <span className={`font-medium tabular-nums ${remainingClass(grantRemaining ?? 0)}`}>
+                {money(grantRemaining)}
+              </span>
+              {afterGrant != null &&
+                activityAmount != null &&
+                afterGrant !== grantRemaining && (
+                  <>
+                    {' '}
+                    after this transfer{' '}
+                    <span className={`font-medium tabular-nums ${remainingClass(afterGrant)}`}>
+                      {money(afterGrant)}
+                    </span>
+                  </>
+                )}
+            </span>
+          ) : null}
+          {restrictionCues.map((r) => (
+            <span key={r.restriction}>
+              {r.restriction} remaining{' '}
+              <span className={`font-medium tabular-nums ${remainingClass(r.remaining)}`}>
+                {money(r.remaining)}
+              </span>
+            </span>
+          ))}
+        </div>
+        {overdrawn.length > 0 && (
+          <p className="mt-1 flex items-start gap-1">
+            <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+            <span>
+              {overdrawn.map((r) => r.restriction).join(', ')}{' '}
+              {overdrawn.length === 1 ? 'is' : 'are'} overdrawn. Add a new allocation on
+              Decisions so the pool covers work already assigned.{' '}
+              <Link
+                href="/err-portal/grant-management/decisions"
+                className="font-medium underline underline-offset-2"
+              >
+                Open Decisions
+              </Link>
+            </span>
+          </p>
+        )}
+        {exceedsGrant && overdrawn.length === 0 && (
+          <p className="mt-1">
+            This amount is larger than the unused grant balance. You can still save; the grant
+            chart remaining is transferred minus disbursed to ERRs.
+          </p>
+        )}
+      </div>
+    )
+  }
 
   const toggleDecision = (id: string) => {
     setFrForm((prev) => ({
@@ -721,56 +998,56 @@ export default function FundRequestsManager() {
                 from and which <span className="font-medium text-foreground">FSP</span> handled it.
               </p>
               <div className="space-y-3">
-                <div>
-                  <Label>Partner *</Label>
-                  <Select
-                    value={frForm.partner_name || undefined}
-                    onValueChange={(v) => updateFrPartnerOrDate({ partner_name: v })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select partner" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {['P2H', 'Avaaz', 'Gisa', 'DKH', 'VTL'].map((p) => (
-                        <SelectItem key={p} value={p}>
-                          {p}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label>Date of Request *</Label>
-                  <Input
-                    type="date"
-                    value={frForm.date_submitted}
-                    onChange={(e) => updateFrPartnerOrDate({ date_submitted: e.target.value })}
-                  />
-                </div>
-                <div>
-                  <Label>Request ID (auto)</Label>
-                  <Input
-                    value={frForm.request_id}
-                    readOnly={!editingFr}
-                    className={!editingFr ? 'bg-muted/40 font-mono text-xs' : 'font-mono text-xs'}
-                    onChange={(e) => setFrForm({ ...frForm, request_id: e.target.value })}
-                  />
-                  {!editingFr && (
-                    <p className="text-[11px] text-muted-foreground mt-1">
-                      Pattern: YYYY-Partner-NNN
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-2">
+                  <div className="min-w-0 space-y-1">
+                    <Label>Partner *</Label>
+                    <Select
+                      value={frForm.partner_name || undefined}
+                      onValueChange={(v) => updateFrPartnerOrDate({ partner_name: v })}
+                    >
+                      <SelectTrigger className="w-full min-w-0">
+                        <SelectValue placeholder="Select partner" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {['P2H', 'Avaaz', 'Gisa', 'DKH', 'VTL'].map((p) => (
+                          <SelectItem key={p} value={p}>
+                            {p}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="min-w-0 space-y-1">
+                    <Label>Date of Request *</Label>
+                    <Input
+                      type="date"
+                      value={frForm.date_submitted}
+                      onChange={(e) => updateFrPartnerOrDate({ date_submitted: e.target.value })}
+                    />
+                  </div>
+                  <div className="min-w-0 space-y-1">
+                    <Label>Request ID (auto)</Label>
+                    <Input
+                      value={frForm.request_id}
+                      readOnly={!editingFr}
+                      className={!editingFr ? 'bg-muted/40 font-mono text-xs' : 'font-mono text-xs'}
+                      onChange={(e) => setFrForm({ ...frForm, request_id: e.target.value })}
+                    />
+                    {!editingFr && (
+                      <p className="text-[11px] text-muted-foreground">Pattern: YYYY-Partner-NNN</p>
+                    )}
+                  </div>
+                  <div className="min-w-0 space-y-1">
+                    <Label>Requested amount (USD)</Label>
+                    <Input
+                      type="number"
+                      value={frForm.requested_amount}
+                      onChange={(e) => setFrForm({ ...frForm, requested_amount: e.target.value })}
+                    />
+                    <p className="text-[11px] text-muted-foreground">
+                      Request Amount = Activity amount + transfer fees
                     </p>
-                  )}
-                </div>
-                <div>
-                  <Label>Requested amount (USD)</Label>
-                  <Input
-                    type="number"
-                    value={frForm.requested_amount}
-                    onChange={(e) => setFrForm({ ...frForm, requested_amount: e.target.value })}
-                  />
-                  <p className="text-[11px] text-muted-foreground mt-1">
-                    Request Amount = Activity amount + transfer fees
-                  </p>
+                  </div>
                 </div>
                 <div>
                   <div className="flex items-center justify-between gap-2 mb-1">
@@ -788,12 +1065,7 @@ export default function FundRequestsManager() {
                     {showAllDecisions
                       ? 'Showing all decisions. A decision can be linked to more than one fund request.'
                       : `Showing decisions from the last ${DECISION_RECENT_DAYS} days (plus any already selected).`}{' '}
-                    <span className="block mt-0.5">
-                      Funding* shows how much other fund requests already cover this decision
-                      (excluding the one you&apos;re editing). Amounts are applied oldest-first, with
-                      5% extra room for fees; multi-decision requests are split by decision size.
-                      * Reference only.
-                    </span>
+                    Funding* is a guide only — how much other requests already cover this decision.
                   </p>
                   <div className="max-h-56 overflow-y-auto border rounded">
                     {selectableDecisions.length === 0 ? (
@@ -1017,6 +1289,7 @@ export default function FundRequestsManager() {
                                 <TableHead className="text-right">Activity</TableHead>
                                 <TableHead className="text-right">Fee</TableHead>
                                 <TableHead className="text-right">Total</TableHead>
+                                <TableHead className="w-28">File</TableHead>
                                 <TableHead />
                               </TableRow>
                             </TableHeader>
@@ -1024,7 +1297,7 @@ export default function FundRequestsManager() {
                               {(fr.transfers || []).length === 0 &&
                                 !(newTsRows[fr.id]?.length) && (
                                 <TableRow>
-                                  <TableCell colSpan={9} className="text-xs text-muted-foreground">
+                                  <TableCell colSpan={10} className="text-xs text-muted-foreground">
                                     No transfers yet
                                   </TableCell>
                                 </TableRow>
@@ -1070,6 +1343,44 @@ export default function FundRequestsManager() {
                                   <TableCell className="text-right">
                                     {money(t.transfer_amount)}
                                   </TableCell>
+                                  <TableCell>
+                                    {uploadingTsId === t.id ? (
+                                      <span className="text-[10px] text-muted-foreground">Uploading…</span>
+                                    ) : t.file_link ? (
+                                      <div className="flex items-center gap-0.5 min-w-0">
+                                        <button
+                                          type="button"
+                                          className="truncate text-[10px] text-primary underline max-w-[6.5rem]"
+                                          title={t.file_name || 'Open file'}
+                                          onClick={() => openTransferFile(t.file_link)}
+                                        >
+                                          {t.file_name || 'File'}
+                                        </button>
+                                        <Button
+                                          variant="ghost"
+                                          size="icon"
+                                          className="h-6 w-6 shrink-0"
+                                          title="Remove file"
+                                          onClick={() => clearTransferFile(t)}
+                                        >
+                                          <X className="h-3 w-3" />
+                                        </Button>
+                                      </div>
+                                    ) : (
+                                      <label className="inline-flex items-center justify-center h-7 w-7 rounded-md hover:bg-muted cursor-pointer">
+                                        <Paperclip className="h-3.5 w-3.5" />
+                                        <input
+                                          type="file"
+                                          className="hidden"
+                                          onChange={(e) => {
+                                            const file = e.target.files?.[0]
+                                            if (file) void saveTransferFile(t, file)
+                                            e.target.value = ''
+                                          }}
+                                        />
+                                      </label>
+                                    )}
+                                  </TableCell>
                                   <TableCell className="whitespace-nowrap">
                                     <Button
                                       variant="ghost"
@@ -1112,15 +1423,30 @@ export default function FundRequestsManager() {
                                           updateNewTsRow(fr.id, idx, { grant_id: v })
                                         }
                                       >
-                                        <SelectTrigger className="h-7 text-xs w-[120px] min-w-0">
+                                        <SelectTrigger
+                                          size="sm"
+                                          className="!h-5 w-auto min-w-0 max-w-[9.5rem] gap-0.5 rounded-full border px-2 py-0 text-[10px] font-medium leading-none shadow-none focus:ring-1 focus-visible:ring-1 data-[size=sm]:!h-5 [&>svg]:size-2.5"
+                                        >
                                           <SelectValue placeholder="Grant" />
                                         </SelectTrigger>
                                         <SelectContent>
-                                          {grants.map((g) => (
-                                            <SelectItem key={g.id} value={g.grant_id}>
-                                              {g.grant_id}
-                                            </SelectItem>
-                                          ))}
+                                          {grants.map((g) => {
+                                            const rem = grantPayoutRemaining(g)
+                                            return (
+                                              <SelectItem key={g.id} value={g.grant_id}>
+                                                <span className="flex items-center gap-2">
+                                                  <span>{g.grant_id}</span>
+                                                  {rem != null && (
+                                                    <span
+                                                      className={`text-[10px] tabular-nums ${remainingClass(rem)}`}
+                                                    >
+                                                      {money(rem)}
+                                                    </span>
+                                                  )}
+                                                </span>
+                                              </SelectItem>
+                                            )
+                                          })}
                                         </SelectContent>
                                       </Select>
                                     </TableCell>
@@ -1131,7 +1457,10 @@ export default function FundRequestsManager() {
                                           updateNewTsRow(fr.id, idx, { fsp_id: v })
                                         }
                                       >
-                                        <SelectTrigger className="h-7 text-xs w-[120px] min-w-0">
+                                        <SelectTrigger
+                                          size="sm"
+                                          className="!h-5 w-auto min-w-0 max-w-[9.5rem] gap-0.5 rounded-full border px-2 py-0 text-[10px] font-medium leading-none shadow-none focus:ring-1 focus-visible:ring-1 data-[size=sm]:!h-5 [&>svg]:size-2.5"
+                                        >
                                           <SelectValue placeholder="FSP" />
                                         </SelectTrigger>
                                         <SelectContent>
@@ -1148,7 +1477,7 @@ export default function FundRequestsManager() {
                                     <TableCell className="text-right">
                                       <Input
                                         type="number"
-                                        className="h-7 text-xs text-right w-[110px] ml-auto"
+                                        className="h-5 text-[10px] text-right w-[90px] ml-auto rounded-full px-2 py-0 shadow-none"
                                         value={row.activity_amount}
                                         onChange={(e) =>
                                           updateNewTsRow(fr.id, idx, {
@@ -1164,12 +1493,50 @@ export default function FundRequestsManager() {
                                       {money(total)}
                                     </TableCell>
                                     <TableCell>
+                                      <div className="flex items-center gap-0.5 min-w-0">
+                                        {row.file ? (
+                                          <>
+                                            <span
+                                              className="truncate text-[10px] max-w-[6.5rem]"
+                                              title={row.file.name}
+                                            >
+                                              {row.file.name}
+                                            </span>
+                                            <Button
+                                              variant="ghost"
+                                              size="icon"
+                                              className="h-6 w-6 shrink-0"
+                                              title="Remove file"
+                                              onClick={() =>
+                                                updateNewTsRow(fr.id, idx, { file: null })
+                                              }
+                                            >
+                                              <X className="h-3 w-3" />
+                                            </Button>
+                                          </>
+                                        ) : (
+                                          <label className="inline-flex items-center justify-center h-7 w-7 rounded-md hover:bg-muted cursor-pointer">
+                                            <Paperclip className="h-3.5 w-3.5" />
+                                            <input
+                                              type="file"
+                                              className="hidden"
+                                              onChange={(e) => {
+                                                const file = e.target.files?.[0] || null
+                                                updateNewTsRow(fr.id, idx, { file })
+                                                e.target.value = ''
+                                              }}
+                                            />
+                                          </label>
+                                        )}
+                                      </div>
+                                    </TableCell>
+                                    <TableCell>
                                       <div className="flex justify-end gap-1">
                                         <Button
                                           type="button"
-                                          variant="outline"
+                                          variant="ghost"
                                           size="sm"
-                                          className="h-7 text-xs"
+                                          className="h-7 px-2 text-xs"
                                           onClick={() =>
                                             draftRows.length > 1
                                               ? setNewTsRows((prev) => ({
@@ -1188,9 +1555,8 @@ export default function FundRequestsManager() {
                                         {idx === draftRows.length - 1 && (
                                           <Button
                                             type="button"
-                                            variant="outline"
                                             size="sm"
-                                            className="h-7 text-xs"
+                                            className="h-7 px-2 text-xs"
                                             onClick={() =>
                                               setNewTsRows((prev) => ({
                                                 ...prev,
@@ -1206,6 +1572,29 @@ export default function FundRequestsManager() {
                                   </TableRow>
                                 )
                               })}
+                              {(newTsRows[fr.id] || []).length > 0 && (
+                                <TableRow className="bg-muted/20">
+                                  <TableCell colSpan={10} className="py-1.5">
+                                    {transferBalanceCue(
+                                      (newTsRows[fr.id] || []).find((r) => r.grant_id)?.grant_id,
+                                      (() => {
+                                        const rows = newTsRows[fr.id] || []
+                                        const grantId = rows.find((r) => r.grant_id)?.grant_id
+                                        const sum = rows
+                                          .filter((r) => !grantId || r.grant_id === grantId)
+                                          .reduce((s, r) => {
+                                            const n = r.activity_amount
+                                              ? Number(r.activity_amount)
+                                              : 0
+                                            return s + (Number.isNaN(n) ? 0 : n)
+                                          }, 0)
+                                        return sum > 0 ? sum : null
+                                      })(),
+                                      fr
+                                    )}
+                                  </TableCell>
+                                </TableRow>
+                              )}
                             </TableBody>
                           </Table>
                           <div className="flex justify-end mt-2">
@@ -1380,11 +1769,21 @@ export default function FundRequestsManager() {
                   <SelectValue placeholder="Select grant" />
                 </SelectTrigger>
                 <SelectContent>
-                  {grants.map((g) => (
-                    <SelectItem key={g.id} value={g.grant_id}>
-                      {g.grant_id}
-                    </SelectItem>
-                  ))}
+                  {grants.map((g) => {
+                    const rem = grantPayoutRemaining(g)
+                    return (
+                      <SelectItem key={g.id} value={g.grant_id}>
+                        <span className="flex items-center gap-2">
+                          <span>{g.grant_id}</span>
+                          {rem != null && (
+                            <span className={`text-[10px] tabular-nums ${remainingClass(rem)}`}>
+                              {money(rem)}
+                            </span>
+                          )}
+                        </span>
+                      </SelectItem>
+                    )
+                  })}
                 </SelectContent>
               </Select>
             </div>
@@ -1446,6 +1845,73 @@ export default function FundRequestsManager() {
                 className="bg-muted"
                 title="Calculated from the selected FSP’s transfer fee %"
               />
+            </div>
+            {(() => {
+              const parent = tsParentId
+                ? requests.find((r) => r.id === tsParentId)
+                : undefined
+              if (!parent) return null
+              return (
+                <div className="sm:col-span-2">
+                  {transferBalanceCue(
+                    tsForm.grant_id || undefined,
+                    tsForm.activity_amount ? Number(tsForm.activity_amount) : null,
+                    parent
+                  )}
+                </div>
+              )
+            })()}
+            <div className="min-w-0 space-y-1">
+              <Label>
+                Transfer fee
+                {selectedFsp?.transfer_fee_percent != null
+                  ? ` (${selectedFsp.transfer_fee_percent}%)`
+                  : ''}
+              </Label>
+              <Input
+                type="text"
+                readOnly
+                value={calculatedTransferFee == null ? '—' : money(calculatedTransferFee)}
+                className="bg-muted"
+                title="Calculated from the selected FSP’s transfer fee %"
+              />
+            </div>
+            <div className="min-w-0 space-y-1 sm:col-span-2">
+              <Label>File</Label>
+              {editingTs?.file_link ? (
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    className="text-sm text-primary underline truncate"
+                    onClick={() => openTransferFile(editingTs.file_link)}
+                  >
+                    {editingTs.file_name || 'Open file'}
+                  </button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 text-xs"
+                    disabled={uploadingTsId === editingTs.id}
+                    onClick={() => clearTransferFile(editingTs)}
+                  >
+                    Remove
+                  </Button>
+                </div>
+              ) : (
+                <Input
+                  type="file"
+                  disabled={!editingTs || uploadingTsId === editingTs?.id}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0]
+                    if (file && editingTs) void saveTransferFile(editingTs, file)
+                    e.target.value = ''
+                  }}
+                />
+              )}
+              {uploadingTsId === editingTs?.id && (
+                <p className="text-[11px] text-muted-foreground">Uploading…</p>
+              )}
             </div>
             <div className="min-w-0 space-y-1 sm:col-span-2">
               <Label>Comment</Label>
