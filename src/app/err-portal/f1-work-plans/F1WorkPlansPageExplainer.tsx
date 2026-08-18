@@ -74,10 +74,11 @@ function F1ExplainerBody({
         <ul className="mt-2 list-disc space-y-1.5 ps-5 marker:text-brand-purple/80 text-sm">
           <li>{t('f1_plans:explainer_by_state_col_state')}</li>
           <li>{t('f1_plans:explainer_by_state_col_allocated')}</li>
-          <li>{t('f1_plans:explainer_by_state_col_historical')}</li>
+          <li>{t('f1_plans:explainer_by_state_col_assigned')}</li>
+          <li>{t('f1_plans:explainer_by_state_col_available')}</li>
           <li>{t('f1_plans:explainer_by_state_col_committed')}</li>
           <li>{t('f1_plans:explainer_by_state_col_pending')}</li>
-          <li>{t('f1_plans:explainer_by_state_col_remaining')}</li>
+          <li>{t('f1_plans:explainer_by_state_col_balance')}</li>
           <li>{t('f1_plans:explainer_by_state_proposed')}</li>
         </ul>
         <p className="mt-2 text-sm leading-relaxed text-brand-purple/90">{t('f1_plans:explainer_state_filter')}</p>

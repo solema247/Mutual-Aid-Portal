@@ -15,6 +15,7 @@ const NOTE_STYLES = [
 type StateRow = {
   state_name: string
   remaining?: number
+  balance?: number
   allocated?: number
 }
 
@@ -127,8 +128,8 @@ export default function AllocationManagementGuide() {
         .map((r) => ({
           key: r.state_name,
           label: r.state_name,
-          value: Number(r.remaining) || 0,
-          warn: (Number(r.remaining) || 0) < 0,
+          value: Number(r.balance ?? r.remaining) || 0,
+          warn: (Number(r.balance ?? r.remaining) || 0) < 0,
         }))
         .sort((a, b) => b.value - a.value),
     [states]

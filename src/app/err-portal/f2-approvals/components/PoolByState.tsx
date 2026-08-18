@@ -134,11 +134,20 @@ export default function PoolByState() {
                 </TableHead>
                 <TableHead className="text-right">
                   <button
-                    onClick={() => handleSort('historical_commitments')}
+                    onClick={() => handleSort('assigned')}
                     className="flex items-center justify-end hover:text-primary cursor-pointer w-full"
                   >
-                    <div className="font-semibold">Historical Commitments</div>
-                    {getSortIcon('historical_commitments')}
+                    <div className="font-semibold">Assigned</div>
+                    {getSortIcon('assigned')}
+                  </button>
+                </TableHead>
+                <TableHead className="text-right">
+                  <button
+                    onClick={() => handleSort('available')}
+                    className="flex items-center justify-end hover:text-primary cursor-pointer w-full"
+                  >
+                    <div className="font-semibold">Available</div>
+                    {getSortIcon('available')}
                   </button>
                 </TableHead>
                 <TableHead className="text-right">
@@ -161,11 +170,11 @@ export default function PoolByState() {
                 </TableHead>
                 <TableHead className="text-right">
                   <button
-                    onClick={() => handleSort('remaining')}
+                    onClick={() => handleSort('balance')}
                     className="flex items-center justify-end hover:text-primary cursor-pointer w-full"
                   >
-                    <div className="font-semibold">Remaining</div>
-                    {getSortIcon('remaining')}
+                    <div className="font-semibold">Balance</div>
+                    {getSortIcon('balance')}
                   </button>
                 </TableHead>
               </TableRow>
@@ -179,11 +188,14 @@ export default function PoolByState() {
                       <TableRow className="font-semibold">
                         <TableCell>Total</TableCell>
                         <TableCell className="text-right">{fmt(sortedByState.reduce((s, r) => s + (r.allocated || 0), 0))}</TableCell>
-                        <TableCell className="text-right">{fmt(sortedByState.reduce((s, r) => s + (r.historical_commitments || 0), 0))}</TableCell>
+                        <TableCell className="text-right">{fmt(sortedByState.reduce((s, r) => s + (r.assigned || 0), 0))}</TableCell>
+                        <TableCell className={`text-right ${sortedByState.reduce((s, r) => s + (r.available || 0), 0) >= 0 ? 'text-green-700' : 'text-red-700'}`}>
+                          {fmt(sortedByState.reduce((s, r) => s + (r.available || 0), 0))}
+                        </TableCell>
                         <TableCell className="text-right">{fmt(sortedByState.reduce((s, r) => s + (r.committed || 0), 0))}</TableCell>
                         <TableCell className="text-right">{fmt(sortedByState.reduce((s, r) => s + (r.pending || 0), 0))}</TableCell>
-                        <TableCell className={`text-right ${sortedByState.reduce((s, r) => s + (r.remaining || 0), 0) >= 0 ? 'text-green-700' : 'text-red-700'}`}>
-                          {fmt(sortedByState.reduce((s, r) => s + (r.remaining || 0), 0))}
+                        <TableCell className={`text-right ${sortedByState.reduce((s, r) => s + (r.balance || r.remaining || 0), 0) >= 0 ? 'text-green-700' : 'text-red-700'}`}>
+                          {fmt(sortedByState.reduce((s, r) => s + (r.balance || r.remaining || 0), 0))}
                         </TableCell>
                       </TableRow>
                     )}
@@ -191,10 +203,11 @@ export default function PoolByState() {
                       <TableRow key={r.state_name}>
                         <TableCell>{r.state_name}</TableCell>
                         <TableCell className="text-right">{fmt(r.allocated)}</TableCell>
-                        <TableCell className="text-right">{fmt(r.historical_commitments || 0)}</TableCell>
+                        <TableCell className="text-right">{fmt(r.assigned || 0)}</TableCell>
+                        <TableCell className={`text-right ${(r.available || 0) >= 0 ? 'text-green-700' : 'text-red-700'}`}>{fmt(r.available || 0)}</TableCell>
                         <TableCell className="text-right">{fmt(r.committed)}</TableCell>
                         <TableCell className="text-right">{fmt(r.pending)}</TableCell>
-                        <TableCell className={`text-right ${r.remaining >= 0 ? 'text-green-700' : 'text-red-700'}`}>{fmt(r.remaining)}</TableCell>
+                        <TableCell className={`text-right ${(r.balance ?? r.remaining) >= 0 ? 'text-green-700' : 'text-red-700'}`}>{fmt(r.balance ?? r.remaining)}</TableCell>
                       </TableRow>
                     ))}
                   </>

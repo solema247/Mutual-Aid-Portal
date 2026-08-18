@@ -137,7 +137,7 @@ export function useGrantAssignment({
       setStateAllocationRemaining((prev) =>
         prev
           ? { ...prev, loading: true }
-          : { total: 0, historical: 0, committed: 0, allocated: 0, remaining: 0, loading: true }
+          : { total: 0, assigned: 0, committed: 0, pending: 0, remaining: 0, loading: true }
       )
       const res = await fetch(
         `/api/pool/state-allocation-remaining?state=${encodeURIComponent(stateName)}`,
@@ -150,9 +150,9 @@ export function useGrantAssignment({
       const data = await res.json()
       setStateAllocationRemaining({
         total: data.total ?? 0,
-        historical: data.historical ?? 0,
+        assigned: data.assigned ?? 0,
         committed: data.committed ?? 0,
-        allocated: data.allocated ?? 0,
+        pending: data.pending ?? data.allocated ?? 0,
         remaining: data.remaining ?? 0,
         loading: false,
       })

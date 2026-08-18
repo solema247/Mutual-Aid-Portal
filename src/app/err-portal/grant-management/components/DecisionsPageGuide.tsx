@@ -23,16 +23,57 @@ export default function DecisionsPageGuide() {
       body: <p>{t('err:decisions_guide_decisions_body')}</p>,
     },
     {
-      title: t('err:decisions_guide_section_amounts'),
-      body: <p>{t('err:decisions_guide_amounts_body')}</p>,
+      title: t('err:decisions_guide_section_managing'),
+      body: (
+        <div className="space-y-1.5">
+          <p><strong>{t('err:decisions_guide_amounts_label')}</strong> {t('err:decisions_guide_amounts_body')}</p>
+          <p><strong>{t('err:decisions_guide_how_to_label')}</strong> {t('err:decisions_guide_how_to_body')}</p>
+          <p><strong>{t('err:decisions_guide_documents_label')}</strong> {t('err:decisions_guide_documents_body')}</p>
+        </div>
+      ),
     },
     {
-      title: t('err:decisions_guide_section_how_to'),
-      body: <p>{t('err:decisions_guide_how_to_body')}</p>,
-    },
-    {
-      title: t('err:decisions_guide_section_documents'),
-      body: <p>{t('err:decisions_guide_documents_body')}</p>,
+      title: t('err:decisions_guide_section_workflow'),
+      body: (
+        <div className="text-[10px]">
+          <table className="w-full border-collapse">
+            <thead>
+              <tr className="border-b">
+                <th className="text-left py-0.5 pr-1 font-semibold">{t('err:decisions_guide_workflow_stage')}</th>
+                <th className="text-left py-0.5 pr-1 font-semibold">{t('err:decisions_guide_workflow_status')}</th>
+                <th className="text-left py-0.5 font-semibold">{t('err:decisions_guide_workflow_funding')}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr className="border-b">
+                <td className="py-0.5 pr-1">F1</td>
+                <td className="py-0.5 pr-1">pending</td>
+                <td className="py-0.5">unassigned</td>
+              </tr>
+              <tr className="border-b">
+                <td className="py-0.5 pr-1">F2 commit</td>
+                <td className="py-0.5 pr-1">approved</td>
+                <td className="py-0.5">committed</td>
+              </tr>
+              <tr className="border-b">
+                <td className="py-0.5 pr-1">F2/F3 assign</td>
+                <td className="py-0.5 pr-1">approved</td>
+                <td className="py-0.5">assigned</td>
+              </tr>
+              <tr className="border-b">
+                <td className="py-0.5 pr-1">Active</td>
+                <td className="py-0.5 pr-1">active</td>
+                <td className="py-0.5">assigned</td>
+              </tr>
+              <tr>
+                <td className="py-0.5 pr-1">F4/F5 complete</td>
+                <td className="py-0.5 pr-1">complete</td>
+                <td className="py-0.5">assigned</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      ),
     },
     {
       title: t('err:decisions_guide_section_pool'),
@@ -40,10 +81,17 @@ export default function DecisionsPageGuide() {
         <ul className="space-y-0.5">
           <li>
             <span className="font-medium text-foreground/90">
-              {t('err:decisions_guide_pool_historical_label')}
+              {t('err:decisions_guide_pool_assigned_label')}
             </span>
             {' — '}
-            {t('err:decisions_guide_pool_historical')}
+            {t('err:decisions_guide_pool_assigned')}
+          </li>
+          <li>
+            <span className="font-medium text-foreground/90">
+              {t('err:decisions_guide_pool_available_label')}
+            </span>
+            {' — '}
+            {t('err:decisions_guide_pool_available')}
           </li>
           <li>
             <span className="font-medium text-foreground/90">
@@ -61,10 +109,10 @@ export default function DecisionsPageGuide() {
           </li>
           <li>
             <span className="font-medium text-foreground/90">
-              {t('err:decisions_guide_pool_remaining_label')}
+              {t('err:decisions_guide_pool_balance_label')}
             </span>
             {' — '}
-            {t('err:decisions_guide_pool_remaining')}
+            {t('err:decisions_guide_pool_balance')}
           </li>
         </ul>
       ),
@@ -90,7 +138,7 @@ export default function DecisionsPageGuide() {
         </Button>
       </div>
       {open && (
-        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-2">
+        <div className="grid grid-cols-2 md:grid-cols-2 xl:grid-cols-4 gap-2">
           {notes.map((note, i) => (
             <div
               key={note.title}

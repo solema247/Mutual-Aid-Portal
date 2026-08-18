@@ -19,15 +19,17 @@ import {
 type PoolByStateRow = {
   state_name: string
   allocated?: number
-  historical_commitments?: number
+  assigned?: number
+  available?: number
   committed?: number
   pending?: number
+  balance?: number
   remaining?: number
   decision_count?: number
 }
 
 const POOL_COLORS = {
-  historical: '#7ec8e3',
+  assigned: '#7ec8e3',
   committed: '#9ee6c2',
   pending: '#ffc9a4',
 } as const
@@ -36,10 +38,10 @@ const money = (n: number) =>
   n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })
 
 const stateUseConfig = {
-  historical_pct: { label: 'Historical', color: POOL_COLORS.historical },
+  assigned_pct: { label: 'Assigned', color: POOL_COLORS.assigned },
   committed_pct: { label: 'Committed', color: POOL_COLORS.committed },
   pending_pct: { label: 'Pending', color: POOL_COLORS.pending },
-  remaining_gap: { label: 'Remaining', color: '#e2e8f0' },
+  remaining_gap: { label: 'Balance', color: '#e2e8f0' },
 } satisfies ChartConfig
 
 export default function PoolOverviewCharts() {
@@ -67,22 +69,22 @@ export default function PoolOverviewCharts() {
     const rows = [...byState]
       .map((r) => {
         const allocated = Number(r.allocated) || 0
-        const historical = Number(r.historical_commitments) || 0
+        const assigned = Number(r.assigned) || 0
         const committed = Number(r.committed) || 0
         const pending = Number(r.pending) || 0
         if (allocated <= 0) return null
-        const historical_pct = (historical / allocated) * 100
+        const assigned_pct = (assigned / allocated) * 100
         const committed_pct = (committed / allocated) * 100
         const pending_pct = (pending / allocated) * 100
-        const used_pct = historical_pct + committed_pct + pending_pct
+        const used_pct = assigned_pct + committed_pct + pending_pct
         const remaining_gap = Math.max(0, 100 - used_pct)
         return {
           state: r.state_name,
           allocated,
-          historical,
+          assigned,
           committed,
           pending,
-          historical_pct,
+          assigned_pct,
           committed_pct,
           pending_pct,
           remaining_gap,
@@ -149,10 +151,10 @@ export default function PoolOverviewCharts() {
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mb-2">
               {(
                 [
-                  ['Historical', POOL_COLORS.historical],
+                  ['Assigned', POOL_COLORS.assigned],
                   ['Committed', POOL_COLORS.committed],
                   ['Pending', POOL_COLORS.pending],
-                  ['Remaining (empty)', '#e2e8f0'],
+                  ['Balance (empty)', '#e2e8f0'],
                 ] as const
               ).map(([label, color]) => (
                 <div key={label} className="flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -214,10 +216,10 @@ export default function PoolOverviewCharts() {
                     if (!active || !payload?.length) return null
                     const row = payload[0]?.payload as {
                       allocated?: number
-                      historical?: number
+                      assigned?: number
                       committed?: number
                       pending?: number
-                      historical_pct?: number
+                      assigned_pct?: number
                       committed_pct?: number
                       pending_pct?: number
                       remaining_gap?: number
@@ -226,11 +228,11 @@ export default function PoolOverviewCharts() {
                     if (!row) return null
                     const lines = [
                       {
-                        key: 'historical',
-                        label: 'Historical',
-                        color: POOL_COLORS.historical,
-                        pct: row.historical_pct ?? 0,
-                        usd: row.historical ?? 0,
+                        key: 'assigned',
+                        label: 'Assigned',
+                        color: POOL_COLORS.assigned,
+                        pct: row.assigned_pct ?? 0,
+                        usd: row.assigned ?? 0,
                       },
                       {
                         key: 'committed',
@@ -276,7 +278,7 @@ export default function PoolOverviewCharts() {
                             <div className="flex items-center justify-between gap-4">
                               <span className="flex items-center gap-1.5 text-muted-foreground">
                                 <span className="size-2 shrink-0 rounded-[2px] bg-slate-200" />
-                                Remaining
+                                Balance
                               </span>
                               <span className="tabular-nums">{remainingPct.toFixed(0)}%</span>
                             </div>
@@ -287,9 +289,9 @@ export default function PoolOverviewCharts() {
                   }}
                 />
                 <Bar
-                  dataKey="historical_pct"
+                  dataKey="assigned_pct"
                   stackId="use"
-                  fill={POOL_COLORS.historical}
+                  fill={POOL_COLORS.assigned}
                   barSize={16}
                 />
                 <Bar

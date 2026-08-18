@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin'
 import { normalizeStateName } from '@/lib/normalizeStateName'
+import {
+  classifyPoolProject,
+  poolRowFromParts,
+  projectExpenseTotal,
+} from '@/lib/poolProjectClassification'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -28,9 +33,8 @@ async function fetchAllRows<T>(supabase: any, table: string, select: string): Pr
 
 /**
  * GET /api/pool/state-allocation-remaining?state=South Kordofan
- * Returns { total, historical, committed, allocated, remaining } for the state.
- * Total from allocations table; historical from activities_raw_import; committed/allocated from err_projects.
- * Remaining = total - historical - committed - allocated (matches Pool by-state logic).
+ * Matches Pool by-state: Assigned = historical + grant-linked projects;
+ * Available = total - assigned; Balance = available - committed - pending.
  */
 export async function GET(request: NextRequest) {
   try {
@@ -79,39 +83,48 @@ export async function GET(request: NextRequest) {
       if (!Number.isNaN(usd) && usd > 0) historical += usd
     }
 
-    // Projects in this state (use admin so we see all projects for accurate committed/allocated)
     const stateVariants = [stateNormalized, stateParam].filter((v, i, a) => v && a.indexOf(v) === i)
     const { data: projects, error: projectsError } = await adminSupabase
       .from('err_projects')
-      .select('expenses, funding_status, state, status')
+      .select('expenses, funding_status, state, status, grant_id, grant_grid_id')
       .in('state', stateVariants)
 
     if (projectsError) throw projectsError
 
-    const sumExpenses = (exp: unknown): number => {
-      try {
-        const arr = typeof exp === 'string' ? JSON.parse(exp || '[]') : (exp || [])
-        return Array.isArray(arr) ? arr.reduce((s: number, e: any) => s + (e?.total_cost || 0), 0) : 0
-      } catch {
-        return 0
-      }
-    }
-
+    let assignedFromProjects = 0
     let committed = 0
-    let allocated = 0
+    let pending = 0
     for (const p of projects || []) {
       const rowState = normalizeState((p as any).state)
       if (rowState !== stateNormalized) continue
-      const amt = sumExpenses((p as any).expenses)
-      if ((p as any).funding_status === 'committed') committed += amt
-      else if ((p as any).funding_status === 'allocated' || ((p as any).funding_status === 'unassigned' && (p as any).status === 'pending')) allocated += amt
+      const bucket = classifyPoolProject(p)
+      if (!bucket) continue
+      const amt = projectExpenseTotal((p as any).expenses)
+      if (bucket === 'assigned') assignedFromProjects += amt
+      else if (bucket === 'committed') committed += amt
+      else pending += amt
     }
 
-    // Remaining = total - historical - committed - allocated (same as Pool by-state)
-    const remaining = totalAllocated - historical - committed - allocated
+    const assigned = historical + assignedFromProjects
+    const parts = poolRowFromParts({
+      allocated: totalAllocated,
+      assigned,
+      committed,
+      pending,
+    })
 
     return NextResponse.json(
-      { total: totalAllocated, historical, committed, allocated, remaining },
+      {
+        total: parts.allocated,
+        assigned: parts.assigned,
+        available: parts.available,
+        committed: parts.committed,
+        pending: parts.pending,
+        balance: parts.balance,
+        remaining: parts.remaining,
+        historical,
+        allocated: parts.pending,
+      },
       { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } }
     )
   } catch (error) {

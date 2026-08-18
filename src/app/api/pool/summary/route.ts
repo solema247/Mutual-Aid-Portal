@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin'
+import { classifyPoolProject, projectExpenseTotal } from '@/lib/poolProjectClassification'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -52,9 +53,9 @@ export async function GET() {
       return sum + (Number.isNaN(amount) ? 0 : amount)
     }, 0)
 
-    // 2. Get Historical Committed from activities_raw_import
+    // 2. Get Historical (Assigned) from activities_raw_import
     const historicalData = await fetchAllRows(supabase, 'activities_raw_import', 'USD')
-    const historical_committed = (historicalData || []).reduce((sum, row) => {
+    const historical = (historicalData || []).reduce((sum, row) => {
       const rawUSD = row['USD'] || row['usd'] || row.USD
       if (rawUSD === null || rawUSD === undefined) return sum
       const usd = Number(rawUSD)
@@ -62,46 +63,39 @@ export async function GET() {
       return sum + usd
     }, 0)
 
-    // 3. Get Committed from err_projects
-    const projects = await fetchAllRows(supabase, 'err_projects', 'expenses, funding_status, status')
-    const sumExpenses = (rows: any[]) => rows.reduce((sum, p) => {
-      try {
-        const exps = typeof p.expenses === 'string' ? JSON.parse(p.expenses) : p.expenses
-        return sum + (exps || []).reduce((s2: number, e: any) => s2 + (e.total_cost || 0), 0)
-      } catch {
-        return sum
+    // 3. Classify projects using the new logic
+    const projects = await fetchAllRows(supabase, 'err_projects', 'expenses, funding_status, status, grant_id, grant_grid_id')
+    
+    let assignedFromProjects = 0
+    let committed = 0
+    let pending = 0
+
+    for (const p of projects || []) {
+      const bucket = classifyPoolProject(p)
+      const total = projectExpenseTotal(p.expenses)
+      if (bucket === 'assigned') {
+        assignedFromProjects += total
+      } else if (bucket === 'committed') {
+        committed += total
+      } else if (bucket === 'pending') {
+        pending += total
       }
-    }, 0)
+    }
 
-    const committed_from_projects = sumExpenses((projects || []).filter(p => p.funding_status === 'committed'))
-    
-    // Committed = Historical Committed + Committed from projects
-    const total_committed = historical_committed + committed_from_projects
-
-    // 4. Pending stays the same (from err_projects)
-    const pending = sumExpenses((projects || []).filter(p => p.funding_status === 'allocated' || (p.funding_status === 'unassigned' && p.status === 'pending')))
-    
-    // 5. Remaining = Total - Committed - Pending
-    const remaining = total_included - total_committed - pending
-
-    // 6. Get Total Grants from grants_grid_view (canonical) – sum of sum_activity_amount
-    const grantsSupabase = getSupabaseAdmin()
-    const grantsData = await fetchAllRows(grantsSupabase, 'grants_grid_view', 'sum_activity_amount')
-    const total_grants = (grantsData || []).reduce((sum, row) => {
-      const amount = row['sum_activity_amount'] != null ? Number(row['sum_activity_amount']) : 0
-      return sum + (Number.isNaN(amount) ? 0 : amount)
-    }, 0)
-
-    // 7. Total Not Included = Total Grants - Total Included
-    const total_not_included = total_grants - total_included
+    // 4. Calculate totals using the new logic
+    const total_assigned = historical + assignedFromProjects
+    const total_available = total_included - total_assigned
+    const total_committed = committed
+    const total_pending = pending
+    const total_balance = total_available - total_committed - total_pending
 
     return NextResponse.json({ 
-      total_included, 
-      total_committed, 
-      total_pending: pending, 
-      remaining,
-      total_grants,
-      total_not_included
+      total_allocated: total_included,
+      total_assigned,
+      total_available,
+      total_committed,
+      total_pending,
+      total_balance
     }, { headers: { 'Cache-Control': 'no-store' } })
   } catch (error) {
     console.error('Pool summary error:', error)

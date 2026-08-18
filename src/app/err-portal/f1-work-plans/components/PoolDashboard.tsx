@@ -121,7 +121,7 @@ export default function PoolDashboard({ showProposals = true, showByDonor = true
           ? aVal.localeCompare(bVal)
           : bVal.localeCompare(aVal)
       } else {
-        // Numerical columns: allocated, historical_commitments, committed, pending, remaining
+        // Numerical columns: allocated, assigned, available, committed, pending, balance
         aVal = a[sortColumn] || 0
         bVal = b[sortColumn] || 0
         return sortDirection === 'desc' 
@@ -233,13 +233,23 @@ export default function PoolDashboard({ showProposals = true, showByDonor = true
               </TableHead>
               <TableHead className="text-right">
                 <button
-                  onClick={() => handleSort('historical_commitments')}
+                  onClick={() => handleSort('assigned')}
                   className="flex items-center justify-end hover:text-primary cursor-pointer w-full"
                 >
-                  <div className="font-semibold">Historical Commitments</div>
-                  {getSortIcon('historical_commitments')}
+                  <div className="font-semibold">{t('pool.by_state.assigned')}</div>
+                  {getSortIcon('assigned')}
                 </button>
-                <div className="text-xs text-muted-foreground">Historical USD from activities</div>
+                <div className="text-xs text-muted-foreground">{t('pool.by_state.assigned_desc')}</div>
+              </TableHead>
+              <TableHead className="text-right">
+                <button
+                  onClick={() => handleSort('available')}
+                  className="flex items-center justify-end hover:text-primary cursor-pointer w-full"
+                >
+                  <div className="font-semibold">{t('pool.by_state.available')}</div>
+                  {getSortIcon('available')}
+                </button>
+                <div className="text-xs text-muted-foreground">{t('pool.by_state.available_desc')}</div>
               </TableHead>
               <TableHead className="text-right">
                 <button
@@ -263,13 +273,13 @@ export default function PoolDashboard({ showProposals = true, showByDonor = true
               </TableHead>
               <TableHead className="text-right">
                 <button
-                  onClick={() => handleSort('remaining')}
+                  onClick={() => handleSort('balance')}
                   className="flex items-center justify-end hover:text-primary cursor-pointer w-full"
                 >
-                  <div className="font-semibold">{t('pool.by_state.remaining')}</div>
-                  {getSortIcon('remaining')}
+                  <div className="font-semibold">{t('pool.by_state.balance')}</div>
+                  {getSortIcon('balance')}
                 </button>
-                <div className="text-xs text-muted-foreground">{t('pool.by_state.remaining_desc')}</div>
+                <div className="text-xs text-muted-foreground">{t('pool.by_state.balance_desc')}</div>
               </TableHead>
               {showProposals && (
                 <>
@@ -294,40 +304,47 @@ export default function PoolDashboard({ showProposals = true, showByDonor = true
                     <TableRow className="font-semibold">
                       <TableCell>Total</TableCell>
                       <TableCell className="text-right">{fmt(sortedByState.reduce((s, r) => s + (r.allocated || 0), 0))}</TableCell>
-                      <TableCell className="text-right">{fmt(sortedByState.reduce((s, r) => s + (r.historical_commitments || 0), 0))}</TableCell>
+                      <TableCell className="text-right">{fmt(sortedByState.reduce((s, r) => s + (r.assigned || 0), 0))}</TableCell>
+                      <TableCell className={`text-right ${sortedByState.reduce((s, r) => s + (r.available || 0), 0) >= 0 ? 'text-green-700' : 'text-red-700'}`}>
+                        {fmt(sortedByState.reduce((s, r) => s + (r.available || 0), 0))}
+                      </TableCell>
                       <TableCell className="text-right">{fmt(sortedByState.reduce((s, r) => s + (r.committed || 0), 0))}</TableCell>
                       <TableCell className="text-right">{fmt(sortedByState.reduce((s, r) => s + (r.pending || 0), 0))}</TableCell>
-                      <TableCell className={`text-right ${sortedByState.reduce((s, r) => s + (r.remaining || 0), 0) >= 0 ? 'text-green-700' : 'text-red-700'}`}>
-                        {fmt(sortedByState.reduce((s, r) => s + (r.remaining || 0), 0))}
+                      <TableCell className={`text-right ${sortedByState.reduce((s, r) => s + (r.balance || r.remaining || 0), 0) >= 0 ? 'text-green-700' : 'text-red-700'}`}>
+                        {fmt(sortedByState.reduce((s, r) => s + (r.balance || r.remaining || 0), 0))}
                       </TableCell>
                       {showProposals && (
                         <>
                           <TableCell className="text-right">{fmt(proposal.amount || 0)}</TableCell>
-                          <TableCell className={`text-right ${(sortedByState.reduce((s, r) => s + (r.remaining || 0), 0) - (proposal.amount || 0)) >= 0 ? 'text-green-700' : 'text-red-700'}`}>
-                            {fmt(sortedByState.reduce((s, r) => s + (r.remaining || 0), 0) - (proposal.amount || 0))}
+                          <TableCell className={`text-right ${(sortedByState.reduce((s, r) => s + (r.balance || r.remaining || 0), 0) - (proposal.amount || 0)) >= 0 ? 'text-green-700' : 'text-red-700'}`}>
+                            {fmt(sortedByState.reduce((s, r) => s + (r.balance || r.remaining || 0), 0) - (proposal.amount || 0))}
                           </TableCell>
                         </>
                       )}
                     </TableRow>
                   )}
-                  {sortedByState.map(r => (
+                  {sortedByState.map(r => {
+                    const rowBalance = r.balance ?? r.remaining
+                    return (
                     <TableRow key={r.state_name}>
                       <TableCell>{r.state_name}</TableCell>
                       <TableCell className="text-right">{fmt(r.allocated)}</TableCell>
-                      <TableCell className="text-right">{fmt(r.historical_commitments || 0)}</TableCell>
+                      <TableCell className="text-right">{fmt(r.assigned || 0)}</TableCell>
+                      <TableCell className={`text-right ${(r.available || 0) >= 0 ? 'text-green-700' : 'text-red-700'}`}>{fmt(r.available || 0)}</TableCell>
                       <TableCell className="text-right">{fmt(r.committed)}</TableCell>
                       <TableCell className="text-right">{fmt(r.pending)}</TableCell>
-                      <TableCell className={`text-right ${r.remaining >= 0 ? 'text-green-700' : 'text-red-700'}`}>{fmt(r.remaining)}</TableCell>
+                      <TableCell className={`text-right ${rowBalance >= 0 ? 'text-green-700' : 'text-red-700'}`}>{fmt(rowBalance)}</TableCell>
                       {showProposals && (
                         <>
                           <TableCell className="text-right">{proposal.state === r.state_name ? fmt(proposal.amount) : fmt(0)}</TableCell>
-                          <TableCell className={`text-right ${((r.remaining - (proposal.state === r.state_name ? proposal.amount : 0)) >= 0) ? 'text-green-700' : 'text-red-700'}`}>
-                            {fmt(r.remaining - (proposal.state === r.state_name ? proposal.amount : 0))}
+                          <TableCell className={`text-right ${((rowBalance - (proposal.state === r.state_name ? proposal.amount : 0)) >= 0) ? 'text-green-700' : 'text-red-700'}`}>
+                            {fmt(rowBalance - (proposal.state === r.state_name ? proposal.amount : 0))}
                           </TableCell>
                         </>
                       )}
                     </TableRow>
-                  ))}
+                    )
+                  })}
                 </>
               )
             })()}

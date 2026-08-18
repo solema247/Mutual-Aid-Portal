@@ -9,9 +9,11 @@ import { RefreshCw } from 'lucide-react'
 type StateAgg = {
   state: string
   total_allocated: number
-  historical_usd: number
+  assigned: number
+  available: number
   committed: number
   pending: number
+  balance: number
   percent_total: number
 }
 
@@ -48,10 +50,12 @@ export default function HistoricalDistributionDecisions() {
 
   const totals = useMemo(() => {
     const totalAllocated = rows.reduce((s, r) => s + (r.total_allocated || 0), 0)
-    const totalHistorical = rows.reduce((s, r) => s + (r.historical_usd || 0), 0)
+    const totalAssigned = rows.reduce((s, r) => s + (r.assigned || 0), 0)
+    const totalAvailable = rows.reduce((s, r) => s + (r.available || 0), 0)
     const totalCommitted = rows.reduce((s, r) => s + (r.committed || 0), 0)
     const totalPending = rows.reduce((s, r) => s + (r.pending || 0), 0)
-    return { totalAllocated, totalHistorical, totalCommitted, totalPending }
+    const totalBalance = rows.reduce((s, r) => s + (r.balance || 0), 0)
+    return { totalAllocated, totalAssigned, totalAvailable, totalCommitted, totalPending, totalBalance }
   }, [rows])
 
   return (
@@ -73,10 +77,12 @@ export default function HistoricalDistributionDecisions() {
               <TableHeader>
                 <TableRow>
                   <TableHead>State</TableHead>
-                  <TableHead className="text-right">Total Allocated</TableHead>
-                  <TableHead className="text-right">Historical USD</TableHead>
+                  <TableHead className="text-right">Allocated</TableHead>
+                  <TableHead className="text-right">Assigned</TableHead>
+                  <TableHead className="text-right">Available</TableHead>
                   <TableHead className="text-right">Committed</TableHead>
                   <TableHead className="text-right">Pending</TableHead>
+                  <TableHead className="text-right">Balance</TableHead>
                   <TableHead className="text-right">% of Total</TableHead>
                 </TableRow>
               </TableHeader>
@@ -85,15 +91,17 @@ export default function HistoricalDistributionDecisions() {
                   <TableRow className="font-semibold">
                     <TableCell>Total</TableCell>
                     <TableCell className="text-right">{formatCurrency(totals.totalAllocated)}</TableCell>
-                    <TableCell className="text-right">{formatCurrency(totals.totalHistorical)}</TableCell>
+                    <TableCell className="text-right">{formatCurrency(totals.totalAssigned)}</TableCell>
+                    <TableCell className="text-right">{formatCurrency(totals.totalAvailable)}</TableCell>
                     <TableCell className="text-right">{formatCurrency(totals.totalCommitted)}</TableCell>
                     <TableCell className="text-right">{formatCurrency(totals.totalPending)}</TableCell>
+                    <TableCell className="text-right">{formatCurrency(totals.totalBalance)}</TableCell>
                     <TableCell className="text-right">100%</TableCell>
                   </TableRow>
                 )}
                 {sorted.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center text-muted-foreground py-6">
+                    <TableCell colSpan={8} className="text-center text-muted-foreground py-6">
                       No data
                     </TableCell>
                   </TableRow>
@@ -102,9 +110,11 @@ export default function HistoricalDistributionDecisions() {
                     <TableRow key={row.state}>
                       <TableCell className="font-medium">{row.state}</TableCell>
                       <TableCell className="text-right">{formatCurrency(row.total_allocated)}</TableCell>
-                      <TableCell className="text-right">{formatCurrency(row.historical_usd)}</TableCell>
+                      <TableCell className="text-right">{formatCurrency(row.assigned)}</TableCell>
+                      <TableCell className="text-right">{formatCurrency(row.available)}</TableCell>
                       <TableCell className="text-right">{formatCurrency(row.committed)}</TableCell>
                       <TableCell className="text-right">{formatCurrency(row.pending)}</TableCell>
+                      <TableCell className="text-right">{formatCurrency(row.balance)}</TableCell>
                       <TableCell className="text-right">
                         {Number.isFinite(row.percent_total) ? `${row.percent_total.toFixed(1)}%` : '—'}
                       </TableCell>

@@ -5,10 +5,12 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useTranslation } from 'react-i18next'
 
 type PoolSummary = {
-  total_included: number
+  total_allocated: number
+  total_assigned: number
+  total_available: number
   total_committed: number
   total_pending: number
-  total_grants: number
+  total_balance: number
 }
 
 function money(n: number) {
@@ -36,33 +38,54 @@ export default function GrantPoolSummaryCards() {
     }
   }, [])
 
-  const remaining =
-    summary != null
-      ? summary.total_grants - summary.total_committed - summary.total_pending
-      : null
-
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+    <div className="space-y-3">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-2">
+        <div className="lg:col-span-3 text-center py-2 bg-slate-50 rounded-md border">
+          <div className="text-xs font-semibold">Allocation Pool Overview</div>
+          <div className="text-[10px] text-muted-foreground">Distribution allocations and current usage</div>
+        </div>
+        <div className="lg:col-span-3 text-center py-2 bg-sky-100 rounded-md border">
+          <div className="text-xs font-semibold">Pipeline</div>
+          <div className="text-[10px] text-muted-foreground">Projects in approval and assignment workflow</div>
+        </div>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
       <Card className="flex flex-col h-full">
         <CardHeader className="flex-shrink-0 space-y-1.5 pb-2">
-          <CardTitle className="text-sm leading-tight">{t('err:gm.total_funds_allocated')}</CardTitle>
+          <CardTitle className="text-sm leading-tight">{t('err:gm.total_allocated')}</CardTitle>
           <div className="text-xs text-muted-foreground line-clamp-2">
-            {t('err:gm.total_funds_allocated_desc')}
+            {t('err:gm.total_allocated_desc')}
           </div>
         </CardHeader>
         <CardContent className="pt-0 mt-auto">
-          <div className="text-2xl font-bold">{summary ? money(summary.total_included) : '—'}</div>
+          <div className="text-2xl font-bold">{summary ? money(summary.total_allocated) : '—'}</div>
         </CardContent>
       </Card>
       <Card className="flex flex-col h-full">
         <CardHeader className="flex-shrink-0 space-y-1.5 pb-2">
-          <CardTitle className="text-sm leading-tight">{t('err:gm.total_funds_transferred')}</CardTitle>
+          <CardTitle className="text-sm leading-tight">{t('err:gm.assigned')}</CardTitle>
           <div className="text-xs text-muted-foreground line-clamp-2">
-            {t('err:gm.total_funds_transferred_desc')}
+            {t('err:gm.assigned_desc')}
           </div>
         </CardHeader>
         <CardContent className="pt-0 mt-auto">
-          <div className="text-2xl font-bold">{summary ? money(summary.total_grants) : '—'}</div>
+          <div className="text-2xl font-bold">{summary ? money(summary.total_assigned) : '—'}</div>
+        </CardContent>
+      </Card>
+      <Card className="flex flex-col h-full">
+        <CardHeader className="flex-shrink-0 space-y-1.5 pb-2">
+          <CardTitle className="text-sm leading-tight">{t('err:gm.available')}</CardTitle>
+          <div className="text-xs text-muted-foreground line-clamp-2">
+            {t('err:gm.available_desc')}
+          </div>
+        </CardHeader>
+        <CardContent
+          className={`pt-0 mt-auto text-2xl font-bold ${
+            summary && summary.total_available >= 0 ? 'text-green-700' : 'text-red-700'
+          }`}
+        >
+          {summary ? money(summary.total_available) : '—'}
         </CardContent>
       </Card>
       <Card className="flex flex-col h-full">
@@ -85,17 +108,18 @@ export default function GrantPoolSummaryCards() {
       </Card>
       <Card className="flex flex-col h-full">
         <CardHeader className="flex-shrink-0 space-y-1.5 pb-2">
-          <CardTitle className="text-sm leading-tight">{t('err:gm.remaining')}</CardTitle>
-          <div className="text-xs text-muted-foreground line-clamp-2">{t('err:gm.remaining_desc')}</div>
+          <CardTitle className="text-sm leading-tight">{t('err:gm.balance')}</CardTitle>
+          <div className="text-xs text-muted-foreground line-clamp-2">{t('err:gm.balance_desc')}</div>
         </CardHeader>
         <CardContent
           className={`pt-0 mt-auto text-2xl font-bold ${
-            remaining != null && remaining >= 0 ? 'text-green-700' : 'text-red-700'
+            summary && summary.total_balance >= 0 ? 'text-green-700' : 'text-red-700'
           }`}
         >
-          {remaining != null ? money(remaining) : '—'}
+          {summary ? money(summary.total_balance) : '—'}
         </CardContent>
       </Card>
+      </div>
     </div>
   )
 }

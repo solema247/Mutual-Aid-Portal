@@ -2,6 +2,11 @@ import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin'
 import { normalizeStateName } from '@/lib/normalizeStateName'
+import {
+  classifyPoolProject,
+  poolRowFromParts,
+  projectExpenseTotal,
+} from '@/lib/poolProjectClassification'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -96,55 +101,36 @@ export async function GET() {
       }
     }
 
-    // 3. Get committed and pending from err_projects (fetch all rows; filter after normalize)
-    const { data: projectsData } = await supabase
-      .from('err_projects')
-      .select('expenses, funding_status, status, state')
-    const projects = projectsData || []
+    // 3. Classify portal projects: assigned (has grant), committed (F2-approved, no grant), pending
+    const projects = await fetchAllRows(
+      supabase,
+      'err_projects',
+      'expenses, funding_status, status, state, grant_id, grant_grid_id'
+    )
 
-    const sumByCommitted = () => {
-      const byState = new Map<string, number>()
-      for (const p of projects || []) {
-        if (p.funding_status !== 'committed') continue
-        try {
-          const exps = typeof p.expenses === 'string' ? JSON.parse(p.expenses) : p.expenses
-          const amount = (exps || []).reduce((s: number, e: any) => s + (e.total_cost || 0), 0)
-          const state = normalizeStateName(p.state)
-          if (!isAllowedState(state, allowedStateNames)) continue
-          byState.set(state, (byState.get(state) || 0) + amount)
-        } catch {
-          /* ignore */
-        }
-      }
-      return byState
+    const assignedFromProjectsByState = new Map<string, number>()
+    const committedByState = new Map<string, number>()
+    const pendingByState = new Map<string, number>()
+    for (const p of projects || []) {
+      const bucket = classifyPoolProject(p)
+      if (!bucket) continue
+      const state = normalizeStateName(p.state)
+      if (!isAllowedState(state, allowedStateNames)) continue
+      const amount = projectExpenseTotal(p.expenses)
+      const target =
+        bucket === 'assigned'
+          ? assignedFromProjectsByState
+          : bucket === 'committed'
+            ? committedByState
+            : pendingByState
+      target.set(state, (target.get(state) || 0) + amount)
     }
-
-    const sumByPending = () => {
-      const byState = new Map<string, number>()
-      for (const p of projects || []) {
-        // Include both 'allocated' funding_status and 'pending' status (new uploads without metadata)
-        if (p.funding_status === 'allocated' || (p.funding_status === 'unassigned' && p.status === 'pending')) {
-          try {
-            const exps = typeof p.expenses === 'string' ? JSON.parse(p.expenses) : p.expenses
-            const amount = (exps || []).reduce((s: number, e: any) => s + (e.total_cost || 0), 0)
-            const state = normalizeStateName(p.state)
-            if (!isAllowedState(state, allowedStateNames)) continue
-            byState.set(state, (byState.get(state) || 0) + amount)
-          } catch {
-            /* ignore */
-          }
-        }
-      }
-      return byState
-    }
-
-    const committedByState = sumByCommitted()
-    const pendingByState = sumByPending()
 
     const states = Array.from(
       new Set<string>([
         ...Array.from(allocatedByState.keys()),
         ...Array.from(historicalByState.keys()),
+        ...Array.from(assignedFromProjectsByState.keys()),
         ...Array.from(committedByState.keys()),
         ...Array.from(pendingByState.keys()),
         ...Array.from(decisionsByState.keys()),
@@ -155,18 +141,14 @@ export async function GET() {
     const rows = states
       .map((state) => {
         const allocated = allocatedByState.get(state) || 0
-        const historical_commitments = historicalByState.get(state) || 0
+        const assigned =
+          (historicalByState.get(state) || 0) + (assignedFromProjectsByState.get(state) || 0)
         const committed = committedByState.get(state) || 0
         const pending = pendingByState.get(state) || 0
-        const remaining = allocated - historical_commitments - committed - pending
         const decision_count = decisionsByState.get(state)?.size || 0
         return {
           state_name: state,
-          allocated,
-          historical_commitments,
-          committed,
-          pending,
-          remaining,
+          ...poolRowFromParts({ allocated, assigned, committed, pending }),
           decision_count,
           overall_decision_count: overallDecisionCount,
         }

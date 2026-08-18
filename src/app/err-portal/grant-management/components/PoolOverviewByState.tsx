@@ -136,10 +136,10 @@ export default function PoolOverviewByState() {
       </CardHeader>
       {!isCollapsed && (
         <CardContent className="p-0 overflow-x-auto">
-          <Table className="min-w-[760px] text-xs [&_th]:py-1.5 [&_th]:px-2 [&_td]:py-1 [&_td]:px-2">
+          <Table className="min-w-[920px] text-xs [&_th]:py-1.5 [&_th]:px-2 [&_td]:py-1 [&_td]:px-2">
             <TableHeader>
               <TableRow>
-                <TableHead className="px-2">
+                <TableHead rowSpan={2} className="px-2 align-bottom border-b">
                   <button
                     onClick={() => handleSort('state_name')}
                     className="flex items-center hover:text-primary cursor-pointer"
@@ -148,6 +148,22 @@ export default function PoolOverviewByState() {
                     {getSortIcon('state_name')}
                   </button>
                 </TableHead>
+                <TableHead 
+                  colSpan={5} 
+                  className="text-center px-2 border-b font-semibold text-xs bg-slate-50"
+                >
+                  <div>Allocation Pool Overview</div>
+                  <div className="text-[10px] font-normal text-muted-foreground">Distribution allocations and current usage</div>
+                </TableHead>
+                <TableHead 
+                  colSpan={3} 
+                  className="text-center px-2 border-b font-semibold text-xs bg-sky-100"
+                >
+                  <div>Pipeline</div>
+                  <div className="text-[10px] font-normal text-muted-foreground">Projects in approval and assignment workflow</div>
+                </TableHead>
+              </TableRow>
+              <TableRow>
                 <TableHead className="text-right px-2">
                   <button
                     onClick={() => handleSort('decision_count')}
@@ -172,17 +188,29 @@ export default function PoolOverviewByState() {
                 </TableHead>
                 <TableHead className="text-right px-2">
                   <button
-                    onClick={() => handleSort('historical_commitments')}
+                    onClick={() => handleSort('assigned')}
                     className="flex items-center justify-end hover:text-primary cursor-pointer w-full"
+                    title="Historical activity plus portal projects already on a grant"
                   >
-                    <div className="font-semibold text-xs">Historical</div>
-                    {getSortIcon('historical_commitments')}
+                    <div className="font-semibold text-xs">Assigned</div>
+                    {getSortIcon('assigned')}
+                  </button>
+                </TableHead>
+                <TableHead className="text-right px-2">
+                  <button
+                    onClick={() => handleSort('available')}
+                    className="flex items-center justify-end hover:text-primary cursor-pointer w-full"
+                    title="Allocated minus Assigned"
+                  >
+                    <div className="font-semibold text-xs">Available</div>
+                    {getSortIcon('available')}
                   </button>
                 </TableHead>
                 <TableHead className="text-right px-2">
                   <button
                     onClick={() => handleSort('committed')}
                     className="flex items-center justify-end hover:text-primary cursor-pointer w-full"
+                    title="F2-approved projects not yet assigned to a grant"
                   >
                     <div className="font-semibold text-xs">Committed</div>
                     {getSortIcon('committed')}
@@ -192,6 +220,7 @@ export default function PoolOverviewByState() {
                   <button
                     onClick={() => handleSort('pending')}
                     className="flex items-center justify-end hover:text-primary cursor-pointer w-full"
+                    title="Projects not yet F2-approved"
                   >
                     <div className="font-semibold text-xs">Pending</div>
                     {getSortIcon('pending')}
@@ -199,11 +228,12 @@ export default function PoolOverviewByState() {
                 </TableHead>
                 <TableHead className="text-right px-2">
                   <button
-                    onClick={() => handleSort('remaining')}
+                    onClick={() => handleSort('balance')}
                     className="flex items-center justify-end hover:text-primary cursor-pointer w-full"
+                    title="Available minus Committed minus Pending"
                   >
-                    <div className="font-semibold text-xs">Remaining</div>
-                    {getSortIcon('remaining')}
+                    <div className="font-semibold text-xs">Balance</div>
+                    {getSortIcon('balance')}
                   </button>
                 </TableHead>
               </TableRow>
@@ -211,7 +241,10 @@ export default function PoolOverviewByState() {
             <TableBody>
               {(() => {
                 const sortedByState = getSortedByState()
-                const totalAllocated = sortedByState.reduce((s, r) => s + (r.allocated || 0), 0)
+                const sum = (key: string) => sortedByState.reduce((s, r) => s + (Number(r[key]) || 0), 0)
+                const totalAllocated = sum('allocated')
+                const totalAvailable = sum('available')
+                const totalBalance = sum('balance')
                 return (
                   <>
                     {sortedByState.length > 0 && (
@@ -225,11 +258,14 @@ export default function PoolOverviewByState() {
                         </TableCell>
                         <TableCell className="text-right whitespace-nowrap">{fmt(totalAllocated)}</TableCell>
                         <TableCell className="text-right">100%</TableCell>
-                        <TableCell className="text-right whitespace-nowrap">{fmt(sortedByState.reduce((s, r) => s + (r.historical_commitments || 0), 0))}</TableCell>
-                        <TableCell className="text-right whitespace-nowrap">{fmt(sortedByState.reduce((s, r) => s + (r.committed || 0), 0))}</TableCell>
-                        <TableCell className="text-right whitespace-nowrap">{fmt(sortedByState.reduce((s, r) => s + (r.pending || 0), 0))}</TableCell>
-                        <TableCell className={`text-right whitespace-nowrap ${sortedByState.reduce((s, r) => s + (r.remaining || 0), 0) >= 0 ? 'text-green-700' : 'text-red-700'}`}>
-                          {fmt(sortedByState.reduce((s, r) => s + (r.remaining || 0), 0))}
+                        <TableCell className="text-right whitespace-nowrap">{fmt(sum('assigned'))}</TableCell>
+                        <TableCell className={`text-right whitespace-nowrap ${totalAvailable >= 0 ? 'text-green-700' : 'text-red-700'}`}>
+                          {fmt(totalAvailable)}
+                        </TableCell>
+                        <TableCell className="text-right whitespace-nowrap">{fmt(sum('committed'))}</TableCell>
+                        <TableCell className="text-right whitespace-nowrap">{fmt(sum('pending'))}</TableCell>
+                        <TableCell className={`text-right whitespace-nowrap ${totalBalance >= 0 ? 'text-green-700' : 'text-red-700'}`}>
+                          {fmt(totalBalance)}
                         </TableCell>
                       </TableRow>
                     )}
@@ -241,10 +277,15 @@ export default function PoolOverviewByState() {
                           <TableCell className="text-right whitespace-nowrap">{r.decision_count || 0}</TableCell>
                           <TableCell className="text-right whitespace-nowrap">{fmt(r.allocated)}</TableCell>
                           <TableCell className="text-right">{percentOfTotal.toFixed(1)}%</TableCell>
-                          <TableCell className="text-right whitespace-nowrap">{fmt(r.historical_commitments || 0)}</TableCell>
+                          <TableCell className="text-right whitespace-nowrap">{fmt(r.assigned || 0)}</TableCell>
+                          <TableCell className={`text-right whitespace-nowrap ${(r.available || 0) >= 0 ? 'text-green-700' : 'text-red-700'}`}>
+                            {fmt(r.available || 0)}
+                          </TableCell>
                           <TableCell className="text-right whitespace-nowrap">{fmt(r.committed)}</TableCell>
                           <TableCell className="text-right whitespace-nowrap">{fmt(r.pending)}</TableCell>
-                          <TableCell className={`text-right whitespace-nowrap ${r.remaining >= 0 ? 'text-green-700' : 'text-red-700'}`}>{fmt(r.remaining)}</TableCell>
+                          <TableCell className={`text-right whitespace-nowrap ${(r.balance ?? r.remaining) >= 0 ? 'text-green-700' : 'text-red-700'}`}>
+                            {fmt(r.balance ?? r.remaining)}
+                          </TableCell>
                         </TableRow>
                       )
                     })}

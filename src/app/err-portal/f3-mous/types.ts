@@ -110,9 +110,11 @@ export interface MouAssignmentStatus {
 
 export interface RemainingAmounts {
   total: number
-  historical: number
+  historical?: number
+  assigned?: number
   committed: number
-  allocated: number
+  allocated?: number
+  pending?: number
   remaining: number
   loading: boolean
 }

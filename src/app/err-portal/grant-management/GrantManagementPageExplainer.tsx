@@ -49,10 +49,11 @@ function GrantManagementExplainerBody() {
           <li>{t('err:gm_explainer_pool_col_state')}</li>
           <li>{t('err:gm_explainer_pool_col_allocated')}</li>
           <li>{t('err:gm_explainer_pool_col_pct')}</li>
-          <li>{t('err:gm_explainer_pool_col_historical')}</li>
+          <li>{t('err:gm_explainer_pool_col_assigned')}</li>
+          <li>{t('err:gm_explainer_pool_col_available')}</li>
           <li>{t('err:gm_explainer_pool_col_committed')}</li>
           <li>{t('err:gm_explainer_pool_col_pending')}</li>
-          <li>{t('err:gm_explainer_pool_col_remaining')}</li>
+          <li>{t('err:gm_explainer_pool_col_balance')}</li>
         </ul>
       </div>
 

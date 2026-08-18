@@ -203,19 +203,19 @@ export default function AssignGrantDialog({
                             <span className="font-medium">${fmtUsd(stateAllocationRemaining.total)}</span>
                           </div>
                           <div className="flex justify-between">
-                            <span className="text-muted-foreground">Historical:</span>
-                            <span>${fmtUsd(stateAllocationRemaining.historical ?? 0)}</span>
+                            <span className="text-muted-foreground">Assigned:</span>
+                            <span>${fmtUsd(stateAllocationRemaining.assigned ?? stateAllocationRemaining.historical ?? 0)}</span>
                           </div>
                           <div className="flex justify-between">
                             <span className="text-muted-foreground">Committed:</span>
                             <span>${fmtUsd(stateAllocationRemaining.committed)}</span>
                           </div>
                           <div className="flex justify-between">
-                            <span className="text-muted-foreground">Allocated:</span>
-                            <span>${fmtUsd(stateAllocationRemaining.allocated)}</span>
+                            <span className="text-muted-foreground">Pending:</span>
+                            <span>${fmtUsd(stateAllocationRemaining.pending ?? stateAllocationRemaining.allocated ?? 0)}</span>
                           </div>
                           <div className="pt-2 border-t flex justify-between items-center">
-                            <span className="font-semibold">Remaining:</span>
+                            <span className="font-semibold">Balance:</span>
                             <span className={`font-bold text-lg ${
                               stateAllocationRemaining.remaining < 0 ? 'text-red-600' :
                               stateAllocationRemaining.remaining < mouTotalAmount ? 'text-yellow-600' :
@@ -224,7 +224,7 @@ export default function AssignGrantDialog({
                               ${fmtUsd(stateAllocationRemaining.remaining)}
                             </span>
                           </div>
-                          <p className="text-xs text-muted-foreground pt-0.5">Remaining = Total âˆ’ Historical âˆ’ Committed âˆ’ Allocated</p>
+                          <p className="text-xs text-muted-foreground pt-0.5">Balance = Total − Assigned − Committed − Pending</p>
                           {mouTotalAmount > 0 && (
                             <div className="pt-1 text-xs">
                               <div className="flex justify-between text-muted-foreground">
