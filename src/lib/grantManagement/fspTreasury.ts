@@ -19,7 +19,7 @@ async function fetchAll(
       .range(from, from + pageSize - 1)
     if (error) return { data: all, error }
     if (!data?.length) break
-    all.push(...(data as Record<string, unknown>[]))
+    all.push(...(data as unknown as Record<string, unknown>[]))
     if (data.length < pageSize) break
     from += pageSize
   }

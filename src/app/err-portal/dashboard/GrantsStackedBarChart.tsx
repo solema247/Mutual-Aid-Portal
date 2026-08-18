@@ -117,7 +117,10 @@ export function GrantsStackedBarChart({
   const [error, setError] = useState<string | null>(null)
 
   const percent = stackMode === 'percent'
-  const config = useMemo(() => (percent ? percentChartConfig : amountChartConfig), [percent])
+  const config: ChartConfig = useMemo(
+    () => (percent ? percentChartConfig : amountChartConfig),
+    [percent]
+  )
   const colors = percent ? PERCENT_COLORS : AMOUNT_COLORS
   const stackKeys = percent ? PERCENT_STACK_KEYS : AMOUNT_STACK_KEYS
   const horizontal = orientation === 'horizontal'
@@ -400,7 +403,7 @@ export function GrantsStackedBarChart({
             <div className="font-medium text-foreground">{row.grant_id}</div>
             {items.map((item) => {
               const key = String(item.dataKey ?? '')
-              const label = config[key as keyof typeof config]?.label ?? key
+              const label = config[key]?.label ?? key
               const usd = percent ? usdForPctKey[key] ?? 0 : Number(item.value) || 0
               const pct = percent ? Number(item.value) || 0 : null
               return (

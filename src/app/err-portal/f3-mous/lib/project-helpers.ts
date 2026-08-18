@@ -57,6 +57,6 @@ export function sumExpensesUsd(expenses: unknown): number {
   }
 }
 
-export function fmtUsd(n: number) {
+export function fmtUsd(n: number | null | undefined) {
   return (n ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
