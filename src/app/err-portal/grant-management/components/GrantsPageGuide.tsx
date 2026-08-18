@@ -30,14 +30,6 @@ export default function GrantsPageGuide() {
       title: t('err:grants_guide_section_stack'),
       body: <p>{t('err:grants_guide_stack_body')}</p>,
     },
-    {
-      title: t('err:grants_guide_section_cards'),
-      body: <p>{t('err:grants_guide_cards_body')}</p>,
-    },
-    {
-      title: t('err:grants_guide_section_status'),
-      body: <p>{t('err:grants_guide_status_body')}</p>,
-    },
   ]
 
   return (
@@ -59,7 +51,7 @@ export default function GrantsPageGuide() {
         </Button>
       </div>
       {open && (
-        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-2">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
           {notes.map((note, i) => (
             <div
               key={note.title}
