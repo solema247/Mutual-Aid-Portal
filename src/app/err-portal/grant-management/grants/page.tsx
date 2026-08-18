@@ -12,7 +12,7 @@ export default function GrantsPage() {
       <GrantPoolSummaryCards />
       <GrantsPageGuide />
       <GrantCallsManager />
-      <GrantsStackedBarChart orientation="horizontal" />
+      <GrantsStackedBarChart orientation="horizontal" stackMode="percent" />
     </div>
   )
 }

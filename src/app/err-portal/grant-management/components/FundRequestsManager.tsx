@@ -1,7 +1,8 @@
 'use client'
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
-import { Plus, Pencil, Trash2, ChevronDown, ChevronUp } from 'lucide-react'
+import { Plus, Pencil, Trash2, ChevronDown, ChevronUp, Info } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import {
   Card,
   CardContent,
@@ -145,8 +146,6 @@ const emptyFspForm = {
   contact_person: '',
   contact_email: '',
   transfer_fee_percent: '',
-  treasury_in_usd: '',
-  treasury_out_usd: '',
 }
 
 const DECISION_RECENT_DAYS = 90
@@ -159,6 +158,7 @@ function daysAgoIso(days: number): string {
 }
 
 export default function FundRequestsManager() {
+  const { t } = useTranslation(['err'])
   const [requests, setRequests] = useState<FundRequest[]>([])
   const [fsps, setFsps] = useState<Fsp[]>([])
   const [grants, setGrants] = useState<GrantOption[]>([])
@@ -467,8 +467,6 @@ export default function FundRequestsManager() {
       contact_email: f.contact_email || '',
       transfer_fee_percent:
         f.transfer_fee_percent != null ? String(f.transfer_fee_percent) : '',
-      treasury_in_usd: f.treasury_in_usd != null ? String(f.treasury_in_usd) : '',
-      treasury_out_usd: f.treasury_out_usd != null ? String(f.treasury_out_usd) : '',
     })
     setFspOpen(true)
   }
@@ -482,8 +480,6 @@ export default function FundRequestsManager() {
       transfer_fee_percent: fspForm.transfer_fee_percent
         ? Number(fspForm.transfer_fee_percent)
         : null,
-      treasury_in_usd: fspForm.treasury_in_usd === '' ? 0 : Number(fspForm.treasury_in_usd),
-      treasury_out_usd: fspForm.treasury_out_usd === '' ? 0 : Number(fspForm.treasury_out_usd),
     }
     const res = editingFsp
       ? await fetch(`/api/fsps/${editingFsp.id}`, {
@@ -898,6 +894,21 @@ export default function FundRequestsManager() {
           </Dialog>
         </CardHeader>
         <CardContent>
+          <div className="mb-3 space-y-1.5">
+            <h3 className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
+              <Info className="h-3.5 w-3.5 text-muted-foreground" />
+              {t('err:allocation_guide_title')}
+            </h3>
+            <div className="flex flex-wrap items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-[11px] text-amber-950">
+              <Badge
+                variant="outline"
+                className="h-5 border-amber-300 bg-amber-100 text-[10px] text-amber-900"
+              >
+                {t('err:allocation_guide_guidance_badge')}
+              </Badge>
+              <span>{t('err:allocation_guide_guidance_body')}</span>
+            </div>
+          </div>
           {loading ? (
             <div className="text-xs text-muted-foreground">Loading…</div>
           ) : (
@@ -1286,8 +1297,8 @@ export default function FundRequestsManager() {
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Fee %</TableHead>
                 <TableHead>Contact</TableHead>
-                <TableHead className="text-right">In</TableHead>
-                <TableHead className="text-right">Out</TableHead>
+                <TableHead className="text-right">Transfer in</TableHead>
+                <TableHead className="text-right">Transfer out</TableHead>
                 <TableHead className="text-right">Balance</TableHead>
                 <TableHead />
               </TableRow>
@@ -1513,36 +1524,9 @@ export default function FundRequestsManager() {
                 Applied to transfer activity amounts as fee = activity × %.
               </p>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label>Treasury In (USD)</Label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={fspForm.treasury_in_usd}
-                  onChange={(e) =>
-                    setFspForm({ ...fspForm, treasury_in_usd: e.target.value })
-                  }
-                  placeholder="0"
-                />
-              </div>
-              <div>
-                <Label>Treasury Out (USD)</Label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={fspForm.treasury_out_usd}
-                  onChange={(e) =>
-                    setFspForm({ ...fspForm, treasury_out_usd: e.target.value })
-                  }
-                  placeholder="0"
-                />
-              </div>
-            </div>
-            <p className="text-[11px] text-muted-foreground -mt-1">
-              Balance = In − Out (cash at this FSP). Guidance only — does not block fund requests.
+            <p className="text-[11px] text-muted-foreground">
+              Transfer in is the sum of transfer segments for this FSP. Transfer out is
+              payment confirmations on MOUs linked to this FSP (backfill pending).
             </p>
             <Button onClick={saveFsp} className="w-full">
               Save

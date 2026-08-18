@@ -80,6 +80,7 @@ interface GrantCall {
   total_transferred_amount_usd: number | null
   sum_activity_amount: number | null
   sum_transfer_fee_amount: number | null
+  sum_disbursed_to_errs: number
 }
 
 interface User {
@@ -87,6 +88,17 @@ interface User {
   role: string
   display_name: string | null
   err_id: string | null
+}
+
+function ColumnHeader({ title, hint }: { title: string; hint?: string }) {
+  return (
+    <div className="flex flex-col justify-start">
+      <div className="leading-tight">{title}</div>
+      {hint ? (
+        <div className="text-[10px] font-normal leading-tight text-muted-foreground">{hint}</div>
+      ) : null}
+    </div>
+  )
 }
 
 export default function GrantCallsManager() {
@@ -395,6 +407,17 @@ export default function GrantCallsManager() {
     if (!date) return '—'
     return new Date(date).toLocaleDateString()
   }
+
+  const grantBalance = (grant: GrantCall) =>
+    (Number(grant.total_transferred_amount_usd) || 0) - (Number(grant.sum_disbursed_to_errs) || 0)
+
+  const totals = {
+    transferred: grants.reduce((s, g) => s + (Number(g.total_transferred_amount_usd) || 0), 0),
+    transferSegments: grants.reduce((s, g) => s + (Number(g.sum_activity_amount) || 0), 0),
+    transferFees: grants.reduce((s, g) => s + (Number(g.sum_transfer_fee_amount) || 0), 0),
+    disbursed: grants.reduce((s, g) => s + (Number(g.sum_disbursed_to_errs) || 0), 0),
+  }
+  const totalBalance = totals.transferred - totals.disbursed
 
   if (isLoading) {
     return <div className="text-center py-4">{t('common:loading')}</div>
@@ -766,18 +789,59 @@ export default function GrantCallsManager() {
       {!isCollapsed && (
         <CardContent>
           <div className="overflow-x-auto">
-            <Table className="min-w-[800px] text-xs [&_th]:py-1.5 [&_th]:px-2 [&_td]:py-1 [&_td]:px-2">
+            <Table className="min-w-[1100px] text-xs [&_th]:h-auto [&_th]:py-1 [&_th]:px-2 [&_td]:py-1 [&_td]:px-2">
             <TableHeader>
               <TableRow>
-                <TableHead className="px-2">Grant ID</TableHead>
-                <TableHead className="px-2">Project Name</TableHead>
-                <TableHead className="px-2">Start Date</TableHead>
-                <TableHead className="px-2">End Date</TableHead>
-                <TableHead className="px-2">Status</TableHead>
-                <TableHead className="px-2">Total Transferred (USD)</TableHead>
-                <TableHead className="px-2">Sum Activity Amount (USD)</TableHead>
-                <TableHead className="px-2">Sum Transfer Fee (USD)</TableHead>
-                {canEditGrants && isEditMode && <TableHead className="px-2">Actions</TableHead>}
+                <TableHead rowSpan={2} className="px-2 align-bottom border-b">
+                  <ColumnHeader title="Grant ID" />
+                </TableHead>
+                <TableHead rowSpan={2} className="px-2 align-bottom border-b">
+                  <ColumnHeader title="Project Name" />
+                </TableHead>
+                <TableHead rowSpan={2} className="px-2 align-bottom border-b">
+                  <ColumnHeader title="Start Date" />
+                </TableHead>
+                <TableHead rowSpan={2} className="px-2 align-bottom border-b">
+                  <ColumnHeader title="End Date" />
+                </TableHead>
+                <TableHead rowSpan={2} className="px-2 align-bottom border-b">
+                  <ColumnHeader title="Status" />
+                </TableHead>
+                <TableHead
+                  colSpan={3}
+                  className="text-center px-2 align-top border-b font-semibold text-xs bg-slate-50"
+                >
+                  <div>{t('err:grants_col_group_transfers')}</div>
+                  <div className="text-[10px] font-normal text-muted-foreground">
+                    {t('err:grants_col_group_transfers_hint')}
+                  </div>
+                </TableHead>
+                <TableHead colSpan={2} className="px-2 align-top border-b" />
+                {canEditGrants && isEditMode && (
+                  <TableHead rowSpan={2} className="px-2 align-bottom border-b">
+                    <ColumnHeader title="Actions" />
+                  </TableHead>
+                )}
+              </TableRow>
+              <TableRow>
+                <TableHead className="px-2 align-top border-b bg-slate-50">
+                  <ColumnHeader title="Total Transferred (USD)" />
+                </TableHead>
+                <TableHead className="px-2 align-top border-b bg-slate-50">
+                  <ColumnHeader title={t('err:grants_col_transfer_segments')} />
+                </TableHead>
+                <TableHead className="px-2 align-top border-b bg-slate-50">
+                  <ColumnHeader title="Sum Transfer Fee (USD)" />
+                </TableHead>
+                <TableHead className="px-2 align-top border-b">
+                  <ColumnHeader title={t('err:grants_col_disbursed_to_errs')} />
+                </TableHead>
+                <TableHead className="px-2 align-top border-b">
+                  <ColumnHeader
+                    title={t('err:grants_col_balance')}
+                    hint={t('err:grants_col_balance_hint')}
+                  />
+                </TableHead>
               </TableRow>
               {grants.length > 0 && (
                 <TableRow className="bg-muted/50 hover:bg-muted/50">
@@ -789,19 +853,23 @@ export default function GrantCallsManager() {
                   <TableHead className="px-2" />
                   <TableHead className="px-2" />
                   <TableHead className="px-2 text-right font-semibold text-foreground whitespace-nowrap">
-                    {formatCurrency(
-                      grants.reduce((s, g) => s + (Number(g.total_transferred_amount_usd) || 0), 0)
-                    )}
+                    {formatCurrency(totals.transferred)}
                   </TableHead>
                   <TableHead className="px-2 text-right font-semibold text-foreground whitespace-nowrap">
-                    {formatCurrency(
-                      grants.reduce((s, g) => s + (Number(g.sum_activity_amount) || 0), 0)
-                    )}
+                    {formatCurrency(totals.transferSegments)}
                   </TableHead>
                   <TableHead className="px-2 text-right font-semibold text-foreground whitespace-nowrap">
-                    {formatCurrency(
-                      grants.reduce((s, g) => s + (Number(g.sum_transfer_fee_amount) || 0), 0)
-                    )}
+                    {formatCurrency(totals.transferFees)}
+                  </TableHead>
+                  <TableHead className="px-2 text-right font-semibold text-foreground whitespace-nowrap">
+                    {formatCurrency(totals.disbursed)}
+                  </TableHead>
+                  <TableHead
+                    className={`px-2 text-right font-semibold whitespace-nowrap ${
+                      totalBalance >= 0 ? 'text-green-700' : 'text-red-700'
+                    }`}
+                  >
+                    {formatCurrency(totalBalance)}
                   </TableHead>
                   {canEditGrants && isEditMode && <TableHead className="px-2" />}
                 </TableRow>
@@ -810,7 +878,7 @@ export default function GrantCallsManager() {
             <TableBody>
               {grants.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={canEditGrants && isEditMode ? 9 : 8} className="text-center py-6 text-muted-foreground text-xs">
+                  <TableCell colSpan={canEditGrants && isEditMode ? 11 : 10} className="text-center py-6 text-muted-foreground text-xs">
                     No grants found
                   </TableCell>
                 </TableRow>
@@ -829,6 +897,14 @@ export default function GrantCallsManager() {
                     <TableCell className="text-right whitespace-nowrap">{formatCurrency(grant.total_transferred_amount_usd)}</TableCell>
                     <TableCell className="text-right whitespace-nowrap">{formatCurrency(grant.sum_activity_amount)}</TableCell>
                     <TableCell className="text-right whitespace-nowrap">{formatCurrency(grant.sum_transfer_fee_amount)}</TableCell>
+                    <TableCell className="text-right whitespace-nowrap">{formatCurrency(grant.sum_disbursed_to_errs)}</TableCell>
+                    <TableCell
+                      className={`text-right whitespace-nowrap font-medium ${
+                        grantBalance(grant) >= 0 ? 'text-green-700' : 'text-red-700'
+                      }`}
+                    >
+                      {formatCurrency(grantBalance(grant))}
+                    </TableCell>
                     {canEditGrants && isEditMode && (
                       <TableCell>
                         <div className="flex items-center gap-1">

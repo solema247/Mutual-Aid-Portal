@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin'
+import { sumDisbursedToErrsByGrant } from '@/lib/grantPaymentDisbursement'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -28,6 +29,7 @@ async function fetchAllRows<T>(
 }
 
 type GrantRow = {
+  id: string
   grant_id: string | null
   total_transferred_amount_usd: number | null
   sum_transfer_fee_amount: number | null
@@ -39,7 +41,9 @@ export type GrantsChartRow = {
   total_transferred_amount_usd: number
   sum_transfer_fee_amount: number
   sum_activity_amount: number
+  sum_disbursed_to_errs: number
   balance: number
+  payout_balance: number
 }
 
 /**
@@ -49,7 +53,9 @@ export type GrantsChartRow = {
  * - to: ISO date (inclusive) – compared to grant_end_date
  * Returns one row per grant_id with:
  * - total_transferred_amount_usd, sum_transfer_fee_amount, sum_activity_amount
+ * - sum_disbursed_to_errs (F3 payment confirmations + historical USD)
  * - balance = total_transferred_amount_usd - sum_transfer_fee_amount - sum_activity_amount
+ * - payout_balance = total_transferred_amount_usd - sum_disbursed_to_errs
  * For stacked bar: x = grant_id, y = transfer_fee + activity + balance (stacked).
  */
 export async function GET(request: Request) {
@@ -63,7 +69,7 @@ export async function GET(request: Request) {
     const rows = await fetchAllRows<GrantRow>(
       supabase,
       'grants_grid_view',
-      'grant_id, total_transferred_amount_usd, sum_transfer_fee_amount, sum_activity_amount',
+      'id, grant_id, total_transferred_amount_usd, sum_transfer_fee_amount, sum_activity_amount',
       (q) => {
         let query = q
         if (from) {
@@ -76,19 +82,63 @@ export async function GET(request: Request) {
       }
     )
 
+    const gridIdToGrantId = new Map<string, string>()
+    const canonicalGrantIds: string[] = []
+    for (const row of rows ?? []) {
+      const grantId = row.grant_id != null ? String(row.grant_id).trim() : ''
+      if (row.id && grantId) {
+        gridIdToGrantId.set(row.id, grantId)
+        canonicalGrantIds.push(grantId)
+      }
+    }
+
+    const [projects, mous, historicalRows] = await Promise.all([
+      fetchAllRows<{
+        id: string
+        grant_id: string | null
+        grant_grid_id: string | null
+        mou_id: string | null
+        expenses: unknown
+        submitted_at: string | null
+      }>(supabase, 'err_projects', 'id, grant_id, grant_grid_id, mou_id, expenses, submitted_at'),
+      fetchAllRows<{
+        id: string
+        payment_confirmation_file: string | null
+        exchange_rate: number | null
+        transfer_date: string | null
+      }>(supabase, 'mous', 'id, payment_confirmation_file, exchange_rate, transfer_date'),
+      fetchAllRows<{
+        'Project Donor'?: string | null
+        USD?: number | null
+      }>(supabase, 'activities_raw_import', '"Project Donor",USD'),
+    ])
+
+    const disbursedByGrant = sumDisbursedToErrsByGrant(
+      projects,
+      mous,
+      gridIdToGrantId,
+      historicalRows,
+      canonicalGrantIds
+    )
+
     const chartData: GrantsChartRow[] = (rows ?? [])
       .filter((r) => r.grant_id != null && String(r.grant_id).trim() !== '')
       .map((r) => {
+        const grantId = String(r.grant_id).trim()
         const total = r.total_transferred_amount_usd != null ? Number(r.total_transferred_amount_usd) : 0
         const fee = r.sum_transfer_fee_amount != null ? Number(r.sum_transfer_fee_amount) : 0
         const activity = r.sum_activity_amount != null ? Number(r.sum_activity_amount) : 0
-        const balance = total - fee - activity
+        const disbursed = disbursedByGrant[grantId] || 0
+        const leftover = total - fee - activity
+        const payoutBalance = total - disbursed
         return {
-          grant_id: String(r.grant_id).trim(),
+          grant_id: grantId,
           total_transferred_amount_usd: total,
           sum_transfer_fee_amount: fee,
           sum_activity_amount: activity,
-          balance: Math.max(0, balance),
+          sum_disbursed_to_errs: disbursed,
+          balance: Math.max(0, leftover),
+          payout_balance: payoutBalance,
         }
       })
 

@@ -4,11 +4,16 @@ import { requireGrantEditor } from '@/lib/grantManagement/requireGrantEditor'
 import { airtableMeta, syncGrantToAirtable } from '@/lib/grantManagement/pushToAirtable'
 import { SYNC_STATUS } from '@/lib/grantManagement/syncStatus'
 import { parseSyncTargetFromBody, SYNC_TARGET } from '@/lib/grantManagement/syncTarget'
+import { sumDisbursedToErrsByGrant } from '@/lib/grantPaymentDisbursement'
 
 const GRANT_SELECT =
   'id, grant_id, donor_id, donor_name, partner_name, project_name, grant_start_date, grant_end_date, status, total_transferred_amount_usd, sum_activity_amount, sum_transfer_fee_amount'
 
-function mapGrantRow(item: Record<string, unknown>) {
+function mapGrantRow(
+  item: Record<string, unknown>,
+  disbursedByGrant: Record<string, number>
+) {
+  const grantId = item.grant_id != null ? String(item.grant_id).trim() : ''
   return {
     id: item.id as string,
     grant_id: item.grant_id ?? null,
@@ -22,7 +27,27 @@ function mapGrantRow(item: Record<string, unknown>) {
     total_transferred_amount_usd: item.total_transferred_amount_usd ?? null,
     sum_activity_amount: item.sum_activity_amount ?? null,
     sum_transfer_fee_amount: item.sum_transfer_fee_amount ?? null,
+    sum_disbursed_to_errs: grantId ? disbursedByGrant[grantId] ?? 0 : 0,
   }
+}
+
+async function fetchAllRows<T>(
+  supabase: ReturnType<typeof getSupabaseAdmin>,
+  table: string,
+  select: string
+): Promise<T[]> {
+  const rows: T[] = []
+  let from = 0
+  const pageSize = 1000
+  while (true) {
+    const { data, error } = await supabase.from(table).select(select).range(from, from + pageSize - 1)
+    if (error) throw error
+    if (!data?.length) break
+    rows.push(...(data as T[]))
+    if (data.length < pageSize) break
+    from += pageSize
+  }
+  return rows
 }
 
 function computeTransferFee(
@@ -111,7 +136,62 @@ export async function GET(request: NextRequest) {
     const { data, error } = await query
     if (error) throw error
 
-    return NextResponse.json((data || []).map((item) => mapGrantRow(item as Record<string, unknown>)))
+    const gridRows = await fetchAllRows<{ id: string; grant_id: string | null }>(
+      supabase,
+      'grants_grid_view',
+      'id, grant_id'
+    )
+    const gridIdToGrantId = new Map<string, string>()
+    for (const row of gridRows) {
+      if (row.id && row.grant_id?.trim()) {
+        gridIdToGrantId.set(row.id, row.grant_id.trim())
+      }
+    }
+
+    const canonicalGrantIds = gridRows
+      .map((row) => row.grant_id?.trim())
+      .filter((id): id is string => Boolean(id))
+
+    const [projects, mous, historicalRows] = await Promise.all([
+      fetchAllRows<{
+        id: string
+        grant_id: string | null
+        grant_grid_id: string | null
+        mou_id: string | null
+        expenses: unknown
+        submitted_at: string | null
+      }>(
+        supabase,
+        'err_projects',
+        'id, grant_id, grant_grid_id, mou_id, expenses, submitted_at'
+      ),
+      fetchAllRows<{
+        id: string
+        payment_confirmation_file: string | null
+        exchange_rate: number | null
+        transfer_date: string | null
+      }>(supabase, 'mous', 'id, payment_confirmation_file, exchange_rate, transfer_date'),
+      fetchAllRows<{
+        'Project Donor'?: string | null
+        project_donor?: string | null
+        USD?: number | null
+        usd?: number | null
+      }>(supabase, 'activities_raw_import', '"Project Donor",USD'),
+    ])
+
+    const disbursedByGrant = sumDisbursedToErrsByGrant(
+      projects,
+      mous,
+      gridIdToGrantId,
+      historicalRows,
+      canonicalGrantIds
+    )
+
+    return NextResponse.json(
+      (data || []).map((item) =>
+        mapGrantRow(item as Record<string, unknown>, disbursedByGrant)
+      )
+    )
   } catch (error) {
     console.error('Error fetching grants:', error)
     return NextResponse.json({ error: 'Failed to fetch grants' }, { status: 500 })
@@ -141,7 +221,7 @@ export async function POST(request: NextRequest) {
     const push = await syncGrantToAirtable(auth.ctx.supabase, data.id)
 
     return NextResponse.json(
-      { ...mapGrantRow(data as Record<string, unknown>), ...airtableMeta(push) },
+      { ...mapGrantRow(data as Record<string, unknown>, {}), ...airtableMeta(push) },
       { status: 201 }
     )
   } catch (error) {
