@@ -11,6 +11,7 @@ import ERRAppSubmissions from './components/ERRAppSubmissions'
 import DirectUpload from './components/DirectUpload'
 import ManualEntry from './components/ManualEntry'
 import PoolDashboard from './components/PoolDashboard'
+import GrantPoolSummaryCards from '../grant-management/components/GrantPoolSummaryCards'
 import { useF1WorkPlansPageExplainer } from './F1WorkPlansPageExplainer'
 
 export default function F1WorkPlansPage() {
@@ -43,15 +44,7 @@ export default function F1WorkPlansPage() {
         <h2 className="text-2xl font-semibold">{t('f1_plans:title')}</h2>
       </div>
 
-      {/* Pool Dashboard - Summary Cards */}
-      <Card className="border-0">
-        <CardHeader>
-          <CardTitle>{t('f1_plans:pool_overview')}</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <PoolDashboard showByDonor={false} showSummaryCards={true} showByState={false} />
-        </CardContent>
-      </Card>
+      <GrantPoolSummaryCards />
 
       {/* Manage and review F1 work plans */}
       <Card className="border-0">

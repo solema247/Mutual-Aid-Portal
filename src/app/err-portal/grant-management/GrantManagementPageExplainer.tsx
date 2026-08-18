@@ -24,11 +24,12 @@ function GrantManagementExplainerBody() {
       <div>
         <p className="mb-2 font-semibold text-brand-dark-blue">{t('err:grant_management_explainer_section_cards')}</p>
         <ul className="list-disc space-y-2 ps-5 marker:text-brand-purple/80">
-          <ExplainerRow labelKey="err:gm.total_funds_allocated" descKey="err:gm_explainer_card_allocated" />
-          <ExplainerRow labelKey="err:gm.total_funds_transferred" descKey="err:gm_explainer_card_transferred" />
-          <ExplainerRow labelKey="err:gm.committed" descKey="err:gm_explainer_card_committed" />
-          <ExplainerRow labelKey="err:gm.pending" descKey="err:gm_explainer_card_pending" />
-          <ExplainerRow labelKey="err:gm.remaining" descKey="err:gm_explainer_card_remaining" />
+          <ExplainerRow labelKey="err:gm.total_allocated" descKey="err:gm.total_allocated_desc" />
+          <ExplainerRow labelKey="err:gm.assigned" descKey="err:gm.assigned_desc" />
+          <ExplainerRow labelKey="err:gm.available" descKey="err:gm.available_desc" />
+          <ExplainerRow labelKey="err:gm.committed" descKey="err:gm.committed_desc" />
+          <ExplainerRow labelKey="err:gm.pending" descKey="err:gm.pending_desc" />
+          <ExplainerRow labelKey="err:gm.balance" descKey="err:gm.balance_desc" />
         </ul>
       </div>
 

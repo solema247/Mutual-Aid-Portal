@@ -6,11 +6,10 @@ import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { supabase } from '@/lib/supabaseClient'
 import { useAllowedFunctions } from '@/hooks/useAllowedFunctions'
-import PoolDashboard from '../f1-work-plans/components/PoolDashboard'
 import PoolByState from './components/PoolByState'
 import PoolByDonor from './components/PoolByDonor'
+import GrantPoolSummaryCards from '../grant-management/components/GrantPoolSummaryCards'
 import UncommittedF1sTab from './components/UncommittedF1sTab'
 import CommittedF1sTab from './components/CommittedF1sTab'
 import { useF2ApprovalsPageExplainer } from './F2ApprovalsPageExplainer'
@@ -90,8 +89,7 @@ export default function F2ApprovalsPage() {
         </Button>
       </div>
 
-      {/* Summary Cards */}
-      <PoolDashboard showProposals={false} showByDonor={false} showSummaryCards={true} showByState={false} />
+      <GrantPoolSummaryCards />
 
       {/* F2 Approvals - Final Review and Commitment */}
       <Card>

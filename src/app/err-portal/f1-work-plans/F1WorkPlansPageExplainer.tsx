@@ -43,11 +43,12 @@ function F1ExplainerBody({
       <div>
         <p className="mb-2 font-semibold text-brand-dark-blue">{t('f1_plans:explainer_section_summary')}</p>
         <ul className="list-disc space-y-2 ps-5 marker:text-brand-purple/80">
-          <CardRow labelKey="err:gm.total_funds_allocated" descKey="f1_plans:explainer_card_allocated" />
-          <CardRow labelKey="err:gm.total_funds_transferred" descKey="f1_plans:explainer_card_transferred" />
-          <CardRow labelKey="err:gm.committed" descKey="f1_plans:explainer_card_committed" />
-          <CardRow labelKey="err:gm.pending" descKey="f1_plans:explainer_card_pending" />
-          <CardRow labelKey="err:gm.remaining" descKey="f1_plans:explainer_card_remaining" />
+          <CardRow labelKey="err:gm.total_allocated" descKey="err:gm.total_allocated_desc" />
+          <CardRow labelKey="err:gm.assigned" descKey="err:gm.assigned_desc" />
+          <CardRow labelKey="err:gm.available" descKey="err:gm.available_desc" />
+          <CardRow labelKey="err:gm.committed" descKey="err:gm.committed_desc" />
+          <CardRow labelKey="err:gm.pending" descKey="err:gm.pending_desc" />
+          <CardRow labelKey="err:gm.balance" descKey="err:gm.balance_desc" />
         </ul>
         <p className="mt-2 text-sm leading-relaxed text-brand-purple/90">{t('f1_plans:explainer_pool_same_as_grant')}</p>
       </div>
