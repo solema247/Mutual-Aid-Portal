@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { Bar, BarChart, CartesianGrid, LabelList, ReferenceLine, XAxis, YAxis } from 'recharts'
 import { RefreshCw } from 'lucide-react'
 import {
@@ -15,18 +15,8 @@ import {
   ChartTooltip,
   type ChartConfig,
 } from '@/components/ui/chart'
-
-type PoolByStateRow = {
-  state_name: string
-  allocated?: number
-  assigned?: number
-  available?: number
-  committed?: number
-  pending?: number
-  balance?: number
-  remaining?: number
-  decision_count?: number
-}
+import { SmartFilter } from '@/components/smart-filter'
+import { useFilteredPoolByState } from './useFilteredPoolByState'
 
 const POOL_COLORS = {
   assigned: '#7ec8e3',
@@ -45,25 +35,7 @@ const stateUseConfig = {
 } satisfies ChartConfig
 
 export default function PoolOverviewCharts() {
-  const [byState, setByState] = useState<PoolByStateRow[]>([])
-  const [loading, setLoading] = useState(true)
-
-  const loadData = useCallback(async () => {
-    try {
-      setLoading(true)
-      const bs = await fetch('/api/pool/by-state', { cache: 'no-store' }).then((r) => r.json())
-      setByState(Array.isArray(bs) ? bs : [])
-    } catch (e) {
-      console.error('Pool overview charts load error:', e)
-      setByState([])
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
-  useEffect(() => {
-    loadData()
-  }, [loadData])
+  const { filters, setFilters, filterFields, byState, loading, loadData } = useFilteredPoolByState()
 
   const { stateUseData, xMax } = useMemo(() => {
     const rows = [...byState]
@@ -130,21 +102,29 @@ export default function PoolOverviewCharts() {
 
   return (
     <Card>
-      <CardHeader className="flex flex-row items-start justify-between gap-2 space-y-0 pb-2">
-        <CardTitle className="text-base">Allocation use by state</CardTitle>
-        <Button variant="outline" size="sm" onClick={loadData} disabled={loading}>
-          <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-          Refresh
-        </Button>
+      <CardHeader className="space-y-3 pb-2">
+        <div className="flex flex-row items-start justify-between gap-2">
+          <CardTitle className="text-base">Allocation use by state</CardTitle>
+          <Button variant="outline" size="sm" onClick={loadData} disabled={loading}>
+            <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+            Refresh
+          </Button>
+        </div>
+        <SmartFilter
+          fields={filterFields}
+          filters={filters}
+          onFiltersChange={setFilters}
+          urlParamPrefix="au_"
+        />
       </CardHeader>
       <CardContent>
-        {loading ? (
+        {loading && stateUseData.length === 0 ? (
           <div className="min-h-[260px] flex items-center justify-center text-muted-foreground text-sm">
             Loading…
           </div>
         ) : stateUseData.length === 0 ? (
           <div className="min-h-[260px] flex items-center justify-center text-muted-foreground text-sm">
-            No state data
+            {filters.length > 0 ? 'No rows match the selected filters.' : 'No state data'}
           </div>
         ) : (
           <>

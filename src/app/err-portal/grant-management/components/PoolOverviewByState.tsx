@@ -1,55 +1,18 @@
 'use client'
 
-import React, { useEffect, useState } from 'react'
+import React, { useMemo, useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
 import { RefreshCw, ArrowUpDown, ArrowUp, ArrowDown, ChevronDown, ChevronUp, BarChart } from 'lucide-react'
+import { SmartFilter } from '@/components/smart-filter'
+import { useFilteredPoolByState } from './useFilteredPoolByState'
 
 export default function PoolOverviewByState() {
-  const [byState, setByState] = useState<any[]>([])
-  const [loading, setLoading] = useState(true)
-  const [totalAllocations, setTotalAllocations] = useState(0)
+  const { filters, setFilters, filterFields, byState, loading, loadData } = useFilteredPoolByState()
   const [sortColumn, setSortColumn] = useState<string | null>(null)
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc')
   const [isCollapsed, setIsCollapsed] = useState(false)
-
-  useEffect(() => {
-    loadData()
-  }, [])
-
-  const loadData = async () => {
-    try {
-      setLoading(true)
-      const bs = await fetch('/api/pool/by-state', { cache: 'no-store' }).then(r => r.json())
-      setByState(Array.isArray(bs) ? bs : [])
-      
-      // Fetch total allocation count from allocations_by_date
-      try {
-        const countRes = await fetch('/api/distribution-decisions/allocations/count', { cache: 'no-store' })
-        if (countRes.ok) {
-          const countData = await countRes.json()
-          setTotalAllocations(countData.count || 0)
-        } else {
-          // Fallback: count states with allocations > 0
-          const statesWithAllocations = Array.isArray(bs) ? bs.filter((s: any) => (s.allocated || 0) > 0).length : 0
-          setTotalAllocations(statesWithAllocations)
-        }
-      } catch {
-        // Fallback: count states with allocations > 0
-        const statesWithAllocations = Array.isArray(bs) ? bs.filter((s: any) => (s.allocated || 0) > 0).length : 0
-        setTotalAllocations(statesWithAllocations)
-      }
-    } catch (e) {
-      console.error('Pool by-state load error:', e)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const handleRefresh = async () => {
-    await loadData()
-  }
 
   const handleSort = (column: string) => {
     if (sortColumn === column) {
@@ -71,48 +34,43 @@ export default function PoolOverviewByState() {
     )
   }
 
-  const getSortedByState = () => {
+  const sortedByState = useMemo(() => {
     if (!sortColumn) {
-      // Default: alphabetical by state name
       return [...byState].sort((a, b) => a.state_name.localeCompare(b.state_name))
     }
 
-    const sorted = [...byState].sort((a, b) => {
-      const aVal = a[sortColumn] || 0
-      const bVal = b[sortColumn] || 0
+    return [...byState].sort((a, b) => {
+      const aVal = (a as Record<string, unknown>)[sortColumn] ?? 0
+      const bVal = (b as Record<string, unknown>)[sortColumn] ?? 0
 
       if (sortColumn === 'state_name') {
-        return sortDirection === 'asc' 
-          ? aVal.localeCompare(bVal)
-          : bVal.localeCompare(aVal)
+        return sortDirection === 'asc'
+          ? String(aVal).localeCompare(String(bVal))
+          : String(bVal).localeCompare(String(aVal))
       }
 
-      // Numeric columns: highest to lowest by default
-      if (sortDirection === 'asc') {
-        return aVal - bVal
-      } else {
-        return bVal - aVal
-      }
+      const aNum = Number(aVal) || 0
+      const bNum = Number(bVal) || 0
+      return sortDirection === 'asc' ? aNum - bNum : bNum - aNum
     })
+  }, [byState, sortColumn, sortDirection])
 
-    return sorted
-  }
-
-  const fmt = (n: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n || 0)
+  const fmt = (n: number | null | undefined) =>
+    new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n || 0)
 
   return (
     <Card>
-      <CardHeader>
+      <CardHeader className="space-y-3">
         <div className="flex items-center justify-between">
-          <CardTitle 
+          <CardTitle
             className="flex items-center gap-2 cursor-pointer"
             onClick={() => setIsCollapsed(!isCollapsed)}
           >
             <BarChart className="h-5 w-5" />
             Pool Overview By State
-            {isCollapsed && totalAllocations > 0 && (
+            {byState.length > 0 && (
               <span className="text-sm font-normal text-muted-foreground ml-2">
-                ({totalAllocations} {totalAllocations === 1 ? 'allocation' : 'allocations'})
+                ({byState.length} {byState.length === 1 ? 'state' : 'states'})
               </span>
             )}
             {isCollapsed ? (
@@ -125,7 +83,7 @@ export default function PoolOverviewByState() {
             <Button
               variant="outline"
               size="sm"
-              onClick={handleRefresh}
+              onClick={loadData}
               disabled={loading}
             >
               <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
@@ -133,9 +91,18 @@ export default function PoolOverviewByState() {
             </Button>
           )}
         </div>
+        <SmartFilter
+          fields={filterFields}
+          filters={filters}
+          onFiltersChange={setFilters}
+          urlParamPrefix="ps_"
+        />
       </CardHeader>
       {!isCollapsed && (
         <CardContent className="p-0 overflow-x-auto">
+          {loading && byState.length === 0 ? (
+            <div className="py-6 text-center text-sm text-muted-foreground">Loading…</div>
+          ) : (
           <Table className="min-w-[920px] text-xs [&_th]:py-1.5 [&_th]:px-2 [&_td]:py-1 [&_td]:px-2">
             <TableHeader>
               <TableRow>
@@ -148,15 +115,15 @@ export default function PoolOverviewByState() {
                     {getSortIcon('state_name')}
                   </button>
                 </TableHead>
-                <TableHead 
-                  colSpan={5} 
+                <TableHead
+                  colSpan={5}
                   className="text-center px-2 border-b font-semibold text-xs bg-slate-50"
                 >
                   <div>Allocation Pool Overview</div>
                   <div className="text-[10px] font-normal text-muted-foreground">Distribution allocations and current usage</div>
                 </TableHead>
-                <TableHead 
-                  colSpan={3} 
+                <TableHead
+                  colSpan={3}
                   className="text-center px-2 border-b font-semibold text-xs bg-sky-100"
                 >
                   <div>Pipeline</div>
@@ -240,8 +207,7 @@ export default function PoolOverviewByState() {
             </TableHeader>
             <TableBody>
               {(() => {
-                const sortedByState = getSortedByState()
-                const sum = (key: string) => sortedByState.reduce((s, r) => s + (Number(r[key]) || 0), 0)
+                const sum = (key: string) => sortedByState.reduce((s, r) => s + (Number((r as Record<string, unknown>)[key]) || 0), 0)
                 const totalAllocated = sum('allocated')
                 const totalAvailable = sum('available')
                 const totalBalance = sum('balance')
@@ -269,34 +235,42 @@ export default function PoolOverviewByState() {
                         </TableCell>
                       </TableRow>
                     )}
-                    {sortedByState.map(r => {
-                      const percentOfTotal = totalAllocated > 0 ? ((r.allocated || 0) / totalAllocated * 100) : 0
-                      return (
-                        <TableRow key={r.state_name}>
-                          <TableCell className="px-2">{r.state_name}</TableCell>
-                          <TableCell className="text-right whitespace-nowrap">{r.decision_count || 0}</TableCell>
-                          <TableCell className="text-right whitespace-nowrap">{fmt(r.allocated)}</TableCell>
-                          <TableCell className="text-right">{percentOfTotal.toFixed(1)}%</TableCell>
-                          <TableCell className="text-right whitespace-nowrap">{fmt(r.assigned || 0)}</TableCell>
-                          <TableCell className={`text-right whitespace-nowrap ${(r.available || 0) >= 0 ? 'text-green-700' : 'text-red-700'}`}>
-                            {fmt(r.available || 0)}
-                          </TableCell>
-                          <TableCell className="text-right whitespace-nowrap">{fmt(r.committed)}</TableCell>
-                          <TableCell className="text-right whitespace-nowrap">{fmt(r.pending)}</TableCell>
-                          <TableCell className={`text-right whitespace-nowrap ${(r.balance ?? r.remaining) >= 0 ? 'text-green-700' : 'text-red-700'}`}>
-                            {fmt(r.balance ?? r.remaining)}
-                          </TableCell>
-                        </TableRow>
-                      )
-                    })}
+                    {sortedByState.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={9} className="text-center text-muted-foreground py-4">
+                          {filters.length > 0 ? 'No rows match the selected filters.' : 'No state data'}
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      sortedByState.map((r) => {
+                        const percentOfTotal = totalAllocated > 0 ? ((r.allocated || 0) / totalAllocated * 100) : 0
+                        return (
+                          <TableRow key={r.state_name}>
+                            <TableCell className="px-2">{r.state_name}</TableCell>
+                            <TableCell className="text-right whitespace-nowrap">{r.decision_count || 0}</TableCell>
+                            <TableCell className="text-right whitespace-nowrap">{fmt(r.allocated)}</TableCell>
+                            <TableCell className="text-right">{percentOfTotal.toFixed(1)}%</TableCell>
+                            <TableCell className="text-right whitespace-nowrap">{fmt(r.assigned || 0)}</TableCell>
+                            <TableCell className={`text-right whitespace-nowrap ${(r.available || 0) >= 0 ? 'text-green-700' : 'text-red-700'}`}>
+                              {fmt(r.available || 0)}
+                            </TableCell>
+                            <TableCell className="text-right whitespace-nowrap">{fmt(r.committed)}</TableCell>
+                            <TableCell className="text-right whitespace-nowrap">{fmt(r.pending)}</TableCell>
+                            <TableCell className={`text-right whitespace-nowrap ${(r.balance ?? r.remaining ?? 0) >= 0 ? 'text-green-700' : 'text-red-700'}`}>
+                              {fmt(r.balance ?? r.remaining ?? 0)}
+                            </TableCell>
+                          </TableRow>
+                        )
+                      })
+                    )}
                   </>
                 )
               })()}
             </TableBody>
           </Table>
+          )}
         </CardContent>
       )}
     </Card>
   )
 }
-

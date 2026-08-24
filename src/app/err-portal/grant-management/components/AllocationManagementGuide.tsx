@@ -7,6 +7,7 @@ import { ChevronDown, ChevronUp } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { ChartContainer, ChartTooltip, type ChartConfig } from '@/components/ui/chart'
+import { poolByStateRows } from '@/lib/poolByState'
 
 const NOTE_STYLES = [
   'bg-sky-50 border-sky-100',
@@ -636,7 +637,7 @@ export default function AllocationManagementGuide() {
           rRes.ok ? rRes.json() : [],
         ])
         if (cancelled) return
-        setStates(Array.isArray(s) ? s : [])
+        setStates(poolByStateRows(s))
         setGrants(Array.isArray(g) ? g : [])
         setFsps(Array.isArray(f) ? f : [])
         setRestrictions(Array.isArray(r) ? r : [])

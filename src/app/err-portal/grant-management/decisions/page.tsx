@@ -1,5 +1,6 @@
 'use client'
 
+import { Suspense } from 'react'
 import DistributionDecisionsManager from '../components/DistributionDecisionsManager'
 import DecisionsPageGuide from '../components/DecisionsPageGuide'
 import GrantPoolSummaryCards from '../components/GrantPoolSummaryCards'
@@ -12,9 +13,13 @@ export default function DecisionsPage() {
       <h2 className="text-2xl font-semibold">Decisions</h2>
       <GrantPoolSummaryCards />
       <DecisionsPageGuide />
-      <DistributionDecisionsManager />
-      <PoolOverviewByState />
-      <PoolOverviewCharts />
+      <Suspense fallback={<div className="py-6 text-center text-muted-foreground">Loading…</div>}>
+        <div className="space-y-6">
+          <DistributionDecisionsManager />
+          <PoolOverviewByState />
+          <PoolOverviewCharts />
+        </div>
+      </Suspense>
     </div>
   )
 }

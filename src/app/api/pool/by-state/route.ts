@@ -7,12 +7,20 @@ import {
   poolRowFromParts,
   projectExpenseTotal,
 } from '@/lib/poolProjectClassification'
+import { normalizeRestrictionLabel } from '@/lib/poolRestrictionLabel'
+import {
+  inDateRange,
+  matchesDecisionId,
+  matchesMulti,
+  parsePoolSliceFilters,
+  uniqueSortedStrings,
+  type PoolSliceFilters,
+} from '@/lib/poolByState'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 export const fetchCache = 'force-no-store'
 
-// Helper function to fetch all rows using pagination
 const fetchAllRows = async (supabase: any, table: string, select: string) => {
   let allData: any[] = []
   let from = 0
@@ -30,7 +38,7 @@ const fetchAllRows = async (supabase: any, table: string, select: string) => {
     if (page && page.length > 0) {
       allData = [...allData, ...page]
       from += pageSize
-      hasMore = page.length === pageSize // If we got a full page, there might be more
+      hasMore = page.length === pageSize
     } else {
       hasMore = false
     }
@@ -45,36 +53,83 @@ function isAllowedState(state: string, allowedStateNames: string[] | null): bool
   return allowed.has(state)
 }
 
+function matchesPoolSlice(
+  filters: PoolSliceFilters,
+  row: {
+    state: string
+    partner?: unknown
+    restriction?: unknown
+    grant?: unknown
+    date?: unknown
+    decisionId?: unknown
+  },
+  opts?: { skipDecisionId?: boolean }
+): boolean {
+  if (!matchesMulti(row.state, filters.states, normalizeStateName)) return false
+  if (!matchesMulti(row.partner, filters.partners)) return false
+  if (!matchesMulti(row.restriction, filters.restrictions, normalizeRestrictionLabel)) return false
+  if (!matchesMulti(row.grant, filters.grants)) return false
+  if (!inDateRange(row.date, filters.dateFrom, filters.dateTo)) return false
+  if (!opts?.skipDecisionId && !matchesDecisionId(row.decisionId, filters.decisionId)) return false
+  return true
+}
+
 // GET /api/pool/by-state - Aggregated view using allocations_by_date
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const supabase = getSupabaseRouteClient()
+    const filters = parsePoolSliceFilters(new URL(request.url).searchParams)
 
-    // Get user's state access rights
     const { getUserStateAccess } = await import('@/lib/userStateAccess')
     const { allowedStateNames } = await getUserStateAccess()
 
-    // 1. Get allocations from allocations_by_date (canonical)
     const allocationsSupabase = getSupabaseAdmin()
     const allocationsData = await fetchAllRows(
       allocationsSupabase,
       'allocations_by_date',
-      'State,"Allocation Amount","Decision_ID"'
+      'State,"Allocation Amount","Decision_ID",Partner,Restriction,"Grant_ID","Decision_Date"'
     )
+
+    const optionPartners: string[] = []
+    const optionRestrictions: string[] = []
+    const optionGrants: string[] = []
+    const optionStates: string[] = []
 
     const allocatedByState = new Map<string, number>()
     const decisionsByState = new Map<string, Set<string>>()
     const allDecisionIds = new Set<string>()
     for (const row of allocationsData || []) {
-      const rawState = row?.State ?? row?.state
-      const state = normalizeStateName(rawState)
+      const state = normalizeStateName(row?.State ?? row?.state)
       if (!isAllowedState(state, allowedStateNames)) continue
+      const partner = row?.Partner ?? row?.partner ?? null
+      const restriction = normalizeRestrictionLabel(row?.Restriction ?? row?.restriction)
+      const grant = row?.Grant_ID ?? row?.grant_id ?? null
+      const decisionDate = row?.Decision_Date ?? row?.decision_date ?? null
+      const decisionId = String(row?.Decision_ID ?? row?.decision_id ?? '').trim()
+
+      optionStates.push(state)
+      if (partner) optionPartners.push(String(partner))
+      if (restriction) optionRestrictions.push(restriction)
+      if (grant) optionGrants.push(String(grant))
+
+      if (
+        !matchesPoolSlice(filters, {
+          state,
+          partner,
+          restriction,
+          grant,
+          date: decisionDate,
+          decisionId,
+        })
+      ) {
+        continue
+      }
+
       const rawAmount = row?.['Allocation Amount'] ?? row?.allocation_amount
       const amount = rawAmount != null ? Number(rawAmount) : 0
       if (!Number.isNaN(amount) && amount > 0) {
         allocatedByState.set(state, (allocatedByState.get(state) || 0) + amount)
       }
-      const decisionId = String(row?.Decision_ID ?? row?.decision_id ?? '').trim()
       if (decisionId) {
         allDecisionIds.add(decisionId)
         const set = decisionsByState.get(state) || new Set<string>()
@@ -83,47 +138,98 @@ export async function GET() {
       }
     }
 
-    // 2. Get historical commitments from activities_raw_import
-    const historicalData = await fetchAllRows(supabase, 'activities_raw_import', 'State,USD')
+    const skipUsageByDecision = Boolean(filters.decisionId)
+
+    const historicalData = await fetchAllRows(
+      supabase,
+      'activities_raw_import',
+      'State,USD,Partner,"Project Donor","Grant Segment","Date Transfer","Start Date (Activity)"'
+    )
 
     const historicalByState = new Map<string, number>()
-    for (const row of historicalData || []) {
-      const rawState = row['State'] || row['state'] || row.State
-      const state = normalizeStateName(rawState)
-      if (!isAllowedState(state, allowedStateNames)) continue
-      const rawUSD = row['USD'] || row['usd'] || row.USD
-      let usd = 0
-      if (rawUSD !== null && rawUSD !== undefined) {
-        usd = Number(rawUSD)
-        if (!isNaN(usd) && usd > 0) {
+    if (!skipUsageByDecision) {
+      for (const row of historicalData || []) {
+        const state = normalizeStateName(row['State'] || row['state'] || row.State)
+        if (!isAllowedState(state, allowedStateNames)) continue
+        const partner = row['Partner'] ?? row.Partner ?? null
+        const grant = row['Project Donor'] ?? row['Project_Donor'] ?? null
+        const restriction = normalizeRestrictionLabel(row['Grant Segment'] ?? row['Grant_Segment'])
+        const date = row['Date Transfer'] || row['Start Date (Activity)'] || null
+
+        optionStates.push(state)
+        if (partner) optionPartners.push(String(partner))
+        if (grant) optionGrants.push(String(grant))
+        if (restriction) optionRestrictions.push(restriction)
+
+        if (
+          !matchesPoolSlice(
+            filters,
+            { state, partner, restriction, grant, date },
+            { skipDecisionId: true }
+          )
+        ) {
+          continue
+        }
+
+        const rawUSD = row['USD'] || row['usd'] || row.USD
+        const usd = rawUSD != null ? Number(rawUSD) : 0
+        if (!Number.isNaN(usd) && usd > 0) {
           historicalByState.set(state, (historicalByState.get(state) || 0) + usd)
         }
       }
     }
 
-    // 3. Classify portal projects: assigned (has grant), committed (F2-approved, no grant), pending
     const projects = await fetchAllRows(
       supabase,
       'err_projects',
-      'expenses, funding_status, status, state, grant_id, grant_grid_id'
+      'expenses, funding_status, status, state, grant_id, grant_grid_id, grant_segment, date, date_transfer'
     )
 
     const assignedFromProjectsByState = new Map<string, number>()
     const committedByState = new Map<string, number>()
     const pendingByState = new Map<string, number>()
-    for (const p of projects || []) {
-      const bucket = classifyPoolProject(p)
-      if (!bucket) continue
-      const state = normalizeStateName(p.state)
-      if (!isAllowedState(state, allowedStateNames)) continue
-      const amount = projectExpenseTotal(p.expenses)
-      const target =
-        bucket === 'assigned'
-          ? assignedFromProjectsByState
-          : bucket === 'committed'
-            ? committedByState
-            : pendingByState
-      target.set(state, (target.get(state) || 0) + amount)
+    if (!skipUsageByDecision) {
+      for (const p of projects || []) {
+        const bucket = classifyPoolProject(p)
+        if (!bucket) continue
+        const state = normalizeStateName(p.state)
+        if (!isAllowedState(state, allowedStateNames)) continue
+        const grant = p.grant_id || p.grant_grid_id || null
+        const restriction = normalizeRestrictionLabel(p.grant_segment)
+        const date = p.date_transfer || p.date || null
+
+        optionStates.push(state)
+        if (grant && !/^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(String(grant))) {
+          optionGrants.push(String(grant))
+        }
+        if (p.grant_segment) optionRestrictions.push(restriction)
+
+        if (
+          !matchesPoolSlice(
+            filters,
+            {
+              state,
+              restriction,
+              grant,
+              date,
+            },
+            { skipDecisionId: true }
+          )
+        ) {
+          continue
+        }
+        // Portal projects have no ops-partner field; skip them when a partner slice is active.
+        if (filters.partners.length > 0) continue
+
+        const amount = projectExpenseTotal(p.expenses)
+        const target =
+          bucket === 'assigned'
+            ? assignedFromProjectsByState
+            : bucket === 'committed'
+              ? committedByState
+              : pendingByState
+        target.set(state, (target.get(state) || 0) + amount)
+      }
     }
 
     const states = Array.from(
@@ -155,9 +261,20 @@ export async function GET() {
       })
       .sort((a, b) => a.state_name.localeCompare(b.state_name))
 
-    return NextResponse.json(rows, {
-      headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' },
-    })
+    return NextResponse.json(
+      {
+        rows,
+        filter_options: {
+          partnerOptions: uniqueSortedStrings(optionPartners),
+          restrictionOptions: uniqueSortedStrings(optionRestrictions),
+          grantOptions: uniqueSortedStrings(optionGrants),
+          stateOptions: uniqueSortedStrings(optionStates),
+        },
+      },
+      {
+        headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' },
+      }
+    )
   } catch (error) {
     console.error('Pool by-state error:', error)
     return NextResponse.json(

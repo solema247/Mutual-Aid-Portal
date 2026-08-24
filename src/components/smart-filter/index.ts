@@ -25,6 +25,7 @@ export type { ApplyFiltersOptions } from './useFilteredData'
 export {
   getReportTrackerFilterFields,
   getProjectManagementFilterFields,
+  getDistributionDecisionsFilterFields,
   getF3MousFilterFields,
   getF4F5ReportingFilterFields,
   getF4ReportingFilterFields,

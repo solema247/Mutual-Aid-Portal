@@ -205,6 +205,71 @@ export function getProjectManagementFilterFields(options?: {
   ]
 }
 
+/** Distribution decisions table: Decision ID, Date Range, Partner, Restriction, Grant, State */
+export function getDistributionDecisionsFilterFields(options?: {
+  partnerOptions?: string[]
+  restrictionOptions?: string[]
+  grantOptions?: string[]
+  stateOptions?: string[]
+}): FilterFieldConfig[] {
+  const partnerOptions = (options?.partnerOptions ?? []).map((s) => ({ value: s, label: s }))
+  const restrictionOptions = (options?.restrictionOptions ?? []).map((s) => ({ value: s, label: s }))
+  const grantOptions = [
+    { value: '__unassigned__', label: 'Unassigned' },
+    ...(options?.grantOptions ?? []).map((s) => ({ value: s, label: s })),
+  ]
+  const stateOptions = (options?.stateOptions ?? []).map((s) => ({ value: s, label: s }))
+
+  return [
+    {
+      id: 'decision_id',
+      label: 'Decision ID',
+      type: 'text',
+      placeholder: 'Search by decision ID',
+      accessorKey: 'decision_id',
+    },
+    {
+      id: 'date_range',
+      label: 'Date Range',
+      type: 'date_range',
+      placeholder: 'From – To',
+      accessorKey: 'decision_date',
+    },
+    {
+      id: 'partner',
+      label: 'Partner',
+      type: 'multi_select',
+      options: partnerOptions,
+      placeholder: 'All partners',
+      accessorKey: 'partner',
+    },
+    {
+      id: 'restriction',
+      label: 'Restriction',
+      type: 'multi_select',
+      options: restrictionOptions,
+      placeholder: 'All restrictions',
+      accessorKey: 'restriction',
+    },
+    {
+      id: 'grant',
+      label: 'Grant',
+      type: 'multi_select',
+      options: grantOptions,
+      placeholder: 'All grants',
+      accessorKey: 'grant_name',
+    },
+    {
+      id: 'state',
+      label: 'State',
+      type: 'multi_select',
+      options: stateOptions,
+      placeholder: 'All states',
+      accessorKey: 'allocated_states',
+    },
+  ]
+}
+
 /** F4 / F5 reporting tables: Grant ID (text prefix match), room, State, Donor */
 export function getF4F5ReportingFilterFields(options: {
   roomOptions: string[]

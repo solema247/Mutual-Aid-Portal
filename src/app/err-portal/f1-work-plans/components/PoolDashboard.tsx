@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { RefreshCw, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react'
 import { CollapsibleRow } from '@/components/ui/collapsible'
 import GrantPoolSummaryCards from '@/app/err-portal/grant-management/components/GrantPoolSummaryCards'
+import { poolByStateRows } from '@/lib/poolByState'
 
 export default function PoolDashboard({ showProposals = true, showByDonor = true, showSummaryCards = true, showByState = true }: { showProposals?: boolean; showByDonor?: boolean; showSummaryCards?: boolean; showByState?: boolean }) {
   const { t } = useTranslation(['f1_plans', 'err'])
@@ -28,7 +29,7 @@ export default function PoolDashboard({ showProposals = true, showByDonor = true
           fetch('/api/pool/by-donor', { cache: 'no-store' }).then(r => r.json())
         ])
         setSummary(s)
-        setByState(Array.isArray(bs) ? bs : [])
+        setByState(poolByStateRows(bs))
         setByDonor(Array.isArray(bd) ? bd : [])
       } catch (e) {
         console.error('Pool dashboard load error:', e)
@@ -61,7 +62,7 @@ export default function PoolDashboard({ showProposals = true, showByDonor = true
           fetch('/api/pool/by-donor', { cache: 'no-store' }).then(r => r.json())
         ])
         setSummary(s)
-        setByState(Array.isArray(bs) ? bs : [])
+        setByState(poolByStateRows(bs))
         setByDonor(Array.isArray(bd) ? bd : [])
         // Clear proposal overlays
         setProposal({ amount: 0 })
@@ -87,7 +88,7 @@ export default function PoolDashboard({ showProposals = true, showByDonor = true
         fetch('/api/pool/by-donor').then(r => r.json())
       ])
       setSummary(s)
-      setByState(Array.isArray(bs) ? bs : [])
+      setByState(poolByStateRows(bs))
       setByDonor(Array.isArray(bd) ? bd : [])
       // Clear proposal overlays
       setProposal({ amount: 0 })

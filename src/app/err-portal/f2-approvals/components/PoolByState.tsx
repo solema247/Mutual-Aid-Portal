@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
 import { RefreshCw, ArrowUpDown, ArrowUp, ArrowDown, ChevronDown, ChevronUp, BarChart } from 'lucide-react'
+import { poolByStateRows } from '@/lib/poolByState'
 
 export default function PoolByState() {
   const [byState, setByState] = useState<any[]>([])
@@ -21,7 +22,7 @@ export default function PoolByState() {
     try {
       setLoading(true)
       const bs = await fetch('/api/pool/by-state', { cache: 'no-store' }).then(r => r.json())
-      setByState(Array.isArray(bs) ? bs : [])
+      setByState(poolByStateRows(bs))
     } catch (e) {
       console.error('Pool by-state load error:', e)
     } finally {

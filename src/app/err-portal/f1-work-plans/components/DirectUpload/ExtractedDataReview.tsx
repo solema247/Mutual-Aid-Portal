@@ -12,6 +12,7 @@ import { cn } from '@/lib/utils'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { CollapsibleRow } from '@/components/ui/collapsible'
 import { supabase } from '@/lib/supabaseClient'
+import { poolByStateRows } from '@/lib/poolByState'
 
 interface AllocationInfo {
   amount: number;
@@ -209,8 +210,13 @@ export default function ExtractedDataReview({
     const loadStates = async () => {
       try {
         const res = await fetch('/api/pool/by-state')
-        const rows = await res.json()
-        setPooledStates(Array.isArray(rows) ? rows.map((r: any) => ({ state_name: r.state_name, remaining: r.remaining })) : [])
+        const rows = poolByStateRows<{ state_name?: string; remaining?: number }>(await res.json())
+        setPooledStates(
+          rows.map((r) => ({
+            state_name: String(r.state_name ?? ''),
+            remaining: Number(r.remaining) || 0,
+          }))
+        )
       } catch (e) {
         console.error('load states error', e)
       }
@@ -409,9 +415,9 @@ export default function ExtractedDataReview({
         // State remaining
         if (stateName) {
           const stRes = await fetch('/api/pool/by-state')
-          const stRows = await stRes.json()
-          const stRow = (Array.isArray(stRows) ? stRows : []).find((r: any) => r.state_name === stateName)
-          setStateRemaining(stRow ? (stRow.remaining || 0) : 0)
+          const stRows = poolByStateRows<{ state_name?: string; remaining?: number }>(await stRes.json())
+          const stRow = stRows.find((r) => r.state_name === stateName)
+          setStateRemaining(stRow ? Number(stRow.remaining) || 0 : 0)
           // state short
           const { data: stShort } = await supabase
             .from('states')

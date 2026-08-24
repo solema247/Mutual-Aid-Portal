@@ -12,15 +12,18 @@ import { STATUS_DISPLAY } from './status-config'
 
 const CHIP_COLORS: Record<string, string> = {
   donor: 'bg-blue-500/10 border-blue-500/30 [&_.chip-dot]:bg-blue-500',
+  partner: 'bg-blue-500/10 border-blue-500/30 [&_.chip-dot]:bg-blue-500',
   f4_status: 'bg-amber-500/10 border-amber-500/30 [&_.chip-dot]:bg-amber-500',
   f5_status: 'bg-emerald-500/10 border-emerald-500/30 [&_.chip-dot]:bg-emerald-500',
   state: 'bg-primary/10 border-primary/30 [&_.chip-dot]:bg-primary',
   date_range: 'bg-violet-500/10 border-violet-500/30 [&_.chip-dot]:bg-violet-500',
   historical_new: 'bg-slate-500/10 border-slate-500/30 [&_.chip-dot]:bg-slate-500',
   grant_segment: 'bg-cyan-500/10 border-cyan-500/30 [&_.chip-dot]:bg-cyan-500',
+  restriction: 'bg-cyan-500/10 border-cyan-500/30 [&_.chip-dot]:bg-cyan-500',
   grant: 'bg-indigo-500/10 border-indigo-500/30 [&_.chip-dot]:bg-indigo-500',
   grant_serial: 'bg-teal-500/10 border-teal-500/30 [&_.chip-dot]:bg-teal-500',
   grant_id: 'bg-teal-500/10 border-teal-500/30 [&_.chip-dot]:bg-teal-500',
+  decision_id: 'bg-teal-500/10 border-teal-500/30 [&_.chip-dot]:bg-teal-500',
   report_status: 'bg-orange-500/10 border-orange-500/30 [&_.chip-dot]:bg-orange-500',
   base_room: 'bg-primary/10 border-primary/30 [&_.chip-dot]:bg-primary',
   expense_category: 'bg-rose-500/10 border-rose-500/30 [&_.chip-dot]:bg-rose-500',
@@ -99,7 +102,7 @@ export function FilterChip({
           placeholder={field.placeholder}
           className={cn(
             'h-7 rounded-sm border-0 bg-transparent px-2 shadow-none',
-            field.id === 'grant_serial' || field.id === 'grant_id'
+            field.id === 'grant_serial' || field.id === 'grant_id' || field.id === 'decision_id'
               ? 'min-w-[280px] w-[min(100%,34rem)] max-w-[min(100vw-2rem,42rem)] text-[11px] leading-tight placeholder:text-muted-foreground'
               : 'w-24 text-xs'
           )}

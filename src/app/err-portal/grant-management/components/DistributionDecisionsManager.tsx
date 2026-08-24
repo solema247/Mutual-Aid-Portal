@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { Plus, ChevronDown, ChevronUp, RefreshCw, Upload, FileSpreadsheet, FileText, Pencil, Save, X, Trash2, ExternalLink, Eye } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -42,6 +42,12 @@ import {
   resolveDecisionDocumentUrl,
   type DecisionDocument,
 } from '@/lib/grantManagement/decisionDocument'
+import {
+  SmartFilter,
+  applyFilters,
+  getDistributionDecisionsFilterFields,
+  type ActiveFilter,
+} from '@/components/smart-filter'
 
 type Decision = {
   id: string
@@ -57,6 +63,17 @@ type Decision = {
   file_name?: string | null
   file_link?: string | null
   documents?: DecisionDocument[]
+  allocated_states?: string[]
+}
+
+function uniqueSortedStrings(values: Array<string | null | undefined>): string[] {
+  return Array.from(
+    new Set(values.map((v) => (v ?? '').trim()).filter(Boolean))
+  ).sort((a, b) => a.localeCompare(b))
+}
+
+function decisionFetchKey(decision: Pick<Decision, 'id' | 'decision_id' | 'decision_id_proposed'>): string {
+  return decision.decision_id_proposed || decision.decision_id || decision.id
 }
 
 /** Format YYYY-MM-DD as a calendar date (no UTC midnight → prior-day shift in NA). */
@@ -186,6 +203,7 @@ export default function DistributionDecisionsManager() {
   const [deleteConfirmText, setDeleteConfirmText] = useState('')
   const [decisionToDelete, setDecisionToDelete] = useState<string | null>(null)
   const [currentPage, setCurrentPage] = useState(1)
+  const [filters, setFilters] = useState<ActiveFilter[]>([])
   const itemsPerPage = 10
   const [useCsvUpload, setUseCsvUpload] = useState(false)
   const [csvFile, setCsvFile] = useState<File | null>(null)
@@ -622,7 +640,12 @@ export default function DistributionDecisionsManager() {
       const res = await fetch(`/api/distribution-decisions/${decisionId}/allocations`)
       if (!res.ok) throw new Error('Failed to load allocations')
       const data = await res.json()
-      setAllocationsByDecision((prev) => ({ ...prev, [decisionId]: data || [] }))
+      const list = (Array.isArray(data) ? data : []) as Allocation[]
+      setAllocationsByDecision((prev) => ({ ...prev, [decisionId]: list }))
+      const states = uniqueSortedStrings(list.map((a) => a.state))
+      setDecisions((prev) =>
+        prev.map((d) => (decisionFetchKey(d) === decisionId ? { ...d, allocated_states: states } : d))
+      )
     } catch (error) {
       alert('Failed to load allocations')
     } finally {
@@ -945,13 +968,82 @@ export default function DistributionDecisionsManager() {
     })
   }, [decisions, dateSortOrder])
 
-  const totalPages = Math.ceil(sortedDecisions.length / itemsPerPage)
+  const getAllocatedStates = useCallback(
+    (decision: Decision): string[] => {
+      const key = decisionFetchKey(decision)
+      if (Object.prototype.hasOwnProperty.call(allocationsByDecision, key)) {
+        return uniqueSortedStrings(allocationsByDecision[key].map((a) => a.state))
+      }
+      return decision.allocated_states ?? []
+    },
+    [allocationsByDecision]
+  )
+
+  const filterFields = useMemo(
+    () =>
+      getDistributionDecisionsFilterFields({
+        partnerOptions: uniqueSortedStrings(decisions.map((d) => d.partner)),
+        restrictionOptions: uniqueSortedStrings(decisions.map((d) => d.restriction)),
+        grantOptions: uniqueSortedStrings(decisions.map((d) => d.grant_name)),
+        stateOptions: uniqueSortedStrings(decisions.flatMap((d) => getAllocatedStates(d))),
+      }),
+    [decisions, getAllocatedStates]
+  )
+
+  const getFieldValue = useCallback((row: Decision, fieldId: string): string | null | undefined => {
+    if (fieldId === 'date_range') return row.decision_date?.slice(0, 10) ?? null
+    if (fieldId === 'partner') return row.partner ?? null
+    if (fieldId === 'restriction') return row.restriction ?? null
+    if (fieldId === 'grant') {
+      const name = (row.grant_name ?? '').trim()
+      return name || '__unassigned__'
+    }
+    return null
+  }, [])
+
+  const filteredDecisions = useMemo(() => {
+    const filtersForApply = filters.filter((f) => f.fieldId !== 'decision_id' && f.fieldId !== 'state')
+    let result = applyFilters({
+      data: sortedDecisions,
+      filters: filtersForApply,
+      fields: filterFields,
+      getFieldValue,
+    })
+
+    const decisionIdFilter = filters.find((f) => f.fieldId === 'decision_id')
+    if (decisionIdFilter?.value && String(decisionIdFilter.value).trim()) {
+      const term = String(decisionIdFilter.value).trim().toLowerCase()
+      result = result.filter((d) => {
+        const ids = [d.decision_id, d.decision_id_proposed, d.id]
+        return ids.some((id) => (id ? String(id).toLowerCase().includes(term) : false))
+      })
+    }
+
+    const stateFilter = filters.find((f) => f.fieldId === 'state')
+    if (stateFilter?.value) {
+      const selected = Array.isArray(stateFilter.value)
+        ? stateFilter.value.map((v) => String(v).trim().toLowerCase()).filter(Boolean)
+        : String(stateFilter.value).trim()
+          ? [String(stateFilter.value).trim().toLowerCase()]
+          : []
+      if (selected.length > 0) {
+        result = result.filter((d) => {
+          const states = getAllocatedStates(d).map((s) => s.toLowerCase())
+          return selected.some((s) => states.includes(s))
+        })
+      }
+    }
+
+    return result
+  }, [sortedDecisions, filters, filterFields, getFieldValue, getAllocatedStates])
+
+  const totalPages = Math.ceil(filteredDecisions.length / itemsPerPage)
   const startIndex = (currentPage - 1) * itemsPerPage
   const endIndex = startIndex + itemsPerPage
-  const paginatedDecisions = sortedDecisions.slice(startIndex, endIndex)
+  const paginatedDecisions = filteredDecisions.slice(startIndex, endIndex)
 
   const decisionTotals = useMemo(() => {
-    return sortedDecisions.reduce(
+    return filteredDecisions.reduce(
       (acc, d) => {
         const decisionAmount = Number(d.decision_amount) || 0
         const allocated = Number(d.sum_allocation_amount) || 0
@@ -962,16 +1054,16 @@ export default function DistributionDecisionsManager() {
       },
       { decisionAmount: 0, allocated: 0, remaining: 0 }
     )
-  }, [sortedDecisions])
+  }, [filteredDecisions])
 
-  // Reset to page 1 when decisions change or sort order changes
+  // Reset to page 1 when decisions, filters, or sort order change
   useEffect(() => {
     setCurrentPage(1)
-  }, [decisions.length, dateSortOrder])
+  }, [decisions.length, dateSortOrder, filters])
 
   return (
     <Card>
-      <CardHeader>
+      <CardHeader className="space-y-3">
         <div className="flex items-center justify-between">
           <CardTitle 
             className="flex items-center gap-2 cursor-pointer"
@@ -981,7 +1073,7 @@ export default function DistributionDecisionsManager() {
             Distribution Decisions
             {decisions.length > 0 && (
               <span className="text-sm font-normal text-muted-foreground ml-2">
-                ({decisions.length} {decisions.length === 1 ? 'decision' : 'decisions'})
+                ({filteredDecisions.length} {filteredDecisions.length === 1 ? 'decision' : 'decisions'})
               </span>
             )}
             {isCollapsed ? (
@@ -1570,6 +1662,12 @@ export default function DistributionDecisionsManager() {
           </div>
           )}
         </div>
+        <SmartFilter
+          fields={filterFields}
+          filters={filters}
+          onFiltersChange={setFilters}
+          urlParamPrefix="f_"
+        />
       </CardHeader>
       {!isCollapsed && (
         <CardContent>
@@ -1605,12 +1703,12 @@ export default function DistributionDecisionsManager() {
                   <TableHead className="min-w-[140px]">Decision Documents</TableHead>
                   <TableHead className="w-[60px] text-right">Actions</TableHead>
                 </TableRow>
-                {sortedDecisions.length > 0 && (
+                {filteredDecisions.length > 0 && (
                   <TableRow className="bg-muted/50 hover:bg-muted/50">
                     <TableHead />
                     <TableHead className="font-semibold text-foreground whitespace-nowrap">
-                      Total ({sortedDecisions.length}{' '}
-                      {sortedDecisions.length === 1 ? 'row' : 'rows'})
+                      Total ({filteredDecisions.length}{' '}
+                      {filteredDecisions.length === 1 ? 'row' : 'rows'})
                     </TableHead>
                     <TableHead />
                     <TableHead className="font-semibold text-foreground whitespace-nowrap">
@@ -1631,10 +1729,12 @@ export default function DistributionDecisionsManager() {
                 )}
               </TableHeader>
               <TableBody>
-                {sortedDecisions.length === 0 ? (
+                {filteredDecisions.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={11} className="text-center text-muted-foreground py-4">
-                      No distribution decisions found
+                      {decisions.length === 0
+                        ? 'No distribution decisions found'
+                        : 'No rows match the selected filters.'}
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -2203,11 +2303,11 @@ export default function DistributionDecisionsManager() {
             </Table>
           </div>
         )}
-        {sortedDecisions.length > itemsPerPage && (
+        {filteredDecisions.length > itemsPerPage && (
           <div className="flex items-center justify-between mt-4">
             <div className="text-sm text-muted-foreground">
-              Showing {startIndex + 1}-{Math.min(endIndex, sortedDecisions.length)} of{' '}
-              {sortedDecisions.length} decisions
+              Showing {startIndex + 1}-{Math.min(endIndex, filteredDecisions.length)} of{' '}
+              {filteredDecisions.length} decisions
             </div>
             <div className="flex items-center gap-2">
               <Button

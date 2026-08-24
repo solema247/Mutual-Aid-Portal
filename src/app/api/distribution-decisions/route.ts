@@ -14,6 +14,7 @@ import {
   buildAdDecisionId,
   extractAdHyphenSerial,
 } from '@/lib/grantManagement/adDecisionIds'
+import { decisionGroupKey } from '@/lib/grantManagement/resolveDecisionKey'
 
 function parseIncomingDocuments(body: any): DecisionDocument[] {
   const docs: DecisionDocument[] = []
@@ -88,6 +89,7 @@ function mapDecisionRow(row: {
     file_name: primary.file_name ?? row.file_name ?? null,
     file_link: primary.file_link ?? row.file_link ?? null,
     documents,
+    allocated_states: [] as string[],
   }
 }
 
@@ -100,14 +102,39 @@ const DECISION_LIST_SELECT =
 export async function GET() {
   try {
     const supabase = getSupabaseAdmin()
-    const { data, error } = await supabase
-      .from('distribution_decision_master_sheet_1')
-      .select(DECISION_LIST_SELECT)
-      .order('decision_date', { ascending: false })
+    const [decisionsRes, allocRes] = await Promise.all([
+      supabase
+        .from('distribution_decision_master_sheet_1')
+        .select(DECISION_LIST_SELECT)
+        .order('decision_date', { ascending: false }),
+      supabase.from('allocations_by_date').select('Decision_ID, State'),
+    ])
 
-    if (error) throw error
+    if (decisionsRes.error) throw decisionsRes.error
 
-    return NextResponse.json((data || []).map(mapDecisionRow))
+    const statesByDecision = new Map<string, Set<string>>()
+    if (allocRes.error) {
+      console.error('Error fetching allocation states:', allocRes.error)
+    } else {
+      for (const row of (allocRes.data || []) as Array<{ Decision_ID?: string | null; State?: string | null }>) {
+        const key = String(row.Decision_ID ?? '').trim()
+        const state = String(row.State ?? '').trim()
+        if (!key || !state) continue
+        if (!statesByDecision.has(key)) statesByDecision.set(key, new Set())
+        statesByDecision.get(key)!.add(state)
+      }
+    }
+
+    return NextResponse.json(
+      (decisionsRes.data || []).map((row) => {
+        const mapped = mapDecisionRow(row)
+        const key = decisionGroupKey(row)
+        mapped.allocated_states = Array.from(statesByDecision.get(key) ?? []).sort((a, b) =>
+          a.localeCompare(b)
+        )
+        return mapped
+      })
+    )
   } catch (error) {
     console.error('Error fetching distribution decisions:', error)
     return NextResponse.json({ error: 'Failed to fetch distribution decisions' }, { status: 500 })
