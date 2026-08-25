@@ -424,6 +424,109 @@ export function getF4ReportingFilterFields(options: {
   ]
 }
 
+/** F2 uncommitted F1s: Search, State, Date Range */
+export function getF2UncommittedFilterFields(options: {
+  stateOptions: string[]
+  labels: {
+    search: string
+    searchPlaceholder: string
+    state: string
+    dateRange: string
+    all: string
+  }
+}): FilterFieldConfig[] {
+  const { stateOptions, labels } = options
+  return [
+    {
+      id: 'search',
+      label: labels.search,
+      type: 'text',
+      placeholder: labels.searchPlaceholder,
+      accessorKey: 'err_id',
+    },
+    {
+      id: 'state',
+      label: labels.state,
+      type: 'multi_select',
+      options: stateOptions.map((s) => ({ value: s, label: s })),
+      placeholder: labels.all,
+      accessorKey: 'state',
+    },
+    {
+      id: 'date_range',
+      label: labels.dateRange,
+      type: 'date_range',
+      placeholder: 'From – To',
+      accessorKey: 'date',
+    },
+  ]
+}
+
+/** F2 committed F1s: Search, State, Date Range, Grant, Donor */
+export function getF2CommittedFilterFields(options: {
+  stateOptions: string[]
+  donorOptions: string[]
+  grants: Array<{ grant_id: string; donor_name: string; project_name?: string | null }>
+  labels: {
+    search: string
+    searchPlaceholder: string
+    state: string
+    dateRange: string
+    grant: string
+    donor: string
+    unassignedGrant: string
+    all: string
+  }
+}): FilterFieldConfig[] {
+  const { stateOptions, donorOptions, grants, labels } = options
+  return [
+    {
+      id: 'search',
+      label: labels.search,
+      type: 'text',
+      placeholder: labels.searchPlaceholder,
+      accessorKey: 'err_id',
+    },
+    {
+      id: 'state',
+      label: labels.state,
+      type: 'multi_select',
+      options: stateOptions.map((s) => ({ value: s, label: s })),
+      placeholder: labels.all,
+      accessorKey: 'state',
+    },
+    {
+      id: 'date_range',
+      label: labels.dateRange,
+      type: 'date_range',
+      placeholder: 'From – To',
+      accessorKey: 'date',
+    },
+    {
+      id: 'grant',
+      label: labels.grant,
+      type: 'multi_select',
+      options: [
+        { value: '__unassigned__', label: labels.unassignedGrant },
+        ...grants.map((g) => ({
+          value: `${g.grant_id}|${g.donor_name}`,
+          label: `${g.grant_id} – ${g.project_name || g.grant_id} (${g.donor_name})`,
+        })),
+      ],
+      placeholder: labels.all,
+      accessorKey: 'grant',
+    },
+    {
+      id: 'donor',
+      label: labels.donor,
+      type: 'multi_select',
+      options: donorOptions.map((s) => ({ value: s, label: s })),
+      placeholder: labels.all,
+      accessorKey: 'donor_name',
+    },
+  ]
+}
+
 /** F5 reporting: F4 fields plus End Activity Status */
 export function getF5ReportingFilterFields(options: {
   baseRoomOptions: string[]

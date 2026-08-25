@@ -1,22 +1,23 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useSearchParams } from 'next/navigation'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
 import { supabase } from '@/lib/supabaseClient'
-import { Search, Filter, Edit2, Undo2, ArrowUp, ArrowDown } from 'lucide-react'
-import type { CommittedF1, FilterOptions } from '../types'
+import { Edit2, Undo2, ArrowUp, ArrowDown } from 'lucide-react'
+import type { CommittedF1 } from '../types'
 import { Checkbox } from '@/components/ui/checkbox'
+import CommunityApprovalCell from './CommunityApprovalCell'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import ProjectEditor from './ProjectEditor'
 import { useAllowedFunctions } from '@/hooks/useAllowedFunctions'
+import { SmartFilter, getF2CommittedFilterFields, type ActiveFilter } from '@/components/smart-filter'
+import { applyF2SmartFilters } from '../applyF2Filters'
 
 export default function CommittedF1sTab() {
   const { t, i18n } = useTranslation(['f2', 'common'])
@@ -28,20 +29,8 @@ export default function CommittedF1sTab() {
   const canViewMou = can('f2_view_mou')
   const searchParams = useSearchParams()
   const [f1s, setF1s] = useState<CommittedF1[]>([])
-  const [filterOptions, setFilterOptions] = useState<FilterOptions>({
-    grantCalls: [],
-    donors: [],
-    cycles: [],
-    states: [],
-    grants: []
-  })
-  const [filters, setFilters] = useState({
-    search: '',
-    grant: 'all',
-    state: 'all',
-    monthYearFrom: '',
-    monthYearTo: ''
-  })
+  const [grants, setGrants] = useState<Array<{ grant_id: string; donor_name: string; project_name: string }>>([])
+  const [filters, setFilters] = useState<ActiveFilter[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [selected, setSelected] = useState<string[]>([])
   const [partners, setPartners] = useState<Array<{ id: string; name: string }>>([])
@@ -59,7 +48,7 @@ export default function CommittedF1sTab() {
 
   const toggleAll = (checked: boolean) => {
     if (!checked) return setSelected([])
-    setSelected(f1s.filter(f => !f.mou_id).map(f => f.id))
+    setSelected(filteredF1s.filter(f => !f.mou_id).map(f => f.id))
   }
   const toggleOne = (id: string, checked: boolean) => {
     if (checked) setSelected(prev => [...prev, id])
@@ -142,15 +131,14 @@ export default function CommittedF1sTab() {
 
   useEffect(() => {
     fetchCommittedF1s()
-    fetchFilterOptions()
-    
-    // Check for editProjectId in URL query params
+    fetchGrants()
+
     const editProjectId = searchParams.get('editProjectId')
     if (editProjectId) {
       setEditorProjectId(editProjectId)
       setEditorOpen(true)
     }
-    
+
     ;(async () => {
       const { data } = await supabase
         .from('partners')
@@ -161,31 +149,12 @@ export default function CommittedF1sTab() {
     })()
   }, [])
 
-  useEffect(() => {
-    applyFilters()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters])
-
   const fetchCommittedF1s = async () => {
     try {
-      const params = new URLSearchParams()
-      if (filters.state && filters.state !== 'all') params.append('state', filters.state)
-      if (filters.search) params.append('search', filters.search)
-      if (filters.monthYearFrom) params.append('month_year_from', filters.monthYearFrom)
-      if (filters.monthYearTo) params.append('month_year_to', filters.monthYearTo)
-      if (filters.grant && filters.grant !== 'all') {
-        const pipeIdx = filters.grant.indexOf('|')
-        const grantId = pipeIdx >= 0 ? filters.grant.slice(0, pipeIdx) : filters.grant
-        const donorName = pipeIdx >= 0 ? filters.grant.slice(pipeIdx + 1) : ''
-        if (grantId) params.append('grant_id', grantId)
-        if (donorName) params.append('donor_name', donorName)
-      }
-
-      const response = await fetch(`/api/f2/committed?${params.toString()}`)
+      const response = await fetch('/api/f2/committed')
       if (!response.ok) throw new Error('Failed to fetch committed F1s')
       const data = await response.json()
       setF1s(data)
-      setCurrentPage(1) // Reset to first page when data refreshes
     } catch (error) {
       console.error('Error fetching committed F1s:', error)
     } finally {
@@ -193,72 +162,68 @@ export default function CommittedF1sTab() {
     }
   }
 
-  const fetchFilterOptions = async () => {
+  const fetchGrants = async () => {
     try {
-      // Fetch grants from grants_grid_view
       const { data: grantsData } = await supabase
         .from('grants_grid_view')
         .select('grant_id, donor_name, project_name')
         .order('grant_id', { ascending: true })
 
-      // Get unique grants (group by grant_id and donor_name)
-      const uniqueGrants = new Map()
-      ;(grantsData || []).forEach((grant: any) => {
+      const uniqueGrants = new Map<string, { grant_id: string; donor_name: string; project_name: string }>()
+      ;(grantsData || []).forEach((grant: { grant_id: string; donor_name: string; project_name: string | null }) => {
         const key = `${grant.grant_id}|${grant.donor_name}`
         if (!uniqueGrants.has(key)) {
           uniqueGrants.set(key, {
             grant_id: grant.grant_id,
             donor_name: grant.donor_name,
-            project_name: grant.project_name || grant.grant_id
+            project_name: grant.project_name || grant.grant_id,
           })
         }
       })
-
-      // Fetch states (deduplicate by state_name)
-      const { data: statesData } = await supabase
-        .from('states')
-        .select('state_name')
-        .not('state_name', 'is', null)
-
-      setFilterOptions({
-        grantCalls: [],
-        donors: [],
-        cycles: [],
-        states: Array.from(new Set(((statesData || []) as any[]).map((s: any) => s.state_name)))
-          .filter(Boolean)
-          .map((name: string) => ({ name })),
-        grants: Array.from(uniqueGrants.values())
-      })
+      setGrants(Array.from(uniqueGrants.values()))
     } catch (error) {
-      console.error('Error fetching filter options:', error)
+      console.error('Error fetching grants:', error)
     }
   }
 
-  const applyFilters = () => {
-    // Since the API now handles most filtering, we just need to refresh the data
-    setCurrentPage(1) // Reset to first page when filters change
-    fetchCommittedF1s()
-  }
+  const filterFields = useMemo(() => {
+    const stateOptions = Array.from(new Set(f1s.map((f) => f.state).filter(Boolean))).sort()
+    const donorOptions = Array.from(new Set(grants.map((g) => g.donor_name).filter(Boolean))).sort()
+    return getF2CommittedFilterFields({
+      stateOptions,
+      donorOptions,
+      grants,
+      labels: {
+        search: t('f2:search'),
+        searchPlaceholder: t('f2:search_placeholder'),
+        state: t('f2:state_label'),
+        dateRange: t('f2:date_range'),
+        grant: t('f2:grant_name'),
+        donor: t('f2:donor'),
+        unassignedGrant: t('f2:unassigned_grant'),
+        all: t('f2:all'),
+      },
+    })
+  }, [f1s, grants, t])
+
+  const filteredF1s = useMemo(
+    () => applyF2SmartFilters({ data: f1s, filters, fields: filterFields }),
+    [f1s, filters, filterFields]
+  )
+
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [filters])
 
   const calculateTotalAmount = (expenses: Array<{ activity: string; total_cost: number }>) => {
     return expenses.reduce((sum, exp) => sum + (exp.total_cost || 0), 0)
-  }
-
-  const clearFilters = () => {
-    setFilters({
-      search: '',
-      grant: 'all',
-      state: 'all',
-      monthYearFrom: '',
-      monthYearTo: ''
-    })
   }
 
   if (isLoading) {
     return <div className="text-center py-8">{t('common:loading')}</div>
   }
 
-  const sortedF1s = [...f1s].sort((a, b) => {
+  const sortedF1s = [...filteredF1s].sort((a, b) => {
     const dA = new Date(a.date).getTime()
     const dB = new Date(b.date).getTime()
     return dateSort === 'desc' ? dB - dA : dA - dB
@@ -270,118 +235,40 @@ export default function CommittedF1sTab() {
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-between items-center">
-        <div>
-          <h3 className="text-lg font-semibold">{t('f2:committed_header', { count: f1s.length })}</h3>
-          <p className="text-sm text-muted-foreground">{t('f2:committed_desc')}</p>
-        </div>
-        <div className="flex items-center gap-2">
-          {canCreateMou && (
-            <Button
-              onClick={openPartnerModal}
-              disabled={selected.length === 0 || selected.some(id => {
-                const f1 = f1s.find(f => f.id === id)
-                return !!f1?.mou_id
-              })}
-            >
-              Create F3 MOU
-            </Button>
-          )}
-        </div>
-      </div>
-
-      {/* Filters */}
-      <Card className="text-[11px]">
-        <CardHeader className="py-1.5 px-3">
-          <CardTitle className="text-[11px] flex items-center gap-1 font-medium">
-            <Filter className="w-3 h-3" />
-            {t('f2:filters')}
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="px-3 pb-2 pt-0">
-          <div className="flex flex-wrap items-end gap-2">
-            <div className="space-y-0.5 w-full sm:w-[8rem] min-w-[8rem]">
-              <Label className="text-[11px] font-normal text-muted-foreground">{t('f2:search')}</Label>
-              <div className="relative">
-                <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 text-muted-foreground w-3 h-3" />
-                <Input
-                  placeholder={t('f2:search_placeholder') as string}
-                  value={filters.search}
-                  onChange={(e) => setFilters(prev => ({ ...prev, search: e.target.value }))}
-                  className="pl-7 h-7 text-[11px] placeholder:text-[10px] placeholder:text-muted-foreground w-full"
-                />
-              </div>
-            </div>
-            <div className="space-y-0.5 w-full sm:w-[10.5rem] min-w-[10.5rem]">
-              <Label className="text-[11px] font-normal text-muted-foreground">{t('f2:date') || 'Date'} (from)</Label>
-              <Input
-                type="month"
-                value={filters.monthYearFrom}
-                onChange={(e) => setFilters(prev => ({ ...prev, monthYearFrom: e.target.value }))}
-                className="w-full h-7 text-[11px] pr-8"
-              />
-            </div>
-            <div className="space-y-0.5 w-full sm:w-[10.5rem] min-w-[10.5rem]">
-              <Label className="text-[11px] font-normal text-muted-foreground">{t('f2:date') || 'Date'} (to)</Label>
-              <Input
-                type="month"
-                value={filters.monthYearTo}
-                onChange={(e) => setFilters(prev => ({ ...prev, monthYearTo: e.target.value }))}
-                className="w-full h-7 text-[11px] pr-8"
-              />
-            </div>
-            <div className="space-y-0.5 w-full sm:w-[8rem] min-w-[8rem]">
-              <Label className="text-[11px] font-normal text-muted-foreground">{t('f2:state_label')}</Label>
-              <Select
-                value={filters.state}
-                onValueChange={(value) => setFilters(prev => ({ ...prev, state: value }))}
-              >
-                <SelectTrigger className="w-full !h-7 min-h-7 py-0 text-[11px] [&>svg]:size-3">
-                  <SelectValue placeholder={t('f2:all_states') as string} />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all" className="text-[11px]">{t('f2:all_states')}</SelectItem>
-                  {filterOptions.states.map(state => (
-                    <SelectItem key={state.name} value={state.name} className="text-[11px]">{state.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-0.5 w-full sm:w-[8rem] min-w-[8rem]">
-              <Label className="text-[11px] font-normal text-muted-foreground">Grant</Label>
-              <Select
-                value={filters.grant}
-                onValueChange={(value) => setFilters(prev => ({ ...prev, grant: value }))}
-              >
-                <SelectTrigger className="w-full !h-7 min-h-7 py-0 text-[11px] [&>svg]:size-3">
-                  <SelectValue placeholder="All Grants" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all" className="text-[11px]">All Grants</SelectItem>
-                  {filterOptions.grants.map((grant: any) => (
-                    <SelectItem key={`${grant.grant_id}|${grant.donor_name}`} value={`${grant.grant_id}|${grant.donor_name}`} className="text-[11px]">
-                      {grant.grant_id} - {grant.donor_name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <Button variant="outline" size="sm" onClick={clearFilters} className="h-7 text-[11px] shrink-0 px-2">
-              {t('f2:clear_filters')}
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Results Table */}
       <Card>
+        <CardHeader className="pb-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <SmartFilter
+              className="min-w-0 flex-1"
+              fields={filterFields}
+              filters={filters}
+              onFiltersChange={setFilters}
+              urlParamPrefix="f2c_"
+              title={t('f2:committed_tab')}
+              count={filteredF1s.length}
+            />
+            {canCreateMou && (
+              <Button
+                className="shrink-0"
+                onClick={openPartnerModal}
+                disabled={selected.length === 0 || selected.some(id => {
+                  const f1 = f1s.find(f => f.id === id)
+                  return !!f1?.mou_id
+                })}
+              >
+                Create F3 MOU
+              </Button>
+            )}
+          </div>
+          <p className="text-sm text-muted-foreground">{t('f2:committed_desc')}</p>
+        </CardHeader>
         <CardContent className="p-0 overflow-x-auto">
           <Table dir={i18n.language === 'ar' ? 'rtl' : 'ltr'} className="text-xs min-w-[900px]">
             <TableHeader>
               <TableRow className="[&>th]:py-2 [&>th]:px-2 [&>th]:text-xs">
                 <TableHead className="w-10 px-2">
                   {canCreateMou && (
-                    <Checkbox checked={selected.length > 0 && selected.length === f1s.filter(f => !f.mou_id).length} onCheckedChange={toggleAll} />
+                    <Checkbox checked={selected.length > 0 && selected.length === filteredF1s.filter(f => !f.mou_id).length} onCheckedChange={toggleAll} />
                   )}
                 </TableHead>
                 <TableHead className="px-2">{t('f2:err_id')}</TableHead>
@@ -445,48 +332,13 @@ export default function CommittedF1sTab() {
                   </TableCell>
                   {/* Community Approval */}
                   <TableCell className="whitespace-nowrap">
-                    {f1.approval_file_key ? (
-                      <Badge variant="default" className="text-[10px] px-1.5 py-0">{t('f2:approval_uploaded')}</Badge>
-                    ) : canUploadApproval ? (
-                      <div className="flex items-center gap-2">
-                        <input
-                          id={`approval-file-${f1.id}`}
-                          type="file"
-                          className="hidden"
-                          accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                          onChange={async (e) => {
-                            const file = e.target.files?.[0]
-                            if (!file) return
-                            try {
-                              // Build path for approval file
-                              const key = `f2-approvals/${f1.id}/${Date.now()}-${file.name.replace(/\s+/g,'_')}`
-                              const { error: upErr } = await supabase.storage.from('images').upload(key, file, { upsert: true })
-                              if (upErr) { alert(t('f2:upload_failed')); return }
-                              const resp = await fetch('/api/f2/uncommitted', {
-                                method: 'PATCH',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ id: f1.id, approval_file_key: key })
-                              })
-                              if (!resp.ok) { alert(t('f2:upload_failed')); return }
-                              await fetchCommittedF1s()
-                            } catch (err) {
-                              console.error('Upload error', err)
-                              alert(t('f2:upload_failed'))
-                            }
-                          }}
-                        />
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-7 text-xs px-2"
-                          onClick={() => document.getElementById(`approval-file-${f1.id}`)?.click()}
-                        >
-                          {t('f2:upload')}
-                        </Button>
-                      </div>
-                    ) : (
-                      <Badge variant="secondary" className="text-muted-foreground text-[10px] px-1.5 py-0">{t('f2:approval_required')}</Badge>
-                    )}
+                    <CommunityApprovalCell
+                      projectId={f1.id}
+                      approvalFileKey={f1.approval_file_key}
+                      canUpload={canUploadApproval}
+                      onUploaded={fetchCommittedF1s}
+                      buttonVariant="ghost"
+                    />
                   </TableCell>
                   <TableCell>
                     {f1.mou_id ? (
@@ -527,17 +379,17 @@ export default function CommittedF1sTab() {
               ))}
             </TableBody>
           </Table>
-          {f1s.length === 0 && (
+          {filteredF1s.length === 0 && (
             <div className="text-center py-8 text-muted-foreground">{t('f2:no_committed')}</div>
           )}
         </CardContent>
       </Card>
 
       {/* Pagination */}
-      {f1s.length > itemsPerPage && (
+      {sortedF1s.length > itemsPerPage && (
         <div className="flex items-center justify-between">
           <div className="text-sm text-muted-foreground">
-            Showing {startIndex + 1} to {Math.min(endIndex, f1s.length)} of {f1s.length} projects
+            Showing {startIndex + 1} to {Math.min(endIndex, sortedF1s.length)} of {sortedF1s.length} projects
           </div>
           <div className="flex gap-2">
             <Button

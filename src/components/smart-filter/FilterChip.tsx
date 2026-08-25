@@ -23,6 +23,7 @@ const CHIP_COLORS: Record<string, string> = {
   grant: 'bg-indigo-500/10 border-indigo-500/30 [&_.chip-dot]:bg-indigo-500',
   grant_serial: 'bg-teal-500/10 border-teal-500/30 [&_.chip-dot]:bg-teal-500',
   grant_id: 'bg-teal-500/10 border-teal-500/30 [&_.chip-dot]:bg-teal-500',
+  search: 'bg-teal-500/10 border-teal-500/30 [&_.chip-dot]:bg-teal-500',
   decision_id: 'bg-teal-500/10 border-teal-500/30 [&_.chip-dot]:bg-teal-500',
   report_status: 'bg-orange-500/10 border-orange-500/30 [&_.chip-dot]:bg-orange-500',
   base_room: 'bg-primary/10 border-primary/30 [&_.chip-dot]:bg-primary',
@@ -102,7 +103,7 @@ export function FilterChip({
           placeholder={field.placeholder}
           className={cn(
             'h-7 rounded-sm border-0 bg-transparent px-2 shadow-none',
-            field.id === 'grant_serial' || field.id === 'grant_id' || field.id === 'decision_id'
+            field.id === 'grant_serial' || field.id === 'grant_id' || field.id === 'decision_id' || field.id === 'search'
               ? 'min-w-[280px] w-[min(100%,34rem)] max-w-[min(100vw-2rem,42rem)] text-[11px] leading-tight placeholder:text-muted-foreground'
               : 'w-24 text-xs'
           )}

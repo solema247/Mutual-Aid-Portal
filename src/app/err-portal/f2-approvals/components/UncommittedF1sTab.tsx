@@ -1,23 +1,22 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useSearchParams } from 'next/navigation'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Badge } from '@/components/ui/badge'
-import { supabase } from '@/lib/supabaseClient'
-import { cn } from '@/lib/utils'
-import { Edit2, Save, X, Trash2, Filter, ArrowUp, ArrowDown } from 'lucide-react'
+import { Edit2, Save, X, Trash2, ArrowUp, ArrowDown } from 'lucide-react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import ProjectEditor from './ProjectEditor'
-import type { UncommittedF1, GrantCallOption } from '../types'
+import type { UncommittedF1 } from '../types'
+import CommunityApprovalCell from './CommunityApprovalCell'
 import { useAllowedFunctions } from '@/hooks/useAllowedFunctions'
+import { SmartFilter, getF2UncommittedFilterFields, type ActiveFilter } from '@/components/smart-filter'
+import { applyF2SmartFilters } from '../applyF2Filters'
 
 export default function UncommittedF1sTab() {
   const { t, i18n } = useTranslation(['f2', 'common'])
@@ -27,7 +26,6 @@ export default function UncommittedF1sTab() {
   const canEditProject = can('f2_edit_project')
   const searchParams = useSearchParams()
   const [f1s, setF1s] = useState<UncommittedF1[]>([])
-  const [grantCalls, setGrantCalls] = useState<GrantCallOption[]>([])
   const [selectedF1s, setSelectedF1s] = useState<string[]>([])
   const [editingExpenses, setEditingExpenses] = useState<Record<string, boolean>>({})
   const [tempExpenses, setTempExpenses] = useState<Record<string, Array<{ activity: string; total_cost: number }>>>({})
@@ -40,19 +38,14 @@ export default function UncommittedF1sTab() {
   const [isDeleting, setIsDeleting] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
   const itemsPerPage = 10
-  const [states, setStates] = useState<Array<{ name: string }>>([])
-  const [filters, setFilters] = useState({
-    monthYearFrom: '',
-    monthYearTo: '',
-    state: 'all'
-  })
+  const [filters, setFilters] = useState<ActiveFilter[]>([])
   const [dateSort, setDateSort] = useState<'asc' | 'desc'>('desc')
 
   useEffect(() => {
-    fetchGrantCalls()
-    fetchStates()
+    fetchUncommittedF1s()
+  }, [])
 
-    // Check for editProjectId in URL query params
+  useEffect(() => {
     const editProjectId = searchParams.get('editProjectId')
     if (editProjectId) {
       setEditorProjectId(editProjectId)
@@ -60,37 +53,12 @@ export default function UncommittedF1sTab() {
     }
   }, [searchParams])
 
-  useEffect(() => {
-    fetchUncommittedF1s()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters])
-
-  const fetchStates = async () => {
-    try {
-      const { data } = await supabase
-        .from('states')
-        .select('state_name')
-        .not('state_name', 'is', null)
-      const list = Array.from(new Set(((data || []) as { state_name: string }[]).map(s => s.state_name)))
-        .filter(Boolean)
-        .map(name => ({ name }))
-      setStates(list)
-    } catch (e) {
-      console.error('Error fetching states:', e)
-    }
-  }
-
   const fetchUncommittedF1s = async () => {
     try {
-      const params = new URLSearchParams()
-      if (filters.state && filters.state !== 'all') params.append('state', filters.state)
-      if (filters.monthYearFrom) params.append('month_year_from', filters.monthYearFrom)
-      if (filters.monthYearTo) params.append('month_year_to', filters.monthYearTo)
-      const response = await fetch(`/api/f2/uncommitted?${params.toString()}`)
+      const response = await fetch('/api/f2/uncommitted')
       if (!response.ok) throw new Error('Failed to fetch uncommitted F1s')
       const data = await response.json()
       setF1s(data)
-      setCurrentPage(1) // Reset to first page when data refreshes
     } catch (error) {
       console.error('Error fetching uncommitted F1s:', error)
     } finally {
@@ -98,20 +66,28 @@ export default function UncommittedF1sTab() {
     }
   }
 
-  const clearFilters = () => {
-    setFilters({ monthYearFrom: '', monthYearTo: '', state: 'all' })
-  }
+  const filterFields = useMemo(() => {
+    const stateOptions = Array.from(new Set(f1s.map((f) => f.state).filter(Boolean))).sort()
+    return getF2UncommittedFilterFields({
+      stateOptions,
+      labels: {
+        search: t('f2:search'),
+        searchPlaceholder: t('f2:search_placeholder'),
+        state: t('f2:state_label'),
+        dateRange: t('f2:date_range'),
+        all: t('f2:all'),
+      },
+    })
+  }, [f1s, t])
 
-  const fetchGrantCalls = async () => {
-    try {
-      const response = await fetch('/api/f2/grant-calls')
-      if (!response.ok) throw new Error('Failed to fetch grant calls')
-      const data = await response.json()
-      setGrantCalls(data)
-    } catch (error) {
-      console.error('Error fetching grant calls:', error)
-    }
-  }
+  const filteredF1s = useMemo(
+    () => applyF2SmartFilters({ data: f1s, filters, fields: filterFields }),
+    [f1s, filters, filterFields]
+  )
+
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [filters])
 
 
   const calculateTotalAmount = (expenses: Array<{ activity: string; total_cost: number }>) => {
@@ -120,8 +96,7 @@ export default function UncommittedF1sTab() {
 
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
-      // Compliance-blocked F1s cannot be committed, so they are not selectable
-      setSelectedF1s(f1s.filter(f1 => !f1.compliance_blocked).map(f1 => f1.id))
+      setSelectedF1s(filteredF1s.filter(f1 => !f1.compliance_blocked).map(f1 => f1.id))
     } else {
       setSelectedF1s([])
     }
@@ -268,7 +243,7 @@ export default function UncommittedF1sTab() {
     return <div className="text-center py-8">{t('common:loading')}</div>
   }
 
-  const sortedF1s = [...f1s].sort((a, b) => {
+  const sortedF1s = [...filteredF1s].sort((a, b) => {
     const dA = new Date(a.date).getTime()
     const dB = new Date(b.date).getTime()
     return dateSort === 'desc' ? dB - dA : dA - dB
@@ -280,76 +255,30 @@ export default function UncommittedF1sTab() {
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-between items-center">
-        <div>
-          <h3 className="text-lg font-semibold">{t('f2:uncommitted_header', { count: f1s.length })}</h3>
-          <p className="text-sm text-muted-foreground">{t('f2:uncommitted_desc')}</p>
-        </div>
-        <div className="flex gap-2">
-          {canCommit && (
-            <Button
-              onClick={handleCommitSelected}
-              disabled={selectedF1s.length === 0 || isCommitting}
-            >
-              {isCommitting ? t('f2:committing') : t('f2:commit_selected', { count: selectedF1s.length })}
-            </Button>
-          )}
-        </div>
-      </div>
-
-      {/* Filters */}
-      <Card className="text-[11px]">
-        <CardHeader className="py-1.5 px-3">
-          <CardTitle className="text-[11px] flex items-center gap-1 font-medium">
-            <Filter className="w-3 h-3" />
-            {t('f2:filters')}
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="px-3 pb-2 pt-0">
-          <div className="flex flex-wrap items-end gap-2">
-            <div className="space-y-0.5 w-full sm:w-[10.5rem] min-w-[10.5rem]">
-              <Label className="text-[11px] font-normal text-muted-foreground">{t('f2:date') || 'Date'} (from)</Label>
-              <Input
-                type="month"
-                value={filters.monthYearFrom}
-                onChange={(e) => setFilters(prev => ({ ...prev, monthYearFrom: e.target.value }))}
-                className="w-full h-7 text-[11px] pr-8"
-              />
-            </div>
-            <div className="space-y-0.5 w-full sm:w-[10.5rem] min-w-[10.5rem]">
-              <Label className="text-[11px] font-normal text-muted-foreground">{t('f2:date') || 'Date'} (to)</Label>
-              <Input
-                type="month"
-                value={filters.monthYearTo}
-                onChange={(e) => setFilters(prev => ({ ...prev, monthYearTo: e.target.value }))}
-                className="w-full h-7 text-[11px] pr-8"
-              />
-            </div>
-            <div className="space-y-0.5 w-full sm:w-[8rem] min-w-[8rem]">
-              <Label className="text-[11px] font-normal text-muted-foreground">{t('f2:state_label') || t('f2:state')}</Label>
-              <Select
-                value={filters.state}
-                onValueChange={(value) => setFilters(prev => ({ ...prev, state: value }))}
-              >
-                <SelectTrigger className="w-full !h-7 min-h-7 py-0 text-[11px] [&>svg]:size-3">
-                  <SelectValue placeholder={t('f2:all_states') as string} />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all" className="text-[11px]">{t('f2:all_states')}</SelectItem>
-                  {states.map(s => (
-                    <SelectItem key={s.name} value={s.name} className="text-[11px]">{s.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <Button variant="outline" size="sm" onClick={clearFilters} className="h-7 text-[11px] shrink-0 px-2">
-              {t('f2:clear_filters')}
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-
       <Card>
+        <CardHeader className="pb-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <SmartFilter
+              className="min-w-0 flex-1"
+              fields={filterFields}
+              filters={filters}
+              onFiltersChange={setFilters}
+              urlParamPrefix="f2u_"
+              title={t('f2:uncommitted_tab')}
+              count={filteredF1s.length}
+            />
+            {canCommit && (
+              <Button
+                className="shrink-0"
+                onClick={handleCommitSelected}
+                disabled={selectedF1s.length === 0 || isCommitting}
+              >
+                {isCommitting ? t('f2:committing') : t('f2:commit_selected', { count: selectedF1s.length })}
+              </Button>
+            )}
+          </div>
+          <p className="text-sm text-muted-foreground">{t('f2:uncommitted_desc')}</p>
+        </CardHeader>
         <CardContent className="p-0 overflow-x-auto">
           <Table dir={i18n.language === 'ar' ? 'rtl' : 'ltr'} className="text-xs min-w-[700px]">
             <TableHeader>
@@ -357,7 +286,7 @@ export default function UncommittedF1sTab() {
                 <TableHead className="w-10 px-2">
                   {canCommit && (
                     <Checkbox
-                      checked={selectedF1s.length === f1s.length && f1s.length > 0}
+                      checked={selectedF1s.length === filteredF1s.filter(f => !f.compliance_blocked).length && filteredF1s.filter(f => !f.compliance_blocked).length > 0}
                       onCheckedChange={handleSelectAll}
                     />
                   )}
@@ -502,49 +431,12 @@ export default function UncommittedF1sTab() {
                   </TableCell>
                   {/* Community Approval */}
                   <TableCell className="whitespace-nowrap">
-                    {f1.approval_file_key ? (
-                      <Badge variant="default" className="text-[10px] px-1.5 py-0">{t('f2:approval_uploaded')}</Badge>
-                    ) : canUploadApproval ? (
-                      <div className="flex items-center gap-1">
-                        <Badge variant="secondary" className="text-muted-foreground text-[10px] px-1.5 py-0">{t('f2:approval_required')}</Badge>
-                        <input
-                          id={`approval-file-${f1.id}`}
-                          type="file"
-                          className="hidden"
-                          accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                          onChange={async (e) => {
-                            const file = e.target.files?.[0]
-                            if (!file) return
-                            try {
-                              // Build path for approval file (no grant assignment needed)
-                              const key = `f2-approvals/${f1.id}/${Date.now()}-${file.name.replace(/\s+/g,'_')}`
-                              const { error: upErr } = await supabase.storage.from('images').upload(key, file, { upsert: true })
-                              if (upErr) { alert(t('f2:upload_failed')); return }
-                              const resp = await fetch('/api/f2/uncommitted', {
-                                method: 'PATCH',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ id: f1.id, approval_file_key: key })
-                              })
-                              if (!resp.ok) { alert(t('f2:upload_failed')); return }
-                              await fetchUncommittedF1s()
-                            } catch (err) {
-                              console.error('Upload error', err)
-                              alert(t('f2:upload_failed'))
-                            }
-                          }}
-                        />
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-7 text-xs px-2"
-                          onClick={() => document.getElementById(`approval-file-${f1.id}`)?.click()}
-                        >
-                          {t('f2:upload')}
-                        </Button>
-                      </div>
-                    ) : (
-                      <Badge variant="secondary" className="text-muted-foreground text-[10px] px-1.5 py-0">{t('f2:approval_required')}</Badge>
-                    )}
+                    <CommunityApprovalCell
+                      projectId={f1.id}
+                      approvalFileKey={f1.approval_file_key}
+                      canUpload={canUploadApproval}
+                      onUploaded={fetchUncommittedF1s}
+                    />
                   </TableCell>
                   <TableCell className="whitespace-nowrap">
                     <div className="flex items-center gap-1">
@@ -581,10 +473,10 @@ export default function UncommittedF1sTab() {
       </Card>
 
       {/* Pagination */}
-      {f1s.length > itemsPerPage && (
+      {sortedF1s.length > itemsPerPage && (
         <div className="flex items-center justify-between">
           <div className="text-sm text-muted-foreground">
-            Showing {startIndex + 1} to {Math.min(endIndex, f1s.length)} of {f1s.length} projects
+            Showing {startIndex + 1} to {Math.min(endIndex, sortedF1s.length)} of {sortedF1s.length} projects
           </div>
           <div className="flex gap-2">
             <Button
