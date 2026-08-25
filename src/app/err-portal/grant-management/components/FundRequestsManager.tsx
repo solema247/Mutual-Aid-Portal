@@ -1041,6 +1041,7 @@ export default function FundRequestsManager() {
                     <Label>Requested amount (USD)</Label>
                     <Input
                       type="number"
+                      step="0.01"
                       value={frForm.requested_amount}
                       onChange={(e) => setFrForm({ ...frForm, requested_amount: e.target.value })}
                     />
@@ -1477,6 +1478,7 @@ export default function FundRequestsManager() {
                                     <TableCell className="text-right">
                                       <Input
                                         type="number"
+                                        step="0.01"
                                         className="h-5 text-[10px] text-right w-[90px] ml-auto rounded-full px-2 py-0 shadow-none"
                                         value={row.activity_amount}
                                         onChange={(e) =>
@@ -1827,6 +1829,7 @@ export default function FundRequestsManager() {
               <Label>Activity amount</Label>
               <Input
                 type="number"
+                step="0.01"
                 value={tsForm.activity_amount}
                 onChange={(e) => setTsForm({ ...tsForm, activity_amount: e.target.value })}
               />

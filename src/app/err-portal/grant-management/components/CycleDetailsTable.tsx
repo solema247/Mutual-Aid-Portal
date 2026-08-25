@@ -316,8 +316,8 @@ export default function CycleDetailsTable({
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: 'USD',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
     }).format(amount)
   }
 
@@ -478,6 +478,7 @@ export default function CycleDetailsTable({
                             <label className="text-sm font-medium">Amount to Include</label>
                             <Input
                               type="number"
+                              step="0.01"
                               value={amountIncluded}
                               onChange={(e) => setAmountIncluded(e.target.value)}
                               placeholder="Enter amount"
@@ -628,6 +629,7 @@ export default function CycleDetailsTable({
                           </Select>
                           <Input
                             type="number"
+                            step="0.01"
                             placeholder="Amount"
                             value={alloc.amount}
                             onChange={(e) => {
@@ -694,6 +696,7 @@ export default function CycleDetailsTable({
                                     <>
                                       <Input
                                         type="number"
+                                        step="0.01"
                                         value={editAmount}
                                         onChange={(e) => setEditAmount(e.target.value)}
                                         className="w-24"

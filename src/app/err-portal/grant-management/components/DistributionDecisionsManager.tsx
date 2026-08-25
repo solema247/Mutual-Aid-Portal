@@ -693,7 +693,7 @@ export default function DistributionDecisionsManager() {
 
   const formatCurrency = (amount: number | null | undefined) => {
     if (amount === null || amount === undefined) return '—'
-    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(amount)
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount)
   }
 
   // Map CSV state names to system state names
@@ -1232,7 +1232,7 @@ export default function DistributionDecisionsManager() {
                           <FormItem className="gap-0.5">
                             <FormLabel className="text-xs">Decision Amount *</FormLabel>
                             <FormControl>
-                              <Input type="number" className="h-8" {...field} />
+                              <Input type="number" step="0.01" className="h-8" {...field} />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -2038,6 +2038,7 @@ export default function DistributionDecisionsManager() {
                                                     {isEditing ? (
                                                       <Input
                                                         type="number"
+                                                        step="0.01"
                                                         value={editAllocationAmount}
                                                         onChange={(e) => setEditAllocationAmount(e.target.value)}
                                                         className="w-32 ml-auto"
@@ -2220,6 +2221,7 @@ export default function DistributionDecisionsManager() {
                                             <TableCell className="text-right">
                                               <Input
                                                 type="number"
+                                                step="0.01"
                                                 value={row.amount}
                                                 onChange={(e) =>
                                                   setAllocRows((prev) =>

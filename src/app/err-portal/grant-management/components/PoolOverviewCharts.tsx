@@ -25,7 +25,7 @@ const POOL_COLORS = {
 } as const
 
 const money = (n: number) =>
-  n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })
+  n.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
 const stateUseConfig = {
   assigned_pct: { label: 'Assigned', color: POOL_COLORS.assigned },

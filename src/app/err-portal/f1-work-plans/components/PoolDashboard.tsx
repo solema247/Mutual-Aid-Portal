@@ -77,7 +77,7 @@ export default function PoolDashboard({ showProposals = true, showByDonor = true
     return () => window.removeEventListener('pool-refresh', onRefresh)
   }, [])
 
-  const fmt = (n: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n || 0)
+  const fmt = (n: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n || 0)
 
   const handleRefresh = async () => {
     try {

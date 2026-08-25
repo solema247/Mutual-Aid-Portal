@@ -164,8 +164,8 @@ export default function GrantPoolSelector({ cycleId, onGrantsChanged }: GrantPoo
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: 'USD',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
     }).format(amount)
   }
 
@@ -246,6 +246,7 @@ export default function GrantPoolSelector({ cycleId, onGrantsChanged }: GrantPoo
                   <div className="space-y-2">
                     <Input
                       type="number"
+                      step="0.01"
                       placeholder={t('err:cycles.pool.amount_placeholder') as string}
                       value={amountIncluded}
                       onChange={(e) => {

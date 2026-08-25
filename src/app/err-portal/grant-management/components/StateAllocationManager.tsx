@@ -215,8 +215,8 @@ export default function StateAllocationManager({ cycleId, cycle, refreshToken, o
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: 'USD',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
     }).format(amount)
   }
 
@@ -664,6 +664,7 @@ export default function StateAllocationManager({ cycleId, cycle, refreshToken, o
                           </div>
                           <Input
                             type="number"
+                            step="0.01"
                             value={trancheSplits[trancheNum - 1] || 0}
                             onChange={(e) => {
                               const value = parseFloat(e.target.value || '0')
