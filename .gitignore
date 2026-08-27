@@ -61,6 +61,8 @@ next-env.d.ts
 # Cursor MCP — local only (contains project ref)
 .cursor/mcp.json
 
-# Local CSV imports (Google Sheet exports, etc.) — not committed
+# Local CSV imports/exports — not committed
 data/imports/*
 !data/imports/.gitkeep
+data/exports/*
+!data/exports/.gitkeep
