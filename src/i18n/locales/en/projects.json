@@ -315,7 +315,7 @@
   "management_explainer_ui_bullets": [
     "Summary by Grant sits below the main grid; it is described under Metrics.",
     "Main grid: start at state level, click a state → ERR rooms → projects; use Back to move up. Grant-serial filter can skip straight to project rows.",
-    "Filters include historical vs new (from 2026 onward), grant, F4/F5 status, state, date range, grant segment, and sector expense category.",
+    "Filters include historical vs new (from 2026 onward), grant, F4/F5 status, state, project date range, transfer date range, whether a transfer date exists (same idea as Looker Studio on the activities view), grant segment, and sector expense category.",
     "Refresh reloads everything; wide tables scroll sideways."
   ],
   "management_explainer_heading_actions": "🧭 What you can do",

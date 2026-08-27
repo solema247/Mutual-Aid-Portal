@@ -1,5 +1,8 @@
-drop view if exists public.projects_all_activities_view;
-create view public.projects_all_activities_view as
+-- Portal date_transfer: err_projects.date_transfer,
+--   else earliest mou_payment_confirmations.transfer_date,
+--   else mous.payment_confirmation_file JSON transfer_date.
+-- Overdue for portal rows uses that same date (+ 32 days).
+create or replace view public.projects_all_activities_view as
 with
   current_projects_base as (
     select
@@ -29,7 +32,29 @@ with
       d.name as donor_name,
       m.mou_code,
       m.payment_confirmation_file,
-      p.date_transfer,
+      COALESCE(
+        p.date_transfer,
+        mpc.confirmation_transfer_date,
+        case
+          when m.payment_confirmation_file is not null
+          and m.payment_confirmation_file ~~ '{%'::text
+          and NULLIF(
+            TRIM(
+              both
+              from
+                (
+                  m.payment_confirmation_file::jsonb -> p.id::text
+                ) ->> 'transfer_date'::text
+            ),
+            ''::text
+          ) is not null then (
+            (
+              m.payment_confirmation_file::jsonb -> p.id::text
+            ) ->> 'transfer_date'::text
+          )::date
+          else null::date
+        end
+      ) as date_transfer,
       p.date_report_completed,
       p.f4_status,
       p.f5_status,
@@ -41,6 +66,17 @@ with
       left join emergency_rooms er on p.emergency_room_id = er.id
       left join donors d on p.donor_id = d.id
       left join mous m on p.mou_id = m.id
+      left join (
+        select
+          project_id,
+          min(transfer_date) as confirmation_transfer_date
+        from
+          mou_payment_confirmations
+        where
+          transfer_date is not null
+        group by
+          project_id
+      ) mpc on mpc.project_id = p.id
       left join grants_grid_view ggv on p.grant_grid_id = ggv.id
       left join grants_grid_view ggv_grant_call on p.grant_call_id = ggv_grant_call.id
   ),
@@ -169,52 +205,8 @@ with
         else null::date
       end as f1_date_submitted,
       case
-        when COALESCE(
-          cpb.date_transfer,
-          case
-            when cpb.payment_confirmation_file is not null
-            and cpb.payment_confirmation_file ~~ '{%'::text
-            and NULLIF(
-              TRIM(
-                both
-                from
-                  (
-                    cpb.payment_confirmation_file::jsonb -> cpb.id::text
-                  ) ->> 'transfer_date'::text
-              ),
-              ''::text
-            ) is not null then (
-              (
-                cpb.payment_confirmation_file::jsonb -> cpb.id::text
-              ) ->> 'transfer_date'::text
-            )::date
-            else null::date
-          end
-        ) is not null
-        and (
-          COALESCE(
-            cpb.date_transfer,
-            case
-              when cpb.payment_confirmation_file is not null
-              and cpb.payment_confirmation_file ~~ '{%'::text
-              and NULLIF(
-                TRIM(
-                  both
-                  from
-                    (
-                      cpb.payment_confirmation_file::jsonb -> cpb.id::text
-                    ) ->> 'transfer_date'::text
-                ),
-                ''::text
-              ) is not null then (
-                (
-                  cpb.payment_confirmation_file::jsonb -> cpb.id::text
-                ) ->> 'transfer_date'::text
-              )::date
-              else null::date
-            end
-          ) + 32
-        ) < CURRENT_DATE
+        when cpb.date_transfer is not null
+        and (cpb.date_transfer + 32) < CURRENT_DATE
         and not (
           (
             lower(
@@ -249,30 +241,7 @@ with
             )
           )
         ) then (
-          CURRENT_DATE - (
-            COALESCE(
-              cpb.date_transfer,
-              case
-                when cpb.payment_confirmation_file is not null
-                and cpb.payment_confirmation_file ~~ '{%'::text
-                and NULLIF(
-                  TRIM(
-                    both
-                    from
-                      (
-                        cpb.payment_confirmation_file::jsonb -> cpb.id::text
-                      ) ->> 'transfer_date'::text
-                  ),
-                  ''::text
-                ) is not null then (
-                  (
-                    cpb.payment_confirmation_file::jsonb -> cpb.id::text
-                  ) ->> 'transfer_date'::text
-                )::date
-                else null::date
-              end
-            ) + 32
-          )
+          CURRENT_DATE - (cpb.date_transfer + 32)
         )::numeric
         else null::numeric
       end as overdue,
@@ -334,28 +303,7 @@ with
         when cpb.mou_id is not null then 'Yes'::text
         else 'No'::text
       end as mou_signed,
-      COALESCE(
-        cpb.date_transfer,
-        case
-          when cpb.payment_confirmation_file is not null
-          and cpb.payment_confirmation_file ~~ '{%'::text
-          and NULLIF(
-            TRIM(
-              both
-              from
-                (
-                  cpb.payment_confirmation_file::jsonb -> cpb.id::text
-                ) ->> 'transfer_date'::text
-            ),
-            ''::text
-          ) is not null then (
-            (
-              cpb.payment_confirmation_file::jsonb -> cpb.id::text
-            ) ->> 'transfer_date'::text
-          )::date
-          else null::date
-        end
-      ) as date_transfer,
+      cpb.date_transfer,
       cpp.usd,
       null::numeric as sdg,
       null::numeric as rate,

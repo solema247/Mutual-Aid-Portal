@@ -109,7 +109,7 @@ const HISTORICAL_NEW_OPTIONS = [
   { value: 'new', label: 'New (2026+)' },
 ] as const
 
-/** Project Management filter fields: Historical/New, State, Date Range, F4 Status, F5 Status, Grant Segment, Grant, Sector, Grant Serial */
+/** Project Management filter fields: Historical/New, State, Project Date Range, Transfer Date Range, Date Transfer Exists, F4 Status, F5 Status, Grant Segment, Grant, Sector, Grant Serial */
 export function getProjectManagementFilterFields(options?: {
   stateOptions?: string[]
   f4StatusOptions?: string[]
@@ -150,10 +150,28 @@ export function getProjectManagementFilterFields(options?: {
     },
     {
       id: 'date_range',
-      label: 'Date Range',
+      label: 'Project Date Range',
       type: 'date_range',
       placeholder: 'From – To',
       accessorKey: 'filter_date',
+    },
+    {
+      id: 'transfer_date_range',
+      label: 'Transfer Date Range',
+      type: 'date_range',
+      placeholder: 'From – To',
+      accessorKey: 'date_transfer',
+    },
+    {
+      id: 'date_transfer_exists',
+      label: 'Date Transfer Exists',
+      type: 'select',
+      options: [
+        { value: 'yes', label: 'Yes' },
+        { value: 'no', label: 'No' },
+      ],
+      placeholder: 'All',
+      accessorKey: 'date_transfer',
     },
     {
       id: 'f4_status',

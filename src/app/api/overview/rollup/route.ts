@@ -121,6 +121,20 @@ function sumTargetsFromPlannedActivities(planned: any): { individuals: number; f
   }
 }
 
+/**
+ * Match projects_all_activities_view date_transfer for historical rows:
+ * empty / "null" / unparseable formats are treated as missing (Looker "exists" = not null).
+ */
+function parseViewDateTransfer(raw: unknown): string | null {
+  if (raw == null) return null
+  const s = String(raw).trim()
+  if (!s || s.toLowerCase() === 'null') return null
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s
+  if (/^\d{1,2}-[A-Za-z]{3}-\d{4}$/.test(s)) return s
+  if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(s)) return s
+  return null
+}
+
 function parseNumericField(value: unknown): number {
   if (value == null || value === '') return 0
   if (typeof value === 'number') return Number.isFinite(value) ? value : 0
@@ -509,6 +523,7 @@ export async function GET(request: Request) {
         is_historical: false,
         f4_status,
         f5_status,
+        date_transfer: effectiveTransferDate,
         filter_date: p.date || agg.last || null,
         is_overdue,
         days_overdue,
@@ -591,6 +606,7 @@ export async function GET(request: Request) {
         is_historical: true,
         f4_status, // For % Tracker: completed | waiting | under review | partial
         f5_status, // For % Tracker: same status values, no actual vs plan
+        date_transfer: parseViewDateTransfer(dateTransfer),
         filter_date: dateTransfer || reportDate || null, // For date filter: Date Transfer or Date Report Completed
         is_overdue: is_overdue_historical,
         days_overdue: !Number.isNaN(overdueNum) ? overdueNum : null,

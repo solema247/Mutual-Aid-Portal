@@ -165,6 +165,14 @@ export default function ProjectManagement() {
         return t < CUTOFF_2026 ? 'historical' : 'new'
       }
       if (fieldId === 'date_range') return row.filter_date ?? null
+      if (fieldId === 'transfer_date_range') return row.date_transfer ?? null
+      if (fieldId === 'date_transfer_exists') {
+        const d = row.date_transfer
+        if (d == null) return 'no'
+        const s = String(d).trim()
+        if (!s || s.toLowerCase() === 'null') return 'no'
+        return 'yes'
+      }
       if (fieldId === 'grant') {
         if (row.is_historical) {
           const donor = row.project_donor != null ? String(row.project_donor).trim() : ''
