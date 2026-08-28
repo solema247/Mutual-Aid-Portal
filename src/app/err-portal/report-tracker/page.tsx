@@ -876,6 +876,7 @@ export default function ReportTrackerPage() {
                         </TableCell>
                         <TableCell>
                           <Select
+                            name={`f4-status-${row.id}`}
                             value={row.f4_status}
                             onValueChange={(v) => updateStatus(row.id, 'f4_status', v)}
                             disabled={updatingId === row.id}
@@ -899,6 +900,7 @@ export default function ReportTrackerPage() {
                         </TableCell>
                         <TableCell>
                           <Select
+                            name={`f5-status-${row.id}`}
                             value={row.f5_status}
                             onValueChange={(v) => updateStatus(row.id, 'f5_status', v)}
                             disabled={updatingId === row.id}
