@@ -17,8 +17,10 @@ import {
   SmartFilter,
   getProjectManagementFilterFields,
   applyFilters,
+  STATUS_DISPLAY,
   type ActiveFilter,
 } from '@/components/smart-filter'
+import { diffReportingStatus } from '@/lib/projectStatus'
 import { downloadCsv } from '@/lib/csvDownload'
 import ProjectDetailModal from './ProjectDetailModal'
 import UploadF4Modal from '@/app/err-portal/f4-f5-reporting/components/UploadF4Modal'
@@ -71,7 +73,15 @@ export default function ProjectManagement() {
   const [loadingReports, setLoadingReports] = useState(false)
   const [completingProjectId, setCompletingProjectId] = useState<string | null>(null)
   const [statusDialogOpen, setStatusDialogOpen] = useState(false)
-  const [statusDialogRow, setStatusDialogRow] = useState<{ project_id: string; f4_status: string; f5_status: string } | null>(null)
+  const [statusDialogRow, setStatusDialogRow] = useState<{
+    project_id: string
+    f4_status: string
+    f5_status: string
+    initial_f4_status: string
+    initial_f5_status: string
+  } | null>(null)
+  const [statusDialogSaving, setStatusDialogSaving] = useState(false)
+  const [statusDialogError, setStatusDialogError] = useState<string | null>(null)
 
   const loadRollup = async (forceRefresh = false) => {
     setLoading(true)
@@ -967,8 +977,21 @@ export default function ProjectManagement() {
                                 variant="outline"
                                 size="sm"
                                 className="text-xs px-1.5 py-0.5 h-6 shrink-0 min-w-0 border-black"
-                                onClick={(e)=>{ e.stopPropagation(); setStatusDialogRow({ project_id: r.project_id, f4_status: r.f4_status || 'waiting', f5_status: r.f5_status || 'waiting' }); setStatusDialogOpen(true) }}
-                              >Status</Button>
+                                onClick={(e)=>{
+                                  e.stopPropagation()
+                                  const f4 = r.f4_status || 'waiting'
+                                  const f5 = r.f5_status || 'waiting'
+                                  setStatusDialogError(null)
+                                  setStatusDialogRow({
+                                    project_id: r.project_id,
+                                    f4_status: f4,
+                                    f5_status: f5,
+                                    initial_f4_status: f4,
+                                    initial_f5_status: f5,
+                                  })
+                                  setStatusDialogOpen(true)
+                                }}
+                              >{t('management.table.status')}</Button>
                             )}
                             {canAccessF4 && (
                             <Button
@@ -1223,74 +1246,102 @@ export default function ProjectManagement() {
         onOpenChange={(v)=> setDetailOpen(v)}
       />
 
-      {/* Update F4/F5 status (portal only) */}
-      <Dialog open={statusDialogOpen} onOpenChange={(open) => { if (!open) setStatusDialogRow(null); setStatusDialogOpen(open) }}>
+      {/* Update F4/F5 status (portal only). Saves only the field(s) the user changed. */}
+      <Dialog open={statusDialogOpen} onOpenChange={(open) => {
+        if (!open) {
+          setStatusDialogRow(null)
+          setStatusDialogError(null)
+          setStatusDialogSaving(false)
+        }
+        setStatusDialogOpen(open)
+      }}>
         <DialogContent className="max-w-md p-4 sm:p-5">
           <DialogHeader className="space-y-1 pb-2">
-            <DialogTitle className="text-base">Update F4 / F5 status</DialogTitle>
+            <DialogTitle className="text-base">{t('management.table.status_dialog_title')}</DialogTitle>
           </DialogHeader>
           {statusDialogRow && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-4" dir="ltr">
+              <div className="space-y-3">
                 <div className="space-y-1.5">
-                  <Label className="text-sm">F4 status</Label>
-                  {statusDialogRow.f4_status === 'completed' ? (
-                    <div className="flex h-9 items-center rounded-md border border-input bg-muted/50 px-3 text-sm text-muted-foreground">Completed</div>
-                  ) : (
-                    <Select
-                      value={statusDialogRow.f4_status}
-                      onValueChange={(v) => setStatusDialogRow(prev => prev ? { ...prev, f4_status: v } : null)}
-                    >
-                      <SelectTrigger className="h-9">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="waiting">Waiting</SelectItem>
-                        <SelectItem value="partial">Partial</SelectItem>
-                        <SelectItem value="in review">In Review</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  )}
+                  <Label className="text-sm" htmlFor="pm-f4-status">{t('management.table.status_dialog_f4')}</Label>
+                  <Select
+                    name="f4-status"
+                    value={statusDialogRow.f4_status}
+                    onValueChange={(v) => {
+                      setStatusDialogError(null)
+                      setStatusDialogRow(prev => prev ? { ...prev, f4_status: v } : null)
+                    }}
+                  >
+                    <SelectTrigger id="pm-f4-status" className="h-9">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {STATUS_DISPLAY.map((d) => (
+                        <SelectItem key={`f4-${d.value}`} value={d.value}>{d.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-sm">F5 status</Label>
-                  {statusDialogRow.f5_status === 'completed' ? (
-                    <div className="flex h-9 items-center rounded-md border border-input bg-muted/50 px-3 text-sm text-muted-foreground">Completed</div>
-                  ) : (
-                    <Select
-                      value={statusDialogRow.f5_status}
-                      onValueChange={(v) => setStatusDialogRow(prev => prev ? { ...prev, f5_status: v } : null)}
-                    >
-                      <SelectTrigger className="h-9">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="waiting">Waiting</SelectItem>
-                        <SelectItem value="partial">Partial</SelectItem>
-                        <SelectItem value="in review">In Review</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  )}
+                  <Label className="text-sm" htmlFor="pm-f5-status">{t('management.table.status_dialog_f5')}</Label>
+                  <Select
+                    name="f5-status"
+                    value={statusDialogRow.f5_status}
+                    onValueChange={(v) => {
+                      setStatusDialogError(null)
+                      setStatusDialogRow(prev => prev ? { ...prev, f5_status: v } : null)
+                    }}
+                  >
+                    <SelectTrigger id="pm-f5-status" className="h-9">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {STATUS_DISPLAY.map((d) => (
+                        <SelectItem key={`f5-${d.value}`} value={d.value}>{d.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
+              {statusDialogError ? (
+                <p className="text-sm text-destructive">{statusDialogError}</p>
+              ) : null}
               <Button
                 className="w-full h-9 bg-green-600 hover:bg-green-700 text-white"
+                disabled={statusDialogSaving}
                 onClick={async () => {
                   if (!statusDialogRow) return
+                  const patch = diffReportingStatus(
+                    { f4_status: statusDialogRow.initial_f4_status, f5_status: statusDialogRow.initial_f5_status },
+                    { f4_status: statusDialogRow.f4_status, f5_status: statusDialogRow.f5_status },
+                  )
+                  if (!patch.f4_status && !patch.f5_status) {
+                    setStatusDialogError(t('management.table.status_dialog_no_changes'))
+                    return
+                  }
+                  setStatusDialogSaving(true)
+                  setStatusDialogError(null)
                   try {
-                    await fetch(`/api/projects/${statusDialogRow.project_id}/reporting-status`, {
+                    const res = await fetch(`/api/projects/${statusDialogRow.project_id}/reporting-status`, {
                       method: 'PATCH',
                       headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ f4_status: statusDialogRow.f4_status, f5_status: statusDialogRow.f5_status })
+                      body: JSON.stringify(patch),
                     })
+                    if (!res.ok) {
+                      setStatusDialogError(t('management.table.status_dialog_error'))
+                      return
+                    }
                     setStatusDialogOpen(false)
                     setStatusDialogRow(null)
-                    await loadRollup(true) // Force refresh after updating status
+                    await loadRollup(true)
                   } catch (e) {
                     console.error(e)
+                    setStatusDialogError(t('management.table.status_dialog_error'))
+                  } finally {
+                    setStatusDialogSaving(false)
                   }
                 }}
-              >Save</Button>
+              >{statusDialogSaving ? t('management.table.status_dialog_saving') : t('management.table.status_dialog_save')}</Button>
             </div>
           )}
         </DialogContent>

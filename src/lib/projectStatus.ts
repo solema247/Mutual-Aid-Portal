@@ -22,6 +22,17 @@ type ReportingStatusChanges = {
   f5_status?: string
 }
 
+/** PATCH body with only the F4/F5 fields that actually changed. */
+export function diffReportingStatus(
+  initial: { f4_status: string; f5_status: string },
+  next: { f4_status: string; f5_status: string },
+): ReportingStatusChanges {
+  const patch: ReportingStatusChanges = {}
+  if (next.f4_status !== initial.f4_status) patch.f4_status = next.f4_status
+  if (next.f5_status !== initial.f5_status) patch.f5_status = next.f5_status
+  return patch
+}
+
 export type ApplyReportingStatusResult =
   | {
       ok: true
@@ -95,8 +106,12 @@ export async function applyReportingStatusUpdates(
   const bothCompleted = isReportingStatusCompleted(nextF4) && isReportingStatusCompleted(nextF5)
 
   const update: Record<string, string | null> = {}
-  if (changes.f4_status) update.f4_status = changes.f4_status
-  if (changes.f5_status) update.f5_status = changes.f5_status
+  if (Object.prototype.hasOwnProperty.call(changes, 'f4_status') && changes.f4_status != null) {
+    update.f4_status = changes.f4_status
+  }
+  if (Object.prototype.hasOwnProperty.call(changes, 'f5_status') && changes.f5_status != null) {
+    update.f5_status = changes.f5_status
+  }
 
   if (shouldAutoCompleteProject(project.status, nextF4, nextF5)) {
     update.status = 'completed'
