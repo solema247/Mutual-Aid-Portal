@@ -111,7 +111,18 @@ type Allocation = {
   amount: number | null
   percent_of_decision: number | null
   notes?: string | null
+  restriction?: string | null
 }
+
+type PendingAllocRow = {
+  state: string
+  amount: string
+  restriction: string
+}
+
+const NONE_RESTRICTION_VALUE = '__none__'
+const RESTRICTION_PILL_TRIGGER_CLASS =
+  '!h-5 w-auto min-w-0 max-w-[10rem] gap-0.5 rounded-full border border-[#5B3C6E]/30 !bg-[#5B3C6E] px-2 py-0 text-[10px] font-medium leading-none !text-white shadow-none hover:!bg-[#4a3159] focus:ring-1 focus-visible:ring-1 data-[size=sm]:!h-5 data-[placeholder]:!text-white/80 dark:!bg-[#5B3C6E] dark:!text-white dark:hover:!bg-[#4a3159] [&>svg]:size-2.5 [&_svg]:!text-white'
 
 /** Prefer the review / missing-funds lines when Notes also has other text. */
 function displayNoteLines(notes: string | null | undefined): string[] {
@@ -195,7 +206,7 @@ export default function DistributionDecisionsManager() {
   const [expandedDecisionKey, setExpandedDecisionKey] = useState<string | null>(null) // decision_id used for API
   const [allocationsByDecision, setAllocationsByDecision] = useState<Record<string, Allocation[]>>({})
   const [isAllocLoading, setIsAllocLoading] = useState<Record<string, boolean>>({})
-  const [allocRows, setAllocRows] = useState<Array<{ state: string; amount: string }>>([])
+  const [allocRows, setAllocRows] = useState<PendingAllocRow[]>([])
   const [stateOptions, setStateOptions] = useState<string[]>([])
   const [isDeleting, setIsDeleting] = useState<Record<string, boolean>>({})
   const [isCollapsed, setIsCollapsed] = useState(false)
@@ -214,6 +225,7 @@ export default function DistributionDecisionsManager() {
   const [editingAllocation, setEditingAllocation] = useState<string | null>(null)
   const [editAllocationState, setEditAllocationState] = useState<string>('')
   const [editAllocationAmount, setEditAllocationAmount] = useState<string>('')
+  const [editAllocationRestriction, setEditAllocationRestriction] = useState<string>('')
   const [isUpdatingAllocation, setIsUpdatingAllocation] = useState(false)
   const [isDeletingAllocation, setIsDeletingAllocation] = useState<string | null>(null)
   const [dateSortOrder, setDateSortOrder] = useState<'desc' | 'asc'>('desc')
@@ -240,10 +252,34 @@ export default function DistributionDecisionsManager() {
     currentUser?.role === 'admin' ||
     currentUser?.role === 'superadmin'
 
-  const validPendingAllocRows = (rows: Array<{ state: string; amount: string }>) =>
+  const validPendingAllocRows = (rows: PendingAllocRow[]) =>
     rows
-      .map((r) => ({ state: r.state.trim(), amount: Number(r.amount) }))
+      .map((r) => ({
+        state: r.state.trim(),
+        amount: Number(r.amount),
+        restriction: r.restriction.trim(),
+      }))
       .filter((r) => r.state && !Number.isNaN(r.amount) && r.amount > 0)
+
+  const newPendingAllocRow = (defaultRestriction?: string | null): PendingAllocRow => ({
+    state: '',
+    amount: '',
+    restriction: defaultRestriction?.trim() || '',
+  })
+
+  const restrictionSelectValue = (value: string | null | undefined) =>
+    value?.trim() ? value.trim() : NONE_RESTRICTION_VALUE
+
+  const restrictionFromSelectValue = (value: string) =>
+    value === NONE_RESTRICTION_VALUE ? '' : value
+
+  const restrictionOptionsForValue = (current?: string | null) => {
+    const trimmed = current?.trim() || ''
+    if (trimmed && !restrictionOptions.includes(trimmed)) {
+      return [trimmed, ...restrictionOptions]
+    }
+    return restrictionOptions
+  }
 
   const decisionForm = useForm<z.infer<typeof decisionSchema>>({
     resolver: zodResolver(decisionSchema),
@@ -559,7 +595,11 @@ export default function DistributionDecisionsManager() {
       // If CSV was used, automatically add allocations
       if (useCsvUpload && csvFile && allocRows.length > 0) {
         try {
-          const validRows = validPendingAllocRows(allocRows)
+          const defaultRestriction = values.restriction?.trim() || ''
+          const validRows = validPendingAllocRows(allocRows).map((r) => ({
+            ...r,
+            restriction: r.restriction || defaultRestriction,
+          }))
           
           if (validRows.length > 0) {
             const allocRes = await fetch(`/api/distribution-decisions/${decisionKey}/allocations`, {
@@ -673,6 +713,62 @@ export default function DistributionDecisionsManager() {
       fetchDecisions()
     } catch (error: any) {
       alert(error.message || 'Failed to add allocation')
+    }
+  }
+
+  const updateAllocationFields = async (
+    allocationId: string,
+    payload: { state: string; amount: number; restriction: string },
+    decisionKey: string,
+    opts?: { refreshDecisionList?: boolean; clearEditing?: boolean }
+  ) => {
+    setIsUpdatingAllocation(true)
+    try {
+      const res = await fetch(`/api/distribution-decisions/allocations/${allocationId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      if (!res.ok) {
+        const err = await res.json()
+        throw new Error(err.error || 'Failed to update allocation')
+      }
+
+      const decisionAmount = decisions.find((d) => decisionFetchKey(d) === decisionKey)?.decision_amount
+      const nextPercent =
+        decisionAmount && payload.amount
+          ? (payload.amount / Number(decisionAmount)) * 100
+          : null
+
+      setAllocationsByDecision((prev) => ({
+        ...prev,
+        [decisionKey]: (prev[decisionKey] || []).map((alloc) =>
+          alloc.allocation_id === allocationId
+            ? {
+                ...alloc,
+                state: payload.state,
+                amount: payload.amount,
+                restriction: payload.restriction.trim() || null,
+                percent_of_decision: nextPercent,
+              }
+            : alloc
+        ),
+      }))
+
+      if (opts?.clearEditing !== false) {
+        setEditingAllocation(null)
+        setEditAllocationState('')
+        setEditAllocationAmount('')
+        setEditAllocationRestriction('')
+      }
+
+      if (opts?.refreshDecisionList) {
+        fetchDecisions()
+      }
+    } catch (error: any) {
+      alert(error.message || 'Failed to update allocation')
+    } finally {
+      setIsUpdatingAllocation(false)
     }
   }
 
@@ -821,11 +917,13 @@ export default function DistributionDecisionsManager() {
         decisionForm.setValue('decision_amount', totalAmount)
       }
       
-      // Populate allocation rows
+      // Populate allocation rows (restriction defaults from decision form)
       if (allocations.length > 0) {
-        const rows = allocations.map(a => ({
+        const defaultRestriction = decisionForm.getValues('restriction')?.trim() || ''
+        const rows = allocations.map((a) => ({
           state: a.state || '',
-          amount: a.amount.toString()
+          amount: a.amount.toString(),
+          restriction: defaultRestriction,
         }))
         setAllocRows(rows)
         setCsvFile(file)
@@ -1504,7 +1602,10 @@ export default function DistributionDecisionsManager() {
                         name="restriction"
                         render={({ field }) => (
                           <FormItem className="gap-0.5">
-                            <FormLabel className="text-xs">Restriction</FormLabel>
+                            <FormLabel className="text-xs">Default restriction</FormLabel>
+                            <p className="text-[10px] text-muted-foreground">
+                              Prefills new allocations; each allocation can override this.
+                            </p>
                             {addingRestriction ? (
                               <div className="flex items-center gap-1">
                                 <Input
@@ -1987,6 +2088,7 @@ export default function DistributionDecisionsManager() {
                                         <TableRow>
                                           <TableHead>Allocation ID</TableHead>
                                           <TableHead>State</TableHead>
+                                          <TableHead className="min-w-[140px]">Restriction</TableHead>
                                           <TableHead className="text-right">Amount</TableHead>
                                           <TableHead className="text-right">% of Decision</TableHead>
                                           <TableHead className="min-w-[220px]">Notes</TableHead>
@@ -1996,7 +2098,7 @@ export default function DistributionDecisionsManager() {
                                       <TableBody>
                                         {(allocationsByDecision[fetchKey] || []).length === 0 ? (
                                           <TableRow>
-                                            <TableCell colSpan={6} className="text-muted-foreground text-sm">
+                                            <TableCell colSpan={7} className="text-muted-foreground text-sm">
                                               No allocations yet
                                             </TableCell>
                                           </TableRow>
@@ -2032,6 +2134,59 @@ export default function DistributionDecisionsManager() {
                                                       </Select>
                                                     ) : (
                                                       alloc.state || '—'
+                                                    )}
+                                                  </TableCell>
+                                                  <TableCell>
+                                                    {canEditAllocations ? (
+                                                      <Select
+                                                        value={
+                                                          isEditing
+                                                            ? restrictionSelectValue(editAllocationRestriction)
+                                                            : restrictionSelectValue(alloc.restriction)
+                                                        }
+                                                        disabled={isUpdatingAllocation}
+                                                        onValueChange={async (val) => {
+                                                          const nextRestriction = restrictionFromSelectValue(val)
+                                                          if (isEditing) {
+                                                            setEditAllocationRestriction(nextRestriction)
+                                                            return
+                                                          }
+                                                          if (!alloc.state || alloc.amount == null || Number(alloc.amount) <= 0) {
+                                                            alert('Allocation needs a valid state and amount before changing restriction')
+                                                            return
+                                                          }
+                                                          await updateAllocationFields(
+                                                            alloc.allocation_id,
+                                                            {
+                                                              state: alloc.state,
+                                                              amount: Number(alloc.amount),
+                                                              restriction: nextRestriction,
+                                                            },
+                                                            fetchKey,
+                                                            { clearEditing: false }
+                                                          )
+                                                        }}
+                                                      >
+                                                        <SelectTrigger size="sm" className={RESTRICTION_PILL_TRIGGER_CLASS}>
+                                                          <SelectValue placeholder="Restriction" />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                          <SelectItem value={NONE_RESTRICTION_VALUE}>None</SelectItem>
+                                                          {restrictionOptionsForValue(
+                                                            isEditing ? editAllocationRestriction : alloc.restriction
+                                                          ).map((name) => (
+                                                            <SelectItem key={name} value={name}>
+                                                              {name}
+                                                            </SelectItem>
+                                                          ))}
+                                                        </SelectContent>
+                                                      </Select>
+                                                    ) : alloc.restriction ? (
+                                                      <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
+                                                        {alloc.restriction}
+                                                      </Badge>
+                                                    ) : (
+                                                      '—'
                                                     )}
                                                   </TableCell>
                                                   <TableCell className="text-right">
@@ -2075,30 +2230,16 @@ export default function DistributionDecisionsManager() {
                                                                   alert('Please enter a valid state and amount')
                                                                   return
                                                                 }
-                                                                setIsUpdatingAllocation(true)
-                                                                try {
-                                                                  const res = await fetch(`/api/distribution-decisions/allocations/${alloc.allocation_id}`, {
-                                                                    method: 'PUT',
-                                                                    headers: { 'Content-Type': 'application/json' },
-                                                                    body: JSON.stringify({
-                                                                      state: editAllocationState,
-                                                                      amount: Number(editAllocationAmount)
-                                                                    })
-                                                                  })
-                                                                  if (!res.ok) {
-                                                                    const err = await res.json()
-                                                                    throw new Error(err.error || 'Failed to update allocation')
-                                                                  }
-                                                                  setEditingAllocation(null)
-                                                                  setEditAllocationState('')
-                                                                  setEditAllocationAmount('')
-                                                                  fetchAllocations(fetchKey)
-                                                                  fetchDecisions()
-                                                                } catch (error: any) {
-                                                                  alert(error.message || 'Failed to update allocation')
-                                                                } finally {
-                                                                  setIsUpdatingAllocation(false)
-                                                                }
+                                                                await updateAllocationFields(
+                                                                  alloc.allocation_id,
+                                                                  {
+                                                                    state: editAllocationState,
+                                                                    amount: Number(editAllocationAmount),
+                                                                    restriction: editAllocationRestriction,
+                                                                  },
+                                                                  fetchKey,
+                                                                  { refreshDecisionList: true }
+                                                                )
                                                               }}
                                                               disabled={isUpdatingAllocation}
                                                             >
@@ -2112,6 +2253,7 @@ export default function DistributionDecisionsManager() {
                                                                 setEditingAllocation(null)
                                                                 setEditAllocationState('')
                                                                 setEditAllocationAmount('')
+                                                                setEditAllocationRestriction('')
                                                               }}
                                                               disabled={isUpdatingAllocation}
                                                             >
@@ -2128,6 +2270,7 @@ export default function DistributionDecisionsManager() {
                                                                 setEditingAllocation(alloc.allocation_id)
                                                                 setEditAllocationState(alloc.state || '')
                                                                 setEditAllocationAmount(alloc.amount?.toString() || '')
+                                                                setEditAllocationRestriction(alloc.restriction || '')
                                                               }}
                                                             >
                                                               <Pencil className="h-3 w-3" />
@@ -2182,6 +2325,7 @@ export default function DistributionDecisionsManager() {
                                                 <TableRow className="bg-muted/50 font-semibold">
                                                   <TableCell className="font-semibold">Total</TableCell>
                                                   <TableCell />
+                                                  <TableCell />
                                                   <TableCell className="text-right font-semibold">{formatCurrency(totalAmount)}</TableCell>
                                                   <TableCell className="text-right font-semibold">
                                                     {totalPercent !== '—' ? `${totalPercent}%` : '—'}
@@ -2213,6 +2357,32 @@ export default function DistributionDecisionsManager() {
                                                   {stateOptions.map((s) => (
                                                     <SelectItem key={s} value={s}>
                                                       {s}
+                                                    </SelectItem>
+                                                  ))}
+                                                </SelectContent>
+                                              </Select>
+                                            </TableCell>
+                                            <TableCell>
+                                              <Select
+                                                value={restrictionSelectValue(row.restriction)}
+                                                onValueChange={(val) =>
+                                                  setAllocRows((prev) =>
+                                                    prev.map((r, i) =>
+                                                      i === idx
+                                                        ? { ...r, restriction: restrictionFromSelectValue(val) }
+                                                        : r
+                                                    )
+                                                  )
+                                                }
+                                              >
+                                                <SelectTrigger size="sm" className={RESTRICTION_PILL_TRIGGER_CLASS}>
+                                                  <SelectValue placeholder="Restriction" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                  <SelectItem value={NONE_RESTRICTION_VALUE}>None</SelectItem>
+                                                  {restrictionOptionsForValue(row.restriction).map((name) => (
+                                                    <SelectItem key={name} value={name}>
+                                                      {name}
                                                     </SelectItem>
                                                   ))}
                                                 </SelectContent>
@@ -2252,7 +2422,10 @@ export default function DistributionDecisionsManager() {
                                                     variant="outline"
                                                     size="sm"
                                                     onClick={() =>
-                                                      setAllocRows((prev) => [...prev, { state: '', amount: '' }])
+                                                      setAllocRows((prev) => [
+                                                        ...prev,
+                                                        newPendingAllocRow(decision.restriction),
+                                                      ])
                                                     }
                                                   >
                                                     Add row
@@ -2272,7 +2445,7 @@ export default function DistributionDecisionsManager() {
                                             variant="outline"
                                             size="sm"
                                             className="h-7 text-xs"
-                                            onClick={() => setAllocRows([{ state: '', amount: '' }])}
+                                            onClick={() => setAllocRows([newPendingAllocRow(decision.restriction)])}
                                           >
                                             <Plus className="h-3 w-3 mr-1" />
                                             Add state allocation

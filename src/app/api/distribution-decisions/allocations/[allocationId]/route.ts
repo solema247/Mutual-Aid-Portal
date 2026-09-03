@@ -18,7 +18,7 @@ export async function PUT(
 
   try {
     const body = await request.json()
-    const { state, amount } = body
+    const { state, amount, restriction } = body
 
     if (!state || !amount || Number(amount) <= 0) {
       return NextResponse.json({ error: 'State and valid amount are required' }, { status: 400 })
@@ -51,6 +51,8 @@ export async function PUT(
 
     const decisionAmount = decision.decision_amount
     const percent = decisionAmount ? (Number(amount) / Number(decisionAmount)) * 100 : null
+    const restrictionValue =
+      typeof restriction === 'string' ? restriction.trim() || null : undefined
 
     const { data, error } = await auth.ctx.supabase
       .from('allocations_by_date')
@@ -58,6 +60,7 @@ export async function PUT(
         State: state,
         'Allocation Amount': Number(amount),
         '%_Decision_Amount': percent,
+        ...(restrictionValue !== undefined ? { Restriction: restrictionValue } : {}),
         sync_status: SYNC_STATUS.PENDING,
       })
       .eq('Allocation_ID', params.allocationId)
