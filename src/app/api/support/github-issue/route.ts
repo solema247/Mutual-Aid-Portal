@@ -5,12 +5,20 @@ import {
   DEFAULT_GITHUB_ISSUES_REPO,
   GITHUB_RAISE_TICKET_LABELS,
   PRIORITY_TO_DESCRIPTION_LINE,
-  RAISE_TICKET_LABEL_I18N_KEYS,
   RAISE_TICKET_PRIORITIES,
 } from '@/lib/raiseTicketGithub'
 import { checkRaiseTicketRateLimit } from '@/lib/rateLimitSlidingWindow'
+import {
+  RAISE_TICKET_IMAGE_MAX_BYTES,
+  RAISE_TICKET_IMAGE_MAX_COUNT,
+  formatGithubIssueAttachmentsMarkdown,
+  isAllowedRaiseTicketImageMime,
+  uploadGithubIssueAttachment,
+  type GithubIssueAttachment,
+  type RaiseTicketImageMime,
+} from '@/lib/githubIssueAttachments'
 
-const bodySchema = z
+const fieldsSchema = z
   .object({
     title: z.string().trim().min(3).max(200),
     description: z.string().trim().min(10).max(8000),
@@ -20,6 +28,23 @@ const bodySchema = z
   .strict()
 
 const DEFAULT_REPO = DEFAULT_GITHUB_ISSUES_REPO
+
+async function parseMultipartFields (form: FormData) {
+  return fieldsSchema.safeParse({
+    title: String(form.get('title') ?? ''),
+    description: String(form.get('description') ?? ''),
+    label: String(form.get('label') ?? ''),
+    priority: String(form.get('priority') ?? ''),
+  })
+}
+
+function collectImageFiles (form: FormData): File[] {
+  const fromAll = form.getAll('images').filter((v): v is File => v instanceof File && v.size > 0)
+  if (fromAll.length > 0) return fromAll
+  const single = form.get('image')
+  if (single instanceof File && single.size > 0) return [single]
+  return []
+}
 
 export async function POST (request: Request) {
   try {
@@ -48,19 +73,56 @@ export async function POST (request: Request) {
       )
     }
 
-    let raw: unknown
-    try {
-      raw = await request.json()
-    } catch {
-      return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
+    const contentType = request.headers.get('content-type') ?? ''
+    if (!contentType.includes('multipart/form-data')) {
+      return NextResponse.json(
+        { error: 'Expected multipart/form-data' },
+        { status: 400 }
+      )
     }
 
-    const parsed = bodySchema.safeParse(raw)
+    let form: FormData
+    try {
+      form = await request.formData()
+    } catch {
+      return NextResponse.json({ error: 'Invalid form data' }, { status: 400 })
+    }
+
+    const parsed = await parseMultipartFields(form)
     if (!parsed.success) {
       return NextResponse.json(
         { error: 'Validation failed', details: parsed.error.flatten() },
         { status: 400 }
       )
+    }
+
+    const imageFiles = collectImageFiles(form)
+    if (imageFiles.length > RAISE_TICKET_IMAGE_MAX_COUNT) {
+      return NextResponse.json(
+        {
+          error: `Too many images (max ${RAISE_TICKET_IMAGE_MAX_COUNT}).`,
+        },
+        { status: 400 }
+      )
+    }
+
+    for (const file of imageFiles) {
+      if (!isAllowedRaiseTicketImageMime(file.type)) {
+        return NextResponse.json(
+          {
+            error: `Unsupported image type: ${file.type || 'unknown'}. Use PNG, JPEG, WebP, or GIF.`,
+          },
+          { status: 400 }
+        )
+      }
+      if (file.size > RAISE_TICKET_IMAGE_MAX_BYTES) {
+        return NextResponse.json(
+          {
+            error: `Image "${file.name}" exceeds the ${Math.round(RAISE_TICKET_IMAGE_MAX_BYTES / (1024 * 1024))} MB limit.`,
+          },
+          { status: 400 }
+        )
+      }
     }
 
     const rate = checkRaiseTicketRateLimit(auth.dbUser.id)
@@ -80,7 +142,34 @@ export async function POST (request: Request) {
     const { title, description, label, priority } = parsed.data
     const repo = process.env.GITHUB_ISSUES_REPO ?? DEFAULT_REPO
 
+    const attachments: GithubIssueAttachment[] = []
+    for (const file of imageFiles) {
+      try {
+        const bytes = await file.arrayBuffer()
+        const uploaded = await uploadGithubIssueAttachment({
+          token,
+          repo,
+          filename: file.name || 'image.png',
+          contentType: file.type as RaiseTicketImageMime,
+          bytes,
+        })
+        attachments.push(uploaded)
+      } catch (uploadErr) {
+        console.error('GitHub attachment upload failed:', uploadErr)
+        const detail =
+          uploadErr instanceof Error ? uploadErr.message : 'Upload failed'
+        return NextResponse.json(
+          {
+            error: 'Could not upload image to GitHub. Ticket was not created.',
+            detail,
+          },
+          { status: 502 }
+        )
+      }
+    }
+
     const priorityLine = PRIORITY_TO_DESCRIPTION_LINE[priority]
+    const attachmentsMd = formatGithubIssueAttachmentsMarkdown(attachments)
 
     const issueBody = [
       '## Report from Mutual Aid Portal',
@@ -93,6 +182,7 @@ export async function POST (request: Request) {
       '',
       description,
       '',
+      ...(attachmentsMd ? [attachmentsMd] : []),
       '---',
       '_Submitted via ERR portal → Raise a ticket_',
     ].join('\n')

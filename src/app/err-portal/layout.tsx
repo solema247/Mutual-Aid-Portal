@@ -7,7 +7,7 @@ import PageExplainerHeader from '@/components/layout/PageExplainerHeader'
 import { PageExplainerProvider } from '@/contexts/PageExplainerContext'
 import type { SidebarItem, SidebarLinkItem } from '@/components/layout/Sidebar'
 import { useRouter } from 'next/navigation'
-import { Users, ClipboardList, BarChart2, BarChart3, PieChart, UserCog, Home, CheckSquare, BookOpen, PenTool, Cog, FileText, BookMarked, Ticket, ShieldCheck, Archive, Split, ArrowLeftRight } from 'lucide-react'
+import { Users, ClipboardList, BarChart2, BarChart3, PieChart, UserCog, Home, CheckSquare, BookOpen, PenTool, Cog, FileText, BookMarked, Ticket, ShieldCheck, Archive, Split, ArrowLeftRight, LayoutDashboard } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 import { useAllowedFunctions } from '@/hooks/useAllowedFunctions'
 
@@ -207,6 +207,11 @@ export default function ErrPortalLayout({
       href: '/err-portal/raise-a-ticket',
       label: t('err:raise_ticket_title', 'Raise a ticket'),
       icon: <Ticket className="h-5 w-5" />,
+    })
+    adminGroupChildren.push({
+      href: '/err-portal/ticket-dashboard',
+      label: t('err:raise_ticket_dashboard_nav', 'Ticket dashboard'),
+      icon: <LayoutDashboard className="h-5 w-5" />,
     })
   }
   if (canViewSurveys) {

@@ -86,6 +86,7 @@ interface ActiveIterationTasksProps {
 }
 
 const UNSCHEDULED_PAGE_SIZE = 10
+const CURRENT_SPRINT_VALUE = '__current__'
 
 function StatusPill ({ status }: { status: GithubProjectStatus }) {
   const { t } = useTranslation('err')
@@ -429,12 +430,12 @@ export function ActiveIterationTasks ({ enabled = true }: ActiveIterationTasksPr
   const { t, i18n } = useTranslation('err')
   const [previous, setPrevious] = useState<ActiveIterationReport | null>(null)
   const [previousOptions, setPreviousOptions] = useState<PreviousIterationOption[]>([])
-  const [selectedPreviousId, setSelectedPreviousId] = useState<string | null>(null)
+  const [selectedSprintId, setSelectedSprintId] = useState<string>(CURRENT_SPRINT_VALUE)
   const [active, setActive] = useState<ActiveIterationReport | null>(null)
   const [planned, setPlanned] = useState<ActiveIterationReport | null>(null)
   const [unscheduled, setUnscheduled] = useState<SprintTaskListReport | null>(null)
   const [loading, setLoading] = useState(true)
-  const [previousLoading, setPreviousLoading] = useState(false)
+  const [sprintLoading, setSprintLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const locale = i18n.language?.startsWith('ar') ? 'ar' : 'en'
@@ -459,12 +460,12 @@ export function ActiveIterationTasks ({ enabled = true }: ActiveIterationTasksPr
           const options = json.previousOptions ?? []
           setPrevious(json.previous ?? null)
           setPreviousOptions(options)
-          setSelectedPreviousId(
-            json.previous?.iteration.iterationId ?? options[0]?.iterationId ?? null
-          )
           setActive(json.active ?? null)
           setPlanned(json.planned ?? null)
           setUnscheduled(json.unscheduled)
+          setSelectedSprintId(
+            json.active ? CURRENT_SPRINT_VALUE : options[0]?.iterationId ?? CURRENT_SPRINT_VALUE
+          )
         }
       } catch (e) {
         if (!cancelled) {
@@ -481,14 +482,19 @@ export function ActiveIterationTasks ({ enabled = true }: ActiveIterationTasksPr
     }
   }, [enabled, locale])
 
-  async function handlePreviousSprintChange (iterationId: string) {
-    if (iterationId === selectedPreviousId) return
-    setSelectedPreviousId(iterationId)
-    setPreviousLoading(true)
+  async function handleSprintChange (value: string) {
+    if (value === selectedSprintId) return
+    setSelectedSprintId(value)
     setError(null)
+
+    if (value === CURRENT_SPRINT_VALUE) {
+      return
+    }
+
+    setSprintLoading(true)
     try {
       const res = await fetch(
-        `/api/support/github-tickets/active-iteration?locale=${encodeURIComponent(locale)}&iterationId=${encodeURIComponent(iterationId)}`
+        `/api/support/github-tickets/active-iteration?locale=${encodeURIComponent(locale)}&iterationId=${encodeURIComponent(value)}`
       )
       if (!res.ok) {
         const body = await res.json().catch(() => null)
@@ -502,29 +508,41 @@ export function ActiveIterationTasks ({ enabled = true }: ActiveIterationTasksPr
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load sprint tasks')
     } finally {
-      setPreviousLoading(false)
+      setSprintLoading(false)
     }
   }
 
   if (!enabled) return null
 
   const title = t('raise_ticket_sprint_title', 'Sprints')
-  const previousSelect =
-    previousOptions.length > 1 ? (
+  const viewingCurrent = selectedSprintId === CURRENT_SPRINT_VALUE
+  const selectedReport = viewingCurrent ? active : previous
+  const showSprintSection = Boolean(active) || previousOptions.length > 0 || Boolean(previous)
+
+  const sprintSelect =
+    previousOptions.length > 0 ? (
       <Select
-        value={selectedPreviousId ?? undefined}
-        onValueChange={handlePreviousSprintChange}
-        disabled={previousLoading}
+        value={selectedSprintId}
+        onValueChange={handleSprintChange}
+        disabled={sprintLoading}
       >
         <SelectTrigger
-          aria-label={t('raise_ticket_sprint_previous_select_label', 'Select previous sprint')}
-          className="h-8 w-full max-w-[16rem] text-xs"
+          aria-label={t('raise_ticket_sprint_select_label', 'Select sprint')}
+          className="h-8 w-full max-w-[18rem] text-xs"
         >
           <SelectValue
-            placeholder={t('raise_ticket_sprint_previous_select_placeholder', 'Select a sprint')}
+            placeholder={t('raise_ticket_sprint_select_placeholder', 'Select a sprint')}
           />
         </SelectTrigger>
         <SelectContent>
+          {active ? (
+            <SelectItem value={CURRENT_SPRINT_VALUE} className="text-xs">
+              {t('raise_ticket_sprint_current_option', 'Current · {{title}} · {{range}}', {
+                title: active.iteration.title,
+                range: active.dateRange,
+              })}
+            </SelectItem>
+          ) : null}
           {previousOptions.map((option) => (
             <SelectItem key={option.iterationId} value={option.iterationId} className="text-xs">
               {option.title} · {option.dateRange}
@@ -561,45 +579,55 @@ export function ActiveIterationTasks ({ enabled = true }: ActiveIterationTasksPr
                 {error}
               </div>
             ) : null}
-            {previous ? (
-              <div className={previousLoading ? 'opacity-60 pointer-events-none' : undefined}>
-                <IterationSection
-                  heading={t('raise_ticket_sprint_previous_heading', 'Previous sprint')}
-                  report={previous}
-                  headerAction={previousSelect}
-                  emptyMessage={t(
-                    'raise_ticket_sprint_previous_empty',
-                    'No tasks are assigned to the previous sprint.'
-                  )}
-                />
-              </div>
-            ) : previousOptions.length > 1 ? (
-              <section className="space-y-2">
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                  <h3 className="text-sm font-semibold text-foreground">
-                    {t('raise_ticket_sprint_previous_heading', 'Previous sprint')}
-                  </h3>
-                  {previousSelect}
-                </div>
-                <div className="rounded-lg px-3 py-6 text-center text-sm text-muted-foreground ring-1 ring-border/50">
-                  {previousLoading
-                    ? t('raise_ticket_chart_loading', 'Loading chart data…')
-                    : t(
-                        'raise_ticket_sprint_previous_empty',
-                        'No tasks are assigned to the previous sprint.'
-                      )}
-                </div>
-              </section>
-            ) : null}
-            {active ? (
-              <IterationSection
-                heading={t('raise_ticket_sprint_current_heading', 'Current sprint')}
-                report={active}
-                emptyMessage={t(
-                  'raise_ticket_sprint_empty',
-                  'No tasks are assigned to the current sprint yet.'
+            {showSprintSection ? (
+              <div className={sprintLoading ? 'opacity-60 pointer-events-none' : undefined}>
+                {selectedReport ? (
+                  <IterationSection
+                    heading={
+                      viewingCurrent
+                        ? t('raise_ticket_sprint_current_heading', 'Current sprint')
+                        : t('raise_ticket_sprint_previous_heading', 'Previous sprint')
+                    }
+                    report={selectedReport}
+                    headerAction={sprintSelect}
+                    emptyMessage={
+                      viewingCurrent
+                        ? t(
+                            'raise_ticket_sprint_empty',
+                            'No tasks are assigned to the current sprint yet.'
+                          )
+                        : t(
+                            'raise_ticket_sprint_previous_empty',
+                            'No tasks are assigned to the previous sprint.'
+                          )
+                    }
+                  />
+                ) : (
+                  <section className="space-y-2">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                      <h3 className="text-sm font-semibold text-foreground">
+                        {viewingCurrent
+                          ? t('raise_ticket_sprint_current_heading', 'Current sprint')
+                          : t('raise_ticket_sprint_previous_heading', 'Previous sprint')}
+                      </h3>
+                      {sprintSelect}
+                    </div>
+                    <div className="rounded-lg px-3 py-6 text-center text-sm text-muted-foreground ring-1 ring-border/50">
+                      {sprintLoading
+                        ? t('raise_ticket_chart_loading', 'Loading chart data…')
+                        : viewingCurrent
+                          ? t(
+                              'raise_ticket_sprint_empty',
+                              'No tasks are assigned to the current sprint yet.'
+                            )
+                          : t(
+                              'raise_ticket_sprint_previous_empty',
+                              'No tasks are assigned to the previous sprint.'
+                            )}
+                    </div>
+                  </section>
                 )}
-              />
+              </div>
             ) : null}
             {planned ? (
               <IterationSection
