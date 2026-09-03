@@ -30,6 +30,18 @@ function jsonbToText(value: unknown): string | null {
   return s && !s.includes('#ERROR!') ? s : null
 }
 
+/** FDW: LCC.AD.P2H.26-06-25.587 — partner is embedded when the partner column is a rec… id */
+function partnerFromAllocationId(id: string): string | null {
+  const m = id.match(/^LCC\.AD\.([^.]+)\.(\d{2}-\d{2}-\d{2})\.(\d+)$/)
+  return m ? m[1] : null
+}
+
+function resolvePartner(allocationId: string, rawPartner: unknown): string | null {
+  const fromCol = jsonbToText(rawPartner)
+  if (fromCol && !/^rec[A-Za-z0-9]+$/.test(fromCol)) return fromCol
+  return partnerFromAllocationId(allocationId) || fromCol
+}
+
 async function fetchFdw() {
   const supabase = getSupabaseAdmin()
   const rows: Array<{
@@ -40,17 +52,33 @@ async function fetchFdw() {
     serial: number | null
     partner: unknown
   }> = []
+  const pageSize = 100
   let from = 0
   while (true) {
-    const { data, error } = await supabase
-      .from('allocations')
-      .select('allocation_id, state, allocation_amount, decision_date, serial, partner')
-      .range(from, from + 999)
-    if (error) throw error
+    let data: typeof rows | null = null
+    let lastError: { message?: string } | null = null
+    for (let attempt = 1; attempt <= 4; attempt++) {
+      const res = await supabase
+        .from('allocations')
+        .select('allocation_id, state, allocation_amount, decision_date, serial, partner')
+        .range(from, from + pageSize - 1)
+      if (!res.error) {
+        data = (res.data as typeof rows) || []
+        lastError = null
+        break
+      }
+      lastError = res.error
+      const waitMs = attempt * 1500
+      console.warn(
+        `[fetchFdw] range ${from}-${from + pageSize - 1} attempt ${attempt} failed: ${res.error.message}; retry in ${waitMs}ms`
+      )
+      await new Promise((r) => setTimeout(r, waitMs))
+    }
+    if (lastError) throw lastError
     if (!data?.length) break
     rows.push(...data)
-    if (data.length < 1000) break
-    from += 1000
+    if (data.length < pageSize) break
+    from += pageSize
   }
   return rows
 }
@@ -100,7 +128,7 @@ async function main() {
 
     orphans.push({
       airtable_allocation_id: id,
-      partner: jsonbToText(r.partner),
+      partner: resolvePartner(id, r.partner),
       decision_date: decisionDate,
       state: r.state,
       allocation_amount:

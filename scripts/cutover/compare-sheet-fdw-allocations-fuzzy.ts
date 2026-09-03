@@ -268,17 +268,35 @@ async function fetchFdw() {
     serial: number | null
     partner: unknown
   }> = []
+  // FDW allocations often time out on 1000-row pages; keep batches small and retry.
+  const pageSize = 100
   let from = 0
   while (true) {
-    const { data, error } = await supabase
-      .from('allocations')
-      .select('allocation_id, state, allocation_amount, decision_date, serial, partner')
-      .range(from, from + 999)
-    if (error) throw error
+    let data: typeof rows | null = null
+    let lastError: { message?: string } | null = null
+    for (let attempt = 1; attempt <= 4; attempt++) {
+      const res = await supabase
+        .from('allocations')
+        .select('allocation_id, state, allocation_amount, decision_date, serial, partner')
+        .range(from, from + pageSize - 1)
+      if (!res.error) {
+        data = (res.data as typeof rows) || []
+        lastError = null
+        break
+      }
+      lastError = res.error
+      const waitMs = attempt * 1500
+      console.warn(
+        `[fetchFdw] range ${from}-${from + pageSize - 1} attempt ${attempt} failed: ${res.error.message}; retry in ${waitMs}ms`
+      )
+      await new Promise((r) => setTimeout(r, waitMs))
+    }
+    if (lastError) throw lastError
     if (!data?.length) break
     rows.push(...data)
-    if (data.length < 1000) break
-    from += 1000
+    console.log(`[fetchFdw] loaded ${rows.length} rows`)
+    if (data.length < pageSize) break
+    from += pageSize
   }
   return rows
 }
