@@ -3042,6 +3042,7 @@ export type Database = {
           project_id: string
           exchange_rate: number | null
           transfer_date: string | null
+          fsp_id: string | null
           created_by: string | null
           created_at: string
           updated_at: string
@@ -3052,6 +3053,7 @@ export type Database = {
           project_id: string
           exchange_rate?: number | null
           transfer_date?: string | null
+          fsp_id?: string | null
           created_by?: string | null
           created_at?: string
           updated_at?: string
@@ -3062,6 +3064,7 @@ export type Database = {
           project_id?: string
           exchange_rate?: number | null
           transfer_date?: string | null
+          fsp_id?: string | null
           created_by?: string | null
           created_at?: string
           updated_at?: string
@@ -3079,6 +3082,13 @@ export type Database = {
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "err_projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mou_payment_confirmations_fsp_id_fkey"
+            columns: ["fsp_id"]
+            isOneToOne: false
+            referencedRelation: "fsps"
             referencedColumns: ["id"]
           },
         ]

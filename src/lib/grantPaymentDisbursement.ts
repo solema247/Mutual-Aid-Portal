@@ -10,14 +10,6 @@ type ProjectRow = {
   submitted_at?: string | null
 }
 
-type MouRow = {
-  id: string
-  payment_confirmation_file: string | null
-  exchange_rate: number | null
-  transfer_date: string | null
-  fsp_id?: string | null
-}
-
 function resolveGrantId(
   project: ProjectRow,
   gridIdToGrantId: Map<string, string>
@@ -124,20 +116,104 @@ export function sumDisbursedToErrsByGrant(
   return mergeDisbursedTotals(portalTotals, historicalTotals)
 }
 
-/** F3 payment confirmations grouped by the MOU's FSP. Zero until mous.fsp_id is backfilled. */
+export type TransferActivityRow = {
+  grant_id?: string | null
+  fsp_id?: string | null
+  activity_amount?: unknown
+  status?: string | null
+}
+
+function grantLookupKey(raw: string | null | undefined): string {
+  if (raw == null) return ''
+  return String(raw).trim().toLowerCase().replace(/[\s_]+/g, '-')
+}
+
+/** Received activity_amount by grant lookup key, then FSP. Recalculated from current rows. */
+export function receivedActivityWeightsByGrant(
+  transfers: TransferActivityRow[]
+): Map<string, Record<string, number>> {
+  const byGrant = new Map<string, Record<string, number>>()
+  for (const t of transfers) {
+    const status = String(t.status || '').trim()
+    if (status !== 'Received') continue
+    const grantKey = grantLookupKey(t.grant_id)
+    const fspId = t.fsp_id != null ? String(t.fsp_id).trim() : ''
+    const activity = Number(t.activity_amount)
+    if (!grantKey || !fspId || !Number.isFinite(activity) || activity <= 0) continue
+    const weights = byGrant.get(grantKey) || {}
+    weights[fspId] = (weights[fspId] || 0) + activity
+    byGrant.set(grantKey, weights)
+  }
+  return byGrant
+}
+
+/** Split cents across FSPs with largest-remainder so totals stay exact. */
+export function splitAmountByWeights(
+  amount: number,
+  weights: Record<string, number>
+): Record<string, number> {
+  const entries = Object.entries(weights).filter(([, w]) => Number.isFinite(w) && w > 0)
+  const totalWeight = entries.reduce((sum, [, w]) => sum + w, 0)
+  if (entries.length === 0 || totalWeight <= 0 || !Number.isFinite(amount) || amount === 0) {
+    return {}
+  }
+  const cents = Math.round(amount * 100)
+  const parts = entries.map(([id, w]) => {
+    const raw = (cents * w) / totalWeight
+    const n = Math.floor(raw)
+    return { id, n, frac: raw - n }
+  })
+  let leftover = cents - parts.reduce((sum, p) => sum + p.n, 0)
+  parts.sort((a, b) => b.frac - a.frac || a.id.localeCompare(b.id))
+  for (let i = 0; leftover > 0 && parts.length > 0; i++, leftover--) {
+    parts[i % parts.length].n += 1
+  }
+  const split: Record<string, number> = {}
+  for (const p of parts) {
+    if (p.n) split[p.id] = p.n / 100
+  }
+  return split
+}
+
+function addSplit(
+  totals: Record<string, number>,
+  split: Record<string, number>
+) {
+  for (const [fspId, amount] of Object.entries(split)) {
+    totals[fspId] = (totals[fspId] || 0) + amount
+  }
+}
+
+/**
+ * Treasury out for confirmed projects, recalculated from current expenses.
+ * Splits each project's F1 expense total across FSPs in the same ratio as
+ * Received transfer activity on that grant. If the grant has no Received
+ * activity, falls back to the latest confirmation FSP.
+ */
 export function sumDisbursedToErrsByFsp(
   projects: ProjectRow[],
-  mous: MouRow[],
-  confirmedProjectIds: Set<string> = new Set()
+  confirmedProjectIds: Set<string> = new Set(),
+  confirmationFspByProject: Record<string, string | null> = {},
+  transfers: TransferActivityRow[] = [],
+  gridIdToGrantId: Map<string, string> = new Map()
 ): Record<string, number> {
-  const mouById = new Map(mous.map((m) => [m.id, m]))
   const totals: Record<string, number> = {}
+  const weightsByGrant = receivedActivityWeightsByGrant(transfers)
 
   for (const project of projects) {
     if (!confirmedProjectIds.has(project.id) || !project.mou_id) continue
-    const fspId = mouById.get(project.mou_id)?.fsp_id?.trim()
-    if (!fspId) continue
-    totals[fspId] = (totals[fspId] || 0) + projectExpenseTotal(project.expenses)
+    const expense = projectExpenseTotal(project.expenses)
+    if (!expense) continue
+
+    const grantId = resolveGrantId(project, gridIdToGrantId)
+    const weights = grantId ? weightsByGrant.get(grantLookupKey(grantId)) : undefined
+    if (weights && Object.keys(weights).length > 0) {
+      addSplit(totals, splitAmountByWeights(expense, weights))
+      continue
+    }
+
+    const fallbackFsp = confirmationFspByProject[project.id]?.trim()
+    if (fallbackFsp) totals[fallbackFsp] = (totals[fallbackFsp] || 0) + expense
   }
   return totals
 }

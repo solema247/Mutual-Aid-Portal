@@ -17,6 +17,7 @@ interface UsePaymentModalOptions {
 const emptyDraft = (): NewPaymentDraft => ({
   exchange_rate: '',
   transfer_date: '',
+  fsp_id: '',
   files: [],
 })
 
@@ -33,6 +34,8 @@ export function usePaymentModal({ fetchMous }: UsePaymentModalOptions) {
   const [busyKeys, setBusyKeys] = useState<Record<string, boolean>>({})
   const [bulkPaymentExchangeRate, setBulkPaymentExchangeRate] = useState('')
   const [bulkPaymentTransferDate, setBulkPaymentTransferDate] = useState('')
+  const [bulkPaymentFspId, setBulkPaymentFspId] = useState('')
+  const [paymentFsps, setPaymentFsps] = useState<Array<{ id: string; name: string }>>([])
 
   const setBusy = (key: string, value: boolean) => {
     setBusyKeys((prev) => {
@@ -59,12 +62,33 @@ export function usePaymentModal({ fetchMous }: UsePaymentModalOptions) {
     setSelectedMouForPayment(mou)
     setBulkPaymentExchangeRate('')
     setBulkPaymentTransferDate('')
+    setBulkPaymentFspId('')
     setNewDrafts({})
     setConfirmationsByProject({})
     setLoadingConfirmations(true)
     setPaymentModalOpen(true)
 
     try {
+      try {
+        const fspRes = await fetch('/api/fsps', { cache: 'no-store' })
+        if (fspRes.ok) {
+          const fspData = await fspRes.json()
+          setPaymentFsps(
+            Array.isArray(fspData)
+              ? fspData
+                  .map((f: { id?: string; name?: string }) => ({
+                    id: String(f.id || ''),
+                    name: String(f.name || ''),
+                  }))
+                  .filter((f: { id: string; name: string }) => f.id && f.name)
+              : []
+          )
+        }
+      } catch (fspError) {
+        console.error('Error loading FSPs for payment modal:', fspError)
+        setPaymentFsps([])
+      }
+
       const { data: projects, error } = await supabase
         .from('err_projects')
         .select('id, err_id, state, locality, grant_id, emergency_rooms (name, name_ar, err_code)')
@@ -133,6 +157,7 @@ export function usePaymentModal({ fetchMous }: UsePaymentModalOptions) {
           ...current,
           exchange_rate: rate,
           transfer_date: date,
+          fsp_id: bulkPaymentFspId || current.fsp_id,
         }
       }
       return next
@@ -148,6 +173,7 @@ export function usePaymentModal({ fetchMous }: UsePaymentModalOptions) {
     setBusyKeys({})
     setBulkPaymentExchangeRate('')
     setBulkPaymentTransferDate('')
+    setBulkPaymentFspId('')
     setLoadingConfirmations(false)
   }
 
@@ -168,6 +194,9 @@ export function usePaymentModal({ fetchMous }: UsePaymentModalOptions) {
     setBulkPaymentExchangeRate,
     bulkPaymentTransferDate,
     setBulkPaymentTransferDate,
+    bulkPaymentFspId,
+    setBulkPaymentFspId,
+    paymentFsps,
     openPaymentModal,
     applyBulkPaymentToAllProjects,
     closePaymentModal,

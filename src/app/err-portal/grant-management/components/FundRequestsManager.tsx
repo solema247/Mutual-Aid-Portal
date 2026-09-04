@@ -162,7 +162,6 @@ type NewTsRow = {
   fsp_id: string
   purpose: string
   activity_amount: string
-  file: File | null
 }
 
 const emptyNewTsRow = (): NewTsRow => ({
@@ -170,7 +169,6 @@ const emptyNewTsRow = (): NewTsRow => ({
   fsp_id: '',
   purpose: 'ERR Activity Plans',
   activity_amount: '',
-  file: null,
 })
 
 const emptyFspForm = {
@@ -213,7 +211,8 @@ export default function FundRequestsManager() {
   const [tsForm, setTsForm] = useState(emptyTsForm)
   const [newTsRows, setNewTsRows] = useState<Record<string, NewTsRow[]>>({})
   const [savingNewTs, setSavingNewTs] = useState(false)
-  const [uploadingTsId, setUploadingTsId] = useState<string | null>(null)
+  const [frPendingFile, setFrPendingFile] = useState<File | null>(null)
+  const [uploadingFrId, setUploadingFrId] = useState<string | null>(null)
 
   const [fspOpen, setFspOpen] = useState(false)
   const [editingFsp, setEditingFsp] = useState<Fsp | null>(null)
@@ -293,6 +292,7 @@ export default function FundRequestsManager() {
 
   const openCreateFr = () => {
     setEditingFr(null)
+    setFrPendingFile(null)
     setShowAllDecisions(false)
     const today = new Date().toISOString().slice(0, 10)
     setFrForm({
@@ -311,6 +311,7 @@ export default function FundRequestsManager() {
 
   const openEditFr = (fr: FundRequest) => {
     setEditingFr(fr)
+    setFrPendingFile(null)
     setShowAllDecisions(false)
     setFrForm({
       request_id: fr.request_id,
@@ -340,13 +341,24 @@ export default function FundRequestsManager() {
   }
 
   const saveFr = async () => {
+    let file_name = frForm.file_name || null
+    let file_link = frForm.file_link || null
+    if (frPendingFile) {
+      try {
+        file_link = await uploadFundRequestFile(frPendingFile, frForm.request_id || 'draft')
+        file_name = frPendingFile.name
+      } catch (e: unknown) {
+        alert(e instanceof Error ? e.message : 'Failed to attach file')
+        return
+      }
+    }
     const payload = {
       request_id: frForm.request_id,
       date_submitted: frForm.date_submitted || null,
       requested_amount: frForm.requested_amount ? Number(frForm.requested_amount) : null,
       partner_name: frForm.partner_name || null,
-      file_name: frForm.file_name || null,
-      file_link: frForm.file_link || null,
+      file_name,
+      file_link,
       decision_ids: frForm.decision_ids,
     }
     const res = editingFr
@@ -365,6 +377,7 @@ export default function FundRequestsManager() {
       alert(err.error || 'Failed to save fund request')
       return
     }
+    setFrPendingFile(null)
     setFrOpen(false)
     await load()
   }
@@ -453,25 +466,6 @@ export default function FundRequestsManager() {
           alert(err.error || 'Failed to save transfer segment')
           return
         }
-        const created = await res.json().catch(() => null)
-        if (row.file && created?.id) {
-          try {
-            const file_link = await uploadTransferFile(
-              row.file,
-              created.transfer_id || created.id
-            )
-            const fileRes = await fetch(`/api/transfer-segments/${created.id}`, {
-              method: 'PUT',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ file_name: row.file.name, file_link }),
-            })
-            if (!fileRes.ok) {
-              alert('Transfer saved, but attaching the file failed. Open the row and attach it again.')
-            }
-          } catch {
-            alert('Transfer saved, but attaching the file failed. Open the row and attach it again.')
-          }
-        }
       }
       setNewTsRows((prev) => {
         const next = { ...prev }
@@ -509,9 +503,9 @@ export default function FundRequestsManager() {
     )
   }
 
-  const uploadTransferFile = async (file: File, key: string) => {
+  const uploadFundRequestFile = async (file: File, key: string) => {
     const ext = file.name.split('.').pop() || 'bin'
-    const filePath = `f0-transfer-segments/${key}-${Date.now()}.${ext}`
+    const filePath = `f0-fund-requests/${key}-${Date.now()}.${ext}`
     const { error } = await supabase.storage.from('images').upload(filePath, file, {
       cacheControl: '3600',
     })
@@ -519,7 +513,7 @@ export default function FundRequestsManager() {
     return filePath
   }
 
-  const openTransferFile = async (fileLink: string | null | undefined) => {
+  const openStorageFile = async (fileLink: string | null | undefined) => {
     if (!fileLink) return
     try {
       const url = await resolveDecisionDocumentUrl(fileLink)
@@ -533,38 +527,37 @@ export default function FundRequestsManager() {
     }
   }
 
-  const saveTransferFile = async (t: Transfer, file: File) => {
-    setUploadingTsId(t.id)
+  const patchFundRequestInState = (id: string, patch: Partial<FundRequest>) => {
+    setRequests((prev) => prev.map((fr) => (fr.id === id ? { ...fr, ...patch } : fr)))
+    if (editingFr?.id === id) {
+      setEditingFr((prev) => (prev ? { ...prev, ...patch } : prev))
+    }
+  }
+
+  const saveFundRequestFile = async (fr: FundRequest, file: File) => {
+    setUploadingFrId(fr.id)
     try {
-      const file_link = await uploadTransferFile(file, t.transfer_id || t.id)
-      const res = await fetch(`/api/transfer-segments/${t.id}`, {
+      const file_link = await uploadFundRequestFile(file, fr.request_id || fr.id)
+      const res = await fetch(`/api/fund-requests/${fr.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ file_name: file.name, file_link }),
       })
       if (!res.ok) {
         const err = await res.json().catch(() => ({}))
-        throw new Error(err.error || 'Failed to save file. Apply sql/add_transfer_segments_file.sql if the columns are missing.')
+        throw new Error(err.error || 'Failed to save file')
       }
-      const updated = await res.json().catch(() => null)
-      patchTransferInState(t.id, {
-        file_name: updated?.file_name ?? file.name,
-        file_link: updated?.file_link ?? file_link,
-      })
-      if (editingTs?.id === t.id) {
-        setEditingTs((prev) =>
-          prev ? { ...prev, file_name: file.name, file_link } : prev
-        )
-      }
+      patchFundRequestInState(fr.id, { file_name: file.name, file_link })
+      setFrForm((prev) => ({ ...prev, file_name: file.name, file_link }))
     } catch (e: unknown) {
       alert(e instanceof Error ? e.message : 'Failed to attach file')
     } finally {
-      setUploadingTsId(null)
+      setUploadingFrId(null)
     }
   }
 
-  const clearTransferFile = async (t: Transfer) => {
-    const res = await fetch(`/api/transfer-segments/${t.id}`, {
+  const clearFundRequestFile = async (fr: FundRequest) => {
+    const res = await fetch(`/api/fund-requests/${fr.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ file_name: null, file_link: null }),
@@ -573,10 +566,9 @@ export default function FundRequestsManager() {
       alert('Failed to remove file')
       return
     }
-    patchTransferInState(t.id, { file_name: null, file_link: null })
-    if (editingTs?.id === t.id) {
-      setEditingTs((prev) => (prev ? { ...prev, file_name: null, file_link: null } : prev))
-    }
+    patchFundRequestInState(fr.id, { file_name: null, file_link: null })
+    setFrForm((prev) => ({ ...prev, file_name: '', file_link: '' }))
+    setFrPendingFile(null)
   }
 
   const updateTsStatus = async (t: Transfer, status: string) => {
@@ -1050,6 +1042,55 @@ export default function FundRequestsManager() {
                     </p>
                   </div>
                 </div>
+                <div className="space-y-1">
+                  <Label>Supporting file</Label>
+                  <p className="text-[11px] text-muted-foreground">
+                    One file for this fund request — not per transfer.
+                  </p>
+                  {frPendingFile ? (
+                    <div className="flex items-center gap-2 text-sm">
+                      <span className="truncate">{frPendingFile.name}</span>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 text-xs"
+                        onClick={() => setFrPendingFile(null)}
+                      >
+                        Remove
+                      </Button>
+                    </div>
+                  ) : frForm.file_link ? (
+                    <div className="flex items-center gap-2 text-sm">
+                      <button
+                        type="button"
+                        className="text-primary underline truncate"
+                        onClick={() => openStorageFile(frForm.file_link)}
+                      >
+                        {frForm.file_name || 'Open file'}
+                      </button>
+                      {editingFr && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 text-xs"
+                          onClick={() => clearFundRequestFile(editingFr)}
+                        >
+                          Remove
+                        </Button>
+                      )}
+                    </div>
+                  ) : (
+                    <Input
+                      type="file"
+                      onChange={(e) => {
+                        setFrPendingFile(e.target.files?.[0] || null)
+                        e.target.value = ''
+                      }}
+                    />
+                  )}
+                </div>
                 <div>
                   <div className="flex items-center justify-between gap-2 mb-1">
                     <Label>Linked decisions</Label>
@@ -1196,6 +1237,7 @@ export default function FundRequestsManager() {
                   <TableHead className="text-right">Received</TableHead>
                   <TableHead className="text-right">Variance</TableHead>
                   <TableHead>Transfers</TableHead>
+                  <TableHead className="w-28">File</TableHead>
                   <TableHead />
                 </TableRow>
                 {requests.length > 0 && (
@@ -1215,6 +1257,7 @@ export default function FundRequestsManager() {
                     <TableHead className="text-right font-semibold text-foreground whitespace-nowrap">
                       {money(requestTotals.variance)}
                     </TableHead>
+                    <TableHead />
                     <TableHead />
                     <TableHead />
                   </TableRow>
@@ -1259,6 +1302,44 @@ export default function FundRequestsManager() {
                           {fr.transfer_count}
                         </Badge>
                       </TableCell>
+                      <TableCell>
+                        {uploadingFrId === fr.id ? (
+                          <span className="text-[10px] text-muted-foreground">Uploading…</span>
+                        ) : fr.file_link ? (
+                          <div className="flex items-center gap-0.5 min-w-0">
+                            <button
+                              type="button"
+                              className="truncate text-[10px] text-primary underline max-w-[6.5rem]"
+                              title={fr.file_name || 'Open file'}
+                              onClick={() => openStorageFile(fr.file_link)}
+                            >
+                              {fr.file_name || 'File'}
+                            </button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6 shrink-0"
+                              title="Remove file"
+                              onClick={() => clearFundRequestFile(fr)}
+                            >
+                              <X className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        ) : (
+                          <label className="inline-flex items-center justify-center h-7 w-7 rounded-md hover:bg-muted cursor-pointer">
+                            <Paperclip className="h-3.5 w-3.5" />
+                            <input
+                              type="file"
+                              className="hidden"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0]
+                                if (file) void saveFundRequestFile(fr, file)
+                                e.target.value = ''
+                              }}
+                            />
+                          </label>
+                        )}
+                      </TableCell>
                       <TableCell className="space-x-1 whitespace-nowrap">
                         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEditFr(fr)}>
                           <Pencil className="h-3.5 w-3.5" />
@@ -1270,7 +1351,7 @@ export default function FundRequestsManager() {
                     </TableRow>
                     {expanded === fr.id && (
                       <TableRow>
-                        <TableCell colSpan={9} className="bg-muted/30">
+                        <TableCell colSpan={10} className="bg-muted/30">
                           <div className="flex items-center justify-between mb-2">
                             <div className="text-xs font-medium">Transfer segments</div>
                           </div>
@@ -1290,7 +1371,6 @@ export default function FundRequestsManager() {
                                 <TableHead className="text-right">Activity</TableHead>
                                 <TableHead className="text-right">Fee</TableHead>
                                 <TableHead className="text-right">Total</TableHead>
-                                <TableHead className="w-28">File</TableHead>
                                 <TableHead />
                               </TableRow>
                             </TableHeader>
@@ -1298,7 +1378,7 @@ export default function FundRequestsManager() {
                               {(fr.transfers || []).length === 0 &&
                                 !(newTsRows[fr.id]?.length) && (
                                 <TableRow>
-                                  <TableCell colSpan={10} className="text-xs text-muted-foreground">
+                                  <TableCell colSpan={9} className="text-xs text-muted-foreground">
                                     No transfers yet
                                   </TableCell>
                                 </TableRow>
@@ -1343,44 +1423,6 @@ export default function FundRequestsManager() {
                                   </TableCell>
                                   <TableCell className="text-right">
                                     {money(t.transfer_amount)}
-                                  </TableCell>
-                                  <TableCell>
-                                    {uploadingTsId === t.id ? (
-                                      <span className="text-[10px] text-muted-foreground">Uploading…</span>
-                                    ) : t.file_link ? (
-                                      <div className="flex items-center gap-0.5 min-w-0">
-                                        <button
-                                          type="button"
-                                          className="truncate text-[10px] text-primary underline max-w-[6.5rem]"
-                                          title={t.file_name || 'Open file'}
-                                          onClick={() => openTransferFile(t.file_link)}
-                                        >
-                                          {t.file_name || 'File'}
-                                        </button>
-                                        <Button
-                                          variant="ghost"
-                                          size="icon"
-                                          className="h-6 w-6 shrink-0"
-                                          title="Remove file"
-                                          onClick={() => clearTransferFile(t)}
-                                        >
-                                          <X className="h-3 w-3" />
-                                        </Button>
-                                      </div>
-                                    ) : (
-                                      <label className="inline-flex items-center justify-center h-7 w-7 rounded-md hover:bg-muted cursor-pointer">
-                                        <Paperclip className="h-3.5 w-3.5" />
-                                        <input
-                                          type="file"
-                                          className="hidden"
-                                          onChange={(e) => {
-                                            const file = e.target.files?.[0]
-                                            if (file) void saveTransferFile(t, file)
-                                            e.target.value = ''
-                                          }}
-                                        />
-                                      </label>
-                                    )}
                                   </TableCell>
                                   <TableCell className="whitespace-nowrap">
                                     <Button
@@ -1493,44 +1535,6 @@ export default function FundRequestsManager() {
                                     </TableCell>
                                     <TableCell className="text-right text-muted-foreground">
                                       {money(total)}
-                                    </TableCell>
-                                    <TableCell>
-                                      <div className="flex items-center gap-0.5 min-w-0">
-                                        {row.file ? (
-                                          <>
-                                            <span
-                                              className="truncate text-[10px] max-w-[6.5rem]"
-                                              title={row.file.name}
-                                            >
-                                              {row.file.name}
-                                            </span>
-                                            <Button
-                                              variant="ghost"
-                                              size="icon"
-                                              className="h-6 w-6 shrink-0"
-                                              title="Remove file"
-                                              onClick={() =>
-                                                updateNewTsRow(fr.id, idx, { file: null })
-                                              }
-                                            >
-                                              <X className="h-3 w-3" />
-                                            </Button>
-                                          </>
-                                        ) : (
-                                          <label className="inline-flex items-center justify-center h-7 w-7 rounded-md hover:bg-muted cursor-pointer">
-                                            <Paperclip className="h-3.5 w-3.5" />
-                                            <input
-                                              type="file"
-                                              className="hidden"
-                                              onChange={(e) => {
-                                                const file = e.target.files?.[0] || null
-                                                updateNewTsRow(fr.id, idx, { file })
-                                                e.target.value = ''
-                                              }}
-                                            />
-                                          </label>
-                                        )}
-                                      </div>
                                     </TableCell>
                                     <TableCell>
                                       <div className="flex justify-end gap-1">
@@ -1878,43 +1882,6 @@ export default function FundRequestsManager() {
                 className="bg-muted"
                 title="Calculated from the selected FSP’s transfer fee %"
               />
-            </div>
-            <div className="min-w-0 space-y-1 sm:col-span-2">
-              <Label>File</Label>
-              {editingTs?.file_link ? (
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    className="text-sm text-primary underline truncate"
-                    onClick={() => openTransferFile(editingTs.file_link)}
-                  >
-                    {editingTs.file_name || 'Open file'}
-                  </button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 text-xs"
-                    disabled={uploadingTsId === editingTs.id}
-                    onClick={() => clearTransferFile(editingTs)}
-                  >
-                    Remove
-                  </Button>
-                </div>
-              ) : (
-                <Input
-                  type="file"
-                  disabled={!editingTs || uploadingTsId === editingTs?.id}
-                  onChange={(e) => {
-                    const file = e.target.files?.[0]
-                    if (file && editingTs) void saveTransferFile(editingTs, file)
-                    e.target.value = ''
-                  }}
-                />
-              )}
-              {uploadingTsId === editingTs?.id && (
-                <p className="text-[11px] text-muted-foreground">Uploading…</p>
-              )}
             </div>
             <div className="min-w-0 space-y-1 sm:col-span-2">
               <Label>Comment</Label>

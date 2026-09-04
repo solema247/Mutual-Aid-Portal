@@ -17,6 +17,7 @@ export type MouPaymentConfirmationRow = {
   project_id: string
   exchange_rate: number | null
   transfer_date: string | null
+  fsp_id: string | null
   created_by: string | null
   created_at: string
   updated_at: string
@@ -95,7 +96,7 @@ export async function loadProjectPaymentSummaries(
     let query = supabase
       .from('mou_payment_confirmations')
       .select(
-        'id, mou_id, project_id, exchange_rate, transfer_date, created_by, created_at, updated_at, mou_payment_files(id, payment_confirmation_id, file_path, original_name, file_type, file_size, uploaded_by, uploaded_at)'
+        'id, mou_id, project_id, exchange_rate, transfer_date, fsp_id, created_by, created_at, updated_at, mou_payment_files(id, payment_confirmation_id, file_path, original_name, file_type, file_size, uploaded_by, uploaded_at)'
       )
       .order('transfer_date', { ascending: true, nullsFirst: false })
       .order('created_at', { ascending: true })
@@ -292,7 +293,7 @@ export async function listPaymentConfirmationsForMou(
   let query = supabase
     .from('mou_payment_confirmations')
     .select(
-      'id, mou_id, project_id, exchange_rate, transfer_date, created_by, created_at, updated_at, mou_payment_files(id, payment_confirmation_id, file_path, original_name, file_type, file_size, uploaded_by, uploaded_at)'
+      'id, mou_id, project_id, exchange_rate, transfer_date, fsp_id, created_by, created_at, updated_at, mou_payment_files(id, payment_confirmation_id, file_path, original_name, file_type, file_size, uploaded_by, uploaded_at)'
     )
     .eq('mou_id', mouId)
     .order('transfer_date', { ascending: true, nullsFirst: false })
@@ -322,6 +323,7 @@ export async function listPaymentConfirmationsForMou(
         ? null
         : Number(row.exchange_rate),
     transfer_date: row.transfer_date,
+    fsp_id: row.fsp_id ?? null,
     created_by: row.created_by,
     created_at: row.created_at,
     updated_at: row.updated_at,

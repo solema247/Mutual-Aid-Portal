@@ -29,7 +29,10 @@ async function fetchAll(
 
 /**
  * Treasury in = sum of transfer segments for the FSP (activity + fee).
- * Treasury out = F3 payment confirmations on MOUs linked to the FSP (mous.fsp_id).
+ * Treasury out = confirmed project expenses split across FSPs in the same
+ * ratio as Received activity on that grant. Recalculated on every fetch so a
+ * new expense or Received transfer revises the totals. Confirmation FSP is a
+ * fallback only when the grant has no Received activity.
  */
 export async function attachFspTreasuryRollups<T extends Record<string, unknown>>(
   supabase: AdminClient,
@@ -51,7 +54,7 @@ export async function attachFspTreasuryRollups<T extends Record<string, unknown>
   const { data: transfers } = await fetchAll(
     supabase,
     'transfer_segments',
-    'fsp_id, activity_amount, transfer_fee_amount'
+    'fsp_id, grant_id, status, activity_amount, transfer_fee_amount'
   )
 
   const inByFsp = new Map<string, { activity: number; fees: number; total: number }>()
@@ -71,12 +74,11 @@ export async function attachFspTreasuryRollups<T extends Record<string, unknown>
   const mousSelect = await fetchAll(
     supabase,
     'mous',
-    'id, fsp_id, payment_confirmation_file, exchange_rate, transfer_date'
+    'id, payment_confirmation_file, exchange_rate, transfer_date'
   )
   if (!mousSelect.error) {
     const mous = mousSelect.data as Array<{
       id: string
-      fsp_id?: string | null
       payment_confirmation_file: string | null
       exchange_rate: number | null
       transfer_date: string | null
@@ -97,7 +99,44 @@ export async function attachFspTreasuryRollups<T extends Record<string, unknown>
     const confirmedProjectIds = await loadConfirmedProjectIds(supabase, {
       mouIds: mous.map((m) => m.id),
     })
-    outByFsp = sumDisbursedToErrsByFsp(projects, mous, confirmedProjectIds)
+    const confirmationsSelect = await fetchAll(
+      supabase,
+      'mou_payment_confirmations',
+      'project_id, fsp_id, transfer_date, created_at'
+    )
+    const confirmationFspByProject: Record<string, string | null> = {}
+    if (!confirmationsSelect.error) {
+      const sorted = [...confirmationsSelect.data].sort((a, b) => {
+        const da = String(a.transfer_date || '')
+        const db = String(b.transfer_date || '')
+        if (da !== db) return db.localeCompare(da)
+        return String(b.created_at || '').localeCompare(String(a.created_at || ''))
+      })
+      for (const row of sorted) {
+        const pid = row.project_id != null ? String(row.project_id) : ''
+        if (!pid || pid in confirmationFspByProject) continue
+        confirmationFspByProject[pid] =
+          row.fsp_id != null && String(row.fsp_id).trim() !== ''
+            ? String(row.fsp_id)
+            : null
+      }
+    }
+    const gridSelect = await fetchAll(supabase, 'grants_grid_view', 'id, grant_id')
+    const gridIdToGrantId = new Map<string, string>()
+    if (!gridSelect.error) {
+      for (const row of gridSelect.data) {
+        const id = row.id != null ? String(row.id) : ''
+        const grantId = row.grant_id != null ? String(row.grant_id).trim() : ''
+        if (id && grantId) gridIdToGrantId.set(id, grantId)
+      }
+    }
+    outByFsp = sumDisbursedToErrsByFsp(
+      projects,
+      confirmedProjectIds,
+      confirmationFspByProject,
+      transfers,
+      gridIdToGrantId
+    )
   }
 
   return fsps.map((f) => {
