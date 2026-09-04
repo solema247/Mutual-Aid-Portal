@@ -5,7 +5,7 @@ type RouteContext = { params: { id: string; confirmationId: string } }
 
 /**
  * PATCH /api/f3/mous/[id]/payment-confirmation/[confirmationId]
- * Update exchange_rate / transfer_date on an existing confirmation.
+ * Update exchange_rate / transfer_date / fsp_id on an existing confirmation.
  */
 export async function PATCH(request: Request, { params }: RouteContext) {
   try {
@@ -46,6 +46,11 @@ export async function PATCH(request: Request, { params }: RouteContext) {
           ? null
           : String(body.transfer_date)
     }
+    if ('fsp_id' in body) {
+      const raw = body.fsp_id
+      update.fsp_id =
+        raw == null || raw === '' || raw === '__none__' ? null : String(raw)
+    }
 
     if (Object.keys(update).length === 0) {
       return NextResponse.json({ error: 'No fields to update' }, { status: 400 })
@@ -57,7 +62,7 @@ export async function PATCH(request: Request, { params }: RouteContext) {
       .eq('id', confirmationId)
       .eq('mou_id', mouId)
       .select(
-        'id, mou_id, project_id, exchange_rate, transfer_date, created_by, created_at, updated_at'
+        'id, mou_id, project_id, exchange_rate, transfer_date, fsp_id, created_by, created_at, updated_at'
       )
       .single()
 

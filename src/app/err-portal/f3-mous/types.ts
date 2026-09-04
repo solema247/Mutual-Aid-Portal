@@ -119,6 +119,7 @@ export interface PaymentConfirmationRecord {
   project_id: string
   exchange_rate: number | null
   transfer_date: string | null
+  fsp_id: string | null
   created_by: string | null
   created_at: string
   updated_at: string
@@ -128,6 +129,7 @@ export interface PaymentConfirmationRecord {
 export interface NewPaymentDraft {
   exchange_rate: string
   transfer_date: string
+  fsp_id: string
   files: File[]
 }
 

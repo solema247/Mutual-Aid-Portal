@@ -130,6 +130,8 @@ export async function POST(request: Request, { params }: RouteContext) {
     const projectId = (formData.get('project_id') as string | null)?.trim() || null
     const exchangeRateRaw = formData.get('exchange_rate') as string | null
     const transferDate = (formData.get('transfer_date') as string | null)?.trim() || null
+    const rawFspId = (formData.get('fsp_id') as string | null)?.trim() || null
+    const fspId = !rawFspId || rawFspId === '__none__' ? null : rawFspId
 
     if (!projectId) {
       return NextResponse.json({ error: 'project_id is required' }, { status: 400 })
@@ -184,10 +186,11 @@ export async function POST(request: Request, { params }: RouteContext) {
         project_id: projectId,
         exchange_rate: exchangeRate,
         transfer_date: transferDate,
+        fsp_id: fspId,
         created_by: uploadedBy,
       })
       .select(
-        'id, mou_id, project_id, exchange_rate, transfer_date, created_by, created_at, updated_at'
+        'id, mou_id, project_id, exchange_rate, transfer_date, fsp_id, created_by, created_at, updated_at'
       )
       .single()
 

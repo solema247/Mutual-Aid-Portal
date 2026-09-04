@@ -5,6 +5,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import type { usePaymentModal } from '../hooks/usePaymentModal'
 import type { NewPaymentDraft, PaymentConfirmationRecord, PaymentFileRecord } from '../types'
 
@@ -43,6 +44,9 @@ export default function PaymentConfirmationDialog(props: PaymentConfirmationDial
     setBulkPaymentExchangeRate,
     bulkPaymentTransferDate,
     setBulkPaymentTransferDate,
+    bulkPaymentFspId,
+    setBulkPaymentFspId,
+    paymentFsps,
     applyBulkPaymentToAllProjects,
     closePaymentModal,
     refreshConfirmations,
@@ -55,7 +59,7 @@ export default function PaymentConfirmationDialog(props: PaymentConfirmationDial
     setNewDrafts((prev) => ({
       ...prev,
       [projectId]: {
-        ...(prev[projectId] || { exchange_rate: '', transfer_date: '', files: [] }),
+        ...(prev[projectId] || { exchange_rate: '', transfer_date: '', fsp_id: '', files: [] }),
         ...patch,
       },
     }))
@@ -91,6 +95,7 @@ export default function PaymentConfirmationDialog(props: PaymentConfirmationDial
       formData.append('project_id', projectId)
       if (draft.exchange_rate.trim()) formData.append('exchange_rate', draft.exchange_rate.trim())
       if (draft.transfer_date.trim()) formData.append('transfer_date', draft.transfer_date.trim())
+      if (draft.fsp_id.trim()) formData.append('fsp_id', draft.fsp_id.trim())
       for (const file of draft.files) formData.append('files', file)
 
       const response = await fetch(
@@ -102,7 +107,7 @@ export default function PaymentConfirmationDialog(props: PaymentConfirmationDial
         throw new Error((err as { error?: string }).error || 'Failed to create payment confirmation')
       }
 
-      updateDraft(projectId, { exchange_rate: '', transfer_date: '', files: [] })
+      updateDraft(projectId, { exchange_rate: '', transfer_date: '', fsp_id: '', files: [] })
       await refreshConfirmations(selectedMouForPayment.id)
       await fetchMous()
     } catch (e) {
@@ -129,6 +134,7 @@ export default function PaymentConfirmationDialog(props: PaymentConfirmationDial
           body: JSON.stringify({
             exchange_rate: confirmation.exchange_rate,
             transfer_date: confirmation.transfer_date,
+            fsp_id: confirmation.fsp_id,
           }),
         }
       )
@@ -275,6 +281,28 @@ export default function PaymentConfirmationDialog(props: PaymentConfirmationDial
                 disabled={anyBusy}
               />
             </div>
+            <div className="space-y-1">
+              <Label htmlFor="bulk-payment-fsp" className="text-xs">
+                {t('f3:payment_modal.fsp')}
+              </Label>
+              <Select
+                value={bulkPaymentFspId || '__none__'}
+                onValueChange={(v) => setBulkPaymentFspId(v === '__none__' ? '' : v)}
+                disabled={anyBusy}
+              >
+                <SelectTrigger id="bulk-payment-fsp" className="h-8 w-[200px] text-sm">
+                  <SelectValue placeholder={t('f3:payment_modal.fsp_placeholder')} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">{t('f3:payment_modal.fsp_none')}</SelectItem>
+                  {paymentFsps.map((fsp) => (
+                    <SelectItem key={fsp.id} value={fsp.id}>
+                      {fsp.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             <Button
               type="button"
               variant="secondary"
@@ -297,6 +325,7 @@ export default function PaymentConfirmationDialog(props: PaymentConfirmationDial
               const draft = newDrafts[project.id] || {
                 exchange_rate: '',
                 transfer_date: '',
+                fsp_id: '',
                 files: [],
               }
               const creating = !!busyKeys[`create:${project.id}`]
@@ -392,6 +421,32 @@ export default function PaymentConfirmationDialog(props: PaymentConfirmationDial
                                     })
                                   }
                                 />
+                              </div>
+                              <div className="space-y-1">
+                                <Label className="text-xs">{t('f3:payment_modal.fsp')}</Label>
+                                <Select
+                                  value={confirmation.fsp_id || '__none__'}
+                                  onValueChange={(v) =>
+                                    patchLocalConfirmation(project.id, confirmation.id, {
+                                      fsp_id: v === '__none__' ? null : v,
+                                    })
+                                  }
+                                  disabled={metaBusy}
+                                >
+                                  <SelectTrigger className="h-8 w-[200px] text-sm">
+                                    <SelectValue placeholder={t('f3:payment_modal.fsp_placeholder')} />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="__none__">
+                                      {t('f3:payment_modal.fsp_none')}
+                                    </SelectItem>
+                                    {paymentFsps.map((fsp) => (
+                                      <SelectItem key={fsp.id} value={fsp.id}>
+                                        {fsp.name}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
                               </div>
                               <Button
                                 type="button"
@@ -523,6 +578,30 @@ export default function PaymentConfirmationDialog(props: PaymentConfirmationDial
                             updateDraft(project.id, { transfer_date: e.target.value })
                           }
                         />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs">{t('f3:payment_modal.fsp')}</Label>
+                        <Select
+                          value={draft.fsp_id || '__none__'}
+                          onValueChange={(v) =>
+                            updateDraft(project.id, { fsp_id: v === '__none__' ? '' : v })
+                          }
+                          disabled={creating}
+                        >
+                          <SelectTrigger className="h-8 w-[200px] text-sm">
+                            <SelectValue placeholder={t('f3:payment_modal.fsp_placeholder')} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__none__">
+                              {t('f3:payment_modal.fsp_none')}
+                            </SelectItem>
+                            {paymentFsps.map((fsp) => (
+                              <SelectItem key={fsp.id} value={fsp.id}>
+                                {fsp.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </div>
                       <div className="space-y-1">
                         <Label className="text-xs">{t('f3:payment_modal.files')}</Label>

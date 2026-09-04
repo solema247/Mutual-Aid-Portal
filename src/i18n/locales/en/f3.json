@@ -53,9 +53,12 @@
     "confirm_delete_file": "Delete this file? The payment confirmation will remain.",
     "confirm_delete_payment": "Delete this payment confirmation and all of its files?",
     "open_failed": "Failed to open payment confirmation",
-    "bulk_hint": "Enter an exchange rate and transfer date, then apply to all projects' new-payment drafts. You can still adjust each project before creating.",
+    "bulk_hint": "Enter an exchange rate, transfer date, and optionally an FSP, then apply to all projects' new-payment drafts. You can still adjust each project before creating.",
     "bulk_exchange_rate": "Exchange rate",
     "bulk_transfer_date": "Transfer date",
+    "fsp": "FSP",
+    "fsp_placeholder": "Select FSP",
+    "fsp_none": "No FSP",
     "apply_to_all": "Apply to all projects",
     "bulk_required": "Please enter both exchange rate and transfer date.",
     "bulk_rate_invalid": "Please enter a valid exchange rate greater than zero."
