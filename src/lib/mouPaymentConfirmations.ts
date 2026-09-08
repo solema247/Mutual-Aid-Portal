@@ -107,7 +107,19 @@ export async function loadProjectPaymentSummaries(
       query = query.in('mou_id', mouIds)
     }
 
-    const { data, error } = await query
+    let { data, error } = await query
+    if (error && /fsp_id/i.test(error.message || '')) {
+      const retry = await supabase
+        .from('mou_payment_confirmations')
+        .select(
+          'id, mou_id, project_id, exchange_rate, transfer_date, created_by, created_at, updated_at, mou_payment_files(id, payment_confirmation_id, file_path, original_name, file_type, file_size, uploaded_by, uploaded_at)'
+        )
+        .order('transfer_date', { ascending: true, nullsFirst: false })
+        .order('created_at', { ascending: true })
+        .in(projectIds.length > 0 ? 'project_id' : 'mou_id', projectIds.length > 0 ? projectIds : mouIds)
+      data = retry.data
+      error = retry.error
+    }
     if (error) {
       // Table may not exist yet before migration — fall through to legacy JSON.
       console.warn('[mouPaymentConfirmations] relational load failed, using legacy', error.message)
@@ -303,7 +315,21 @@ export async function listPaymentConfirmationsForMou(
     query = query.eq('project_id', projectId)
   }
 
-  const { data, error } = await query
+  let { data, error } = await query
+  if (error && /fsp_id/i.test(error.message || '')) {
+    let fallback = supabase
+      .from('mou_payment_confirmations')
+      .select(
+        'id, mou_id, project_id, exchange_rate, transfer_date, created_by, created_at, updated_at, mou_payment_files(id, payment_confirmation_id, file_path, original_name, file_type, file_size, uploaded_by, uploaded_at)'
+      )
+      .eq('mou_id', mouId)
+      .order('transfer_date', { ascending: true, nullsFirst: false })
+      .order('created_at', { ascending: true })
+    if (projectId) fallback = fallback.eq('project_id', projectId)
+    const retry = await fallback
+    data = retry.data
+    error = retry.error
+  }
   if (error) {
     // Migration not applied / schema cache stale — return empty so the modal can still
     // show projects and the Add Payment form instead of wiping the UI.

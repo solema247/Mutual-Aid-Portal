@@ -179,20 +179,37 @@ export async function POST(request: Request, { params }: RouteContext) {
 
     const uploadedBy = await getSessionUserLabel(supabase)
 
-    const { data: confirmation, error: insertError } = await supabase
+    const insertPayload: Record<string, unknown> = {
+      mou_id: mouId,
+      project_id: projectId,
+      exchange_rate: exchangeRate,
+      transfer_date: transferDate,
+      created_by: uploadedBy,
+    }
+    if (fspId) insertPayload.fsp_id = fspId
+
+    let { data: confirmation, error: insertError } = await supabase
       .from('mou_payment_confirmations')
-      .insert({
-        mou_id: mouId,
-        project_id: projectId,
-        exchange_rate: exchangeRate,
-        transfer_date: transferDate,
-        fsp_id: fspId,
-        created_by: uploadedBy,
-      })
+      .insert(insertPayload)
       .select(
         'id, mou_id, project_id, exchange_rate, transfer_date, fsp_id, created_by, created_at, updated_at'
       )
       .single()
+
+    if (insertError && /fsp_id/i.test(insertError.message || '')) {
+      delete insertPayload.fsp_id
+      const retry = await supabase
+        .from('mou_payment_confirmations')
+        .insert(insertPayload)
+        .select(
+          'id, mou_id, project_id, exchange_rate, transfer_date, created_by, created_at, updated_at'
+        )
+        .single()
+      confirmation = retry.data
+        ? { ...retry.data, fsp_id: null }
+        : retry.data
+      insertError = retry.error
+    }
 
     if (insertError || !confirmation) {
       console.error('[payment-confirmation POST] insert', insertError)

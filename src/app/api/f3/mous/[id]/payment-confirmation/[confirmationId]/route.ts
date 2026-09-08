@@ -56,7 +56,7 @@ export async function PATCH(request: Request, { params }: RouteContext) {
       return NextResponse.json({ error: 'No fields to update' }, { status: 400 })
     }
 
-    const { data, error } = await supabase
+    let { data, error } = await supabase
       .from('mou_payment_confirmations')
       .update(update)
       .eq('id', confirmationId)
@@ -65,6 +65,30 @@ export async function PATCH(request: Request, { params }: RouteContext) {
         'id, mou_id, project_id, exchange_rate, transfer_date, fsp_id, created_by, created_at, updated_at'
       )
       .single()
+
+    if (error && /fsp_id/i.test(error.message || '')) {
+      const { fsp_id: _ignored, ...withoutFsp } = update
+      if (Object.keys(withoutFsp).length === 0) {
+        return NextResponse.json(
+          {
+            error:
+              'FSP cannot be saved until sql/add_payment_confirmations_fsp_id.sql is applied in Supabase.',
+          },
+          { status: 400 }
+        )
+      }
+      const retry = await supabase
+        .from('mou_payment_confirmations')
+        .update(withoutFsp)
+        .eq('id', confirmationId)
+        .eq('mou_id', mouId)
+        .select(
+          'id, mou_id, project_id, exchange_rate, transfer_date, created_by, created_at, updated_at'
+        )
+        .single()
+      data = retry.data ? { ...retry.data, fsp_id: null } : retry.data
+      error = retry.error
+    }
 
     if (error) {
       console.error('[payment-confirmation PATCH]', error)
