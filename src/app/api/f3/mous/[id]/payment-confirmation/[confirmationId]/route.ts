@@ -90,7 +90,7 @@ export async function PATCH(request: Request, { params }: RouteContext) {
       error = retry.error
     }
 
-    if (error) {
+    if (error || !data) {
       console.error('[payment-confirmation PATCH]', error)
       return NextResponse.json({ error: 'Failed to update confirmation' }, { status: 500 })
     }
