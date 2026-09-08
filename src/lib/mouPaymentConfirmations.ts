@@ -117,7 +117,7 @@ export async function loadProjectPaymentSummaries(
         .order('transfer_date', { ascending: true, nullsFirst: false })
         .order('created_at', { ascending: true })
         .in(projectIds.length > 0 ? 'project_id' : 'mou_id', projectIds.length > 0 ? projectIds : mouIds)
-      data = retry.data
+      data = (retry.data || []).map((row) => ({ ...row, fsp_id: null }))
       error = retry.error
     }
     if (error) {
@@ -327,7 +327,7 @@ export async function listPaymentConfirmationsForMou(
       .order('created_at', { ascending: true })
     if (projectId) fallback = fallback.eq('project_id', projectId)
     const retry = await fallback
-    data = retry.data
+    data = (retry.data || []).map((row) => ({ ...row, fsp_id: null }))
     error = retry.error
   }
   if (error) {
