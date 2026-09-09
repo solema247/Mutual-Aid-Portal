@@ -221,6 +221,16 @@ export async function DELETE(
       fullRow.last_pushed_at
     )
 
+    // fund_request_decisions FK has no ON DELETE CASCADE (unlike allocations_by_date).
+    const decisionKey = fullRow.decision_id_proposed
+    if (decisionKey) {
+      const { error: unlinkError } = await auth.ctx.supabase
+        .from('fund_request_decisions')
+        .delete()
+        .eq('decision_id_proposed', decisionKey)
+      if (unlinkError) throw unlinkError
+    }
+
     const { error: deleteError } = await auth.ctx.supabase
       .from('distribution_decision_master_sheet_1')
       .delete()
