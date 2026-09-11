@@ -4,10 +4,11 @@ import { useTranslation } from 'react-i18next'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
-import { Users, BarChart2, BarChart3, ClipboardList, PieChart, UserCog, CheckSquare, LogOut, BookOpen, BookMarked, PenTool, Cog } from 'lucide-react'
+import { Users, BarChart2, BarChart3, ClipboardList, PieChart, UserCog, CheckSquare, LogOut, BookOpen, BookMarked, PenTool, Cog, MapPin } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 import { useAllowedFunctions } from '@/hooks/useAllowedFunctions'
 import { useHomePageExplainer } from './HomePageExplainer'
+import { isStateManagementRole } from '@/lib/stateManagement/roles'
 import '@/i18n/config'
 
 interface User {
@@ -34,6 +35,7 @@ export default function ErrPortalPage() {
   const canViewLearnings = can('learnings_view_page')
   const [isLoading, setIsLoading] = useState(true)
   const [user, setUser] = useState<User | null>(null)
+  const canViewStates = can('states_view_page') && isStateManagementRole(user?.role)
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -263,6 +265,23 @@ export default function ErrPortalPage() {
                 </CardTitle>
                 <CardDescription className="mt-1 text-sm">
                   {t('err:room_management_desc')}
+                </CardDescription>
+              </CardHeader>
+            </Card>
+          </Link>
+        )}
+
+        {/* State Management */}
+        {canViewStates && (
+          <Link href="/err-portal/state-management" className="block">
+            <Card className="h-full hover:bg-muted/50 transition-colors">
+              <CardHeader className="h-full flex flex-col justify-center items-center text-center p-4">
+                <MapPin className="h-6 w-6 mb-2" />
+                <CardTitle className="text-base">
+                  {t('err:state_management')}
+                </CardTitle>
+                <CardDescription className="mt-1 text-sm">
+                  {t('err:state_management_desc')}
                 </CardDescription>
               </CardHeader>
             </Card>

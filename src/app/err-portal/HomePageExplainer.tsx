@@ -17,6 +17,7 @@ function HomeExplainerBody() {
   const canViewProjectManagement = can('management_view_page')
   const canViewUserManagement = can('users_view_page')
   const canViewRooms = can('rooms_view_page')
+  const canViewStates = can('states_view_page')
   const canViewDashboard = can('dashboard_view_page')
   const canViewLearnings = can('learnings_view_page')
   const canViewSurveys = can('surveys_view_page')
@@ -32,6 +33,7 @@ function HomeExplainerBody() {
     { id: 'dashboard', show: canViewDashboard },
     { id: 'learnings', show: canViewLearnings },
     { id: 'rooms', show: canViewRooms },
+    { id: 'states', show: canViewStates },
     { id: 'users', show: canViewUserManagement },
     { id: 'surveys', show: canViewSurveys },
   ]

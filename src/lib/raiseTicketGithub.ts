@@ -5,6 +5,18 @@ export const GITHUB_RAISE_TICKET_LABELS = [
   'portal-ui-minor-fix',
 ] as const
 
+/** Labels offered when flagging a state/locality for review. */
+export const GITHUB_STATES_REVIEW_LABELS = [
+  'state-locality-change',
+  'bug',
+  'portal-ui-major-fix',
+  'portal-ui-minor-fix',
+] as const
+
+export type GithubStatesReviewLabel = (typeof GITHUB_STATES_REVIEW_LABELS)[number]
+
+export const DEFAULT_STATES_REVIEW_LABEL: GithubStatesReviewLabel = 'state-locality-change'
+
 export type GithubRaiseTicketLabel = (typeof GITHUB_RAISE_TICKET_LABELS)[number]
 
 export const RAISE_TICKET_PRIORITIES = ['P0', 'P1', 'P2', 'P3'] as const
@@ -228,6 +240,7 @@ export const BIG_ROCK_TASK_TYPES: Record<(typeof GITHUB_PROJECT_BIG_ROCKS)[numbe
     'Data Issue or Bug',
     'Portal UI Minor Fix',
     'Portal Major Upgrade',
+    'State or Locality Change',
   ],
   'Expand Access': ['Expand Access (Planning)', 'Expand Access (Training)'],
   Localization: ['Localization'],
@@ -242,8 +255,26 @@ export const GITHUB_PROJECT_ALL_TASK_TYPES = [
   'Expand Access (Planning)',
   'Expand Access (Training)',
   'Safeguard System (Planning)',
+  'Safeguard System',
   'Localization',
+  'State or Locality Change',
 ] as const
+
+/** Type of Task options shown on State Management review (match GitHub project). */
+export const STATES_REVIEW_TASK_TYPES = [
+  'Data Issue or Bug',
+  'Portal UI Minor Fix',
+  'Portal Major Upgrade',
+  'Expand Access (Planning)',
+  'Expand Access (Training)',
+  'Safeguard System',
+  'Localization',
+  'State or Locality Change',
+] as const
+
+export type StatesReviewTaskType = (typeof STATES_REVIEW_TASK_TYPES)[number]
+
+export const DEFAULT_STATES_REVIEW_TASK_TYPE: StatesReviewTaskType = 'State or Locality Change'
 
 export const STATUS_DATA_KEYS = {
   Backlog: 'backlog',
@@ -295,7 +326,9 @@ export const RAISE_TICKET_TASK_TYPE_I18N_KEYS: Record<string, string> = {
   'Expand Access (Planning)': 'raise_ticket_task_expand_planning',
   'Expand Access (Training)': 'raise_ticket_task_expand_training',
   'Safeguard System (Planning)': 'raise_ticket_task_safeguard_planning',
+  'Safeguard System': 'raise_ticket_task_safeguard',
   Localization: 'raise_ticket_task_localization',
+  'State or Locality Change': 'raise_ticket_task_state_locality',
 }
 
 export const RAISE_TICKET_TASK_TYPE_SHORT_I18N_KEYS: Record<string, string> = {
@@ -305,7 +338,9 @@ export const RAISE_TICKET_TASK_TYPE_SHORT_I18N_KEYS: Record<string, string> = {
   'Expand Access (Planning)': 'raise_ticket_task_short_expand_planning',
   'Expand Access (Training)': 'raise_ticket_task_short_expand_training',
   'Safeguard System (Planning)': 'raise_ticket_task_short_safeguard_planning',
+  'Safeguard System': 'raise_ticket_task_short_safeguard',
   Localization: 'raise_ticket_task_short_localization',
+  'State or Locality Change': 'raise_ticket_task_short_state_locality',
 }
 
 export function taskTypeToChartKey (taskType: string): string {

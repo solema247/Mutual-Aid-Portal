@@ -12,7 +12,7 @@ import { getSupabaseAdmin } from '../../src/lib/supabaseAdmin'
 config({ path: resolve(process.cwd(), '.env.local') })
 
 const MATCH_CSV = resolve(process.cwd(), 'data/imports/sheet-airtable-allocation-match.csv')
-const OUTPUT_PATH = resolve(process.cwd(), 'data/imports/airtable-allocations-without-sheet-match.csv')
+const OUTPUT_PATH = resolve(process.cwd(), 'data/exports/airtable-allocations-without-sheet-match.csv')
 
 function jsonbToText(value: unknown): string | null {
   if (value == null) return null

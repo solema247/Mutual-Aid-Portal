@@ -3790,6 +3790,67 @@ export type Database = {
         }
         Relationships: []
       }
+      state_locality_reviews: {
+        Row: {
+          cleared_at: string | null
+          cleared_by: string | null
+          comment: string
+          flagged_at: string
+          flagged_by: string | null
+          github_issue_number: number | null
+          github_issue_url: string | null
+          id: string
+          state_id: string
+          status: string
+        }
+        Insert: {
+          cleared_at?: string | null
+          cleared_by?: string | null
+          comment: string
+          flagged_at?: string
+          flagged_by?: string | null
+          github_issue_number?: number | null
+          github_issue_url?: string | null
+          id?: string
+          state_id: string
+          status?: string
+        }
+        Update: {
+          cleared_at?: string | null
+          cleared_by?: string | null
+          comment?: string
+          flagged_at?: string
+          flagged_by?: string | null
+          github_issue_number?: number | null
+          github_issue_url?: string | null
+          id?: string
+          state_id?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "state_locality_reviews_cleared_by_fkey"
+            columns: ["cleared_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "state_locality_reviews_flagged_by_fkey"
+            columns: ["flagged_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "state_locality_reviews_state_id_fkey"
+            columns: ["state_id"]
+            isOneToOne: false
+            referencedRelation: "states"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       states: {
         Row: {
           id: string

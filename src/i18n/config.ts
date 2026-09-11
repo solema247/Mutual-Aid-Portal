@@ -10,6 +10,7 @@ import loginEN from './locales/en/login.json'
 import partnerEN from './locales/en/partner.json'
 import projectsEN from './locales/en/projects.json'
 import roomsEN from './locales/en/rooms.json'
+import statesEN from './locales/en/states.json'
 import usersEN from './locales/en/users.json'
 import fsystemEN from './locales/en/fsystem.json'
 import f2EN from './locales/en/f2.json'
@@ -26,6 +27,7 @@ import loginAR from './locales/ar/login.json'
 import partnerAR from './locales/ar/partner.json'
 import projectsAR from './locales/ar/projects.json'
 import roomsAR from './locales/ar/rooms.json'
+import statesAR from './locales/ar/states.json'
 import usersAR from './locales/ar/users.json'
 import fsystemAR from './locales/ar/fsystem.json'
 import f2AR from './locales/ar/f2.json'
@@ -43,6 +45,7 @@ const resources = {
     partner: partnerEN,
     projects: projectsEN,
     rooms: roomsEN,
+    states: statesEN,
     users: usersEN,
     fsystem: fsystemEN,
     f2: f2EN,
@@ -59,6 +62,7 @@ const resources = {
     partner: partnerAR,
     projects: projectsAR,
     rooms: roomsAR,
+    states: statesAR,
     users: usersAR,
     fsystem: fsystemAR,
     f2: f2AR,
@@ -86,6 +90,7 @@ if (!i18n.isInitialized) {
       'partner',
       'projects',
       'rooms',
+      'states',
       'users',
       'fsystem',
       'f2',

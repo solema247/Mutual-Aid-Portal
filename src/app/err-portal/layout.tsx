@@ -7,9 +7,10 @@ import PageExplainerHeader from '@/components/layout/PageExplainerHeader'
 import { PageExplainerProvider } from '@/contexts/PageExplainerContext'
 import type { SidebarItem, SidebarLinkItem } from '@/components/layout/Sidebar'
 import { useRouter } from 'next/navigation'
-import { Users, ClipboardList, BarChart2, BarChart3, PieChart, UserCog, Home, CheckSquare, BookOpen, PenTool, Cog, FileText, BookMarked, Ticket, ShieldCheck, Archive, Split, ArrowLeftRight, LayoutDashboard } from 'lucide-react'
+import { Users, ClipboardList, BarChart2, BarChart3, PieChart, UserCog, Home, CheckSquare, BookOpen, PenTool, Cog, FileText, BookMarked, Ticket, ShieldCheck, Archive, Split, ArrowLeftRight, LayoutDashboard, MapPin } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 import { useAllowedFunctions } from '@/hooks/useAllowedFunctions'
+import { isStateManagementRole } from '@/lib/stateManagement/roles'
 
 interface User {
   id: string;
@@ -88,6 +89,7 @@ export default function ErrPortalLayout({
   const canViewProjectManagement = can('management_view_page')
   const canViewUserManagement = can('users_view_page')
   const canViewRooms = can('rooms_view_page')
+  const canViewStates = can('states_view_page') && isStateManagementRole(user?.role)
   const canViewDashboard = can('dashboard_view_page')
   const canViewSurveys = can('surveys_view_page')
   const canRaiseTicket = can('raise_ticket_page')
@@ -186,6 +188,13 @@ export default function ErrPortalLayout({
       href: '/err-portal/room-management',
       label: t('err:room_management'),
       icon: <Users className="h-5 w-5" />,
+    })
+  }
+  if (canViewStates) {
+    adminGroupChildren.push({
+      href: '/err-portal/state-management',
+      label: t('err:state_management'),
+      icon: <MapPin className="h-5 w-5" />,
     })
   }
   if (canViewUserManagement) {
