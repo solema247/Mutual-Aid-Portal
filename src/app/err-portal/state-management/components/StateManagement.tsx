@@ -24,6 +24,8 @@ import {
   GITHUB_PROJECT_TEAM_REQUESTS,
   GITHUB_STATES_REVIEW_LABELS,
   STATES_REVIEW_TASK_TYPES,
+  type GithubStatesReviewLabel,
+  type StatesReviewTaskType,
 } from '@/lib/raiseTicketGithub'
 import type { LocalityRow, StateGroup } from '@/lib/stateManagement/types'
 
@@ -612,7 +614,15 @@ export default function StateManagement() {
               <div className="space-y-3">
                 <div>
                   <Label>{t('states:review_label')} *</Label>
-                  <Select value={reviewLabel} onValueChange={setReviewLabel} disabled={busy}>
+                  <Select
+                    value={reviewLabel}
+                    onValueChange={(value) => {
+                      if ((GITHUB_STATES_REVIEW_LABELS as readonly string[]).includes(value)) {
+                        setReviewLabel(value as GithubStatesReviewLabel)
+                      }
+                    }}
+                    disabled={busy}
+                  >
                     <SelectTrigger className="h-8 w-full rounded-none text-xs">
                       <SelectValue />
                     </SelectTrigger>
@@ -625,7 +635,15 @@ export default function StateManagement() {
                 </div>
                 <div>
                   <Label>{t('states:review_type_of_task')} *</Label>
-                  <Select value={reviewTaskType} onValueChange={setReviewTaskType} disabled={busy}>
+                  <Select
+                    value={reviewTaskType}
+                    onValueChange={(value) => {
+                      if ((STATES_REVIEW_TASK_TYPES as readonly string[]).includes(value)) {
+                        setReviewTaskType(value as StatesReviewTaskType)
+                      }
+                    }}
+                    disabled={busy}
+                  >
                     <SelectTrigger className="h-8 w-full rounded-none text-xs">
                       <SelectValue />
                     </SelectTrigger>
@@ -638,7 +656,15 @@ export default function StateManagement() {
                 </div>
                 <div>
                   <Label>{t('states:review_team_request')} *</Label>
-                  <Select value={reviewTeamRequest} onValueChange={setReviewTeamRequest} disabled={busy}>
+                  <Select
+                    value={reviewTeamRequest}
+                    onValueChange={(value) => {
+                      if ((GITHUB_PROJECT_TEAM_REQUESTS as readonly string[]).includes(value)) {
+                        setReviewTeamRequest(value)
+                      }
+                    }}
+                    disabled={busy}
+                  >
                     <SelectTrigger className="h-8 w-full rounded-none text-xs">
                       <SelectValue placeholder={t('states:review_select')} />
                     </SelectTrigger>
