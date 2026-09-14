@@ -203,13 +203,13 @@ export default function AccessRightsManagement({
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex gap-4 items-center">
+    <div className="space-y-2 text-xs">
+      <div className="flex flex-wrap gap-2 items-center">
         <Select
           value={selectedRole}
           onValueChange={setSelectedRole}
         >
-          <SelectTrigger className="w-[180px] border-input bg-background">
+          <SelectTrigger className="h-8 w-[150px] border-input bg-background text-xs">
             <SelectValue placeholder={t('users:filter_by_role')} />
           </SelectTrigger>
           <SelectContent>
@@ -226,7 +226,7 @@ export default function AccessRightsManagement({
           value={selectedState}
           onValueChange={setSelectedState}
         >
-          <SelectTrigger className="w-[180px] border-input bg-background">
+          <SelectTrigger className="h-8 w-[150px] border-input bg-background text-xs">
             <SelectValue placeholder="Filter by State" />
           </SelectTrigger>
           <SelectContent>
@@ -242,7 +242,7 @@ export default function AccessRightsManagement({
       </div>
 
       <div className="rounded-md border">
-        <div className="grid grid-cols-6 gap-4 p-4 font-medium border-b">
+        <div className="grid grid-cols-6 gap-2 py-1.5 px-2 font-medium border-b">
           <div>{t('users:display_name')}</div>
           <div>{t('users:role')}</div>
           <div>State</div>
@@ -258,10 +258,10 @@ export default function AccessRightsManagement({
             const canChangeStateAccess = currentUserRole === 'support' || currentUserRole === 'superadmin' || user.role !== 'admin'
 
             return (
-              <div key={user.id} className="grid grid-cols-6 gap-4 p-4 hover:bg-muted/50">
-                <div className="flex items-center">{user.display_name || '-'}</div>
+              <div key={user.id} className="grid grid-cols-6 gap-2 py-1 px-2 items-center hover:bg-muted/50">
+                <div className="truncate">{user.display_name || '-'}</div>
                 
-                <div className="flex items-center">
+                <div className="flex items-center gap-1.5 min-w-0">
                   <Select
                     value={user.role}
                     onValueChange={(value) => handleRoleChange(user.id, value as 'support' | 'superadmin' | 'admin' | 'state_err' | 'base_err')}
@@ -272,7 +272,7 @@ export default function AccessRightsManagement({
                       (user.role === 'admin' && currentUserRole !== 'superadmin' && currentUserRole !== 'support')
                     }
                   >
-                    <SelectTrigger className="w-[120px] border-input bg-background text-xs h-8">
+                    <SelectTrigger className="h-7 w-[110px] border-input bg-background text-xs">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -288,15 +288,15 @@ export default function AccessRightsManagement({
                     </SelectContent>
                   </Select>
                   {savingUserId === user.id && (
-                    <span className="ml-2 text-xs text-muted-foreground">Saving...</span>
+                    <span className="text-muted-foreground">Saving...</span>
                   )}
                 </div>
 
-                <div className="flex items-center">{user.state_name || '-'}</div>
+                <div className="truncate">{user.state_name || '-'}</div>
 
-                <div className="relative" ref={openDropdownId === user.id ? dropdownRef : null}>
+                <div className="relative min-w-0" ref={openDropdownId === user.id ? dropdownRef : null}>
                   <div
-                    className={`flex flex-wrap gap-1 min-h-[28px] p-1 border rounded-md ${
+                    className={`flex flex-wrap gap-0.5 min-h-[24px] px-1 py-0.5 border rounded-md ${
                       canChangeStateAccess 
                         ? 'cursor-pointer hover:bg-accent' 
                         : 'cursor-not-allowed opacity-60'
@@ -309,7 +309,7 @@ export default function AccessRightsManagement({
                     title={!canChangeStateAccess ? 'Only superadmin or support can change state access for admin users' : ''}
                   >
                     {canSeeAll ? (
-                      <Badge variant="default" className="bg-blue-200 hover:bg-blue-300 text-blue-800 border-blue-300">
+                      <Badge variant="default" className="h-5 px-1.5 text-[10px] bg-blue-200 hover:bg-blue-300 text-blue-800 border-blue-300">
                         All States
                       </Badge>
                     ) : userStates.length > 0 ? (
@@ -330,20 +330,20 @@ export default function AccessRightsManagement({
                         ]
                         const colorClass = pastelColors[index % pastelColors.length]
                         return state ? (
-                          <Badge key={stateId} variant="secondary" className={colorClass}>
+                          <Badge key={stateId} variant="secondary" className={`h-5 px-1.5 text-[10px] ${colorClass}`}>
                             {state.state_name}
                           </Badge>
                         ) : null
                       })
                     ) : (
-                      <span className="text-xs text-muted-foreground">No states</span>
+                      <span className="text-muted-foreground">No states</span>
                     )}
                   </div>
 
                   {isDropdownOpen && (
-                    <div className="absolute z-50 mt-1 w-80 bg-popover border rounded-md shadow-lg p-4 left-0 top-full">
-                      <div className="space-y-3">
-                        <div className="flex items-center space-x-2">
+                    <div className="absolute z-50 mt-1 w-72 bg-popover border rounded-md shadow-lg p-2.5 left-0 top-full">
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2">
                           <Checkbox
                             id={`all-states-${user.id}`}
                             checked={canSeeAll}
@@ -360,24 +360,24 @@ export default function AccessRightsManagement({
                           />
                           <label
                             htmlFor={`all-states-${user.id}`}
-                            className="text-sm font-medium cursor-pointer"
+                            className="text-xs font-medium cursor-pointer"
                           >
                             Can see all states
                           </label>
                         </div>
 
                         {!canSeeAll && (
-                          <div className="space-y-2 max-h-60 overflow-y-auto border-t pt-3">
-                            <div className="text-xs font-medium text-muted-foreground mb-2">
+                          <div className="space-y-1 max-h-52 overflow-y-auto border-t pt-2">
+                            <div className="text-[11px] font-medium text-muted-foreground mb-1">
                               Select specific states:
                             </div>
                             {states.length === 0 ? (
-                              <div className="text-xs text-muted-foreground">Loading states...</div>
+                              <div className="text-muted-foreground">Loading states...</div>
                             ) : (
                               states.map((state) => {
                                 const isSelected = userStates.includes(state.id)
                                 return (
-                                  <div key={state.id} className="flex items-center space-x-2">
+                                  <div key={state.id} className="flex items-center gap-2">
                                   <Checkbox
                                     id={`state-${user.id}-${state.id}`}
                                     checked={isSelected}
@@ -393,7 +393,7 @@ export default function AccessRightsManagement({
                                   />
                                     <label
                                       htmlFor={`state-${user.id}-${state.id}`}
-                                      className="text-sm cursor-pointer flex-1"
+                                      className="text-xs cursor-pointer flex-1"
                                     >
                                       {state.state_name}
                                     </label>
@@ -408,8 +408,8 @@ export default function AccessRightsManagement({
                   )}
                 </div>
 
-                <div className="flex items-center">{user.err_name || '-'}</div>
-                <div className="flex items-center">{t(`users:${user.status}_status`)}</div>
+                <div className="truncate">{user.err_name || '-'}</div>
+                <div>{t(`users:${user.status}_status`)}</div>
               </div>
             )
           })}
@@ -417,14 +417,15 @@ export default function AccessRightsManagement({
       </div>
 
       {totalPages > 1 && (
-        <div className="flex items-center justify-between px-2">
-          <div className="text-sm text-muted-foreground">
+        <div className="flex items-center justify-between gap-2">
+          <div className="text-muted-foreground">
             Showing {((currentPage - 1) * PAGE_SIZE) + 1} to {Math.min(currentPage * PAGE_SIZE, totalUsers)} of {totalUsers} users
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-1.5">
             <Button
               variant="outline"
               size="sm"
+              className="h-7 px-2 text-xs"
               onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
               disabled={currentPage === 1}
             >
@@ -433,6 +434,7 @@ export default function AccessRightsManagement({
             <Button
               variant="outline"
               size="sm"
+              className="h-7 px-2 text-xs"
               onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
               disabled={currentPage === totalPages}
             >

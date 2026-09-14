@@ -30,7 +30,6 @@ export default function UserManagement() {
   const { can } = useAllowedFunctions()
   const canViewPage = can('users_view_page')
   const canViewPermissionsPage = can('users_view_permissions_page')
-  const canViewGroupPermissionsPage = can('users_view_group_permissions_page')
   const [pendingUsers, setPendingUsers] = useState<PendingUserListItem[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -108,21 +107,14 @@ export default function UserManagement() {
   const isAdmin = currentUser.role === 'support' || currentUser.role === 'admin' || currentUser.role === 'superadmin'
 
   return (
-    <div className="space-y-6">
-      {(canViewPermissionsPage || canViewGroupPermissionsPage) && (
+    <div className="space-y-3">
+      {(canViewPermissionsPage) && (
         <>
-          <div className="flex gap-4">
+          <div className="flex gap-2">
             {canViewPermissionsPage && (
               <Button variant="default" size="sm" asChild>
                 <Link href="/err-portal/user-management/permissions">
-                  Individual User Permissions
-                </Link>
-              </Button>
-            )}
-            {canViewGroupPermissionsPage && (
-              <Button variant="default" size="sm" asChild>
-                <Link href="/err-portal/user-management/group-permissions">
-                  Bulk Permissions
+                  Permissions
                 </Link>
               </Button>
             )}
@@ -144,7 +136,7 @@ export default function UserManagement() {
         title={t('users:pending_users_title')}
         defaultOpen={!isAdmin}
       >
-        <div className="space-y-4">
+        <div className="space-y-2">
           {error && (
             <div className="text-destructive text-sm">{error}</div>
           )}

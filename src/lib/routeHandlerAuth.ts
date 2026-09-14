@@ -3,11 +3,18 @@ import { cookies } from 'next/headers'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { can, type Role } from '@/lib/permissions'
 import { getOverridesForUser } from '@/lib/userOverridesDb'
+import {
+  ensureRoleDefaultsSeeded,
+  mergeRoleDefaultsMaps,
+  getJsonRoleDefaults,
+  type RoleDefaultsMap,
+} from '@/lib/roleDefaultsDb'
 
 export type RouteAuthContext = {
   supabase: SupabaseClient
   dbUser: { id: string; role: string }
   overridesMap: Record<string, { add: string[]; remove: string[] }>
+  roleDefaultsMap: RoleDefaultsMap
 }
 
 export async function getRouteHandlerAuth (): Promise<RouteAuthContext | null> {
@@ -24,10 +31,12 @@ export async function getRouteHandlerAuth (): Promise<RouteAuthContext | null> {
   if (error || !dbUser) return null
 
   const override = await getOverridesForUser(supabase, dbUser.id)
+  const dbDefaults = await ensureRoleDefaultsSeeded(supabase)
   return {
     supabase,
     dbUser,
-    overridesMap: { [dbUser.id]: override }
+    overridesMap: { [dbUser.id]: override },
+    roleDefaultsMap: mergeRoleDefaultsMaps(getJsonRoleDefaults(), dbDefaults),
   }
 }
 
@@ -35,7 +44,8 @@ export function assertPermission (ctx: RouteAuthContext, functionCode: string): 
   const ok = can(
     { id: ctx.dbUser.id, role: ctx.dbUser.role as Role },
     functionCode,
-    ctx.overridesMap
+    ctx.overridesMap,
+    ctx.roleDefaultsMap
   )
   if (!ok) {
     const err = new Error('Forbidden')

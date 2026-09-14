@@ -4000,6 +4000,35 @@ export type Database = {
           },
         ]
       }
+      role_permission_defaults: {
+        Row: {
+          role: string
+          function_codes: string[]
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          role: string
+          function_codes?: string[]
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          role?: string
+          function_codes?: string[]
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "role_permission_defaults_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       users: {
         Row: {
           auth_user_id: string | null

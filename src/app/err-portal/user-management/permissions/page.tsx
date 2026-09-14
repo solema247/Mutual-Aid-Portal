@@ -1,79 +1,51 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { ArrowLeft } from 'lucide-react'
 import { useAllowedFunctions } from '@/hooks/useAllowedFunctions'
-import PermissionsManager from './components/PermissionsManager'
-
-interface CurrentUser {
-  id: string
-  role: string
-  err_id: string | null
-}
+import RolePermissionsManager from './components/RolePermissionsManager'
 
 export default function PermissionsPage() {
   const router = useRouter()
-  const { can } = useAllowedFunctions()
+  const { can, isLoading } = useAllowedFunctions()
   const canViewPage = can('users_view_permissions_page')
-  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null)
-  const [checking, setChecking] = useState(true)
+  const [ready, setReady] = useState(false)
 
   useEffect(() => {
+    if (isLoading) return
     if (!canViewPage) {
       router.replace('/err-portal/user-management')
       return
     }
-  }, [canViewPage, router])
+    setReady(true)
+  }, [canViewPage, isLoading, router])
 
-  useEffect(() => {
-    let cancelled = false
-    fetch('/api/users/me')
-      .then((r) => {
-        if (!r.ok) throw new Error('Not ok')
-        return r.json()
-      })
-      .then((data) => {
-        if (cancelled) return
-        setCurrentUser({
-          id: data.id,
-          role: data.role,
-          err_id: data.err_id ?? null
-        })
-      })
-      .catch(() => {
-        if (!cancelled) router.replace('/err-portal/user-management')
-      })
-      .finally(() => {
-        if (!cancelled) setChecking(false)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [router])
-
-  if (!canViewPage) return null
-  if (checking || !currentUser) {
-    return <div className="p-6 text-muted-foreground">Loading...</div>
+  if (!ready) {
+    return <div className="p-3 text-xs text-muted-foreground">Loading...</div>
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-4">
-        <Button variant="outline" size="sm" asChild>
-          <Link href="/err-portal/user-management" className="flex items-center gap-2">
-            <ArrowLeft className="h-4 w-4" />
+    <div className="min-w-0 max-w-full space-y-3 overflow-x-hidden">
+      <div className="flex min-w-0 items-center gap-2">
+        <Button variant="outline" size="sm" className="h-7 shrink-0 px-2 text-xs" asChild>
+          <Link href="/err-portal/user-management" className="flex items-center gap-1.5">
+            <ArrowLeft className="h-3.5 w-3.5" />
             Back
           </Link>
         </Button>
-        <h1 className="text-2xl font-semibold">Individual User Permissions</h1>
+        <div className="min-w-0">
+          <h1 className="text-base font-semibold leading-tight">Permissions</h1>
+          <p className="text-xs text-muted-foreground leading-snug">
+            Type defaults and individual exceptions.
+          </p>
+        </div>
       </div>
-      <PermissionsManager
-        currentUserRole={currentUser.role}
-        currentUserErrId={currentUser.err_id}
-      />
+      <Suspense fallback={<div className="text-xs text-muted-foreground">Loading…</div>}>
+        <RolePermissionsManager />
+      </Suspense>
     </div>
   )
 }

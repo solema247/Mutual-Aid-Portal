@@ -114,16 +114,16 @@ export default function ActiveUsersList({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-2">
       {error && (
-        <div className="text-destructive text-sm bg-destructive/10 p-3 rounded-md">{error}</div>
+        <div className="text-destructive text-sm bg-destructive/10 px-2 py-1.5 rounded-md">{error}</div>
       )}
-      <div className="flex gap-4 items-center">
+      <div className="flex flex-wrap gap-2 items-center">
         <Select
           value={selectedRole}
           onValueChange={setSelectedRole}
         >
-          <SelectTrigger className="w-[180px] border-input bg-background">
+          <SelectTrigger className="h-8 w-[150px] border-input bg-background text-xs">
             <SelectValue placeholder={t('users:filter_by_role')} />
           </SelectTrigger>
           <SelectContent>
@@ -140,7 +140,7 @@ export default function ActiveUsersList({
           value={selectedStatus}
           onValueChange={(value) => setSelectedStatus(value as 'active' | 'suspended')}
         >
-          <SelectTrigger className="w-[180px] border-input bg-background">
+          <SelectTrigger className="h-8 w-[150px] border-input bg-background text-xs">
             <SelectValue placeholder={t('users:filter_by_status')} />
           </SelectTrigger>
           <SelectContent>
@@ -151,14 +151,14 @@ export default function ActiveUsersList({
 
         <button
           onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
-          className="text-sm text-muted-foreground hover:text-foreground"
+          className="text-xs text-muted-foreground hover:text-foreground"
         >
           {sortOrder === 'asc' ? t('users:sort_desc') : t('users:sort_asc')}
         </button>
       </div>
 
       <div className="rounded-md border text-xs">
-        <div className="grid grid-cols-9 gap-2 py-2 px-3 font-medium border-b [&>div]:py-1">
+        <div className="grid grid-cols-9 gap-1.5 py-1.5 px-2 font-medium border-b">
           <div>{t('users:err_name')}</div>
           <div>{t('users:state')}</div>
           <div>{t('users:display_name')}</div>
@@ -171,10 +171,10 @@ export default function ActiveUsersList({
         </div>
         <div className="divide-y">
           {users.map((user) => (
-            <div key={user.id} className="grid grid-cols-9 gap-2 py-2 px-3 [&>div]:py-1">
-              <div>{user.err_name || '-'}</div>
-              <div>{user.state_name || '-'}</div>
-              <div>{user.display_name || '-'}</div>
+            <div key={user.id} className="grid grid-cols-9 gap-1.5 py-1 px-2 items-center">
+              <div className="truncate">{user.err_name || '-'}</div>
+              <div className="truncate">{user.state_name || '-'}</div>
+              <div className="truncate">{user.display_name || '-'}</div>
               <div>{t(`users:${user.role}_role`)}</div>
               <div>{t(`users:${user.status}_status`)}</div>
               <div>{user.createdAt}</div>
@@ -202,14 +202,14 @@ export default function ActiveUsersList({
                     {processingId === user.id ? '...' : user.status === 'active' ? '⊘' : '✓'}
                   </button>
                 ) : (
-                  <span className="text-xs text-muted-foreground">-</span>
+                  <span className="text-muted-foreground">-</span>
                 )}
               </div>
               <div>
                 {(currentUserRole === 'support' || currentUserRole === 'admin' || currentUserRole === 'superadmin') && (
                   <Link
                     href={`/err-portal/user-management/permissions?userId=${user.id}`}
-                    className="text-primary hover:underline text-sm"
+                    className="text-primary hover:underline"
                   >
                     Permissions
                   </Link>

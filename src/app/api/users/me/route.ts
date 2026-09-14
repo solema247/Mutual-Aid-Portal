@@ -3,6 +3,11 @@ import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
 import { getAllowedFunctions } from '@/lib/permissions'
 import { getOverridesForUser } from '@/lib/userOverridesDb'
+import {
+  ensureRoleDefaultsSeeded,
+  getJsonRoleDefaults,
+  mergeRoleDefaultsMaps,
+} from '@/lib/roleDefaultsDb'
 
 export async function GET() {
   try {
@@ -31,9 +36,12 @@ export async function GET() {
 
     const override = await getOverridesForUser(supabase, userData.id)
     const overridesMap = { [userData.id]: override }
+    const dbDefaults = await ensureRoleDefaultsSeeded(supabase)
+    const roleDefaultsMap = mergeRoleDefaultsMaps(getJsonRoleDefaults(), dbDefaults)
     const allowed_functions = getAllowedFunctions(
       { id: userData.id, role: userData.role },
-      overridesMap
+      overridesMap,
+      roleDefaultsMap
     )
 
     // Parse visible_states if it's a string (JSON)

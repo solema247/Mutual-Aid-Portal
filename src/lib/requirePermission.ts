@@ -2,6 +2,11 @@ import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { can, type PermissionUser } from '@/lib/permissions'
 import { getOverridesForUser } from '@/lib/userOverridesDb'
+import {
+  ensureRoleDefaultsSeeded,
+  getJsonRoleDefaults,
+  mergeRoleDefaultsMaps,
+} from '@/lib/roleDefaultsDb'
 
 export async function requirePermission(
   functionCode: string
@@ -24,11 +29,13 @@ export async function requirePermission(
   }
   const override = await getOverridesForUser(supabase, userRow.id)
   const overridesMap = { [userRow.id]: override }
+  const dbDefaults = await ensureRoleDefaultsSeeded(supabase)
+  const roleDefaultsMap = mergeRoleDefaultsMaps(getJsonRoleDefaults(), dbDefaults)
   const permUser: PermissionUser = {
     id: userRow.id,
     role: userRow.role as PermissionUser['role']
   }
-  if (!can(permUser, functionCode, overridesMap)) {
+  if (!can(permUser, functionCode, overridesMap, roleDefaultsMap)) {
     return NextResponse.json(
       {
         error: 'Forbidden - You do not have permission for this action',

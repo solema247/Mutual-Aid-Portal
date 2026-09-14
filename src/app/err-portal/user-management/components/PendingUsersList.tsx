@@ -65,51 +65,51 @@ export default function PendingUsersList({ users, isLoading, onUpdate, currentUs
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-2">
       {error && (
-        <div className="text-destructive text-sm bg-destructive/10 p-3 rounded-md">{error}</div>
+        <div className="text-destructive text-sm bg-destructive/10 px-2 py-1.5 rounded-md">{error}</div>
       )}
       <div className="rounded-md border text-xs">
-        <div className="grid grid-cols-7 gap-2 py-2 px-3 font-medium border-b [&>div]:py-1">
-        <div>{t('users:err_name')}</div>
-        <div>{t('users:state')}</div>
-        <div>{t('users:display_name')}</div>
-        <div>{t('users:role')}</div>
-        <div>{t('users:status')}</div>
-        <div>{t('users:created_at')}</div>
-        <div>{t('users:actions')}</div>
-      </div>
-      <div className="divide-y">
-        {users.map((user) => (
-          <div key={user.id} className="grid grid-cols-7 gap-2 py-2 px-3 [&>div]:py-1">
-            <div>{user.err_name || '-'}</div>
-            <div>{user.state_name || '-'}</div>
-            <div>{user.display_name || '-'}</div>
-            <div>{t(`users:${user.role}_role`)}</div>
-            <div>{t(`users:${user.status}_status`)}</div>
-            <div>{user.createdAt}</div>
-            <div className="flex gap-2">
-              <button 
-                className="text-primary hover:opacity-80 disabled:opacity-50"
-                title={t('users:approve')}
-                onClick={() => handleApprove(user.id, user.role)}
-                disabled={processingId === user.id || !canApprove(user.role)}
-              >
-                {processingId === user.id ? '...' : '✓'}
-              </button>
-              {canDecline(user.role) && (
-                <button 
-                  className="text-red-600 hover:text-red-800 disabled:opacity-50"
-                  title={user.role === 'superadmin' && currentUserRole !== 'support' ? 'Only support can decline superadmin' : t('users:decline')}
-                  onClick={() => handleDecline(user.id, user.role)}
+        <div className="grid grid-cols-7 gap-1.5 py-1.5 px-2 font-medium border-b">
+          <div>{t('users:err_name')}</div>
+          <div>{t('users:state')}</div>
+          <div>{t('users:display_name')}</div>
+          <div>{t('users:role')}</div>
+          <div>{t('users:status')}</div>
+          <div>{t('users:created_at')}</div>
+          <div>{t('users:actions')}</div>
+        </div>
+        <div className="divide-y">
+          {users.map((user) => (
+            <div key={user.id} className="grid grid-cols-7 gap-1.5 py-1 px-2 items-center">
+              <div className="truncate">{user.err_name || '-'}</div>
+              <div className="truncate">{user.state_name || '-'}</div>
+              <div className="truncate">{user.display_name || '-'}</div>
+              <div>{t(`users:${user.role}_role`)}</div>
+              <div>{t(`users:${user.status}_status`)}</div>
+              <div>{user.createdAt}</div>
+              <div className="flex gap-1.5">
+                <button
+                  className="text-primary hover:opacity-80 disabled:opacity-50"
+                  title={t('users:approve')}
+                  onClick={() => handleApprove(user.id, user.role)}
                   disabled={processingId === user.id || !canApprove(user.role)}
                 >
-                  {processingId === user.id ? '...' : '✕'}
+                  {processingId === user.id ? '...' : '✓'}
                 </button>
-              )}
+                {canDecline(user.role) && (
+                  <button
+                    className="text-red-600 hover:text-red-800 disabled:opacity-50"
+                    title={user.role === 'superadmin' && currentUserRole !== 'support' ? 'Only support can decline superadmin' : t('users:decline')}
+                    onClick={() => handleDecline(user.id, user.role)}
+                    disabled={processingId === user.id || !canApprove(user.role)}
+                  >
+                    {processingId === user.id ? '...' : '✕'}
+                  </button>
+                )}
+              </div>
             </div>
-          </div>
-        ))}
+          ))}
         </div>
       </div>
     </div>

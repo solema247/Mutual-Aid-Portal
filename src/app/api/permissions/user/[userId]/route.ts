@@ -6,6 +6,11 @@ import {
   type PermissionUser
 } from '@/lib/permissions'
 import { getOverridesForUser } from '@/lib/userOverridesDb'
+import {
+  ensureRoleDefaultsSeeded,
+  getJsonRoleDefaults,
+  mergeRoleDefaultsMaps,
+} from '@/lib/roleDefaultsDb'
 
 export async function GET(
   _request: Request,
@@ -40,12 +45,14 @@ export async function GET(
 
   const override = await getOverridesForUser(supabase, userId)
   const overridesMap = { [userId]: override }
+  const dbDefaults = await ensureRoleDefaultsSeeded(supabase)
+  const roleDefaultsMap = mergeRoleDefaultsMaps(getJsonRoleDefaults(), dbDefaults)
   const permUser: PermissionUser = {
     id: targetUser.id,
     role: targetUser.role as PermissionUser['role']
   }
-  const allowedSet = getAllowedSetFromOverrides(permUser, overridesMap)
-  const roleBase = getRoleBase(targetUser.role)
+  const allowedSet = getAllowedSetFromOverrides(permUser, overridesMap, roleDefaultsMap)
+  const roleBase = getRoleBase(targetUser.role, roleDefaultsMap)
 
   return NextResponse.json({
     user: {
