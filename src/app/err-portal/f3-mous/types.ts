@@ -93,6 +93,7 @@ export interface PaymentProjectRow {
   locality: string | null
   emergency_room_name: string | null
   grant_id: string | null
+  amount_usd: number
 }
 
 export interface PaymentConfirmationEntry {

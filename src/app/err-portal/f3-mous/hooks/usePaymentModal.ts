@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { supabase } from '@/lib/supabaseClient'
+import { sumExpensesUsd } from '../lib/project-helpers'
 import type {
   MOU,
   NewPaymentDraft,
@@ -91,7 +92,7 @@ export function usePaymentModal({ fetchMous }: UsePaymentModalOptions) {
 
       const { data: projects, error } = await supabase
         .from('err_projects')
-        .select('id, err_id, state, locality, grant_id, emergency_rooms (name, name_ar, err_code)')
+        .select('id, err_id, state, locality, grant_id, expenses, emergency_rooms (name, name_ar, err_code)')
         .eq('mou_id', mou.id)
         .order('submitted_at', { ascending: true })
 
@@ -113,6 +114,7 @@ export function usePaymentModal({ fetchMous }: UsePaymentModalOptions) {
             locality: p.locality as string | null,
             emergency_room_name: roomName,
             grant_id: (p.grant_id as string | null) || null,
+            amount_usd: sumExpensesUsd(p.expenses),
           }
         })
         setPaymentProjects(projectList)

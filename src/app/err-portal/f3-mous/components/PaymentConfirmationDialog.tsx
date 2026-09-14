@@ -8,8 +8,26 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import type { usePaymentModal } from '../hooks/usePaymentModal'
 import type { NewPaymentDraft, PaymentConfirmationRecord, PaymentFileRecord } from '../types'
+import { fmtUsd } from '../lib/project-helpers'
 
 type PaymentConfirmationDialogProps = ReturnType<typeof usePaymentModal>
+
+function resolveExchangeRate(
+  confirmations: PaymentConfirmationRecord[],
+  draftExchangeRate: string
+): number | null {
+  for (let i = confirmations.length - 1; i >= 0; i--) {
+    const rate = confirmations[i]?.exchange_rate
+    if (rate != null && Number(rate) > 0) return Number(rate)
+  }
+  const draft = parseFloat(draftExchangeRate)
+  if (!Number.isNaN(draft) && draft > 0) return draft
+  return null
+}
+
+function fmtSdg(n: number) {
+  return n.toLocaleString('en-US', { maximumFractionDigits: 0 })
+}
 
 async function openSignedUrl(filePath: string) {
   const response = await fetch(
@@ -329,6 +347,8 @@ export default function PaymentConfirmationDialog(props: PaymentConfirmationDial
                 files: [],
               }
               const creating = !!busyKeys[`create:${project.id}`]
+              const rate = resolveExchangeRate(confirmations, draft.exchange_rate)
+              const amountSdg = rate != null ? project.amount_usd * rate : null
 
               return (
                 <section
@@ -342,6 +362,11 @@ export default function PaymentConfirmationDialog(props: PaymentConfirmationDial
                       </h3>
                       <p className="text-xs text-muted-foreground">
                         {t('f3:payment_modal.grant_serial')}: {project.grant_id || '-'}
+                      </p>
+                      <p className="text-xs text-muted-foreground font-mono mt-0.5">
+                        USD: ${fmtUsd(project.amount_usd)}
+                        {' · '}
+                        SDG: {amountSdg != null ? fmtSdg(amountSdg) : '—'}
                       </p>
                     </div>
                     <span className="text-xs text-muted-foreground">
