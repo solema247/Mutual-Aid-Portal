@@ -362,7 +362,7 @@ export async function GET(request: Request) {
     let mouCodeById: Record<string, string> = {}
     let transferDateByProject: Record<string, string> = {}
     for (const m of mousRows || []) mouCodeById[(m as any).id] = (m as any).mou_code
-    for (const [projectId, summary] of Object.entries(paymentSummaries)) {
+    for (const [projectId, summary] of Object.entries(paymentSummaries as Record<string, { transfer_date?: string | null }>)) {
       if (summary.transfer_date) transferDateByProject[projectId] = summary.transfer_date
     }
 
