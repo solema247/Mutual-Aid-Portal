@@ -86,6 +86,8 @@ export default function ProjectManagement() {
   const loadRollup = async (forceRefresh = false) => {
     setLoading(true)
     try {
+      console.log('[PM] Loading rollup...')
+      const start = Date.now()
       const url = forceRefresh ? `/api/overview/rollup?refresh=true` : `/api/overview/rollup`
       const res = await fetch(url)
       const j = await res.json()
@@ -93,6 +95,7 @@ export default function ProjectManagement() {
       setAllRows(j.rows || [])
       setPreCalcStateRows(j.stateAggregations || [])
       setPreCalcRoomRows(j.roomAggregations || [])
+      console.log(`[PM] Rollup loaded in ${Date.now() - start}ms`)
     } catch (e) {
       console.error(e)
     } finally {

@@ -22,7 +22,7 @@ function getCacheKey(allowedStates: string[] | null): string {
   return [...allowedStates].sort().join(',')
 }
 
-async function readSharedRollupCache(cacheKey: string): Promise<any | null> {
+export async function readSharedRollupCache(cacheKey: string): Promise<any | null> {
   try {
     const admin = getSupabaseAdmin()
     const { data, error } = await admin
@@ -269,12 +269,22 @@ const fetchAllRows = async (supabase: any, table: string, select: string) => {
 }
 
 export async function GET(request: Request) {
+  const startTime = Date.now()
+  const timer = (label: string, start: number) => {
+    const elapsed = Date.now() - start
+    console.log(`[rollup] ${label}: ${elapsed}ms`)
+    return elapsed
+  }
+
   try {
     const supabase = getSupabaseRouteClient()
     const { getUserStateAccess } = await import('@/lib/userStateAccess')
 
     // Get user's state access rights
+    const accessStart = Date.now()
     const { allowedStateNames } = await getUserStateAccess()
+    timer('getUserStateAccess', accessStart)
+    
     const cacheKey = getCacheKey(allowedStateNames)
     
     // Check for cache bypass parameter
@@ -283,8 +293,11 @@ export async function GET(request: Request) {
     
     // Check shared cache if not bypassing
     if (!bypassCache) {
+      const cacheReadStart = Date.now()
       const cached = await readSharedRollupCache(cacheKey)
+      timer('cache read', cacheReadStart)
       if (cached) {
+        timer('TOTAL (cached)', startTime)
         console.log('[rollup] Returning shared cached data')
         return NextResponse.json(cached)
       }
@@ -293,6 +306,7 @@ export async function GET(request: Request) {
     console.log('[rollup] Cache miss or bypass - fetching fresh data')
 
     // Build project filter (include more statuses to catch F5 projects and completed projects)
+    const projectsStart = Date.now()
     let projectQuery = supabase
       .from('err_projects')
       .select('id, state, grant_call_id, grant_grid_id, grant_id, grant_segment, emergency_rooms (id, name, name_ar, err_code), planned_activities, expenses, source, status, funding_status, mou_id, f4_status, f5_status, date, date_transfer, completed_at, date_report_completed, estimated_beneficiaries, implemented_sector, activity_shift_note')
@@ -305,33 +319,52 @@ export async function GET(request: Request) {
     }
 
     const { data: projects } = await projectQuery
-
-    // Resolve MOU codes and per-project transfer dates from payment confirmations
-    const mouIds = Array.from(new Set(((projects || []).map((p:any)=> p.mou_id).filter(Boolean)))) as string[]
-    let mouCodeById: Record<string, string> = {}
-    let transferDateByProject: Record<string, string> = {}
-    if (mouIds.length) {
-      const { data: mousRows } = await supabase
-        .from('mous')
-        .select('id, mou_code')
-        .in('id', mouIds)
-      for (const m of mousRows || []) mouCodeById[(m as any).id] = (m as any).mou_code
-      const paymentSummaries = await loadProjectPaymentSummaries(supabase, { mouIds })
-      for (const [projectId, summary] of Object.entries(paymentSummaries)) {
-        if (summary.transfer_date) transferDateByProject[projectId] = summary.transfer_date
-      }
-    }
+    timer('fetch projects', projectsStart)
 
     const projectIds = (projects || []).map((p:any)=> p.id)
+    const mouIds = Array.from(new Set(((projects || []).map((p:any)=> p.mou_id).filter(Boolean)))) as string[]
     const dataSupabase = getSupabaseAdmin()
 
-    // ===== Fetch ALL historical data from activities_raw_import FIRST =====
-    // This ensures we have all data before filtering, making it more stable
-    const allHistoricalData = await fetchAllRows(
-      dataSupabase,
-      'activities_raw_import',
-      'id,"ERR CODE","ERR Name","State","Project Donor","USD","MOU Signed","F4","F5","Date Report Completed","Date Transfer","Serial Number","Target (Ind.)","Target (Fam.)","Individuals","Family","Overdue"'
-    )
+    // ===== PARALLEL BATCH 1: All independent data (historical + project-dependent) =====
+    const batch1Start = Date.now()
+    const [
+      allHistoricalData,
+      historicalFinancialReports,
+      mousRows,
+      paymentSummaries,
+      portalSummaries,
+      f5Reports
+    ] = await Promise.all([
+      // Historical data (fully independent)
+      fetchAllRows(
+        dataSupabase,
+        'activities_raw_import',
+        'id,"ERR CODE","ERR Name","State","Project Donor","USD","MOU Signed","F4","F5","Date Report Completed","Date Transfer","Serial Number","Target (Ind.)","Target (Fam.)","Individuals","Family","Overdue"'
+      ),
+      fetchAllRows(
+        dataSupabase,
+        'historical_financial_reports',
+        'budget_items, total_errs_expenditure_usd'
+      ),
+      // Project-dependent data (all independent of each other)
+      mouIds.length > 0
+        ? supabase.from('mous').select('id, mou_code').in('id', mouIds).then(r => r.data)
+        : Promise.resolve([]),
+      mouIds.length > 0
+        ? loadProjectPaymentSummaries(supabase, { mouIds })
+        : Promise.resolve({}),
+      fetchPortalSummariesForProjects(dataSupabase, projectIds),
+      fetchF5ReportsForProjects(dataSupabase, projectIds)
+    ])
+    timer('BATCH 1: all data (parallel)', batch1Start)
+    
+    // Process MOU results
+    let mouCodeById: Record<string, string> = {}
+    let transferDateByProject: Record<string, string> = {}
+    for (const m of mousRows || []) mouCodeById[(m as any).id] = (m as any).mou_code
+    for (const [projectId, summary] of Object.entries(paymentSummaries)) {
+      if (summary.transfer_date) transferDateByProject[projectId] = summary.transfer_date
+    }
 
     // Filter historical data by state AFTER normalization (like Pool Overview By State)
     let filteredHistoricalData = allHistoricalData || []
@@ -353,12 +386,7 @@ export async function GET(request: Request) {
       }
     }
 
-    // Historical financial reports: actuals by serial (match historical_financial_reports.budget_items = activities_raw_import."Serial Number")
-    const historicalFinancialReports = await fetchAllRows(
-      dataSupabase,
-      'historical_financial_reports',
-      'budget_items, total_errs_expenditure_usd'
-    )
+    // Process historical financial reports: actuals by serial (match historical_financial_reports.budget_items = activities_raw_import."Serial Number")
     const actualBySerial = new Map<string, number>()
     for (const r of (historicalFinancialReports || [])) {
       const key = (r.budget_items != null ? String(r.budget_items).trim() : '') || ''
@@ -367,21 +395,40 @@ export async function GET(request: Request) {
       actualBySerial.set(key, (actualBySerial.get(key) ?? 0) + val)
     }
 
-    const portalSummaries = await fetchPortalSummariesForProjects(dataSupabase, projectIds)
-
-    // Line-item expenses by summary_id (project_id on err_expense may not match err_summary)
+    // ===== PARALLEL BATCH 2: Expenses and F5 reach (depend on batch 1 results) =====
+    const batch2Start = Date.now()
     const portalSummaryIds = portalSummaries
       .map((s: any) => s.id)
       .filter((id: unknown): id is number => typeof id === 'number')
     const expenseSelect =
       'expense_id, project_id, summary_id, expense_amount, expense_amount_sdg, payment_date, payment_method, seller, receipt_no, expense_description, expense_activity'
-    const expensesBySummary =
+    const f5ReportIds = (f5Reports || []).map((f:any) => f.id)
+    
+    const [expensesBySummary, expensesByProject, f5ReachData] = await Promise.all([
       portalSummaryIds.length > 0
-        ? await fetchRowsByIdColumn(dataSupabase, 'err_expense', expenseSelect, 'summary_id', portalSummaryIds)
-        : []
-    const expensesByProject = projectIds.length
-      ? await fetchRowsByIdColumn(dataSupabase, 'err_expense', expenseSelect, 'project_id', projectIds)
-      : []
+        ? fetchRowsByIdColumn(dataSupabase, 'err_expense', expenseSelect, 'summary_id', portalSummaryIds)
+        : Promise.resolve([]),
+      projectIds.length
+        ? fetchRowsByIdColumn(dataSupabase, 'err_expense', expenseSelect, 'project_id', projectIds)
+        : Promise.resolve([]),
+      f5ReportIds.length > 0
+        ? (async () => {
+            let reachData: any[] = []
+            for (const batch of chunkIds(f5ReportIds)) {
+              const { data: page, error: reachErr } = await dataSupabase
+                .from('err_program_reach')
+                .select('report_id, individual_count, household_count')
+                .in('report_id', batch)
+              if (reachErr) throw reachErr
+              reachData.push(...(page || []))
+            }
+            return reachData
+          })()
+        : Promise.resolve([])
+    ])
+    timer('BATCH 2: expenses and F5 reach (parallel)', batch2Start)
+    
+    // Process expense results
     const portalExpenseById = new Map<number, (typeof expensesBySummary)[0]>()
     for (const row of [...expensesBySummary, ...expensesByProject]) {
       const id = (row as { expense_id?: number }).expense_id
@@ -424,26 +471,8 @@ export async function GET(request: Request) {
     
     // Historical summaries only (portal uses portalActualsByProject)
     const allSummaries = filteredHistoricalSummaries || []
-
-    const f5Reports = await fetchF5ReportsForProjects(dataSupabase, projectIds)
     
-    // Get F5 reach data for individual and family totals
-    const f5ReportIds = (f5Reports || []).map((f:any) => f.id)
-    let f5ReachData: any[] = []
-    if (f5ReportIds.length) {
-      let reachData: any[] = []
-      for (const batch of chunkIds(f5ReportIds)) {
-        const { data: page, error: reachErr } = await dataSupabase
-          .from('err_program_reach')
-          .select('report_id, individual_count, household_count')
-          .in('report_id', batch)
-        if (reachErr) throw reachErr
-        reachData.push(...(page || []))
-      }
-      f5ReachData = reachData || []
-    }
-    
-    // Calculate totals
+    // Calculate F5 totals
     const totalIndividuals = f5ReachData.reduce((sum, r) => sum + (Number(r.individual_count) || 0), 0)
     const totalFamilies = f5ReachData.reduce((sum, r) => sum + (Number(r.household_count) || 0), 0)
 
@@ -484,6 +513,7 @@ export async function GET(request: Request) {
     }
 
     // Build project-level rows from err_projects
+    const aggregationStart = Date.now()
     const projRows = (projects || []).map((p:any) => {
       // Use expenses for mutual_aid_portal projects, otherwise use planned_activities
       const plan = p.source === 'mutual_aid_portal' 
@@ -822,6 +852,7 @@ export async function GET(request: Request) {
       variance: s.plan - s.actual,
       burn: s.plan > 0 ? s.actual / s.plan : 0
     }))
+    timer('aggregations and processing', aggregationStart)
 
     const result = { 
       kpis, 
@@ -830,8 +861,16 @@ export async function GET(request: Request) {
       roomAggregations: roomRows
     }
     
-    await writeSharedRollupCache(cacheKey, result)
+    // Write to shared cache (async - don't block response)
+    const cacheWriteStart = Date.now()
+    writeSharedRollupCache(cacheKey, result).then(() => {
+      const elapsed = Date.now() - cacheWriteStart
+      console.log(`[rollup] cache write: ${elapsed}ms (async)`)
+    }).catch(e => {
+      console.error('[rollup] async cache write failed:', e)
+    })
 
+    timer('TOTAL (rebuild)', startTime)
     return NextResponse.json(result)
   } catch (e) {
     console.error('overview/rollup error', e)
