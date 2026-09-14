@@ -96,3 +96,17 @@ export function getFunctionsByModule(): Record<string, FunctionDefinition[]> {
 export function hasExceptionOverrides(override: UserOverride | undefined | null): boolean {
   return Boolean(override?.add?.length || override?.remove?.length)
 }
+
+/** Roles a viewer may see/manage on the Permissions page. */
+export function rolesVisibleToViewer(viewerRole: string): string[] {
+  switch (viewerRole) {
+    case 'support':
+      return ['base_err', 'state_err', 'admin', 'superadmin', 'support']
+    case 'superadmin':
+      return ['base_err', 'state_err', 'admin', 'superadmin']
+    case 'admin':
+      return ['base_err', 'state_err']
+    default:
+      return []
+  }
+}

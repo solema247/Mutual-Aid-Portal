@@ -1,6 +1,12 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
-import { getFunctionList, getFunctionsByModule, hasExceptionOverrides } from '@/lib/permissions'
+import {
+  getFunctionList,
+  getFunctionsByModule,
+  getRoleBase,
+  hasExceptionOverrides,
+  rolesVisibleToViewer,
+} from '@/lib/permissions'
 import { getOverridesMap } from '@/lib/userOverridesDb'
 import {
   EDITABLE_ROLE_DEFAULTS,
@@ -8,7 +14,6 @@ import {
   getJsonRoleDefaults,
   mergeRoleDefaultsMaps,
 } from '@/lib/roleDefaultsDb'
-import { getRoleBase } from '@/lib/permissions'
 
 const FULL_ACCESS_ROLES = new Set(['superadmin', 'support'])
 
@@ -36,6 +41,8 @@ export async function GET() {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
+  const visibleRoles = new Set(rolesVisibleToViewer(currentUser.role))
+
   const { data: users, error: usersError } = await supabase
     .from('users')
     .select(`
@@ -58,10 +65,7 @@ export async function GET() {
     return NextResponse.json({ error: 'Failed to load users' }, { status: 500 })
   }
 
-  let list = users ?? []
-  if (currentUser.role !== 'support') {
-    list = list.filter((u) => u.role !== 'support')
-  }
+  const list = (users ?? []).filter((u) => visibleRoles.has(u.role))
 
   const overridesMap = await getOverridesMap(
     supabase,
@@ -97,6 +101,9 @@ export async function GET() {
   }
 
   const roleCounts: Record<string, number> = {}
+  for (const role of visibleRoles) {
+    roleCounts[role] = 0
+  }
   const usersPayload = list.map((u) => {
     roleCounts[u.role] = (roleCounts[u.role] ?? 0) + 1
     const ov = overridesMap[u.id] ?? { add: [], remove: [] }
@@ -114,7 +121,8 @@ export async function GET() {
   })
 
   const editableDefaults: Record<string, string[]> = {}
-  for (const role of EDITABLE_ROLE_DEFAULTS) {
+  const editableRoles = EDITABLE_ROLE_DEFAULTS.filter((role) => visibleRoles.has(role))
+  for (const role of editableRoles) {
     editableDefaults[role] = roleDefaultsMap[role] ?? []
   }
 
@@ -123,7 +131,8 @@ export async function GET() {
     roleCounts,
     roleDefaults: editableDefaults,
     fullAccessRoles: Array.from(FULL_ACCESS_ROLES),
-    editableRoles: [...EDITABLE_ROLE_DEFAULTS],
+    editableRoles,
+    visibleRoles: rolesVisibleToViewer(currentUser.role),
     viewerRole: currentUser.role,
     functions: getFunctionList(),
     functionsByModule: getFunctionsByModule(),

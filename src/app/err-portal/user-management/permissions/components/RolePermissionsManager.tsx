@@ -87,6 +87,7 @@ type OverviewPayload = {
   roleCounts: Record<string, number>
   roleDefaults: Record<string, string[]>
   editableRoles: string[]
+  visibleRoles: string[]
   viewerRole: string
   functionsByModule: Record<string, FunctionDefinition[]>
 }
@@ -190,15 +191,14 @@ export default function RolePermissionsManager() {
   }, [data, searchParams])
 
   const visibleRoleTabs = useMemo(() => {
-    if (!data) return ROLE_TABS.filter((t) => t.id !== 'support')
-    if (data.viewerRole === 'support') return ROLE_TABS
-    return ROLE_TABS.filter((t) => t.id !== 'support')
+    const allowed = new Set(data?.visibleRoles ?? ['base_err', 'state_err'])
+    return ROLE_TABS.filter((t) => allowed.has(t.id))
   }, [data])
 
   useEffect(() => {
     if (!data) return
-    if (roleTab === 'support' && data.viewerRole !== 'support') {
-      setRoleTab('base_err')
+    if (!data.visibleRoles.includes(roleTab)) {
+      setRoleTab(data.visibleRoles[0] ?? 'base_err')
     }
   }, [data, roleTab])
 
