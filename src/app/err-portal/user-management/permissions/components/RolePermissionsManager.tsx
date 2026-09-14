@@ -87,6 +87,7 @@ type OverviewPayload = {
   roleCounts: Record<string, number>
   roleDefaults: Record<string, string[]>
   editableRoles: string[]
+  viewerRole: string
   functionsByModule: Record<string, FunctionDefinition[]>
 }
 
@@ -187,6 +188,19 @@ export default function RolePermissionsManager() {
       setActiveUserId(u.id)
     }
   }, [data, searchParams])
+
+  const visibleRoleTabs = useMemo(() => {
+    if (!data) return ROLE_TABS.filter((t) => t.id !== 'support')
+    if (data.viewerRole === 'support') return ROLE_TABS
+    return ROLE_TABS.filter((t) => t.id !== 'support')
+  }, [data])
+
+  useEffect(() => {
+    if (!data) return
+    if (roleTab === 'support' && data.viewerRole !== 'support') {
+      setRoleTab('base_err')
+    }
+  }, [data, roleTab])
 
   useEffect(() => {
     if (!data) return
@@ -428,7 +442,7 @@ export default function RolePermissionsManager() {
 
       <Tabs value={roleTab} onValueChange={setRoleTab} className="min-w-0 w-full">
         <TabsList className="flex h-auto min-h-0 w-full flex-wrap gap-0.5 p-0.5">
-          {ROLE_TABS.map((tab) => (
+          {visibleRoleTabs.map((tab) => (
             <TabsTrigger
               key={tab.id}
               value={tab.id}

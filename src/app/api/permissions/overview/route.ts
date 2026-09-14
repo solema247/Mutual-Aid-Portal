@@ -124,6 +124,7 @@ export async function GET() {
     roleDefaults: editableDefaults,
     fullAccessRoles: Array.from(FULL_ACCESS_ROLES),
     editableRoles: [...EDITABLE_ROLE_DEFAULTS],
+    viewerRole: currentUser.role,
     functions: getFunctionList(),
     functionsByModule: getFunctionsByModule(),
   })
