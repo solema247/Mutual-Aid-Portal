@@ -17,32 +17,55 @@ const SUPABASE_IN_BATCH = 80
 /** Cache duration in milliseconds (3 minutes) */
 const CACHE_DURATION_MS = 3 * 60 * 1000
 
-/** In-memory cache for rollup data */
-interface CacheEntry {
-  data: any
-  timestamp: number
-  allowedStates: string[] | null
-}
-
-let rollupCache: CacheEntry | null = null
-
 function getCacheKey(allowedStates: string[] | null): string {
   if (!allowedStates || allowedStates.length === 0) return 'all_states'
-  return allowedStates.sort().join(',')
+  return [...allowedStates].sort().join(',')
 }
 
-function isCacheValid(entry: CacheEntry | null, allowedStates: string[] | null): boolean {
-  if (!entry) return false
-  
-  const now = Date.now()
-  const isExpired = now - entry.timestamp > CACHE_DURATION_MS
-  if (isExpired) return false
-  
-  // Check if state access matches
-  const currentKey = getCacheKey(allowedStates)
-  const cachedKey = getCacheKey(entry.allowedStates)
-  
-  return currentKey === cachedKey
+async function readSharedRollupCache(cacheKey: string): Promise<any | null> {
+  try {
+    const admin = getSupabaseAdmin()
+    const { data, error } = await admin
+      .from('rollup_cache')
+      .select('payload, updated_at')
+      .eq('cache_key', cacheKey)
+      .maybeSingle()
+
+    if (error) {
+      console.error('[rollup] shared cache read failed:', error.message)
+      return null
+    }
+    if (!data?.payload || !data.updated_at) return null
+
+    const ageMs = Date.now() - new Date(data.updated_at).getTime()
+    if (ageMs > CACHE_DURATION_MS || ageMs < 0) return null
+
+    return data.payload
+  } catch (e) {
+    console.error('[rollup] shared cache read error:', e)
+    return null
+  }
+}
+
+async function writeSharedRollupCache(cacheKey: string, payload: any): Promise<void> {
+  try {
+    const admin = getSupabaseAdmin()
+    const { error } = await admin.from('rollup_cache').upsert(
+      {
+        cache_key: cacheKey,
+        payload,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'cache_key' }
+    )
+    if (error) {
+      console.error('[rollup] shared cache write failed:', error.message)
+      return
+    }
+    console.log('[rollup] Data cached successfully (shared)')
+  } catch (e) {
+    console.error('[rollup] shared cache write error:', e)
+  }
 }
 
 function chunkIds<T extends string | number>(ids: T[]): T[][] {
@@ -252,15 +275,19 @@ export async function GET(request: Request) {
 
     // Get user's state access rights
     const { allowedStateNames } = await getUserStateAccess()
+    const cacheKey = getCacheKey(allowedStateNames)
     
     // Check for cache bypass parameter
     const url = new URL(request.url)
     const bypassCache = url.searchParams.get('refresh') === 'true'
     
-    // Check cache if not bypassing
-    if (!bypassCache && isCacheValid(rollupCache, allowedStateNames)) {
-      console.log('[rollup] Returning cached data')
-      return NextResponse.json(rollupCache!.data)
+    // Check shared cache if not bypassing
+    if (!bypassCache) {
+      const cached = await readSharedRollupCache(cacheKey)
+      if (cached) {
+        console.log('[rollup] Returning shared cached data')
+        return NextResponse.json(cached)
+      }
     }
     
     console.log('[rollup] Cache miss or bypass - fetching fresh data')
@@ -803,13 +830,7 @@ export async function GET(request: Request) {
       roomAggregations: roomRows
     }
     
-    // Cache the result
-    rollupCache = {
-      data: result,
-      timestamp: Date.now(),
-      allowedStates: allowedStateNames
-    }
-    console.log('[rollup] Data cached successfully')
+    await writeSharedRollupCache(cacheKey, result)
 
     return NextResponse.json(result)
   } catch (e) {
