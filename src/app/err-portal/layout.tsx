@@ -67,7 +67,9 @@ export default function ErrPortalLayout({
   }, [])
 
   const { can, isLoading: permissionsLoading } = useAllowedFunctions()
-  const canViewGrantManagement = can('grant_view')
+  const canViewGrantDecisions = can('grant_decisions_view_page')
+  const canViewGrantGrants = can('grant_grants_view_page')
+  const canViewGrantAllocation = can('grant_allocation_view_page')
   const canViewCompliance = can('compliance_view_page')
 
   useEffect(() => {
@@ -93,6 +95,7 @@ export default function ErrPortalLayout({
   const canViewDashboard = can('dashboard_view_page')
   const canViewSurveys = can('surveys_view_page')
   const canRaiseTicket = can('raise_ticket_page')
+  const canViewTicketDashboard = can('ticket_dashboard_view_page')
   const canViewDataArchive = can('data_archive_view_page')
 
   const fSystemChildren: SidebarLinkItem[] = []
@@ -162,25 +165,28 @@ export default function ErrPortalLayout({
     })
   }
 
-  const grantManagementChildren: SidebarLinkItem[] = canViewGrantManagement
-    ? [
-        {
-          href: '/err-portal/grant-management/decisions',
-          label: 'Decisions',
-          icon: <Split className="h-5 w-5" />,
-        },
-        {
-          href: '/err-portal/grant-management/grants',
-          label: 'Grants',
-          icon: <PieChart className="h-5 w-5" />,
-        },
-        {
-          href: '/err-portal/grant-management/allocation-management',
-          label: 'Allocation Management',
-          icon: <ArrowLeftRight className="h-5 w-5" />,
-        },
-      ]
-    : []
+  const grantManagementChildren: SidebarLinkItem[] = []
+  if (canViewGrantDecisions) {
+    grantManagementChildren.push({
+      href: '/err-portal/grant-management/decisions',
+      label: 'Decisions',
+      icon: <Split className="h-5 w-5" />,
+    })
+  }
+  if (canViewGrantGrants) {
+    grantManagementChildren.push({
+      href: '/err-portal/grant-management/grants',
+      label: 'Grants',
+      icon: <PieChart className="h-5 w-5" />,
+    })
+  }
+  if (canViewGrantAllocation) {
+    grantManagementChildren.push({
+      href: '/err-portal/grant-management/allocation-management',
+      label: 'Allocation Management',
+      icon: <ArrowLeftRight className="h-5 w-5" />,
+    })
+  }
 
   const adminGroupChildren: SidebarLinkItem[] = []
   if (canViewRooms) {
@@ -217,6 +223,8 @@ export default function ErrPortalLayout({
       label: t('err:raise_ticket_title', 'Raise a ticket'),
       icon: <Ticket className="h-5 w-5" />,
     })
+  }
+  if (canViewTicketDashboard) {
     adminGroupChildren.push({
       href: '/err-portal/ticket-dashboard',
       label: t('err:raise_ticket_dashboard_nav', 'Ticket dashboard'),

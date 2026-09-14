@@ -43,6 +43,7 @@ export default function RaiseATicketPage () {
   const fileInputId = useId()
   const { can, isLoading: permissionsLoading } = useAllowedFunctions()
   const canViewPage = can('raise_ticket_page')
+  const canViewTicketDashboard = can('ticket_dashboard_view_page')
   const [ready, setReady] = useState(false)
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
@@ -296,14 +297,16 @@ export default function RaiseATicketPage () {
             'Choose an issue type and priority to help triage.'
           )}
         </p>
-        <p className="text-sm">
-          <Link
-            href="/err-portal/ticket-dashboard"
-            className="text-primary underline font-medium"
-          >
-            {t('err:raise_ticket_link_dashboard', 'View ticket dashboard')}
-          </Link>
-        </p>
+        {canViewTicketDashboard && (
+          <p className="text-sm">
+            <Link
+              href="/err-portal/ticket-dashboard"
+              className="text-primary underline font-medium"
+            >
+              {t('err:raise_ticket_link_dashboard', 'View ticket dashboard')}
+            </Link>
+          </p>
+        )}
 
         {error && (
           <p className="text-sm text-destructive" role="alert">

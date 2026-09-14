@@ -30,10 +30,13 @@ const MODULE_LABELS: Record<string, string> = {
   users: 'User Management',
   grants: 'Grant Management',
   rooms: 'Room Management',
+  states: 'State Management',
+  compliance: 'Compliance',
+  archive: 'Data Archive',
   dashboard: 'Dashboard',
   learnings: 'Mutual Aid Learnings',
   surveys: 'Surveys',
-  tickets: 'Raise a ticket'
+  tickets: 'Tickets'
 }
 
 const PAGE_SIZE = 10
@@ -83,7 +86,7 @@ export default function BulkPermissionsManager({
   const [loadingFunctions, setLoadingFunctions] = useState(true)
   const [loadingUsers, setLoadingUsers] = useState(true)
   const [availablePage, setAvailablePage] = useState(1)
-  const moduleOrder = ['grants', 'f1', 'f2', 'f3', 'f4_f5', 'management', 'users', 'rooms', 'dashboard', 'learnings', 'surveys', 'tickets'] as const
+  const moduleOrder = ['grants', 'f1', 'f2', 'f3', 'f4_f5', 'management', 'archive', 'users', 'rooms', 'states', 'compliance', 'dashboard', 'learnings', 'surveys', 'tickets'] as const
   const [openModules, setOpenModules] = useState<Set<string>>(
     () => new Set(moduleOrder)
   )

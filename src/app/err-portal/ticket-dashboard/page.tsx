@@ -19,7 +19,8 @@ export default function TicketDashboardPage () {
   const { t } = useTranslation(['err', 'common'])
   const router = useRouter()
   const { can, isLoading: permissionsLoading } = useAllowedFunctions()
-  const canViewPage = can('raise_ticket_page')
+  const canViewPage = can('ticket_dashboard_view_page')
+  const canRaiseTicket = can('raise_ticket_page')
   const [ready, setReady] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -88,14 +89,16 @@ export default function TicketDashboardPage () {
             'Figures reflect board fields set during weekly triage; use the project board link below for full detail.'
           )}
         </p>
-        <p className="text-sm">
-          <Link
-            href="/err-portal/raise-a-ticket"
-            className="text-primary underline font-medium"
-          >
-            {t('err:raise_ticket_link_raise', 'Raise a ticket')}
-          </Link>
-        </p>
+        {canRaiseTicket && (
+          <p className="text-sm">
+            <Link
+              href="/err-portal/raise-a-ticket"
+              className="text-primary underline font-medium"
+            >
+              {t('err:raise_ticket_link_raise', 'Raise a ticket')}
+            </Link>
+          </p>
+        )}
 
         {error && (
           <p className="text-sm text-destructive" role="alert">

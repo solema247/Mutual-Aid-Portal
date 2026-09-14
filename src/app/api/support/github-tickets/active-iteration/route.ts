@@ -22,7 +22,7 @@ export async function GET (request: Request) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    assertPermission(auth, 'raise_ticket_page')
+    assertPermission(auth, 'ticket_dashboard_view_page')
 
     const token = process.env.GITHUB_ISSUES_TOKEN ?? process.env.GITHUB_TOKEN
     if (!token) {

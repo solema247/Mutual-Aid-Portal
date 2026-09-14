@@ -23,7 +23,10 @@ interface User {
 export default function ErrPortalPage() {
   const { t } = useTranslation(['common', 'err'])
   const { can, isLoading: permissionsLoading } = useAllowedFunctions()
-  const canViewGrantManagement = can('grant_view')
+  const canViewGrantManagement =
+    can('grant_decisions_view_page') ||
+    can('grant_grants_view_page') ||
+    can('grant_allocation_view_page')
   const canViewF1 = can('f1_view_page')
   const canViewF2 = can('f2_view_page')
   const canViewF3 = can('f3_view_page')
