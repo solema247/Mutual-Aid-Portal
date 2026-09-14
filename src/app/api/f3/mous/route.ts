@@ -22,6 +22,18 @@ function parseMouSignatures(mou: Record<string, unknown>) {
   return mou
 }
 
+/** PostgREST `.in()` with hundreds of UUIDs exceeds URL limits and can fail as "fetch failed". */
+const SUPABASE_IN_BATCH = 80
+
+function chunkIds(ids: string[]): string[][] {
+  if (!ids.length) return []
+  const out: string[][] = []
+  for (let i = 0; i < ids.length; i += SUPABASE_IN_BATCH) {
+    out.push(ids.slice(i, i + SUPABASE_IN_BATCH))
+  }
+  return out
+}
+
 async function fetchProjectEnrichment(
   supabase: SupabaseClient,
   mouIds: string[]
@@ -33,14 +45,18 @@ async function fetchProjectEnrichment(
     }
   }
 
-  const { data: projects, error: projErr } = await supabase
-    .from('err_projects')
-    .select('mou_id, expenses, grant_id, grant_grid_id, funding_status, status')
-    .in('mou_id', mouIds)
+  const batches = chunkIds(mouIds)
+  const rows: MouProjectListRow[] = []
+  for (const batch of batches) {
+    const { data: projects, error: projErr } = await supabase
+      .from('err_projects')
+      .select('mou_id, expenses, grant_id, grant_grid_id, funding_status, status')
+      .in('mou_id', batch)
 
-  if (projErr) throw projErr
+    if (projErr) throw projErr
+    if (projects?.length) rows.push(...(projects as MouProjectListRow[]))
+  }
 
-  const rows = (projects || []) as MouProjectListRow[]
   const totalByMouId = sumExpensesByMouId(rows)
 
   const gridIds = Array.from(
@@ -49,16 +65,18 @@ async function fetchProjectEnrichment(
 
   const grantIdByGridId: Record<string, string> = {}
   if (gridIds.length > 0) {
-    const { data: grants, error: grantsErr } = await supabase
-      .from('grants_grid_view')
-      .select('id, grant_id')
-      .in('id', gridIds)
+    for (const batch of chunkIds(gridIds)) {
+      const { data: grants, error: grantsErr } = await supabase
+        .from('grants_grid_view')
+        .select('id, grant_id')
+        .in('id', batch)
 
-    if (grantsErr) throw grantsErr
+      if (grantsErr) throw grantsErr
 
-    for (const grant of grants || []) {
-      if (grant.id && grant.grant_id) {
-        grantIdByGridId[grant.id] = grant.grant_id
+      for (const grant of grants || []) {
+        if (grant.id && grant.grant_id) {
+          grantIdByGridId[grant.id] = grant.grant_id
+        }
       }
     }
   }
@@ -67,21 +85,28 @@ async function fetchProjectEnrichment(
 
   // Distinct projects with ≥1 relational payment confirmation per MOU
   const paymentConfirmedCounts: Record<string, number> = {}
-  const { data: confRows, error: confErr } = await supabase
-    .from('mou_payment_confirmations')
-    .select('mou_id, project_id')
-    .in('mou_id', mouIds)
+  const confRows: { mou_id: string; project_id: string }[] = []
+  let confFailed = false
+  for (const batch of batches) {
+    const { data, error: confErr } = await supabase
+      .from('mou_payment_confirmations')
+      .select('mou_id, project_id')
+      .in('mou_id', batch)
 
-  if (confErr) {
-    console.warn('[f3/mous] payment confirmation counts unavailable', confErr.message)
-  } else {
+    if (confErr) {
+      confFailed = true
+      console.warn('[f3/mous] payment confirmation counts unavailable', confErr.message)
+      break
+    }
+    if (data?.length) confRows.push(...(data as { mou_id: string; project_id: string }[]))
+  }
+
+  if (!confFailed) {
     const projectsByMou = new Map<string, Set<string>>()
-    for (const row of confRows || []) {
-      const mouId = (row as { mou_id: string }).mou_id
-      const projectId = (row as { project_id: string }).project_id
-      if (!mouId || !projectId) continue
-      if (!projectsByMou.has(mouId)) projectsByMou.set(mouId, new Set())
-      projectsByMou.get(mouId)!.add(projectId)
+    for (const row of confRows) {
+      if (!row.mou_id || !row.project_id) continue
+      if (!projectsByMou.has(row.mou_id)) projectsByMou.set(row.mou_id, new Set())
+      projectsByMou.get(row.mou_id)!.add(row.project_id)
     }
     for (const [mouId, set] of projectsByMou) {
       paymentConfirmedCounts[mouId] = set.size
