@@ -470,6 +470,7 @@ export async function GET() {
         activities_count: reachCounts[reportId] || 0,
         updated_at: r.created_at,
         has_f5_report: true,
+        f5_status: project.f5_status != null ? String(project.f5_status).trim().toLowerCase() : null,
         report_status: 'uploaded',
         end_activity_status: reachHasEndDate[reportId] ? 'complete' : 'missing',
       })
@@ -498,6 +499,7 @@ export async function GET() {
         activities_count: 0,
         updated_at: null,
         has_f5_report: false,
+        f5_status: f5Status,
         report_status: f5Status === 'completed' ? 'complete_no_report' : 'not_uploaded',
         end_activity_status: null,
       })

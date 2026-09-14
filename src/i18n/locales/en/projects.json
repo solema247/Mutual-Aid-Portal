@@ -108,6 +108,7 @@
     "resolved": "Resolved"
   },
   "management": {
+    "complete_requires_reports": "Both F4 and F5 must be marked completed before completing the project. Still missing: {{missing}}.",
     "filters": {
       "donor": "Donor",
       "grant_call": "Grant Call",

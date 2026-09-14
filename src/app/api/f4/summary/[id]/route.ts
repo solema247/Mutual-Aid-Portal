@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { requirePermission } from '@/lib/requirePermission'
+import { resetReportingStatusIfNoReportsRemaining } from '@/lib/projectStatus'
 
 export async function GET(
   _req: Request,
@@ -205,6 +206,12 @@ export async function DELETE(
     if (attErr) throw attErr
     const { error: sumErr } = await supabase.from('err_summary').delete().eq('id', summaryId)
     if (sumErr) throw sumErr
+
+    const projectId = row.project_id as string
+    const statusResult = await resetReportingStatusIfNoReportsRemaining(supabase, projectId, 'f4')
+    if (!statusResult.ok) {
+      console.warn('F4 delete: failed to reset reporting status', statusResult.error)
+    }
 
     return NextResponse.json({ success: true })
   } catch (e) {

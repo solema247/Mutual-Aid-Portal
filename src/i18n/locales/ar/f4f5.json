@@ -60,6 +60,12 @@
       "actions": ""
     },
     "view": "عرض",
+    "mark_complete": "تعيين كمكتمل",
+    "mark_complete_saving": "جارٍ الحفظ…",
+    "mark_complete_confirm_title": "تعيين F4 كمكتمل؟",
+    "mark_complete_confirm_body": "سيُعلَّم تقرير F4 لهذا المشروع كمكتمل. يمكنك عرض التقرير بعد ذلك.",
+    "mark_complete_confirm_action": "تعيين كمكتمل",
+    "mark_complete_confirm_cancel": "إلغاء",
     "loading": "جارٍ التحميل…",
     "empty": "لا توجد سجلات بعد",
     "report_status": {
@@ -181,6 +187,12 @@
       "actions": ""
     },
     "view": "عرض",
+    "mark_complete": "تعيين كمكتمل",
+    "mark_complete_saving": "جارٍ الحفظ…",
+    "mark_complete_confirm_title": "تعيين F5 كمكتمل؟",
+    "mark_complete_confirm_body": "سيُعلَّم تقرير F5 لهذا المشروع كمكتمل. يمكنك عرض التقرير بعد ذلك.",
+    "mark_complete_confirm_action": "تعيين كمكتمل",
+    "mark_complete_confirm_cancel": "إلغاء",
     "loading": "جارٍ التحميل…",
     "empty": "لا توجد سجلات بعد",
     "report_status": {

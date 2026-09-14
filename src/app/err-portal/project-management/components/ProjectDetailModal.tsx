@@ -17,6 +17,7 @@ import {
 } from '@/lib/f4ExpenseDisplay'
 import { getSectorWithHighestAmount } from '@/lib/plannedActivitiesExpenses'
 import { isActivityShifted } from '@/lib/activityShift'
+import { isReportingStatusCompleted } from '@/lib/projectStatus'
 import { supabase } from '@/lib/supabaseClient'
 import { GrantSegmentSelect } from '@/app/err-portal/f1-work-plans/components/GrantSegmentSelect'
 
@@ -243,6 +244,23 @@ export default function ProjectDetailModal({ projectId, open, onOpenChange }: Pr
 
   const handleCompleteProject = async () => {
     if (!projectId || isHistorical) return
+
+    const f4Done = isReportingStatusCompleted(project?.f4_status)
+    const f5Done = isReportingStatusCompleted(project?.f5_status)
+    if (!f4Done || !f5Done) {
+      const missing = [
+        !f4Done ? 'F4' : null,
+        !f5Done ? 'F5' : null,
+      ].filter(Boolean).join(' and ')
+      alert(
+        t('management.complete_requires_reports', {
+          missing,
+          defaultValue:
+            'Both F4 and F5 must be marked completed before completing the project. Still missing: {{missing}}.',
+        })
+      )
+      return
+    }
     
     if (!confirm('Are you sure you want to mark this project as completed?')) {
       return

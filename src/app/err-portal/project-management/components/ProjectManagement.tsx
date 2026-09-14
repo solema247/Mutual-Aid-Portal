@@ -20,7 +20,7 @@ import {
   STATUS_DISPLAY,
   type ActiveFilter,
 } from '@/components/smart-filter'
-import { diffReportingStatus } from '@/lib/projectStatus'
+import { diffReportingStatus, isReportingStatusCompleted } from '@/lib/projectStatus'
 import { downloadCsv } from '@/lib/csvDownload'
 import ProjectDetailModal from './ProjectDetailModal'
 import UploadF4Modal from '@/app/err-portal/f4-f5-reporting/components/UploadF4Modal'
@@ -254,7 +254,7 @@ export default function ProjectManagement() {
 
   // Tracker score: F4 half (max 0.5) + F5 half (max 0.5).
   // Historical F4: Completed+actual>0 → actual/plan; else Completed → 0.5; Partial/Under Review → 0.25; Waiting → 0.
-  // Portal F4: rollup sets f4_status to 'completed' when F4 data exists; else user-set waiting/partial/in review. Completed → 0.5*min(1,burn); partial/in review → 0.25; waiting → 0.
+  // Portal F4/F5: use stored f4_status / f5_status (upload sets partial; user marks completed). Completed → 0.5*min(1,burn) for F4 / 0.5 for F5; partial/in review → 0.25; waiting → 0.
   // F5 (both): Completed → 0.5; Partial/Under Review → 0.25; Waiting → 0.
   const trackerScore = (r: any) => {
     const plan = Number(r.plan || 0)
@@ -542,8 +542,29 @@ export default function ProjectManagement() {
     }
   }
 
-  const handleCompleteProject = async (projectId: string) => {
+  const handleCompleteProject = async (
+    projectId: string,
+    f4Status?: string | null,
+    f5Status?: string | null,
+  ) => {
     if (!projectId || projectId.startsWith('historical_')) return
+
+    const f4Done = isReportingStatusCompleted(f4Status)
+    const f5Done = isReportingStatusCompleted(f5Status)
+    if (!f4Done || !f5Done) {
+      const missing = [
+        !f4Done ? 'F4' : null,
+        !f5Done ? 'F5' : null,
+      ].filter(Boolean).join(' and ')
+      alert(
+        t('management.complete_requires_reports', {
+          missing,
+          defaultValue:
+            'Both F4 and F5 must be marked completed before completing the project. Still missing: {{missing}}.',
+        })
+      )
+      return
+    }
     
     if (!confirm('Are you sure you want to mark this project as completed?')) {
       return
@@ -998,6 +1019,7 @@ export default function ProjectManagement() {
                               variant="outline"
                               size="sm"
                               className="bg-green-50 hover:bg-green-100 text-xs px-1.5 py-0.5 h-6 shrink-0 min-w-0"
+                              disabled={loadingReports}
                               onClick={async (e)=>{ 
                                 e.stopPropagation(); 
                                 const projectId = r.project_id || null;
@@ -1006,27 +1028,21 @@ export default function ProjectManagement() {
                                   ? projectId // Keep the historical_ prefix for the modal to handle
                                   : projectId;
                                 setSelectedProjectId(actualProjectId);
-                                // Load existing F4 reports for this project
+                                // Load existing F4 reports for this project only
                                 if (projectId) {
                                   setLoadingReports(true);
                                   try {
-                                    const res = await fetch('/api/f4/list');
+                                    const res = await fetch(`/api/f4/project-reports?project_id=${encodeURIComponent(projectId)}`);
+                                    if (!res.ok) throw new Error('Failed to load F4 reports')
                                     const data = await res.json();
-                                    // Check both project_id and activities_raw_import_id for historical projects
-                                    const isHistorical = String(projectId).startsWith('historical_');
-                                    const realUuid = isHistorical ? String(projectId).replace('historical_', '') : null;
-                                    const projectF4s = (data || []).filter((f4: any) => {
-                                      if (isHistorical && realUuid) {
-                                        return f4.activities_raw_import_id === realUuid;
-                                      }
-                                      return f4.project_id === projectId;
-                                    });
+                                    const projectF4s = Array.isArray(data) ? data : [];
                                     setF4Reports(projectF4s);
-                                    if (projectF4s.length > 0) {
-                                      // If reports exist, show list (edit only)
+                                    if (projectF4s.length === 1 && canViewF4 && projectF4s[0]?.id != null) {
+                                      setSelectedF4Id(projectF4s[0].id);
+                                      setViewF4Open(true);
+                                    } else if (projectF4s.length > 0) {
                                       setF4ListOpen(true);
                                     } else if (canUploadF4) {
-                                      // If no reports and can upload, allow upload
                                       setUploadF4Open(true);
                                     } else {
                                       setF4ListOpen(true);
@@ -1056,19 +1072,24 @@ export default function ProjectManagement() {
                                 variant="outline"
                                 size="sm"
                                 className="bg-blue-50 hover:bg-blue-100 text-xs px-1.5 py-0.5 h-6 shrink-0 min-w-0"
+                                disabled={loadingReports}
                                 onClick={async (e)=>{ 
                                   e.stopPropagation();
                                   const projectId = r.project_id || null;
                                   setSelectedProjectId(projectId);
-                                  // Load existing F5 reports for this project
+                                  // Load existing F5 reports for this project only
                                   if (projectId) {
                                     setLoadingReports(true);
                                     try {
-                                      const res = await fetch('/api/f5/list');
+                                      const res = await fetch(`/api/f5/project-reports?project_id=${encodeURIComponent(projectId)}`);
+                                      if (!res.ok) throw new Error('Failed to load F5 reports')
                                       const data = await res.json();
-                                      const projectF5s = (data || []).filter((f5: any) => f5.project_id === projectId);
+                                      const projectF5s = Array.isArray(data) ? data : [];
                                       setF5Reports(projectF5s);
-                                      if (projectF5s.length > 0) {
+                                      if (projectF5s.length === 1 && canViewF5 && projectF5s[0]?.id != null) {
+                                        setSelectedF5Id(projectF5s[0].id);
+                                        setViewF5Open(true);
+                                      } else if (projectF5s.length > 0) {
                                         setF5ListOpen(true);
                                       } else if (canUploadF5) {
                                         setUploadF5Open(true);
@@ -1097,7 +1118,7 @@ export default function ProjectManagement() {
                                 onClick={async (e)=>{ 
                                   e.stopPropagation();
                                   if (r.project_id) {
-                                    await handleCompleteProject(r.project_id);
+                                    await handleCompleteProject(r.project_id, r.f4_status, r.f5_status);
                                   }
                                 }}
                               >

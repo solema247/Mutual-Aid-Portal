@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { isReportingStatusCompleted } from '@/lib/projectStatus'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 
 export async function PATCH(
@@ -25,7 +26,7 @@ export async function PATCH(
     // Verify the project exists in err_projects
     const { data: project, error: fetchError } = await supabase
       .from('err_projects')
-      .select('id, status')
+      .select('id, status, f4_status, f5_status')
       .eq('id', projectId)
       .single()
 
@@ -33,8 +34,28 @@ export async function PATCH(
       return NextResponse.json({ error: 'Project not found' }, { status: 404 })
     }
 
-    // Update the project status, tracking when it was marked completed
     const newStatus = status || 'completed'
+    if (newStatus === 'completed') {
+      const f4Done = isReportingStatusCompleted(project.f4_status)
+      const f5Done = isReportingStatusCompleted(project.f5_status)
+      if (!f4Done || !f5Done) {
+        const missing = [
+          !f4Done ? 'F4' : null,
+          !f5Done ? 'F5' : null,
+        ].filter(Boolean).join(' and ')
+        return NextResponse.json(
+          {
+            error: `Both F4 and F5 must be marked completed before completing the project. Still missing: ${missing}.`,
+            code: 'reporting_incomplete',
+            f4_status: project.f4_status,
+            f5_status: project.f5_status,
+          },
+          { status: 400 }
+        )
+      }
+    }
+
+    // Update the project status, tracking when it was marked completed
     const { error: updateError } = await supabase
       .from('err_projects')
       .update({
@@ -54,4 +75,3 @@ export async function PATCH(
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
-

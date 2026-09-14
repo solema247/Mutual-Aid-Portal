@@ -23,9 +23,14 @@ import UploadF5Modal from './components/UploadF5Modal'
 import ViewF5Modal from './components/ViewF5Modal'
 import { useF4F5ReportingPageExplainer } from './F4F5ReportingPageExplainer'
 import { useSearchParams, useRouter } from 'next/navigation'
-import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { Check, ChevronLeft, ChevronRight, Eye, Loader2 } from 'lucide-react'
+import { getStatusDisplay } from '@/components/smart-filter/status-config'
+import { isReportingStatusCompleted } from '@/lib/projectStatus'
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100] as const
+
+/** Set true to show F4 Accept/Reject actions again. Review API and dialog remain in place. */
+const SHOW_F4_REVIEW_BUTTONS = false
 
 interface F4Row {
   id: number | null
@@ -54,6 +59,7 @@ interface F4Row {
   grant_name?: string | null
   report_status?: string | null
   has_f4_report?: boolean
+  f4_status?: string | null
   /** Set for tracker/historical rows; review workflow does not apply */
   activities_raw_import_id?: string | null
 }
@@ -79,6 +85,7 @@ interface F5Row {
   updated_at: string | null
   report_status?: string | null
   has_f5_report?: boolean
+  f5_status?: string | null
   /** complete = uploaded with ≥1 activity end_date; missing = uploaded without; null = not uploaded */
   end_activity_status?: 'complete' | 'missing' | null
 }
@@ -143,6 +150,27 @@ function formatMoneyTwoDecimals(n: number | null | undefined) {
   })
 }
 
+function reportingStatusChipLabel(status: string | null | undefined): string {
+  const s = String(status ?? 'waiting').trim().toLowerCase()
+  if (s === 'completed') return 'Done'
+  if (s === 'in review' || s === 'under review') return 'In review'
+  if (s === 'partial') return 'Partial'
+  return 'Waiting'
+}
+
+function ReportingStatusChip({ status }: { status: string | null | undefined }) {
+  const normalized = String(status ?? 'waiting').trim().toLowerCase() || 'waiting'
+  const display = getStatusDisplay(normalized === 'under review' ? 'in review' : normalized)
+  return (
+    <span
+      className="inline-flex items-center shrink-0 rounded-full px-2 py-0.5 text-[10px] leading-none font-medium"
+      style={{ backgroundColor: display.pillBg, color: display.pillText }}
+    >
+      {reportingStatusChipLabel(normalized)}
+    </span>
+  )
+}
+
 function compareNullableValues (a: unknown, b: unknown): number {
   if (a == null && b == null) return 0
   if (a == null) return 1
@@ -167,6 +195,7 @@ function F4F5ReportingPageContent() {
   const canViewF4 = can('f4_view_report')
   const canViewF5 = can('f5_view_report')
   const canReviewF4 = can('f4_review')
+  const canEditReportingStatus = can('management_edit_reporting_status')
   const [tab, setTab] = useState<'f4'|'f5'>('f4')
   const [rows, setRows] = useState<F4Row[]>([])
   const [loading, setLoading] = useState(false)
@@ -178,6 +207,11 @@ function F4F5ReportingPageContent() {
   const [rejectSummaryId, setRejectSummaryId] = useState<number | null>(null)
   const [rejectComment, setRejectComment] = useState('')
   const [reviewSaving, setReviewSaving] = useState(false)
+  const [markCompleteSavingId, setMarkCompleteSavingId] = useState<string | null>(null)
+  const [confirmMarkComplete, setConfirmMarkComplete] = useState<{
+    projectId: string
+    field: 'f4_status' | 'f5_status'
+  } | null>(null)
 
   // F5 state
   const [f5Rows, setF5Rows] = useState<F5Row[]>([])
@@ -239,6 +273,29 @@ function F4F5ReportingPageContent() {
       /* review submit failed */
     } finally {
       setReviewSaving(false)
+    }
+  }
+
+  const markCompleteReportingStatus = async (
+    projectId: string,
+    field: 'f4_status' | 'f5_status',
+  ) => {
+    if (!projectId || projectId.startsWith('historical_')) return
+    setMarkCompleteSavingId(`${field}:${projectId}`)
+    try {
+      const res = await fetch(`/api/projects/${projectId}/reporting-status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ [field]: 'completed' }),
+      })
+      if (!res.ok) throw new Error((await res.json()).error || 'Failed')
+      setConfirmMarkComplete(null)
+      if (field === 'f4_status') await load()
+      else await loadF5()
+    } catch {
+      /* mark complete failed */
+    } finally {
+      setMarkCompleteSavingId(null)
     }
   }
 
@@ -635,11 +692,23 @@ function F4F5ReportingPageContent() {
                         <TableCell className="text-xs text-right tabular-nums">{formatMoneyTwoDecimals(r.remainder)}</TableCell>
                         <TableCell className="text-xs whitespace-nowrap">
                           <div className="flex flex-nowrap items-center justify-end gap-1">
+                            {!r.activities_raw_import_id && (
+                              <ReportingStatusChip status={r.f4_status} />
+                            )}
                             {hasReport && (r.review_status === 'accepted' || r.review_status === 'rejected') && (
                               <span className="text-[10px] leading-none text-muted-foreground capitalize shrink-0 mr-0.5">{r.review_status}</span>
                             )}
                             {hasReport && canViewF4 && (
-                              <Button variant="outline" size="sm" className="h-7 px-2 py-0 text-[11px] leading-none shrink-0" onClick={()=>{ setViewId(r.id); setViewOpen(true) }}>{t('f4.view')}</Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-7 w-7 p-0 shrink-0"
+                                onClick={()=>{ setViewId(r.id); setViewOpen(true) }}
+                                aria-label={t('f4.view')}
+                                title={t('f4.view')}
+                              >
+                                <Eye className="h-3.5 w-3.5" />
+                              </Button>
                             )}
                             {!hasReport && canUploadF4 && r.project_id && (
                               <Button
@@ -660,7 +729,26 @@ function F4F5ReportingPageContent() {
                                 {t('f4.upload')}
                               </Button>
                             )}
-                            {hasReport && canReviewF4 && !r.activities_raw_import_id && (
+                            {hasReport &&
+                              (canEditReportingStatus || canUploadF4) &&
+                              r.project_id &&
+                              !r.activities_raw_import_id &&
+                              !isReportingStatusCompleted(r.f4_status) && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-7 w-7 p-0 shrink-0 text-green-700 border-green-200 hover:bg-green-50"
+                                onClick={() => r.project_id && setConfirmMarkComplete({ projectId: r.project_id, field: 'f4_status' })}
+                                disabled={markCompleteSavingId === `f4_status:${r.project_id}`}
+                                aria-label={t('f4.mark_complete')}
+                                title={t('f4.mark_complete')}
+                              >
+                                {markCompleteSavingId === `f4_status:${r.project_id}`
+                                  ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                  : <Check className="h-3.5 w-3.5" />}
+                              </Button>
+                            )}
+                            {SHOW_F4_REVIEW_BUTTONS && hasReport && canReviewF4 && !r.activities_raw_import_id && (
                               <>
                                 {r.review_status !== 'accepted' && (
                                   <Button variant="outline" size="sm" className="h-7 px-2 py-0 text-[11px] leading-none shrink-0 text-green-700 border-green-200 hover:bg-green-50" onClick={() => r.id != null && submitReview(r.id, 'accepted')} disabled={reviewSaving}>Accept</Button>
@@ -873,8 +961,18 @@ function F4F5ReportingPageContent() {
                         <TableCell className="text-xs whitespace-nowrap">{r.updated_at ? new Date(r.updated_at).toLocaleDateString() : '-'}</TableCell>
                         <TableCell className="text-xs whitespace-nowrap">
                           <div className="flex flex-nowrap items-center justify-end gap-1">
+                            <ReportingStatusChip status={r.f5_status} />
                             {hasReport && canViewF5 && (
-                              <Button variant="outline" size="sm" className="h-7 px-2 py-0 text-[11px] leading-none shrink-0" onClick={()=>{ setViewF5Id(r.id); setViewF5Open(true) }}>{t('f5.view')}</Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-7 w-7 p-0 shrink-0"
+                                onClick={()=>{ setViewF5Id(r.id); setViewF5Open(true) }}
+                                aria-label={t('f5.view')}
+                                title={t('f5.view')}
+                              >
+                                <Eye className="h-3.5 w-3.5" />
+                              </Button>
                             )}
                             {!hasReport && canUploadF5 && r.project_id && (
                               <Button
@@ -893,6 +991,24 @@ function F4F5ReportingPageContent() {
                                 }}
                               >
                                 {t('f5.upload')}
+                              </Button>
+                            )}
+                            {hasReport &&
+                              (canEditReportingStatus || canUploadF5) &&
+                              r.project_id &&
+                              !isReportingStatusCompleted(r.f5_status) && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-7 w-7 p-0 shrink-0 text-green-700 border-green-200 hover:bg-green-50"
+                                onClick={() => r.project_id && setConfirmMarkComplete({ projectId: r.project_id, field: 'f5_status' })}
+                                disabled={markCompleteSavingId === `f5_status:${r.project_id}`}
+                                aria-label={t('f5.mark_complete')}
+                                title={t('f5.mark_complete')}
+                              >
+                                {markCompleteSavingId === `f5_status:${r.project_id}`
+                                  ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                  : <Check className="h-3.5 w-3.5" />}
                               </Button>
                             )}
                           </div>
@@ -969,6 +1085,54 @@ function F4F5ReportingPageContent() {
           <ViewF5Modal reportId={viewF5Id} open={viewF5Open} onOpenChange={(v)=>{ setViewF5Open(v); if (!v) setViewF5Id(null) }} onSaved={loadF5} />
         </TabsContent>
       </Tabs>
+
+      <Dialog
+        open={confirmMarkComplete != null}
+        onOpenChange={(open) => {
+          if (!open && !markCompleteSavingId) setConfirmMarkComplete(null)
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {confirmMarkComplete?.field === 'f5_status'
+                ? t('f5.mark_complete_confirm_title')
+                : t('f4.mark_complete_confirm_title')}
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            {confirmMarkComplete?.field === 'f5_status'
+              ? t('f5.mark_complete_confirm_body')
+              : t('f4.mark_complete_confirm_body')}
+          </p>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              disabled={!!markCompleteSavingId}
+              onClick={() => setConfirmMarkComplete(null)}
+            >
+              {confirmMarkComplete?.field === 'f5_status'
+                ? t('f5.mark_complete_confirm_cancel')
+                : t('f4.mark_complete_confirm_cancel')}
+            </Button>
+            <Button
+              disabled={!confirmMarkComplete || !!markCompleteSavingId}
+              onClick={() => {
+                if (!confirmMarkComplete) return
+                markCompleteReportingStatus(confirmMarkComplete.projectId, confirmMarkComplete.field)
+              }}
+            >
+              {markCompleteSavingId
+                ? (confirmMarkComplete?.field === 'f5_status'
+                    ? t('f5.mark_complete_saving')
+                    : t('f4.mark_complete_saving'))
+                : (confirmMarkComplete?.field === 'f5_status'
+                    ? t('f5.mark_complete_confirm_action')
+                    : t('f4.mark_complete_confirm_action'))}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

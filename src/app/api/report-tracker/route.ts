@@ -357,15 +357,13 @@ export async function GET(request: Request) {
         : amounts.amount_sdg
       const f4_count = amounts.f4_count
       const f5_count = f5CountByProject[p.id] || 0
-      const storedF4 = (p.f4_status != null ? String(p.f4_status).trim().toLowerCase() : null) || 'waiting'
-      const storedF5 = (p.f5_status != null ? String(p.f5_status).trim().toLowerCase() : null) || 'waiting'
-      const f4_status = f4_count > 0 ? 'completed' : storedF4
-      const f5_status = f5_count > 0 ? 'completed' : storedF5
+      const f4_status = (p.f4_status != null ? String(p.f4_status).trim().toLowerCase() : null) || 'waiting'
+      const f5_status = (p.f5_status != null ? String(p.f5_status).trim().toLowerCase() : null) || 'waiting'
       const f4Complete = isStatusCompleteForOverdue(f4_status)
       const f5Complete = isStatusCompleteForOverdue(f5_status)
       const { days_overdue } = computeOverdue(transfer_date, f4Complete, f5Complete)
-      const f4_pct = statusToPercent(storedF4)
-      const f5_pct = statusToPercent(storedF5)
+      const f4_pct = statusToPercent(f4_status)
+      const f5_pct = statusToPercent(f5_status)
       const tracker = (f4_pct + f5_pct) / 2
       const donorRow =
         Array.isArray(p.donors) ? p.donors[0] : p.donors ??

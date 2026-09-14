@@ -526,6 +526,7 @@ export async function GET() {
         review_comment: s.review_comment ?? null,
         reviewed_at: s.reviewed_at ?? null,
         has_f4_report: true,
+        f4_status: project.f4_status != null ? String(project.f4_status).trim().toLowerCase() : null,
         report_status: computeReportStatus({
           has_f4_report: true,
           activities_raw_import_id: null,
@@ -569,6 +570,7 @@ export async function GET() {
         review_comment: null,
         reviewed_at: null,
         has_f4_report: false,
+        f4_status: project.f4_status != null ? String(project.f4_status).trim().toLowerCase() : null,
         report_status: computeReportStatus({
           has_f4_report: false,
           activities_raw_import_id: null,

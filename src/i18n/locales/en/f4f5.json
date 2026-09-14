@@ -60,6 +60,12 @@
       "actions": ""
     },
     "view": "View",
+    "mark_complete": "Mark Complete",
+    "mark_complete_saving": "Saving…",
+    "mark_complete_confirm_title": "Mark F4 as complete?",
+    "mark_complete_confirm_body": "This marks F4 reporting for this project as completed. You can still view the report afterward.",
+    "mark_complete_confirm_action": "Mark Complete",
+    "mark_complete_confirm_cancel": "Cancel",
     "loading": "Loading…",
     "empty": "No records yet",
     "report_status": {
@@ -181,6 +187,12 @@
       "actions": ""
     },
     "view": "View",
+    "mark_complete": "Mark Complete",
+    "mark_complete_saving": "Saving…",
+    "mark_complete_confirm_title": "Mark F5 as complete?",
+    "mark_complete_confirm_body": "This marks F5 reporting for this project as completed. You can still view the report afterward.",
+    "mark_complete_confirm_action": "Mark Complete",
+    "mark_complete_confirm_cancel": "Cancel",
     "loading": "Loading…",
     "empty": "No records yet",
     "report_status": {

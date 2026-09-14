@@ -107,6 +107,7 @@
     "resolved": "تم الحل"
   },
   "management": {
+    "complete_requires_reports": "يجب تعيين كل من F4 و F5 كمكتمل قبل إكمال المشروع. ما زال ناقصاً: {{missing}}.",
     "filters": {
       "donor": "المانح",
       "grant_call": "نداء المنحة",

@@ -4,6 +4,15 @@ export function isReportingStatusCompleted(status: string | null | undefined): b
   return String(status ?? '').trim().toLowerCase() === 'completed'
 }
 
+/**
+ * Status to apply after an F4/F5 upload or re-save.
+ * Returns null when already completed so re-edits do not demote finished reports.
+ */
+export function statusAfterUpload(current: string | null | undefined): 'partial' | null {
+  if (isReportingStatusCompleted(current)) return null
+  return 'partial'
+}
+
 /** When both F4 and F5 are completed, promote active portal projects to completed. */
 export function shouldAutoCompleteProject(
   projectStatus: string | null | undefined,
@@ -147,6 +156,34 @@ export async function applyReportingStatusUpdates(
       date_report_completed?: string | null
     },
   }
+}
+
+/**
+ * After deleting an F4/F5 report: if no portal reports remain for that side, set status to waiting.
+ */
+export async function resetReportingStatusIfNoReportsRemaining(
+  supabase: SupabaseClient,
+  projectId: string,
+  kind: 'f4' | 'f5',
+): Promise<ApplyReportingStatusResult | { ok: true; skipped: true }> {
+  if (kind === 'f4') {
+    const { count, error } = await supabase
+      .from('err_summary')
+      .select('id', { count: 'exact', head: true })
+      .eq('project_id', projectId)
+      .is('activities_raw_import_id', null)
+    if (error) return { ok: false, error: error.message }
+    if ((count ?? 0) > 0) return { ok: true, skipped: true }
+    return applyReportingStatusUpdates(supabase, projectId, { f4_status: 'waiting' })
+  }
+
+  const { count, error } = await supabase
+    .from('err_program_report')
+    .select('id', { count: 'exact', head: true })
+    .eq('project_id', projectId)
+  if (error) return { ok: false, error: error.message }
+  if ((count ?? 0) > 0) return { ok: true, skipped: true }
+  return applyReportingStatusUpdates(supabase, projectId, { f5_status: 'waiting' })
 }
 
 /**

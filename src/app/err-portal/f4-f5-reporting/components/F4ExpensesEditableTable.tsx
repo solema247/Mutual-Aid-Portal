@@ -274,7 +274,7 @@ export function F4ExpensesEditableTable ({
 
   return (
     <div className="w-full max-w-full min-w-0 border rounded overflow-x-auto select-text overscroll-x-contain">
-      <Table className="select-text min-w-[1100px] w-max">
+      <Table className="select-text min-w-[1100px] w-full">
         <TableHeader>
           <TableRow>
             <TableHead

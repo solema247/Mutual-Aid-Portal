@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { applyReportingStatusUpdates } from '@/lib/projectStatus'
+import { applyReportingStatusUpdates, statusAfterUpload } from '@/lib/projectStatus'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { translateF4Summary, translateF4Expenses } from '@/lib/translateHelper'
 import { inferF4SourceLanguage, normalizePaymentDateForDb } from '@/lib/f4SaveNormalize'
@@ -212,13 +212,21 @@ export async function POST(req: Request) {
       }
     }
 
-    // Mark F4 completed; auto-complete project when F5 is already completed
+    // Mark F4 partial after upload; leave completed unchanged so re-edits do not demote
     if (actual_project_id) {
-      const statusResult = await applyReportingStatusUpdates(supabase, actual_project_id, {
-        f4_status: 'completed',
-      })
-      if (!statusResult.ok) {
-        console.warn('F4 save: failed to update reporting status', statusResult.error)
+      const { data: proj } = await supabase
+        .from('err_projects')
+        .select('f4_status')
+        .eq('id', actual_project_id)
+        .maybeSingle()
+      const nextStatus = statusAfterUpload(proj?.f4_status)
+      if (nextStatus) {
+        const statusResult = await applyReportingStatusUpdates(supabase, actual_project_id, {
+          f4_status: nextStatus,
+        })
+        if (!statusResult.ok) {
+          console.warn('F4 save: failed to update reporting status', statusResult.error)
+        }
       }
     }
 

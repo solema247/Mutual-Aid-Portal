@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { applyReportingStatusUpdates } from '@/lib/projectStatus'
+import { applyReportingStatusUpdates, statusAfterUpload } from '@/lib/projectStatus'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { syncProjectEndDateFromF5 } from '@/lib/syncProjectEndDateFromF5'
 import { syncImplementedSectorFromF5 } from '@/lib/activityShift'
@@ -111,12 +111,22 @@ export async function POST(req: Request) {
     if (insErr) throw insErr
     const report_id = inserted.id
 
-    // Set F5 completed; auto-complete project when F4 is already completed
-    const statusResult = await applyReportingStatusUpdates(supabase, project_id, {
-      f5_status: 'completed',
-    })
-    if (!statusResult.ok) {
-      console.warn('F5 save: failed to update reporting status', statusResult.error)
+    // Mark F5 partial after upload; leave completed unchanged so re-edits do not demote
+    {
+      const { data: proj } = await supabase
+        .from('err_projects')
+        .select('f5_status')
+        .eq('id', project_id)
+        .maybeSingle()
+      const nextStatus = statusAfterUpload(proj?.f5_status)
+      if (nextStatus) {
+        const statusResult = await applyReportingStatusUpdates(supabase, project_id, {
+          f5_status: nextStatus,
+        })
+        if (!statusResult.ok) {
+          console.warn('F5 save: failed to update reporting status', statusResult.error)
+        }
+      }
     }
 
     // If a summary file exists, move it from tmp to a clear final path and record attachment

@@ -196,10 +196,10 @@ export default function ViewF5Modal({ reportId, open, onOpenChange, onSaved }: V
   return (
     <>
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-7xl w-[95vw] max-h-[85vh] overflow-y-auto">
-        <DialogHeader>
-          <div className="flex items-center justify-between">
-            <DialogTitle>F5 Report Details</DialogTitle>
+      <DialogContent className="max-w-7xl w-[95vw] max-h-[85vh] min-w-0 overflow-x-hidden overflow-y-auto">
+        <DialogHeader className="min-w-0 pr-8">
+          <div className="flex flex-wrap items-center justify-between gap-2 min-w-0">
+            <DialogTitle className="min-w-0">F5 Report Details</DialogTitle>
             {!isEditing ? (
               <Button onClick={() => setIsEditing(true)}>Edit</Button>
             ) : (
@@ -227,30 +227,30 @@ export default function ViewF5Modal({ reportId, open, onOpenChange, onSaved }: V
         ) : !report ? (
           <div className="py-10 text-center text-muted-foreground">No data</div>
         ) : (
-          <div className="space-y-6">
+          <div className="space-y-6 min-w-0 max-w-full">
             {/* Project context */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 min-w-0">
+              <div className="min-w-0">
                 <Label>ERR</Label>
-                <div className="h-10 flex items-center px-3 rounded border bg-muted/50">{room?.name || room?.name_ar || room?.err_code || '-'}</div>
+                <div className="h-10 flex items-center px-3 rounded border bg-muted/50 truncate">{room?.name || room?.name_ar || room?.err_code || '-'}</div>
               </div>
-              <div>
+              <div className="min-w-0">
                 <Label>State</Label>
-                <div className="h-10 flex items-center px-3 rounded border bg-muted/50">{project?.state || '-'}</div>
+                <div className="h-10 flex items-center px-3 rounded border bg-muted/50 truncate">{project?.state || '-'}</div>
               </div>
-              <div>
+              <div className="min-w-0">
                 <Label>Grant ID</Label>
                 <div className="min-h-10 flex items-center px-3 rounded border bg-muted/50 text-sm break-all">{grantIdDisplay}</div>
               </div>
             </div>
-            <div>
+            <div className="min-w-0">
               <Label>Project Objectives</Label>
-              <div className="min-h-[40px] px-3 py-2 rounded border bg-muted/50 text-sm whitespace-pre-wrap">{project?.project_objectives || '-'}</div>
+              <div className="min-h-[40px] px-3 py-2 rounded border bg-muted/50 text-sm whitespace-pre-wrap break-words">{project?.project_objectives || '-'}</div>
             </div>
 
             {/* Summary */}
-            <div className="grid grid-cols-2 gap-4">
-              <div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 min-w-0">
+              <div className="min-w-0">
                 <Label>Report Date</Label>
                 {isEditing ? (
                   <Input 
@@ -262,7 +262,7 @@ export default function ViewF5Modal({ reportId, open, onOpenChange, onSaved }: V
                   <div className="h-10 flex items-center px-3 rounded border bg-muted/50">{report?.report_date ? new Date(report.report_date).toLocaleDateString() : '-'}</div>
                 )}
               </div>
-              <div>
+              <div className="min-w-0">
                 <Label>Reporting Person</Label>
                 {isEditing ? (
                   <Input 
@@ -270,12 +270,12 @@ export default function ViewF5Modal({ reportId, open, onOpenChange, onSaved }: V
                     onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), reporting_person: e.target.value }))} 
                   />
                 ) : (
-                  <div className="h-10 flex items-center px-3 rounded border bg-muted/50">{report?.reporting_person || '-'}</div>
+                  <div className="h-10 flex items-center px-3 rounded border bg-muted/50 truncate">{report?.reporting_person || '-'}</div>
                 )}
               </div>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 min-w-0">
+              <div className="min-w-0">
                 <Label>Positive Changes</Label>
                 {isEditing ? (
                   <Input 
@@ -283,10 +283,10 @@ export default function ViewF5Modal({ reportId, open, onOpenChange, onSaved }: V
                     onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), positive_changes: e.target.value }))} 
                   />
                 ) : (
-                  <div className="min-h-[40px] px-3 py-2 rounded border bg-muted/50 text-sm whitespace-pre-wrap">{report?.positive_changes || '-'}</div>
+                  <div className="min-h-[40px] px-3 py-2 rounded border bg-muted/50 text-sm whitespace-pre-wrap break-words">{report?.positive_changes || '-'}</div>
                 )}
               </div>
-              <div>
+              <div className="min-w-0">
                 <Label>Negative Results</Label>
                 {isEditing ? (
                   <Input 
@@ -294,10 +294,10 @@ export default function ViewF5Modal({ reportId, open, onOpenChange, onSaved }: V
                     onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), negative_results: e.target.value }))} 
                   />
                 ) : (
-                  <div className="min-h-[40px] px-3 py-2 rounded border bg-muted/50 text-sm whitespace-pre-wrap">{report?.negative_results || '-'}</div>
+                  <div className="min-h-[40px] px-3 py-2 rounded border bg-muted/50 text-sm whitespace-pre-wrap break-words">{report?.negative_results || '-'}</div>
                 )}
               </div>
-              <div>
+              <div className="min-w-0">
                 <Label>Unexpected Results</Label>
                 {isEditing ? (
                   <Input 
@@ -305,10 +305,10 @@ export default function ViewF5Modal({ reportId, open, onOpenChange, onSaved }: V
                     onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), unexpected_results: e.target.value }))} 
                   />
                 ) : (
-                  <div className="min-h-[40px] px-3 py-2 rounded border bg-muted/50 text-sm whitespace-pre-wrap">{report?.unexpected_results || '-'}</div>
+                  <div className="min-h-[40px] px-3 py-2 rounded border bg-muted/50 text-sm whitespace-pre-wrap break-words">{report?.unexpected_results || '-'}</div>
                 )}
               </div>
-              <div>
+              <div className="min-w-0">
                 <Label>Lessons Learned</Label>
                 {isEditing ? (
                   <Input 
@@ -316,10 +316,10 @@ export default function ViewF5Modal({ reportId, open, onOpenChange, onSaved }: V
                     onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), lessons_learned: e.target.value }))} 
                   />
                 ) : (
-                  <div className="min-h-[40px] px-3 py-2 rounded border bg-muted/50 text-sm whitespace-pre-wrap">{report?.lessons_learned || '-'}</div>
+                  <div className="min-h-[40px] px-3 py-2 rounded border bg-muted/50 text-sm whitespace-pre-wrap break-words">{report?.lessons_learned || '-'}</div>
                 )}
               </div>
-              <div className="md:col-span-2">
+              <div className="md:col-span-2 min-w-0">
                 <Label>Suggestions</Label>
                 {isEditing ? (
                   <Input 
@@ -327,14 +327,14 @@ export default function ViewF5Modal({ reportId, open, onOpenChange, onSaved }: V
                     onChange={(e)=>setSummaryDraft((s:any)=>({ ...(s||{}), suggestions: e.target.value }))} 
                   />
                 ) : (
-                  <div className="min-h-[40px] px-3 py-2 rounded border bg-muted/50 text-sm whitespace-pre-wrap">{report?.suggestions || '-'}</div>
+                  <div className="min-h-[40px] px-3 py-2 rounded border bg-muted/50 text-sm whitespace-pre-wrap break-words">{report?.suggestions || '-'}</div>
                 )}
               </div>
             </div>
 
             {/* Activities Table */}
-            <div>
-              <div className="flex items-center justify-between mb-2">
+            <div className="min-w-0 max-w-full">
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
                 <Label>Implemented Activities</Label>
                 {isEditing && (
                   <Button
@@ -358,7 +358,8 @@ export default function ViewF5Modal({ reportId, open, onOpenChange, onSaved }: V
                   >Add Activity</Button>
                 )}
               </div>
-              <Table>
+              <div className="w-full max-w-full min-w-0 border rounded overflow-x-auto">
+              <Table className="min-w-[960px]">
                 <TableHeader>
                   <TableRow>
                     <TableHead>Activity Name</TableHead>
@@ -483,12 +484,14 @@ export default function ViewF5Modal({ reportId, open, onOpenChange, onSaved }: V
                   ))}
                 </TableBody>
               </Table>
+              </div>
             </div>
 
             {/* Demographics Breakdown Table */}
-            <div>
+            <div className="min-w-0 max-w-full">
               <Label>Additional Beneficiary Breakdown</Label>
-              <Table>
+              <div className="mt-2 w-full max-w-full min-w-0 border rounded overflow-x-auto">
+              <Table className="min-w-[720px]">
                 <TableHeader>
                   <TableRow>
                     <TableHead>Activity</TableHead>
@@ -554,6 +557,7 @@ export default function ViewF5Modal({ reportId, open, onOpenChange, onSaved }: V
                   ))}
                 </TableBody>
               </Table>
+              </div>
             </div>
 
             {/* File Attachments */}

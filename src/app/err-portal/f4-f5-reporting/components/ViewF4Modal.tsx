@@ -50,9 +50,11 @@ export default function ViewF4Modal({ summaryId, open, onOpenChange, onSaved }: 
     ;(async () => {
       try {
         setLoading(true)
-        const sectorsRows = await fetchF4SectorsForMatch(supabase)
+        const [sectorsRows, res] = await Promise.all([
+          fetchF4SectorsForMatch(supabase),
+          fetch(`/api/f4/summary/${summaryId}`),
+        ])
         setF4Sectors(sectorsRows)
-        const res = await fetch(`/api/f4/summary/${summaryId}`)
         const j = await res.json()
         if (!res.ok) throw new Error(j.error || 'Failed to load summary')
         setData(j)
@@ -298,10 +300,10 @@ export default function ViewF4Modal({ summaryId, open, onOpenChange, onSaved }: 
   return (
     <>
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-7xl w-[95vw] max-h-[85vh] overflow-y-auto">
-        <DialogHeader>
-          <div className="flex items-center justify-between">
-            <DialogTitle>F4 Report Details</DialogTitle>
+      <DialogContent className="max-w-7xl w-[95vw] max-h-[85vh] min-w-0 overflow-x-hidden overflow-y-auto">
+        <DialogHeader className="min-w-0 pr-8">
+          <div className="flex flex-wrap items-center justify-between gap-2 min-w-0">
+            <DialogTitle className="min-w-0">F4 Report Details</DialogTitle>
             {!isEditing ? (
               <Button onClick={() => setIsEditing(true)}>Edit</Button>
             ) : (
@@ -329,9 +331,9 @@ export default function ViewF4Modal({ summaryId, open, onOpenChange, onSaved }: 
         ) : !summary ? (
           <div className="py-10 text-center text-muted-foreground">No data</div>
         ) : (
-          <div className="space-y-6">
+          <div className="space-y-6 min-w-0 max-w-full">
             {completion && (completion.completion_percent != null || completion.planned_total != null) && (
-              <div className={`rounded-lg border p-3 ${completion.totals_match ? 'border-green-200 bg-green-50 dark:bg-green-950/20' : 'border-amber-200 bg-amber-50 dark:bg-amber-950/20'}`}>
+              <div className={`rounded-lg border p-3 min-w-0 ${completion.totals_match ? 'border-green-200 bg-green-50 dark:bg-green-950/20' : 'border-amber-200 bg-amber-50 dark:bg-amber-950/20'}`}>
                 <div className="text-sm font-medium mb-1">F4 completion</div>
                 <div className="flex flex-wrap gap-4 text-sm">
                   {completion.completion_percent != null && (
@@ -346,22 +348,22 @@ export default function ViewF4Modal({ summaryId, open, onOpenChange, onSaved }: 
               </div>
             )}
             {/* Project / F1 context */}
-            <div>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div>
+            <div className="min-w-0">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 min-w-0">
+                <div className="min-w-0">
                   <Label>ERR</Label>
-                  <div className="h-10 flex items-center px-3 rounded border bg-muted/50">{errDisplay}</div>
+                  <div className="h-10 flex items-center px-3 rounded border bg-muted/50 truncate">{errDisplay}</div>
                 </div>
-                <div>
+                <div className="min-w-0">
                   <Label>State</Label>
-                  <div className="h-10 flex items-center px-3 rounded border bg-muted/50">{stateDisplay}</div>
+                  <div className="h-10 flex items-center px-3 rounded border bg-muted/50 truncate">{stateDisplay}</div>
                 </div>
-                <div>
+                <div className="min-w-0">
                   <Label>Grant ID</Label>
                   <div className="min-h-10 flex items-center px-3 rounded border bg-muted/50 text-sm break-all">{grantIdDisplay}</div>
                 </div>
               </div>
-              <div className="mt-3">
+              <div className="mt-3 min-w-0">
                 <Label>Project Objectives</Label>
                 <div className="min-h-[40px] max-h-[14rem] overflow-y-auto px-3 py-2 rounded border bg-muted/50 text-sm whitespace-pre-wrap break-words">{objectivesDisplay}</div>
               </div>

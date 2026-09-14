@@ -473,10 +473,8 @@ export async function GET(request: Request) {
       const target_families = fromPa.families
       const actual_individuals = individualsByProject.get(p.id) || 0
       const actual_families = familiesByProject.get(p.id) || 0
-      const storedF4 = (p.f4_status != null ? String(p.f4_status).trim().toLowerCase() : null) || 'waiting'
-      const storedF5 = (p.f5_status != null ? String(p.f5_status).trim().toLowerCase() : null) || 'waiting'
-      const f4_status = agg.count > 0 ? 'completed' : storedF4
-      const f5_status = f5Agg.count > 0 ? 'completed' : storedF5
+      const f4_status = (p.f4_status != null ? String(p.f4_status).trim().toLowerCase() : null) || 'waiting'
+      const f5_status = (p.f5_status != null ? String(p.f5_status).trim().toLowerCase() : null) || 'waiting'
       const f4Complete = isStatusCompleteForOverdue(f4_status)
       const f5Complete = isStatusCompleteForOverdue(f5_status)
       const effectiveTransferDate = p.date_transfer || transferDateByProject[p.id] || null
