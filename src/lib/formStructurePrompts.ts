@@ -261,7 +261,7 @@ function buildF1SystemPrompt (formMetadata: FormStructureMetadata): string {
 BASIC INFORMATION:
 - date: Date of the project in YYYY-MM-DD format (convert any date format to this)
 - state: State name (keep in original language)
-- locality: Locality name (keep in original language)
+- locality: Locality / محلية name (keep in original language). Read carefully from headers such as المحليات, المحلية, Locality, or place lines near the state (الولاية). Common Khartoum-area spellings include أمبدة / امبدة / Ombada / Umbada — preserve the form's spelling; do not drop or blank this field when present.
 - project_objectives: Return the exact text as found in the OCR (verbatim, preserve line breaks). Do not summarize or shorten. If not present, return null.
 - intended_beneficiaries: Description of who will benefit (keep in original language)
 - estimated_beneficiaries: Number of beneficiaries (integer)
@@ -278,16 +278,17 @@ CONTACT INFORMATION:
 - finance_officer_phone: Phone of finance officer
 
 ACTIVITIES AND EXPENSES:
-1. From section 6 (الأنشطة الرئيسية اللازمة):
-   - Each activity row has three columns: العدد, مدة النشاط, مكان التنفيذ
-   - ONLY include an activity if ALL THREE columns have values
+1. From section 6 (الأنشطة الرئيسية اللازمة) — also accept nearby headings if numbering differs:
+   - Each activity row typically has columns: العدد, مدة النشاط, مكان التنفيذ
+   - Include an activity when it has a clear activity name AND at least one of: العدد, مدة النشاط, or مكان التنفيذ
+   - Prefer including rows with all three columns when available
    - Example row with complete data:
      Activity: المطبخ المشترك/ تموين
      العدد: 100
      مدة النشاط: 7 أيام
      مكان التنفيذ: الدلنج -- حي الواحة
-   - This activity should be included because all columns are filled
-   - Activities with empty columns should be excluded
+   - Do NOT invent activities that are not in the form
+   - Exclude blank/header-only rows
 
 2. From section 7 (الميزانية التفصيلية):
    If form is in Arabic (RTL):

@@ -363,18 +363,34 @@ export async function POST(req: Request) {
         }
       }
 
-      // Override the state and locality from OCR with the selected values from form metadata
+      // Override state from the selected ERR/state in the upload form.
+      // Locality: prefer DB locality when present, otherwise keep OCR-extracted locality
+      // (important for places like Ombada where states.locality may be null/wrong).
       if (!isF4 && formMetadata.state_name) {
         console.log('Overriding OCR state with selected state:', {
           original: structuredData.state,
           new: formMetadata.state_name
         })
         structuredData.state = formMetadata.state_name
-        
-        // Override locality if available from database
-        if (formMetadata.locality) {
-          structuredData.locality = formMetadata.locality
+      }
+
+      if (!isF4 && !isF5) {
+        const metaLocality =
+          typeof formMetadata.locality === 'string' ? formMetadata.locality.trim() : ''
+        const ocrLocality =
+          typeof structuredData.locality === 'string' ? structuredData.locality.trim() : ''
+        if (metaLocality) {
+          structuredData.locality = metaLocality
+        } else if (ocrLocality) {
+          structuredData.locality = ocrLocality
+        } else {
+          structuredData.locality = structuredData.locality ?? null
         }
+        console.log('[F1] locality resolution', {
+          metadata: metaLocality || null,
+          ocr: ocrLocality || null,
+          final: structuredData.locality ?? null,
+        })
       }
       
       // If F5, normalize reach rows and parse demographics from raw OCR
@@ -574,17 +590,27 @@ export async function POST(req: Request) {
       console.error('JSON parse error:', error)
       console.error('Sanitized content:', sanitizedContent)
 
-      // Attempt a one-shot repair for F5 JSON
-      if (isF5) {
+      // Attempt a one-shot repair for F1/F5 JSON (malformed model output)
+      if (!isF4) {
         try {
           const fixedRaw = await repairMalformedJsonWithGemini(sanitizedContent)
           const fixedSan = sanitizeModelJsonOutput(fixedRaw).replace(/^[\s`]+|[\s`]+$/g, '')
           const repaired = JSON.parse(fixedSan)
           if (!repaired.language) repaired.language = detectLanguage(text)
           repaired.raw_ocr = text
+          if (!isF5 && formMetadata.state_name) {
+            repaired.state = formMetadata.state_name
+          }
+          if (!isF5) {
+            const metaLocality =
+              typeof formMetadata.locality === 'string' ? formMetadata.locality.trim() : ''
+            const ocrLocality =
+              typeof repaired.locality === 'string' ? repaired.locality.trim() : ''
+            repaired.locality = metaLocality || ocrLocality || repaired.locality || null
+          }
           return NextResponse.json(repaired)
         } catch (repairErr) {
-          console.warn('F5 repair attempt failed:', repairErr)
+          console.warn(isF5 ? 'F5 repair attempt failed:' : 'F1 repair attempt failed:', repairErr)
         }
       }
 
@@ -602,6 +628,37 @@ export async function POST(req: Request) {
           lessons_learned: null,
           suggestions: null,
           reporting_person: null
+        })
+      }
+
+      // Fallback for F1: return raw OCR + empty fields so the review UI can still open
+      if (!isF4) {
+        const detectedLanguage = detectLanguage(text)
+        const metaLocality =
+          typeof formMetadata.locality === 'string' ? formMetadata.locality.trim() : ''
+        return NextResponse.json({
+          raw_ocr: text,
+          language: detectedLanguage,
+          date: null,
+          state: formMetadata.state_name || null,
+          locality: metaLocality || null,
+          project_objectives: getLongestArabicParagraph(text) || null,
+          intended_beneficiaries: null,
+          estimated_beneficiaries: null,
+          estimated_timeframe: null,
+          additional_support: null,
+          banking_details: null,
+          program_officer_name: null,
+          program_officer_phone: null,
+          reporting_officer_name: null,
+          reporting_officer_phone: null,
+          finance_officer_name: null,
+          finance_officer_phone: null,
+          planned_activities: [],
+          expenses: [],
+          form_currency: formMetadata.currency || 'USD',
+          exchange_rate: formMetadata.exchange_rate ? Number(formMetadata.exchange_rate) : null,
+          _parse_fallback: true,
         })
       }
 
