@@ -1,12 +1,16 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { requirePermission } from '@/lib/requirePermission'
+import { sendIdUploadedAlert } from '@/lib/complianceAlerts'
 
 /**
  * POST /api/compliance/[id]/upload-id
  * Finance uploads a missing ID document for a missing_id flag.
  * Body: { file_key: string } — storage path already uploaded to the images bucket.
- * Saves the key onto err_projects.identity_document_file_key and marks the flag approved.
+ *
+ * Saves the key onto err_projects.identity_document_file_key and returns the
+ * screening to Ahmed's compliance queue (finance_review_status = id_uploaded).
+ * Does NOT auto-approve into History — Ahmed must Clear after reviewing the ID.
  */
 export async function POST(
   request: Request,
@@ -29,7 +33,10 @@ export async function POST(
 
     const { data: screening, error: fetchError } = await supabase
       .from('compliance_screenings')
-      .select('id, status, flag_type, project_id')
+      .select(`
+        id, status, flag_type, project_id, screened_by, names,
+        err_projects ( err_id )
+      `)
       .eq('id', params.id)
       .single()
     if (fetchError || !screening) {
@@ -48,20 +55,42 @@ export async function POST(
       .eq('id', screening.project_id)
     if (projectError) throw projectError
 
+    const trimmedNote = note ? String(note).trim() : ''
     const { error: screeningError } = await supabase
       .from('compliance_screenings')
       .update({
-        finance_review_status: 'approved',
-        finance_review_note: note || 'Identity document uploaded',
+        // Stay flagged/missing_id so commit remains blocked, but mark finance's
+        // step done so the row returns to Ahmed's screening queue for Clear.
+        finance_review_status: 'id_uploaded',
+        finance_review_note:
+          trimmedNote || 'Identity document uploaded — awaiting compliance clearance',
         finance_reviewed_by: actorLogin,
         finance_reviewed_at: new Date().toISOString()
       })
       .eq('id', params.id)
     if (screeningError) throw screeningError
 
+    const project = screening.err_projects as
+      | { err_id?: string | null }
+      | { err_id?: string | null }[]
+      | null
+    const errId = Array.isArray(project) ? project[0]?.err_id : project?.err_id
+
+    const alert = await sendIdUploadedAlert({
+      errId: errId || null,
+      projectId: screening.project_id,
+      screeningId: screening.id,
+      names: Array.isArray(screening.names) ? screening.names : [],
+      screenedByLogin: screening.screened_by || null,
+      uploadedByLogin: actorLogin,
+      note: trimmedNote || null
+    })
+
     return NextResponse.json({
       success: true,
-      identity_document_file_key: file_key
+      identity_document_file_key: file_key,
+      awaiting_compliance_clearance: true,
+      alert: alert.detail
     })
   } catch (error) {
     console.error('Error uploading identity document:', error)

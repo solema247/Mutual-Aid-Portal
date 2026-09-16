@@ -100,7 +100,8 @@ export async function GET(request: Request) {
       if (!c || c.status !== 'flagged') return false
       if (c.finance_review_status === 'rejected') return false
       if (c.flag_type === 'sanctions_match') return true
-      if (c.flag_type === 'missing_id') return c.finance_review_status !== 'approved'
+      // Missing ID stays blocked until Ahmed clears (including after id_uploaded)
+      if (c.flag_type === 'missing_id') return true
       return c.finance_review_status !== 'approved'
     }
 

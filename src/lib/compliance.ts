@@ -204,7 +204,8 @@ export async function sweepUnscreenedProjects(
  * Return the subset of project ids that are blocked from committing.
  *
  * - sanctions_match: blocked until finance dismisses the flag as erroneous
- * - missing_id: blocked until finance uploads an ID (approved) or dismisses the flag
+ * - missing_id: blocked until Ahmed clears after finance uploads the ID
+ *   (or dismisses the flag). ID upload alone does not unblock.
  * - legacy flagged rows with no flag_type: blocked until finance approves or dismisses
  */
 export async function getComplianceBlockedProjectIds(
@@ -231,8 +232,8 @@ export async function getComplianceBlockedProjectIds(
         continue
       }
       if (row.flag_type === 'missing_id') {
-        // Unblocked only after ID upload (approved)
-        if (review !== 'approved') blocked.push(row.project_id)
+        // Stay blocked through ID upload until Ahmed clears the screening
+        blocked.push(row.project_id)
         continue
       }
       // Legacy generic flag
