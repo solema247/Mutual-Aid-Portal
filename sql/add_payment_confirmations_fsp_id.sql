@@ -8,7 +8,7 @@ ALTER TABLE public.mou_payment_confirmations
   ON DELETE SET NULL;
 
 COMMENT ON COLUMN public.mou_payment_confirmations.fsp_id IS
-  'FSP that paid this confirmation. Not used to attribute F1/F4 activity expenses.';
+  'FSP that paid this confirmation. Treasury out uses this FSP and the confirmed project total, not F4 activity lines.';
 
 CREATE INDEX IF NOT EXISTS mou_payment_confirmations_fsp_id_idx
   ON public.mou_payment_confirmations (fsp_id);
