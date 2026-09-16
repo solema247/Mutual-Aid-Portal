@@ -459,7 +459,11 @@ export default function DirectUpload() {
 
     } catch (error) {
       console.error('Error processing form:', error)
-      alert('Upload failed. Please try again in a minute.')
+      const message =
+        error instanceof Error && error.message
+          ? error.message
+          : 'Upload failed. Please try again in a minute.'
+      alert(message)
       setIsLoading(false)
     }
   }
