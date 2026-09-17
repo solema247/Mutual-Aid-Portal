@@ -109,9 +109,25 @@ const HISTORICAL_NEW_OPTIONS = [
   { value: 'new', label: 'New (2026+)' },
 ] as const
 
-/** Project Management filter fields: Historical/New, State, Project Date Range, Transfer Date Range, Date Transfer Exists, F4 Status, F5 Status, Grant Segment, Grant, Sector, Grant Serial */
+const PROJECT_STATUS_FALLBACK = [
+  { value: 'pending', label: 'Pending' },
+  { value: 'approved', label: 'Approved' },
+  { value: 'active', label: 'Active' },
+  { value: 'completed', label: 'Completed' },
+] as const
+
+function titleCaseStatus(value: string): string {
+  return value
+    .split(/[\s_]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+    .join(' ')
+}
+
+/** Project Management filter fields: Historical/New, State, Project Date Range, Transfer Date Range, Date Transfer Exists, Project Status, F4 Status, F5 Status, Grant Segment, Grant, Sector, Grant Serial */
 export function getProjectManagementFilterFields(options?: {
   stateOptions?: string[]
+  projectStatusOptions?: string[]
   f4StatusOptions?: string[]
   f5StatusOptions?: string[]
   grantSegmentOptions?: string[]
@@ -119,8 +135,9 @@ export function getProjectManagementFilterFields(options?: {
   grants?: Array<{ id: string; grant_id: string; donor_name: string; project_name: string | null }>
 }): FilterFieldConfig[] {
   const stateOptions = (options?.stateOptions ?? []).map((s) => ({ value: s, label: s }))
-  const f4Options = (options?.f4StatusOptions ?? []).map((s) => ({ value: s, label: s }))
-  const f5Options = (options?.f5StatusOptions ?? []).map((s) => ({ value: s, label: s }))
+  const projectStatusOptions = (options?.projectStatusOptions ?? []).length
+    ? (options?.projectStatusOptions ?? []).map((s) => ({ value: s, label: titleCaseStatus(s) }))
+    : [...PROJECT_STATUS_FALLBACK]
   const segmentOptions = (options?.grantSegmentOptions ?? []).map((s) => ({ value: s, label: s }))
   const expenseCategoryOptions = (options?.expenseCategoryOptions ?? []).map((c) => ({ value: c, label: c }))
   const grantOptions = [
@@ -174,19 +191,27 @@ export function getProjectManagementFilterFields(options?: {
       accessorKey: 'date_transfer',
     },
     {
+      id: 'project_status',
+      label: 'Project Status',
+      type: 'multi_select',
+      options: projectStatusOptions,
+      placeholder: 'All statuses',
+      accessorKey: 'status',
+    },
+    {
       id: 'f4_status',
       label: 'F4 Status',
-      type: 'select',
+      type: 'multi_select',
       options: STATUS_OPTIONS.map((o) => ({ value: o.value, label: o.label })),
-      placeholder: 'All',
+      placeholder: 'All statuses',
       accessorKey: 'f4_status',
     },
     {
       id: 'f5_status',
       label: 'F5 Status',
-      type: 'select',
+      type: 'multi_select',
       options: STATUS_OPTIONS.map((o) => ({ value: o.value, label: o.label })),
-      placeholder: 'All',
+      placeholder: 'All statuses',
       accessorKey: 'f5_status',
     },
     {

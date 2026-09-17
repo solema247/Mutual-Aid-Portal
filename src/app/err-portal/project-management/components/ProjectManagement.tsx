@@ -153,16 +153,20 @@ export default function ProjectManagement() {
   // Filter field config and options (from allRows + grants)
   const filterFields = useMemo(() => {
     const stateOptions = Array.from(new Set((allRows || []).map((r: any) => r.state || '').filter(Boolean))).sort()
-    const f4StatusOptions = Array.from(new Set((allRows || []).map((r: any) => normalizedF4(r.f4_status)).filter(Boolean))).sort()
-    const f5StatusOptions = Array.from(new Set((allRows || []).map((r: any) => normalizedF5(r.f5_status)).filter(Boolean))).sort()
+    const projectStatusOptions = Array.from(
+      new Set(
+        (allRows || [])
+          .map((r: any) => (r.status != null ? String(r.status).trim().toLowerCase() : ''))
+          .filter(Boolean)
+      )
+    ).sort()
     const grantSegmentOptions = Array.from(new Set((allRows || []).map((r: any) => r.grant_segment).filter((s): s is string => s != null && String(s).trim() !== ''))).sort()
     const expenseCategoryOptions = Array.from(
       new Set((allRows || []).flatMap((r: any) => r.expense_category_list || []).filter(Boolean))
     ).sort()
     return getProjectManagementFilterFields({
       stateOptions,
-      f4StatusOptions,
-      f5StatusOptions,
+      projectStatusOptions,
       grantSegmentOptions,
       expenseCategoryOptions,
       grants,
@@ -197,6 +201,9 @@ export default function ProjectManagement() {
       }
       if (fieldId === 'grant_serial') return row.grant_serial_id ?? null
       if (fieldId === 'grant_segment') return row.grant_segment ?? null
+      if (fieldId === 'project_status') {
+        return row.status != null ? String(row.status).trim().toLowerCase() || null : null
+      }
       if (fieldId === 'f4_status') return normalizedF4(row.f4_status) || null
       if (fieldId === 'f5_status') return normalizedF5(row.f5_status) || null
       if (fieldId === 'state') return row.state ?? null

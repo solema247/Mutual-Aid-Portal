@@ -13,6 +13,7 @@ import { STATUS_DISPLAY } from './status-config'
 const CHIP_COLORS: Record<string, string> = {
   donor: 'bg-blue-500/10 border-blue-500/30 [&_.chip-dot]:bg-blue-500',
   partner: 'bg-blue-500/10 border-blue-500/30 [&_.chip-dot]:bg-blue-500',
+  project_status: 'bg-orange-500/10 border-orange-500/30 [&_.chip-dot]:bg-orange-500',
   f4_status: 'bg-amber-500/10 border-amber-500/30 [&_.chip-dot]:bg-amber-500',
   f5_status: 'bg-emerald-500/10 border-emerald-500/30 [&_.chip-dot]:bg-emerald-500',
   state: 'bg-primary/10 border-primary/30 [&_.chip-dot]:bg-primary',
