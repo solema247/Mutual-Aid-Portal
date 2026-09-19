@@ -4,6 +4,7 @@ import { aggregateObjectives, aggregateBeneficiaries, aggregatePlannedActivities
 import {
   aggregateMouEnrichment,
   sumExpensesByMouId,
+  sumProjectExpenses,
   type MouProjectListRow,
 } from '@/lib/mou-list-enrichment'
 import { getUserStateAccess } from '@/lib/userStateAccess'
@@ -41,6 +42,8 @@ async function fetchProjectEnrichment(
   if (mouIds.length === 0) {
     return {
       totalByMouId: {} as Record<string, number>,
+      exchangeRateByMouId: {} as Record<string, number>,
+      totalSdgByMouId: {} as Record<string, number>,
       enrichment: aggregateMouEnrichment([]),
     }
   }
@@ -50,7 +53,7 @@ async function fetchProjectEnrichment(
   for (const batch of batches) {
     const { data: projects, error: projErr } = await supabase
       .from('err_projects')
-      .select('mou_id, expenses, grant_id, grant_grid_id, funding_status, status')
+      .select('mou_id, id, expenses, grant_id, grant_grid_id, funding_status, status')
       .in('mou_id', batch)
 
     if (projErr) throw projErr
@@ -83,14 +86,23 @@ async function fetchProjectEnrichment(
 
   const enrichment = aggregateMouEnrichment(rows, grantIdByGridId)
 
-  // Distinct projects with ≥1 relational payment confirmation per MOU
+  // Distinct projects with ≥1 relational payment confirmation per MOU + rates for SDG
   const paymentConfirmedCounts: Record<string, number> = {}
-  const confRows: { mou_id: string; project_id: string }[] = []
+  const exchangeRateByMouId: Record<string, number> = {}
+  const totalSdgByMouId: Record<string, number> = {}
+  type ConfRow = {
+    mou_id: string
+    project_id: string
+    exchange_rate: number | null
+    transfer_date: string | null
+    created_at: string | null
+  }
+  const confRows: ConfRow[] = []
   let confFailed = false
   for (const batch of batches) {
     const { data, error: confErr } = await supabase
       .from('mou_payment_confirmations')
-      .select('mou_id, project_id')
+      .select('mou_id, project_id, exchange_rate, transfer_date, created_at')
       .in('mou_id', batch)
 
     if (confErr) {
@@ -98,40 +110,128 @@ async function fetchProjectEnrichment(
       console.warn('[f3/mous] payment confirmation counts unavailable', confErr.message)
       break
     }
-    if (data?.length) confRows.push(...(data as { mou_id: string; project_id: string }[]))
+    if (data?.length) confRows.push(...(data as ConfRow[]))
   }
 
   if (!confFailed) {
     const projectsByMou = new Map<string, Set<string>>()
+    // Latest rate per project (prefer transfer_date, then created_at)
+    const rateByProject = new Map<string, { mou_id: string; rate: number; sortKey: string }>()
     for (const row of confRows) {
       if (!row.mou_id || !row.project_id) continue
       if (!projectsByMou.has(row.mou_id)) projectsByMou.set(row.mou_id, new Set())
       projectsByMou.get(row.mou_id)!.add(row.project_id)
+
+      const rate = row.exchange_rate == null ? null : Number(row.exchange_rate)
+      if (rate == null || !(rate > 0)) continue
+      const sortKey = `${row.transfer_date || ''}|${row.created_at || ''}`
+      const prev = rateByProject.get(row.project_id)
+      if (!prev || sortKey >= prev.sortKey) {
+        rateByProject.set(row.project_id, { mou_id: row.mou_id, rate, sortKey })
+      }
     }
     for (const [mouId, set] of projectsByMou) {
       paymentConfirmedCounts[mouId] = set.size
+    }
+
+    const projectUsdById = new Map<string, { mou_id: string; usd: number }>()
+    for (const p of rows) {
+      if (!p.id || !p.mou_id) continue
+      projectUsdById.set(p.id, {
+        mou_id: p.mou_id,
+        usd: sumProjectExpenses(p.expenses),
+      })
+    }
+
+    const ratesByMou = new Map<string, number[]>()
+    const sdgByMou = new Map<string, number>()
+    for (const [projectId, { mou_id, rate }] of rateByProject) {
+      const project = projectUsdById.get(projectId)
+      const usd = project?.usd ?? 0
+      if (!ratesByMou.has(mou_id)) ratesByMou.set(mou_id, [])
+      ratesByMou.get(mou_id)!.push(rate)
+      sdgByMou.set(mou_id, (sdgByMou.get(mou_id) || 0) + usd * rate)
+    }
+
+    for (const [mouId, rates] of ratesByMou) {
+      const unique = Array.from(new Set(rates.map((r) => Number(r))))
+      if (unique.length === 1) {
+        exchangeRateByMouId[mouId] = unique[0]
+        const totalUsd = totalByMouId[mouId] ?? 0
+        // Single rate: apply to full MOU USD total (covers projects not yet confirmed)
+        if (totalUsd > 0) {
+          totalSdgByMouId[mouId] = totalUsd * unique[0]
+        } else {
+          const sdg = sdgByMou.get(mouId)
+          if (sdg != null && sdg > 0) totalSdgByMouId[mouId] = sdg
+        }
+      } else if (unique.length > 1) {
+        // Weighted by project USD when possible; else simple average
+        let weightedSum = 0
+        let weightTotal = 0
+        for (const [projectId, { mou_id, rate }] of rateByProject) {
+          if (mou_id !== mouId) continue
+          const usd = projectUsdById.get(projectId)?.usd ?? 0
+          if (usd > 0) {
+            weightedSum += rate * usd
+            weightTotal += usd
+          }
+        }
+        exchangeRateByMouId[mouId] =
+          weightTotal > 0
+            ? weightedSum / weightTotal
+            : unique.reduce((a, b) => a + b, 0) / unique.length
+        const sdg = sdgByMou.get(mouId)
+        if (sdg != null && sdg > 0) totalSdgByMouId[mouId] = sdg
+      }
+    }
+
+    // MOUs with a single shared rate but no per-project confirmation yet: USD × rate
+    for (const [mouId, totalUsd] of Object.entries(totalByMouId)) {
+      if (totalSdgByMouId[mouId] != null) continue
+      const rate = exchangeRateByMouId[mouId]
+      if (rate != null && rate > 0 && totalUsd > 0) {
+        totalSdgByMouId[mouId] = totalUsd * rate
+      }
     }
   }
 
   return {
     totalByMouId,
+    exchangeRateByMouId,
+    totalSdgByMouId,
     enrichment: { ...enrichment, paymentConfirmedCounts },
   }
 }
 
 function buildMousListPayload(
   mous: Record<string, unknown>[],
-  totalByMouId: Record<string, number>
+  totalByMouId: Record<string, number>,
+  exchangeRateByMouId: Record<string, number> = {},
+  totalSdgByMouId: Record<string, number> = {}
 ) {
   return mous.map((mou) => {
     const parsed = parseMouSignatures({ ...mou })
-    const totalFromProjects = totalByMouId[parsed.id as string]
+    const id = parsed.id as string
+    const totalFromProjects = totalByMouId[id]
+    const total_amount =
+      totalFromProjects !== undefined
+        ? totalFromProjects
+        : ((parsed.total_amount as number | undefined) ?? 0)
+    const rateFromPayments = exchangeRateByMouId[id]
+    const exchange_rate =
+      rateFromPayments != null && rateFromPayments > 0
+        ? rateFromPayments
+        : (parsed.exchange_rate == null ? null : Number(parsed.exchange_rate))
+    const total_amount_sdg =
+      totalSdgByMouId[id] != null
+        ? totalSdgByMouId[id]
+        : (exchange_rate != null && exchange_rate > 0 ? total_amount * exchange_rate : null)
     return {
       ...parsed,
-      total_amount:
-        totalFromProjects !== undefined
-          ? totalFromProjects
-          : ((parsed.total_amount as number | undefined) ?? 0),
+      total_amount,
+      exchange_rate: exchange_rate != null && exchange_rate > 0 ? exchange_rate : null,
+      total_amount_sdg,
     }
   })
 }
@@ -165,10 +265,15 @@ export async function GET(request: Request) {
         m.err_name?.toLowerCase().includes(s)
       )
       const filteredIds = filtered.map((m: { id: string }) => m.id).filter(Boolean)
-      const { totalByMouId, enrichment } = await fetchProjectEnrichment(supabase, filteredIds)
+      const { totalByMouId, exchangeRateByMouId, totalSdgByMouId, enrichment } = await fetchProjectEnrichment(supabase, filteredIds)
 
       return NextResponse.json({
-        mous: buildMousListPayload(filtered as Record<string, unknown>[], totalByMouId),
+        mous: buildMousListPayload(
+          filtered as Record<string, unknown>[],
+          totalByMouId,
+          exchangeRateByMouId,
+          totalSdgByMouId
+        ),
         ...enrichment,
       })
     }
@@ -182,10 +287,15 @@ export async function GET(request: Request) {
 
     const mous = data || []
     const mouIds = mous.map((m: { id: string }) => m.id).filter(Boolean)
-    const { totalByMouId, enrichment } = await fetchProjectEnrichment(supabase, mouIds)
+    const { totalByMouId, exchangeRateByMouId, totalSdgByMouId, enrichment } = await fetchProjectEnrichment(supabase, mouIds)
 
     return NextResponse.json({
-      mous: buildMousListPayload(mous as Record<string, unknown>[], totalByMouId),
+      mous: buildMousListPayload(
+        mous as Record<string, unknown>[],
+        totalByMouId,
+        exchangeRateByMouId,
+        totalSdgByMouId
+      ),
       ...enrichment,
     })
   } catch (error) {

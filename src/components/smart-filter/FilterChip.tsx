@@ -17,6 +17,7 @@ const CHIP_COLORS: Record<string, string> = {
   f4_status: 'bg-amber-500/10 border-amber-500/30 [&_.chip-dot]:bg-amber-500',
   f5_status: 'bg-emerald-500/10 border-emerald-500/30 [&_.chip-dot]:bg-emerald-500',
   state: 'bg-primary/10 border-primary/30 [&_.chip-dot]:bg-primary',
+  locality: 'bg-lime-500/10 border-lime-500/30 [&_.chip-dot]:bg-lime-500',
   date_range: 'bg-violet-500/10 border-violet-500/30 [&_.chip-dot]:bg-violet-500',
   transfer_date_range: 'bg-fuchsia-500/10 border-fuchsia-500/30 [&_.chip-dot]:bg-fuchsia-500',
   date_transfer_exists: 'bg-sky-500/10 border-sky-500/30 [&_.chip-dot]:bg-sky-500',

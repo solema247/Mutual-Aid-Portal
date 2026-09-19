@@ -127,6 +127,7 @@ function titleCaseStatus(value: string): string {
 /** Project Management filter fields: Historical/New, State, Project Date Range, Transfer Date Range, Date Transfer Exists, Project Status, F4 Status, F5 Status, Grant Segment, Grant, Sector, Grant Serial */
 export function getProjectManagementFilterFields(options?: {
   stateOptions?: string[]
+  localityOptions?: string[]
   projectStatusOptions?: string[]
   f4StatusOptions?: string[]
   f5StatusOptions?: string[]
@@ -135,6 +136,7 @@ export function getProjectManagementFilterFields(options?: {
   grants?: Array<{ id: string; grant_id: string; donor_name: string; project_name: string | null }>
 }): FilterFieldConfig[] {
   const stateOptions = (options?.stateOptions ?? []).map((s) => ({ value: s, label: s }))
+  const localityOptions = (options?.localityOptions ?? []).map((s) => ({ value: s, label: s }))
   const projectStatusOptions = (options?.projectStatusOptions ?? []).length
     ? (options?.projectStatusOptions ?? []).map((s) => ({ value: s, label: titleCaseStatus(s) }))
     : [...PROJECT_STATUS_FALLBACK]
@@ -164,6 +166,14 @@ export function getProjectManagementFilterFields(options?: {
       options: stateOptions,
       placeholder: 'All states',
       accessorKey: 'state',
+    },
+    {
+      id: 'locality',
+      label: 'Locality',
+      type: 'multi_select',
+      options: localityOptions,
+      placeholder: 'All localities',
+      accessorKey: 'locality',
     },
     {
       id: 'date_range',

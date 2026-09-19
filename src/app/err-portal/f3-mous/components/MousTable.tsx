@@ -154,6 +154,8 @@ export default function MousTable({
                     <TableHead className="min-w-[100px] px-2">Grant ID</TableHead>
                     <TableHead className="min-w-[120px] px-2">{t('f3:headers.err_state')}</TableHead>
                     <TableHead className="text-right min-w-[70px] px-2">{t('f3:headers.total')}</TableHead>
+                    <TableHead className="text-right min-w-[70px] px-2">{t('f3:headers.rate')}</TableHead>
+                    <TableHead className="text-right min-w-[90px] px-2">{t('f3:headers.total_sdg')}</TableHead>
                     <TableHead className="min-w-[80px] px-2">
                       <Button
                         variant="ghost"
@@ -175,6 +177,16 @@ export default function MousTable({
                     <TableCell className="whitespace-nowrap">{mouGrantIds[m.id] || '-'}</TableCell>
                     <TableCell className="max-w-[140px] truncate" title={`${m.err_name}${m.state ? ` - ${m.state}` : ''}`}>{m.err_name}{m.state ? ` - ${m.state}` : ''}</TableCell>
                     <TableCell className="text-right whitespace-nowrap">{Number(m.total_amount || 0).toLocaleString()}</TableCell>
+                    <TableCell className="text-right whitespace-nowrap">
+                      {m.exchange_rate != null && Number(m.exchange_rate) > 0
+                        ? Number(m.exchange_rate).toLocaleString(undefined, { maximumFractionDigits: 2 })
+                        : '—'}
+                    </TableCell>
+                    <TableCell className="text-right whitespace-nowrap">
+                      {m.total_amount_sdg != null && Number(m.total_amount_sdg) > 0
+                        ? Number(m.total_amount_sdg).toLocaleString(undefined, { maximumFractionDigits: 0 })
+                        : '—'}
+                    </TableCell>
                     <TableCell className="whitespace-nowrap">{new Date(m.created_at).toLocaleDateString()}</TableCell>
                     <TableCell className="align-top whitespace-nowrap">
                       <div className="flex items-start gap-1.5 flex-nowrap">

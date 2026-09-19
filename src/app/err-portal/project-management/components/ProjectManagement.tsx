@@ -46,13 +46,15 @@ export default function ProjectManagement() {
   const [kpis, setKpis] = useState<any>({})
   const [allRows, setAllRows] = useState<any[]>([])
   const [preCalcStateRows, setPreCalcStateRows] = useState<any[]>([])
+  const [preCalcLocalityRows, setPreCalcLocalityRows] = useState<any[]>([])
   const [preCalcRoomRows, setPreCalcRoomRows] = useState<any[]>([])
   const [filters, setFilters] = useState<ActiveFilter[]>([])
   const [grants, setGrants] = useState<Array<{ id: string; grant_id: string; donor_name: string; project_name: string | null }>>([])
 
   // Drill-down state
-  const [level, setLevel] = useState<'state'|'room'|'project'>('state')
+  const [level, setLevel] = useState<'state'|'locality'|'room'|'project'>('state')
   const [selectedStateName, setSelectedStateName] = useState<string>('')
+  const [selectedLocality, setSelectedLocality] = useState<string>('')
   const [selectedErrId, setSelectedErrId] = useState<string>('')
   const [selectedErrName, setSelectedErrName] = useState<string>('')
   const [detailOpen, setDetailOpen] = useState(false)
@@ -94,6 +96,7 @@ export default function ProjectManagement() {
       setKpis(j.kpis || {})
       setAllRows(j.rows || [])
       setPreCalcStateRows(j.stateAggregations || [])
+      setPreCalcLocalityRows(j.localityAggregations || [])
       setPreCalcRoomRows(j.roomAggregations || [])
       console.log(`[PM] Rollup loaded in ${Date.now() - start}ms`)
     } catch (e) {
@@ -153,6 +156,9 @@ export default function ProjectManagement() {
   // Filter field config and options (from allRows + grants)
   const filterFields = useMemo(() => {
     const stateOptions = Array.from(new Set((allRows || []).map((r: any) => r.state || '').filter(Boolean))).sort()
+    const localityOptions = Array.from(
+      new Set((allRows || []).map((r: any) => (r.locality != null ? String(r.locality).trim() : '')).filter(Boolean))
+    ).sort()
     const projectStatusOptions = Array.from(
       new Set(
         (allRows || [])
@@ -166,6 +172,7 @@ export default function ProjectManagement() {
     ).sort()
     return getProjectManagementFilterFields({
       stateOptions,
+      localityOptions,
       projectStatusOptions,
       grantSegmentOptions,
       expenseCategoryOptions,
@@ -207,6 +214,10 @@ export default function ProjectManagement() {
       if (fieldId === 'f4_status') return normalizedF4(row.f4_status) || null
       if (fieldId === 'f5_status') return normalizedF5(row.f5_status) || null
       if (fieldId === 'state') return row.state ?? null
+      if (fieldId === 'locality') {
+        const loc = row.locality != null ? String(row.locality).trim() : ''
+        return loc || null
+      }
       return null
     },
     [grants]
@@ -402,20 +413,62 @@ export default function ProjectManagement() {
       .sort((a, b) => (a.state || '').localeCompare(b.state || ''))
   }, [rows, filters, allRows, preCalcStateRows])
 
-  const roomRows = useMemo(() => {
+  const localityRows = useMemo(() => {
     if (!selectedStateName) return [] as any[]
+
+    if (filters.length === 0 && rows.length === allRows.length && preCalcLocalityRows.length > 0) {
+      return preCalcLocalityRows
+        .filter((r: any) => r.state === selectedStateName)
+        .sort((a: any, b: any) => (a.locality || '').localeCompare(b.locality || ''))
+    }
+
+    const filtered = rows.filter((r: any) => r.state === selectedStateName)
+    const byLocality = new Map<string, { locality: string; state: string; plan: number; actual: number; variance: number; burn: number; f4_count: number; f5_count: number; total_projects: number; projects_with_f4: number; projects_with_f5: number; tracker_sum: number; target_individuals: number; target_families: number; actual_individuals: number; actual_families: number; individuals: number; last_report_date: string | null; last_f5_date: string | null; overdue_count: number }>()
+    for (const r of filtered) {
+      const key = r.locality || '—'
+      const curr = byLocality.get(key) || { locality: key, state: selectedStateName, plan: 0, actual: 0, variance: 0, burn: 0, f4_count: 0, f5_count: 0, total_projects: 0, projects_with_f4: 0, projects_with_f5: 0, tracker_sum: 0, target_individuals: 0, target_families: 0, actual_individuals: 0, actual_families: 0, individuals: 0, last_report_date: null as string | null, last_f5_date: null as string | null, overdue_count: 0 }
+      curr.plan += Number(r.plan || 0)
+      curr.actual += Number(r.actual || 0)
+      curr.variance = curr.plan - curr.actual
+      curr.f4_count += Number(r.f4_count || 0)
+      curr.f5_count += Number(r.f5_count || 0)
+      curr.total_projects += 1
+      curr.tracker_sum += trackerScore(r)
+      curr.target_individuals += Number(r.target_individuals || 0)
+      curr.target_families += Number(r.target_families || 0)
+      curr.actual_individuals += Number(r.actual_individuals ?? r.individuals ?? 0)
+      curr.actual_families += Number(r.actual_families || 0)
+      curr.individuals += Number(r.actual_individuals ?? r.individuals ?? 0)
+      if (Number(r.f4_count || 0) > 0) curr.projects_with_f4 += 1
+      if (Number(r.f5_count || 0) > 0) curr.projects_with_f5 += 1
+      if (r.is_overdue) curr.overdue_count += 1
+      const last = curr.last_report_date
+      const cand = r.last_report_date || null
+      curr.last_report_date = !last ? cand : (!cand ? last : (new Date(last) > new Date(cand) ? last : cand))
+      const lastF5 = curr.last_f5_date
+      const candF5 = r.last_f5_date || null
+      curr.last_f5_date = !lastF5 ? candF5 : (!candF5 ? lastF5 : (new Date(lastF5) > new Date(candF5) ? lastF5 : candF5))
+      byLocality.set(key, curr)
+    }
+    return Array.from(byLocality.values())
+      .map(v => ({ ...v, burn: v.plan > 0 ? v.actual / v.plan : 0 }))
+      .sort((a, b) => (a.locality || '').localeCompare(b.locality || ''))
+  }, [rows, selectedStateName, filters, allRows, preCalcLocalityRows])
+
+  const roomRows = useMemo(() => {
+    if (!selectedStateName || !selectedLocality) return [] as any[]
     
     // Use pre-calculated aggregations when no filters are active
     if (filters.length === 0 && rows.length === allRows.length && preCalcRoomRows.length > 0) {
-      return preCalcRoomRows.filter((r:any) => r.state === selectedStateName)
+      return preCalcRoomRows.filter((r:any) => r.state === selectedStateName && (r.locality || '—') === selectedLocality)
     }
     
     // Fall back to JavaScript calculation when filters are active
-    const filtered = rows.filter((r:any) => r.state === selectedStateName)
-    const byRoom = new Map<string, { err_id: string; err_name: string | null; state: string; plan: number; actual: number; variance: number; burn: number; f4_count: number; f5_count: number; total_projects: number; projects_with_f4: number; projects_with_f5: number; tracker_sum: number; target_individuals: number; target_families: number; actual_individuals: number; actual_families: number; individuals: number; last_report_date: string | null; last_f5_date: string | null; overdue_count: number }>()
+    const filtered = rows.filter((r:any) => r.state === selectedStateName && (r.locality || '—') === selectedLocality)
+    const byRoom = new Map<string, { err_id: string; err_name: string | null; state: string; locality: string; plan: number; actual: number; variance: number; burn: number; f4_count: number; f5_count: number; total_projects: number; projects_with_f4: number; projects_with_f5: number; tracker_sum: number; target_individuals: number; target_families: number; actual_individuals: number; actual_families: number; individuals: number; last_report_date: string | null; last_f5_date: string | null; overdue_count: number }>()
     for (const r of filtered) {
       const key = r.err_id || '—'
-      const curr = byRoom.get(key) || { err_id: key, err_name: null as string | null, state: selectedStateName, plan: 0, actual: 0, variance: 0, burn: 0, f4_count: 0, f5_count: 0, total_projects: 0, projects_with_f4: 0, projects_with_f5: 0, tracker_sum: 0, target_individuals: 0, target_families: 0, actual_individuals: 0, actual_families: 0, individuals: 0, last_report_date: null as string | null, last_f5_date: null as string | null, overdue_count: 0 }
+      const curr = byRoom.get(key) || { err_id: key, err_name: null as string | null, state: selectedStateName, locality: selectedLocality, plan: 0, actual: 0, variance: 0, burn: 0, f4_count: 0, f5_count: 0, total_projects: 0, projects_with_f4: 0, projects_with_f5: 0, tracker_sum: 0, target_individuals: 0, target_families: 0, actual_individuals: 0, actual_families: 0, individuals: 0, last_report_date: null as string | null, last_f5_date: null as string | null, overdue_count: 0 }
       if (curr.err_name == null && r.err_name != null) curr.err_name = r.err_name
       curr.plan += Number(r.plan || 0)
       curr.actual += Number(r.actual || 0)
@@ -441,12 +494,12 @@ export default function ProjectManagement() {
       byRoom.set(key, curr)
     }
     return Array.from(byRoom.values()).map(v => ({ ...v, burn: v.plan > 0 ? v.actual / v.plan : 0 }))
-  }, [rows, selectedStateName, filters, allRows, preCalcRoomRows])
+  }, [rows, selectedStateName, selectedLocality, filters, allRows, preCalcRoomRows])
 
   const projectRows = useMemo(() => {
-    if (!selectedStateName || !selectedErrId) return [] as any[]
-    return rows.filter((r:any)=> r.state === selectedStateName && (r.err_id || '—') === selectedErrId)
-  }, [rows, selectedStateName, selectedErrId])
+    if (!selectedStateName || !selectedLocality || !selectedErrId) return [] as any[]
+    return rows.filter((r:any)=> r.state === selectedStateName && (r.locality || '—') === selectedLocality && (r.err_id || '—') === selectedErrId)
+  }, [rows, selectedStateName, selectedLocality, selectedErrId])
 
   // When Grant Serial filter is active, show matching projects directly (project-level view)
   const searchRows = useMemo(() => {
@@ -461,7 +514,44 @@ export default function ProjectManagement() {
     })
   }, [rows, filters])
 
-  const displayed = searchRows ? searchRows : (level === 'state' ? stateRows : (level === 'room' ? roomRows : projectRows))
+  const displayed = searchRows
+    ? searchRows
+    : (level === 'state'
+      ? stateRows
+      : (level === 'locality'
+        ? localityRows
+        : (level === 'room' ? roomRows : projectRows)))
+
+  const hierarchyCounts = useMemo(() => {
+    const scoped = searchRows
+      ? searchRows
+      : rows.filter((r: any) => {
+          if (level === 'state') return true
+          if ((r.state || '—') !== selectedStateName) return false
+          if (level === 'locality') return true
+          if ((r.locality || '—') !== selectedLocality) return false
+          if (level === 'room') return true
+          return (r.err_id || '—') === selectedErrId
+        })
+
+    const states = new Set<string>()
+    const localities = new Set<string>()
+    const errs = new Set<string>()
+    for (const r of scoped) {
+      const state = r.state || '—'
+      const locality = r.locality || '—'
+      const err = r.err_id || '—'
+      states.add(state)
+      localities.add(`${state}|${locality}`)
+      errs.add(`${state}|${locality}|${err}`)
+    }
+    return {
+      projects: scoped.length,
+      states: states.size,
+      localities: localities.size,
+      errs: errs.size,
+    }
+  }, [rows, searchRows, level, selectedStateName, selectedLocality, selectedErrId])
 
   // Calculate totals for the displayed rows
   const totals = useMemo(() => {
@@ -529,6 +619,14 @@ export default function ProjectManagement() {
     if (level === 'state') {
       const newState = r.state || '—'
       setSelectedStateName(newState)
+      setSelectedLocality('')
+      setSelectedErrId('')
+      setSelectedErrName('')
+      setLevel('locality')
+    } else if (level === 'locality') {
+      setSelectedLocality(r.locality || '—')
+      setSelectedErrId('')
+      setSelectedErrName('')
       setLevel('room')
     } else if (level === 'room') {
       const newErrId = r.err_id || '—'
@@ -547,8 +645,13 @@ export default function ProjectManagement() {
       setSelectedErrId('')
       setSelectedErrName('')
     } else if (level === 'room') {
+      setLevel('locality')
+      setSelectedErrId('')
+      setSelectedErrName('')
+    } else if (level === 'locality') {
       setLevel('state')
       setSelectedStateName('')
+      setSelectedLocality('')
     }
   }
 
@@ -708,11 +811,14 @@ export default function ProjectManagement() {
                     {level !== 'state' && (
                       <Button variant="outline" size="sm" onClick={goBack}>{t('management.table.back')}</Button>
                     )}
-                    {level === 'room' && selectedStateName ? (
+                    {level === 'locality' && selectedStateName ? (
                       <span className="ml-2 text-sm text-muted-foreground">{t('management.table.state')}: {selectedStateName}</span>
                     ) : null}
+                    {level === 'room' && selectedStateName ? (
+                      <span className="ml-2 text-sm text-muted-foreground">{t('management.table.state')}: {selectedStateName} · {t('management.table.locality')}: {selectedLocality}</span>
+                    ) : null}
                     {level === 'project' && selectedErrId ? (
-                      <span className="ml-2 text-sm text-muted-foreground">{t('management.table.state')}: {selectedStateName} · {t('management.table.err')}: {selectedErrId}{selectedErrName ? ` (${selectedErrName})` : ''}</span>
+                      <span className="ml-2 text-sm text-muted-foreground">{t('management.table.state')}: {selectedStateName} · {t('management.table.locality')}: {selectedLocality} · {t('management.table.err')}: {selectedErrId}{selectedErrName ? ` (${selectedErrName})` : ''}</span>
                     ) : null}
                   </CardTitle>
                   <div className="flex items-center gap-2">
@@ -722,15 +828,21 @@ export default function ProjectManagement() {
                       onClick={() => {
                         const isSearchOrProject = !!(searchRows || level === 'project')
                         const isState = level === 'state'
+                        const isLocality = level === 'locality'
                         const isRoom = level === 'room'
                         const cols: { key: string; header: string; format?: (v: any, r: any) => string | number }[] = []
                         if (isSearchOrProject) {
                           cols.push({ key: 'err_id', header: t('management.table.err') })
-                          if (searchRows) cols.push({ key: 'state', header: t('management.table.state') })
+                          if (searchRows) {
+                            cols.push({ key: 'state', header: t('management.table.state') })
+                            cols.push({ key: 'locality', header: t('management.table.locality') })
+                          }
                           cols.push({ key: 'grant_serial_id', header: 'Grant Serial' })
                         } else if (isState) {
                           cols.push({ key: 'state', header: t('management.table.state') })
-                        } else {
+                        } else if (isLocality) {
+                          cols.push({ key: 'locality', header: t('management.table.locality') })
+                        } else if (isRoom) {
                           cols.push({ key: 'err_id', header: t('management.table.err') })
                           cols.push({ key: 'err_name', header: t('management.table.err_name') })
                         }
@@ -774,7 +886,12 @@ export default function ProjectManagement() {
                     onFiltersChange={setFilters}
                     urlParamPrefix="f_"
                     title="Projects"
-                    count={rows.length}
+                    count={hierarchyCounts.projects}
+                    extraCounts={[
+                      { label: 'States', count: hierarchyCounts.states },
+                      { label: 'Localities', count: hierarchyCounts.localities },
+                      { label: 'ERRs', count: hierarchyCounts.errs },
+                    ]}
                   />
                 )}
               </div>
@@ -788,6 +905,11 @@ export default function ProjectManagement() {
             ) : level === 'state' ? (
               <span>
                 {t('management.table.tips.state')} 
+                <span className="ml-2 font-medium text-foreground">→ Click a row to view localities</span>
+              </span>
+            ) : level === 'locality' ? (
+              <span>
+                {t('management.table.tips.locality')} 
                 <span className="ml-2 font-medium text-foreground">→ Click a row to view ERR rooms</span>
               </span>
             ) : level === 'room' ? (
@@ -809,12 +931,21 @@ export default function ProjectManagement() {
                   {searchRows || level === 'project' ? (
                     <>
                       <TableHead className="whitespace-nowrap">{t('management.table.err')}</TableHead>
-                      {searchRows ? <TableHead className="whitespace-nowrap">{t('management.table.state')}</TableHead> : null}
+                      {searchRows ? (
+                        <>
+                          <TableHead className="whitespace-nowrap">{t('management.table.state')}</TableHead>
+                          <TableHead className="whitespace-nowrap">{t('management.table.locality')}</TableHead>
+                        </>
+                      ) : null}
                       <TableHead className="whitespace-nowrap">Grant Serial</TableHead>
                     </>
                   ) : level === 'state' ? (
                     <>
                       <TableHead className="whitespace-nowrap">{t('management.table.state')}</TableHead>
+                    </>
+                  ) : level === 'locality' ? (
+                    <>
+                      <TableHead className="whitespace-nowrap">{t('management.table.locality')}</TableHead>
                     </>
                   ) : (
                     <>
@@ -840,7 +971,7 @@ export default function ProjectManagement() {
                   </TableHeader>
                   <TableBody>
                 {(displayed||[]).length===0 ? (
-                  <TableRow><TableCell colSpan={searchRows ? 17 : (level==='project' ? 16 : (level==='room'?14:15))} className="text-center text-muted-foreground">{t('management.table.no_data')}</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={searchRows ? 18 : (level==='project' ? 16 : (level==='room'?14:15))} className="text-center text-muted-foreground">{t('management.table.no_data')}</TableCell></TableRow>
                 ) : (
                   <>
                     {/* Total Row */}
@@ -848,10 +979,15 @@ export default function ProjectManagement() {
                       {searchRows || level === 'project' ? (
                         <>
                           <TableCell className="font-semibold">Total</TableCell>
-                          {searchRows ? <TableCell></TableCell> : null}
+                          {searchRows ? (
+                            <>
+                              <TableCell></TableCell>
+                              <TableCell></TableCell>
+                            </>
+                          ) : null}
                           <TableCell></TableCell>
                         </>
-                      ) : level === 'state' ? (
+                      ) : level === 'state' || level === 'locality' ? (
                         <>
                           <TableCell className="font-semibold">Total</TableCell>
                         </>
@@ -924,7 +1060,12 @@ export default function ProjectManagement() {
                             )}
                           </div>
                         </TableCell>
-                        {searchRows ? <TableCell>{r.state || '-'}</TableCell> : null}
+                        {searchRows ? (
+                          <>
+                            <TableCell>{r.state || '-'}</TableCell>
+                            <TableCell>{r.locality || '—'}</TableCell>
+                          </>
+                        ) : null}
                         <TableCell>{r.grant_serial_id || '-'}</TableCell>
                       </>
                     ) : level === 'state' ? (
@@ -932,6 +1073,15 @@ export default function ProjectManagement() {
                         <TableCell>
                           <div className="flex items-center gap-2">
                             <span>{r.state || '-'}</span>
+                            <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                          </div>
+                        </TableCell>
+                      </>
+                    ) : level === 'locality' ? (
+                      <>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <span>{r.locality || '—'}</span>
                             <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                           </div>
                         </TableCell>

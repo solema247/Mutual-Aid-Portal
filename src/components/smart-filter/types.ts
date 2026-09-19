@@ -50,6 +50,8 @@ export interface SmartFilterProps {
   /** Optional: show title/count (e.g. "Report Tracker (37)") */
   title?: string
   count?: number
+  /** Optional: additional labeled counts shown after the primary count */
+  extraCounts?: Array<{ label: string; count: number }>
 }
 
 /** Props for applying filters to data (client-side) */

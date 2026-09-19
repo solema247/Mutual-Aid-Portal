@@ -2,6 +2,7 @@ import type { MouAssignmentStatus } from '@/app/err-portal/f3-mous/types'
 
 export interface MouProjectListRow {
   mou_id: string | null
+  id?: string | null
   grant_id?: string | null
   grant_grid_id?: string | null
   funding_status?: string | null

@@ -18,8 +18,11 @@ const SUPABASE_IN_BATCH = 80
 const CACHE_DURATION_MS = 3 * 60 * 1000
 
 function getCacheKey(allowedStates: string[] | null): string {
-  if (!allowedStates || allowedStates.length === 0) return 'all_states'
-  return [...allowedStates].sort().join(',')
+  // v2: includes locality on rows + localityAggregations
+  const scope = (!allowedStates || allowedStates.length === 0)
+    ? 'all_states'
+    : [...allowedStates].sort().join(',')
+  return `v2|${scope}`
 }
 
 export async function readSharedRollupCache(cacheKey: string): Promise<any | null> {
@@ -309,7 +312,7 @@ export async function GET(request: Request) {
     const projectsStart = Date.now()
     let projectQuery = supabase
       .from('err_projects')
-      .select('id, state, grant_call_id, grant_grid_id, grant_id, grant_segment, emergency_rooms (id, name, name_ar, err_code), planned_activities, expenses, source, status, funding_status, mou_id, f4_status, f5_status, date, date_transfer, completed_at, date_report_completed, estimated_beneficiaries, implemented_sector, activity_shift_note')
+      .select('id, state, locality, grant_call_id, grant_grid_id, grant_id, grant_segment, emergency_rooms (id, name, name_ar, err_code), planned_activities, expenses, source, status, funding_status, mou_id, f4_status, f5_status, date, date_transfer, completed_at, date_report_completed, estimated_beneficiaries, implemented_sector, activity_shift_note')
       .in('status', ['approved', 'active', 'pending', 'completed'])
       .in('funding_status', ['committed', 'allocated', 'unassigned'])
 
@@ -545,6 +548,7 @@ export async function GET(request: Request) {
       return {
         project_id: p.id,
         state: p.state,
+        locality: (p.locality != null && String(p.locality).trim() !== '') ? String(p.locality).trim() : null,
         err_id: p.emergency_rooms?.err_code || p.emergency_rooms?.name || null,
         err_name: p.emergency_rooms?.name || null,
         grant_call_id: p.grant_call_id,
@@ -635,6 +639,7 @@ export async function GET(request: Request) {
       return {
         project_id: historicalProjectId, // Use a prefix to distinguish historical projects
         state: normalizeStateName(row['State'] || row['state'] || row.State),
+        locality: null, // Historical sheet rows have no locality
         err_id: row['ERR CODE'] || row['ERR Name'] || row['err_code'] || row['err_name'] || null,
         err_name: row['ERR Name'] || row['err_name'] || null,
         grant_call_id: null, // Historical data doesn't have grant_call_id
@@ -778,12 +783,88 @@ export async function GET(request: Request) {
       burn: s.plan > 0 ? s.actual / s.plan : 0
     }))
 
+    // Pre-calculate locality aggregations for frontend (state → locality)
+    const localityAggregations = new Map<string, any>()
+    for (const r of allRows) {
+      const locality = r.locality || '—'
+      const key = `${r.state || '—'}|${locality}`
+      const curr = localityAggregations.get(key) || {
+        state: r.state || '—',
+        locality,
+        plan: 0, actual: 0, variance: 0, burn: 0,
+        f4_count: 0, f5_count: 0, total_projects: 0,
+        projects_with_f4: 0, projects_with_f5: 0, tracker_sum: 0,
+        target_individuals: 0, target_families: 0,
+        actual_individuals: 0, actual_families: 0,
+        individuals: 0, last_report_date: null, last_f5_date: null,
+        overdue_count: 0
+      }
+      curr.plan += Number(r.plan) || 0
+      curr.actual += Number(r.actual) || 0
+      curr.f4_count += Number(r.f4_count) || 0
+      curr.f5_count += Number(r.f5_count) || 0
+      curr.total_projects += 1
+      if (Number(r.f4_count || 0) > 0) curr.projects_with_f4 += 1
+      if (Number(r.f5_count || 0) > 0) curr.projects_with_f5 += 1
+      curr.target_individuals += Number(r.target_individuals) || 0
+      curr.target_families += Number(r.target_families) || 0
+      curr.actual_individuals += Number(r.actual_individuals) || 0
+      curr.actual_families += Number(r.actual_families) || 0
+      curr.individuals += Number(r.actual_individuals ?? r.individuals) || 0
+      if (r.is_overdue) curr.overdue_count += 1
+
+      if (r.last_report_date) {
+        if (!curr.last_report_date || new Date(r.last_report_date) > new Date(curr.last_report_date)) {
+          curr.last_report_date = r.last_report_date
+        }
+      }
+      if (r.last_f5_date) {
+        if (!curr.last_f5_date || new Date(r.last_f5_date) > new Date(curr.last_f5_date)) {
+          curr.last_f5_date = r.last_f5_date
+        }
+      }
+
+      const plan = Number(r.plan || 0)
+      const actual = Number(r.actual ?? 0)
+      const burn = plan > 0 ? actual / plan : 0
+      const hasActual = (typeof r.actual === 'number' && r.actual > 0) || (r.actual != null && String(r.actual).trim() !== '' && Number(r.actual) > 0)
+      const f5Status = r.f5_status != null ? String(r.f5_status).toLowerCase() : null
+      let f5Part: number
+      if (f5Status === 'completed') f5Part = 0.5
+      else if (f5Status === 'under review' || f5Status === 'in review' || f5Status === 'partial') f5Part = 0.25
+      else if (f5Status === 'waiting') f5Part = 0
+      else if (r.is_historical) f5Part = 0
+      else f5Part = Number(r.f5_count || 0) > 0 ? 0.5 : 0
+
+      const f4Status = r.f4_status != null ? String(r.f4_status).toLowerCase() : null
+      let f4Part: number
+      if (f4Status === 'completed') {
+        if (r.is_historical && hasActual && plan > 0) f4Part = 0.5 * Math.min(1, burn)
+        else if (r.is_historical) f4Part = 0.5
+        else f4Part = 0.5 * Math.min(1, burn)
+      } else if (f4Status === 'under review' || f4Status === 'in review' || f4Status === 'partial') f4Part = 0.25
+      else if (f4Status === 'waiting') f4Part = 0
+      else if (r.is_historical) f4Part = 0
+      else f4Part = 0.5 * Math.min(1, burn)
+
+      curr.tracker_sum += f4Part + f5Part
+      localityAggregations.set(key, curr)
+    }
+
+    const localityRows = Array.from(localityAggregations.values()).map(s => ({
+      ...s,
+      variance: s.plan - s.actual,
+      burn: s.plan > 0 ? s.actual / s.plan : 0
+    }))
+
     // Pre-calculate room aggregations for frontend
     const roomAggregations = new Map<string, any>()
     for (const r of allRows) {
-      const key = `${r.state || '—'}|${r.err_id || '—'}`
+      const locality = r.locality || '—'
+      const key = `${r.state || '—'}|${locality}|${r.err_id || '—'}`
       const curr = roomAggregations.get(key) || { 
         state: r.state || '—',
+        locality,
         err_id: r.err_id || '—', 
         err_name: r.err_name || '—',
         plan: 0, actual: 0, variance: 0, burn: 0, 
@@ -858,6 +939,7 @@ export async function GET(request: Request) {
       kpis, 
       rows: allRows,
       stateAggregations: stateRows,
+      localityAggregations: localityRows,
       roomAggregations: roomRows
     }
     

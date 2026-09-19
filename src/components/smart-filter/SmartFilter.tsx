@@ -74,6 +74,7 @@ export function SmartFilter({
   className,
   title,
   count,
+  extraCounts,
 }: SmartFilterProps) {
   const searchParams = useSearchParams()
   const [addFilterOpen, setAddFilterOpen] = React.useState(false)
@@ -169,12 +170,18 @@ export function SmartFilter({
   return (
     <div className={cn('flex flex-col gap-3', className)}>
       <div className="flex flex-wrap items-center justify-between gap-3">
-        {(title != null || count != null) && (
+        {(title != null || count != null || (extraCounts != null && extraCounts.length > 0)) && (
           <h2 className="text-xl font-semibold text-foreground">
             {title}
             {count != null && (
               <span className="ml-1.5 font-normal text-muted-foreground">({count})</span>
             )}
+            {extraCounts?.map((item) => (
+              <span key={item.label} className="ml-3 font-normal text-muted-foreground">
+                <span className="font-semibold text-foreground">{item.label}</span>
+                <span className="ml-1.5">({item.count})</span>
+              </span>
+            ))}
           </h2>
         )}
         <div className="relative">

@@ -12,6 +12,8 @@ export interface MOU {
   err_name: string
   state: string | null
   total_amount: number
+  /** MOU total in SDG (from payment confirmation rates × project USD) */
+  total_amount_sdg?: number | null
   start_date: string | null
   end_date: string | null
   file_key: string | null
