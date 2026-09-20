@@ -1,20 +1,11 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
-
-const ALLOWED_ROLES = [
-  'support',
-  'superadmin',
-  'admin',
-  'state_err',
-  'base_err',
-  'partner',
-] as const
-
-type AllowedRole = (typeof ALLOWED_ROLES)[number]
-
-function isAllowedRole(role: unknown): role is AllowedRole {
-  return typeof role === 'string' && (ALLOWED_ROLES as readonly string[]).includes(role)
-}
+import { clearUserOverrides } from '@/lib/userOverridesDb'
+import {
+  isPortalRole,
+  roleAssignmentError,
+  stateAccessEditError,
+} from '@/lib/userAccessRules'
 
 export async function PUT(
   request: Request,
@@ -55,7 +46,7 @@ export async function PUT(
 
     const { data: targetUser, error: targetUserError } = await supabase
       .from('users')
-      .select('role, partner_id')
+      .select('role, partner_id, status')
       .eq('id', params.userId)
       .single()
 
@@ -63,75 +54,43 @@ export async function PUT(
       return NextResponse.json({ error: 'Target user not found' }, { status: 404 })
     }
 
+    if (targetUser.status === 'deleted') {
+      return NextResponse.json({ error: 'User account has been deleted' }, { status: 410 })
+    }
+
     const body = await request.json()
     const { role, can_see_all_states, visible_states, partner_id } = body
 
-    if (role !== undefined && !isAllowedRole(role)) {
+    if (role !== undefined && !isPortalRole(role)) {
       return NextResponse.json({ error: 'Invalid role' }, { status: 400 })
     }
 
-    if (
-      targetUser.role === 'superadmin' &&
-      role &&
-      role !== 'superadmin' &&
-      currentUser.role !== 'support'
-    ) {
-      return NextResponse.json(
-        { error: 'Only support can change superadmin role' },
-        { status: 403 }
+    const roleChanging =
+      role !== undefined && role !== (targetUser.role as string)
+
+    if (role !== undefined) {
+      const assignErr = roleAssignmentError(
+        currentUser.role as string,
+        role,
+        targetUser.role as string
       )
-    }
-    if (role === 'superadmin' && currentUser.role !== 'support') {
-      return NextResponse.json(
-        { error: 'Only support can assign superadmin role' },
-        { status: 403 }
-      )
+      if (assignErr) {
+        return NextResponse.json({ error: assignErr }, { status: 403 })
+      }
     }
 
-    if (
-      role === 'admin' &&
-      currentUser.role !== 'superadmin' &&
-      currentUser.role !== 'support'
-    ) {
-      return NextResponse.json(
-        { error: 'Only superadmin or support can set admin role' },
-        { status: 403 }
-      )
-    }
+    const effectiveRole: string =
+      role !== undefined ? role : (targetUser.role as string)
 
-    if (
-      targetUser.role === 'admin' &&
-      role &&
-      role !== 'admin' &&
-      currentUser.role !== 'superadmin' &&
-      currentUser.role !== 'support'
-    ) {
-      return NextResponse.json(
-        { error: 'Only superadmin or support can change admin role' },
-        { status: 403 }
+    if (can_see_all_states !== undefined || visible_states !== undefined) {
+      const stateErr = stateAccessEditError(
+        currentUser.role as string,
+        effectiveRole
       )
-    }
-
-    if (
-      targetUser.role === 'superadmin' &&
-      (can_see_all_states !== undefined || visible_states !== undefined) &&
-      currentUser.role !== 'support'
-    ) {
-      return NextResponse.json(
-        { error: 'Only support can change state access for superadmin users' },
-        { status: 403 }
-      )
-    }
-    if (
-      targetUser.role === 'admin' &&
-      (can_see_all_states !== undefined || visible_states !== undefined) &&
-      currentUser.role !== 'superadmin' &&
-      currentUser.role !== 'support'
-    ) {
-      return NextResponse.json(
-        { error: 'Only superadmin or support can change state access for admin users' },
-        { status: 403 }
-      )
+      if (stateErr) {
+        const status = stateErr.includes('Partner') ? 400 : 403
+        return NextResponse.json({ error: stateErr }, { status })
+      }
     }
 
     if (can_see_all_states !== undefined && typeof can_see_all_states !== 'boolean') {
@@ -152,9 +111,6 @@ export async function PUT(
       updated_at: new Date().toISOString(),
     }
 
-    const effectiveRole: string =
-      role !== undefined ? role : (targetUser.role as string)
-
     if (role !== undefined) {
       updateData.role = role
       if (role === 'partner') {
@@ -169,9 +125,9 @@ export async function PUT(
           )
         }
         updateData.partner_id = pid
-        // Partner is org-scoped, not state-scoped
         updateData.can_see_all_states = false
         updateData.visible_states = []
+        updateData.err_id = null
       } else {
         updateData.partner_id = null
       }
@@ -195,7 +151,6 @@ export async function PUT(
       updateData.partner_id = pid
     }
 
-    // Reject state-access updates for partner users (org-scoped only)
     if (
       effectiveRole === 'partner' &&
       (can_see_all_states !== undefined || visible_states !== undefined)
@@ -211,10 +166,9 @@ export async function PUT(
     }
 
     if (visible_states !== undefined) {
-      updateData.visible_states = visible_states
+      updateData.visible_states = can_see_all_states === true ? [] : visible_states
     }
 
-    // Validate partner org exists when setting partner_id
     if (typeof updateData.partner_id === 'string') {
       const { data: partnerRow, error: partnerErr } = await supabase
         .from('partners')
@@ -243,6 +197,22 @@ export async function PUT(
         { error: 'Failed to update user access rights' },
         { status: 500 }
       )
+    }
+
+    // Role change: drop old overrides so effective perms become the new role defaults.
+    if (roleChanging) {
+      const { error: clearError } = await clearUserOverrides(supabase, params.userId)
+      if (clearError) {
+        console.error('Error clearing permission overrides after role change:', clearError)
+        return NextResponse.json(
+          {
+            error:
+              'Role updated but failed to clear previous permission overrides. Please clear them manually.',
+            user: updatedUser,
+          },
+          { status: 500 }
+        )
+      }
     }
 
     return NextResponse.json(updatedUser)

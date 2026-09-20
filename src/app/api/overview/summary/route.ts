@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { readSharedRollupCache } from '../rollup/route'
 import { getUserGrantAccess } from '@/lib/userGrantAccess'
+import { getUserRoomAccess } from '@/lib/userRoomAccess'
 
 function getCacheKey(allowedStates: string[] | null): string {
   if (!allowedStates || allowedStates.length === 0) return 'all_states'
@@ -48,6 +49,14 @@ function partnerRollupCacheKey(partnerId: string, grantGridIds: string[]): strin
 }
 
 /**
+ * Base ERR rollup cache key. Must match getCacheKey(null, 'all_grants', roomAccessCacheKey)
+ * in overview/rollup: v3|all_states|all_grants|room:base_err:{roomId}
+ */
+function roomRollupCacheKey(emergencyRoomId: string): string {
+  return `v3|all_states|all_grants|room:base_err:${emergencyRoomId}`
+}
+
+/**
  * Lightweight summary endpoint - returns only KPIs and aggregations (no full rows)
  * Falls back to full rollup if needed
  */
@@ -55,7 +64,30 @@ export async function GET(request: Request) {
   const startTime = Date.now()
   
   try {
-    const grantAccess = await getUserGrantAccess()
+    const [grantAccess, roomAccess] = await Promise.all([
+      getUserGrantAccess(),
+      getUserRoomAccess(),
+    ])
+
+    if (roomAccess.mode === 'none') {
+      return NextResponse.json(emptySummary())
+    }
+
+    if (roomAccess.mode === 'room') {
+      const cached = await readSharedRollupCache(roomRollupCacheKey(roomAccess.emergencyRoomId))
+      if (!cached) {
+        // Build the room-scoped rollup so the next poll can serve it
+        const url = new URL(request.url)
+        fetch(`${url.origin}/api/overview/rollup`, {
+          headers: { cookie: request.headers.get('cookie') ?? '' },
+        }).catch((e) => console.error('[summary] background room rollup failed:', e))
+        return NextResponse.json(
+          { message: 'Building summary, please retry in a moment' },
+          { status: 202 }
+        )
+      }
+      return NextResponse.json(summaryFromCache(cached))
+    }
 
     if (grantAccess.mode === 'none') {
       return NextResponse.json(emptySummary())

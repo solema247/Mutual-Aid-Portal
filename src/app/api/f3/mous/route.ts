@@ -16,6 +16,11 @@ import {
   grantGridIdInAccess,
   type UserGrantAccess,
 } from '@/lib/userGrantAccess'
+import {
+  fetchMouIdsForEmergencyRoom,
+  getUserRoomAccess,
+  type UserRoomAccess,
+} from '@/lib/userRoomAccess'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 function parseMouSignatures(mou: Record<string, unknown>) {
@@ -45,7 +50,8 @@ function chunkIds(ids: string[]): string[][] {
 async function fetchProjectEnrichment(
   supabase: SupabaseClient,
   mouIds: string[],
-  grantAccess?: UserGrantAccess
+  grantAccess?: UserGrantAccess,
+  roomAccess?: UserRoomAccess
 ) {
   if (mouIds.length === 0) {
     return {
@@ -61,13 +67,16 @@ async function fetchProjectEnrichment(
   for (const batch of batches) {
     const { data: projects, error: projErr } = await supabase
       .from('err_projects')
-      .select('mou_id, id, expenses, grant_id, grant_grid_id, funding_status, status')
+      .select('mou_id, id, expenses, grant_id, grant_grid_id, funding_status, status, emergency_room_id')
       .in('mou_id', batch)
 
     if (projErr) throw projErr
     if (projects?.length) {
-      for (const p of projects as MouProjectListRow[]) {
-        if (grantAccess && grantAccess.mode !== 'all') {
+      for (const p of projects as (MouProjectListRow & { emergency_room_id?: string | null })[]) {
+        // Base ERR: room scope only; Partner: grant scope only
+        if (roomAccess?.mode === 'room') {
+          if (String(p.emergency_room_id ?? '') !== roomAccess.emergencyRoomId) continue
+        } else if (grantAccess && grantAccess.mode === 'partner') {
           if (!grantGridIdInAccess(grantAccess, p.grant_grid_id)) continue
         }
         rows.push(p)
@@ -129,11 +138,14 @@ async function fetchProjectEnrichment(
   }
 
   if (!confFailed) {
+    // Only count confirmations for projects already in room/grant enrichment rows
+    const inScopeProjectIds = new Set(rows.map((p) => String(p.id)).filter(Boolean))
     const projectsByMou = new Map<string, Set<string>>()
     // Latest rate per project (prefer transfer_date, then created_at)
     const rateByProject = new Map<string, { mou_id: string; rate: number; sortKey: string }>()
     for (const row of confRows) {
       if (!row.mou_id || !row.project_id) continue
+      if (!inScopeProjectIds.has(String(row.project_id))) continue
       if (!projectsByMou.has(row.mou_id)) projectsByMou.set(row.mou_id, new Set())
       projectsByMou.get(row.mou_id)!.add(row.project_id)
 
@@ -259,36 +271,39 @@ export async function GET(request: Request) {
     const search = searchParams.get('search')
     const state = searchParams.get('state')
 
-    const [{ allowedStateNames }, grantAccess] = await Promise.all([
+    const [{ allowedStateNames }, grantAccess, roomAccess] = await Promise.all([
       getUserStateAccess(),
       getUserGrantAccess(),
+      getUserRoomAccess(),
     ])
 
-    if (grantAccess.mode === 'none') {
-      return NextResponse.json({
+    const emptyMous = () =>
+      NextResponse.json({
         mous: [],
         ...aggregateMouEnrichment([]),
       })
-    }
 
-    const partnerMouIds =
-      grantAccess.mode === 'partner' ? await fetchMouIdsInGrantAccess(grantAccess) : null
+    if (roomAccess.mode === 'none') return emptyMous()
+    if (roomAccess.mode !== 'room' && grantAccess.mode === 'none') return emptyMous()
 
-    if (grantAccess.mode === 'partner' && (!partnerMouIds || partnerMouIds.length === 0)) {
-      return NextResponse.json({
-        mous: [],
-        ...aggregateMouEnrichment([]),
-      })
-    }
+    // MOU ids with ≥1 project in scope: Base ERR by room, Partner by grants
+    const scopedMouIds =
+      roomAccess.mode === 'room'
+        ? await fetchMouIdsForEmergencyRoom(roomAccess.emergencyRoomId)
+        : grantAccess.mode === 'partner'
+          ? await fetchMouIdsInGrantAccess(grantAccess)
+          : null
+
+    if (scopedMouIds != null && scopedMouIds.length === 0) return emptyMous()
 
     let query = supabase
       .from('mous')
       .select('*')
       .order('created_at', { ascending: false })
 
-    // Partner: grant-scoped via linked projects (never state scope)
-    if (grantAccess.mode === 'partner' && partnerMouIds) {
-      // batch .in() for large partner mou sets
+    // Base ERR / Partner: scoped via linked projects (never state scope)
+    if (scopedMouIds != null) {
+      // batch .in() for large scoped mou sets
       // For typical sizes a single .in is fine; chunk if needed below after fetch
     } else if (allowedStateNames !== null && allowedStateNames.length > 0) {
       query = query.in('state', allowedStateNames)
@@ -297,13 +312,10 @@ export async function GET(request: Request) {
     if (search) {
       const { data, error } = await query
       if (error) throw error
-      const partnerSet =
-        grantAccess.mode === 'partner' && partnerMouIds
-          ? new Set(partnerMouIds)
-          : null
+      const scopedSet = scopedMouIds != null ? new Set(scopedMouIds) : null
       const s = search.toLowerCase()
       const filtered = (data || []).filter((m: { id: string; mou_code?: string; partner_name?: string; err_name?: string }) => {
-        if (partnerSet && !partnerSet.has(m.id)) return false
+        if (scopedSet && !scopedSet.has(m.id)) return false
         return (
           m.mou_code?.toLowerCase().includes(s) ||
           m.partner_name?.toLowerCase().includes(s) ||
@@ -312,7 +324,7 @@ export async function GET(request: Request) {
       })
       const filteredIds = filtered.map((m: { id: string }) => m.id).filter(Boolean)
       const { totalByMouId, exchangeRateByMouId, totalSdgByMouId, enrichment } =
-        await fetchProjectEnrichment(supabase, filteredIds, grantAccess)
+        await fetchProjectEnrichment(supabase, filteredIds, grantAccess, roomAccess)
 
       return NextResponse.json({
         mous: buildMousListPayload(
@@ -332,16 +344,13 @@ export async function GET(request: Request) {
     const { data, error } = await query
     if (error) throw error
 
-    const partnerSet =
-      grantAccess.mode === 'partner' && partnerMouIds
-        ? new Set(partnerMouIds)
-        : null
+    const scopedSet = scopedMouIds != null ? new Set(scopedMouIds) : null
     const mous = (data || []).filter((m: { id: string }) =>
-      partnerSet ? partnerSet.has(m.id) : true
+      scopedSet ? scopedSet.has(m.id) : true
     )
     const mouIds = mous.map((m: { id: string }) => m.id).filter(Boolean)
     const { totalByMouId, exchangeRateByMouId, totalSdgByMouId, enrichment } =
-      await fetchProjectEnrichment(supabase, mouIds, grantAccess)
+      await fetchProjectEnrichment(supabase, mouIds, grantAccess, roomAccess)
 
     return NextResponse.json({
       mous: buildMousListPayload(

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { getUserStateAccess } from '@/lib/userStateAccess'
 import { assertProjectInGrantAccess, getUserGrantAccess } from '@/lib/userGrantAccess'
+import { assertProjectInRoomAccess, getUserRoomAccess } from '@/lib/userRoomAccess'
 
 /**
  * GET /api/f4/project-reports?project_id=...
@@ -15,16 +16,31 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'project_id is required' }, { status: 400 })
     }
 
-    const grantAccess = await getUserGrantAccess()
-    if (grantAccess.mode === 'none') {
+    const [grantAccess, roomAccess] = await Promise.all([
+      getUserGrantAccess(),
+      getUserRoomAccess(),
+    ])
+    if (roomAccess.mode === 'none') {
+      return NextResponse.json([])
+    }
+    if (roomAccess.mode !== 'room' && grantAccess.mode === 'none') {
       return NextResponse.json([])
     }
 
     const isHistorical = projectId.startsWith('historical_')
     const historicalImportId = isHistorical ? projectId.replace(/^historical_/, '') : null
 
-    // Partner: no historical; portal projects must be in grant scope
-    if (grantAccess.mode === 'partner') {
+    // Base ERR: no historical; portal projects must be in the user's room
+    if (roomAccess.mode === 'room') {
+      if (isHistorical) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+      }
+      const roomCheck = await assertProjectInRoomAccess(projectId, roomAccess, {
+        notFoundMessage: 'Forbidden',
+      })
+      if (roomCheck.handled && !roomCheck.ok) return roomCheck.response
+    } else if (grantAccess.mode === 'partner') {
+      // Partner: no historical; portal projects must be in grant scope
       if (isHistorical) {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
       }

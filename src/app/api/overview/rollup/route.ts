@@ -19,7 +19,8 @@ const CACHE_DURATION_MS = 3 * 60 * 1000
 
 function getCacheKey(
   allowedStates: string[] | null,
-  grantScopeKey: string = 'all_grants'
+  grantScopeKey: string = 'all_grants',
+  roomScopeKey: string = 'n/a'
 ): string {
   // v2: includes locality on rows + localityAggregations
   // v3: partner grant scope segment so partners never share admin/state caches
@@ -27,7 +28,9 @@ function getCacheKey(
     !allowedStates || allowedStates.length === 0
       ? 'all_states'
       : [...allowedStates].sort().join(',')
-  return `v3|${scope}|${grantScopeKey}`
+  const base = `v3|${scope}|${grantScopeKey}`
+  // Base ERR room scope must never share the global/state cache entry
+  return roomScopeKey === 'n/a' ? base : `${base}|room:${roomScopeKey}`
 }
 
 function emptyRollupPayload() {
@@ -310,17 +313,24 @@ export async function GET(request: Request) {
     const supabase = getSupabaseRouteClient()
     const { getUserStateAccess } = await import('@/lib/userStateAccess')
     const { getUserGrantAccess } = await import('@/lib/userGrantAccess')
+    const { getUserRoomAccess, roomAccessCacheKey } = await import('@/lib/userRoomAccess')
 
-    // Get user's state access rights (ERR roles) and grant access (Partner role)
+    // Get user's state access rights (ERR roles), grant access (Partner) and room access (Base ERR)
     const accessStart = Date.now()
-    const [{ allowedStateNames }, grantAccess] = await Promise.all([
+    const [{ allowedStateNames }, grantAccess, roomAccess] = await Promise.all([
       getUserStateAccess(),
       getUserGrantAccess(),
+      getUserRoomAccess(),
     ])
-    timer('getUserStateAccess+getUserGrantAccess', accessStart)
+    timer('getUserStateAccess+getUserGrantAccess+getUserRoomAccess', accessStart)
+
+    // Base ERR without a room: empty dataset (fail closed) — checked before grant scope
+    if (roomAccess.mode === 'none') {
+      return NextResponse.json(emptyRollupPayload())
+    }
 
     // Partner with no org / no grants: empty dataset (fail closed)
-    if (grantAccess.mode === 'none') {
+    if (roomAccess.mode !== 'room' && grantAccess.mode === 'none') {
       return NextResponse.json(emptyRollupPayload())
     }
 
@@ -329,11 +339,15 @@ export async function GET(request: Request) {
         ? `partner:${grantAccess.partnerId}:${[...grantAccess.grantGridIds].sort().join(',')}`
         : 'all_grants'
 
-    // Partners are grant-scoped (not state-scoped) for this endpoint
+    // Partners are grant-scoped and Base ERR is room-scoped (neither is state-scoped) here
     const stateFilterForQuery =
-      grantAccess.mode === 'partner' ? null : allowedStateNames
+      grantAccess.mode === 'partner' || roomAccess.mode === 'room' ? null : allowedStateNames
 
-    const cacheKey = getCacheKey(stateFilterForQuery, grantScopeKey)
+    const cacheKey = getCacheKey(
+      stateFilterForQuery,
+      grantScopeKey,
+      roomAccessCacheKey(roomAccess)
+    )
     
     // Check for cache bypass parameter
     const url = new URL(request.url)
@@ -357,7 +371,17 @@ export async function GET(request: Request) {
     const projectsStart = Date.now()
     // Partner: only projects linked via grant_grid_id (no serial / historical fallbacks)
     let projects: any[] | null = null
-    if (grantAccess.mode === 'partner') {
+    if (roomAccess.mode === 'room') {
+      // Base ERR: emergency_room_id only (never state / grant scope)
+      const { data, error: roomErr } = await supabase
+        .from('err_projects')
+        .select('id, state, locality, grant_call_id, grant_grid_id, grant_id, grant_segment, emergency_rooms (id, name, name_ar, err_code), planned_activities, expenses, source, status, funding_status, mou_id, f4_status, f5_status, date, date_transfer, completed_at, date_report_completed, estimated_beneficiaries, implemented_sector, activity_shift_note')
+        .in('status', ['approved', 'active', 'pending', 'completed'])
+        .in('funding_status', ['committed', 'allocated', 'unassigned'])
+        .eq('emergency_room_id', roomAccess.emergencyRoomId)
+      if (roomErr) throw roomErr
+      projects = data
+    } else if (grantAccess.mode === 'partner') {
       if (grantAccess.grantGridIds.length === 0) {
         return NextResponse.json(emptyRollupPayload())
       }
@@ -396,8 +420,8 @@ export async function GET(request: Request) {
     const dataSupabase = getSupabaseAdmin()
 
     // ===== PARALLEL BATCH 1: All independent data (historical + project-dependent) =====
-    // Partner v1: exclude activities_raw_import / historical (grant_grid_id-only scope)
-    const skipHistorical = grantAccess.mode === 'partner'
+    // Partner v1 / Base ERR: exclude activities_raw_import (grant_grid_id- / room-only scope)
+    const skipHistorical = grantAccess.mode === 'partner' || roomAccess.mode === 'room'
     const batch1Start = Date.now()
     const [
       allHistoricalData,

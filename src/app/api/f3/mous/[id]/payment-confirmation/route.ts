@@ -8,6 +8,7 @@ import {
 import {
   assertMouInGrantAccess,
   assertProjectInGrantAccess,
+  isProjectIdInMouScope,
 } from '@/lib/userGrantAccess'
 
 type RouteContext = { params: { id: string } }
@@ -156,6 +157,9 @@ export async function POST(request: Request, { params }: RouteContext) {
 
     const projectScope = await assertProjectInGrantAccess(projectId, mouScope.access)
     if (!projectScope.ok) return projectScope.response
+    if (!isProjectIdInMouScope(mouScope.inScopeProjectIds, projectId)) {
+      return NextResponse.json({ error: 'Project not found' }, { status: 404 })
+    }
 
     const { data: project, error: projectError } = await supabase
       .from('err_projects')

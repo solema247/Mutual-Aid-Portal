@@ -43,13 +43,17 @@ function F3MOUsPageContent() {
   const payment = usePaymentModal({ fetchMous: list.fetchMous })
 
   useEffect(() => {
+    if (permissionsLoading) return
     if (!canViewPage) {
       router.replace('/err-portal')
     }
-  }, [canViewPage, router])
+  }, [permissionsLoading, canViewPage, router])
 
   useF3MousPageExplainer(!permissionsLoading && canViewPage && !list.loading)
 
+  if (permissionsLoading) {
+    return <div className="p-6 text-muted-foreground">Loading…</div>
+  }
   if (!canViewPage) return null
 
   return (

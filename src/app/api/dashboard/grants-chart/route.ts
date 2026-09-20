@@ -6,6 +6,10 @@ import {
   chunkGrantScopeIds,
   getUserGrantAccess,
 } from '@/lib/userGrantAccess'
+import {
+  fetchGrantGridIdsForEmergencyRoom,
+  getUserRoomAccess,
+} from '@/lib/userRoomAccess'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -96,21 +100,37 @@ export type GrantsChartRow = {
  */
 export async function GET(request: Request) {
   try {
-    const grantAccess = await getUserGrantAccess()
-    if (grantAccess.mode === 'none') {
-      return NextResponse.json([], {
+    const [grantAccess, roomAccess] = await Promise.all([
+      getUserGrantAccess(),
+      getUserRoomAccess(),
+    ])
+    const emptyChart = () =>
+      NextResponse.json([], {
         headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' },
       })
-    }
+
+    if (roomAccess.mode === 'none') return emptyChart()
 
     const supabase = getSupabaseAdmin()
+
+    // Base ERR: grants that fund at least one project in the user's room
+    const roomGridIds =
+      roomAccess.mode === 'room'
+        ? await fetchGrantGridIdsForEmergencyRoom(roomAccess.emergencyRoomId)
+        : null
+    if (roomGridIds != null && roomGridIds.length === 0) return emptyChart()
+    if (roomAccess.mode !== 'room' && grantAccess.mode === 'none') return emptyChart()
 
     const { searchParams } = new URL(request.url)
     const from = searchParams.get('from')
     const to = searchParams.get('to')
 
-    const partnerGridIdSet =
-      grantAccess.mode === 'partner' ? new Set(grantAccess.grantGridIds) : null
+    const scopedGridIdSet =
+      roomGridIds != null
+        ? new Set(roomGridIds)
+        : grantAccess.mode === 'partner'
+          ? new Set(grantAccess.grantGridIds)
+          : null
 
     const rows = await fetchAllRows<GrantRow>(
       supabase,
@@ -132,9 +152,9 @@ export async function GET(request: Request) {
     )
 
     const scopedRows =
-      partnerGridIdSet == null
+      scopedGridIdSet == null
         ? rows ?? []
-        : (rows ?? []).filter((r) => r.id && partnerGridIdSet.has(String(r.id)))
+        : (rows ?? []).filter((r) => r.id && scopedGridIdSet.has(String(r.id)))
 
     const gridIdToGrantId = new Map<string, string>()
     const canonicalGrantIds: string[] = []
@@ -146,25 +166,32 @@ export async function GET(request: Request) {
       }
     }
 
-    // Partner: only grant_grid_id-linked portal projects; never activities_raw_import / Project Donor.
+    // Partner / Base ERR: only scoped portal projects; never activities_raw_import / Project Donor.
+    const projectScoped = roomAccess.mode === 'room' || grantAccess.mode === 'partner'
+    const projectSelect = 'id, grant_id, grant_grid_id, mou_id, expenses, submitted_at'
+    type ChartProject = {
+      id: string
+      grant_id: string | null
+      grant_grid_id: string | null
+      mou_id: string | null
+      expenses: unknown
+      submitted_at: string | null
+    }
     const [projects, mous, historicalRows] = await Promise.all([
-      grantAccess.mode === 'partner'
-        ? fetchPartnerProjects(supabase, grantAccess.grantGridIds)
-        : fetchAllRows<{
-            id: string
-            grant_id: string | null
-            grant_grid_id: string | null
-            mou_id: string | null
-            expenses: unknown
-            submitted_at: string | null
-          }>(supabase, 'err_projects', 'id, grant_id, grant_grid_id, mou_id, expenses, submitted_at'),
+      roomAccess.mode === 'room'
+        ? fetchAllRows<ChartProject>(supabase, 'err_projects', projectSelect, (q) =>
+            q.eq('emergency_room_id', roomAccess.emergencyRoomId)
+          )
+        : grantAccess.mode === 'partner'
+          ? fetchPartnerProjects(supabase, grantAccess.grantGridIds)
+          : fetchAllRows<ChartProject>(supabase, 'err_projects', projectSelect),
       fetchAllRows<{
         id: string
         payment_confirmation_file: string | null
         exchange_rate: number | null
         transfer_date: string | null
       }>(supabase, 'mous', 'id, payment_confirmation_file, exchange_rate, transfer_date'),
-      grantAccess.mode === 'partner'
+      projectScoped
         ? Promise.resolve([] as Array<{ 'Project Donor'?: string | null; USD?: number | null }>)
         : fetchAllRows<{
             'Project Donor'?: string | null
@@ -174,7 +201,7 @@ export async function GET(request: Request) {
 
     const confirmedProjectIds = await loadConfirmedProjectIds(
       supabase,
-      grantAccess.mode === 'partner'
+      projectScoped
         ? { projectIds: projects.map((p) => p.id) }
         : { mouIds: mous.map((m) => m.id) }
     )

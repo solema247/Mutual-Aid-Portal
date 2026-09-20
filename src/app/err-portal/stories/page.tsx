@@ -523,9 +523,9 @@ function SudanFitBounds() {
 function StoriesContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const { can } = useAllowedFunctions()
+  const { can, isLoading: permissionsLoading } = useAllowedFunctions()
   const canViewPage = can('learnings_view_page')
-  useStoriesPageExplainer(canViewPage)
+  useStoriesPageExplainer(!permissionsLoading && canViewPage)
 
   const mode = (searchParams.get('mode') === 'theme' ? 'theme' : 'state') as Mode
   const stateParam = searchParams.get('state')?.trim() || null
@@ -662,6 +662,7 @@ function StoriesContent() {
   }
 
   useEffect(() => {
+    if (permissionsLoading) return
     if (!canViewPage) {
       router.replace('/err-portal')
       return
@@ -686,7 +687,7 @@ function StoriesContent() {
     return () => {
       cancelled = true
     }
-  }, [canViewPage, router])
+  }, [permissionsLoading, canViewPage, router])
 
   // Fix invalid state/theme in URL only; no state = Total Sudan (default view)
   useEffect(() => {
@@ -1002,6 +1003,13 @@ function StoriesContent() {
     }
   }, [])
 
+  if (permissionsLoading) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 text-muted-foreground">
+        Loading…
+      </div>
+    )
+  }
   if (!canViewPage) return null
 
   return (

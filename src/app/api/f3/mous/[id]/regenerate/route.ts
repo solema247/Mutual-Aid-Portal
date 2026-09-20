@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { aggregateObjectives, aggregateBeneficiaries, aggregatePlannedActivities, aggregatePlannedActivitiesDetailed, aggregateLocations, getBankingDetails, getBudgetTable } from '@/lib/mou-aggregation'
 import {
+  applyMouInScopeProjectFilter,
   assertMouInGrantAccess,
   grantGridIdInAccess,
 } from '@/lib/userGrantAccess'
@@ -20,11 +21,16 @@ export async function POST(
     const { data: mou, error: mouErr } = await supabase.from('mous').select('*').eq('id', id).single()
     if (mouErr || !mou) throw mouErr || new Error('MOU not found')
 
-    // Load projects for aggregation (Partner: in-scope only)
-    const { data: projects } = await supabase
+    // Load projects for aggregation — only in-scope (Base ERR room / Partner grants)
+    let projectsQuery = supabase
       .from('err_projects')
       .select('id, grant_grid_id, project_objectives, intended_beneficiaries, estimated_beneficiaries, planned_activities, planned_activities_resolved, locality, state, banking_details, expenses, err_id, emergency_room_id, grant_id, emergency_rooms (name, name_ar, err_code)')
       .eq('mou_id', id)
+    projectsQuery = applyMouInScopeProjectFilter(
+      projectsQuery,
+      mouScope.inScopeProjectIds
+    )
+    const { data: projects } = await projectsQuery
 
     const inScopeSet =
       mouScope.inScopeProjectIds == null
@@ -33,7 +39,8 @@ export async function POST(
 
     const scopedProjects = (projects || []).filter((p: any) => {
       if (inScopeSet && !inScopeSet.has(String(p.id))) return false
-      if (mouScope.access.mode !== 'all' && !grantGridIdInAccess(mouScope.access, p.grant_grid_id)) {
+      // Partner grant scope only; Base ERR room scope is already applied via inScopeProjectIds
+      if (mouScope.access.mode === 'partner' && !grantGridIdInAccess(mouScope.access, p.grant_grid_id)) {
         return false
       }
       return true

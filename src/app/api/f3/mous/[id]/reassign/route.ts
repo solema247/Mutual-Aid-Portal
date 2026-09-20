@@ -2,7 +2,10 @@ import { NextResponse } from 'next/server'
 import { allocateNextWorkplanSequence } from '@/lib/allocateNextWorkplanSequence'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { requirePermission } from '@/lib/requirePermission'
-import { assertMouInGrantAccess } from '@/lib/userGrantAccess'
+import {
+  applyMouInScopeProjectFilter,
+  assertMouInGrantAccess,
+} from '@/lib/userGrantAccess'
 
 export async function POST(
   request: Request,
@@ -28,13 +31,15 @@ export async function POST(
       return NextResponse.json({ error: 'MMYY must be 4 digits' }, { status: 400 })
     }
     
-    // Fetch all projects linked to this MOU that are assigned (have grant_id starting with LCC-)
-    const { data: f1s, error: fetchError } = await supabase
+    // Only in-scope assigned projects (Base ERR room / Partner grants)
+    let f1Query = supabase
       .from('err_projects')
       .select('id, state, file_key, grant_id, donor_id')
       .eq('mou_id', mouId)
       .eq('funding_status', 'committed')
       .not('grant_id', 'is', null)
+    f1Query = applyMouInScopeProjectFilter(f1Query, mouScope.inScopeProjectIds)
+    const { data: f1s, error: fetchError } = await f1Query
     
     if (fetchError) throw fetchError
     if (!f1s || f1s.length === 0) {

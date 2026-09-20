@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import {
+  applyMouInScopeProjectFilter,
   assertMouInGrantAccess,
   assertProjectsInGrantAccess,
 } from '@/lib/userGrantAccess'
@@ -39,11 +40,16 @@ export async function POST(
       return NextResponse.json({ error: 'MOU not found' }, { status: 404 })
     }
 
-    // Ensure MOU is not assigned: no project linked to this MOU has grant_id starting with LCC-
-    const { data: existingProjects, error: existingErr } = await supabase
+    // Ensure MOU is not assigned: check in-scope linked projects only
+    let existingQuery = supabase
       .from('err_projects')
       .select('id, grant_id')
       .eq('mou_id', mouId)
+    existingQuery = applyMouInScopeProjectFilter(
+      existingQuery,
+      mouScope.inScopeProjectIds
+    )
+    const { data: existingProjects, error: existingErr } = await existingQuery
     if (existingErr) throw existingErr
     const hasAssigned = (existingProjects || []).some(
       (p: any) => p.grant_id && String(p.grant_id).startsWith('LCC-')

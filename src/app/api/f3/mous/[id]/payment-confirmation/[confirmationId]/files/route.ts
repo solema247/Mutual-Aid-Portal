@@ -7,6 +7,7 @@ import {
 import {
   assertMouInGrantAccess,
   assertProjectInGrantAccess,
+  isProjectIdInMouScope,
 } from '@/lib/userGrantAccess'
 
 type RouteContext = { params: { id: string; confirmationId: string } }
@@ -37,6 +38,10 @@ export async function POST(request: Request, { params }: RouteContext) {
       return NextResponse.json({ error: 'Failed to load confirmation' }, { status: 500 })
     }
     if (!confirmation) {
+      return NextResponse.json({ error: 'Payment confirmation not found' }, { status: 404 })
+    }
+
+    if (!isProjectIdInMouScope(mouScope.inScopeProjectIds, confirmation.project_id)) {
       return NextResponse.json({ error: 'Payment confirmation not found' }, { status: 404 })
     }
 

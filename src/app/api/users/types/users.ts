@@ -37,6 +37,8 @@ export interface ActiveUserListItem {
   err_id: string | null
   partner_id?: string | null
   display_name: string | null
+  /** Present only when the users payload includes it; not all list sources provide email */
+  email?: string | null
   role: 'support' | 'superadmin' | 'admin' | 'state_err' | 'base_err' | 'partner'
   status: 'active' | 'suspended'
   createdAt: string

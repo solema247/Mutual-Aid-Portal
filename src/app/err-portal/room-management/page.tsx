@@ -22,20 +22,24 @@ interface User {
 export default function RoomManagementPage() {
   const { t } = useTranslation(['rooms', 'err'])
   const router = useRouter()
-  const { can } = useAllowedFunctions()
+  const { can, isLoading: permissionsLoading } = useAllowedFunctions()
   const canViewPage = can('rooms_view_page')
   const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   useRoomManagementPageExplainer(
-    canViewPage && !isLoading && user != null && user.role !== 'base_err'
+    !permissionsLoading &&
+      canViewPage &&
+      !isLoading &&
+      user != null &&
+      user.role !== 'base_err'
   )
 
   useEffect(() => {
+    if (permissionsLoading) return
     if (!canViewPage) {
       router.replace('/err-portal')
-      return
     }
-  }, [canViewPage, router])
+  }, [permissionsLoading, canViewPage, router])
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -63,8 +67,8 @@ export default function RoomManagementPage() {
     checkAuth()
   }, [])
 
+  if (permissionsLoading || isLoading) return <div>Loading...</div>
   if (!canViewPage) return null
-  if (isLoading) return <div>Loading...</div>
 
   // Only show room management for admin, superadmin, and state ERR users
   // Block only base_err users

@@ -5,6 +5,10 @@ import {
   chunkGrantScopeIds,
   getUserGrantAccess,
 } from '@/lib/userGrantAccess'
+import {
+  applyEmergencyRoomIdFilter,
+  getUserRoomAccess,
+} from '@/lib/userRoomAccess'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -50,12 +54,13 @@ function parseJsonArray(raw: unknown): any[] {
 export async function GET(request: Request) {
   try {
     const supabase = getSupabaseRouteClient()
-    const [{ allowedStateNames }, grantAccess] = await Promise.all([
+    const [{ allowedStateNames }, grantAccess, roomAccess] = await Promise.all([
       getUserStateAccess(),
       getUserGrantAccess(),
+      getUserRoomAccess(),
     ])
 
-    if (grantAccess.mode === 'none') {
+    if (roomAccess.mode === 'none') {
       return NextResponse.json(
         { projectCount: 0, categories: [] },
         { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } }
@@ -69,7 +74,30 @@ export async function GET(request: Request) {
     const projectSelect = 'date, state, planned_activities, source'
     let data: PlannedCategoriesRow[] = []
 
-    if (grantAccess.mode === 'partner') {
+    if (roomAccess.mode === 'room') {
+      let query = supabase
+        .from('err_projects')
+        .select(projectSelect)
+        .in('status', ['approved', 'active', 'pending', 'completed'])
+        .eq('source', 'mutual_aid_portal')
+      query = applyEmergencyRoomIdFilter(query, roomAccess)
+      if (from) query = query.gte('date', from)
+      if (to) query = query.lte('date', to)
+      const { data: rows, error } = await query
+      if (error) {
+        console.error('Dashboard planned-categories error:', error)
+        return NextResponse.json(
+          { error: 'Failed to load planned categories' },
+          { status: 500, headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } }
+        )
+      }
+      data = (rows || []) as PlannedCategoriesRow[]
+    } else if (grantAccess.mode === 'none') {
+      return NextResponse.json(
+        { projectCount: 0, categories: [] },
+        { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } }
+      )
+    } else if (grantAccess.mode === 'partner') {
       // Partner: grant_grid_id only — do not apply state scope
       for (const batch of chunkGrantScopeIds(grantAccess.grantGridIds)) {
         let query = supabase

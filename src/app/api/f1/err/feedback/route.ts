@@ -4,6 +4,7 @@ import {
   getRouteHandlerAuth,
   isErrSubmissionSource
 } from '@/lib/routeHandlerAuth'
+import { assertProjectInRoomAccess } from '@/lib/userRoomAccess'
 import { z } from 'zod'
 
 const bodySchema = z.object({
@@ -43,6 +44,10 @@ export async function POST (request: Request) {
     if (projErr || !project) {
       return NextResponse.json({ error: 'Project not found' }, { status: 404 })
     }
+
+    // Base ERR may only act on projects in its own emergency room
+    const roomCheck = await assertProjectInRoomAccess(project_id)
+    if (roomCheck.handled && !roomCheck.ok) return roomCheck.response
 
     if (!isErrSubmissionSource(project.source as string | null)) {
       return NextResponse.json({ error: 'Invalid project for ERR submissions' }, { status: 400 })

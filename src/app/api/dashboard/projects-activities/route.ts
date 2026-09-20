@@ -55,8 +55,9 @@ function toDateKey(d: string | null): string | null {
  * Returns data for stacked cumulative area chart: X = time (date_transfer), Y = usd,
  * one series per project_donor (top 10 by total usd). Values are cumulative over time.
  *
- * Partner: this view is not grant_grid_id-scoped (Project Donor text matching is forbidden
- * for Partner ownership). Fail closed with an empty series.
+ * Partner / Base ERR: this view is not grant_grid_id- or emergency_room_id-scoped (Project Donor
+ * text matching is forbidden for ownership). Fail closed with an empty series — getUserGrantAccess
+ * returns mode 'none' for both roles, so only mode 'all' proceeds.
  */
 export async function GET(request: Request) {
   try {

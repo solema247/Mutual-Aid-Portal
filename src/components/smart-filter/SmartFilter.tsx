@@ -5,6 +5,8 @@ import { useSearchParams } from 'next/navigation'
 import { Filter, ChevronDown, Eraser } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { FilterChip } from './FilterChip'
 import type { ActiveFilter, FilterFieldConfig, FilterValues, SmartFilterProps, FilterValue } from './types'
 
@@ -80,22 +82,23 @@ export function SmartFilter({
   const [addFilterOpen, setAddFilterOpen] = React.useState(false)
 
   const activeFieldIds = React.useMemo(() => new Set(filters.map((f) => f.fieldId)), [filters])
-  const availableFields = React.useMemo(
-    () => fields.filter((f) => !activeFieldIds.has(f.id)),
-    [fields, activeFieldIds]
-  )
 
-  const addFilter = React.useCallback(
-    (field: FilterFieldConfig) => {
-      let defaultValue: FilterValue = ''
-      if (field.type === 'date_range') defaultValue = ['', '']
-      else if (field.type === 'multi_select') defaultValue = []
-      onFiltersChange([
-        ...filters,
-        { id: `${field.id}-${Date.now()}`, fieldId: field.id, value: defaultValue },
-      ])
+  const toggleCategoryFilter = React.useCallback(
+    (field: FilterFieldConfig, checked: boolean) => {
+      if (checked) {
+        if (activeFieldIds.has(field.id)) return
+        let defaultValue: FilterValue = ''
+        if (field.type === 'date_range') defaultValue = ['', '']
+        else if (field.type === 'multi_select') defaultValue = []
+        onFiltersChange([
+          ...filters,
+          { id: `${field.id}-${Date.now()}`, fieldId: field.id, value: defaultValue },
+        ])
+        return
+      }
+      onFiltersChange(filters.filter((f) => f.fieldId !== field.id))
     },
-    [filters, onFiltersChange]
+    [activeFieldIds, filters, onFiltersChange]
   )
 
   const updateFilter = React.useCallback(
@@ -142,7 +145,7 @@ export function SmartFilter({
       const url = `${window.location.pathname}${params.toString() ? `?${params.toString()}` : ''}`
       window.history.replaceState(null, '', url)
     }
-  }, [filters, urlParamPrefix, searchParams])
+  }, [filters, urlParamPrefix, searchParams, fields])
 
   // Hydrate from URL on mount (once)
   const hydratedRef = React.useRef(false)
@@ -184,54 +187,62 @@ export function SmartFilter({
             ))}
           </h2>
         )}
-        <div className="relative">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="min-w-0 border-0 bg-transparent p-0 shadow-none hover:bg-transparent text-muted-foreground hover:text-foreground"
-            onClick={() => setAddFilterOpen((o) => !o)}
-            aria-expanded={addFilterOpen}
-            aria-haspopup="listbox"
+        <Popover open={addFilterOpen} onOpenChange={setAddFilterOpen}>
+          <PopoverTrigger asChild>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-8 gap-1.5 text-xs font-medium"
+              aria-expanded={addFilterOpen}
+              aria-haspopup="listbox"
+            >
+              <Filter className="h-3.5 w-3.5" />
+              Add filter
+              <ChevronDown className="h-3.5 w-3.5 opacity-60" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent
+            align="start"
+            side="bottom"
+            sideOffset={6}
+            collisionPadding={12}
+            className="z-[200] w-56 max-h-72 overflow-y-auto p-2"
+            role="group"
+            aria-label="Add filter"
+            onOpenAutoFocus={(e) => e.preventDefault()}
+            onCloseAutoFocus={(e) => e.preventDefault()}
           >
-            <Filter className="h-4 w-4 mr-1.5" />
-            Add filter
-            <ChevronDown className="h-4 w-4 ml-1" />
-          </Button>
-          {addFilterOpen && (
-            <>
-              <div
-                className="fixed inset-0 z-40"
-                aria-hidden
-                onClick={() => setAddFilterOpen(false)}
-              />
-              <div
-                className="absolute right-0 top-full z-50 mt-1 min-w-[12rem] rounded-md border border-border bg-popover py-1 shadow-md"
-                role="listbox"
-              >
-                {availableFields.length === 0 ? (
-                  <div className="px-3 py-2 text-xs text-muted-foreground">
-                    All filters added
-                  </div>
-                ) : (
-                  availableFields.map((field) => (
-                    <button
-                      key={field.id}
-                      type="button"
-                      role="option"
-                      className="w-full px-3 py-2 text-left text-sm hover:bg-accent hover:text-accent-foreground"
-                      onClick={() => {
-                        addFilter(field)
-                        setAddFilterOpen(false)
-                      }}
-                    >
-                      {field.label}
-                    </button>
-                  ))
-                )}
+            <div className="px-2 pb-1.5 pt-0.5 text-xs font-medium text-muted-foreground">
+              Add filter
+            </div>
+            <div className="mb-1 h-px bg-border" role="separator" />
+            {fields.length === 0 ? (
+              <div className="px-2 py-2 text-xs text-muted-foreground">
+                No filters available
               </div>
-            </>
-          )}
-        </div>
+            ) : (
+              fields.map((field) => {
+                const checked = activeFieldIds.has(field.id)
+                return (
+                  <label
+                    key={field.id}
+                    className="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground"
+                  >
+                    <Checkbox
+                      checked={checked}
+                      onCheckedChange={(value) => {
+                        toggleCategoryFilter(field, value === true)
+                      }}
+                      aria-label={field.label}
+                    />
+                    <span className="truncate">{field.label}</span>
+                  </label>
+                )
+              })
+            )}
+          </PopoverContent>
+        </Popover>
       </div>
 
       {filters.length > 0 && (

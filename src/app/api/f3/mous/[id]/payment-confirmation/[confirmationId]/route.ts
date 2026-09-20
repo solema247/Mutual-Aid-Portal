@@ -3,6 +3,7 @@ import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import {
   assertMouInGrantAccess,
   assertProjectInGrantAccess,
+  isProjectIdInMouScope,
 } from '@/lib/userGrantAccess'
 
 type RouteContext = { params: { id: string; confirmationId: string } }
@@ -32,6 +33,10 @@ export async function PATCH(request: Request, { params }: RouteContext) {
       return NextResponse.json({ error: 'Failed to load confirmation' }, { status: 500 })
     }
     if (!existing) {
+      return NextResponse.json({ error: 'Payment confirmation not found' }, { status: 404 })
+    }
+
+    if (!isProjectIdInMouScope(mouScope.inScopeProjectIds, existing.project_id)) {
       return NextResponse.json({ error: 'Payment confirmation not found' }, { status: 404 })
     }
 
@@ -145,6 +150,10 @@ export async function DELETE(_request: Request, { params }: RouteContext) {
       return NextResponse.json({ error: 'Failed to load confirmation' }, { status: 500 })
     }
     if (!existing) {
+      return NextResponse.json({ error: 'Payment confirmation not found' }, { status: 404 })
+    }
+
+    if (!isProjectIdInMouScope(mouScope.inScopeProjectIds, existing.project_id)) {
       return NextResponse.json({ error: 'Payment confirmation not found' }, { status: 404 })
     }
 

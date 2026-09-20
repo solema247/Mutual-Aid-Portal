@@ -1,12 +1,19 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { forbidIfPartner } from '@/lib/routeHandlerAuth'
+import { getUserRoomAccess } from '@/lib/userRoomAccess'
 
 // POST /api/f1/pre-assign { workplan_id, grant_call_id }
 export async function POST(req: Request) {
   try {
     const partnerBlock = await forbidIfPartner()
     if (partnerBlock) return partnerBlock
+
+    // Grant-call pre-assignment is a nationwide allocation action: out of Base ERR scope
+    const roomAccess = await getUserRoomAccess()
+    if (roomAccess.applies) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
 
     const supabase = getSupabaseRouteClient()
     const { workplan_id, grant_call_id } = await req.json()

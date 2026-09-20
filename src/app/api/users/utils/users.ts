@@ -7,12 +7,6 @@ interface StateResponse {
   }[];
 }
 
-interface EmergencyRoomWithState {
-  state: {
-    state_name: string;
-  }
-}
-
 export async function getPendingUsers(currentUserRole: string, currentUserErrId: string | null): Promise<User[]> {
   let query = supabase
     .from('users')
@@ -75,13 +69,26 @@ export async function getPendingUsers(currentUserRole: string, currentUserErrId:
 interface GetActiveUsersParams {
   page: number
   pageSize: number
+  /** @deprecated Prefer `roles` for multi-select. Kept for ActiveUsersList. */
   role?: 'support' | 'superadmin' | 'admin' | 'state_err' | 'base_err' | 'partner'
-  status?: 'active' | 'suspended'
+  roles?: Array<'support' | 'superadmin' | 'admin' | 'state_err' | 'base_err' | 'partner'>
+  /** 'all' = every non-pending/non-deleted status; default remains 'active' for existing callers */
+  status?: 'active' | 'suspended' | 'all'
+  statuses?: Array<'active' | 'suspended'>
   sortBy?: string
   sortOrder?: 'asc' | 'desc'
   currentUserRole: string
   currentUserErrId: string | null
-  stateFilter?: string | null // 'all', state name, or 'no_state' for null
+  /** @deprecated Prefer `stateFilters` for multi-select */
+  stateFilter?: string | null
+  /** State names and/or 'no_state' */
+  stateFilters?: string[]
+  /** Display name search (ilike). Applied before pagination. */
+  search?: string | null
+  /** Scope keys: all_states | state | emergency_room | partner_grant */
+  scopes?: string[]
+  errIds?: string[]
+  partnerIds?: string[]
 }
 
 interface GetActiveUsersResult {
@@ -89,16 +96,54 @@ interface GetActiveUsersResult {
   total: number
 }
 
+const EMPTY_UUID = '00000000-0000-0000-0000-000000000000'
+
+function applyScopeFilter<T extends { or: (filters: string) => T }>(
+  query: T,
+  scopes: string[]
+): T {
+  if (scopes.length === 0) return query
+
+  const clauses: string[] = []
+  if (scopes.includes('partner_grant')) {
+    clauses.push('role.eq.partner')
+  }
+  if (scopes.includes('emergency_room')) {
+    clauses.push('role.eq.base_err')
+  }
+  if (scopes.includes('state')) {
+    // State-scoped users: state_err role, or limited state access on other roles
+    clauses.push('role.eq.state_err')
+    clauses.push('and(can_see_all_states.eq.false,role.not.in.(partner,base_err,state_err))')
+  }
+  if (scopes.includes('all_states')) {
+    clauses.push(
+      'and(can_see_all_states.eq.true,role.not.in.(partner,base_err))'
+    )
+  }
+
+  if (clauses.length === 0) return query
+  if (clauses.length === 1) return query.or(clauses[0])
+  return query.or(clauses.join(','))
+}
+
 export async function getActiveUsers({
   page = 1,
   pageSize = 20,
   role,
+  roles,
   status = 'active',
+  statuses,
   sortBy = 'created_at',
   sortOrder = 'desc',
   currentUserRole,
   currentUserErrId,
-  stateFilter
+  stateFilter,
+  stateFilters,
+  search,
+  scopes,
+  errIds,
+  partnerIds,
 }: GetActiveUsersParams): Promise<GetActiveUsersResult> {
   let query = supabase
     .from('users')
@@ -116,53 +161,92 @@ export async function getActiveUsers({
       )
     `, { count: 'exact' })
     .neq('status', 'pending')
+    .neq('status', 'deleted')
 
-  // Apply role filter if specified
-  if (role) {
-    query = query.eq('role', role)
+  const roleList =
+    roles && roles.length > 0
+      ? roles
+      : role
+        ? [role]
+        : []
+  if (roleList.length === 1) {
+    query = query.eq('role', roleList[0])
+  } else if (roleList.length > 1) {
+    query = query.in('role', roleList)
   }
 
-  // Apply status filter
-  if (status) {
-    query = query.eq('status', status)
+  const statusList =
+    statuses && statuses.length > 0
+      ? statuses
+      : status && status !== 'all'
+        ? [status]
+        : []
+  if (statusList.length === 1) {
+    query = query.eq('status', statusList[0])
+  } else if (statusList.length > 1) {
+    query = query.in('status', statusList)
   }
 
-  // Apply state filter
-  if (stateFilter && stateFilter !== 'all') {
-    if (stateFilter === 'no_state') {
-      // Filter for users with null err_id
-      query = query.is('err_id', null)
-    } else {
-      // Filter by state name - get all ERRs in this state
+  const searchTerm = search?.trim()
+  if (searchTerm) {
+    // users table has no email column; search display_name across the full dataset
+    query = query.ilike('display_name', `%${searchTerm}%`)
+  }
+
+  if (scopes && scopes.length > 0) {
+    query = applyScopeFilter(query, scopes)
+  }
+
+  if (errIds && errIds.length > 0) {
+    query = query.in('err_id', errIds)
+  }
+
+  if (partnerIds && partnerIds.length > 0) {
+    query = query.in('partner_id', partnerIds)
+  }
+
+  const stateList =
+    stateFilters && stateFilters.length > 0
+      ? stateFilters
+      : stateFilter && stateFilter !== 'all'
+        ? [stateFilter]
+        : []
+
+  if (stateList.length > 0) {
+    const includeNoState = stateList.includes('no_state')
+    const stateNames = stateList.filter((s) => s !== 'no_state')
+    let errIdsFromStates: string[] = []
+
+    if (stateNames.length > 0) {
       const { data: stateRefs } = await supabase
         .from('states')
         .select('id')
-        .eq('state_name', stateFilter)
+        .in('state_name', stateNames)
 
       if (stateRefs && stateRefs.length > 0) {
-        const stateIds = stateRefs.map(ref => ref.id)
+        const stateIds = stateRefs.map((ref) => ref.id)
         const { data: errsInState } = await supabase
           .from('emergency_rooms')
           .select('id')
           .in('state_reference', stateIds)
 
-        if (errsInState && errsInState.length > 0) {
-          const errIds = errsInState.map(err => err.id)
-          query = query.in('err_id', errIds)
-        } else {
-          // No ERRs in this state, return empty
-          query = query.eq('id', '00000000-0000-0000-0000-000000000000')
-        }
-      } else {
-        // State not found, return empty
-        query = query.eq('id', '00000000-0000-0000-0000-000000000000')
+        errIdsFromStates = (errsInState || []).map((err) => err.id)
       }
+    }
+
+    if (includeNoState && errIdsFromStates.length > 0) {
+      query = query.or(`err_id.is.null,err_id.in.(${errIdsFromStates.join(',')})`)
+    } else if (includeNoState) {
+      query = query.is('err_id', null)
+    } else if (errIdsFromStates.length > 0) {
+      query = query.in('err_id', errIdsFromStates)
+    } else {
+      query = query.eq('id', EMPTY_UUID)
     }
   }
 
-  // Filter based on user role
+  // Filter based on caller role visibility
   if (currentUserRole === 'state_err' && currentUserErrId) {
-    // First get the state name for the current user's ERR
     const { data: currentERR } = await supabase
       .from('emergency_rooms')
       .select(`
@@ -175,7 +259,6 @@ export async function getActiveUsers({
 
     const stateName = (currentERR as StateResponse)?.state?.[0]?.state_name
     if (stateName) {
-      // Get all state references for this state name
       const { data: stateRefs } = await supabase
         .from('states')
         .select('id')
@@ -183,18 +266,16 @@ export async function getActiveUsers({
 
       if (stateRefs && stateRefs.length > 0) {
         const stateIds = stateRefs.map(ref => ref.id)
-        // Get all ERRs in these states
         const { data: errsInState } = await supabase
           .from('emergency_rooms')
           .select('id')
           .in('state_reference', stateIds)
 
         if (errsInState && errsInState.length > 0) {
-          const errIds = errsInState.map(err => err.id)
-          query = query.in('err_id', errIds)
+          const callerErrIds = errsInState.map(err => err.id)
+          query = query.in('err_id', callerErrIds)
         } else {
-          // No ERRs in this state, so return empty result
-          query = query.eq('id', '00000000-0000-0000-0000-000000000000') // Impossible ID to return empty
+          query = query.eq('id', EMPTY_UUID)
         }
       }
     }

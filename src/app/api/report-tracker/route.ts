@@ -6,6 +6,7 @@ import {
   chunkGrantScopeIds,
   getUserGrantAccess,
 } from '@/lib/userGrantAccess'
+import { getUserRoomAccess } from '@/lib/userRoomAccess'
 import { getActivityAndCategoryLists, getSectorWithHighestAmount } from '@/lib/plannedActivitiesExpenses'
 import { isActivityShifted } from '@/lib/activityShift'
 import { pickF5TextForEnUi } from '@/lib/storiesEnDisplay'
@@ -115,9 +116,16 @@ export async function GET(request: Request) {
     /** Arabic UI: prefer primary Arabic columns (+ en fallback). Other locales: same as Stories overview (en cache for ar-authored reports). */
     const useEnUi = loc === '' || !loc.startsWith('ar')
     const supabase = getSupabaseRouteClient()
-    const grantAccess = await getUserGrantAccess()
+    const [grantAccess, roomAccess] = await Promise.all([
+      getUserGrantAccess(),
+      getUserRoomAccess(),
+    ])
 
-    if (grantAccess.mode === 'none') {
+    if (roomAccess.mode === 'none') {
+      return NextResponse.json([])
+    }
+
+    if (roomAccess.mode !== 'room' && grantAccess.mode === 'none') {
       return NextResponse.json([])
     }
 
@@ -147,7 +155,21 @@ export async function GET(request: Request) {
 
     let rows: { id: string; state?: string | null; grant_id?: string | null }[] = []
 
-    if (grantAccess.mode === 'partner') {
+    if (roomAccess.mode === 'room') {
+      // Base ERR: emergency_room_id only. Never state or grant scope.
+      const { data, error } = await supabase
+        .from('err_projects')
+        .select(projectSelect)
+        .in('status', ['approved', 'active', 'pending', 'completed'])
+        .eq('emergency_room_id', roomAccess.emergencyRoomId)
+        .order('state')
+        .order('grant_id')
+      if (error) {
+        console.error('Report tracker fetch error:', error)
+        return NextResponse.json({ error: 'Failed to fetch report tracker data' }, { status: 500 })
+      }
+      rows = data || []
+    } else if (grantAccess.mode === 'partner') {
       // Partner: grant_grid_id only. Do not apply state scope or null grant_grid_id.
       for (const batch of chunkGrantScopeIds(grantAccess.grantGridIds)) {
         let query = supabase

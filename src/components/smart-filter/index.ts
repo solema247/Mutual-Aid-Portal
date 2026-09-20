@@ -32,6 +32,7 @@ export {
   getF5ReportingFilterFields,
   getF2UncommittedFilterFields,
   getF2CommittedFilterFields,
+  getUserManagementFilterFields,
   STATUS_OPTIONS,
 } from './filter-config'
 export { STATUS_DISPLAY, getStatusDisplay } from './status-config'

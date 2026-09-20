@@ -6,6 +6,7 @@ import {
   chunkGrantScopeIds,
   getUserGrantAccess,
 } from '@/lib/userGrantAccess'
+import { getUserRoomAccess } from '@/lib/userRoomAccess'
 import { getActivityAndCategoryLists } from '@/lib/plannedActivitiesExpenses'
 
 export const dynamic = 'force-dynamic'
@@ -42,18 +43,38 @@ export async function GET() {
   console.log('[stories/options] start')
   try {
     const supabase = getSupabaseRouteClient()
-    const grantAccess = await getUserGrantAccess()
-    if (grantAccess.mode === 'none') {
-      return NextResponse.json(
+    const [grantAccess, roomAccess] = await Promise.all([
+      getUserGrantAccess(),
+      getUserRoomAccess(),
+    ])
+    const emptyOptions = () =>
+      NextResponse.json(
         { states: [], themes: [] },
         { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } }
       )
-    }
+    if (roomAccess.mode === 'none') return emptyOptions()
+    if (roomAccess.mode !== 'room' && grantAccess.mode === 'none') return emptyOptions()
 
     const projectSelect = 'id, state, planned_activities'
     let projects: { id: string; state?: string | null; planned_activities?: unknown }[] = []
 
-    if (grantAccess.mode === 'partner') {
+    if (roomAccess.mode === 'room') {
+      // Base ERR: emergency_room_id only (never state scope)
+      const { data, error: projectsError } = await supabase
+        .from('err_projects')
+        .select(projectSelect)
+        .eq('source', 'mutual_aid_portal')
+        .in('status', MAP_STATUSES)
+        .eq('emergency_room_id', roomAccess.emergencyRoomId)
+      if (projectsError) {
+        console.error('Stories options projects error:', projectsError)
+        return NextResponse.json(
+          { error: 'Failed to load stories options' },
+          { status: 500, headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } }
+        )
+      }
+      projects = data || []
+    } else if (grantAccess.mode === 'partner') {
       console.log('[stories/options] partner grant scope', Date.now() - t0, 'ms')
       for (const batch of chunkGrantScopeIds(grantAccess.grantGridIds)) {
         let projectsQuery = supabase

@@ -6,6 +6,7 @@ import {
   chunkGrantScopeIds,
   getUserGrantAccess,
 } from '@/lib/userGrantAccess'
+import { getUserRoomAccess } from '@/lib/userRoomAccess'
 
 const SUPABASE_IN_BATCH = 80
 
@@ -277,12 +278,17 @@ async function fetchPortalSummaries(
 export async function GET() {
   try {
     const supabase = getSupabaseRouteClient()
-    const [{ allowedStateNames }, grantAccess] = await Promise.all([
+    const [{ allowedStateNames }, grantAccess, roomAccess] = await Promise.all([
       getUserStateAccess(),
       getUserGrantAccess(),
+      getUserRoomAccess(),
     ])
 
-    if (grantAccess.mode === 'none') {
+    if (roomAccess.mode === 'none') {
+      return NextResponse.json([])
+    }
+
+    if (roomAccess.mode !== 'room' && grantAccess.mode === 'none') {
       return NextResponse.json([])
     }
 
@@ -307,13 +313,27 @@ export async function GET() {
       donors ( name, short_name )
     `
 
-    // Partner uses grant scope only; state empty-array fail-closed applies to non-partner only
-    if (grantAccess.mode !== 'partner' && allowedStateNames !== null && allowedStateNames.length === 0) {
+    // Base ERR uses room scope and Partner uses grant scope only;
+    // state empty-array fail-closed applies to neither
+    if (
+      roomAccess.mode !== 'room' &&
+      grantAccess.mode !== 'partner' &&
+      allowedStateNames !== null &&
+      allowedStateNames.length === 0
+    ) {
       return NextResponse.json([])
     }
 
     let projects: Record<string, unknown>[] = []
-    if (grantAccess.mode === 'partner') {
+    if (roomAccess.mode === 'room') {
+      const { data, error } = await supabase
+        .from('err_projects')
+        .select(projectSelect)
+        .in('status', ['active', 'approved', 'completed'])
+        .eq('emergency_room_id', roomAccess.emergencyRoomId)
+      if (error) throw error
+      projects = (data || []) as unknown as Record<string, unknown>[]
+    } else if (grantAccess.mode === 'partner') {
       for (const batch of chunkGrantScopeIds(grantAccess.grantGridIds)) {
         const { data, error } = await supabase
           .from('err_projects')
@@ -376,9 +396,9 @@ export async function GET() {
         )
       `
 
-    // Partner: summaries only for in-scope project ids (never global unscoped fetch)
+    // Base ERR / Partner: summaries only for in-scope project ids (never global unscoped fetch)
     const summaries =
-      grantAccess.mode === 'partner'
+      roomAccess.mode === 'room' || grantAccess.mode === 'partner'
         ? await (async () => {
             const ids = Array.from(projectById.keys())
             if (ids.length === 0) return [] as Record<string, unknown>[]

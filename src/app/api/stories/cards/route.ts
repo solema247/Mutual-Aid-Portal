@@ -6,6 +6,7 @@ import {
   chunkGrantScopeIds,
   getUserGrantAccess,
 } from '@/lib/userGrantAccess'
+import { getUserRoomAccess } from '@/lib/userRoomAccess'
 import { getActivityAndCategoryLists } from '@/lib/plannedActivitiesExpenses'
 import { pickF5TextForEnUi } from '@/lib/storiesEnDisplay'
 import { getCategorySpend, getOtherLabels } from '@/lib/mutualAidCategorySpend'
@@ -120,13 +121,17 @@ export async function GET(request: Request) {
   console.log('[stories/cards] start')
   try {
     const supabase = getSupabaseRouteClient()
-    const grantAccess = await getUserGrantAccess()
-    if (grantAccess.mode === 'none') {
-      return NextResponse.json(
+    const [grantAccess, roomAccess] = await Promise.all([
+      getUserGrantAccess(),
+      getUserRoomAccess(),
+    ])
+    const emptyCards = () =>
+      NextResponse.json(
         { summary: null, cards: [] },
         { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } }
       )
-    }
+    if (roomAccess.mode === 'none') return emptyCards()
+    if (roomAccess.mode !== 'room' && grantAccess.mode === 'none') return emptyCards()
 
     const { searchParams } = new URL(request.url)
     const stateParam = searchParams.get('state')?.trim() || null
@@ -147,7 +152,27 @@ export async function GET(request: Request) {
       expenses?: unknown
     }[] = []
 
-    if (grantAccess.mode === 'partner') {
+    if (roomAccess.mode === 'room') {
+      // Base ERR: emergency_room_id only (never state scope)
+      let projectsQuery = supabase
+        .from('err_projects')
+        .select(projectSelect)
+        .eq('source', 'mutual_aid_portal')
+        .in('status', MAP_STATUSES)
+        .eq('emergency_room_id', roomAccess.emergencyRoomId)
+      if (stateParam) {
+        projectsQuery = projectsQuery.eq('state', stateParam)
+      }
+      const { data, error: projectsError } = await projectsQuery
+      if (projectsError) {
+        console.error('Stories cards projects error', projectsError)
+        return NextResponse.json(
+          { error: 'Failed to load story cards' },
+          { status: 500, headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } }
+        )
+      }
+      projects = data || []
+    } else if (grantAccess.mode === 'partner') {
       console.log('[stories/cards] partner grant scope', Date.now() - t0, 'ms')
       for (const batch of chunkGrantScopeIds(grantAccess.grantGridIds)) {
         let projectsQuery = supabase
