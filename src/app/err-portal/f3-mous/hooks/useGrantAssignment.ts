@@ -43,29 +43,34 @@ export function useGrantAssignment({
 
   const fetchGrantsFromGridView = async () => {
     try {
-      const { data, error } = await supabase
-        .from('grants_grid_view')
-        .select('grant_id, donor_name, project_name, donor_id')
-        .order('grant_id', { ascending: true })
-
-      if (error) throw error
+      const response = await fetch('/api/grants?status=all')
+      if (!response.ok) throw new Error('Failed to fetch grants')
+      const data = await response.json()
 
       const uniqueGrants = new Map<string, GrantGridEntry>()
       const donorIds = new Set<string>()
-      ;(data || []).forEach((grant: GrantGridEntry) => {
-        const key = `${grant.grant_id}|${grant.donor_name}`
-        if (!uniqueGrants.has(key)) {
-          uniqueGrants.set(key, {
-            grant_id: grant.grant_id,
-            donor_name: grant.donor_name,
-            project_name: grant.project_name || grant.grant_id,
-            donor_id: grant.donor_id,
-          })
-          if (grant.donor_id) {
-            donorIds.add(grant.donor_id)
+      ;(Array.isArray(data) ? data : []).forEach(
+        (grant: GrantGridEntry & { donor_id?: string | null }) => {
+          if (!grant.grant_id) return
+          const key = `${grant.grant_id}|${grant.donor_name || ''}`
+          if (!uniqueGrants.has(key)) {
+            uniqueGrants.set(key, {
+              grant_id: grant.grant_id,
+              donor_name: grant.donor_name,
+              project_name: grant.project_name || grant.grant_id,
+              donor_id: grant.donor_id,
+              max_workplan_sequence:
+                typeof (grant as { max_workplan_sequence?: number }).max_workplan_sequence ===
+                'number'
+                  ? (grant as { max_workplan_sequence?: number }).max_workplan_sequence
+                  : 0,
+            })
+            if (grant.donor_id) {
+              donorIds.add(grant.donor_id)
+            }
           }
         }
-      })
+      )
 
       setGrantsFromGridView(Array.from(uniqueGrants.values()))
 
@@ -282,63 +287,54 @@ export function useGrantAssignment({
     setAssignModalOpen(true)
 
     try {
-      const { data: projects, error } = await supabase
-        .from('err_projects')
-        .select('id, err_id, state, locality, expenses, emergency_rooms (err_code)')
-        .eq('mou_id', mouId)
-        .eq('funding_status', 'committed')
-        .eq('status', 'approved')
-        .order('submitted_at', { ascending: true })
+      const response = await fetch(`/api/f3/mous/${mouId}`)
+      if (!response.ok) throw new Error('Failed to load MOU projects')
+      const data = await response.json()
+      const projects = Array.isArray(data.projects) ? data.projects : []
 
-      if (error) {
-        console.error('Error fetching MOU projects:', error)
-        setMouProjects([])
-        setMouTotalAmount(0)
-      } else {
-        setMouProjects(
-          (projects || []).map((p: Record<string, unknown>) => ({
-            id: p.id as string,
-            err_id:
-              (p.err_id as string | null) ??
-              (p.emergency_rooms as { err_code?: string } | null)?.err_code ??
-              null,
-            state: p.state as string,
-            locality: p.locality as string | null,
-          }))
-        )
+      setMouProjects(
+        projects.map((p: Record<string, unknown>) => ({
+          id: p.id as string,
+          err_id:
+            (p.err_id as string | null) ??
+            (p.emergency_rooms as { err_code?: string } | null)?.err_code ??
+            null,
+          state: p.state as string,
+          locality: p.locality as string | null,
+        }))
+      )
 
-        const totalAmount = (projects || []).reduce((sum: number, project: Record<string, unknown>) => {
-          try {
-            const expenses =
-              typeof project.expenses === 'string'
-                ? JSON.parse(project.expenses)
-                : project.expenses || []
-            return (
-              sum +
-              (expenses as { total_cost?: number }[]).reduce(
-                (expSum: number, exp) => expSum + (exp.total_cost || 0),
-                0
-              )
+      const totalAmount = projects.reduce((sum: number, project: Record<string, unknown>) => {
+        try {
+          const expenses =
+            typeof project.expenses === 'string'
+              ? JSON.parse(project.expenses)
+              : project.expenses || []
+          return (
+            sum +
+            (expenses as { total_cost?: number }[]).reduce(
+              (expSum: number, exp) => expSum + (exp.total_cost || 0),
+              0
             )
-          } catch {
-            return sum
-          }
-        }, 0)
-        setMouTotalAmount(totalAmount)
-
-        const states = [...new Set((projects || []).map((p: { state: string }) => p.state).filter(Boolean))]
-        if (states.length > 0) {
-          const { data: stateData } = await supabase
-            .from('states')
-            .select('state_name, state_short')
-            .in('state_name', states)
-
-          const shorts: Record<string, string> = {}
-          ;(stateData || []).forEach((row: { state_name: string; state_short: string }) => {
-            shorts[row.state_name] = row.state_short
-          })
-          setStateShorts(shorts)
+          )
+        } catch {
+          return sum
         }
+      }, 0)
+      setMouTotalAmount(totalAmount)
+
+      const states = [...new Set(projects.map((p: { state: string }) => p.state).filter(Boolean))]
+      if (states.length > 0) {
+        const { data: stateData } = await supabase
+          .from('states')
+          .select('state_name, state_short')
+          .in('state_name', states)
+
+        const shorts: Record<string, string> = {}
+        ;(stateData || []).forEach((row: { state_name: string; state_short: string }) => {
+          shorts[row.state_name] = row.state_short
+        })
+        setStateShorts(shorts)
       }
     } catch (error) {
       console.error('Error fetching MOU projects:', error)
@@ -357,17 +353,13 @@ export function useGrantAssignment({
     setSelectedGrantMaxSequence(0)
 
     try {
-      const { data: projects, error } = await supabase
-        .from('err_projects')
-        .select('id, err_id, state, locality, expenses, grant_grid_id, grant_id')
-        .eq('mou_id', mouId)
-        .eq('funding_status', 'committed')
-        .not('grant_id', 'is', null)
+      const response = await fetch(`/api/f3/mous/${mouId}`)
+      if (!response.ok) throw new Error('Failed to load MOU projects')
+      const data = await response.json()
+      const projects = Array.isArray(data.projects) ? data.projects : []
 
-      if (error) throw error
-
-      const assignedProjects = (projects || []).filter(
-        (p: { grant_id: string | null }) => p.grant_id && p.grant_id.startsWith('LCC-')
+      const assignedProjects = projects.filter(
+        (p: { grant_id: string | null }) => p.grant_id && String(p.grant_id).startsWith('LCC-')
       )
 
       if (assignedProjects.length === 0) {
@@ -404,9 +396,10 @@ export function useGrantAssignment({
       )
       setMouTotalAmount(total)
 
-      const uniqueStates = Array.from(
-        new Set(assignedProjects.map((p: { state: string }) => p.state).filter(Boolean))
-      )
+      const stateNames = assignedProjects
+        .map((p: Record<string, unknown>) => (typeof p.state === 'string' ? p.state : null))
+        .filter((s: string | null): s is string => Boolean(s))
+      const uniqueStates: string[] = Array.from(new Set(stateNames))
       const shorts: Record<string, string> = {}
       for (const state of uniqueStates) {
         const { data: stateData } = await supabase
@@ -420,39 +413,7 @@ export function useGrantAssignment({
       }
       setStateShorts(shorts)
 
-      const uniqueGrantGridIds = Array.from(
-        new Set(
-          assignedProjects.map((p: { grant_grid_id: string }) => p.grant_grid_id).filter(Boolean)
-        )
-      )
-      if (uniqueGrantGridIds.length > 0) {
-        const { data: grants, error: grantsError } = await supabase
-          .from('grants_grid_view')
-          .select('id, donor_id')
-          .in('id', uniqueGrantGridIds)
-
-        if (!grantsError && grants) {
-          const donorIds = Array.from(
-            new Set(grants.map((g: { donor_id: string }) => g.donor_id).filter(Boolean))
-          )
-          if (donorIds.length > 0) {
-            const { data: donors, error: donorsError } = await supabase
-              .from('donors')
-              .select('id, short_name')
-              .in('id', donorIds)
-
-            if (!donorsError && donors) {
-              const shortNamesMap: Record<string, string> = {}
-              donors.forEach((donor: { id: string; short_name: string }) => {
-                if (donor.id && donor.short_name) {
-                  shortNamesMap[donor.id] = donor.short_name
-                }
-              })
-              setDonorShortNames(shortNamesMap)
-            }
-          }
-        }
-      }
+      // Donor short names already loaded via scoped /api/grants in fetchGrantsFromGridView
     } catch (error) {
       console.error('Error fetching MOU projects for reassign:', error)
     }
@@ -483,23 +444,13 @@ export function useGrantAssignment({
     }
 
     if (value && selectedGrant?.donor_name) {
-      try {
-        const { data: grantData, error } = await supabase
-          .from('grants_grid_view')
-          .select('max_workplan_sequence')
-          .eq('grant_id', value)
-          .eq('donor_name', selectedGrant.donor_name)
-          .single()
-
-        if (!error && grantData) {
-          setSelectedGrantMaxSequence(grantData.max_workplan_sequence || 0)
-        } else {
-          setSelectedGrantMaxSequence(0)
-        }
-      } catch (error) {
-        console.error('Error fetching max workplan sequence:', error)
-        setSelectedGrantMaxSequence(0)
-      }
+      setSelectedGrantMaxSequence(
+        typeof (selectedGrant as GrantGridEntry & { max_workplan_sequence?: number })
+          .max_workplan_sequence === 'number'
+          ? (selectedGrant as GrantGridEntry & { max_workplan_sequence?: number })
+              .max_workplan_sequence || 0
+          : 0
+      )
     } else {
       setSelectedGrantMaxSequence(0)
     }
@@ -532,23 +483,13 @@ export function useGrantAssignment({
     }
 
     if (value && selectedGrant?.donor_name) {
-      try {
-        const { data: grantData, error } = await supabase
-          .from('grants_grid_view')
-          .select('max_workplan_sequence')
-          .eq('grant_id', value)
-          .eq('donor_name', selectedGrant.donor_name)
-          .single()
-
-        if (!error && grantData) {
-          setSelectedGrantMaxSequence(grantData.max_workplan_sequence || 0)
-        } else {
-          setSelectedGrantMaxSequence(0)
-        }
-      } catch (error) {
-        console.error('Error fetching max workplan sequence:', error)
-        setSelectedGrantMaxSequence(0)
-      }
+      setSelectedGrantMaxSequence(
+        typeof (selectedGrant as GrantGridEntry & { max_workplan_sequence?: number })
+          .max_workplan_sequence === 'number'
+          ? (selectedGrant as GrantGridEntry & { max_workplan_sequence?: number })
+              .max_workplan_sequence || 0
+          : 0
+      )
     } else {
       setSelectedGrantMaxSequence(0)
     }

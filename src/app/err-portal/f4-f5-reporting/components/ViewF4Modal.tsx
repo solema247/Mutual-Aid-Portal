@@ -85,44 +85,11 @@ export default function ViewF4Modal({ summaryId, open, onOpenChange, onSaved }: 
         }))
         setExpensesDraft(normalizeF4ExpenseActivitiesToSectors(expenseRows, sectorsRows))
         
-        // Load project meta to get total grant
-        if (summary?.project_id) {
-          const { data: projectData, error } = await supabase
-            .from('err_projects')
-            .select(`
-              id,
-              expenses,
-              planned_activities,
-              emergency_rooms (err_code, name, name_ar)
-            `)
-            .eq('id', summary.project_id)
-            .single()
-          
-          if (!error && projectData) {
-            // Calculate total from planned_activities (for ERR App submissions)
-            const plannedArr = Array.isArray(projectData.planned_activities)
-              ? projectData.planned_activities
-              : (typeof projectData.planned_activities === 'string' ? JSON.parse(projectData.planned_activities || '[]') : [])
-            const fromPlanned = (Array.isArray(plannedArr) ? plannedArr : []).reduce((s: number, pa: any) => {
-              const inner = Array.isArray(pa?.expenses) ? pa.expenses : []
-              return s + inner.reduce((ss: number, ie: any) => ss + (Number(ie.total) || 0), 0)
-            }, 0)
-
-            // Calculate total from expenses (for mutual_aid_portal submissions)
-            const expensesArr = Array.isArray(projectData.expenses)
-              ? projectData.expenses
-              : (typeof projectData.expenses === 'string' ? JSON.parse(projectData.expenses || '[]') : [])
-            const fromExpenses = (Array.isArray(expensesArr) ? expensesArr : []).reduce((s: number, ex: any) => {
-              return s + (Number(ex.total_cost) || 0)
-            }, 0)
-
-            // Use expenses total if it exists (mutual_aid_portal), otherwise use planned_activities total (ERR App)
-            const grantSum = fromExpenses > 0 ? fromExpenses : fromPlanned
-            const room = projectData.emergency_rooms
-            setProjectMeta({
-              total_grant_from_project: grantSum
-            })
-          }
+        // Prefer server-computed planned total (avoids direct err_projects client reads)
+        if (j.completion?.planned_total != null) {
+          setProjectMeta({
+            total_grant_from_project: Number(j.completion.planned_total) || 0
+          })
         }
       } catch {
         setData(null)

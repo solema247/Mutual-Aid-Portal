@@ -1,8 +1,12 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin'
+import { forbidIfPartner } from '@/lib/routeHandlerAuth'
 
 export async function POST(request: Request) {
   try {
+    const partnerBlock = await forbidIfPartner()
+    if (partnerBlock) return partnerBlock
+
     const supabase = getSupabaseAdmin()
     const { grant_call_id, funding_cycle_id, cycle_state_allocation_id, state_name, yymm } = await request.json()
 

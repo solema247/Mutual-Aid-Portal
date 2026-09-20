@@ -4,7 +4,9 @@ import { createClient } from '@supabase/supabase-js'
 // This is safe to use in server-side API routes only
 export function getSupabaseAdmin() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  // This app's env defines SUPABASE_SERVICE_KEY. Keep the standard name as a fallback.
+  const supabaseServiceKey =
+    process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY
 
   if (!supabaseUrl || !supabaseServiceKey) {
     throw new Error('Missing Supabase URL or Service Role Key')

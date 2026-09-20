@@ -1,11 +1,15 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { ensureScreeningsForProjects } from '@/lib/compliance'
+import { forbidIfPartner } from '@/lib/routeHandlerAuth'
 
 // POST /api/compliance/ensure - Create compliance screenings for specific projects
 // Called after client-side F1 inserts so new F1s land in the screening queue immediately.
 export async function POST(request: Request) {
   try {
+    const partnerBlock = await forbidIfPartner()
+    if (partnerBlock) return partnerBlock
+
     const supabase = getSupabaseRouteClient()
     const {
       data: { session },

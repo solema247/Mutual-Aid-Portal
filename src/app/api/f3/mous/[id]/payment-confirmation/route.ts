@@ -5,6 +5,10 @@ import {
   getSessionUserLabel,
   listPaymentConfirmationsForMou,
 } from '@/lib/mouPaymentConfirmations'
+import {
+  assertMouInGrantAccess,
+  assertProjectInGrantAccess,
+} from '@/lib/userGrantAccess'
 
 type RouteContext = { params: { id: string } }
 
@@ -74,31 +78,41 @@ export async function GET(request: Request, { params }: RouteContext) {
     const { searchParams } = new URL(request.url)
     const projectId = searchParams.get('project_id')
 
-    const { data: mou, error: mouError } = await supabase
-      .from('mous')
-      .select('id')
-      .eq('id', mouId)
-      .maybeSingle()
+    const mouScope = await assertMouInGrantAccess(mouId)
+    if (!mouScope.ok) return mouScope.response
 
-    if (mouError) {
-      console.error('[payment-confirmation GET] mou', mouError)
-      return NextResponse.json({ error: 'Failed to fetch MOU' }, { status: 500 })
-    }
-    if (!mou) {
-      return NextResponse.json({ error: 'MOU not found' }, { status: 404 })
+    if (projectId) {
+      const projectScope = await assertProjectInGrantAccess(projectId, mouScope.access)
+      if (!projectScope.ok) return projectScope.response
+      if (
+        mouScope.inScopeProjectIds &&
+        !mouScope.inScopeProjectIds.includes(projectId)
+      ) {
+        return NextResponse.json({ error: 'Project not found' }, { status: 404 })
+      }
     }
 
     const confirmations = await listPaymentConfirmationsForMou(supabase, mouId, projectId)
 
+    const inScopeSet =
+      mouScope.inScopeProjectIds == null
+        ? null
+        : new Set(mouScope.inScopeProjectIds)
+
+    const scopedConfirmations =
+      inScopeSet == null
+        ? confirmations
+        : confirmations.filter((c) => inScopeSet.has(c.project_id))
+
     if (projectId) {
       return NextResponse.json({
         project_id: projectId,
-        payment_confirmations: confirmations,
+        payment_confirmations: scopedConfirmations,
       })
     }
 
-    const byProject: Record<string, typeof confirmations> = {}
-    for (const c of confirmations) {
+    const byProject: Record<string, typeof scopedConfirmations> = {}
+    for (const c of scopedConfirmations) {
       if (!byProject[c.project_id]) byProject[c.project_id] = []
       byProject[c.project_id].push(c)
     }
@@ -106,7 +120,7 @@ export async function GET(request: Request, { params }: RouteContext) {
     return NextResponse.json({
       mou_id: mouId,
       by_project: byProject,
-      payment_confirmations: confirmations,
+      payment_confirmations: scopedConfirmations,
     })
   } catch (error) {
     console.error('[payment-confirmation GET]', error)
@@ -136,6 +150,12 @@ export async function POST(request: Request, { params }: RouteContext) {
     if (!projectId) {
       return NextResponse.json({ error: 'project_id is required' }, { status: 400 })
     }
+
+    const mouScope = await assertMouInGrantAccess(mouId)
+    if (!mouScope.ok) return mouScope.response
+
+    const projectScope = await assertProjectInGrantAccess(projectId, mouScope.access)
+    if (!projectScope.ok) return projectScope.response
 
     const { data: project, error: projectError } = await supabase
       .from('err_projects')

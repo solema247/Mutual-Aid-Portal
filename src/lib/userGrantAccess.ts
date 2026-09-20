@@ -1,0 +1,458 @@
+import { NextResponse } from 'next/server'
+import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
+
+export type UserGrantAccess =
+  | {
+      mode: 'all'
+      partnerId: null
+      grantGridIds: null
+      grantIds: null
+    }
+  | {
+      mode: 'partner'
+      partnerId: string
+      grantGridIds: string[]
+      grantIds: string[]
+    }
+  | {
+      mode: 'none'
+      partnerId: string | null
+      grantGridIds: []
+      grantIds: []
+    }
+
+/** PostgREST `.in()` with large UUID lists can exceed URL limits. */
+export const GRANT_SCOPE_IN_BATCH = 80
+
+export function chunkGrantScopeIds<T extends string | number>(ids: T[]): T[][] {
+  if (!ids.length) return []
+  const out: T[][] = []
+  for (let i = 0; i < ids.length; i += GRANT_SCOPE_IN_BATCH) {
+    out.push(ids.slice(i, i + GRANT_SCOPE_IN_BATCH))
+  }
+  return out
+}
+
+const ALL_ACCESS: UserGrantAccess = {
+  mode: 'all',
+  partnerId: null,
+  grantGridIds: null,
+  grantIds: null,
+}
+
+function noneAccess(partnerId: string | null): UserGrantAccess {
+  return {
+    mode: 'none',
+    partnerId,
+    grantGridIds: [],
+    grantIds: [],
+  }
+}
+
+async function fetchGrantsForPartner(
+  partnerId: string
+): Promise<{ grantGridIds: string[]; grantIds: string[] }> {
+  const supabase = getSupabaseRouteClient()
+  const grantGridIds: string[] = []
+  const grantIds: string[] = []
+  const pageSize = 1000
+  let from = 0
+
+  while (true) {
+    const { data, error } = await supabase
+      .from('grants_grid_view')
+      .select('id, grant_id')
+      .eq('partner_id', partnerId)
+      .range(from, from + pageSize - 1)
+
+    if (error) {
+      console.error('Error fetching grants for partner scope:', error)
+      return { grantGridIds: [], grantIds: [] }
+    }
+
+    if (!data?.length) break
+
+    for (const row of data) {
+      if (row.id) grantGridIds.push(String(row.id))
+      if (row.grant_id != null && String(row.grant_id).trim() !== '') {
+        grantIds.push(String(row.grant_id).trim())
+      }
+    }
+
+    if (data.length < pageSize) break
+    from += pageSize
+  }
+
+  return { grantGridIds, grantIds }
+}
+
+/**
+ * Grant-based data scope for the current session user.
+ *
+ * Non-partner roles: mode 'all' (no grant filter from this helper).
+ * Partner roles always fail closed: never return mode 'all'.
+ */
+export async function getUserGrantAccess(): Promise<UserGrantAccess> {
+  const supabase = getSupabaseRouteClient()
+
+  const {
+    data: { session },
+    error: sessionError,
+  } = await supabase.auth.getSession()
+
+  if (sessionError || !session) {
+    // No session: fail closed for grant scope (callers for non-auth routes should not rely on 'all')
+    return noneAccess(null)
+  }
+
+  const { data: userData, error } = await supabase
+    .from('users')
+    .select('role, partner_id')
+    .eq('auth_user_id', session.user.id)
+    .single()
+
+  if (error || !userData) {
+    return noneAccess(null)
+  }
+
+  const role = userData.role ?? null
+  const partnerId =
+    userData.partner_id != null && String(userData.partner_id).trim() !== ''
+      ? String(userData.partner_id)
+      : null
+
+  // Partner must never fall through to mode 'all'
+  if (role === 'partner') {
+    if (!partnerId) {
+      return noneAccess(null)
+    }
+
+    const { grantGridIds, grantIds } = await fetchGrantsForPartner(partnerId)
+    if (grantGridIds.length === 0) {
+      return noneAccess(partnerId)
+    }
+
+    return {
+      mode: 'partner',
+      partnerId,
+      grantGridIds,
+      grantIds,
+    }
+  }
+
+  return ALL_ACCESS
+}
+
+/**
+ * Whether a grant_grid_id is within the given access result.
+ * - mode 'all': no grant restriction (always true)
+ * - mode 'none': always false
+ * - mode 'partner': true only if grantGridId is in the partner's grant set
+ */
+export function grantGridIdInAccess(
+  access: UserGrantAccess,
+  grantGridId: string | null | undefined
+): boolean {
+  if (access.mode === 'all') return true
+  if (access.mode === 'none') return false
+  if (grantGridId == null || String(grantGridId).trim() === '') return false
+  return access.grantGridIds.includes(String(grantGridId))
+}
+
+/**
+ * Apply `.in('grant_grid_id', …)` for partner mode.
+ * Caller must handle mode 'none' (empty result) before querying.
+ * mode 'all': returns query unchanged.
+ */
+export function applyGrantGridIdFilter<T extends { in: (column: string, values: readonly string[]) => T }>(
+  query: T,
+  access: UserGrantAccess,
+  column: string = 'grant_grid_id'
+): T {
+  if (access.mode !== 'partner') return query
+  return query.in(column, access.grantGridIds)
+}
+
+type ProjectScopeRow = { id: string; grant_grid_id: string | null }
+
+/**
+ * Load grant_grid_id for a portal project and assert Partner scope.
+ * Historical IDs (`historical_*`) are out of Partner scope.
+ * Uses 404 to match existing overview/project convention (no existence leak).
+ */
+export async function assertProjectInGrantAccess(
+  projectId: string,
+  access?: UserGrantAccess,
+  options?: { notFoundMessage?: string; forbiddenStatus?: 403 | 404 }
+): Promise<
+  | { ok: true; access: UserGrantAccess; project: ProjectScopeRow }
+  | { ok: false; response: NextResponse }
+> {
+  const grantAccess = access ?? (await getUserGrantAccess())
+  const notFoundMessage = options?.notFoundMessage ?? 'Project not found'
+  const status = options?.forbiddenStatus ?? 404
+
+  if (grantAccess.mode === 'all') {
+    const supabase = getSupabaseRouteClient()
+    if (projectId.startsWith('historical_')) {
+      return {
+        ok: true,
+        access: grantAccess,
+        project: { id: projectId, grant_grid_id: null },
+      }
+    }
+    const { data: project, error } = await supabase
+      .from('err_projects')
+      .select('id, grant_grid_id')
+      .eq('id', projectId)
+      .maybeSingle()
+    if (error) {
+      console.error('[assertProjectInGrantAccess]', error)
+      return {
+        ok: false,
+        response: NextResponse.json({ error: 'Failed to load project' }, { status: 500 }),
+      }
+    }
+    if (!project) {
+      return {
+        ok: false,
+        response: NextResponse.json({ error: notFoundMessage }, { status: 404 }),
+      }
+    }
+    return {
+      ok: true,
+      access: grantAccess,
+      project: { id: String(project.id), grant_grid_id: project.grant_grid_id ?? null },
+    }
+  }
+
+  // Partner / none: historical import rows are never in grant scope
+  if (projectId.startsWith('historical_')) {
+    return {
+      ok: false,
+      response: NextResponse.json({ error: notFoundMessage }, { status }),
+    }
+  }
+
+  if (grantAccess.mode === 'none') {
+    return {
+      ok: false,
+      response: NextResponse.json({ error: notFoundMessage }, { status }),
+    }
+  }
+
+  const supabase = getSupabaseRouteClient()
+  const { data: project, error } = await supabase
+    .from('err_projects')
+    .select('id, grant_grid_id')
+    .eq('id', projectId)
+    .maybeSingle()
+
+  if (error) {
+    console.error('[assertProjectInGrantAccess]', error)
+    return {
+      ok: false,
+      response: NextResponse.json({ error: 'Failed to load project' }, { status: 500 }),
+    }
+  }
+
+  if (!project || !grantGridIdInAccess(grantAccess, project.grant_grid_id)) {
+    return {
+      ok: false,
+      response: NextResponse.json({ error: notFoundMessage }, { status }),
+    }
+  }
+
+  return {
+    ok: true,
+    access: grantAccess,
+    project: { id: String(project.id), grant_grid_id: project.grant_grid_id ?? null },
+  }
+}
+
+/**
+ * Assert every project id is in Partner grant scope (or mode 'all').
+ * Missing / out-of-scope ids → 404.
+ */
+export async function assertProjectsInGrantAccess(
+  projectIds: string[],
+  access?: UserGrantAccess,
+  options?: { notFoundMessage?: string }
+): Promise<
+  | { ok: true; access: UserGrantAccess }
+  | { ok: false; response: NextResponse }
+> {
+  const grantAccess = access ?? (await getUserGrantAccess())
+  const notFoundMessage = options?.notFoundMessage ?? 'Project not found'
+  const unique = Array.from(new Set(projectIds.filter(Boolean)))
+
+  if (unique.length === 0) {
+    return { ok: true, access: grantAccess }
+  }
+
+  if (grantAccess.mode === 'all') {
+    return { ok: true, access: grantAccess }
+  }
+
+  if (grantAccess.mode === 'none') {
+    return {
+      ok: false,
+      response: NextResponse.json({ error: notFoundMessage }, { status: 404 }),
+    }
+  }
+
+  for (const id of unique) {
+    if (id.startsWith('historical_')) {
+      return {
+        ok: false,
+        response: NextResponse.json({ error: notFoundMessage }, { status: 404 }),
+      }
+    }
+  }
+
+  const supabase = getSupabaseRouteClient()
+  const found = new Map<string, string | null>()
+  for (const batch of chunkGrantScopeIds(unique)) {
+    const { data, error } = await supabase
+      .from('err_projects')
+      .select('id, grant_grid_id')
+      .in('id', batch)
+    if (error) {
+      console.error('[assertProjectsInGrantAccess]', error)
+      return {
+        ok: false,
+        response: NextResponse.json({ error: 'Failed to load projects' }, { status: 500 }),
+      }
+    }
+    for (const row of data || []) {
+      found.set(String(row.id), row.grant_grid_id ?? null)
+    }
+  }
+
+  for (const id of unique) {
+    const gridId = found.get(id)
+    if (gridId === undefined || !grantGridIdInAccess(grantAccess, gridId)) {
+      return {
+        ok: false,
+        response: NextResponse.json({ error: notFoundMessage }, { status: 404 }),
+      }
+    }
+  }
+
+  return { ok: true, access: grantAccess }
+}
+
+/**
+ * Fetch portal project ids whose grant_grid_id is in the Partner set.
+ * mode 'all' → null (no grant restriction).
+ * mode 'none' / empty partner grants → [].
+ */
+export async function fetchProjectIdsInGrantAccess(
+  access: UserGrantAccess,
+  options?: { extraFilter?: (q: any) => any }
+): Promise<string[] | null> {
+  if (access.mode === 'all') return null
+  if (access.mode === 'none' || access.grantGridIds.length === 0) return []
+
+  const supabase = getSupabaseRouteClient()
+  const ids: string[] = []
+  for (const batch of chunkGrantScopeIds(access.grantGridIds)) {
+    let q: any = supabase.from('err_projects').select('id').in('grant_grid_id', batch)
+    if (options?.extraFilter) q = options.extraFilter(q)
+    const { data, error } = await q
+    if (error) {
+      console.error('[fetchProjectIdsInGrantAccess]', error)
+      throw error
+    }
+    for (const row of data || []) {
+      if (row.id) ids.push(String(row.id))
+    }
+  }
+  return ids
+}
+
+/**
+ * MOU is in Partner scope iff at least one linked project has grant_grid_id in the set.
+ * Returns in-scope project ids for filtering detail/payment/file responses.
+ */
+export async function assertMouInGrantAccess(
+  mouId: string,
+  access?: UserGrantAccess,
+  options?: { notFoundMessage?: string }
+): Promise<
+  | { ok: true; access: UserGrantAccess; inScopeProjectIds: string[] | null }
+  | { ok: false; response: NextResponse }
+> {
+  const grantAccess = access ?? (await getUserGrantAccess())
+  const notFoundMessage = options?.notFoundMessage ?? 'MOU not found'
+
+  if (grantAccess.mode === 'all') {
+    return { ok: true, access: grantAccess, inScopeProjectIds: null }
+  }
+
+  if (grantAccess.mode === 'none') {
+    return {
+      ok: false,
+      response: NextResponse.json({ error: notFoundMessage }, { status: 404 }),
+    }
+  }
+
+  const supabase = getSupabaseRouteClient()
+  const inScopeProjectIds: string[] = []
+
+  for (const batch of chunkGrantScopeIds(grantAccess.grantGridIds)) {
+    const { data, error } = await supabase
+      .from('err_projects')
+      .select('id')
+      .eq('mou_id', mouId)
+      .in('grant_grid_id', batch)
+    if (error) {
+      console.error('[assertMouInGrantAccess]', error)
+      return {
+        ok: false,
+        response: NextResponse.json({ error: 'Failed to load MOU' }, { status: 500 }),
+      }
+    }
+    for (const row of data || []) {
+      if (row.id) inScopeProjectIds.push(String(row.id))
+    }
+  }
+
+  if (inScopeProjectIds.length === 0) {
+    return {
+      ok: false,
+      response: NextResponse.json({ error: notFoundMessage }, { status: 404 }),
+    }
+  }
+
+  return { ok: true, access: grantAccess, inScopeProjectIds }
+}
+
+/**
+ * Mou ids that have ≥1 project in Partner grant scope.
+ * mode 'all' → null (no filter). mode 'none' → [].
+ */
+export async function fetchMouIdsInGrantAccess(
+  access: UserGrantAccess
+): Promise<string[] | null> {
+  if (access.mode === 'all') return null
+  if (access.mode === 'none' || access.grantGridIds.length === 0) return []
+
+  const supabase = getSupabaseRouteClient()
+  const mouIds = new Set<string>()
+  for (const batch of chunkGrantScopeIds(access.grantGridIds)) {
+    const { data, error } = await supabase
+      .from('err_projects')
+      .select('mou_id')
+      .in('grant_grid_id', batch)
+      .not('mou_id', 'is', null)
+    if (error) {
+      console.error('[fetchMouIdsInGrantAccess]', error)
+      throw error
+    }
+    for (const row of data || []) {
+      if (row.mou_id) mouIds.add(String(row.mou_id))
+    }
+  }
+  return Array.from(mouIds)
+}

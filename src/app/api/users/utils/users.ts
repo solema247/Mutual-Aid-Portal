@@ -75,7 +75,7 @@ export async function getPendingUsers(currentUserRole: string, currentUserErrId:
 interface GetActiveUsersParams {
   page: number
   pageSize: number
-  role?: 'support' | 'superadmin' | 'admin' | 'state_err' | 'base_err'
+  role?: 'support' | 'superadmin' | 'admin' | 'state_err' | 'base_err' | 'partner'
   status?: 'active' | 'suspended'
   sortBy?: string
   sortOrder?: 'asc' | 'desc'

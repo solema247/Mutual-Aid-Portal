@@ -1,8 +1,12 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
+import { forbidIfPartner } from '@/lib/routeHandlerAuth'
 
 export async function POST(req: Request) {
   try {
+    const partnerBlock = await forbidIfPartner()
+    if (partnerBlock) return partnerBlock
+
     const supabase = getSupabaseRouteClient()
     const { base_pattern, preview_only = false } = await req.json()
 

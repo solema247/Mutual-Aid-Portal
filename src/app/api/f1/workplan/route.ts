@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server'
 import { normalizeF1DateForDb } from '@/lib/f1WorkplanNormalize'
 import { f1WorkplanCreateSchema } from '@/lib/f1WorkplanSchema'
 import { ensureScreeningsForProjects } from '@/lib/compliance'
+import { forbidIfPartner } from '@/lib/routeHandlerAuth'
 
 function emptyToNull<T extends string | null | undefined> (v: T): string | null {
   if (v === undefined || v === null) return null
@@ -13,6 +14,9 @@ function emptyToNull<T extends string | null | undefined> (v: T): string | null 
 
 export async function POST (request: Request) {
   try {
+    const partnerBlock = await forbidIfPartner()
+    if (partnerBlock) return partnerBlock
+
     const supabase = createRouteHandlerClient({ cookies })
 
     const { data: { session }, error: sessionError } = await supabase.auth.getSession()
