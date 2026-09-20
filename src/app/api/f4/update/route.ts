@@ -3,6 +3,7 @@ import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { translateF4Summary, translateF4Expenses } from '@/lib/translateHelper'
 import { inferF4SourceLanguage, normalizePaymentDateForDb } from '@/lib/f4SaveNormalize'
 import { fetchF4SectorsForMatch, normalizeF4ExpenseActivitiesToSectors } from '@/lib/f4ExpenseSectors'
+import { assertProjectInGrantAccess } from '@/lib/userGrantAccess'
 
 export async function POST(req: Request) {
   try {
@@ -20,6 +21,9 @@ export async function POST(req: Request) {
 
     const project_id = existingSummary?.project_id
     if (!project_id) return NextResponse.json({ error: 'Project not found' }, { status: 400 })
+
+    const scope = await assertProjectInGrantAccess(String(project_id))
+    if (!scope.ok) return scope.response
 
     // Detect language and translate if needed
     const sourceLanguage = summary.language || existingSummary?.language || 'en'

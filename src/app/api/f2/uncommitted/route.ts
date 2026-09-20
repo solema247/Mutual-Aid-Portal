@@ -3,6 +3,12 @@ import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { getUserStateAccess } from '@/lib/userStateAccess'
 import { requirePermission } from '@/lib/requirePermission'
 import { getComplianceBlockedProjectIds } from '@/lib/compliance'
+import {
+  applyGrantGridIdFilter,
+  assertProjectInGrantAccess,
+  assertProjectsInGrantAccess,
+  getUserGrantAccess,
+} from '@/lib/userGrantAccess'
 
 const PAGE_SIZE = 1000
 
@@ -40,8 +46,14 @@ export async function GET(request: Request) {
       dateTo = `${y}-${String(m).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
     }
 
-    // Get user's state access rights
-    const { allowedStateNames } = await getUserStateAccess()
+    const [{ allowedStateNames }, grantAccess] = await Promise.all([
+      getUserStateAccess(),
+      getUserGrantAccess(),
+    ])
+
+    if (grantAccess.mode === 'none') {
+      return NextResponse.json([])
+    }
 
     const data = await fetchAllRows<any>(() => {
       let query = supabase
@@ -63,12 +75,15 @@ export async function GET(request: Request) {
           approval_file_key,
           temp_file_key,
           grant_id,
-          grant_segment
+          grant_segment,
+          grant_grid_id
         `)
         .eq('status', 'pending')
         .order('submitted_at', { ascending: false })
 
-      if (allowedStateNames !== null && allowedStateNames.length > 0) {
+      if (grantAccess.mode === 'partner') {
+        query = applyGrantGridIdFilter(query, grantAccess)
+      } else if (allowedStateNames !== null && allowedStateNames.length > 0) {
         query = query.in('state', allowedStateNames)
       }
       if (state) {
@@ -159,6 +174,9 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: 'F1 ID is required' }, { status: 400 })
     }
 
+    const scope = await assertProjectInGrantAccess(String(id))
+    if (!scope.ok) return scope.response
+
     // Require f2_upload_approval when updating approval_file_key
     if (approval_file_key !== undefined) {
       const perm = await requirePermission('f2_upload_approval')
@@ -210,6 +228,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'F1 IDs array is required' }, { status: 400 })
     }
 
+    const scope = await assertProjectsInGrantAccess(f1_ids.map(String))
+    if (!scope.ok) return scope.response
+
     // Compliance gate: flagged F1s need finance approval before commit
     const blocked = await getComplianceBlockedProjectIds(supabase, f1_ids)
     if (blocked.length > 0) {
@@ -252,6 +273,9 @@ export async function DELETE(request: Request) {
     if (!id) {
       return NextResponse.json({ error: 'F1 ID is required' }, { status: 400 })
     }
+
+    const scope = await assertProjectInGrantAccess(String(id))
+    if (!scope.ok) return scope.response
 
     // First, fetch the project to get file keys for cleanup
     const { data: project, error: fetchError } = await supabase

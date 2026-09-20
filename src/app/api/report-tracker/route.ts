@@ -1,6 +1,11 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { getUserStateAccess } from '@/lib/userStateAccess'
+import {
+  applyGrantGridIdFilter,
+  chunkGrantScopeIds,
+  getUserGrantAccess,
+} from '@/lib/userGrantAccess'
 import { getActivityAndCategoryLists, getSectorWithHighestAmount } from '@/lib/plannedActivitiesExpenses'
 import { isActivityShifted } from '@/lib/activityShift'
 import { pickF5TextForEnUi } from '@/lib/storiesEnDisplay'
@@ -110,7 +115,11 @@ export async function GET(request: Request) {
     /** Arabic UI: prefer primary Arabic columns (+ en fallback). Other locales: same as Stories overview (en cache for ar-authored reports). */
     const useEnUi = loc === '' || !loc.startsWith('ar')
     const supabase = getSupabaseRouteClient()
-    const { allowedStateNames } = await getUserStateAccess()
+    const grantAccess = await getUserGrantAccess()
+
+    if (grantAccess.mode === 'none') {
+      return NextResponse.json([])
+    }
 
     const projectSelect = `
         id,
@@ -135,9 +144,29 @@ export async function GET(request: Request) {
         emergency_rooms ( err_code ),
         donors ( name, short_name )
       `
-    // Paginate: PostgREST max-rows (often 1000) truncates otherwise
-    const rows: any[] = []
-    {
+    let rows: any[] = []
+
+    if (grantAccess.mode === 'partner') {
+      for (const batch of chunkGrantScopeIds(grantAccess.grantGridIds)) {
+        let query = supabase
+          .from('err_projects')
+          .select(projectSelect)
+          .in('status', ['approved', 'active', 'pending', 'completed'])
+        query = applyGrantGridIdFilter(query, { ...grantAccess, grantGridIds: batch })
+        const { data, error } = await query.order('state').order('grant_id')
+        if (error) {
+          console.error('Report tracker fetch error:', error)
+          return NextResponse.json({ error: 'Failed to fetch report tracker data' }, { status: 500 })
+        }
+        if (data?.length) rows.push(...data)
+      }
+      rows.sort((a, b) => {
+        const stateCmp = String(a.state ?? '').localeCompare(String(b.state ?? ''))
+        if (stateCmp !== 0) return stateCmp
+        return String(a.grant_id ?? '').localeCompare(String(b.grant_id ?? ''))
+      })
+    } else {
+      const { allowedStateNames } = await getUserStateAccess()
       let from = 0
       const pageSize = 1000
       for (;;) {

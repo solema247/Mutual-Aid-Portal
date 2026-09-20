@@ -17,12 +17,39 @@ const SUPABASE_IN_BATCH = 80
 /** Cache duration in milliseconds (3 minutes) */
 const CACHE_DURATION_MS = 3 * 60 * 1000
 
-function getCacheKey(allowedStates: string[] | null): string {
+function getCacheKey(
+  allowedStates: string[] | null,
+  grantScopeKey: string = 'all_grants'
+): string {
   // v2: includes locality on rows + localityAggregations
-  const scope = (!allowedStates || allowedStates.length === 0)
-    ? 'all_states'
-    : [...allowedStates].sort().join(',')
-  return `v2|${scope}`
+  // v3: partner grant scope segment so partners never share admin/state caches
+  const scope =
+    !allowedStates || allowedStates.length === 0
+      ? 'all_states'
+      : [...allowedStates].sort().join(',')
+  return `v3|${scope}|${grantScopeKey}`
+}
+
+function emptyRollupPayload() {
+  return {
+    kpis: {
+      projects: 0,
+      plan: 0,
+      actual: 0,
+      variance: 0,
+      burn: 0,
+      f4_count: 0,
+      last_report_date: null,
+      f5_count: 0,
+      last_f5_date: null,
+      f5_total_individuals: 0,
+      f5_total_families: 0,
+    },
+    rows: [],
+    stateAggregations: [],
+    localityAggregations: [],
+    roomAggregations: [],
+  }
 }
 
 export async function readSharedRollupCache(cacheKey: string): Promise<any | null> {
@@ -282,13 +309,31 @@ export async function GET(request: Request) {
   try {
     const supabase = getSupabaseRouteClient()
     const { getUserStateAccess } = await import('@/lib/userStateAccess')
+    const { getUserGrantAccess } = await import('@/lib/userGrantAccess')
 
-    // Get user's state access rights
+    // Get user's state access rights (ERR roles) and grant access (Partner role)
     const accessStart = Date.now()
-    const { allowedStateNames } = await getUserStateAccess()
-    timer('getUserStateAccess', accessStart)
-    
-    const cacheKey = getCacheKey(allowedStateNames)
+    const [{ allowedStateNames }, grantAccess] = await Promise.all([
+      getUserStateAccess(),
+      getUserGrantAccess(),
+    ])
+    timer('getUserStateAccess+getUserGrantAccess', accessStart)
+
+    // Partner with no org / no grants: empty dataset (fail closed)
+    if (grantAccess.mode === 'none') {
+      return NextResponse.json(emptyRollupPayload())
+    }
+
+    const grantScopeKey =
+      grantAccess.mode === 'partner'
+        ? `partner:${grantAccess.partnerId}:${[...grantAccess.grantGridIds].sort().join(',')}`
+        : 'all_grants'
+
+    // Partners are grant-scoped (not state-scoped) for this endpoint
+    const stateFilterForQuery =
+      grantAccess.mode === 'partner' ? null : allowedStateNames
+
+    const cacheKey = getCacheKey(stateFilterForQuery, grantScopeKey)
     
     // Check for cache bypass parameter
     const url = new URL(request.url)
@@ -313,8 +358,23 @@ export async function GET(request: Request) {
     const projectsStart = Date.now()
     const projectSelect =
       'id, state, locality, grant_call_id, grant_grid_id, grant_id, grant_segment, emergency_rooms (id, name, name_ar, err_code), planned_activities, expenses, source, status, funding_status, mou_id, f4_status, f5_status, date, date_transfer, completed_at, date_report_completed, estimated_beneficiaries, implemented_sector, activity_shift_note'
-    const projects: any[] = []
-    {
+    let projects: any[] = []
+
+    if (grantAccess.mode === 'partner') {
+      if (grantAccess.grantGridIds.length === 0) {
+        return NextResponse.json(emptyRollupPayload())
+      }
+      for (const batch of chunkIds(grantAccess.grantGridIds)) {
+        const { data: batchProjects, error: batchErr } = await supabase
+          .from('err_projects')
+          .select(projectSelect)
+          .in('status', ['approved', 'active', 'pending', 'completed'])
+          .in('funding_status', ['committed', 'allocated', 'unassigned'])
+          .in('grant_grid_id', batch)
+        if (batchErr) throw batchErr
+        if (batchProjects?.length) projects.push(...batchProjects)
+      }
+    } else {
       let from = 0
       const pageSize = 1000
       for (;;) {
@@ -326,8 +386,8 @@ export async function GET(request: Request) {
           .order('id', { ascending: true })
           .range(from, from + pageSize - 1)
 
-        if (allowedStateNames !== null && allowedStateNames.length > 0) {
-          projectQuery = projectQuery.in('state', allowedStateNames)
+        if (stateFilterForQuery !== null && stateFilterForQuery.length > 0) {
+          projectQuery = projectQuery.in('state', stateFilterForQuery)
         }
 
         const { data: page, error: projectsError } = await projectQuery
@@ -345,6 +405,8 @@ export async function GET(request: Request) {
     const dataSupabase = getSupabaseAdmin()
 
     // ===== PARALLEL BATCH 1: All independent data (historical + project-dependent) =====
+    // Partner v1: exclude activities_raw_import / historical (grant_grid_id-only scope)
+    const skipHistorical = grantAccess.mode === 'partner'
     const batch1Start = Date.now()
     const [
       allHistoricalData,
@@ -354,17 +416,20 @@ export async function GET(request: Request) {
       portalSummaries,
       f5Reports
     ] = await Promise.all([
-      // Historical data (fully independent)
-      fetchAllRows(
-        dataSupabase,
-        'activities_raw_import',
-        'id,"ERR CODE","ERR Name","State","Project Donor","USD","MOU Signed","F4","F5","Date Report Completed","Date Transfer","Serial Number","Target (Ind.)","Target (Fam.)","Individuals","Family","Overdue"'
-      ),
-      fetchAllRows(
-        dataSupabase,
-        'historical_financial_reports',
-        'budget_items, total_errs_expenditure_usd'
-      ),
+      skipHistorical
+        ? Promise.resolve([])
+        : fetchAllRows(
+            dataSupabase,
+            'activities_raw_import',
+            'id,"ERR CODE","ERR Name","State","Project Donor","USD","MOU Signed","F4","F5","Date Report Completed","Date Transfer","Serial Number","Target (Ind.)","Target (Fam.)","Individuals","Family","Overdue"'
+          ),
+      skipHistorical
+        ? Promise.resolve([])
+        : fetchAllRows(
+            dataSupabase,
+            'historical_financial_reports',
+            'budget_items, total_errs_expenditure_usd'
+          ),
       // Project-dependent data (all independent of each other)
       mouIds.length > 0
         ? (async () => {
@@ -395,11 +460,11 @@ export async function GET(request: Request) {
 
     // Filter historical data by state AFTER normalization (like Pool Overview By State)
     let filteredHistoricalData = allHistoricalData || []
-    if (allowedStateNames !== null && allowedStateNames.length > 0) {
+    if (stateFilterForQuery !== null && stateFilterForQuery.length > 0) {
       filteredHistoricalData = (allHistoricalData || []).filter((row: any) => {
         const rawState = row['State'] || row['state'] || row.State
         const normalizedState = normalizeStateName(rawState)
-        return allowedStateNames.includes(normalizedState)
+        return stateFilterForQuery.includes(normalizedState)
       })
     }
 
@@ -479,20 +544,29 @@ export async function GET(request: Request) {
     }
     
     // Get historical F4 summaries (linked to activities_raw_import)
-    // Fetch all historical summaries first (no filtering at query level)
-    // Only get summaries that are historical (have activities_raw_import_id) and don't have project_id
-    const allHistoricalSummaries = await fetchAllRows(
-      dataSupabase,
-      'err_summary',
-      'id, activities_raw_import_id, total_expenses, report_date'
-    ).then((data: any[]) => (data || []).filter((s: any) => s.activities_raw_import_id != null && !s.project_id))
+    // Partner v1: skip (no activities_raw_import scope)
+    const allHistoricalSummaries = skipHistorical
+      ? []
+      : await fetchAllRows(
+          dataSupabase,
+          'err_summary',
+          'id, activities_raw_import_id, total_expenses, report_date'
+        ).then((data: any[]) =>
+          (data || []).filter(
+            (s: any) => s.activities_raw_import_id != null && !s.project_id
+          )
+        )
     
     // Filter historical summaries by state AFTER normalization (using the state map we created)
     let filteredHistoricalSummaries = allHistoricalSummaries || []
-    if (allowedStateNames !== null && allowedStateNames.length > 0 && filteredHistoricalSummaries.length > 0) {
+    if (
+      stateFilterForQuery !== null &&
+      stateFilterForQuery.length > 0 &&
+      filteredHistoricalSummaries.length > 0
+    ) {
       filteredHistoricalSummaries = filteredHistoricalSummaries.filter((s: any) => {
         const normalizedState = historicalStateMap.get(s.activities_raw_import_id)
-        return normalizedState && allowedStateNames.includes(normalizedState)
+        return normalizedState && stateFilterForQuery.includes(normalizedState)
       })
     }
     

@@ -6,9 +6,10 @@ import { SYNC_STATUS } from '@/lib/grantManagement/syncStatus'
 import { parseSyncTargetFromBody, SYNC_TARGET } from '@/lib/grantManagement/syncTarget'
 import { sumDisbursedToErrsByGrant } from '@/lib/grantPaymentDisbursement'
 import { loadConfirmedProjectIds } from '@/lib/mouPaymentConfirmations'
+import { getUserGrantAccess } from '@/lib/userGrantAccess'
 
 const GRANT_SELECT =
-  'id, grant_id, donor_id, donor_name, partner_name, project_name, grant_start_date, grant_end_date, status, total_transferred_amount_usd, sum_activity_amount, sum_transfer_fee_amount'
+  'id, grant_id, donor_id, donor_name, partner_name, project_name, grant_start_date, grant_end_date, status, total_transferred_amount_usd, sum_activity_amount, sum_transfer_fee_amount, max_workplan_sequence'
 
 function mapGrantRow(
   item: Record<string, unknown>,
@@ -29,6 +30,8 @@ function mapGrantRow(
     sum_activity_amount: item.sum_activity_amount ?? null,
     sum_transfer_fee_amount: item.sum_transfer_fee_amount ?? null,
     sum_disbursed_to_errs: grantId ? disbursedByGrant[grantId] ?? 0 : 0,
+    max_workplan_sequence:
+      item.max_workplan_sequence != null ? Number(item.max_workplan_sequence) || 0 : 0,
   }
 }
 
@@ -128,12 +131,20 @@ function parseGrantBody(body: Record<string, unknown>) {
 /**
  * GET /api/grants - List grants from grants_grid_view (portal canonical).
  * Query: ?status=all|Active|Complete (default all)
+ * Partner users: only grants where grants_grid_view.partner_id = users.partner_id
+ * (never trusts a client partner_id query param).
  */
 export async function GET(request: NextRequest) {
   try {
+    const grantAccess = await getUserGrantAccess()
+    if (grantAccess.mode === 'none') {
+      return NextResponse.json([])
+    }
+
     const supabase = getSupabaseAdmin()
     const { searchParams } = new URL(request.url)
     const status = searchParams.get('status') ?? 'all'
+    // Intentionally ignore any client-supplied partner_id query param
 
     const data = await fetchAllPages((from, to) => {
       let query = supabase
@@ -142,27 +153,39 @@ export async function GET(request: NextRequest) {
         .order('grant_start_date', { ascending: false })
         .order('id', { ascending: true })
         .range(from, to)
+      if (grantAccess.mode === 'partner') {
+        query = query.eq('partner_id', grantAccess.partnerId)
+      }
       if (status !== 'all') {
         query = query.eq('status', status)
       }
       return query
     })
 
-    const gridRows = await fetchAllRows<{ id: string; grant_id: string | null }>(
-      supabase,
-      'grants_grid_view',
-      'id, grant_id'
-    )
+    const scopedGridRows =
+      grantAccess.mode === 'partner'
+        ? (data || []).map((row) => ({
+            id: String((row as { id: string }).id),
+            grant_id: (row as { grant_id?: string | null }).grant_id ?? null,
+          }))
+        : await fetchAllRows<{ id: string; grant_id: string | null }>(
+            supabase,
+            'grants_grid_view',
+            'id, grant_id'
+          )
     const gridIdToGrantId = new Map<string, string>()
-    for (const row of gridRows) {
+    for (const row of scopedGridRows) {
       if (row.id && row.grant_id?.trim()) {
         gridIdToGrantId.set(row.id, row.grant_id.trim())
       }
     }
 
-    const canonicalGrantIds = gridRows
+    const canonicalGrantIds = scopedGridRows
       .map((row) => row.grant_id?.trim())
       .filter((id): id is string => Boolean(id))
+
+    const partnerGrantGridIdSet =
+      grantAccess.mode === 'partner' ? new Set(grantAccess.grantGridIds) : null
 
     const [projects, mous, historicalRows] = await Promise.all([
       fetchAllRows<{
@@ -176,6 +199,12 @@ export async function GET(request: NextRequest) {
         supabase,
         'err_projects',
         'id, grant_id, grant_grid_id, mou_id, expenses, submitted_at'
+      ).then((rows) =>
+        partnerGrantGridIdSet
+          ? rows.filter(
+              (p) => p.grant_grid_id != null && partnerGrantGridIdSet.has(String(p.grant_grid_id))
+            )
+          : rows
       ),
       fetchAllRows<{
         id: string
@@ -183,12 +212,21 @@ export async function GET(request: NextRequest) {
         exchange_rate: number | null
         transfer_date: string | null
       }>(supabase, 'mous', 'id, payment_confirmation_file, exchange_rate, transfer_date'),
-      fetchAllRows<{
-        'Project Donor'?: string | null
-        project_donor?: string | null
-        USD?: number | null
-        usd?: number | null
-      }>(supabase, 'activities_raw_import', '"Project Donor",USD'),
+      grantAccess.mode === 'partner'
+        ? Promise.resolve(
+            [] as {
+              'Project Donor'?: string | null
+              project_donor?: string | null
+              USD?: number | null
+              usd?: number | null
+            }[]
+          )
+        : fetchAllRows<{
+            'Project Donor'?: string | null
+            project_donor?: string | null
+            USD?: number | null
+            usd?: number | null
+          }>(supabase, 'activities_raw_import', '"Project Donor",USD'),
     ])
 
     const confirmedProjectIds = await loadConfirmedProjectIds(supabase, {

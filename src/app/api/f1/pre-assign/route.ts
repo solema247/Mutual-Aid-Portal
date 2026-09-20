@@ -1,9 +1,13 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
+import { forbidIfPartner } from '@/lib/routeHandlerAuth'
 
 // POST /api/f1/pre-assign { workplan_id, grant_call_id }
 export async function POST(req: Request) {
   try {
+    const partnerBlock = await forbidIfPartner()
+    if (partnerBlock) return partnerBlock
+
     const supabase = getSupabaseRouteClient()
     const { workplan_id, grant_call_id } = await req.json()
     if (!workplan_id || !grant_call_id) {

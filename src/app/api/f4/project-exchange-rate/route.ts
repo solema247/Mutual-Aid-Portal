@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { loadProjectPaymentSummaries } from '@/lib/mouPaymentConfirmations'
+import { assertProjectInGrantAccess } from '@/lib/userGrantAccess'
 
 /**
  * GET /api/f4/project-exchange-rate?project_id=<uuid>
@@ -14,6 +15,9 @@ export async function GET(request: Request) {
     if (!projectId) {
       return NextResponse.json({ error: 'Query parameter project_id is required' }, { status: 400 })
     }
+
+    const scope = await assertProjectInGrantAccess(projectId)
+    if (!scope.ok) return scope.response
 
     const supabase = getSupabaseRouteClient()
     const { data: project, error: projErr } = await supabase

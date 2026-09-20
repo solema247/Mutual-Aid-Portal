@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
+import { getUserGrantAccess } from '@/lib/userGrantAccess'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -53,9 +54,20 @@ function toDateKey(d: string | null): string | null {
  * - to: ISO date (inclusive)
  * Returns data for stacked cumulative area chart: X = time (date_transfer), Y = usd,
  * one series per project_donor (top 10 by total usd). Values are cumulative over time.
+ *
+ * Partner: this view is not grant_grid_id-scoped (Project Donor text matching is forbidden
+ * for Partner ownership). Fail closed with an empty series.
  */
 export async function GET(request: Request) {
   try {
+    const grantAccess = await getUserGrantAccess()
+    if (grantAccess.mode !== 'all') {
+      return NextResponse.json(
+        { chartData: [], series: [] as string[] },
+        { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } }
+      )
+    }
+
     const supabase = getSupabaseRouteClient()
 
     const { searchParams } = new URL(request.url)

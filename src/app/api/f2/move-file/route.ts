@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
+import { assertProjectInGrantAccess } from '@/lib/userGrantAccess'
 
 export async function POST(request: Request) {
   try {
@@ -9,6 +10,9 @@ export async function POST(request: Request) {
     if (!project_id || !temp_file_key || !donor_id || !state_short || !mmyy || !grant_id) {
       return NextResponse.json({ error: 'Missing required parameters' }, { status: 400 })
     }
+
+    const scope = await assertProjectInGrantAccess(String(project_id))
+    if (!scope.ok) return scope.response
     
     // Get donor short name
     const { data: donor, error: donorError } = await supabase

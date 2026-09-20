@@ -1,6 +1,11 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { getUserStateAccess } from '@/lib/userStateAccess'
+import {
+  applyGrantGridIdFilter,
+  chunkGrantScopeIds,
+  getUserGrantAccess,
+} from '@/lib/userGrantAccess'
 import { getActivityAndCategoryLists } from '@/lib/plannedActivitiesExpenses'
 
 export const dynamic = 'force-dynamic'
@@ -47,42 +52,76 @@ function slugify(label: string): string {
 /**
  * GET /api/stories/options
  * Returns states and themes for Mutual Aid Stories Level 1 (Option C).
- * Only MAP projects; respects getUserStateAccess.
+ * Only MAP projects. Partner scope is grant-based; other roles keep getUserStateAccess.
  */
 export async function GET() {
   const t0 = Date.now()
   console.log('[stories/options] start')
   try {
     const supabase = getSupabaseRouteClient()
-    const { allowedStateNames } = await getUserStateAccess()
-    console.log('[stories/options] getUserStateAccess', Date.now() - t0, 'ms')
-
-    let projects: any[]
-    try {
-      projects = await fetchAllPages((from, to) => {
-        let projectsQuery = supabase
-          .from('err_projects')
-          .select('id, state, planned_activities')
-          .eq('source', 'mutual_aid_portal')
-          .in('status', MAP_STATUSES)
-          .order('id', { ascending: true })
-          .range(from, to)
-
-        if (allowedStateNames !== null && allowedStateNames.length > 0) {
-          projectsQuery = projectsQuery.in('state', allowedStateNames)
-        }
-        return projectsQuery
-      })
-    } catch (projectsError) {
-      console.error('Stories options projects error:', projectsError)
+    const grantAccess = await getUserGrantAccess()
+    if (grantAccess.mode === 'none') {
       return NextResponse.json(
-        { error: 'Failed to load stories options' },
-        { status: 500, headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } }
+        { states: [], themes: [] },
+        { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } }
       )
     }
+
+    const projectSelect = 'id, state, planned_activities'
+    let projects: { id: string; state?: string | null; planned_activities?: unknown }[] = []
+
+    if (grantAccess.mode === 'partner') {
+      console.log('[stories/options] partner grant scope', Date.now() - t0, 'ms')
+      for (const batch of chunkGrantScopeIds(grantAccess.grantGridIds)) {
+        let projectsQuery = supabase
+          .from('err_projects')
+          .select(projectSelect)
+          .eq('source', 'mutual_aid_portal')
+          .in('status', MAP_STATUSES)
+        projectsQuery = applyGrantGridIdFilter(projectsQuery, {
+          ...grantAccess,
+          grantGridIds: batch,
+        })
+        const { data, error: projectsError } = await projectsQuery
+        if (projectsError) {
+          console.error('Stories options projects error:', projectsError)
+          return NextResponse.json(
+            { error: 'Failed to load stories options' },
+            { status: 500, headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } }
+          )
+        }
+        if (data?.length) projects.push(...data)
+      }
+    } else {
+      const { allowedStateNames } = await getUserStateAccess()
+      console.log('[stories/options] getUserStateAccess', Date.now() - t0, 'ms')
+      try {
+        projects = await fetchAllPages((from, to) => {
+          let projectsQuery = supabase
+            .from('err_projects')
+            .select(projectSelect)
+            .eq('source', 'mutual_aid_portal')
+            .in('status', MAP_STATUSES)
+            .order('id', { ascending: true })
+            .range(from, to)
+
+          if (allowedStateNames !== null && allowedStateNames.length > 0) {
+            projectsQuery = projectsQuery.in('state', allowedStateNames)
+          }
+          return projectsQuery
+        })
+      } catch (projectsError) {
+        console.error('Stories options projects error:', projectsError)
+        return NextResponse.json(
+          { error: 'Failed to load stories options' },
+          { status: 500, headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } }
+        )
+      }
+    }
+
     console.log('[stories/options] projects query', Date.now() - t0, 'ms', projects.length, 'rows')
 
-    const projectIds = projects.map((p: any) => p.id).filter(Boolean)
+    const projectIds = projects.map((p) => p.id).filter(Boolean)
     if (projectIds.length === 0) {
       return NextResponse.json(
         { states: [], themes: [] },

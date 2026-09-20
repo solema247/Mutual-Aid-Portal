@@ -1,8 +1,12 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
+import { forbidIfPartner } from '@/lib/routeHandlerAuth'
 
 export async function GET(request: Request) {
   try {
+    const partnerBlock = await forbidIfPartner()
+    if (partnerBlock) return partnerBlock
+
     const supabase = getSupabaseRouteClient()
     const { searchParams } = new URL(request.url)
     const grant_call_id = searchParams.get('grant_call_id')
