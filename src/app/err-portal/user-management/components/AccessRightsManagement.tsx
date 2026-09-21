@@ -22,7 +22,7 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { ActiveUserListItem, User } from '@/app/api/users/types/users'
+import { ActiveUserListItem } from '@/app/api/users/types/users'
 import { getActiveUsers } from '@/app/api/users/utils/users'
 import { supabase } from '@/lib/supabaseClient'
 import {
@@ -31,19 +31,24 @@ import {
   type ActiveFilter,
 } from '@/components/smart-filter'
 import {
-  Check,
+  Building2,
   ChevronLeft,
   ChevronRight,
+  Eye,
+  Globe2,
+  Handshake,
+  MapPin,
   MoreHorizontal,
   Pause,
   Pencil,
   Play,
+  RefreshCw,
   Search,
   Shield,
   Trash2,
-  X,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { getPortalRoleLabel } from '@/lib/roleLabels'
 import EditUserDialog from './EditUserDialog'
 import DeleteUserDialog from './DeleteUserDialog'
 import StatusConfirmDialog from './StatusConfirmDialog'
@@ -98,28 +103,6 @@ function getMultiFilterValues(filters: ActiveFilter[], fieldId: string): string[
   return trimmed ? [trimmed] : []
 }
 
-function roleLabel(
-  role: string,
-  t: (key: string, opts?: Record<string, string>) => string
-): string {
-  switch (role) {
-    case 'support':
-      return t('users:support_role')
-    case 'superadmin':
-      return t('users:superadmin_role')
-    case 'admin':
-      return t('users:admin_role')
-    case 'state_err':
-      return t('users:state_err_role')
-    case 'base_err':
-      return t('users:base_err_role')
-    case 'partner':
-      return t('users:partner_role', { defaultValue: 'Partner' })
-    default:
-      return role
-  }
-}
-
 function getInitials(name: string | null | undefined): string {
   if (!name?.trim()) return '?'
   const parts = name.trim().split(/\s+/).filter(Boolean)
@@ -137,11 +120,45 @@ function stateNamesForUser(
     .filter((n): n is string => Boolean(n))
 }
 
+function roleBadgeClass(role: string): string {
+  switch (role) {
+    case 'admin':
+      return 'border-violet-200 bg-violet-50 text-violet-700'
+    case 'superadmin':
+      return 'border-purple-200 bg-purple-50 text-purple-800'
+    case 'support':
+      return 'border-slate-200 bg-slate-50 text-slate-700'
+    case 'state_err':
+      return 'border-orange-200 bg-orange-50 text-orange-700'
+    case 'base_err':
+      return 'border-sky-200 bg-sky-50 text-sky-700'
+    case 'partner':
+      return 'border-teal-200 bg-teal-50 text-teal-700'
+    default:
+      return 'border-border bg-muted text-foreground/80'
+  }
+}
+
+function avatarTone(name: string | null | undefined): string {
+  const tones = [
+    'bg-sky-100 text-sky-700',
+    'bg-violet-100 text-violet-700',
+    'bg-emerald-100 text-emerald-700',
+    'bg-amber-100 text-amber-800',
+    'bg-rose-100 text-rose-700',
+    'bg-teal-100 text-teal-700',
+  ]
+  const key = (name || '?').trim()
+  let hash = 0
+  for (let i = 0; i < key.length; i += 1) hash = (hash + key.charCodeAt(i) * (i + 1)) % tones.length
+  return tones[hash]
+}
+
 function getAccessScopeParts(
   user: ActiveUserListItem,
   states: State[],
   partnerNameById: Map<string, string>,
-  t: (key: string, opts?: Record<string, string>) => string
+  t: (key: string, opts?: Record<string, string | number>) => string
 ): { label: string; details: string[] } {
   if (user.role === 'partner') {
     const name = user.partner_id ? partnerNameById.get(user.partner_id) : null
@@ -198,7 +215,7 @@ function getAccessScopeLabel(
   user: ActiveUserListItem,
   states: State[],
   partnerNameById: Map<string, string>,
-  t: (key: string, opts?: Record<string, string>) => string
+  t: (key: string, opts?: Record<string, string | number>) => string
 ): string {
   return getAccessScopeParts(user, states, partnerNameById, t).label
 }
@@ -245,6 +262,7 @@ export default function AccessRightsManagement({
   const [deleteUserId, setDeleteUserId] = useState<string | null>(null)
   const [statusConfirmUserId, setStatusConfirmUserId] = useState<string | null>(null)
   const [actionsOpenId, setActionsOpenId] = useState<string | null>(null)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
   const [summary, setSummary] = useState<SummaryCounts>({
     total: 0,
     active: 0,
@@ -405,48 +423,42 @@ export default function AccessRightsManagement({
   const fetchUsers = useCallback(async () => {
     try {
       setIsLoading(true)
-      const { users: fetchedUsers, total } = await getActiveUsers({
-        page: currentPage,
-        pageSize,
-        roles: selectedRoles.length > 0 ? selectedRoles : undefined,
-        statuses: selectedStatuses.length > 0 ? selectedStatuses : undefined,
-        status: 'all',
-        sortOrder: 'desc',
-        currentUserRole,
-        currentUserErrId,
-        stateFilters: selectedStates.length > 0 ? selectedStates : undefined,
-        search: debouncedSearch.trim() || undefined,
-        scopes: selectedScopes.length > 0 ? selectedScopes : undefined,
-        errIds: selectedErrIds.length > 0 ? selectedErrIds : undefined,
-        partnerIds: selectedPartnerIds.length > 0 ? selectedPartnerIds : undefined,
-      })
+      setError(null)
 
-      const formattedUsers: ActiveUserListItem[] = fetchedUsers
-        .filter((user) => currentUserRole === 'support' || user.role !== 'support')
-        .map((user) => ({
-          id: user.id,
-          err_id: user.err_id,
-          partner_id: (user as { partner_id?: string | null }).partner_id ?? null,
-          display_name: user.display_name,
-          role: user.role as PortalRole,
-          status: user.status as 'active' | 'suspended',
-          createdAt: new Date(user.created_at || '').toLocaleDateString(),
-          updatedAt: user.updated_at ? new Date(user.updated_at).toLocaleDateString() : null,
-          err_name: user.emergency_rooms?.name || '-',
-          err_code: user.emergency_rooms?.err_code || '-',
-          state_name: user.emergency_rooms?.state?.state_name || '-',
-          can_see_all_states: user.can_see_all_states ?? true,
-          visible_states: user.visible_states || [],
-          email: (user as User & { email?: string | null }).email ?? null,
-        }))
+      const params = new URLSearchParams()
+      params.set('page', String(currentPage))
+      params.set('pageSize', String(pageSize))
+      if (debouncedSearch.trim()) params.set('search', debouncedSearch.trim())
+      if (selectedRoles.length > 0) params.set('roles', selectedRoles.join(','))
+      if (selectedStatuses.length > 0) {
+        params.set('statuses', selectedStatuses.join(','))
+      }
+      if (selectedStates.length > 0) {
+        params.set('stateFilters', selectedStates.join(','))
+      }
+      if (selectedScopes.length > 0) params.set('scopes', selectedScopes.join(','))
+      if (selectedErrIds.length > 0) params.set('errIds', selectedErrIds.join(','))
+      if (selectedPartnerIds.length > 0) {
+        params.set('partnerIds', selectedPartnerIds.join(','))
+      }
 
-      setUsers(formattedUsers)
-      const supportCount =
-        currentUserRole === 'support'
-          ? 0
-          : fetchedUsers.filter((u) => u.role === 'support').length
-      setTotalUsers(Math.max(0, total - supportCount))
+      const res = await fetch(`/api/users/active?${params.toString()}`)
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(
+          typeof body?.error === 'string' ? body.error : 'Failed to fetch users'
+        )
+      }
+
+      const data = (await res.json()) as {
+        users: ActiveUserListItem[]
+        total: number
+      }
+
+      setUsers(data.users || [])
+      setTotalUsers(data.total ?? 0)
       setPendingPartnerRoleUserIds(new Set())
+      setSelectedIds(new Set())
     } catch (err) {
       setError(t('common:error_fetching_data'))
       console.error(err)
@@ -463,8 +475,6 @@ export default function AccessRightsManagement({
     selectedErrIds,
     selectedPartnerIds,
     debouncedSearch,
-    currentUserRole,
-    currentUserErrId,
     t,
   ])
 
@@ -511,12 +521,12 @@ export default function AccessRightsManagement({
         errOptions: errOptions.map((e) => ({ value: e.id, label: e.name })),
         partnerOptions: partners.map((p) => ({ value: p.id, label: p.name })),
         roleOptions: [
-          { value: 'admin', label: t('users:admin_role') },
-          { value: 'superadmin', label: t('users:superadmin_role') },
-          { value: 'support', label: t('users:support_role') },
-          { value: 'state_err', label: t('users:state_err_role') },
-          { value: 'base_err', label: t('users:base_err_role') },
-          { value: 'partner', label: t('users:partner_role', { defaultValue: 'Partner' }) },
+          { value: 'admin', label: getPortalRoleLabel('admin', t) },
+          { value: 'superadmin', label: getPortalRoleLabel('superadmin', t) },
+          { value: 'support', label: getPortalRoleLabel('support', t) },
+          { value: 'state_err', label: getPortalRoleLabel('state_err', t) },
+          { value: 'base_err', label: getPortalRoleLabel('base_err', t) },
+          { value: 'partner', label: getPortalRoleLabel('partner', t) },
         ],
         labels: {
           role: t('users:role'),
@@ -717,23 +727,29 @@ export default function AccessRightsManagement({
     setAccessEditUserId(userId)
   }
 
-  const renderStatus = (status: 'active' | 'suspended') => (
-    <span
-      className={cn(
-        'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium',
-        status === 'active'
-          ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400'
-          : 'bg-rose-500/10 text-rose-700 dark:text-rose-400'
-      )}
-    >
-      {status === 'active' ? (
-        <Check className="size-3 shrink-0" aria-hidden />
-      ) : (
-        <X className="size-3 shrink-0" aria-hidden />
-      )}
-      {t(`users:${status}_status`)}
-    </span>
-  )
+  const renderStatus = (status: 'active' | 'suspended') => {
+    const isActive = status === 'active'
+    return (
+      <span
+        className={cn(
+          'inline-flex items-center gap-1.5 rounded-md px-2.5 py-0.5 text-[11px] font-medium',
+          isActive
+            ? 'bg-emerald-50 text-emerald-700'
+            : 'bg-amber-50 text-amber-800'
+        )}
+      >
+        <span
+          className={cn(
+            'size-1.5 shrink-0 rounded-full',
+            isActive ? 'bg-emerald-500' : 'bg-amber-500'
+          )}
+          aria-hidden
+        />
+        <span className="sr-only">{isActive ? 'Active' : 'Suspended'}: </span>
+        {t(`users:${status}_status`)}
+      </span>
+    )
+  }
 
   const renderScopeDetails = (user: ActiveUserListItem) => {
     if (user.role === 'partner') {
@@ -793,22 +809,47 @@ export default function AccessRightsManagement({
 
   const renderAccessScopeCell = (user: ActiveUserListItem) => {
     const scope = getAccessScopeParts(user, states, partnerNameById, t)
+    const ScopeIcon =
+      user.role === 'partner'
+        ? Handshake
+        : user.role === 'base_err'
+          ? Building2
+          : scope.details.length > 1
+            ? MapPin
+            : scope.label.toLowerCase().includes('all')
+              ? Globe2
+              : MapPin
+
+    const pill = (
+      <span className="inline-flex max-w-full items-center gap-1.5 truncate rounded-md border border-slate-100 bg-slate-50 px-2 py-0.5 text-[11px] font-medium text-foreground/90 dark:border-border/50 dark:bg-muted/40">
+        <ScopeIcon className="size-3 shrink-0 text-muted-foreground" aria-hidden />
+        <span className="truncate">{scope.label}</span>
+      </span>
+    )
+
     if (scope.details.length > 1) {
       return (
         <Popover>
           <PopoverTrigger asChild>
             <button
               type="button"
-              className="max-w-full truncate text-start text-xs text-foreground/90 underline-offset-2 hover:underline"
+              className="max-w-full text-start"
               onClick={(e) => e.stopPropagation()}
             >
-              {scope.label}
+              {pill}
             </button>
           </PopoverTrigger>
-          <PopoverContent className="w-56 p-2" align="start" onClick={(e) => e.stopPropagation()}>
-            <ul className="space-y-1 text-xs">
+          <PopoverContent
+            className="z-[200] w-56 p-2"
+            align="start"
+            collisionPadding={12}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <ul className="max-h-48 space-y-1 overflow-y-auto text-xs">
               {scope.details.map((name) => (
-                <li key={name}>{name}</li>
+                <li key={name} className="truncate text-foreground/90">
+                  {name}
+                </li>
               ))}
             </ul>
           </PopoverContent>
@@ -816,8 +857,8 @@ export default function AccessRightsManagement({
       )
     }
     return (
-      <span className="block truncate text-xs text-foreground/90" title={scope.label}>
-        {scope.label}
+      <span className="block max-w-full" title={scope.label}>
+        {pill}
       </span>
     )
   }
@@ -831,243 +872,356 @@ export default function AccessRightsManagement({
         </div>
       )}
 
-      {/* Compact summary — secondary to the table */}
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
-        <span>
-          <span className="font-medium text-foreground tabular-nums">{summary.total}</span>{' '}
-          {t('users:summary_total', { defaultValue: 'Total Users' })}
-        </span>
-        <span className="text-border">·</span>
-        <span>
-          <span className="font-medium text-foreground tabular-nums">{summary.active}</span>{' '}
-          {t('users:summary_active', { defaultValue: 'Active' })}
-        </span>
-        <span className="text-border">·</span>
-        <span>
-          <span className="font-medium text-foreground tabular-nums">{summary.suspended}</span>{' '}
-          {t('users:summary_suspended', { defaultValue: 'Suspended' })}
-        </span>
-        <span className="text-border">·</span>
-        <span>
-          <span className="font-medium text-foreground tabular-nums">{summary.baseErr}</span>{' '}
-          {t('users:summary_base_err', { defaultValue: 'Base ERR' })}
-        </span>
-      </div>
-
-      {/* Search + SmartFilter */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="relative w-full max-w-sm">
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder={t('users:search_users', { defaultValue: 'Search users...' })}
-            className="h-9 pl-8 text-sm"
-            aria-label={t('users:search_users', { defaultValue: 'Search users...' })}
-          />
-        </div>
-        <SmartFilter
-          fields={filterFields}
-          filters={filters}
-          onFiltersChange={setFilters}
-          urlParamPrefix="um_"
-          className="min-w-0 flex-1 sm:items-end"
-        />
-      </div>
-
-      {/* Table */}
-      <div className="overflow-x-auto rounded-lg border border-border/60 bg-background">
-        <div className="min-w-[720px]">
-          <div className="grid grid-cols-[minmax(200px,1.6fr)_120px_minmax(140px,1.2fr)_120px_52px] gap-3 border-b border-border bg-muted/40 px-4 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-            <div>{t('users:user_column', { defaultValue: 'User' })}</div>
-            <div>{t('users:role')}</div>
-            <div>{t('users:access_scope', { defaultValue: 'Access Scope' })}</div>
-            <div>{t('users:status')}</div>
-            <div className="text-center">{t('users:actions')}</div>
-          </div>
-
-          {isLoading && users.length === 0 ? (
-            <div className="px-4 py-12 text-center text-sm text-muted-foreground">
-              {t('users:loading')}
-            </div>
-          ) : filteredUsers.length === 0 ? (
-            <div className="px-4 py-12 text-center space-y-1">
-              <div className="text-sm font-medium">
-                {t('users:no_users', { defaultValue: 'No users found' })}
+      {/* Summary cards — metrics with compact status chips (no large icons) */}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {[
+          {
+            label: t('users:summary_total', { defaultValue: 'Total Users' }),
+            value: summary.total,
+            description: t('users:summary_total_desc', {
+              defaultValue: 'Total registered users',
+            }),
+            badge: t('users:summary_badge_all', { defaultValue: 'All' }),
+            badgeClass: 'bg-emerald-50 text-emerald-700',
+          },
+          {
+            label: t('users:summary_active', { defaultValue: 'Active' }),
+            value: summary.active,
+            description: t('users:summary_active_desc', {
+              defaultValue: 'Currently active',
+            }),
+            badge: t('users:summary_badge_live', { defaultValue: 'Live' }),
+            badgeClass: 'bg-sky-50 text-sky-700',
+          },
+          {
+            label: t('users:summary_suspended', { defaultValue: 'Suspended' }),
+            value: summary.suspended,
+            description: t('users:summary_suspended_desc', {
+              defaultValue: 'Currently suspended',
+            }),
+            badge: t('users:summary_badge_hold', { defaultValue: 'Hold' }),
+            badgeClass: 'bg-amber-50 text-amber-800',
+          },
+          {
+            label: t('users:summary_base_err', { defaultValue: 'Beneficiary Entity' }),
+            value: summary.baseErr,
+            description: t('users:summary_base_err_desc', {
+              defaultValue: 'Room-scoped users',
+            }),
+            badge: t('users:summary_badge_scoped', { defaultValue: 'Scoped' }),
+            badgeClass: 'bg-slate-100 text-slate-600',
+          },
+        ].map((card) => (
+          <div
+            key={card.label}
+            className="rounded-lg border border-slate-100 bg-white p-4 shadow-sm dark:border-border/40 dark:bg-card"
+          >
+            <div className="flex items-start justify-between gap-2">
+              <div className="text-[11px] font-medium text-muted-foreground">
+                {card.label}
               </div>
-              <div className="text-xs text-muted-foreground">
-                {t('users:no_users_hint', {
-                  defaultValue: 'Try changing your filters or search.',
+              <span
+                className={cn(
+                  'inline-flex shrink-0 items-center rounded-md px-2 py-0.5 text-[10px] font-semibold',
+                  card.badgeClass
+                )}
+              >
+                {card.badge}
+              </span>
+            </div>
+            <div className="mt-2 text-3xl font-bold tabular-nums tracking-tight text-foreground">
+              {card.value.toLocaleString()}
+            </div>
+            <div className="mt-1 text-xs text-muted-foreground">{card.description}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Unified directory panel */}
+      <div className="overflow-hidden rounded-lg border border-slate-100 bg-white shadow-sm dark:border-border/40 dark:bg-card">
+        <div className="flex flex-row flex-wrap items-center gap-2 border-b border-slate-100 px-4 py-3 dark:border-border/40">
+          <div className="relative w-full max-w-xs shrink-0 sm:w-56">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder={t('users:search_users', { defaultValue: 'Search users...' })}
+              className="h-8 rounded-md border-slate-200 bg-background pl-8 text-sm"
+              aria-label={t('users:search_users', { defaultValue: 'Search users...' })}
+            />
+          </div>
+          <SmartFilter
+            fields={filterFields}
+            filters={filters}
+            onFiltersChange={setFilters}
+            urlParamPrefix="um_"
+            layout="inline"
+            className="min-w-0 flex-1"
+          />
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="ml-auto h-8 w-8 shrink-0 rounded-md border-slate-200 p-0"
+            onClick={() => void refreshAfterMutation()}
+            disabled={isLoading}
+            aria-label={t('common:refresh', { defaultValue: 'Refresh' })}
+          >
+            <RefreshCw className={cn('size-4', isLoading && 'animate-spin')} />
+          </Button>
+        </div>
+
+        <div className="overflow-x-auto">
+          <div className="min-w-[820px]">
+            <div className="grid grid-cols-[36px_minmax(220px,1.8fr)_120px_minmax(140px,1.2fr)_110px_88px] items-center gap-3 border-b border-slate-100 bg-slate-50/60 px-4 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground dark:border-border/40 dark:bg-muted/15">
+              <div className="flex items-center">
+                <Checkbox
+                  checked={
+                    filteredUsers.length > 0 &&
+                    filteredUsers.every((u) => selectedIds.has(u.id))
+                      ? true
+                      : filteredUsers.some((u) => selectedIds.has(u.id))
+                        ? 'indeterminate'
+                        : false
+                  }
+                  onCheckedChange={(checked) => {
+                    if (checked === true) {
+                      setSelectedIds(new Set(filteredUsers.map((u) => u.id)))
+                    } else {
+                      setSelectedIds(new Set())
+                    }
+                  }}
+                  aria-label={t('users:select_all', { defaultValue: 'Select all' })}
+                />
+              </div>
+              <div>{t('users:user_column', { defaultValue: 'User' })}</div>
+              <div>{t('users:role')}</div>
+              <div>{t('users:access_scope', { defaultValue: 'Access Scope' })}</div>
+              <div>{t('users:status')}</div>
+              <div className="text-end">{t('users:actions')}</div>
+            </div>
+
+            {isLoading && users.length === 0 ? (
+              <div className="px-4 py-8 text-center text-sm text-muted-foreground">
+                {t('users:loading')}
+              </div>
+            ) : filteredUsers.length === 0 ? (
+              <div className="space-y-1 px-4 py-8 text-center">
+                <div className="text-sm font-medium">
+                  {t('users:no_users', { defaultValue: 'No users found' })}
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  {t('users:no_users_hint', {
+                    defaultValue: 'Try changing your filters or search.',
+                  })}
+                </div>
+              </div>
+            ) : (
+              <div className="divide-y divide-slate-100 dark:divide-border/40">
+                {filteredUsers.map((user) => {
+                  const displayRole = pendingPartnerRoleUserIds.has(user.id)
+                    ? 'partner'
+                    : user.role
+                  const email = user.email?.trim() || null
+
+                  return (
+                    <div
+                      key={user.id}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => setDetailsUserId(user.id)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault()
+                          setDetailsUserId(user.id)
+                        }
+                      }}
+                      className="grid grid-cols-[36px_minmax(220px,1.8fr)_120px_minmax(140px,1.2fr)_110px_88px] items-center gap-3 px-4 py-3 transition-colors hover:bg-slate-50/80 cursor-pointer outline-none focus-visible:bg-slate-50 dark:hover:bg-muted/20"
+                    >
+                      <div
+                        className="flex items-center"
+                        onClick={(e) => e.stopPropagation()}
+                        onKeyDown={(e) => e.stopPropagation()}
+                      >
+                        <Checkbox
+                          checked={selectedIds.has(user.id)}
+                          onCheckedChange={(checked) => {
+                            setSelectedIds((prev) => {
+                              const next = new Set(prev)
+                              if (checked === true) next.add(user.id)
+                              else next.delete(user.id)
+                              return next
+                            })
+                          }}
+                          aria-label={t('users:select_user', {
+                            defaultValue: 'Select user',
+                          })}
+                        />
+                      </div>
+
+                      <div className="flex min-w-0 items-center gap-3">
+                        <div
+                          className={cn(
+                            'flex size-9 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold tracking-wide',
+                            avatarTone(user.display_name)
+                          )}
+                          aria-hidden
+                        >
+                          {getInitials(user.display_name)}
+                        </div>
+                        <div className="min-w-0 leading-tight">
+                          <button
+                            type="button"
+                            className="block w-full truncate text-start text-sm font-semibold text-foreground hover:underline"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setDetailsUserId(user.id)
+                            }}
+                          >
+                            {user.display_name || '—'}
+                          </button>
+                          {email ? (
+                            <div className="truncate text-xs text-muted-foreground">
+                              {email}
+                            </div>
+                          ) : null}
+                        </div>
+                      </div>
+
+                      <div>
+                        <span
+                          className={cn(
+                            'inline-flex h-6 max-w-full items-center truncate rounded-md border px-2 text-[10px] font-semibold',
+                            roleBadgeClass(displayRole)
+                          )}
+                        >
+                          {getPortalRoleLabel(displayRole, t)}
+                        </span>
+                      </div>
+
+                      <div className="min-w-0">{renderAccessScopeCell(user)}</div>
+
+                      <div>{renderStatus(user.status)}</div>
+
+                      <div
+                        className="flex items-center justify-end gap-0.5"
+                        onClick={(e) => e.stopPropagation()}
+                        onKeyDown={(e) => e.stopPropagation()}
+                      >
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
+                          aria-label={t('users:user_details', { defaultValue: 'User Details' })}
+                          onClick={() => setDetailsUserId(user.id)}
+                        >
+                          <Eye className="size-4" />
+                        </Button>
+                        <Popover
+                          open={actionsOpenId === user.id}
+                          onOpenChange={(open) =>
+                            setActionsOpenId(open ? user.id : null)
+                          }
+                        >
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
+                              aria-label={t('users:actions')}
+                            >
+                              <MoreHorizontal className="size-4" />
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="z-[200] w-52 p-1" align="end" collisionPadding={12}>
+                            <div className="flex flex-col">
+                              <button
+                                type="button"
+                                className="inline-flex items-center gap-2 rounded-sm px-2 py-1.5 text-start text-xs hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"
+                                onClick={() => openEditUser(user.id)}
+                              >
+                                <Pencil className="size-3.5 shrink-0 text-muted-foreground" />
+                                {t('users:edit_user', { defaultValue: 'Edit User' })}
+                              </button>
+                              <button
+                                type="button"
+                                className="inline-flex items-center gap-2 rounded-sm px-2 py-1.5 text-start text-xs hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"
+                                onClick={() => openAccessRights(user.id)}
+                              >
+                                <Shield className="size-3.5 shrink-0 text-muted-foreground" />
+                                {t('users:access_rights_action', {
+                                  defaultValue: 'Access Rights',
+                                })}
+                              </button>
+                              <div className="my-1 h-px bg-border" role="separator" />
+                              <button
+                                type="button"
+                                className="inline-flex items-center gap-2 rounded-sm px-2 py-1.5 text-start text-xs hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"
+                                onClick={() => openStatusConfirm(user.id)}
+                              >
+                                {user.status === 'active' ? (
+                                  <Pause className="size-3.5 shrink-0 text-muted-foreground" />
+                                ) : (
+                                  <Play className="size-3.5 shrink-0 text-muted-foreground" />
+                                )}
+                                {user.status === 'active'
+                                  ? t('users:suspend_user', {
+                                      defaultValue: 'Suspend User',
+                                    })
+                                  : t('users:activate_user', {
+                                      defaultValue: 'Activate User',
+                                    })}
+                              </button>
+                              <div className="my-1 h-px bg-border" role="separator" />
+                              <button
+                                type="button"
+                                className="inline-flex items-center gap-2 rounded-sm px-2 py-1.5 text-start text-xs text-destructive hover:bg-destructive/10 focus-visible:bg-destructive/10 focus-visible:outline-none"
+                                onClick={() => openDeleteUser(user.id)}
+                              >
+                                <Trash2 className="size-3.5 shrink-0" />
+                                {t('users:delete_user', { defaultValue: 'Delete User' })}
+                              </button>
+                            </div>
+                          </PopoverContent>
+                        </Popover>
+                      </div>
+                    </div>
+                  )
                 })}
               </div>
-            </div>
-          ) : (
-            <div className="divide-y divide-border/50">
-              {filteredUsers.map((user) => {
-                const displayRole = pendingPartnerRoleUserIds.has(user.id)
-                  ? 'partner'
-                  : user.role
-                const email = user.email
+            )}
+          </div>
+        </div>
 
-                return (
-                  <div
-                    key={user.id}
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => setDetailsUserId(user.id)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault()
-                        setDetailsUserId(user.id)
-                      }
-                    }}
-                    className="grid grid-cols-[minmax(200px,1.6fr)_120px_minmax(140px,1.2fr)_120px_52px] gap-3 px-4 py-2.5 items-center transition-colors hover:bg-muted/30 cursor-pointer outline-none focus-visible:bg-muted/40"
-                  >
-                    <div className="flex min-w-0 items-center gap-2.5">
-                      <div
-                        className="flex size-8 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-semibold tracking-wide text-muted-foreground"
-                        aria-hidden
-                      >
-                        {getInitials(user.display_name)}
-                      </div>
-                      <div className="min-w-0 leading-tight">
-                        <button
-                          type="button"
-                          className="block w-full truncate text-start text-sm font-semibold text-foreground hover:underline"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            setDetailsUserId(user.id)
-                          }}
-                        >
-                          {user.display_name || '—'}
-                        </button>
-                        {email ? (
-                          <div className="truncate text-xs text-muted-foreground">{email}</div>
-                        ) : null}
-                      </div>
-                    </div>
-
-                    <div>
-                      <Badge
-                        variant="secondary"
-                        className="h-5 max-w-full truncate rounded-md border border-border/60 bg-muted/60 px-1.5 text-[10px] font-medium text-foreground/80"
-                      >
-                        {roleLabel(displayRole, t)}
-                      </Badge>
-                    </div>
-
-                    <div className="min-w-0">{renderAccessScopeCell(user)}</div>
-
-                    <div>{renderStatus(user.status)}</div>
-
-                    <div
-                      className="flex justify-center"
-                      onClick={(e) => e.stopPropagation()}
-                      onKeyDown={(e) => e.stopPropagation()}
-                    >
-                      <Popover
-                        open={actionsOpenId === user.id}
-                        onOpenChange={(open) =>
-                          setActionsOpenId(open ? user.id : null)
-                        }
-                      >
-                        <PopoverTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
-                            aria-label={t('users:actions')}
-                          >
-                            <MoreHorizontal className="size-4" />
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="z-[200] w-52 p-1" align="end" collisionPadding={12}>
-                          <div className="flex flex-col">
-                            <button
-                              type="button"
-                              className="inline-flex items-center gap-2 rounded-sm px-2 py-1.5 text-start text-xs hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"
-                              onClick={() => openEditUser(user.id)}
-                            >
-                              <Pencil className="size-3.5 shrink-0 text-muted-foreground" />
-                              {t('users:edit_user', { defaultValue: 'Edit User' })}
-                            </button>
-                            <button
-                              type="button"
-                              className="inline-flex items-center gap-2 rounded-sm px-2 py-1.5 text-start text-xs hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"
-                              onClick={() => openAccessRights(user.id)}
-                            >
-                              <Shield className="size-3.5 shrink-0 text-muted-foreground" />
-                              {t('users:access_rights_action', {
-                                defaultValue: 'Access Rights',
-                              })}
-                            </button>
-                            <div className="my-1 h-px bg-border" role="separator" />
-                            <button
-                              type="button"
-                              className="inline-flex items-center gap-2 rounded-sm px-2 py-1.5 text-start text-xs hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"
-                              onClick={() => openStatusConfirm(user.id)}
-                            >
-                              {user.status === 'active' ? (
-                                <Pause className="size-3.5 shrink-0 text-muted-foreground" />
-                              ) : (
-                                <Play className="size-3.5 shrink-0 text-muted-foreground" />
-                              )}
-                              {user.status === 'active'
-                                ? t('users:suspend_user', {
-                                    defaultValue: 'Suspend User',
-                                  })
-                                : t('users:activate_user', {
-                                    defaultValue: 'Activate User',
-                                  })}
-                            </button>
-                            <div className="my-1 h-px bg-border" role="separator" />
-                            <button
-                              type="button"
-                              className="inline-flex items-center gap-2 rounded-sm px-2 py-1.5 text-start text-xs text-destructive hover:bg-destructive/10 focus-visible:bg-destructive/10 focus-visible:outline-none"
-                              onClick={() => openDeleteUser(user.id)}
-                            >
-                              <Trash2 className="size-3.5 shrink-0" />
-                              {t('users:delete_user', { defaultValue: 'Delete User' })}
-                            </button>
-                          </div>
-                        </PopoverContent>
-                      </Popover>
-                    </div>
-                  </div>
-                )
+        <div className="flex flex-col gap-3 border-t border-slate-100 px-4 py-3 sm:flex-row sm:items-center sm:justify-between dark:border-border/40">
+          <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+            <span>
+              {t('users:showing_users', {
+                defaultValue: 'Showing {{from}}–{{to}} of {{total}}',
+                from: showingFrom,
+                to: showingTo,
+                total: totalUsers,
               })}
+            </span>
+            <div className="flex items-center gap-2">
+              <span>{t('users:rows_per_page', { defaultValue: 'Rows' })}</span>
+              <Select
+                value={String(pageSize)}
+                onValueChange={(v) => setPageSize(Number(v))}
+              >
+                <SelectTrigger className="h-8 w-[72px] border-input bg-background text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {PAGE_SIZE_OPTIONS.map((size) => (
+                    <SelectItem key={size} value={String(size)}>
+                      {size}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
-          )}
-        </div>
-      </div>
-      {/* Pagination — server-side via getActiveUsers */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="text-xs text-muted-foreground">
-          {t('users:showing_users', {
-            defaultValue: 'Showing {{from}}–{{to}} of {{total}}',
-            from: showingFrom,
-            to: showingTo,
-            total: totalUsers,
-          })}
-        </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <span>{t('users:rows_per_page', { defaultValue: 'Rows per page' })}</span>
-            <Select
-              value={String(pageSize)}
-              onValueChange={(v) => setPageSize(Number(v))}
-            >
-              <SelectTrigger className="h-8 w-[72px] border-input bg-background text-xs">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {PAGE_SIZE_OPTIONS.map((size) => (
-                  <SelectItem key={size} value={String(size)}>
-                    {size}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
           </div>
           <div className="flex items-center gap-1">
             <Button
@@ -1158,7 +1312,7 @@ export default function AccessRightsManagement({
                     <div className="text-xs text-muted-foreground">{t('users:role')}</div>
                     <div className="mt-1">
                       <Badge variant="secondary" className="text-[10px]">
-                        {roleLabel(
+                        {getPortalRoleLabel(
                           pendingPartnerRoleUserIds.has(detailsUser.id)
                             ? 'partner'
                             : detailsUser.role,
@@ -1241,6 +1395,11 @@ export default function AccessRightsManagement({
         user={editUser}
         currentUserRole={currentUserRole}
         currentUserId={currentUserId}
+        accessScopeLabel={
+          editUser
+            ? getAccessScopeLabel(editUser, states, partnerNameById, t)
+            : null
+        }
         onSaved={async () => {
           await refreshAfterMutation()
           showSuccess(
@@ -1271,7 +1430,7 @@ export default function AccessRightsManagement({
         user={statusConfirmUser}
         roleLabel={
           statusConfirmUser
-            ? roleLabel(
+            ? getPortalRoleLabel(
                 pendingPartnerRoleUserIds.has(statusConfirmUser.id)
                   ? 'partner'
                   : statusConfirmUser.role,
@@ -1357,17 +1516,15 @@ function AccessRightsEditor({
           </SelectTrigger>
           <SelectContent>
             {currentUserRole === 'support' && (
-              <SelectItem value="support">{t('users:support_role')}</SelectItem>
+              <SelectItem value="support">{getPortalRoleLabel('support', t)}</SelectItem>
             )}
-            <SelectItem value="superadmin">{t('users:superadmin_role')}</SelectItem>
+            <SelectItem value="superadmin">{getPortalRoleLabel('superadmin', t)}</SelectItem>
             {(currentUserRole === 'support' || currentUserRole === 'superadmin') && (
-              <SelectItem value="admin">{t('users:admin_role')}</SelectItem>
+              <SelectItem value="admin">{getPortalRoleLabel('admin', t)}</SelectItem>
             )}
-            <SelectItem value="state_err">{t('users:state_err_role')}</SelectItem>
-            <SelectItem value="base_err">{t('users:base_err_role')}</SelectItem>
-            <SelectItem value="partner">
-              {t('users:partner_role', { defaultValue: 'Partner' })}
-            </SelectItem>
+            <SelectItem value="state_err">{getPortalRoleLabel('state_err', t)}</SelectItem>
+            <SelectItem value="base_err">{getPortalRoleLabel('base_err', t)}</SelectItem>
+            <SelectItem value="partner">{getPortalRoleLabel('partner', t)}</SelectItem>
           </SelectContent>
         </Select>
         {saving && (

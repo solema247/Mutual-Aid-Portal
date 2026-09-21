@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/select'
 import { ActiveUserListItem } from '@/app/api/users/types/users'
 import { getActiveUsers, suspendUser, activateUser } from '@/app/api/users/utils/users'
+import { getPortalRoleLabel } from '@/lib/roleLabels'
 
 interface ActiveUsersListProps {
   isLoading: boolean;
@@ -82,7 +83,7 @@ export default function ActiveUsersList({
     return currentUserRole === 'support' || currentUserRole === 'superadmin' || currentUserRole === 'admin'
   }
 
-  const handleStatusChange = async (userId: string, newStatus: 'active' | 'suspended', userRole: string) => {
+  const handleStatusChange = async (userId: string, newStatus: 'active' | 'suspended') => {
     try {
       setProcessingId(userId)
       setError(null)
@@ -92,9 +93,11 @@ export default function ActiveUsersList({
         await activateUser(userId, currentUserRole)
       }
       fetchUsers()
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error(t('common:error_updating_user_status'), error)
-      setError(error.message || t('common:error_updating_user_status'))
+      const message =
+        error instanceof Error ? error.message : t('common:error_updating_user_status')
+      setError(message)
       setTimeout(() => setError(null), 5000) // Clear error after 5 seconds
     } finally {
       setProcessingId(null)
@@ -128,11 +131,13 @@ export default function ActiveUsersList({
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">{t('users:all_roles')}</SelectItem>
-            {currentUserRole === 'support' && <SelectItem value="support">Support</SelectItem>}
-            <SelectItem value="superadmin">Superadmin</SelectItem>
-            <SelectItem value="admin">{t('users:admin_role')}</SelectItem>
-            <SelectItem value="state_err">{t('users:state_err_role')}</SelectItem>
-            <SelectItem value="base_err">{t('users:base_err_role')}</SelectItem>
+            {currentUserRole === 'support' && (
+              <SelectItem value="support">{getPortalRoleLabel('support', t)}</SelectItem>
+            )}
+            <SelectItem value="superadmin">{getPortalRoleLabel('superadmin', t)}</SelectItem>
+            <SelectItem value="admin">{getPortalRoleLabel('admin', t)}</SelectItem>
+            <SelectItem value="state_err">{getPortalRoleLabel('state_err', t)}</SelectItem>
+            <SelectItem value="base_err">{getPortalRoleLabel('base_err', t)}</SelectItem>
           </SelectContent>
         </Select>
 
@@ -192,7 +197,7 @@ export default function ActiveUsersList({
                         ? 'Only superadmin or support can change admin status'
                         : t(user.status === 'active' ? 'users:suspend' : 'users:activate')
                     }
-                    onClick={() => handleStatusChange(user.id, user.status === 'active' ? 'suspended' : 'active', user.role)}
+                    onClick={() => handleStatusChange(user.id, user.status === 'active' ? 'suspended' : 'active')}
                     disabled={
                       processingId === user.id ||
                       (user.role === 'superadmin' && currentUserRole !== 'support') ||

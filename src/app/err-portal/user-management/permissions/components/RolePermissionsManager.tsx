@@ -21,8 +21,10 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { ChevronDown, GripVertical } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { notifyPortalPermissionsChanged, useAllowedFunctions } from '@/hooks/useAllowedFunctions'
 import type { FunctionDefinition } from '@/lib/permissions'
+import { getPortalRoleLabel } from '@/lib/roleLabels'
 
 const MODULE_LABELS: Record<string, string> = {
   f1: 'F1 Work Plans',
@@ -60,13 +62,13 @@ const MODULE_ORDER = [
   'tickets',
 ] as const
 
-const ROLE_TABS: { id: string; label: string }[] = [
-  { id: 'base_err', label: 'Base ERR' },
-  { id: 'state_err', label: 'State ERR' },
-  { id: 'admin', label: 'Admin' },
-  { id: 'superadmin', label: 'Superadmin' },
-  { id: 'support', label: 'Support' },
-]
+const ROLE_TAB_IDS = [
+  'base_err',
+  'state_err',
+  'admin',
+  'superadmin',
+  'support',
+] as const
 
 const FULL_ACCESS = new Set(['superadmin', 'support'])
 const HIDDEN_CODES = new Set(['f1_assign_grant'])
@@ -128,6 +130,7 @@ function computeEffective(
 }
 
 export default function RolePermissionsManager() {
+  const { t } = useTranslation(['users'])
   const searchParams = useSearchParams()
   const { can } = useAllowedFunctions()
   const canManage = can('users_manage_permissions')
@@ -201,8 +204,11 @@ export default function RolePermissionsManager() {
 
   const visibleRoleTabs = useMemo(() => {
     const allowed = new Set(data?.visibleRoles ?? ['base_err', 'state_err'])
-    return ROLE_TABS.filter((t) => allowed.has(t.id))
-  }, [data])
+    return ROLE_TAB_IDS.filter((id) => allowed.has(id)).map((id) => ({
+      id,
+      label: getPortalRoleLabel(id, t),
+    }))
+  }, [data, t])
 
   useEffect(() => {
     if (!data) return
@@ -476,7 +482,7 @@ export default function RolePermissionsManager() {
           <Card className={cardClass}>
             <CardHeader className={cardHeaderClass}>
               <CardTitle className="text-sm">
-                Default pack — {ROLE_TABS.find((t) => t.id === roleTab)?.label ?? roleTab}
+                Default pack — {getPortalRoleLabel(roleTab, t)}
               </CardTitle>
               <CardDescription className="text-[11px] leading-snug">
                 {isFullAccessRole
@@ -598,8 +604,12 @@ export default function RolePermissionsManager() {
                       <thead className="sticky top-0 bg-muted/80 text-left">
                         <tr className="border-b">
                           <th className="px-1.5 py-1 font-medium">Name</th>
-                          <th className="px-1.5 py-1 font-medium">ERR</th>
-                          <th className="px-1.5 py-1 font-medium">State</th>
+                          <th className="px-1.5 py-1 font-medium">
+                            {getPortalRoleLabel('base_err', t)}
+                          </th>
+                          <th className="px-1.5 py-1 font-medium">
+                            {getPortalRoleLabel('state_err', t)}
+                          </th>
                         </tr>
                       </thead>
                       <tbody>
@@ -660,8 +670,12 @@ export default function RolePermissionsManager() {
                       <thead className="sticky top-0 bg-muted/80 text-left">
                         <tr className="border-b">
                           <th className="px-1.5 py-1 font-medium">Name</th>
-                          <th className="px-1.5 py-1 font-medium">ERR</th>
-                          <th className="px-1.5 py-1 font-medium">State</th>
+                          <th className="px-1.5 py-1 font-medium">
+                            {getPortalRoleLabel('base_err', t)}
+                          </th>
+                          <th className="px-1.5 py-1 font-medium">
+                            {getPortalRoleLabel('state_err', t)}
+                          </th>
                           <th className="px-1.5 py-1 font-medium">Diff</th>
                         </tr>
                       </thead>

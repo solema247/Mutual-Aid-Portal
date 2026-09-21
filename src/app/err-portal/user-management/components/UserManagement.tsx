@@ -124,7 +124,7 @@ export default function UserManagement() {
     <div className="space-y-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0 space-y-1">
-          <h1 className="text-xl font-semibold tracking-tight text-foreground">
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">
             {t('users:user_management_title', { defaultValue: 'User Management' })}
           </h1>
           <p className="text-sm text-muted-foreground">

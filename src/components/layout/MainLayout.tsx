@@ -1,12 +1,13 @@
 'use client'
 
-import { ReactNode, ReactElement, useState } from 'react'
+import { ReactNode, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import Sidebar, { type SidebarItem } from './Sidebar'
 import LanguageSwitch from '@/components/LanguageSwitch'
 import { Button } from '@/components/ui/button'
 import { Globe, Menu } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { getPortalRoleLabel } from '@/lib/roleLabels'
 
 interface MainLayoutProps {
   children: ReactNode
@@ -23,22 +24,15 @@ interface MainLayoutProps {
   headerExtra?: ReactNode
 }
 
-function formatRole(role: string | undefined): string {
+function formatRole(role: string | undefined, t: (key: string, opts?: Record<string, string>) => string): string {
   if (!role) return ''
-  const map: Record<string, string> = {
-    support: 'Support',
-    superadmin: 'Super Admin',
-    admin: 'Admin',
-    state_err: 'State ERR',
-    base_err: 'Base ERR',
-  }
-  return map[role.toLowerCase()] ?? role
+  return getPortalRoleLabel(role, t)
 }
 
 export default function MainLayout({ children, sidebarItems, sidebarTitle, userName, userRole, headerTitle, headerExtra }: MainLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [mobileSheetOpen, setMobileSheetOpen] = useState(false)
-  const { i18n } = useTranslation()
+  const { t, i18n } = useTranslation(['users', 'common', 'err'])
   const showHeader = !!headerTitle
   const isControlledSidebar = showHeader
 
@@ -48,10 +42,10 @@ export default function MainLayout({ children, sidebarItems, sidebarTitle, userN
     if (typeof document !== 'undefined') document.dir = newLang === 'ar' ? 'rtl' : 'ltr'
   }
 
-  const userDisplay = (userName ?? (userRole ? formatRole(userRole) : '')) || null
+  const userDisplay = (userName ?? (userRole ? formatRole(userRole, t) : '')) || null
 
   return (
-    <div className="flex h-screen max-h-[100dvh] overflow-hidden">
+    <div className="fixed inset-0 flex overflow-hidden">
       <Sidebar
         items={sidebarItems}
         title={sidebarTitle}
@@ -59,9 +53,9 @@ export default function MainLayout({ children, sidebarItems, sidebarTitle, userN
         mobileSheetOpen={showHeader ? mobileSheetOpen : undefined}
         onMobileSheetOpenChange={showHeader ? setMobileSheetOpen : undefined}
       />
-      <div className="flex flex-1 flex-col min-w-0 min-h-0">
+      <div className="flex h-full min-w-0 flex-1 flex-col overflow-hidden">
         {showHeader && (
-          <nav className="sticky top-0 z-40 shrink-0 w-full text-white backdrop-blur bg-gradient-to-r from-brand-header to-brand-purple">
+          <nav className="z-40 shrink-0 w-full text-white backdrop-blur bg-gradient-to-r from-brand-header to-brand-purple">
             <div className="mx-auto flex h-14 max-w-full items-center justify-between px-4 sm:px-6 lg:px-8">
               <div className="flex min-w-0 flex-1 items-center gap-4">
                 <Button
@@ -108,20 +102,20 @@ export default function MainLayout({ children, sidebarItems, sidebarTitle, userN
             </div>
           </nav>
         )}
-        <main className="flex-1 transition-all duration-300 min-w-0 w-full overflow-auto">
+        <main className="min-h-0 w-full min-w-0 flex-1 overflow-y-auto overscroll-contain">
           <div className={cn(
-            'container mx-auto px-4 sm:px-6 py-6 max-w-full',
+            'container mx-auto max-w-full px-4 pb-4 sm:px-6',
             showHeader ? 'pt-4' : 'pt-20 lg:pt-6'
           )}>
             {!showHeader && (
-              <div className="flex justify-end items-center gap-4 mb-6">
+              <div className="mb-4 flex items-center justify-end gap-4">
                 {userName && (
                   <span className="text-sm text-muted-foreground">{userName}</span>
                 )}
                 <LanguageSwitch />
               </div>
             )}
-            <div className="w-full">
+            <div className="h-auto w-full">
               {children}
             </div>
           </div>

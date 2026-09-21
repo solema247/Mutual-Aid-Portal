@@ -74,6 +74,7 @@ export function SmartFilter({
   onFiltersChange,
   urlParamPrefix = DEFAULT_URL_PREFIX,
   className,
+  layout = 'stacked',
   title,
   count,
   extraCounts,
@@ -170,6 +171,100 @@ export function SmartFilter({
     if (toAdd.length > 0) onFiltersChange(toAdd)
   }, [fields, onFiltersChange, searchParams, urlParamPrefix])
 
+  const addFilterButton = (
+    <Popover open={addFilterOpen} onOpenChange={setAddFilterOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="h-8 shrink-0 gap-1.5 text-xs font-medium"
+          aria-expanded={addFilterOpen}
+          aria-haspopup="listbox"
+        >
+          <Filter className="h-3.5 w-3.5" />
+          Add filter
+          <ChevronDown className="h-3.5 w-3.5 opacity-60" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="start"
+        side="bottom"
+        sideOffset={6}
+        collisionPadding={12}
+        className="z-[200] w-56 max-h-72 overflow-y-auto p-2"
+        role="group"
+        aria-label="Add filter"
+        onOpenAutoFocus={(e) => e.preventDefault()}
+        onCloseAutoFocus={(e) => e.preventDefault()}
+      >
+        <div className="px-2 pb-1.5 pt-0.5 text-xs font-medium text-muted-foreground">
+          Add filter
+        </div>
+        <div className="mb-1 h-px bg-border" role="separator" />
+        {fields.length === 0 ? (
+          <div className="px-2 py-2 text-xs text-muted-foreground">
+            No filters available
+          </div>
+        ) : (
+          fields.map((field) => {
+            const checked = activeFieldIds.has(field.id)
+            return (
+              <label
+                key={field.id}
+                className="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground"
+              >
+                <Checkbox
+                  checked={checked}
+                  onCheckedChange={(value) => {
+                    toggleCategoryFilter(field, value === true)
+                  }}
+                  aria-label={field.label}
+                />
+                <span className="truncate">{field.label}</span>
+              </label>
+            )
+          })
+        )}
+      </PopoverContent>
+    </Popover>
+  )
+
+  const filterChips = filters.length > 0 && (
+    <>
+      {filters.map((filter) => {
+        const field = fields.find((f) => f.id === filter.fieldId)
+        if (!field) return null
+        return (
+          <FilterChip
+            key={filter.id}
+            filter={filter}
+            field={field}
+            onValueChange={(v) => updateFilter(filter.id, v)}
+            onRemove={() => removeFilter(filter.id)}
+          />
+        )
+      })}
+      <button
+        type="button"
+        onClick={clearAll}
+        className="inline-flex shrink-0 items-center gap-1.5 rounded-sm px-2 py-1 text-xs text-muted-foreground hover:text-foreground"
+      >
+        <Eraser className="h-4 w-4 shrink-0" />
+        Clear all
+      </button>
+    </>
+  )
+
+  if (layout === 'inline') {
+    return (
+      <div className={cn('flex flex-row flex-wrap items-center gap-2', className)}>
+        {addFilterButton}
+        {filterChips}
+      </div>
+    )
+  }
+
   return (
     <div className={cn('flex flex-col gap-3', className)}>
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -187,87 +282,12 @@ export function SmartFilter({
             ))}
           </h2>
         )}
-        <Popover open={addFilterOpen} onOpenChange={setAddFilterOpen}>
-          <PopoverTrigger asChild>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="h-8 gap-1.5 text-xs font-medium"
-              aria-expanded={addFilterOpen}
-              aria-haspopup="listbox"
-            >
-              <Filter className="h-3.5 w-3.5" />
-              Add filter
-              <ChevronDown className="h-3.5 w-3.5 opacity-60" />
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent
-            align="start"
-            side="bottom"
-            sideOffset={6}
-            collisionPadding={12}
-            className="z-[200] w-56 max-h-72 overflow-y-auto p-2"
-            role="group"
-            aria-label="Add filter"
-            onOpenAutoFocus={(e) => e.preventDefault()}
-            onCloseAutoFocus={(e) => e.preventDefault()}
-          >
-            <div className="px-2 pb-1.5 pt-0.5 text-xs font-medium text-muted-foreground">
-              Add filter
-            </div>
-            <div className="mb-1 h-px bg-border" role="separator" />
-            {fields.length === 0 ? (
-              <div className="px-2 py-2 text-xs text-muted-foreground">
-                No filters available
-              </div>
-            ) : (
-              fields.map((field) => {
-                const checked = activeFieldIds.has(field.id)
-                return (
-                  <label
-                    key={field.id}
-                    className="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground"
-                  >
-                    <Checkbox
-                      checked={checked}
-                      onCheckedChange={(value) => {
-                        toggleCategoryFilter(field, value === true)
-                      }}
-                      aria-label={field.label}
-                    />
-                    <span className="truncate">{field.label}</span>
-                  </label>
-                )
-              })
-            )}
-          </PopoverContent>
-        </Popover>
+        {addFilterButton}
       </div>
 
       {filters.length > 0 && (
-        <div className="flex flex-wrap items-center gap-2">
-          {filters.map((filter) => {
-            const field = fields.find((f) => f.id === filter.fieldId)
-            if (!field) return null
-            return (
-              <FilterChip
-                key={filter.id}
-                filter={filter}
-                field={field}
-                onValueChange={(v) => updateFilter(filter.id, v)}
-                onRemove={() => removeFilter(filter.id)}
-              />
-            )
-          })}
-          <button
-            type="button"
-            onClick={clearAll}
-            className="inline-flex items-center gap-1.5 rounded-sm px-2 py-1 text-xs text-muted-foreground hover:text-foreground"
-          >
-            <Eraser className="h-4 w-4 shrink-0" />
-            Clear all
-          </button>
+        <div className="flex flex-row flex-wrap items-center gap-2">
+          {filterChips}
         </div>
       )}
     </div>

@@ -109,12 +109,12 @@ function F3MOUsPageContent() {
       <ReassignGrantDialog {...assignment} />
 
       <PaymentConfirmationDialog {...payment} />
-    </div>
-  )
-}
+                            </div>
+                          )
+                        }
 
 export default function F3MOUsPage() {
-  return (
+                          return (
     <Suspense fallback={<div className="w-full p-6">Loading...</div>}>
       <F3MOUsPageContent />
     </Suspense>

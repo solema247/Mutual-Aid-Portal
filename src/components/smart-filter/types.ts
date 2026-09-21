@@ -47,6 +47,11 @@ export interface SmartFilterProps {
   urlParamPrefix?: string
   /** Optional: custom class for container */
   className?: string
+  /**
+   * stacked (default): title row + chips on a second row
+   * inline: Add filter + chips in one horizontal wrapping row (compact toolbars)
+   */
+  layout?: 'stacked' | 'inline'
   /** Optional: show title/count (e.g. "Report Tracker (37)") */
   title?: string
   count?: number

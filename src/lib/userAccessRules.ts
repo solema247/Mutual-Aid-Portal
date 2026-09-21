@@ -191,7 +191,7 @@ export function normalizeAccessFieldsForRole(
     ) {
       return {
         ok: false,
-        error: 'Base ERR users do not use state access controls',
+        error: 'Beneficiary Entity users do not use state access controls',
       }
     }
     const eid =
@@ -199,7 +199,7 @@ export function normalizeAccessFieldsForRole(
         ? String(input.err_id).trim()
         : null
     if (!eid) {
-      return { ok: false, error: 'err_id is required for base_err role' }
+      return { ok: false, error: 'err_id is required for Beneficiary Entity role' }
     }
     return {
       ok: true,
@@ -258,7 +258,7 @@ export function normalizeAccessFieldsForRole(
   }
 
   if (input.err_id != null && String(input.err_id).trim() !== '') {
-    return { ok: false, error: 'err_id can only be set for base_err role' }
+    return { ok: false, error: 'err_id can only be set for Beneficiary Entity role' }
   }
 
   return {

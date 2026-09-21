@@ -176,7 +176,7 @@ export async function PATCH(
           return NextResponse.json(
             {
               error:
-                'Assign an ERR / room in Access Rights before setting the Base ERR role',
+                'Assign an ERR / room in Access Rights before setting the Beneficiary Entity role',
             },
             { status: 400 }
           )

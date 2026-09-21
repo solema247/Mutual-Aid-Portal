@@ -12,5 +12,6 @@
   "error_updating_user_status": "Failed to update user status",
   "error_unexpected": "An unexpected error occurred",
   "cancel": "Cancel",
-  "select_all": "Select all"
+  "select_all": "Select all",
+  "clear_all": "Clear all"
 } 
