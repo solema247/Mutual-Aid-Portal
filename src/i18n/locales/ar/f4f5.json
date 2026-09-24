@@ -67,6 +67,7 @@
     "mark_complete_confirm_action": "تعيين كمكتمل",
     "mark_complete_confirm_cancel": "إلغاء",
     "loading": "جارٍ التحميل…",
+    "updating": "جارٍ التحديث…",
     "empty": "لا توجد سجلات بعد",
     "report_status": {
       "not_uploaded": "لم يُرفع",
@@ -194,6 +195,7 @@
     "mark_complete_confirm_action": "تعيين كمكتمل",
     "mark_complete_confirm_cancel": "إلغاء",
     "loading": "جارٍ التحميل…",
+    "updating": "جارٍ التحديث…",
     "empty": "لا توجد سجلات بعد",
     "report_status": {
       "not_uploaded": "لم يُرفع",

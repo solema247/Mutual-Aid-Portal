@@ -67,6 +67,7 @@
     "mark_complete_confirm_action": "Mark Complete",
     "mark_complete_confirm_cancel": "Cancel",
     "loading": "Loading…",
+    "updating": "Updating…",
     "empty": "No records yet",
     "report_status": {
       "not_uploaded": "Not uploaded",
@@ -194,6 +195,7 @@
     "mark_complete_confirm_action": "Mark Complete",
     "mark_complete_confirm_cancel": "Cancel",
     "loading": "Loading…",
+    "updating": "Updating…",
     "empty": "No records yet",
     "report_status": {
       "not_uploaded": "Not uploaded",

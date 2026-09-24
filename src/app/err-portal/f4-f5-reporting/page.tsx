@@ -1,19 +1,36 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState, Suspense } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, Suspense } from 'react'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
 import { useAllowedFunctions } from '@/hooks/useAllowedFunctions'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Card, CardContent, CardHeader } from '@/components/ui/card'
+import {
+  REPORTING_LIST_BODY_ROW,
+  REPORTING_LIST_FOOTER,
+  REPORTING_LIST_HEADER_ROW,
+  REPORTING_LIST_SHELL,
+  REPORTING_LIST_SORT_BUTTON,
+  REPORTING_LIST_TABLE,
+  REPORTING_LIST_TOOLBAR,
+} from './reportingTableShell'
 import {
   SmartFilter,
-  applyFilters,
   getF4ReportingFilterFields,
   getF5ReportingFilterFields,
   type ActiveFilter,
 } from '@/components/smart-filter'
+import {
+  buildF4ListSearchParams,
+  buildF5ListSearchParams,
+  PAGE_SIZE_OPTIONS,
+  parseF4ListQuery,
+  parseF5ListQuery,
+  type F4SortKey,
+  type F5SortKey,
+  type SortDirection,
+} from '@/lib/f4f5/listQueryParams'
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '@/components/ui/table'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import UploadF4Modal from './components/UploadF4Modal'
@@ -26,8 +43,6 @@ import { useSearchParams, useRouter } from 'next/navigation'
 import { Check, ChevronLeft, ChevronRight, Eye, Loader2 } from 'lucide-react'
 import { getStatusDisplay } from '@/components/smart-filter/status-config'
 import { isReportingStatusCompleted } from '@/lib/projectStatus'
-
-const PAGE_SIZE_OPTIONS = [10, 20, 50, 100] as const
 
 /** Set true to show F4 Accept/Reject actions again. Review API and dialog remain in place. */
 const SHOW_F4_REVIEW_BUTTONS = false
@@ -90,57 +105,25 @@ interface F5Row {
   end_activity_status?: 'complete' | 'missing' | null
 }
 
-type SortDirection = 'asc' | 'desc'
-type F4SortKey =
-  | 'base_room_name'
-  | 'grant'
-  | 'state'
-  | 'donor'
-  | 'payment_date'
-  | 'amount_sdg'
-  | 'exchange_rate'
-  | 'report_date'
-  | 'total_grant'
-  | 'total_expenses'
-  | 'remainder'
-type F5SortKey =
-  | 'base_room_name'
-  | 'grant'
-  | 'state'
-  | 'donor'
-  | 'payment_date'
-  | 'amount_sdg'
-  | 'exchange_rate'
-  | 'report_date'
-  | 'activities_count'
-  | 'updated_at'
+type ListPagination = {
+  page: number
+  pageSize: number
+  total: number
+  totalPages: number
+  hasNextPage: boolean
+  hasPreviousPage: boolean
+}
+
+type FilterMeta = {
+  baseRooms: string[]
+  states: string[]
+  grants: { value: string; label: string }[]
+}
 
 function grantIdTableText(r: { grant_serial_id?: string | null; grant_id?: string | null }) {
   const v = r.grant_serial_id ?? r.grant_id
   if (v == null || String(v).trim() === '') return '-'
   return String(v).trim()
-}
-
-function grantSearchText(r: {
-  grant_serial_id?: string | null
-  grant_id?: string | null
-}) {
-  return [r.grant_serial_id, r.grant_id]
-    .filter((v) => v != null && String(v).trim() !== '')
-    .map((v) => String(v).toLowerCase().trim())
-}
-
-function grantGridFilterOptions(
-  rows: { grant_call_id?: string | null }[]
-) {
-  const values = new Set<string>()
-  for (const r of rows) {
-    const id = r.grant_call_id != null ? String(r.grant_call_id).trim() : ''
-    if (id) values.add(id)
-  }
-  return Array.from(values)
-    .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }))
-    .map((value) => ({ value, label: value }))
 }
 
 function formatMoneyTwoDecimals(n: number | null | undefined) {
@@ -163,25 +146,12 @@ function ReportingStatusChip({ status }: { status: string | null | undefined }) 
   const display = getStatusDisplay(normalized === 'under review' ? 'in review' : normalized)
   return (
     <span
-      className="inline-flex items-center shrink-0 rounded-full px-2 py-0.5 text-[10px] leading-none font-medium"
+      className="inline-flex items-center shrink-0 rounded-md px-2 py-0.5 text-[10px] leading-none font-semibold"
       style={{ backgroundColor: display.pillBg, color: display.pillText }}
     >
       {reportingStatusChipLabel(normalized)}
     </span>
   )
-}
-
-function compareNullableValues (a: unknown, b: unknown): number {
-  if (a == null && b == null) return 0
-  if (a == null) return 1
-  if (b == null) return -1
-  if (typeof a === 'number' && typeof b === 'number') return a - b
-  return String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: 'base' })
-}
-
-function sortWithDirection<T> (items: T[], dir: SortDirection, pick: (row: T) => unknown): T[] {
-  const factor = dir === 'asc' ? 1 : -1
-  return [...items].sort((a, b) => compareNullableValues(pick(a), pick(b)) * factor)
 }
 
 function F4F5ReportingPageContent() {
@@ -221,41 +191,95 @@ function F4F5ReportingPageContent() {
   const [uploadF5ProjectId, setUploadF5ProjectId] = useState<string | null>(null)
   const [viewF5Id, setViewF5Id] = useState<string | null>(null)
   const [viewF5Open, setViewF5Open] = useState(false)
-  const [f4Sort, setF4Sort] = useState<{ key: F4SortKey; dir: SortDirection }>({ key: 'report_date', dir: 'desc' })
-  const [f5Sort, setF5Sort] = useState<{ key: F5SortKey; dir: SortDirection }>({ key: 'report_date', dir: 'desc' })
+  const [f4Pagination, setF4Pagination] = useState<ListPagination>({
+    page: 1,
+    pageSize: 20,
+    total: 0,
+    totalPages: 1,
+    hasNextPage: false,
+    hasPreviousPage: false,
+  })
+  const [f5Pagination, setF5Pagination] = useState<ListPagination>({
+    page: 1,
+    pageSize: 20,
+    total: 0,
+    totalPages: 1,
+    hasNextPage: false,
+    hasPreviousPage: false,
+  })
+  const [f4FilterMeta, setF4FilterMeta] = useState<FilterMeta>({ baseRooms: [], states: [], grants: [] })
+  const [f5FilterMeta, setF5FilterMeta] = useState<FilterMeta>({ baseRooms: [], states: [], grants: [] })
+  /** f5ListKey last served successfully by GET /api/f5/list (tab-switch dedup only) */
+  const f5LoadedListKeyRef = useRef<string | null>(null)
+  const f4FetchGenerationRef = useRef(0)
+  const f5FetchGenerationRef = useRef(0)
 
-  const [f4Page, setF4Page] = useState(1)
-  const [f4PageSize, setF4PageSize] = useState(20)
-  const [f5Page, setF5Page] = useState(1)
-  const [f5PageSize, setF5PageSize] = useState(20)
+  const f4Query = useMemo(() => parseF4ListQuery(searchParams), [searchParams])
+  const f5Query = useMemo(() => parseF5ListQuery(searchParams), [searchParams])
+  const f4ListKey = useMemo(() => buildF4ListSearchParams(f4Query), [f4Query])
+  const f5ListKey = useMemo(() => buildF5ListSearchParams(f5Query), [f5Query])
 
-  const load = async () => {
+  const patchUrlParams = useCallback(
+    (updates: Record<string, string | null>) => {
+      const params = new URLSearchParams(searchParams.toString())
+      for (const [key, value] of Object.entries(updates)) {
+        if (value === null || value === '') params.delete(key)
+        else params.set(key, value)
+      }
+      const qs = params.toString()
+      router.replace(qs ? `?${qs}` : '/err-portal/f4-f5-reporting', { scroll: false })
+    },
+    [router, searchParams]
+  )
+
+  const load = useCallback(async () => {
+    const fetchGeneration = ++f4FetchGenerationRef.current
     try {
       setLoading(true)
-      const res = await fetch('/api/f4/list')
+      const res = await fetch(`/api/f4/list?${f4ListKey}`)
+      if (fetchGeneration !== f4FetchGenerationRef.current) return
       if (!res.ok) throw new Error('failed list')
-      const data = await res.json()
-      setRows(data)
+      const body = await res.json()
+      if (fetchGeneration !== f4FetchGenerationRef.current) return
+      setRows(body.data ?? [])
+      if (body.pagination) setF4Pagination(body.pagination)
+      if (body.filterMeta) setF4FilterMeta(body.filterMeta)
     } catch {
-      /* list load failed */
+      /* list load failed — keep prior rows */
     } finally {
-      setLoading(false)
+      if (fetchGeneration === f4FetchGenerationRef.current) {
+        setLoading(false)
+      }
     }
-  }
+  }, [f4ListKey])
 
-  const loadF5 = async () => {
+  const loadF5 = useCallback(async (options?: { force?: boolean }) => {
+    const force = options?.force ?? false
+    if (!force && f5LoadedListKeyRef.current === f5ListKey) {
+      return
+    }
+    const fetchGeneration = ++f5FetchGenerationRef.current
     try {
       setF5Loading(true)
-      const res = await fetch('/api/f5/list')
+      const res = await fetch(`/api/f5/list?${f5ListKey}`)
+      if (fetchGeneration !== f5FetchGenerationRef.current) return
       if (!res.ok) throw new Error('failed f5 list')
-      const data = await res.json()
-      setF5Rows(data)
+      const body = await res.json()
+      if (fetchGeneration !== f5FetchGenerationRef.current) return
+      setF5Rows(body.data ?? [])
+      if (body.pagination) setF5Pagination(body.pagination)
+      if (body.filterMeta) setF5FilterMeta(body.filterMeta)
+      f5LoadedListKeyRef.current = f5ListKey
     } catch {
-      /* F5 list load failed */
+      /* F5 list load failed — do not mark key loaded; keep prior rows */
     } finally {
-      setF5Loading(false)
+      if (fetchGeneration === f5FetchGenerationRef.current) {
+        setF5Loading(false)
+      }
     }
-  }
+  }, [f5ListKey])
+
+  const refreshF5 = useCallback(() => loadF5({ force: true }), [loadF5])
 
   const submitReview = async (summaryId: number, status: 'accepted' | 'rejected', comment?: string) => {
     setReviewSaving(true)
@@ -291,7 +315,7 @@ function F4F5ReportingPageContent() {
       if (!res.ok) throw new Error((await res.json()).error || 'Failed')
       setConfirmMarkComplete(null)
       if (field === 'f4_status') await load()
-      else await loadF5()
+      else await refreshF5()
     } catch {
       /* mark complete failed */
     } finally {
@@ -305,28 +329,24 @@ function F4F5ReportingPageContent() {
     }
   }, [canViewPage, router])
 
-  useEffect(() => { load() }, [])
-  useEffect(() => { if (tab === 'f5') loadF5() }, [tab])
+  useEffect(() => {
+    if (!canViewPage) return
+    load()
+  }, [canViewPage, load])
 
-  const f4BaseRoomOptions = useMemo(
-    () => Array.from(new Set(rows.map((r) => r.base_room_name).filter(Boolean) as string[])).sort(),
-    [rows]
-  )
-  const f4StateOptions = useMemo(
-    () => Array.from(new Set(rows.map((r) => r.state).filter(Boolean) as string[])).sort(),
-    [rows]
-  )
-  const f4GrantOptions = useMemo(() => grantGridFilterOptions(rows), [rows])
+  useEffect(() => {
+    if (!canViewPage || tab !== 'f5') return
+    loadF5()
+  }, [canViewPage, tab, loadF5])
 
-  const f5BaseRoomOptions = useMemo(
-    () => Array.from(new Set(f5Rows.map((r) => r.base_room_name).filter(Boolean) as string[])).sort(),
-    [f5Rows]
+  const f4Sort = useMemo(
+    () => ({ key: f4Query.sortBy, dir: f4Query.sortDir }),
+    [f4Query.sortBy, f4Query.sortDir]
   )
-  const f5StateOptions = useMemo(
-    () => Array.from(new Set(f5Rows.map((r) => r.state).filter(Boolean) as string[])).sort(),
-    [f5Rows]
+  const f5Sort = useMemo(
+    () => ({ key: f5Query.sortBy, dir: f5Query.sortDir }),
+    [f5Query.sortBy, f5Query.sortDir]
   )
-  const f5GrantOptions = useMemo(() => grantGridFilterOptions(f5Rows), [f5Rows])
 
   const f4ReportStatusOptions = useMemo(
     () => [
@@ -343,9 +363,9 @@ function F4F5ReportingPageContent() {
   const f4FilterFields = useMemo(
     () =>
       getF4ReportingFilterFields({
-        baseRoomOptions: f4BaseRoomOptions,
-        stateOptions: f4StateOptions,
-        grantOptions: f4GrantOptions,
+        baseRoomOptions: f4FilterMeta.baseRooms,
+        stateOptions: f4FilterMeta.states,
+        grantOptions: f4FilterMeta.grants,
         reportStatusOptions: f4ReportStatusOptions,
         labels: {
           grantId: t('f4.filters.grant_id'),
@@ -357,7 +377,7 @@ function F4F5ReportingPageContent() {
           all: t('f4.filters.all'),
         },
       }),
-    [f4BaseRoomOptions, f4StateOptions, f4GrantOptions, f4ReportStatusOptions, t]
+    [f4FilterMeta, f4ReportStatusOptions, t]
   )
 
   const f5ReportStatusOptions = useMemo(
@@ -379,9 +399,9 @@ function F4F5ReportingPageContent() {
   const f5FilterFields = useMemo(
     () =>
       getF5ReportingFilterFields({
-        baseRoomOptions: f5BaseRoomOptions,
-        stateOptions: f5StateOptions,
-        grantOptions: f5GrantOptions,
+        baseRoomOptions: f5FilterMeta.baseRooms,
+        stateOptions: f5FilterMeta.states,
+        grantOptions: f5FilterMeta.grants,
         reportStatusOptions: f5ReportStatusOptions,
         endActivityStatusOptions: f5EndActivityStatusOptions,
         labels: {
@@ -395,144 +415,35 @@ function F4F5ReportingPageContent() {
           all: t('f5.filters.all'),
         },
       }),
-    [f5BaseRoomOptions, f5StateOptions, f5GrantOptions, f5ReportStatusOptions, f5EndActivityStatusOptions, t]
+    [f5FilterMeta, f5ReportStatusOptions, f5EndActivityStatusOptions, t]
   )
 
-  const getF4FieldValue = useCallback((row: F4Row, fieldId: string): string | null | undefined => {
-    if (fieldId === 'grant_id') {
-      const v = row.grant_serial_id ?? row.grant_id
-      return v != null && String(v).trim() !== '' ? String(v).trim() : ''
-    }
-    if (fieldId === 'base_room') return row.base_room_name ?? ''
-    if (fieldId === 'state') return row.state ?? ''
-    if (fieldId === 'grant') return row.grant_call_id ?? ''
-    if (fieldId === 'report_status') return row.report_status ?? ''
-    return null
-  }, [])
+  const onF4FiltersChange = useCallback(
+    (filters: ActiveFilter[]) => {
+      setF4Filters(filters)
+      patchUrlParams({ f4p_page: '1' })
+    },
+    [patchUrlParams]
+  )
 
-  const getF5FieldValue = useCallback((row: F5Row, fieldId: string): string | null | undefined => {
-    if (fieldId === 'grant_id') {
-      const v = row.grant_serial_id ?? row.grant_id
-      return v != null && String(v).trim() !== '' ? String(v).trim() : ''
-    }
-    if (fieldId === 'base_room') return row.base_room_name ?? ''
-    if (fieldId === 'state') return row.state ?? ''
-    if (fieldId === 'grant') return row.grant_call_id ?? ''
-    if (fieldId === 'report_status') return row.report_status ?? ''
-    if (fieldId === 'end_activity_status') return row.end_activity_status ?? ''
-    return null
-  }, [])
-
-  const f4Filtered = useMemo(() => {
-    const filtersSansGrant = f4Filters.filter((f) => f.fieldId !== 'grant_id')
-    let result = applyFilters({
-      data: rows,
-      filters: filtersSansGrant,
-      fields: f4FilterFields,
-      getFieldValue: getF4FieldValue,
-    })
-    const grantFilter = f4Filters.find((f) => f.fieldId === 'grant_id')
-    if (grantFilter?.value && String(grantFilter.value).trim()) {
-      const term = String(grantFilter.value).trim().toLowerCase()
-      result = result.filter((r: F4Row) =>
-        grantSearchText(r).some((s) => s.startsWith(term) || s.includes(term))
-      )
-    }
-    return result
-  }, [rows, f4Filters, f4FilterFields, getF4FieldValue])
-
-  const f5Filtered = useMemo(() => {
-    const filtersSansGrant = f5Filters.filter((f) => f.fieldId !== 'grant_id')
-    let result = applyFilters({
-      data: f5Rows,
-      filters: filtersSansGrant,
-      fields: f5FilterFields,
-      getFieldValue: getF5FieldValue,
-    })
-    const grantFilter = f5Filters.find((f) => f.fieldId === 'grant_id')
-    if (grantFilter?.value && String(grantFilter.value).trim()) {
-      const term = String(grantFilter.value).trim().toLowerCase()
-      result = result.filter((r: F5Row) =>
-        grantSearchText(r).some((s) => s.startsWith(term) || s.includes(term))
-      )
-    }
-    return result
-  }, [f5Rows, f5Filters, f5FilterFields, getF5FieldValue])
-
-  const f4Sorted = useMemo(() => {
-    return sortWithDirection(f4Filtered, f4Sort.dir, (r) => {
-      if (f4Sort.key === 'base_room_name') return r.base_room_name ?? r.err_id ?? null
-      if (f4Sort.key === 'grant') return grantIdTableText(r)
-      if (f4Sort.key === 'state') return r.state ?? null
-      if (f4Sort.key === 'donor') return r.donor ?? null
-      if (f4Sort.key === 'payment_date') return r.payment_date ? new Date(r.payment_date).getTime() : null
-      if (f4Sort.key === 'amount_sdg') return r.amount_sdg ?? null
-      if (f4Sort.key === 'exchange_rate') return r.exchange_rate ?? null
-      if (f4Sort.key === 'report_date') return r.report_date ? new Date(r.report_date).getTime() : null
-      if (f4Sort.key === 'total_grant') return r.total_grant ?? null
-      if (f4Sort.key === 'total_expenses') return r.total_expenses ?? null
-      return r.remainder ?? null
-    })
-  }, [f4Filtered, f4Sort])
-
-  const f5Sorted = useMemo(() => {
-    return sortWithDirection(f5Filtered, f5Sort.dir, (r) => {
-      if (f5Sort.key === 'base_room_name') return r.base_room_name ?? r.err_id ?? null
-      if (f5Sort.key === 'grant') return grantIdTableText(r)
-      if (f5Sort.key === 'state') return r.state ?? null
-      if (f5Sort.key === 'donor') return r.donor ?? null
-      if (f5Sort.key === 'payment_date') return r.payment_date ? new Date(r.payment_date).getTime() : null
-      if (f5Sort.key === 'amount_sdg') return r.amount_sdg ?? null
-      if (f5Sort.key === 'exchange_rate') return r.exchange_rate ?? null
-      if (f5Sort.key === 'report_date') return r.report_date ? new Date(r.report_date).getTime() : null
-      if (f5Sort.key === 'activities_count') return Number(r.activities_count || 0)
-      return r.updated_at ? new Date(r.updated_at).getTime() : null
-    })
-  }, [f5Filtered, f5Sort])
-
-  const f4TotalPages = Math.max(1, Math.ceil(f4Sorted.length / f4PageSize))
-  const f5TotalPages = Math.max(1, Math.ceil(f5Sorted.length / f5PageSize))
-
-  useEffect(() => {
-    setF4Page(1)
-  }, [f4Filters])
-
-  useEffect(() => {
-    setF5Page(1)
-  }, [f5Filters])
-
-  useEffect(() => {
-    if (f4Page > f4TotalPages) setF4Page(f4TotalPages)
-  }, [f4Page, f4TotalPages])
-
-  useEffect(() => {
-    if (f5Page > f5TotalPages) setF5Page(f5TotalPages)
-  }, [f5Page, f5TotalPages])
-
-  const f4PageRows = useMemo(() => {
-    const start = (f4Page - 1) * f4PageSize
-    return f4Sorted.slice(start, start + f4PageSize)
-  }, [f4Sorted, f4Page, f4PageSize])
-
-  const f5PageRows = useMemo(() => {
-    const start = (f5Page - 1) * f5PageSize
-    return f5Sorted.slice(start, start + f5PageSize)
-  }, [f5Sorted, f5Page, f5PageSize])
+  const onF5FiltersChange = useCallback(
+    (filters: ActiveFilter[]) => {
+      setF5Filters(filters)
+      patchUrlParams({ f5p_page: '1' })
+    },
+    [patchUrlParams]
+  )
 
   const toggleF4Sort = (key: F4SortKey) => {
-    setF4Sort((prev) =>
-      prev.key === key
-        ? { key, dir: prev.dir === 'asc' ? 'desc' : 'asc' }
-        : { key, dir: 'asc' }
-    )
+    const dir: SortDirection =
+      f4Sort.key === key ? (f4Sort.dir === 'asc' ? 'desc' : 'asc') : 'asc'
+    patchUrlParams({ f4p_sortBy: key, f4p_sortDir: dir, f4p_page: '1' })
   }
 
   const toggleF5Sort = (key: F5SortKey) => {
-    setF5Sort((prev) =>
-      prev.key === key
-        ? { key, dir: prev.dir === 'asc' ? 'desc' : 'asc' }
-        : { key, dir: 'asc' }
-    )
+    const dir: SortDirection =
+      f5Sort.key === key ? (f5Sort.dir === 'asc' ? 'desc' : 'asc') : 'asc'
+    patchUrlParams({ f5p_sortBy: key, f5p_sortDir: dir, f5p_page: '1' })
   }
 
   const sortIndicator = (active: boolean, dir: SortDirection) => (active ? (dir === 'asc' ? '▲' : '▼') : '↕')
@@ -559,13 +470,18 @@ function F4F5ReportingPageContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams])
 
-  useF4F5ReportingPageExplainer(!permissionsLoading && canViewPage && !loading)
+  const f4InitialLoading = loading && rows.length === 0
+  const f4Refreshing = loading && rows.length > 0
+  const f5InitialLoading = f5Loading && f5Rows.length === 0
+  const f5Refreshing = f5Loading && f5Rows.length > 0
+
+  useF4F5ReportingPageExplainer(!permissionsLoading && canViewPage && !f4InitialLoading)
 
   if (!canViewPage) return null
 
   return (
     <div className="w-full min-w-0 space-y-6">
-      <Tabs value={tab} onValueChange={(v) => setTab(v as any)}>
+      <Tabs value={tab} onValueChange={(v) => { if (v === 'f4' || v === 'f5') setTab(v) }}>
         <TabsList>
           <TabsTrigger value="f4">{t('tabs.f4')}</TabsTrigger>
           <TabsTrigger value="f5">{t('tabs.f5')}</TabsTrigger>
@@ -587,81 +503,85 @@ function F4F5ReportingPageContent() {
             )}
           </div>
 
-          <Card className="w-full">
-            <CardHeader className="pb-4">
-              {!loading && (
-                <SmartFilter
-                  fields={f4FilterFields}
-                  filters={f4Filters}
-                  onFiltersChange={setF4Filters}
-                  urlParamPrefix="f4f_"
-                  title={t('f4.title')}
-                  count={f4Filtered.length}
-                />
+          <div className={REPORTING_LIST_SHELL}>
+            <div className={REPORTING_LIST_TOOLBAR}>
+              {f4InitialLoading ? (
+                <div className="text-sm font-semibold text-foreground">{t('f4.title')}</div>
+              ) : (
+                <div className="flex flex-wrap items-center gap-2">
+                  <SmartFilter
+                    fields={f4FilterFields}
+                    filters={f4Filters}
+                    onFiltersChange={onF4FiltersChange}
+                    urlParamPrefix="f4f_"
+                    title={t('f4.title')}
+                    count={f4Pagination.total}
+                  />
+                  {f4Refreshing && (
+                    <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground shrink-0">
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+                      {t('f4.updating')}
+                    </span>
+                  )}
+                </div>
               )}
-              {loading && (
-                <div className="text-lg font-semibold">{t('f4.title')}</div>
-              )}
-            </CardHeader>
-            <CardContent className="w-full p-0 overflow-x-auto">
-                <Table
-                  noOverflowWrapper
-                  className="w-full min-w-[1100px] text-xs [&_th]:py-1.5 [&_td]:py-1 [&_th]:px-2 [&_td]:px-2 [&_td]:text-xs"
-                >
+            </div>
+            <div className="w-full overflow-x-auto">
+                <Table noOverflowWrapper className={REPORTING_LIST_TABLE}>
                   <TableHeader>
-                    <TableRow>
+                    <TableRow className={REPORTING_LIST_HEADER_ROW}>
                       <TableHead className="text-xs whitespace-nowrap">
-                        <button type="button" className="inline-flex items-center gap-1" onClick={() => toggleF4Sort('base_room_name')}>
+                        <button type="button" className={REPORTING_LIST_SORT_BUTTON} onClick={() => toggleF4Sort('base_room_name')}>
                           {t('f4.headers.base_room')} <span className="text-[10px]">{sortIndicator(f4Sort.key === 'base_room_name', f4Sort.dir)}</span>
                         </button>
                       </TableHead>
                       <TableHead className="text-xs whitespace-nowrap">
-                        <button type="button" className="inline-flex items-center gap-1" onClick={() => toggleF4Sort('grant')}>
+                        <button type="button" className={REPORTING_LIST_SORT_BUTTON} onClick={() => toggleF4Sort('grant')}>
                           {t('f4.headers.grant_id')} <span className="text-[10px]">{sortIndicator(f4Sort.key === 'grant', f4Sort.dir)}</span>
                         </button>
                       </TableHead>
                       <TableHead className="text-xs whitespace-nowrap">
-                        <button type="button" className="inline-flex items-center gap-1" onClick={() => toggleF4Sort('state')}>
+                        <button type="button" className={REPORTING_LIST_SORT_BUTTON} onClick={() => toggleF4Sort('state')}>
                           {t('f4.headers.state')} <span className="text-[10px]">{sortIndicator(f4Sort.key === 'state', f4Sort.dir)}</span>
                         </button>
                       </TableHead>
                       <TableHead className="text-xs whitespace-nowrap">
-                        <button type="button" className="inline-flex items-center gap-1" onClick={() => toggleF4Sort('donor')}>
+                        <button type="button" className={REPORTING_LIST_SORT_BUTTON} onClick={() => toggleF4Sort('donor')}>
                           {t('f4.headers.donor')} <span className="text-[10px]">{sortIndicator(f4Sort.key === 'donor', f4Sort.dir)}</span>
                         </button>
                       </TableHead>
                       <TableHead className="text-xs whitespace-nowrap">
-                        <button type="button" className="inline-flex items-center gap-1" onClick={() => toggleF4Sort('payment_date')}>
+                        <button type="button" className={REPORTING_LIST_SORT_BUTTON} onClick={() => toggleF4Sort('payment_date')}>
                           {t('f4.headers.payment_date')} <span className="text-[10px]">{sortIndicator(f4Sort.key === 'payment_date', f4Sort.dir)}</span>
                         </button>
                       </TableHead>
                       <TableHead className="text-xs text-right whitespace-nowrap">
-                        <button type="button" className="inline-flex items-center gap-1" onClick={() => toggleF4Sort('amount_sdg')}>
+                        <button type="button" className={REPORTING_LIST_SORT_BUTTON} onClick={() => toggleF4Sort('amount_sdg')}>
                           {t('f4.headers.amount_sdg')} <span className="text-[10px]">{sortIndicator(f4Sort.key === 'amount_sdg', f4Sort.dir)}</span>
                         </button>
                       </TableHead>
                       <TableHead className="text-xs text-right whitespace-nowrap">
-                        <button type="button" className="inline-flex items-center gap-1" onClick={() => toggleF4Sort('exchange_rate')}>
+                        <button type="button" className={REPORTING_LIST_SORT_BUTTON} onClick={() => toggleF4Sort('exchange_rate')}>
                           {t('f4.headers.exchange_rate')} <span className="text-[10px]">{sortIndicator(f4Sort.key === 'exchange_rate', f4Sort.dir)}</span>
                         </button>
                       </TableHead>
                       <TableHead className="text-xs whitespace-nowrap">
-                        <button type="button" className="inline-flex items-center gap-1" onClick={() => toggleF4Sort('report_date')}>
+                        <button type="button" className={REPORTING_LIST_SORT_BUTTON} onClick={() => toggleF4Sort('report_date')}>
                           {t('f4.headers.report_date')} <span className="text-[10px]">{sortIndicator(f4Sort.key === 'report_date', f4Sort.dir)}</span>
                         </button>
                       </TableHead>
                       <TableHead className="text-xs text-right whitespace-nowrap">
-                        <button type="button" className="inline-flex items-center gap-1" onClick={() => toggleF4Sort('total_grant')}>
+                        <button type="button" className={REPORTING_LIST_SORT_BUTTON} onClick={() => toggleF4Sort('total_grant')}>
                           {t('f4.headers.total_grant')} <span className="text-[10px]">{sortIndicator(f4Sort.key === 'total_grant', f4Sort.dir)}</span>
                         </button>
                       </TableHead>
                       <TableHead className="text-xs text-right whitespace-nowrap">
-                        <button type="button" className="inline-flex items-center gap-1" onClick={() => toggleF4Sort('total_expenses')}>
+                        <button type="button" className={REPORTING_LIST_SORT_BUTTON} onClick={() => toggleF4Sort('total_expenses')}>
                           {t('f4.headers.total_expenses')} <span className="text-[10px]">{sortIndicator(f4Sort.key === 'total_expenses', f4Sort.dir)}</span>
                         </button>
                       </TableHead>
                       <TableHead className="text-xs text-right whitespace-nowrap">
-                        <button type="button" className="inline-flex items-center gap-1" onClick={() => toggleF4Sort('remainder')}>
+                        <button type="button" className={REPORTING_LIST_SORT_BUTTON} onClick={() => toggleF4Sort('remainder')}>
                           {t('f4.headers.remainder')} <span className="text-[10px]">{sortIndicator(f4Sort.key === 'remainder', f4Sort.dir)}</span>
                         </button>
                       </TableHead>
@@ -669,17 +589,17 @@ function F4F5ReportingPageContent() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {loading ? (
-                      <TableRow><TableCell colSpan={12} className="text-center py-4 text-xs">{t('f4.loading')}</TableCell></TableRow>
-                    ) : f4Filtered.length === 0 ? (
-                      <TableRow><TableCell colSpan={12} className="text-center py-4 text-muted-foreground text-xs">{t('f4.empty')}</TableCell></TableRow>
-                    ) : f4PageRows.map(r => {
+                    {f4InitialLoading ? (
+                      <TableRow><TableCell colSpan={12} className="text-center py-8 text-sm text-muted-foreground">{t('f4.loading')}</TableCell></TableRow>
+                    ) : !loading && f4Pagination.total === 0 ? (
+                      <TableRow><TableCell colSpan={12} className="text-center py-8 text-sm text-muted-foreground">{t('f4.empty')}</TableCell></TableRow>
+                    ) : rows.map(r => {
                       const grantCol = grantIdTableText(r)
                       const hasReport = r.has_f4_report !== false && r.id != null
                       const rowKey = r.id != null ? `summary-${r.id}` : `project-${r.project_id}`
                       return (
-                      <TableRow key={rowKey}>
-                        <TableCell className="text-xs min-w-0 truncate" title={String(r.base_room_name || '')}>{r.base_room_name || '-'}</TableCell>
+                      <TableRow key={rowKey} className={REPORTING_LIST_BODY_ROW}>
+                        <TableCell className="min-w-0 truncate" title={String(r.base_room_name || '')}>{r.base_room_name || '-'}</TableCell>
                         <TableCell className="text-xs min-w-0 truncate" title={grantCol === '-' ? '' : grantCol}>{grantCol}</TableCell>
                         <TableCell className="text-xs whitespace-nowrap">{r.state || '-'}</TableCell>
                         <TableCell className="text-xs min-w-0 truncate" title={String(r.donor || '')}>{r.donor || '-'}</TableCell>
@@ -764,18 +684,17 @@ function F4F5ReportingPageContent() {
                     )})}
                   </TableBody>
                 </Table>
-              {!loading && f4Filtered.length > 0 && (
-                <div className="flex flex-wrap items-center justify-between gap-3 border-t px-3 py-2">
+              {f4Pagination.total > 0 && (rows.length > 0 || !loading) && (
+                <div className={REPORTING_LIST_FOOTER}>
                   <span className="text-xs text-muted-foreground tabular-nums">
-                    Showing {(f4Page - 1) * f4PageSize + 1}–{Math.min(f4Page * f4PageSize, f4Filtered.length)} of {f4Filtered.length}
+                    Showing {(f4Pagination.page - 1) * f4Pagination.pageSize + 1}–{Math.min(f4Pagination.page * f4Pagination.pageSize, f4Pagination.total)} of {f4Pagination.total}
                   </span>
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="text-xs text-muted-foreground">Rows per page</span>
                     <Select
-                      value={String(f4PageSize)}
+                      value={String(f4Pagination.pageSize)}
                       onValueChange={(v) => {
-                        setF4PageSize(Number(v))
-                        setF4Page(1)
+                        patchUrlParams({ f4p_pageSize: v, f4p_page: '1' })
                       }}
                     >
                       <SelectTrigger className="h-7 w-[72px] text-xs">
@@ -794,22 +713,22 @@ function F4F5ReportingPageContent() {
                       variant="outline"
                       size="sm"
                       className="h-7 px-2 text-xs"
-                      onClick={() => setF4Page((p) => Math.max(1, p - 1))}
-                      disabled={f4Page <= 1}
+                      onClick={() => patchUrlParams({ f4p_page: String(Math.max(1, f4Pagination.page - 1)) })}
+                      disabled={!f4Pagination.hasPreviousPage}
                     >
                       <ChevronLeft className="h-3.5 w-3.5" />
                       Prev
                     </Button>
                     <span className="text-xs text-muted-foreground px-2 tabular-nums">
-                      Page {f4Page} of {f4TotalPages}
+                      Page {f4Pagination.page} of {f4Pagination.totalPages}
                     </span>
                     <Button
                       type="button"
                       variant="outline"
                       size="sm"
                       className="h-7 px-2 text-xs"
-                      onClick={() => setF4Page((p) => Math.min(f4TotalPages, p + 1))}
-                      disabled={f4Page >= f4TotalPages}
+                      onClick={() => patchUrlParams({ f4p_page: String(f4Pagination.page + 1) })}
+                      disabled={!f4Pagination.hasNextPage}
                     >
                       Next
                       <ChevronRight className="h-3.5 w-3.5" />
@@ -817,8 +736,8 @@ function F4F5ReportingPageContent() {
                   </div>
                 </div>
               )}
-            </CardContent>
-          </Card>
+            </div>
+          </div>
 
           <UploadF4Modal
             open={uploadOpen}
@@ -862,76 +781,80 @@ function F4F5ReportingPageContent() {
             )}
           </div>
 
-          <Card className="w-full">
-            <CardHeader className="pb-4">
-              {!f5Loading && (
-                <SmartFilter
-                  fields={f5FilterFields}
-                  filters={f5Filters}
-                  onFiltersChange={setF5Filters}
-                  urlParamPrefix="f5f_"
-                  title={t('f5.title')}
-                  count={f5Filtered.length}
-                />
+          <div className={REPORTING_LIST_SHELL}>
+            <div className={REPORTING_LIST_TOOLBAR}>
+              {f5InitialLoading ? (
+                <div className="text-sm font-semibold text-foreground">{t('f5.title')}</div>
+              ) : (
+                <div className="flex flex-wrap items-center gap-2">
+                  <SmartFilter
+                    fields={f5FilterFields}
+                    filters={f5Filters}
+                    onFiltersChange={onF5FiltersChange}
+                    urlParamPrefix="f5f_"
+                    title={t('f5.title')}
+                    count={f5Pagination.total}
+                  />
+                  {f5Refreshing && (
+                    <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground shrink-0">
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+                      {t('f5.updating')}
+                    </span>
+                  )}
+                </div>
               )}
-              {f5Loading && (
-                <div className="text-lg font-semibold">{t('f5.title')}</div>
-              )}
-            </CardHeader>
-            <CardContent className="w-full p-0 overflow-x-auto">
-                <Table
-                  noOverflowWrapper
-                  className="w-full min-w-[1100px] text-xs [&_th]:py-1.5 [&_td]:py-1 [&_th]:px-2 [&_td]:px-2 [&_td]:text-xs"
-                >
+            </div>
+            <div className="w-full overflow-x-auto">
+                <Table noOverflowWrapper className={REPORTING_LIST_TABLE}>
                   <TableHeader>
-                    <TableRow>
+                    <TableRow className={REPORTING_LIST_HEADER_ROW}>
                       <TableHead className="text-xs whitespace-nowrap">
-                        <button type="button" className="inline-flex items-center gap-1" onClick={() => toggleF5Sort('base_room_name')}>
+                        <button type="button" className={REPORTING_LIST_SORT_BUTTON} onClick={() => toggleF5Sort('base_room_name')}>
                           {t('f5.headers.base_room')} <span className="text-[10px]">{sortIndicator(f5Sort.key === 'base_room_name', f5Sort.dir)}</span>
                         </button>
                       </TableHead>
                       <TableHead className="text-xs whitespace-nowrap">
-                        <button type="button" className="inline-flex items-center gap-1" onClick={() => toggleF5Sort('grant')}>
+                        <button type="button" className={REPORTING_LIST_SORT_BUTTON} onClick={() => toggleF5Sort('grant')}>
                           {t('f5.headers.grant_id')} <span className="text-[10px]">{sortIndicator(f5Sort.key === 'grant', f5Sort.dir)}</span>
                         </button>
                       </TableHead>
                       <TableHead className="text-xs whitespace-nowrap">
-                        <button type="button" className="inline-flex items-center gap-1" onClick={() => toggleF5Sort('state')}>
+                        <button type="button" className={REPORTING_LIST_SORT_BUTTON} onClick={() => toggleF5Sort('state')}>
                           {t('f5.headers.state')} <span className="text-[10px]">{sortIndicator(f5Sort.key === 'state', f5Sort.dir)}</span>
                         </button>
                       </TableHead>
                       <TableHead className="text-xs whitespace-nowrap">
-                        <button type="button" className="inline-flex items-center gap-1" onClick={() => toggleF5Sort('donor')}>
+                        <button type="button" className={REPORTING_LIST_SORT_BUTTON} onClick={() => toggleF5Sort('donor')}>
                           {t('f5.headers.donor')} <span className="text-[10px]">{sortIndicator(f5Sort.key === 'donor', f5Sort.dir)}</span>
                         </button>
                       </TableHead>
                       <TableHead className="text-xs whitespace-nowrap">
-                        <button type="button" className="inline-flex items-center gap-1" onClick={() => toggleF5Sort('payment_date')}>
+                        <button type="button" className={REPORTING_LIST_SORT_BUTTON} onClick={() => toggleF5Sort('payment_date')}>
                           {t('f5.headers.payment_date')} <span className="text-[10px]">{sortIndicator(f5Sort.key === 'payment_date', f5Sort.dir)}</span>
                         </button>
                       </TableHead>
                       <TableHead className="text-xs text-right whitespace-nowrap">
-                        <button type="button" className="inline-flex items-center gap-1" onClick={() => toggleF5Sort('amount_sdg')}>
+                        <button type="button" className={REPORTING_LIST_SORT_BUTTON} onClick={() => toggleF5Sort('amount_sdg')}>
                           {t('f5.headers.amount_sdg')} <span className="text-[10px]">{sortIndicator(f5Sort.key === 'amount_sdg', f5Sort.dir)}</span>
                         </button>
                       </TableHead>
                       <TableHead className="text-xs text-right whitespace-nowrap">
-                        <button type="button" className="inline-flex items-center gap-1" onClick={() => toggleF5Sort('exchange_rate')}>
+                        <button type="button" className={REPORTING_LIST_SORT_BUTTON} onClick={() => toggleF5Sort('exchange_rate')}>
                           {t('f5.headers.exchange_rate')} <span className="text-[10px]">{sortIndicator(f5Sort.key === 'exchange_rate', f5Sort.dir)}</span>
                         </button>
                       </TableHead>
                       <TableHead className="text-xs whitespace-nowrap">
-                        <button type="button" className="inline-flex items-center gap-1" onClick={() => toggleF5Sort('report_date')}>
+                        <button type="button" className={REPORTING_LIST_SORT_BUTTON} onClick={() => toggleF5Sort('report_date')}>
                           {t('f5.headers.report_date')} <span className="text-[10px]">{sortIndicator(f5Sort.key === 'report_date', f5Sort.dir)}</span>
                         </button>
                       </TableHead>
                       <TableHead className="text-xs text-right whitespace-nowrap">
-                        <button type="button" className="inline-flex items-center gap-1" onClick={() => toggleF5Sort('activities_count')}>
+                        <button type="button" className={REPORTING_LIST_SORT_BUTTON} onClick={() => toggleF5Sort('activities_count')}>
                           {t('f5.headers.activities')} <span className="text-[10px]">{sortIndicator(f5Sort.key === 'activities_count', f5Sort.dir)}</span>
                         </button>
                       </TableHead>
                       <TableHead className="text-xs whitespace-nowrap">
-                        <button type="button" className="inline-flex items-center gap-1" onClick={() => toggleF5Sort('updated_at')}>
+                        <button type="button" className={REPORTING_LIST_SORT_BUTTON} onClick={() => toggleF5Sort('updated_at')}>
                           {t('f5.headers.updated')} <span className="text-[10px]">{sortIndicator(f5Sort.key === 'updated_at', f5Sort.dir)}</span>
                         </button>
                       </TableHead>
@@ -939,17 +862,17 @@ function F4F5ReportingPageContent() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {f5Loading ? (
-                      <TableRow><TableCell colSpan={11} className="text-center py-4 text-xs">{t('f5.loading')}</TableCell></TableRow>
-                    ) : f5Filtered.length === 0 ? (
-                      <TableRow><TableCell colSpan={11} className="text-center py-4 text-muted-foreground text-xs">{t('f5.empty')}</TableCell></TableRow>
-                    ) : f5PageRows.map(r => {
+                    {f5InitialLoading ? (
+                      <TableRow><TableCell colSpan={11} className="text-center py-8 text-sm text-muted-foreground">{t('f5.loading')}</TableCell></TableRow>
+                    ) : !f5Loading && f5Pagination.total === 0 ? (
+                      <TableRow><TableCell colSpan={11} className="text-center py-8 text-sm text-muted-foreground">{t('f5.empty')}</TableCell></TableRow>
+                    ) : f5Rows.map(r => {
                       const grantCol = grantIdTableText(r)
                       const hasReport = r.has_f5_report !== false && r.id != null
                       const rowKey = r.id != null ? `report-${r.id}` : `project-${r.project_id}`
                       return (
-                      <TableRow key={rowKey}>
-                        <TableCell className="text-xs min-w-0 truncate" title={String(r.base_room_name || '')}>{r.base_room_name || '-'}</TableCell>
+                      <TableRow key={rowKey} className={REPORTING_LIST_BODY_ROW}>
+                        <TableCell className="min-w-0 truncate" title={String(r.base_room_name || '')}>{r.base_room_name || '-'}</TableCell>
                         <TableCell className="text-xs min-w-0 truncate" title={grantCol === '-' ? '' : grantCol}>{grantCol}</TableCell>
                         <TableCell className="text-xs whitespace-nowrap">{r.state || '-'}</TableCell>
                         <TableCell className="text-xs min-w-0 truncate" title={String(r.donor || '')}>{r.donor || '-'}</TableCell>
@@ -1017,18 +940,17 @@ function F4F5ReportingPageContent() {
                     )})}
                   </TableBody>
                 </Table>
-              {!f5Loading && f5Filtered.length > 0 && (
-                <div className="flex flex-wrap items-center justify-between gap-3 border-t px-3 py-2">
+              {f5Pagination.total > 0 && (f5Rows.length > 0 || !f5Loading) && (
+                <div className={REPORTING_LIST_FOOTER}>
                   <span className="text-xs text-muted-foreground tabular-nums">
-                    Showing {(f5Page - 1) * f5PageSize + 1}–{Math.min(f5Page * f5PageSize, f5Filtered.length)} of {f5Filtered.length}
+                    Showing {(f5Pagination.page - 1) * f5Pagination.pageSize + 1}–{Math.min(f5Pagination.page * f5Pagination.pageSize, f5Pagination.total)} of {f5Pagination.total}
                   </span>
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="text-xs text-muted-foreground">Rows per page</span>
                     <Select
-                      value={String(f5PageSize)}
+                      value={String(f5Pagination.pageSize)}
                       onValueChange={(v) => {
-                        setF5PageSize(Number(v))
-                        setF5Page(1)
+                        patchUrlParams({ f5p_pageSize: v, f5p_page: '1' })
                       }}
                     >
                       <SelectTrigger className="h-7 w-[72px] text-xs">
@@ -1047,22 +969,22 @@ function F4F5ReportingPageContent() {
                       variant="outline"
                       size="sm"
                       className="h-7 px-2 text-xs"
-                      onClick={() => setF5Page((p) => Math.max(1, p - 1))}
-                      disabled={f5Page <= 1}
+                      onClick={() => patchUrlParams({ f5p_page: String(Math.max(1, f5Pagination.page - 1)) })}
+                      disabled={!f5Pagination.hasPreviousPage}
                     >
                       <ChevronLeft className="h-3.5 w-3.5" />
                       Prev
                     </Button>
                     <span className="text-xs text-muted-foreground px-2 tabular-nums">
-                      Page {f5Page} of {f5TotalPages}
+                      Page {f5Pagination.page} of {f5Pagination.totalPages}
                     </span>
                     <Button
                       type="button"
                       variant="outline"
                       size="sm"
                       className="h-7 px-2 text-xs"
-                      onClick={() => setF5Page((p) => Math.min(f5TotalPages, p + 1))}
-                      disabled={f5Page >= f5TotalPages}
+                      onClick={() => patchUrlParams({ f5p_page: String(f5Pagination.page + 1) })}
+                      disabled={!f5Pagination.hasNextPage}
                     >
                       Next
                       <ChevronRight className="h-3.5 w-3.5" />
@@ -1070,8 +992,8 @@ function F4F5ReportingPageContent() {
                   </div>
                 </div>
               )}
-            </CardContent>
-          </Card>
+            </div>
+          </div>
 
           <UploadF5Modal
             open={uploadF5Open}
@@ -1079,10 +1001,10 @@ function F4F5ReportingPageContent() {
               setUploadF5Open(open)
               if (!open) setUploadF5ProjectId(null)
             }}
-            onSaved={loadF5}
+            onSaved={refreshF5}
             initialProjectId={uploadF5ProjectId}
           />
-          <ViewF5Modal reportId={viewF5Id} open={viewF5Open} onOpenChange={(v)=>{ setViewF5Open(v); if (!v) setViewF5Id(null) }} onSaved={loadF5} />
+          <ViewF5Modal reportId={viewF5Id} open={viewF5Open} onOpenChange={(v)=>{ setViewF5Open(v); if (!v) setViewF5Id(null) }} onSaved={refreshF5} />
         </TabsContent>
       </Tabs>
 

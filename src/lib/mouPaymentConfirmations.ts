@@ -31,6 +31,129 @@ export type ProjectPaymentSummary = {
   confirmation_count: number
 }
 
+/** transfer_date + exchange_rate only (F4/F5 reporting list and shared aggregation). */
+export type ReportingPaymentSlice = {
+  transfer_date: string | null
+  exchange_rate: number | null
+}
+
+export type ReportingConfirmationRow = {
+  project_id: string
+  exchange_rate: number | null
+  transfer_date: string | null
+  created_at: string
+}
+
+/** Same rules as ProjectPaymentSummary: earliest transfer_date; latest rate by transfer_date then created_at. */
+export function computeReportingPaymentFieldsForProject(
+  list: Array<Pick<ReportingConfirmationRow, 'exchange_rate' | 'transfer_date' | 'created_at'>>
+): ReportingPaymentSlice {
+  const withDates = list.filter((c) => c.transfer_date)
+  const earliestDate =
+    withDates.length > 0
+      ? withDates.reduce((a, b) =>
+          String(a.transfer_date) <= String(b.transfer_date) ? a : b
+        ).transfer_date
+      : null
+
+  const withRates = [...list]
+    .filter((c) => c.exchange_rate != null && Number(c.exchange_rate) > 0)
+    .sort((a, b) => {
+      const da = a.transfer_date || ''
+      const db = b.transfer_date || ''
+      if (da !== db) return db.localeCompare(da)
+      return String(b.created_at).localeCompare(String(a.created_at))
+    })
+  const latestRate = withRates[0]?.exchange_rate ?? null
+
+  return {
+    transfer_date: earliestDate,
+    exchange_rate: latestRate,
+  }
+}
+
+export function summarizeConfirmationsForReporting(
+  confirmations: ReportingConfirmationRow[]
+): Record<string, ReportingPaymentSlice> {
+  const byProject = new Map<string, ReportingConfirmationRow[]>()
+  for (const c of confirmations) {
+    const list = byProject.get(c.project_id) || []
+    list.push(c)
+    byProject.set(c.project_id, list)
+  }
+  const out: Record<string, ReportingPaymentSlice> = {}
+  for (const [projectId, list] of byProject) {
+    out[projectId] = computeReportingPaymentFieldsForProject(list)
+  }
+  return out
+}
+
+/**
+ * Legacy mous.payment_confirmation_file JSON fallback (reporting fields only).
+ * Does not load mou_payment_files or file paths.
+ */
+const LEGACY_MOU_IN_BATCH = 80
+
+export async function supplementReportingPaymentsFromLegacyMous(
+  supabase: SupabaseClient,
+  mouIds: string[],
+  out: Record<string, ReportingPaymentSlice>,
+  opts?: { onlyProjectIds?: string[] }
+): Promise<void> {
+  const uniqueMouIds = [...new Set(mouIds.filter(Boolean))]
+  if (uniqueMouIds.length === 0) return
+
+  const legacyTargetProjects =
+    opts?.onlyProjectIds && opts.onlyProjectIds.length > 0
+      ? opts.onlyProjectIds.filter((id) => !out[id])
+      : null
+
+  for (let i = 0; i < uniqueMouIds.length; i += LEGACY_MOU_IN_BATCH) {
+    const idBatch = uniqueMouIds.slice(i, i + LEGACY_MOU_IN_BATCH)
+    const { data: mousRows } = await supabase
+      .from('mous')
+      .select('id, exchange_rate, transfer_date, payment_confirmation_file')
+      .in('id', idBatch)
+
+    for (const mou of mousRows || []) {
+      const raw = (mou as { payment_confirmation_file?: string | null }).payment_confirmation_file as
+        | string
+        | null
+      const map = parseLegacyJsonMap(raw)
+      const entries = Object.entries(map)
+      if (entries.length > 0) {
+        for (const [projectId, data] of entries) {
+          if (legacyTargetProjects && !legacyTargetProjects.includes(projectId)) continue
+          if (out[projectId]) continue
+          const rate =
+            data?.exchange_rate != null && !Number.isNaN(Number(data.exchange_rate))
+              ? Number(data.exchange_rate)
+              : null
+          out[projectId] = {
+            transfer_date: typeof data?.transfer_date === 'string' ? data.transfer_date : null,
+            exchange_rate: rate && rate > 0 ? rate : null,
+          }
+        }
+      } else if (raw && !raw.trim().startsWith('{')) {
+        const { data: projects } = await supabase
+          .from('err_projects')
+          .select('id')
+          .eq('mou_id', (mou as { id: string }).id)
+        if ((projects || []).length === 1) {
+          const projectId = (projects as { id: string }[])[0].id
+          if (!out[projectId] && (!legacyTargetProjects || legacyTargetProjects.includes(projectId))) {
+            const mouRate = (mou as { exchange_rate?: number }).exchange_rate
+            out[projectId] = {
+              transfer_date: (mou as { transfer_date?: string | null }).transfer_date || null,
+              exchange_rate: typeof mouRate === 'number' && mouRate > 0 ? mouRate : null,
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
 function parseLegacyJsonMap(
   raw: string | null | undefined
 ): Record<string, { file_path?: string; exchange_rate?: number; transfer_date?: string }> {
@@ -143,24 +266,9 @@ export async function loadProjectPaymentSummaries(
   }
 
   for (const [projectId, list] of byProject) {
+    const { transfer_date, exchange_rate } = computeReportingPaymentFieldsForProject(list)
+
     const withDates = list.filter((c) => c.transfer_date)
-    const earliestDate =
-      withDates.length > 0
-        ? withDates.reduce((a, b) =>
-            String(a.transfer_date) <= String(b.transfer_date) ? a : b
-          ).transfer_date
-        : null
-
-    const withRates = [...list]
-      .filter((c) => c.exchange_rate != null && Number(c.exchange_rate) > 0)
-      .sort((a, b) => {
-        const da = a.transfer_date || ''
-        const db = b.transfer_date || ''
-        if (da !== db) return db.localeCompare(da)
-        return String(b.created_at).localeCompare(String(a.created_at))
-      })
-    const latestRate = withRates[0]?.exchange_rate ?? null
-
     const earliestConf =
       withDates.length > 0
         ? withDates.reduce((a, b) =>
@@ -173,8 +281,8 @@ export async function loadProjectPaymentSummaries(
       null
 
     out[projectId] = {
-      transfer_date: earliestDate,
-      exchange_rate: latestRate,
+      transfer_date,
+      exchange_rate,
       file_path: firstFile,
       confirmation_count: list.length,
     }
