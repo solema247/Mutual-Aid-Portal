@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { applyReportingStatusUpdates } from '@/lib/projectStatus'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { assertProjectInGrantAccess } from '@/lib/userGrantAccess'
+import { emitF123Audit } from '@/lib/f123Audit'
 
 const ALLOWED_F4 = ['waiting', 'partial', 'in review', 'completed'] as const
 const ALLOWED_F5 = ['waiting', 'partial', 'in review', 'completed'] as const
@@ -44,6 +45,12 @@ export async function PATCH(
       return NextResponse.json({ error: 'Provide at least one of f4_status or f5_status.' }, { status: 400 })
     }
 
+    const { data: beforeProj } = await supabase
+      .from('err_projects')
+      .select('status, f4_status, f5_status, completed_at, date_report_completed')
+      .eq('id', projectId)
+      .maybeSingle()
+
     const changes: { f4_status?: string; f5_status?: string } = {}
     if (f4_status !== null) changes.f4_status = f4_status
     if (f5_status !== null) changes.f5_status = f5_status
@@ -56,6 +63,47 @@ export async function PATCH(
       console.error('Error updating reporting status:', result.error)
       return NextResponse.json({ error: 'Failed to update reporting status' }, { status: 500 })
     }
+
+    const applied = result.applied
+    const changedFields: string[] = []
+    if (changes.f4_status != null) changedFields.push('f4_status')
+    if (changes.f5_status != null) changedFields.push('f5_status')
+    const autoCompleted = applied.status === 'completed'
+
+    await emitF123Audit({
+      action: 'project.reporting_status_changed',
+      endpoint: 'PATCH /api/projects/[id]/reporting-status',
+      request,
+      targetType: 'project',
+      targetId: projectId,
+      oldValues: {
+        f4_status: beforeProj?.f4_status ?? null,
+        f5_status: beforeProj?.f5_status ?? null,
+        ...(autoCompleted
+          ? {
+              status: beforeProj?.status ?? null,
+              completed_at: beforeProj?.completed_at ?? null,
+              date_report_completed: beforeProj?.date_report_completed ?? null,
+            }
+          : {}),
+      },
+      newValues: {
+        ...(changes.f4_status != null ? { f4_status: changes.f4_status } : {}),
+        ...(changes.f5_status != null ? { f5_status: changes.f5_status } : {}),
+        ...(autoCompleted
+          ? {
+              status: applied.status ?? null,
+              completed_at: applied.completed_at ?? null,
+              date_report_completed: applied.date_report_completed ?? null,
+            }
+          : {}),
+      },
+      metadata: {
+        project_id: projectId,
+        changed_fields: changedFields,
+        ...(autoCompleted ? { auto_completed_project: true } : {}),
+      },
+    })
 
     return NextResponse.json({ success: true, ...result.applied })
   } catch (e) {

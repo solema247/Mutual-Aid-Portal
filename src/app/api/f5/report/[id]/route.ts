@@ -4,6 +4,7 @@ import { requirePermission } from '@/lib/requirePermission'
 import { syncProjectEndDateFromF5 } from '@/lib/syncProjectEndDateFromF5'
 import { resetReportingStatusIfNoReportsRemaining } from '@/lib/projectStatus'
 import { assertProjectInGrantAccess, getUserGrantAccess } from '@/lib/userGrantAccess'
+import { emitF123Audit } from '@/lib/f123Audit'
 
 export async function GET(
   _req: Request,
@@ -97,6 +98,17 @@ export async function DELETE(
     const scope = await assertProjectInGrantAccess(projectId)
     if (!scope.ok) return scope.response
 
+    const { count: reachCount } = await supabase
+      .from('err_program_reach')
+      .select('id', { count: 'exact', head: true })
+      .eq('report_id', id)
+
+    const { data: beforeProj } = await supabase
+      .from('err_projects')
+      .select('f5_status')
+      .eq('id', projectId)
+      .maybeSingle()
+
     const { error: reachErr } = await supabase.from('err_program_reach').delete().eq('report_id', id)
     if (reachErr) throw reachErr
     const { error: filesErr } = await supabase.from('err_program_files').delete().eq('report_id', id)
@@ -104,15 +116,41 @@ export async function DELETE(
     const { error: repErr } = await supabase.from('err_program_report').delete().eq('id', id)
     if (repErr) throw repErr
 
+    let f5StatusSideEffect: { from: string | null; to: string } | null = null
     const statusResult = await resetReportingStatusIfNoReportsRemaining(supabase, projectId, 'f5')
     if (!statusResult.ok) {
       console.warn('F5 delete: failed to reset reporting status', statusResult.error)
+    } else if (!('skipped' in statusResult && statusResult.skipped)) {
+      f5StatusSideEffect = {
+        from: (beforeProj?.f5_status as string | null) ?? null,
+        to: 'waiting',
+      }
     }
 
     const endDateResult = await syncProjectEndDateFromF5(supabase, projectId)
     if (!endDateResult.ok) {
       console.warn('F5 delete: failed to sync project end_date', endDateResult.error)
     }
+
+    await emitF123Audit({
+      action: 'f5.report_deleted',
+      endpoint: 'DELETE /api/f5/report/[id]',
+      request: req,
+      targetType: 'f5_report',
+      targetId: String(id),
+      oldValues: {
+        report_id: id,
+        reach_count: reachCount ?? 0,
+      },
+      newValues: null,
+      metadata: {
+        project_id: projectId,
+        report_id: id,
+        reach_count: reachCount ?? 0,
+        ...(f5StatusSideEffect ? { f5_status_side_effect: f5StatusSideEffect } : {}),
+        ...(endDateResult.ok ? { end_date_side_effect: endDateResult.end_date } : {}),
+      },
+    })
 
     return NextResponse.json({ success: true })
   } catch (e) {

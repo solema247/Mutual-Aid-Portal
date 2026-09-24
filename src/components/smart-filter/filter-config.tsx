@@ -708,3 +708,51 @@ export function getUserManagementFilterFields(options: {
     },
   ]
 }
+
+/** Audit Log filter fields: Action, Actor, Target Type, Date Range */
+export function getAuditLogFilterFields(options: {
+  actionOptions: FilterSelectOption[]
+  actorOptions: FilterSelectOption[]
+  targetTypeOptions: FilterSelectOption[]
+  labels?: {
+    action?: string
+    actor?: string
+    targetType?: string
+    dateRange?: string
+  }
+}): FilterFieldConfig[] {
+  const labels = options.labels ?? {}
+  return [
+    {
+      id: 'action',
+      label: labels.action ?? 'Action',
+      type: 'multi_select',
+      options: options.actionOptions,
+      placeholder: 'All actions',
+      accessorKey: 'action',
+    },
+    {
+      id: 'actor',
+      label: labels.actor ?? 'Actor',
+      type: 'multi_select',
+      options: options.actorOptions,
+      placeholder: 'All actors',
+      accessorKey: 'actor',
+    },
+    {
+      id: 'target_type',
+      label: labels.targetType ?? 'Target Type',
+      type: 'multi_select',
+      options: options.targetTypeOptions,
+      placeholder: 'All types',
+      accessorKey: 'target_type',
+    },
+    {
+      id: 'date_range',
+      label: labels.dateRange ?? 'Date Range',
+      type: 'date_range',
+      placeholder: 'From – To',
+      accessorKey: 'created_at',
+    },
+  ]
+}

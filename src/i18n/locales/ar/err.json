@@ -42,6 +42,7 @@
   "state_management": "إدارة الولايات",
   "state_management_desc": "عرض الولايات والمحليات، وإضافة ناقصة، أو طلب تصحيح من فريق البيانات",
   "user_management": "إدارة المستخدمين",
+  "audit_log": "سجل التدقيق",
   "user_management_desc": "إدارة والموافقة على حسابات منسقي غرف الطوارئ",
   "project_management": "إدارة المشاريع",
   "project_management_desc": "مراجعة وإدارة مقترحات مشاريع غرف الطوارئ",

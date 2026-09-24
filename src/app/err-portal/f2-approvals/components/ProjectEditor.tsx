@@ -19,6 +19,80 @@ type Expense = {
   planned_activity_other?: string | null
 }
 
+type PlannedActivityRow = {
+  activity: string
+  category: string | null
+  individuals: number | null
+  families: number | null
+  planned_activity_cost: number | null
+}
+
+/** Normalize scalars/arrays/objects so null, undefined, and '' compare equal. */
+function normalizeForCompare(value: unknown): unknown {
+  if (value === undefined || value === null || value === '') return null
+  if (Array.isArray(value)) return value.map(normalizeForCompare)
+  if (typeof value === 'object') {
+    const src = value as Record<string, unknown>
+    const out: Record<string, unknown> = {}
+    for (const key of Object.keys(src).sort()) {
+      out[key] = normalizeForCompare(src[key])
+    }
+    return out
+  }
+  return value
+}
+
+function payloadCompareKey(payload: Record<string, unknown>): string {
+  return JSON.stringify(normalizeForCompare(payload))
+}
+
+function buildEditorPayload(
+  formData: Record<string, unknown>,
+  expensesList: Expense[],
+  plannedList: PlannedActivityRow[]
+): Record<string, unknown> {
+  const payload: Record<string, unknown> = {
+    date: formData.date || null,
+    project_objectives: formData.project_objectives || null,
+    intended_beneficiaries: formData.intended_beneficiaries || null,
+    estimated_beneficiaries: formData.estimated_beneficiaries ?? null,
+    estimated_timeframe: formData.estimated_timeframe || null,
+    additional_support: formData.additional_support || null,
+    banking_details: formData.banking_details || null,
+    program_officer_name: formData.program_officer_name || null,
+    program_officer_phone: formData.program_officer_phone || null,
+    reporting_officer_name: formData.reporting_officer_name || null,
+    reporting_officer_phone: formData.reporting_officer_phone || null,
+    finance_officer_name: formData.finance_officer_name || null,
+    finance_officer_phone: formData.finance_officer_phone || null,
+    planned_activities: plannedList.map(pa => ({
+      activity: pa.activity || '',
+      category: pa.category || null,
+      individuals: pa.individuals ?? null,
+      families: pa.families ?? null,
+      planned_activity_cost: pa.planned_activity_cost ?? null
+    })),
+    expenses: expensesList.map(e => ({
+      activity: e.activity,
+      total_cost: e.total_cost,
+      category: e.category || null,
+      planned_activity: e.planned_activity || null,
+      planned_activity_other: e.planned_activity_other || null
+    }))
+  }
+
+  if (formData.emergency_room_id) {
+    payload.emergency_room_id = formData.emergency_room_id
+  }
+  if (formData.state) {
+    payload.state = formData.state
+  }
+  if (formData.locality !== undefined) {
+    payload.locality = formData.locality
+  }
+  return payload
+}
+
 interface ProjectEditorProps {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -49,6 +123,8 @@ export default function ProjectEditor({ open, onOpenChange, projectId, onSaved }
   const [selectedStateFilter, setSelectedStateFilter] = useState<string>('')
   const [availableStates, setAvailableStates] = useState<Array<{id: string, name: string, name_ar: string | null}>>([])
   const dateInputRef = useRef<HTMLInputElement>(null)
+  /** Normalized JSON of the save payload as of last successful load (for dirty detection). */
+  const initialPayloadKeyRef = useRef<string | null>(null)
   const [availablePlannedActivities, setAvailablePlannedActivities] = useState<Array<{ id: string; activity_name: string; activity_name_ar: string | null; language: string | null }>>([])
   const [sectors, setSectors] = useState<Array<{ id: string; sector_name_en: string; sector_name_ar: string | null }>>([])
 
@@ -240,16 +316,8 @@ export default function ProjectEditor({ open, onOpenChange, projectId, onSaved }
               data.locality !== roomState.locality
             
             if (needsUpdate) {
-              // Silently update in background
-              await supabase
-                .from('err_projects')
-                .update({
-                  state: roomState.state_name,
-                  locality: roomState.locality
-                })
-                .eq('id', projectId)
-              
-              // Update local form data with synced values
+              // Align form display only; DB sync happens on save via
+              // PATCH /api/f2/projects/[id]/editor (audited).
               data.state = roomState.state_name
               data.locality = roomState.locality
             }
@@ -344,11 +412,20 @@ export default function ProjectEditor({ open, onOpenChange, projectId, onSaved }
         // Also set activities for backward compatibility
         const paDisplay: string[] = paObjects.map(item => item.activity)
         setActivities(paDisplay)
+
+        // Baseline for dirty detection: same shape as save payload after load normalization.
+        initialPayloadKeyRef.current = payloadCompareKey(
+          buildEditorPayload(data as Record<string, unknown>, expensesWithTags, paObjects)
+        )
       } catch (e) {
         console.error('Load project error', e)
+        initialPayloadKeyRef.current = null
       } finally {
         setLoading(false)
       }
+    }
+    if (!open) {
+      initialPayloadKeyRef.current = null
     }
     load()
   }, [open, projectId, availableStates])
@@ -507,84 +584,24 @@ export default function ProjectEditor({ open, onOpenChange, projectId, onSaved }
     if (!projectId) return
     setSaving(true)
     try {
-      // If emergency_room_id is set, ensure state/locality are synced from the room
-      let finalState = form.state
-      let finalLocality = form.locality
+      // Room → state/locality sync is applied server-side on PATCH /api/f2/projects/[id]/editor.
+      const payload = buildEditorPayload(form as Record<string, unknown>, expenses, plannedActivities)
 
-      if (form.emergency_room_id) {
-        const { data: roomData } = await supabase
-          .from('emergency_rooms')
-          .select(`
-            state:states!emergency_rooms_state_reference_fkey(
-              state_name,
-              locality
-            )
-          `)
-          .eq('id', form.emergency_room_id)
-          .single()
-
-        if (roomData?.state) {
-          const roomState = Array.isArray(roomData.state) 
-            ? roomData.state[0] 
-            : roomData.state
-
-          if (roomState && typeof roomState === 'object' && 'state_name' in roomState) {
-            // Auto-sync: Always use the room's actual state and locality
-            finalState = roomState.state_name
-            finalLocality = roomState.locality || null
-          }
-        }
+      // Skip mutation entirely when the form matches what was loaded (no DB write, no audit).
+      if (
+        initialPayloadKeyRef.current != null &&
+        payloadCompareKey(payload) === initialPayloadKeyRef.current
+      ) {
+        alert(t('projects:no_changes_to_save') || 'No changes to save')
+        return
       }
 
-      // Build planned_activities payload from the plannedActivities state
-      const plannedActivitiesForSave = plannedActivities.map(pa => ({
-        activity: pa.activity || '',
-        category: pa.category || null,
-        individuals: pa.individuals ?? null,
-        families: pa.families ?? null,
-        planned_activity_cost: pa.planned_activity_cost ?? null
-      }))
-
-      const payload: any = {
-        date: form.date || null,
-        project_objectives: form.project_objectives || null,
-        intended_beneficiaries: form.intended_beneficiaries || null,
-        estimated_beneficiaries: form.estimated_beneficiaries ?? null,
-        estimated_timeframe: form.estimated_timeframe || null,
-        additional_support: form.additional_support || null,
-        banking_details: form.banking_details || null,
-        program_officer_name: form.program_officer_name || null,
-        program_officer_phone: form.program_officer_phone || null,
-        reporting_officer_name: form.reporting_officer_name || null,
-        reporting_officer_phone: form.reporting_officer_phone || null,
-        finance_officer_name: form.finance_officer_name || null,
-        finance_officer_phone: form.finance_officer_phone || null,
-        planned_activities: plannedActivitiesForSave,
-        expenses: expenses.map(e => ({
-          activity: e.activity,
-          total_cost: e.total_cost,
-          category: e.category || null,
-          planned_activity: e.planned_activity || null,
-          planned_activity_other: e.planned_activity_other || null
-        }))
-      }
-
-      // Include emergency_room_id, state, and locality if they exist
-      if (form.emergency_room_id) {
-        payload.emergency_room_id = form.emergency_room_id
-      }
-      if (finalState) {
-        payload.state = finalState
-      }
-      if (finalLocality !== undefined) {
-        payload.locality = finalLocality
-      }
-
-      const { error } = await supabase
-        .from('err_projects')
-        .update(payload)
-        .eq('id', projectId)
-      if (error) throw error
+      const resp = await fetch(`/api/f2/projects/${projectId}/editor`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      if (!resp.ok) throw new Error('Failed to save project')
       onSaved?.()
       onOpenChange(false)
     } catch (e) {

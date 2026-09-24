@@ -5,6 +5,7 @@ import {
   assertMouInGrantAccess,
   assertProjectsInGrantAccess,
 } from '@/lib/userGrantAccess'
+import { emitF123Audit } from '@/lib/f123Audit'
 
 /**
  * POST /api/f3/mous/[id]/projects/add
@@ -33,7 +34,7 @@ export async function POST(
     // Load MOU
     const { data: mou, error: mouErr } = await supabase
       .from('mous')
-      .select('id')
+      .select('id, total_amount')
       .eq('id', mouId)
       .single()
     if (mouErr || !mou) {
@@ -123,6 +124,20 @@ export async function POST(
       .eq('id', mouId)
 
     if (updateMouErr) throw updateMouErr
+
+    await emitF123Audit({
+      action: 'f3.mou_projects_added',
+      endpoint: 'POST /api/f3/mous/[id]/projects/add',
+      request,
+      targetType: 'mou',
+      targetId: mouId,
+      oldValues: { total_amount: mou.total_amount ?? null },
+      newValues: { total_amount },
+      metadata: {
+        project_ids: project_ids.map(String),
+        added_count: project_ids.length,
+      },
+    })
 
     return NextResponse.json({
       success: true,

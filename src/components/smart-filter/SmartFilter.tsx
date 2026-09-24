@@ -12,6 +12,26 @@ import type { ActiveFilter, FilterFieldConfig, FilterValues, SmartFilterProps, F
 
 const DEFAULT_URL_PREFIX = 'f_'
 
+function mergeFiltersByFieldId(
+  existing: ActiveFilter[],
+  fromUrl: ActiveFilter[]
+): ActiveFilter[] {
+  if (fromUrl.length === 0) return existing
+  const byField = new Map(existing.map((f) => [f.fieldId, f]))
+  for (const f of fromUrl) {
+    byField.set(f.fieldId, f)
+  }
+  return Array.from(byField.values())
+}
+
+function filterValuesEqual(a: ActiveFilter[], b: ActiveFilter[]): boolean {
+  if (a.length !== b.length) return false
+  const sortKey = (f: ActiveFilter) => `${f.fieldId}:${JSON.stringify(f.value)}`
+  const aa = [...a].map(sortKey).sort()
+  const bb = [...b].map(sortKey).sort()
+  return aa.every((k, i) => k === bb[i])
+}
+
 /** Parse URL search params into filter values (for hydration / server) */
 export function parseFiltersFromSearchParams(
   searchParams: URLSearchParams,
@@ -127,22 +147,19 @@ export function SmartFilter({
     if (typeof window === 'undefined') return
     const params = new URLSearchParams(searchParams.toString())
     const newParams = filtersToSearchParams(filters, urlParamPrefix, fields)
-    let changed = false
-    const keysToDelete: string[] = []
+    const prefixKeys: string[] = []
     params.forEach((_, key) => {
-      if (key.startsWith(urlParamPrefix)) keysToDelete.push(key)
+      if (key.startsWith(urlParamPrefix)) prefixKeys.push(key)
     })
-    keysToDelete.forEach((k) => {
-      params.delete(k)
-      changed = true
-    })
-    Object.entries(newParams).forEach(([k, v]) => {
-      if (params.get(k) !== v) {
-        params.set(k, v)
-        changed = true
-      }
-    })
-    if (changed && window.history?.replaceState) {
+    const newKeys = new Set(Object.keys(newParams))
+    const changed =
+      prefixKeys.some((k) => !newKeys.has(k)) ||
+      Object.entries(newParams).some(([k, v]) => params.get(k) !== v)
+    if (!changed) return
+
+    prefixKeys.forEach((k) => params.delete(k))
+    Object.entries(newParams).forEach(([k, v]) => params.set(k, v))
+    if (window.history?.replaceState) {
       const url = `${window.location.pathname}${params.toString() ? `?${params.toString()}` : ''}`
       window.history.replaceState(null, '', url)
     }
@@ -168,8 +185,11 @@ export function SmartFilter({
       const field = fields.find((f) => f.id === fieldId)
       if (field) toAdd.push({ id: `${fieldId}-${Date.now()}-${Math.random()}`, fieldId, value })
     })
-    if (toAdd.length > 0) onFiltersChange(toAdd)
-  }, [fields, onFiltersChange, searchParams, urlParamPrefix])
+    const merged = mergeFiltersByFieldId(filters, toAdd)
+    if (!filterValuesEqual(merged, filters)) {
+      onFiltersChange(merged)
+    }
+  }, [fields, filters, onFiltersChange, searchParams, urlParamPrefix])
 
   const addFilterButton = (
     <Popover open={addFilterOpen} onOpenChange={setAddFilterOpen}>

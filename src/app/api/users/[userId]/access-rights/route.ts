@@ -6,6 +6,12 @@ import {
   roleAssignmentError,
   stateAccessEditError,
 } from '@/lib/userAccessRules'
+import {
+  emitUserManagementAudits,
+  pickChangedAuditFields,
+  USER_SCOPE_AUDIT_KEYS,
+  type UserManagementAuditEvent,
+} from '@/lib/userManagementAudit'
 
 export async function PUT(
   request: Request,
@@ -25,7 +31,7 @@ export async function PUT(
 
     const { data: currentUser, error: userError } = await supabase
       .from('users')
-      .select('role')
+      .select('id, role')
       .eq('auth_user_id', session.user.id)
       .single()
 
@@ -46,7 +52,9 @@ export async function PUT(
 
     const { data: targetUser, error: targetUserError } = await supabase
       .from('users')
-      .select('role, partner_id, status')
+      .select(
+        'id, role, partner_id, status, err_id, can_see_all_states, visible_states'
+      )
       .eq('id', params.userId)
       .single()
 
@@ -199,11 +207,43 @@ export async function PUT(
       )
     }
 
+    const before = targetUser as Record<string, unknown>
+    const after = updatedUser as Record<string, unknown>
+    const events: UserManagementAuditEvent[] = []
+
+    const roleDiff = pickChangedAuditFields(before, after, ['role'])
+    if (roleDiff) {
+      events.push({
+        action: 'user.role_changed',
+        oldValues: roleDiff.oldValues,
+        newValues: roleDiff.newValues,
+      })
+    }
+
+    const scopeDiff = pickChangedAuditFields(before, after, USER_SCOPE_AUDIT_KEYS)
+    if (scopeDiff) {
+      events.push({
+        action: 'user.scope_changed',
+        oldValues: scopeDiff.oldValues,
+        newValues: scopeDiff.newValues,
+      })
+    }
+
     // Role change: drop old overrides so effective perms become the new role defaults.
+    let overridesCleared = false
     if (roleChanging) {
       const { error: clearError } = await clearUserOverrides(supabase, params.userId)
       if (clearError) {
         console.error('Error clearing permission overrides after role change:', clearError)
+        if (events.length > 0) {
+          await emitUserManagementAudits({
+            actorUserId: currentUser.id,
+            targetUserId: params.userId,
+            endpoint: 'PUT /api/users/[userId]/access-rights',
+            request,
+            events,
+          })
+        }
         return NextResponse.json(
           {
             error:
@@ -213,6 +253,27 @@ export async function PUT(
           { status: 500 }
         )
       }
+      overridesCleared = true
+    }
+
+    // Override clears on role change are permissions_reset only (not permission_changed).
+    if (overridesCleared) {
+      events.push({
+        action: 'user.permissions_reset',
+        oldValues: { reason: 'role_changed' },
+        newValues: { overrides_cleared: true },
+        metadata: { reason: 'role_changed' },
+      })
+    }
+
+    if (events.length > 0) {
+      await emitUserManagementAudits({
+        actorUserId: currentUser.id,
+        targetUserId: params.userId,
+        endpoint: 'PUT /api/users/[userId]/access-rights',
+        request,
+        events,
+      })
     }
 
     return NextResponse.json(updatedUser)

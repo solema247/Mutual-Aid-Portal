@@ -5,6 +5,7 @@ import { syncProjectEndDateFromF5 } from '@/lib/syncProjectEndDateFromF5'
 import { syncImplementedSectorFromF5 } from '@/lib/activityShift'
 import { translateF5Report, translateF5Reach } from '@/lib/translateHelper'
 import { assertProjectInGrantAccess } from '@/lib/userGrantAccess'
+import { emitF123Audit } from '@/lib/f123Audit'
 
 export async function POST(req: Request) {
   try {
@@ -116,24 +117,29 @@ export async function POST(req: Request) {
     const report_id = inserted.id
 
     // Mark F5 partial after upload; leave completed unchanged so re-edits do not demote
+    let f5StatusSideEffect: { from: string | null; to: string } | null = null
     {
       const { data: proj } = await supabase
         .from('err_projects')
         .select('f5_status')
         .eq('id', project_id)
         .maybeSingle()
-      const nextStatus = statusAfterUpload(proj?.f5_status)
+      const prevF5 = (proj?.f5_status as string | null) ?? null
+      const nextStatus = statusAfterUpload(prevF5)
       if (nextStatus) {
         const statusResult = await applyReportingStatusUpdates(supabase, project_id, {
           f5_status: nextStatus,
         })
         if (!statusResult.ok) {
           console.warn('F5 save: failed to update reporting status', statusResult.error)
+        } else {
+          f5StatusSideEffect = { from: prevF5, to: nextStatus }
         }
       }
     }
 
     // If a summary file exists, move it from tmp to a clear final path and record attachment
+    let fileCount = 0
     if (file_key_temp) {
       try {
         const tempKey: string = String(file_key_temp)
@@ -175,6 +181,7 @@ export async function POST(req: Request) {
             file_size: blob.size,
             uploaded_by: uploaded_by || null 
           })
+        fileCount = 1
       } catch (e) {
         console.warn('F5 file finalize failed, continuing without attachment', e)
       }
@@ -182,6 +189,8 @@ export async function POST(req: Request) {
 
     // Insert reach activities
     let reach_ids: string[] = []
+    let implementedSectorSideEffect: string | null = null
+    let endDateSideEffect: string | null = null
     if (Array.isArray(reach) && reach.length) {
       // Translate reach activities if needed
       const { translatedData: translatedReach, originalText: reachOriginalText } = await translateF5Reach(reach, sourceLanguage)
@@ -223,13 +232,42 @@ export async function POST(req: Request) {
       )
       if (!sectorResult.ok) {
         console.warn('F5 save: failed to sync implemented_sector', sectorResult.error)
+      } else {
+        implementedSectorSideEffect = sectorResult.implemented_sector
       }
     }
 
     const endDateResult = await syncProjectEndDateFromF5(supabase, project_id)
     if (!endDateResult.ok) {
       console.warn('F5 save: failed to sync project end_date', endDateResult.error)
+    } else {
+      endDateSideEffect = endDateResult.end_date
     }
+
+    // file count already tracked during finalize
+    await emitF123Audit({
+      action: 'f5.report_created',
+      endpoint: 'POST /api/f5/save',
+      request: req,
+      targetType: 'f5_report',
+      targetId: String(report_id),
+      newValues: {
+        report_id,
+        reach_count: reach_ids.length,
+        report_date: cleanDate(translatedSummary.report_date),
+      },
+      metadata: {
+        project_id,
+        report_id,
+        reach_count: reach_ids.length,
+        file_count: fileCount,
+        ...(f5StatusSideEffect ? { f5_status_side_effect: f5StatusSideEffect } : {}),
+        ...(implementedSectorSideEffect
+          ? { implemented_sector_side_effect: implementedSectorSideEffect }
+          : {}),
+        ...(endDateSideEffect != null ? { end_date_side_effect: endDateSideEffect } : {}),
+      },
+    })
 
     return NextResponse.json({ report_id, reach_ids })
   } catch (e) {

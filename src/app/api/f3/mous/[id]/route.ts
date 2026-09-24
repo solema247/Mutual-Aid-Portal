@@ -5,6 +5,7 @@ import {
   assertMouInGrantAccess,
   grantGridIdInAccess,
 } from '@/lib/userGrantAccess'
+import { emitF123Audit, pickMouAuditChanges } from '@/lib/f123Audit'
 
 export async function GET(
   _request: Request,
@@ -192,6 +193,12 @@ export async function PATCH(
       }
     }
 
+    const { data: mouBefore } = await supabase
+      .from('mous')
+      .select('*')
+      .eq('id', id)
+      .maybeSingle()
+
     // Update the MOU
     const { data: updated, error: updateErr } = await supabase
       .from('mous')
@@ -208,6 +215,26 @@ export async function PATCH(
         { error: 'Failed to update MOU', details: updateErr.message },
         { status: 500 }
       )
+    }
+
+    const mouChanges = pickMouAuditChanges(
+      (mouBefore ?? {}) as Record<string, unknown>,
+      (updated ?? {}) as Record<string, unknown>,
+      Object.keys(updates)
+    )
+    if (mouChanges) {
+      await emitF123Audit({
+        action: 'f3.mou_updated',
+        endpoint: 'PATCH /api/f3/mous/[id]',
+        request,
+        targetType: 'mou',
+        targetId: id,
+        oldValues: mouChanges.oldValues,
+        newValues: mouChanges.newValues,
+        metadata: {
+          updated_fields: Object.keys(mouChanges.newValues)
+        }
+      })
     }
 
     // Parse signatures JSON if it exists

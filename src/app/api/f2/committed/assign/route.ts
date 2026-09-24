@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { assertProjectsInGrantAccess } from '@/lib/userGrantAccess'
+import { emitF123Audit } from '@/lib/f123Audit'
 
 export async function POST(request: Request) {
   try {
@@ -136,6 +137,11 @@ export async function POST(request: Request) {
     // Process each F1
     let assignedCount = 0
     const errors: string[] = []
+    const assignedAudits: {
+      id: string
+      oldValues: Record<string, unknown>
+      newValues: Record<string, unknown>
+    }[] = []
     
     for (const f1 of f1s) {
       try {
@@ -215,6 +221,26 @@ export async function POST(request: Request) {
         
         if (updateError) throw updateError
         
+        assignedAudits.push({
+          id: String(f1.id),
+          oldValues: {
+            grant_call_id: f1.grant_call_id ?? null,
+            file_key: f1.file_key ?? null,
+            temp_file_key: f1.temp_file_key ?? null
+          },
+          newValues: {
+            grant_call_id,
+            donor_id: grantCall.donor_id,
+            funding_cycle_id,
+            grant_serial_id: grantSerialId,
+            workplan_number: workplanNumber,
+            cycle_state_allocation_id: cycleStateAllocationId,
+            grant_id: grantId,
+            file_key: finalFileKey ?? null,
+            temp_file_key: null,
+            status: 'active'
+          }
+        })
         assignedCount++
       } catch (error: any) {
         console.error(`Error assigning F1 ${f1.id}:`, error)
@@ -227,6 +253,23 @@ export async function POST(request: Request) {
         error: 'Failed to assign any F1s', 
         details: errors 
       }, { status: 500 })
+    }
+    
+    for (const entry of assignedAudits) {
+      await emitF123Audit({
+        action: 'f2.assigned',
+        endpoint: 'POST /api/f2/committed/assign',
+        request,
+        targetType: 'project',
+        targetId: entry.id,
+        oldValues: entry.oldValues,
+        newValues: entry.newValues,
+        metadata: {
+          grant_serial: grantSerialId,
+          mmyy,
+          assigned_count: assignedCount
+        }
+      })
     }
     
     return NextResponse.json({ 

@@ -2,6 +2,11 @@ import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { getFunctionList } from '@/lib/permissions'
 import { getOverridesForUser, saveOverrides } from '@/lib/userOverridesDb'
+import {
+  emitPermissionManagerAudit,
+  overridesEqual,
+  pickOverrideChanges,
+} from '@/lib/permissionManagerAudit'
 
 type Change = {
   userId: string
@@ -53,6 +58,7 @@ export async function POST(request: Request) {
 
   const validCodes = new Set(getFunctionList().map((f) => f.code))
   const results: { userId: string; ok: boolean; error?: string }[] = []
+  const endpoint = 'POST /api/permissions/overrides/merge'
 
   for (const change of body.changes) {
     if (!change?.userId || typeof change.userId !== 'string') {
@@ -81,16 +87,36 @@ export async function POST(request: Request) {
       remove.add(c)
     }
 
+    const after = { add: Array.from(add), remove: Array.from(remove) }
+
     const { error } = await saveOverrides(
       supabase,
       change.userId,
-      Array.from(add),
-      Array.from(remove)
+      after.add,
+      after.remove
     )
     if (error) {
       results.push({ userId: change.userId, ok: false, error: error.message })
     } else {
       results.push({ userId: change.userId, ok: true })
+      // Merge is a permission edit (not the Permission Manager clear-to-default path).
+      // One permission_changed event per successful user with only changed fields.
+      if (currentUser && !overridesEqual(current, after)) {
+        const diff = pickOverrideChanges(current, after)
+        if (diff) {
+          await emitPermissionManagerAudit({
+            action: 'user.permission_changed',
+            actorUserId: currentUser.id,
+            endpoint,
+            request,
+            targetType: 'user',
+            targetId: change.userId,
+            oldValues: diff.oldValues,
+            newValues: diff.newValues,
+            metadata: { target_user_id: change.userId, merge: true },
+          })
+        }
+      }
     }
   }
 

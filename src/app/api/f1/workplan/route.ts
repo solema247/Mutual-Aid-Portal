@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server'
 import { normalizeF1DateForDb } from '@/lib/f1WorkplanNormalize'
 import { f1WorkplanCreateSchema } from '@/lib/f1WorkplanSchema'
 import { ensureScreeningsForProjects } from '@/lib/compliance'
+import { emitF123Audit } from '@/lib/f123Audit'
 import { forbidIfPartner } from '@/lib/routeHandlerAuth'
 import { getUserRoomAccess } from '@/lib/userRoomAccess'
 
@@ -122,7 +123,7 @@ export async function POST (request: Request) {
     const { data: inserted, error: insertError } = await supabase
       .from('err_projects')
       .insert([row])
-      .select('id')
+      .select('id, emergency_room_id, status, funding_status, date, locality, state, source')
       .single()
 
     if (insertError) {
@@ -145,6 +146,26 @@ export async function POST (request: Request) {
       } catch (screeningError) {
         console.error('f1/workplan compliance screening:', screeningError)
       }
+    }
+
+    if (inserted?.id) {
+      await emitF123Audit({
+        action: 'f1.workplan_created',
+        endpoint: 'POST /api/f1/workplan',
+        request,
+        targetType: 'project',
+        targetId: inserted.id,
+        newValues: {
+          id: inserted.id,
+          emergency_room_id: inserted.emergency_room_id ?? null,
+          status: inserted.status ?? null,
+          funding_status: inserted.funding_status ?? null,
+          date: inserted.date ?? null,
+          locality: inserted.locality ?? null,
+          state: inserted.state ?? null,
+          source: inserted.source ?? null
+        }
+      })
     }
 
     return NextResponse.json({ success: true, id: inserted?.id })

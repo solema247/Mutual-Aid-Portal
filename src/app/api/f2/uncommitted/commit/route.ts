@@ -3,6 +3,7 @@ import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { requirePermission } from '@/lib/requirePermission'
 import { getComplianceBlockedProjectIds } from '@/lib/compliance'
 import { assertProjectsInGrantAccess } from '@/lib/userGrantAccess'
+import { emitF123Audit } from '@/lib/f123Audit'
 
 // POST /api/f2/uncommitted/commit - Commit selected F1s (set funding_status to committed and status to approved)
 export async function POST(request: Request) {
@@ -34,12 +35,43 @@ export async function POST(request: Request) {
       )
     }
 
+    const { data: beforeRows } = await supabase
+      .from('err_projects')
+      .select('id, status, funding_status')
+      .in('id', f1_ids)
+
     const { error } = await supabase
       .from('err_projects')
       .update({ funding_status: 'committed', status: 'approved' })
       .in('id', f1_ids)
 
     if (error) throw error
+
+    const beforeById = new Map(
+      (beforeRows || []).map((row) => [String(row.id), row])
+    )
+    for (const f1Id of f1_ids) {
+      const before = beforeById.get(String(f1Id))
+      await emitF123Audit({
+        action: 'f2.committed',
+        actorUserId: perm.user.id,
+        endpoint: 'POST /api/f2/uncommitted/commit',
+        request,
+        targetType: 'project',
+        targetId: String(f1Id),
+        oldValues: {
+          status: before?.status ?? null,
+          funding_status: before?.funding_status ?? null
+        },
+        newValues: {
+          status: 'approved',
+          funding_status: 'committed'
+        },
+        metadata: {
+          committed_count: f1_ids.length
+        }
+      })
+    }
 
     return NextResponse.json({ success: true, committed_count: f1_ids.length })
   } catch (error) {

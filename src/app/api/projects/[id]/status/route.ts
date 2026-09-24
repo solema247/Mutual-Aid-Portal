@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { isReportingStatusCompleted } from '@/lib/projectStatus'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { assertProjectInGrantAccess } from '@/lib/userGrantAccess'
+import { emitF123Audit } from '@/lib/f123Audit'
 
 export async function PATCH(
   request: Request,
@@ -60,17 +61,41 @@ export async function PATCH(
     }
 
     // Update the project status, tracking when it was marked completed
+    const completedAt = newStatus === 'completed' ? new Date().toISOString() : null
     const { error: updateError } = await supabase
       .from('err_projects')
       .update({
         status: newStatus,
-        completed_at: newStatus === 'completed' ? new Date().toISOString() : null
+        completed_at: completedAt
       })
       .eq('id', projectId)
 
     if (updateError) {
       console.error('Error updating project status:', updateError)
       return NextResponse.json({ error: 'Failed to update project status' }, { status: 500 })
+    }
+
+    if (newStatus === 'completed') {
+      await emitF123Audit({
+        action: 'project.completed',
+        endpoint: 'PATCH /api/projects/[id]/status',
+        request,
+        targetType: 'project',
+        targetId: projectId,
+        oldValues: {
+          status: project.status ?? null,
+          completed_at: null,
+        },
+        newValues: {
+          status: 'completed',
+          completed_at: completedAt,
+        },
+        metadata: {
+          project_id: projectId,
+          f4_status: project.f4_status ?? null,
+          f5_status: project.f5_status ?? null,
+        },
+      })
     }
 
     return NextResponse.json({ success: true, status: status || 'completed' })

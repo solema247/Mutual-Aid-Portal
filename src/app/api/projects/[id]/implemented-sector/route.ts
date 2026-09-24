@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { assertProjectInGrantAccess } from '@/lib/userGrantAccess'
+import { emitF123Audit } from '@/lib/f123Audit'
 
 /**
  * PATCH /api/projects/[id]/implemented-sector
@@ -43,7 +44,7 @@ export async function PATCH(
 
     const { data: project, error: fetchError } = await supabase
       .from('err_projects')
-      .select('id')
+      .select('id, implemented_sector, activity_shift_note')
       .eq('id', projectId)
       .single()
 
@@ -73,6 +74,27 @@ export async function PATCH(
       console.error('Error updating implemented sector:', updateError)
       return NextResponse.json({ error: 'Failed to update implemented sector' }, { status: 500 })
     }
+
+    await emitF123Audit({
+      action: 'project.implemented_sector_changed',
+      endpoint: 'PATCH /api/projects/[id]/implemented-sector',
+      request,
+      targetType: 'project',
+      targetId: projectId,
+      oldValues: {
+        implemented_sector: project.implemented_sector ?? null,
+        ...(noteProvided
+          ? { activity_shift_note: project.activity_shift_note ?? null }
+          : {}),
+      },
+      newValues: {
+        implemented_sector: implementedSector,
+        ...(noteProvided ? { activity_shift_note: activityShiftNote ?? null } : {}),
+      },
+      metadata: {
+        project_id: projectId,
+      },
+    })
 
     return NextResponse.json({
       success: true,

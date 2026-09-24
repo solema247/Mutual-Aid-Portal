@@ -9,6 +9,12 @@ import {
   statusChangeError,
   userDeleteError,
 } from '@/lib/userAccessRules'
+import {
+  emitUserManagementAudits,
+  pickChangedAuditFields,
+  USER_SCOPE_AUDIT_KEYS,
+  type UserManagementAuditEvent,
+} from '@/lib/userManagementAudit'
 
 type CallerUser = { id: string; role: string }
 
@@ -239,10 +245,60 @@ export async function PATCH(
       return NextResponse.json({ error: 'Failed to update user' }, { status: 500 })
     }
 
+    const before = targetUser as Record<string, unknown>
+    const after = updatedUser as Record<string, unknown>
+    const events: UserManagementAuditEvent[] = []
+
+    const general = pickChangedAuditFields(before, after, ['display_name'])
+    if (general) {
+      events.push({
+        action: 'user.updated',
+        oldValues: general.oldValues,
+        newValues: general.newValues,
+      })
+    }
+
+    const roleDiff = pickChangedAuditFields(before, after, ['role'])
+    if (roleDiff) {
+      events.push({
+        action: 'user.role_changed',
+        oldValues: roleDiff.oldValues,
+        newValues: roleDiff.newValues,
+      })
+    }
+
+    const statusDiff = pickChangedAuditFields(before, after, ['status'])
+    if (statusDiff) {
+      events.push({
+        action: 'user.status_changed',
+        oldValues: statusDiff.oldValues,
+        newValues: statusDiff.newValues,
+      })
+    }
+
+    const scopeDiff = pickChangedAuditFields(before, after, USER_SCOPE_AUDIT_KEYS)
+    if (scopeDiff) {
+      events.push({
+        action: 'user.scope_changed',
+        oldValues: scopeDiff.oldValues,
+        newValues: scopeDiff.newValues,
+      })
+    }
+
+    let overridesCleared = false
     if (roleChanging) {
       const { error: clearError } = await clearUserOverrides(supabase, userId)
       if (clearError) {
         console.error('Error clearing overrides after role change:', clearError)
+        if (events.length > 0) {
+          await emitUserManagementAudits({
+            actorUserId: caller.id,
+            targetUserId: userId,
+            endpoint: 'PATCH /api/users/[userId]',
+            request,
+            events,
+          })
+        }
         return NextResponse.json(
           {
             error:
@@ -252,6 +308,26 @@ export async function PATCH(
           { status: 500 }
         )
       }
+      overridesCleared = true
+    }
+
+    if (overridesCleared) {
+      events.push({
+        action: 'user.permissions_reset',
+        oldValues: { reason: 'role_changed' },
+        newValues: { overrides_cleared: true },
+        metadata: { reason: 'role_changed' },
+      })
+    }
+
+    if (events.length > 0) {
+      await emitUserManagementAudits({
+        actorUserId: caller.id,
+        targetUserId: userId,
+        endpoint: 'PATCH /api/users/[userId]',
+        request,
+        events,
+      })
     }
 
     return NextResponse.json({ user: updatedUser, role_changed: roleChanging })
@@ -277,7 +353,7 @@ export async function PATCH(
  * - Do not change partner_id / err_id / state scope fields (preserves audit context)
  */
 export async function DELETE(
-  _request: Request,
+  request: Request,
   { params }: { params: { userId: string } }
 ) {
   try {
@@ -360,6 +436,27 @@ export async function DELETE(
         console.error('Admin client unavailable during soft-delete auth cleanup:', e)
       }
     }
+
+    await emitUserManagementAudits({
+      actorUserId: caller.id,
+      targetUserId: userId,
+      endpoint: 'DELETE /api/users/[userId]',
+      request,
+      events: [
+        {
+          action: 'user.deleted',
+          oldValues: {
+            display_name: targetUser.display_name,
+            role: targetUser.role,
+            status: targetUser.status,
+          },
+          newValues: {
+            status: 'deleted',
+          },
+          metadata: { strategy: 'soft_delete' },
+        },
+      ],
+    })
 
     return NextResponse.json({
       ok: true,

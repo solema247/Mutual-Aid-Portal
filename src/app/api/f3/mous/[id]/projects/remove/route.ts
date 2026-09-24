@@ -6,6 +6,7 @@ import {
   assertProjectsInGrantAccess,
   isProjectIdInMouScope,
 } from '@/lib/userGrantAccess'
+import { emitF123Audit } from '@/lib/f123Audit'
 
 /**
  * POST /api/f3/mous/[id]/projects/remove
@@ -40,7 +41,7 @@ export async function POST(
     // Load MOU
     const { data: mou, error: mouErr } = await supabase
       .from('mous')
-      .select('id')
+      .select('id, total_amount')
       .eq('id', mouId)
       .single()
     if (mouErr || !mou) {
@@ -108,6 +109,20 @@ export async function POST(
       .eq('id', mouId)
 
     if (updateMouErr) throw updateMouErr
+
+    await emitF123Audit({
+      action: 'f3.mou_projects_removed',
+      endpoint: 'POST /api/f3/mous/[id]/projects/remove',
+      request,
+      targetType: 'mou',
+      targetId: mouId,
+      oldValues: { total_amount: mou.total_amount ?? null },
+      newValues: { total_amount },
+      metadata: {
+        project_ids: idsToUnlink,
+        removed_count: idsToUnlink.length,
+      },
+    })
 
     return NextResponse.json({
       success: true,
