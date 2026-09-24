@@ -8,7 +8,7 @@ import {
   needsPlanBeforePaginateF5List,
   needsReachForF5List,
   parseF5ListQueryFromApiUrl,
-} from './listQueryParams'
+} from './listQueryParamsCore'
 import {
   buildPageProjectById,
   computeMouIdsForProjects,
@@ -50,6 +50,7 @@ import {
 } from './listCommon'
 import { loadF5ReachForReports, loadMouPaymentMaps } from './listEnrichment'
 import { fetchScopedProjectsCached } from './scopedProjectsCache'
+import { computeF5ListSummary, EMPTY_REPORTING_LIST_SUMMARY } from './listSummary'
 
 const F5_REPORT_SELECT = `
   id,
@@ -210,6 +211,7 @@ export async function handleF5ListGet(request: Request) {
     pagination: paginationMeta(0, query.page, query.pageSize),
     sort: { sortBy: query.sortBy, sortDir: query.sortDir },
     filterMeta: { baseRooms: [] as string[], states: [] as string[], grants: [] as { value: string; label: string }[] },
+    summary: EMPTY_REPORTING_LIST_SUMMARY,
   }
 
   if (scope.isEmpty) {
@@ -345,9 +347,11 @@ export async function handleF5ListGet(request: Request) {
 
     let pageRows: Record<string, unknown>[]
     let pagination: ReturnType<typeof paginationMeta>
+    let summary = EMPTY_REPORTING_LIST_SUMMARY
 
     if (!reachDependent && !grantMultiSelect) {
       const filtered = applyF5ListFilters(rows, query.filters)
+      summary = computeF5ListSummary(filtered)
       const sorted = sortF5Rows(filtered, query.sortBy, query.sortDir)
       pagination = paginationMeta(sorted.length, query.page, query.pageSize)
       pageRows = paginateRows(sorted, pagination.page, pagination.pageSize)
@@ -360,6 +364,7 @@ export async function handleF5ListGet(request: Request) {
     } else if (!reachDependent && grantMultiSelect) {
       let filtered = applyF5NonGrantMultiSelectListFilters(rows, query.filters)
       filtered = await resolveAndApplyGrantMultiSelect(filtered)
+      summary = computeF5ListSummary(filtered)
       const sorted = sortF5Rows(filtered, query.sortBy, query.sortDir)
       pagination = paginationMeta(sorted.length, query.page, query.pageSize)
       pageRows = paginateRows(sorted, pagination.page, pagination.pageSize)
@@ -379,6 +384,7 @@ export async function handleF5ListGet(request: Request) {
       if (query.filters.endActivityStatuses.length > 0) {
         filtered = applyF5EndActivityListFilters(filtered, query.filters.endActivityStatuses)
       }
+      summary = computeF5ListSummary(filtered)
       const sorted = sortF5Rows(filtered, query.sortBy, query.sortDir)
       pagination = paginationMeta(sorted.length, query.page, query.pageSize)
       pageRows = paginateRows(sorted, pagination.page, pagination.pageSize)
@@ -396,6 +402,7 @@ export async function handleF5ListGet(request: Request) {
       if (query.filters.endActivityStatuses.length > 0) {
         filtered = applyF5EndActivityListFilters(filtered, query.filters.endActivityStatuses)
       }
+      summary = computeF5ListSummary(filtered)
       const sorted = sortF5Rows(filtered, query.sortBy, query.sortDir)
       pagination = paginationMeta(sorted.length, query.page, query.pageSize)
       pageRows = paginateRows(sorted, pagination.page, pagination.pageSize)
@@ -438,6 +445,7 @@ export async function handleF5ListGet(request: Request) {
       pagination,
       sort: { sortBy: query.sortBy, sortDir: query.sortDir },
       filterMeta,
+      summary,
     })
   } catch (e) {
     console.error('F5 list error', e)

@@ -7,7 +7,7 @@ import {
   needsPaymentBeforePaginateF4List,
   needsPlanBeforePaginateF4List,
   parseF4ListQueryFromApiUrl,
-} from './listQueryParams'
+} from './listQueryParamsCore'
 import {
   buildPageProjectById,
   computeMouIdsForProjects,
@@ -48,6 +48,7 @@ import {
 } from './listCommon'
 import { loadF4AttachmentCounts, loadMouPaymentMaps } from './listEnrichment'
 import { fetchScopedProjectsCached } from './scopedProjectsCache'
+import { computeF4ListSummary, EMPTY_REPORTING_LIST_SUMMARY } from './listSummary'
 
 const F4_SUMMARY_SELECT = `
   id,
@@ -198,6 +199,7 @@ export async function handleF4ListGet(request: Request) {
     pagination: paginationMeta(0, query.page, query.pageSize),
     sort: { sortBy: query.sortBy, sortDir: query.sortDir },
     filterMeta: { baseRooms: [] as string[], states: [] as string[], grants: [] as { value: string; label: string }[] },
+    summary: EMPTY_REPORTING_LIST_SUMMARY,
   }
 
   if (scope.isEmpty) {
@@ -460,6 +462,7 @@ export async function handleF4ListGet(request: Request) {
       filtered = applyF4ListFilters(rows, query.filters)
     }
 
+    const summary = computeF4ListSummary(filtered)
     const sorted = sortF4Rows(filtered, query.sortBy, query.sortDir)
     const pagination = paginationMeta(sorted.length, query.page, query.pageSize)
     const pageRows = paginateRows(sorted, pagination.page, pagination.pageSize)
@@ -511,6 +514,7 @@ export async function handleF4ListGet(request: Request) {
       pagination,
       sort: { sortBy: query.sortBy, sortDir: query.sortDir },
       filterMeta,
+      summary,
     })
   } catch (e) {
     console.error('F4 list error', e)

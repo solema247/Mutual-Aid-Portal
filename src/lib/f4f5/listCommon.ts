@@ -1,4 +1,4 @@
-import type { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
+import type { SupabaseClient } from '@supabase/supabase-js'
 import { chunkGrantScopeIds } from '@/lib/userGrantAccess'
 
 export const SUPABASE_IN_BATCH = 80
@@ -198,7 +198,7 @@ export function uniqueGrantKeysFromProjects(projects: Record<string, unknown>[])
 
 /** grid UUID → grants_grid_view.grant_id (canonical grant_call_id). */
 export async function loadGrantCallIdMap(
-  supabase: ReturnType<typeof getSupabaseRouteClient>,
+  supabase: SupabaseClient,
   gridIds: string[]
 ): Promise<Map<string, string>> {
   const gridGrantIdByUuid = new Map<string, string>()
@@ -221,7 +221,7 @@ export async function loadGrantCallIdMap(
 
 /** Display names + call-id map for a project subset (page enrichment / legacy fallback). */
 export async function loadGrantDisplayNameMaps(
-  supabase: ReturnType<typeof getSupabaseRouteClient>,
+  supabase: SupabaseClient,
   projects: Record<string, unknown>[]
 ): Promise<{
   gridById: Map<string, string>
@@ -273,7 +273,7 @@ export async function loadGrantDisplayNameMaps(
 }
 
 export async function loadGrantNameMaps(
-  supabase: ReturnType<typeof getSupabaseRouteClient>,
+  supabase: SupabaseClient,
   projects: Record<string, unknown>[]
 ): Promise<{
   gridById: Map<string, string>
@@ -284,7 +284,7 @@ export async function loadGrantNameMaps(
 }
 
 export async function buildGrantFilterMetaForProjects(
-  supabase: ReturnType<typeof getSupabaseRouteClient>,
+  supabase: SupabaseClient,
   projects: Record<string, unknown>[]
 ): Promise<{ value: string; label: string }[]> {
   const gridIds = uniqueGrantGridIdsFromProjects(projects)
@@ -335,7 +335,7 @@ export function applyGrantCallIdToRows(
 }
 
 export async function enrichPortalRowGrantFields(
-  supabase: ReturnType<typeof getSupabaseRouteClient>,
+  supabase: SupabaseClient,
   rows: Record<string, unknown>[],
   projectById: Map<string, Record<string, unknown>>
 ) {
@@ -490,7 +490,7 @@ export function enrichF5ListPlanFinancialFields(
 }
 
 export async function fetchPlanJsonForProjects(
-  supabase: ReturnType<typeof getSupabaseRouteClient>,
+  supabase: SupabaseClient,
   projectIds: string[]
 ): Promise<Map<string, Record<string, unknown>>> {
   const out = new Map<string, Record<string, unknown>>()
@@ -509,7 +509,7 @@ export async function fetchPlanJsonForProjects(
 }
 
 export async function fetchProjectIdsInStateScope(
-  supabase: ReturnType<typeof getSupabaseRouteClient>,
+  supabase: SupabaseClient,
   allowedStateNames: string[] | null
 ): Promise<string[]> {
   if (allowedStateNames !== null && allowedStateNames.length === 0) return []
@@ -523,7 +523,7 @@ export async function fetchProjectIdsInStateScope(
 }
 
 export async function fetchScopedProjects(
-  supabase: ReturnType<typeof getSupabaseRouteClient>,
+  supabase: SupabaseClient,
   opts: {
     grantGridIds: string[] | null
     allowedStateNames: string[] | null

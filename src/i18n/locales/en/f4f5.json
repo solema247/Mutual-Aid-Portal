@@ -251,6 +251,18 @@
       "buttons": { "back": "Back", "save": "Save F5", "saving": "Saving…" }
     }
   },
+  "summary": {
+    "total_reports": "Total Reports",
+    "completed": "Completed",
+    "under_review": "Under Review",
+    "under_review_pending": "Under Review / Pending",
+    "not_uploaded": "Not Uploaded",
+    "badge_all": "All",
+    "badge_done": "Done",
+    "badge_review": "Review",
+    "badge_pending": "Pending",
+    "badge_missing": "Missing"
+  },
   "explainer_tooltip": "About F4 & F5 Reporting",
   "explainer_title": "📊 F4 & F5 Reporting",
   "explainer_intro": "Use this page to work with submitted reports after implementation. F4 is the financial side: how much of the grant was spent, what remains, and supporting expense detail. F5 is the program side: what was delivered (activities, results, lessons learned, and related narrative fields). Switch tabs to see each type. In either tab you can narrow the list with filters (grant, ERR, state, donor), upload a new report, or open an existing row to read or change it when your role allows.",
