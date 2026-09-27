@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Checkbox } from '@/components/ui/checkbox'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import type { ActiveFilter, FilterFieldConfig, FilterSelectOption, FilterValue } from './types'
 import { STATUS_DISPLAY } from './status-config'
 
@@ -32,6 +33,10 @@ const CHIP_COLORS: Record<string, string> = {
   report_status: 'bg-orange-500/10 border-orange-500/30 [&_.chip-dot]:bg-orange-500',
   base_room: 'bg-primary/10 border-primary/30 [&_.chip-dot]:bg-primary',
   expense_category: 'bg-rose-500/10 border-rose-500/30 [&_.chip-dot]:bg-rose-500',
+  role: 'bg-indigo-500/10 border-indigo-500/30 [&_.chip-dot]:bg-indigo-500',
+  status: 'bg-emerald-500/10 border-emerald-500/30 [&_.chip-dot]:bg-emerald-500',
+  scope: 'bg-violet-500/10 border-violet-500/30 [&_.chip-dot]:bg-violet-500',
+  err: 'bg-cyan-500/10 border-cyan-500/30 [&_.chip-dot]:bg-cyan-500',
 }
 
 export interface FilterChipProps {
@@ -40,6 +45,8 @@ export interface FilterChipProps {
   onValueChange: (value: FilterValue) => void
   onRemove: () => void
   options?: FilterSelectOption[]
+  /** When true, value controls are non-interactive (e.g. locality before state). */
+  disabled?: boolean
   className?: string
 }
 
@@ -49,6 +56,7 @@ export function FilterChip({
   onValueChange,
   onRemove,
   options = field.type === 'select' || field.type === 'multi_select' ? field.options : undefined,
+  disabled = false,
   className,
 }: FilterChipProps) {
   const { t } = useTranslation('common')
@@ -91,7 +99,7 @@ export function FilterChip({
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-2 rounded-sm border px-2.5 py-1.5 text-xs font-medium text-foreground',
+        'inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-medium text-foreground',
         colorClass,
         className
       )}
@@ -115,52 +123,53 @@ export function FilterChip({
       )}
 
       {field.type === 'multi_select' && (
-        <div className="relative">
-          <button
-            type="button"
-            className="h-7 min-w-[140px] rounded-sm border-0 bg-transparent px-2 text-left text-xs hover:bg-black/5 dark:hover:bg-white/5"
-            onClick={() => setMultiOpen((o) => !o)}
+        <Popover open={multiOpen} onOpenChange={setMultiOpen}>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              disabled={disabled}
+              className="h-7 min-w-[140px] rounded-sm border-0 bg-transparent px-2 text-left text-xs hover:bg-black/5 dark:hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-50"
+              aria-expanded={multiOpen}
+              aria-haspopup="listbox"
+            >
+              {multiLabel}
+            </button>
+          </PopoverTrigger>
+          <PopoverContent
+            align="start"
+            side="bottom"
+            sideOffset={6}
+            collisionPadding={12}
+            className="z-[200] w-64 max-h-64 overflow-y-auto p-2"
+            onOpenAutoFocus={(e) => e.preventDefault()}
+            onCloseAutoFocus={(e) => e.preventDefault()}
           >
-            {multiLabel}
-          </button>
-          {multiOpen && (
-            <>
-              <div
-                className="fixed inset-0 z-40"
-                aria-hidden
-                onClick={() => setMultiOpen(false)}
-              />
-              <div className="absolute left-0 top-full z-50 mt-1 max-h-56 min-w-[220px] overflow-y-auto rounded-md border border-border bg-popover p-2 shadow-md">
-                {multiOptionValues.length > 0 && (
-                  <>
-                    <label className="flex cursor-pointer items-center gap-2 rounded-sm border-b border-border px-2 py-1.5 text-xs font-medium hover:bg-accent mb-1">
-                      <Checkbox
-                        checked={allMultiSelected ? true : someMultiSelected ? 'indeterminate' : false}
-                        onCheckedChange={toggleSelectAllMulti}
-                      />
-                      <span>{t('select_all')}</span>
-                    </label>
-                  </>
-                )}
-                {(options ?? []).map((opt) => {
-                  const checked = multiSelected.includes(opt.value)
-                  return (
-                    <label
-                      key={opt.value}
-                      className="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-xs hover:bg-accent"
-                    >
-                      <Checkbox
-                        checked={checked}
-                        onCheckedChange={() => toggleMultiValue(opt.value)}
-                      />
-                      <span className="truncate">{opt.label}</span>
-                    </label>
-                  )
-                })}
-              </div>
-            </>
-          )}
-        </div>
+            {multiOptionValues.length > 0 && (
+              <label className="mb-1 flex cursor-pointer items-center gap-2 rounded-sm border-b border-border px-2 py-1.5 text-xs font-medium hover:bg-accent">
+                <Checkbox
+                  checked={allMultiSelected ? true : someMultiSelected ? 'indeterminate' : false}
+                  onCheckedChange={toggleSelectAllMulti}
+                />
+                <span>{t('select_all')}</span>
+              </label>
+            )}
+            {(options ?? []).map((opt) => {
+              const checked = multiSelected.includes(opt.value)
+              return (
+                <label
+                  key={opt.value}
+                  className="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-xs hover:bg-accent"
+                >
+                  <Checkbox
+                    checked={checked}
+                    onCheckedChange={() => toggleMultiValue(opt.value)}
+                  />
+                  <span className="truncate">{opt.label}</span>
+                </label>
+              )
+            })}
+          </PopoverContent>
+        </Popover>
       )}
 
       {field.type === 'select' && (

@@ -2,7 +2,7 @@ import functionsList from '@/data/functions.json'
 import rolePermissions from '@/data/rolePermissions.json'
 import type { RoleDefaultsMap } from '@/lib/roleDefaultsDb'
 
-export type Role = 'support' | 'superadmin' | 'admin' | 'state_err' | 'base_err'
+export type Role = 'support' | 'superadmin' | 'admin' | 'state_err' | 'base_err' | 'partner'
 export interface PermissionUser {
   id: string
   role: Role
@@ -101,11 +101,11 @@ export function hasExceptionOverrides(override: UserOverride | undefined | null)
 export function rolesVisibleToViewer(viewerRole: string): string[] {
   switch (viewerRole) {
     case 'support':
-      return ['base_err', 'state_err', 'admin', 'superadmin', 'support']
+      return ['base_err', 'state_err', 'partner', 'admin', 'superadmin', 'support']
     case 'superadmin':
-      return ['base_err', 'state_err', 'admin', 'superadmin']
+      return ['base_err', 'state_err', 'partner', 'admin', 'superadmin']
     case 'admin':
-      return ['base_err', 'state_err']
+      return ['base_err', 'state_err', 'partner']
     default:
       return []
   }

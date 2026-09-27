@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
+import { assertProjectInGrantAccess } from '@/lib/userGrantAccess'
 
 type RouteContext = { params: { id: string; docId: string } }
 
@@ -15,6 +16,9 @@ export async function DELETE(_request: Request, { params }: RouteContext) {
     if (!docId) {
       return NextResponse.json({ error: 'Document ID is required' }, { status: 400 })
     }
+
+    const scope = await assertProjectInGrantAccess(projectId)
+    if (!scope.ok) return scope.response
 
     const { data: doc, error: fetchError } = await supabase
       .from('err_project_documents')

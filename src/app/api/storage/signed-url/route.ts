@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { resolveStoragePathGrant } from '@/lib/storagePathGrantAccess'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL as string
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string
@@ -13,6 +14,12 @@ export async function GET(request: Request) {
     if (!path) {
       return NextResponse.json({ error: 'path is required' }, { status: 400 })
     }
+
+    const decision = await resolveStoragePathGrant(path, bucket)
+    if (decision.status === 'deny') {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    }
+
     const { data, error } = await client.storage.from(bucket).createSignedUrl(path, 60 * 60)
     if (error) throw error
     return NextResponse.json({ url: data?.signedUrl || null })

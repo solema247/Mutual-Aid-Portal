@@ -5,7 +5,7 @@ import functionsList from '@/data/functions.json'
 export type RoleDefaultsMap = Record<string, string[]>
 
 /** Roles whose default packs can be edited in the UI. */
-export const EDITABLE_ROLE_DEFAULTS = ['base_err', 'state_err', 'admin'] as const
+export const EDITABLE_ROLE_DEFAULTS = ['base_err', 'state_err', 'partner', 'admin'] as const
 export type EditableRoleDefault = (typeof EDITABLE_ROLE_DEFAULTS)[number]
 
 export function isEditableRoleDefault(role: string): role is EditableRoleDefault {

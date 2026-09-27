@@ -8,6 +8,7 @@ import {
   projectExpenseTotal,
 } from '@/lib/poolProjectClassification'
 import { normalizeRestrictionLabel } from '@/lib/poolRestrictionLabel'
+import { forbidIfPartner } from '@/lib/routeHandlerAuth'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -58,6 +59,9 @@ function addAmount(map: Map<string, number>, key: string, amount: number) {
  */
 export async function GET() {
   try {
+    const partnerBlock = await forbidIfPartner()
+    if (partnerBlock) return partnerBlock
+
     const supabase = getSupabaseRouteClient()
     const { getUserStateAccess } = await import('@/lib/userStateAccess')
     const { allowedStateNames } = await getUserStateAccess()

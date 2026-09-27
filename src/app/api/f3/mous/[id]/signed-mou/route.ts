@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
+import { assertMouInGrantAccess } from '@/lib/userGrantAccess'
 
 // POST /api/f3/mous/[id]/signed-mou - Upload signed MOU file
 export async function POST(
@@ -9,6 +10,10 @@ export async function POST(
   try {
     const supabase = getSupabaseRouteClient()
     const { id: mouId } = params
+
+    const mouScope = await assertMouInGrantAccess(mouId)
+    if (!mouScope.ok) return mouScope.response
+
     const formData = await request.formData()
     const file = formData.get('file') as File
     

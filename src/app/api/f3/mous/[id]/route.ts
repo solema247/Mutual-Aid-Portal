@@ -1,5 +1,9 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
+import {
+  assertMouInGrantAccess,
+  grantGridIdInAccess,
+} from '@/lib/userGrantAccess'
 
 export async function GET(
   _request: Request,
@@ -8,6 +12,10 @@ export async function GET(
   try {
     const supabase = getSupabaseRouteClient()
     const id = params.id
+
+    const mouScope = await assertMouInGrantAccess(id)
+    if (!mouScope.ok) return mouScope.response
+
     // Load MOU
     const { data: mou, error: mouErr } = await supabase
       .from('mous')
@@ -40,6 +48,7 @@ export async function GET(
         emergency_room_id,
         grant_id,
         grant_segment,
+        grant_grid_id,
         source,
         project_name,
         emergency_rooms (name, name_ar, err_code),
@@ -50,9 +59,21 @@ export async function GET(
       .order('submitted_at', { ascending: false })
     if (projErr) throw projErr
 
-    // Resolve planned activities for all projects
+    const inScopeSet =
+      mouScope.inScopeProjectIds == null
+        ? null
+        : new Set(mouScope.inScopeProjectIds)
+
+    // Resolve planned activities for all in-scope projects
     const resolvedProjects = [] as any[]
-    for (const p of (projects || [])) {
+    for (const p of projects || []) {
+      if (inScopeSet && !inScopeSet.has(String(p.id))) continue
+      if (
+        mouScope.access.mode !== 'all' &&
+        !grantGridIdInAccess(mouScope.access, (p as { grant_grid_id?: string | null }).grant_grid_id)
+      ) {
+        continue
+      }
       let resolved: any = { ...p }
       if (p?.planned_activities) {
         try {
@@ -115,6 +136,10 @@ export async function PATCH(
   try {
     const supabase = getSupabaseRouteClient()
     const id = params.id
+
+    const mouScope = await assertMouInGrantAccess(id)
+    if (!mouScope.ok) return mouScope.response
+
     const body = await request.json()
 
     // Only allow updating specific editable fields

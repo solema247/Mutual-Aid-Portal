@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { requirePermission } from '@/lib/requirePermission'
+import { assertProjectInGrantAccess } from '@/lib/userGrantAccess'
 
 // POST /api/f2/committed/decommit - Move a committed project back to uncommitted (only if not in an MOU)
 export async function POST(request: Request) {
@@ -14,6 +15,9 @@ export async function POST(request: Request) {
     if (!id) {
       return NextResponse.json({ error: 'Project ID is required' }, { status: 400 })
     }
+
+    const scope = await assertProjectInGrantAccess(String(id))
+    if (!scope.ok) return scope.response
 
     const { data: project, error: fetchError } = await supabase
       .from('err_projects')
