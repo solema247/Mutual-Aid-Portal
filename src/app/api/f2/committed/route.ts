@@ -1,6 +1,10 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { getUserStateAccess } from '@/lib/userStateAccess'
+import {
+  applyGrantGridIdFilter,
+  getUserGrantAccess,
+} from '@/lib/userGrantAccess'
 
 // GET /api/f2/committed - Get all committed F1s with optional filtering
 export async function GET(request: Request) {
@@ -25,8 +29,14 @@ export async function GET(request: Request) {
       dateTo = `${y}-${String(m).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
     }
 
-    // Get user's state access rights
-    const { allowedStateNames } = await getUserStateAccess()
+    const [{ allowedStateNames }, grantAccess] = await Promise.all([
+      getUserStateAccess(),
+      getUserGrantAccess(),
+    ])
+
+    if (grantAccess.mode === 'none') {
+      return NextResponse.json([])
+    }
 
     let query = supabase
       .from('err_projects')
@@ -55,13 +65,15 @@ export async function GET(request: Request) {
         grant_id,
         grant_serial_id,
         workplan_number,
-        approval_file_key
+        approval_file_key,
+        grant_grid_id
       `)
       .eq('funding_status', 'committed')
       .order('submitted_at', { ascending: false })
 
-    // Apply state filter from user access rights (if not seeing all states)
-    if (allowedStateNames !== null && allowedStateNames.length > 0) {
+    if (grantAccess.mode === 'partner') {
+      query = applyGrantGridIdFilter(query, grantAccess)
+    } else if (allowedStateNames !== null && allowedStateNames.length > 0) {
       query = query.in('state', allowedStateNames)
     }
 
@@ -80,11 +92,15 @@ export async function GET(request: Request) {
 
     if (error) throw error
 
-    // Fetch all grants from grants_grid_view to match project serials
-    const { data: grantsData } = await supabase
+    // Fetch grants from grants_grid_view to match project serials (Partner: scoped grants only)
+    let grantsQuery = supabase
       .from('grants_grid_view')
       .select('grant_id, project_name, donor_name, activities')
-    
+    if (grantAccess.mode === 'partner') {
+      grantsQuery = grantsQuery.eq('partner_id', grantAccess.partnerId)
+    }
+    const { data: grantsData } = await grantsQuery
+
     // Build a map of project serial to grant info
     const serialToGrant = new Map<string, { grant_id: string; donor_name: string | null }>()
     for (const grant of grantsData || []) {
@@ -105,14 +121,14 @@ export async function GET(request: Request) {
       if (f1.grant_id && f1.grant_id.startsWith('LCC-')) {
         grantInfo = serialToGrant.get(f1.grant_id)
       }
-      
+
       // Filter by grant if specified
       if (grantId && donorName) {
         if (!grantInfo || grantInfo.grant_id !== grantId || grantInfo.donor_name !== donorName) {
           return null // Filter out this F1
         }
       }
-      
+
       return {
         id: f1.id,
         err_id: f1.err_id,
@@ -150,7 +166,7 @@ export async function GET(request: Request) {
     // Apply client-side filters that can't be done in SQL
     if (search) {
       const searchLower = search.toLowerCase()
-      formattedF1s = formattedF1s.filter(f1 => 
+      formattedF1s = formattedF1s.filter(f1 =>
         (f1.err_id && f1.err_id.toLowerCase().includes(searchLower)) ||
         (f1.state && f1.state.toLowerCase().includes(searchLower)) ||
         (f1.locality && f1.locality.toLowerCase().includes(searchLower)) ||

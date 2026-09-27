@@ -1,5 +1,9 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
+import {
+  assertMouInGrantAccess,
+  assertProjectsInGrantAccess,
+} from '@/lib/userGrantAccess'
 
 /**
  * POST /api/f3/mous/[id]/projects/remove
@@ -18,6 +22,12 @@ export async function POST(
     if (!Array.isArray(project_ids) || project_ids.length === 0) {
       return NextResponse.json({ error: 'project_ids is required (non-empty array)' }, { status: 400 })
     }
+
+    const mouScope = await assertMouInGrantAccess(mouId)
+    if (!mouScope.ok) return mouScope.response
+
+    const projectScope = await assertProjectsInGrantAccess(project_ids.map(String), mouScope.access)
+    if (!projectScope.ok) return projectScope.response
 
     // Load MOU
     const { data: mou, error: mouErr } = await supabase

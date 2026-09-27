@@ -2,6 +2,11 @@ import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin'
 import { classifyPoolProject, projectExpenseTotal } from '@/lib/poolProjectClassification'
+import {
+  applyGrantGridIdFilter,
+  chunkGrantScopeIds,
+  getUserGrantAccess,
+} from '@/lib/userGrantAccess'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -44,6 +49,54 @@ const fetchAllRows = async (supabase: any, table: string, select: string) => {
 export async function GET() {
   try {
     const supabase = getSupabaseRouteClient()
+    const grantAccess = await getUserGrantAccess()
+    const emptySummary = {
+      total_allocated: 0,
+      total_assigned: 0,
+      total_available: 0,
+      total_committed: 0,
+      total_pending: 0,
+      total_balance: 0,
+    }
+    if (grantAccess.mode === 'none') {
+      return NextResponse.json(emptySummary, { headers: { 'Cache-Control': 'no-store' } })
+    }
+    if (grantAccess.mode === 'partner') {
+      let assignedFromProjects = 0
+      let committed = 0
+      let pending = 0
+      for (const batch of chunkGrantScopeIds(grantAccess.grantGridIds)) {
+        let from = 0
+        const pageSize = 1000
+        while (true) {
+          let query = supabase
+            .from('err_projects')
+            .select('expenses, funding_status, status, grant_id, grant_grid_id')
+          query = applyGrantGridIdFilter(query, { ...grantAccess, grantGridIds: batch })
+          const { data, error } = await query.range(from, from + pageSize - 1)
+          if (error) throw error
+          if (!data?.length) break
+          for (const p of data) {
+            const bucket = classifyPoolProject(p)
+            const total = projectExpenseTotal(p.expenses)
+            if (bucket === 'assigned') assignedFromProjects += total
+            else if (bucket === 'committed') committed += total
+            else if (bucket === 'pending') pending += total
+          }
+          if (data.length < pageSize) break
+          from += pageSize
+        }
+      }
+      return NextResponse.json(
+        {
+          ...emptySummary,
+          total_assigned: assignedFromProjects,
+          total_committed: committed,
+          total_pending: pending,
+        },
+        { headers: { 'Cache-Control': 'no-store' } }
+      )
+    }
     
     // 1. Total Included = sum of all allocation amounts from allocations_by_date (canonical)
     const allocationsSupabase = getSupabaseAdmin()

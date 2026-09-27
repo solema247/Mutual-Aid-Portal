@@ -1,13 +1,65 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
+import {
+  applyGrantGridIdFilter,
+  chunkGrantScopeIds,
+  getUserGrantAccess,
+} from '@/lib/userGrantAccess'
 
 // GET /api/pool/by-grant-for-state?state=Kassala
 export async function GET(request: Request) {
   try {
     const supabase = getSupabaseRouteClient()
+    const grantAccess = await getUserGrantAccess()
+    if (grantAccess.mode === 'none') {
+      return NextResponse.json([])
+    }
+
     const { searchParams } = new URL(request.url)
     const state = searchParams.get('state')
     if (!state) return NextResponse.json({ error: 'state is required' }, { status: 400 })
+
+    if (grantAccess.mode === 'partner') {
+      const grantCallIds = new Set<string>()
+      for (const batch of chunkGrantScopeIds(grantAccess.grantGridIds)) {
+        let from = 0
+        const pageSize = 1000
+        while (true) {
+          let query = supabase.from('err_projects').select('grant_call_id, state')
+          query = applyGrantGridIdFilter(query, { ...grantAccess, grantGridIds: batch })
+          const { data, error } = await query.range(from, from + pageSize - 1)
+          if (error) throw error
+          if (!data?.length) break
+          for (const row of data) {
+            if (row.state === state && row.grant_call_id) grantCallIds.add(String(row.grant_call_id))
+          }
+          if (data.length < pageSize) break
+          from += pageSize
+        }
+      }
+      const names = new Map<string, string | null>()
+      const ids = Array.from(grantCallIds)
+      for (const batch of chunkGrantScopeIds(ids)) {
+        const { data, error } = await supabase
+          .from('grant_calls')
+          .select('id, name')
+          .in('id', batch)
+        if (error) throw error
+        for (const row of data || []) {
+          if (row.id) names.set(String(row.id), row.name ?? null)
+        }
+      }
+      const rows = ids.map((grantCallId) => ({
+        donor_id: null,
+        donor_name: null,
+        donor_short: null,
+        grant_call_id: grantCallId,
+        grant_call_name: names.get(grantCallId) ?? null,
+        included: 0,
+        remaining_for_state: 0,
+      }))
+      return NextResponse.json(rows)
+    }
 
     // Included per grant (pooled across cycles) + donor & grant names
     const { data: inclusions, error: incErr } = await supabase

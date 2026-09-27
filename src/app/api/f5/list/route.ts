@@ -2,6 +2,10 @@ import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { getUserStateAccess } from '@/lib/userStateAccess'
 import { loadProjectPaymentSummaries } from '@/lib/mouPaymentConfirmations'
+import {
+  chunkGrantScopeIds,
+  getUserGrantAccess,
+} from '@/lib/userGrantAccess'
 
 const SUPABASE_IN_BATCH = 80
 
@@ -281,7 +285,14 @@ function buildProjectRowFields(
 export async function GET() {
   try {
     const supabase = getSupabaseRouteClient()
-    const { allowedStateNames } = await getUserStateAccess()
+    const [{ allowedStateNames }, grantAccess] = await Promise.all([
+      getUserStateAccess(),
+      getUserGrantAccess(),
+    ])
+
+    if (grantAccess.mode === 'none') {
+      return NextResponse.json([])
+    }
 
     const projectSelect = `
       id,
@@ -304,24 +315,38 @@ export async function GET() {
       donors ( name, short_name )
     `
 
-    if (allowedStateNames !== null && allowedStateNames.length === 0) {
+    if (grantAccess.mode !== 'partner' && allowedStateNames !== null && allowedStateNames.length === 0) {
       return NextResponse.json([])
     }
 
-    let projectsQuery = supabase
-      .from('err_projects')
-      .select(projectSelect)
-      .in('status', ['active', 'approved', 'completed'])
+    let projects: Record<string, unknown>[] = []
+    if (grantAccess.mode === 'partner') {
+      for (const batch of chunkGrantScopeIds(grantAccess.grantGridIds)) {
+        const { data, error } = await supabase
+          .from('err_projects')
+          .select(projectSelect)
+          .in('status', ['active', 'approved', 'completed'])
+          .in('grant_grid_id', batch)
+        if (error) throw error
+        if (data?.length) projects.push(...(data as unknown as Record<string, unknown>[]))
+      }
+    } else {
+      let projectsQuery = supabase
+        .from('err_projects')
+        .select(projectSelect)
+        .in('status', ['active', 'approved', 'completed'])
 
-    if (allowedStateNames !== null && allowedStateNames.length > 0) {
-      projectsQuery = projectsQuery.in('state', allowedStateNames)
+      if (allowedStateNames !== null && allowedStateNames.length > 0) {
+        projectsQuery = projectsQuery.in('state', allowedStateNames)
+      }
+
+      const { data, error: projectsError } = await projectsQuery
+      if (projectsError) throw projectsError
+      projects = (data || []) as unknown as Record<string, unknown>[]
     }
 
-    const { data: projects, error: projectsError } = await projectsQuery
-    if (projectsError) throw projectsError
-
     const projectById = new Map<string, Record<string, unknown>>()
-    for (const p of projects || []) {
+    for (const p of projects) {
       projectById.set(String((p as { id: string }).id), p as Record<string, unknown>)
     }
 
@@ -351,14 +376,31 @@ export async function GET() {
         )
       `
 
-    const reports = await fetchPortalReports(supabase, allowedStateNames, portalSelect)
+    const reports =
+      grantAccess.mode === 'partner'
+        ? await (async () => {
+            const ids = Array.from(projectById.keys())
+            if (ids.length === 0) return [] as Record<string, unknown>[]
+            const out: Record<string, unknown>[] = []
+            for (const batch of chunkIds(ids)) {
+              const { data, error } = await supabase
+                .from('err_program_report')
+                .select(portalSelect)
+                .in('project_id', batch)
+                .order('created_at', { ascending: false })
+              if (error) throw error
+              out.push(...((data || []) as unknown as Record<string, unknown>[]))
+            }
+            return out
+          })()
+        : await fetchPortalReports(supabase, allowedStateNames, portalSelect)
 
     const allProjectsForGrants = Array.from(projectById.values())
     const { gridById, gridByGrantKey, gridGrantIdByUuid } = await loadGrantNameMaps(supabase, allProjectsForGrants)
 
     const mouIds = Array.from(
       new Set(
-        [...(projects || []), ...reports.map((r) => r.err_projects)].flatMap((item) => {
+        [...projects, ...reports.map((r) => r.err_projects)].flatMap((item) => {
           const p = item as Record<string, unknown> | null | undefined
           if (!p) return []
           const mouId = p.mou_id

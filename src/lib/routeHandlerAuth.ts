@@ -1,5 +1,6 @@
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
 import { cookies } from 'next/headers'
+import { NextResponse } from 'next/server'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { can, type Role } from '@/lib/permissions'
 import { getOverridesForUser } from '@/lib/userOverridesDb'
@@ -38,6 +39,28 @@ export async function getRouteHandlerAuth (): Promise<RouteAuthContext | null> {
     overridesMap: { [dbUser.id]: override },
     roleDefaultsMap: mergeRoleDefaultsMaps(getJsonRoleDefaults(), dbDefaults),
   }
+}
+
+/**
+ * Partner is view-only on F1 mutation and fsystem routes.
+ * Returns 403 before any request-body, storage, or business query.
+ * No session or a non-partner role returns null so callers keep their existing behavior.
+ */
+export async function forbidIfPartner (): Promise<NextResponse | null> {
+  const supabase = createRouteHandlerClient({ cookies })
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session) return null
+
+  const { data: userData } = await supabase
+    .from('users')
+    .select('role')
+    .eq('auth_user_id', session.user.id)
+    .maybeSingle()
+
+  if (userData?.role === 'partner') {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+  return null
 }
 
 export function assertPermission (ctx: RouteAuthContext, functionCode: string): void {
