@@ -4,6 +4,8 @@ import {
   getRouteHandlerAuth,
   isErrSubmissionSource
 } from '@/lib/routeHandlerAuth'
+import { assertProjectInRoomAccess } from '@/lib/userRoomAccess'
+import { emitF123Audit } from '@/lib/f123Audit'
 import { z } from 'zod'
 
 const bodySchema = z.object({
@@ -43,6 +45,10 @@ export async function POST (request: Request) {
     if (projErr || !project) {
       return NextResponse.json({ error: 'Project not found' }, { status: 404 })
     }
+
+    // Base ERR may only act on projects in its own emergency room
+    const roomCheck = await assertProjectInRoomAccess(project_id)
+    if (roomCheck.handled && !roomCheck.ok) return roomCheck.response
 
     if (!isErrSubmissionSource(project.source as string | null)) {
       return NextResponse.json({ error: 'Invalid project for ERR submissions' }, { status: 400 })
@@ -95,6 +101,26 @@ export async function POST (request: Request) {
       console.error(projectError)
       return NextResponse.json({ error: 'Failed to update project' }, { status: 500 })
     }
+
+    await emitF123Audit({
+      action: 'f1.feedback_submitted',
+      actorUserId: auth.dbUser.id,
+      endpoint: 'POST /api/f1/err/feedback',
+      request,
+      targetType: 'project',
+      targetId: project_id,
+      oldValues: {
+        status: project.status ?? null,
+        version: typeof project.version === 'number' ? project.version : null
+      },
+      newValues: {
+        status: newStatus,
+        version: nextVersion
+      },
+      metadata: {
+        feedback_action: action
+      }
+    })
 
     return NextResponse.json({ success: true, feedback_id: feedbackData.id })
   } catch (e: unknown) {

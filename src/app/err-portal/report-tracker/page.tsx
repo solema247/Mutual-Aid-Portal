@@ -36,7 +36,6 @@ import {
 import { STATUS_DISPLAY } from '@/components/smart-filter'
 import { StatsDonutCard, CompactStatCard, type DonutSegment } from '@/components/report-tracker-stats'
 import { downloadCsv } from '@/lib/csvDownload'
-import { supabase } from '@/lib/supabaseClient'
 import { cn } from '@/lib/utils'
 import { useReportTrackerPageExplainer } from './ReportTrackerPageExplainer'
 
@@ -328,13 +327,11 @@ export default function ReportTrackerPage() {
   useEffect(() => {
     const fetchGrants = async () => {
       try {
-        const { data, error } = await supabase
-          .from('grants_grid_view')
-          .select('id, grant_id, donor_name, project_name')
-          .order('grant_id', { ascending: true })
-        if (error) throw error
+        const res = await fetch('/api/grants?status=all', { cache: 'no-store' })
+        if (!res.ok) throw new Error('Failed to fetch grants')
+        const data = await res.json()
         const uniqueGrants = new Map<string, { id: string; grant_id: string; donor_name: string; project_name: string | null }>()
-        ;(data || []).forEach((grant: { id: string; grant_id: string; donor_name: string; project_name: string | null }) => {
+        ;(Array.isArray(data) ? data : []).forEach((grant: { id: string; grant_id: string; donor_name: string; project_name: string | null }) => {
           const key = `${grant.grant_id}|${grant.donor_name}`
           if (!uniqueGrants.has(key)) {
             uniqueGrants.set(key, {
@@ -504,6 +501,9 @@ export default function ReportTrackerPage() {
   const displayStatus = (s: string) =>
     STATUS_OPTIONS.find((o) => o.value === s)?.label ?? s
 
+  if (permissionsLoading) {
+    return <div className="p-6 text-muted-foreground">Loading…</div>
+  }
   if (!canViewPage) {
     return (
       <div className="p-6">

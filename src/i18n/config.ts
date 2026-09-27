@@ -17,6 +17,7 @@ import f2EN from './locales/en/f2.json'
 import f1_plansEN from './locales/en/f1_plans.json'
 import f3EN from './locales/en/f3.json'
 import f4f5EN from './locales/en/f4f5.json'
+import auditEN from './locales/en/audit.json'
 
 // Arabic translations
 import commonAR from './locales/ar/common.json'
@@ -34,6 +35,7 @@ import f2AR from './locales/ar/f2.json'
 import f1_plansAR from './locales/ar/f1_plans.json'
 import f3AR from './locales/ar/f3.json'
 import f4f5AR from './locales/ar/f4f5.json'
+import auditAR from './locales/ar/audit.json'
 
 const resources = {
   en: {
@@ -51,7 +53,8 @@ const resources = {
     f2: f2EN,
     f1_plans: f1_plansEN,
     f3: f3EN,
-    f4f5: f4f5EN
+    f4f5: f4f5EN,
+    audit: auditEN,
   },
   ar: {
     common: commonAR,
@@ -68,7 +71,8 @@ const resources = {
     f2: f2AR,
     f1_plans: f1_plansAR,
     f3: f3AR,
-    f4f5: f4f5AR
+    f4f5: f4f5AR,
+    audit: auditAR,
   }
 }
 
@@ -97,6 +101,7 @@ if (!i18n.isInitialized) {
       'f1_plans',
       'f3',
       'f4f5',
+      'audit',
     ],
   })
 } else if (process.env.NODE_ENV === 'development') {

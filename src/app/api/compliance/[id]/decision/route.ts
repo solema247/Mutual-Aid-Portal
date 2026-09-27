@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { requirePermission } from '@/lib/requirePermission'
+import { assertProjectInRoomAccess } from '@/lib/userRoomAccess'
 import { normalizedNameKey, type FlagType } from '@/lib/compliance'
 import { sendSanctionsMatchAlert } from '@/lib/complianceAlerts'
 
@@ -50,6 +51,12 @@ export async function POST(
     if (fetchError || !screening) {
       return NextResponse.json({ error: 'Screening not found' }, { status: 404 })
     }
+
+    // Base ERR may only act on screenings for projects in its own emergency room
+    const roomCheck = await assertProjectInRoomAccess(String(screening.project_id), undefined, {
+      notFoundMessage: 'Screening not found',
+    })
+    if (roomCheck.handled && !roomCheck.ok) return roomCheck.response
 
     // On clear, the note is an optional caveat/comment (e.g. "Cleared but no
     // account number included"); on flag it's the required reason. Either way

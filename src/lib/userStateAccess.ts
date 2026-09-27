@@ -32,12 +32,18 @@ export async function getAllowedStateNames(
     return []
   }
 
-  return (states || []).map((s: any) => s.state_name).filter(Boolean)
+  return (states || [])
+    .map((s: { state_name: string | null }) => s.state_name)
+    .filter((name): name is string => Boolean(name))
 }
 
 /**
  * Get current user's state access information from session
  * @returns Object with canSeeAllStates and allowedStateNames
+ *
+ * Base ERR: always fail-closed for *state* scope (`allowedStateNames: []`).
+ * Room scope is separate — use getUserRoomAccess(); never treat this empty
+ * list as "all states" for base_err (callers must branch on room access first).
  */
 export async function getUserStateAccess(): Promise<{
   canSeeAllStates: boolean
@@ -53,11 +59,17 @@ export async function getUserStateAccess(): Promise<{
 
   const { data: userData, error } = await supabase
     .from('users')
-    .select('can_see_all_states, visible_states')
+    .select('role, can_see_all_states, visible_states')
     .eq('auth_user_id', session.user.id)
     .single()
 
   if (error || !userData) {
+    return { canSeeAllStates: false, allowedStateNames: [] }
+  }
+
+  // Base ERR is room-scoped via err_id only — never state-scoped.
+  // Callers must use getUserRoomAccess(); do not interpret [] as nationwide.
+  if (userData.role === 'base_err') {
     return { canSeeAllStates: false, allowedStateNames: [] }
   }
 
@@ -68,7 +80,7 @@ export async function getUserStateAccess(): Promise<{
   if (typeof visibleStateIds === 'string') {
     try {
       visibleStateIds = JSON.parse(visibleStateIds)
-    } catch (e) {
+    } catch {
       visibleStateIds = []
     }
   }

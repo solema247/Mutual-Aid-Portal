@@ -3,6 +3,7 @@ import { requirePermission } from '@/lib/requirePermission'
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin'
 import { collectArchiveFiles, type ArchiveProjectRow } from '@/lib/dataArchive'
 import { resolveProjectCompletionDate } from '@/lib/projectStatus'
+import { getUserRoomAccess } from '@/lib/userRoomAccess'
 
 const PROJECT_SELECT = `
   id,
@@ -71,6 +72,15 @@ async function fetchAllCompleted(supabase: ReturnType<typeof getSupabaseAdmin>, 
 export async function GET(req: Request) {
   const perm = await requirePermission('data_archive_view_page')
   if (perm instanceof NextResponse) return perm
+
+  // The archive is a nationwide dataset served via admin client: out of Base ERR scope
+  const roomAccess = await getUserRoomAccess()
+  if (roomAccess.applies) {
+    return NextResponse.json({
+      rows: [],
+      meta: { total_completed: 0, matched: 0, range: null, include_undated: false }
+    })
+  }
 
   try {
     // Use admin after permission check so date filters are not affected by RLS quirks.

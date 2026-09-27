@@ -3,6 +3,12 @@ import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { requirePermission } from '@/lib/requirePermission'
 import { syncProjectEndDateFromF5 } from '@/lib/syncProjectEndDateFromF5'
 import { resetReportingStatusIfNoReportsRemaining } from '@/lib/projectStatus'
+import { assertProjectInGrantAccess, getUserGrantAccess } from '@/lib/userGrantAccess'
+import { emitF123Audit } from '@/lib/f123Audit'
+import {
+  f5ReportAuditTarget,
+  reportF5AuditInsertFailure,
+} from '@/lib/f5ReportAuditTarget'
 
 export async function GET(
   _req: Request,
@@ -15,10 +21,19 @@ export async function GET(
 
     const { data: report, error: repErr } = await supabase
       .from('err_program_report')
-      .select('*, err_projects (state, project_objectives, grant_id, emergency_rooms (name, name_ar, err_code))')
+      .select('*, err_projects (state, project_objectives, grant_id, grant_grid_id, emergency_rooms (name, name_ar, err_code))')
       .eq('id', id)
       .single()
     if (repErr) throw repErr
+
+    const grantAccess = await getUserGrantAccess()
+    if (grantAccess.mode !== 'all') {
+      if (!report?.project_id) {
+        return NextResponse.json({ error: 'Report not found' }, { status: 404 })
+      }
+      const scope = await assertProjectInGrantAccess(String(report.project_id), grantAccess)
+      if (!scope.ok) return scope.response
+    }
 
     const { data: reach, error: reachErr } = await supabase
       .from('err_program_reach')
@@ -84,6 +99,19 @@ export async function DELETE(
     }
 
     const projectId = row.project_id as string
+    const scope = await assertProjectInGrantAccess(projectId)
+    if (!scope.ok) return scope.response
+
+    const { count: reachCount } = await supabase
+      .from('err_program_reach')
+      .select('id', { count: 'exact', head: true })
+      .eq('report_id', id)
+
+    const { data: beforeProj } = await supabase
+      .from('err_projects')
+      .select('f5_status')
+      .eq('id', projectId)
+      .maybeSingle()
 
     const { error: reachErr } = await supabase.from('err_program_reach').delete().eq('report_id', id)
     if (reachErr) throw reachErr
@@ -92,15 +120,51 @@ export async function DELETE(
     const { error: repErr } = await supabase.from('err_program_report').delete().eq('id', id)
     if (repErr) throw repErr
 
+    let f5StatusSideEffect: { from: string | null; to: string } | null = null
     const statusResult = await resetReportingStatusIfNoReportsRemaining(supabase, projectId, 'f5')
     if (!statusResult.ok) {
       console.warn('F5 delete: failed to reset reporting status', statusResult.error)
+    } else if (!('skipped' in statusResult && statusResult.skipped)) {
+      f5StatusSideEffect = {
+        from: (beforeProj?.f5_status as string | null) ?? null,
+        to: 'waiting',
+      }
     }
 
     const endDateResult = await syncProjectEndDateFromF5(supabase, projectId)
     if (!endDateResult.ok) {
       console.warn('F5 delete: failed to sync project end_date', endDateResult.error)
     }
+
+    const f5AuditTarget = f5ReportAuditTarget(projectId)
+    const auditResult = await emitF123Audit({
+      action: 'f5.report_deleted',
+      endpoint: 'DELETE /api/f5/report/[id]',
+      request: req,
+      targetType: f5AuditTarget.targetType,
+      targetId: f5AuditTarget.targetId,
+      oldValues: {
+        report_id: id,
+        reach_count: reachCount ?? 0,
+      },
+      newValues: null,
+      metadata: {
+        project_id: projectId,
+        report_id: id,
+        reach_count: reachCount ?? 0,
+        ...(f5StatusSideEffect ? { f5_status_side_effect: f5StatusSideEffect } : {}),
+        ...(endDateResult.ok ? { end_date_side_effect: endDateResult.end_date } : {}),
+      },
+    })
+    reportF5AuditInsertFailure(
+      {
+        action: 'f5.report_deleted',
+        endpoint: 'DELETE /api/f5/report/[id]',
+        projectId,
+        reportId: id,
+      },
+      auditResult
+    )
 
     return NextResponse.json({ success: true })
   } catch (e) {

@@ -43,13 +43,17 @@ function F3MOUsPageContent() {
   const payment = usePaymentModal({ fetchMous: list.fetchMous })
 
   useEffect(() => {
+    if (permissionsLoading) return
     if (!canViewPage) {
       router.replace('/err-portal')
     }
-  }, [canViewPage, router])
+  }, [permissionsLoading, canViewPage, router])
 
   useF3MousPageExplainer(!permissionsLoading && canViewPage && !list.loading)
 
+  if (permissionsLoading) {
+    return <div className="p-6 text-muted-foreground">Loading…</div>
+  }
   if (!canViewPage) return null
 
   return (
@@ -105,12 +109,12 @@ function F3MOUsPageContent() {
       <ReassignGrantDialog {...assignment} />
 
       <PaymentConfirmationDialog {...payment} />
-    </div>
-  )
-}
+                            </div>
+                          )
+                        }
 
 export default function F3MOUsPage() {
-  return (
+                          return (
     <Suspense fallback={<div className="w-full p-6">Loading...</div>}>
       <F3MOUsPageContent />
     </Suspense>

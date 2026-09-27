@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
@@ -10,6 +10,10 @@ import { fetchF4SectorsForMatch, normalizeF4ExpenseActivitiesToSectors, type F4S
 import { F4ExpensesEditableTable } from './F4ExpensesEditableTable'
 import { useTranslation } from 'react-i18next'
 import { FileText } from 'lucide-react'
+import {
+  buildF4UpdateComparePayload,
+  payloadCompareKey,
+} from '@/lib/f4f5UpdateCompare'
 
 interface ViewF4ModalProps {
   summaryId: number | null
@@ -19,7 +23,8 @@ interface ViewF4ModalProps {
 }
 
 export default function ViewF4Modal({ summaryId, open, onOpenChange, onSaved }: ViewF4ModalProps) {
-  const { t } = useTranslation(['f4f5'])
+  const { t } = useTranslation(['f4f5', 'projects'])
+  const initialUpdatePayloadKeyRef = useRef<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [data, setData] = useState<any | null>(null)
@@ -45,6 +50,7 @@ export default function ViewF4Modal({ summaryId, open, onOpenChange, onSaved }: 
       setDeletePhrase('')
       setDeleting(false)
       setF4Sectors([])
+      initialUpdatePayloadKeyRef.current = null
       return 
     }
     ;(async () => {
@@ -85,47 +91,37 @@ export default function ViewF4Modal({ summaryId, open, onOpenChange, onSaved }: 
         }))
         setExpensesDraft(normalizeF4ExpenseActivitiesToSectors(expenseRows, sectorsRows))
         
-        // Load project meta to get total grant
-        if (summary?.project_id) {
-          const { data: projectData, error } = await supabase
-            .from('err_projects')
-            .select(`
-              id,
-              expenses,
-              planned_activities,
-              emergency_rooms (err_code, name, name_ar)
-            `)
-            .eq('id', summary.project_id)
-            .single()
-          
-          if (!error && projectData) {
-            // Calculate total from planned_activities (for ERR App submissions)
-            const plannedArr = Array.isArray(projectData.planned_activities)
-              ? projectData.planned_activities
-              : (typeof projectData.planned_activities === 'string' ? JSON.parse(projectData.planned_activities || '[]') : [])
-            const fromPlanned = (Array.isArray(plannedArr) ? plannedArr : []).reduce((s: number, pa: any) => {
-              const inner = Array.isArray(pa?.expenses) ? pa.expenses : []
-              return s + inner.reduce((ss: number, ie: any) => ss + (Number(ie.total) || 0), 0)
-            }, 0)
-
-            // Calculate total from expenses (for mutual_aid_portal submissions)
-            const expensesArr = Array.isArray(projectData.expenses)
-              ? projectData.expenses
-              : (typeof projectData.expenses === 'string' ? JSON.parse(projectData.expenses || '[]') : [])
-            const fromExpenses = (Array.isArray(expensesArr) ? expensesArr : []).reduce((s: number, ex: any) => {
-              return s + (Number(ex.total_cost) || 0)
-            }, 0)
-
-            // Use expenses total if it exists (mutual_aid_portal), otherwise use planned_activities total (ERR App)
-            const grantSum = fromExpenses > 0 ? fromExpenses : fromPlanned
-            const room = projectData.emergency_rooms
-            setProjectMeta({
-              total_grant_from_project: grantSum
-            })
-          }
+        // Prefer server-computed planned total (avoids direct err_projects client reads)
+        const totalGrantFromProject =
+          j.completion?.planned_total != null
+            ? Number(j.completion.planned_total) || 0
+            : Number(summary?.total_grant) || 0
+        if (j.completion?.planned_total != null) {
+          setProjectMeta({
+            total_grant_from_project: totalGrantFromProject
+          })
+        } else {
+          setProjectMeta(null)
         }
+
+        initialUpdatePayloadKeyRef.current = payloadCompareKey(
+          buildF4UpdateComparePayload({
+            summaryDraft: {
+              report_date: summary?.report_date || '',
+              beneficiaries: summary?.beneficiaries || '',
+              lessons: summary?.lessons || '',
+              training: summary?.training || '',
+              excess_expenses: summary?.excess_expenses || '',
+              surplus_use: summary?.surplus_use || '',
+              total_other_sources: summary?.total_other_sources || 0,
+            },
+            expensesDraft: normalizeF4ExpenseActivitiesToSectors(expenseRows, sectorsRows),
+            totalGrantUSD: totalGrantFromProject,
+          })
+        )
       } catch {
         setData(null)
+        initialUpdatePayloadKeyRef.current = null
       } finally {
         setLoading(false)
       }
@@ -208,16 +204,30 @@ export default function ViewF4Modal({ summaryId, open, onOpenChange, onSaved }: 
 
   const handleSave = async () => {
     if (!summaryId || !summaryDraft) return
+    const totalGrantUSD = projectMeta?.total_grant_from_project ?? summary?.total_grant ?? 0
+    const comparePayload = buildF4UpdateComparePayload({
+      summaryDraft: summaryDraft as Record<string, unknown>,
+      expensesDraft: expensesDraft as Record<string, unknown>[],
+      totalGrantUSD: Number(totalGrantUSD) || 0,
+    })
+    if (
+      initialUpdatePayloadKeyRef.current != null &&
+      payloadCompareKey(comparePayload) === initialUpdatePayloadKeyRef.current
+    ) {
+      alert(t('projects:no_changes_to_save') || 'No changes to save')
+      return
+    }
+
     setSaving(true)
     try {
       const totalExpensesSDG = expensesDraft.reduce((s, ex) => s + (Number(ex.expense_amount_sdg) || 0), 0)
       const totalExpensesUSD = expensesDraft.reduce((s, ex) => s + (Number(ex.expense_amount) || 0), 0)
-      const totalGrantUSD = projectMeta?.total_grant_from_project ?? summary?.total_grant ?? 0
-      const remainderUSD = totalGrantUSD - totalExpensesUSD
+      const totalGrantNum = Number(totalGrantUSD) || 0
+      const remainderUSD = totalGrantNum - totalExpensesUSD
       
       const summaryToSave = {
         ...summaryDraft,
-        total_grant: totalGrantUSD,
+        total_grant: totalGrantNum,
         total_expenses: totalExpensesUSD,
         total_expenses_sdg: totalExpensesSDG,
         remainder: remainderUSD
@@ -242,15 +252,17 @@ export default function ViewF4Modal({ summaryId, open, onOpenChange, onSaved }: 
       const reloadJson = await reloadRes.json()
       if (reloadRes.ok) {
         setData(reloadJson)
-        setSummaryDraft({
-          report_date: reloadJson.summary?.report_date || '',
-          beneficiaries: reloadJson.summary?.beneficiaries || '',
-          lessons: reloadJson.summary?.lessons || '',
-          training: reloadJson.summary?.training || '',
-          excess_expenses: reloadJson.summary?.excess_expenses || '',
-          surplus_use: reloadJson.summary?.surplus_use || '',
-          total_other_sources: reloadJson.summary?.total_other_sources || 0
-        })
+        const reSummary = reloadJson.summary
+        const nextSummaryDraft = {
+          report_date: reSummary?.report_date || '',
+          beneficiaries: reSummary?.beneficiaries || '',
+          lessons: reSummary?.lessons || '',
+          training: reSummary?.training || '',
+          excess_expenses: reSummary?.excess_expenses || '',
+          surplus_use: reSummary?.surplus_use || '',
+          total_other_sources: reSummary?.total_other_sources || 0
+        }
+        setSummaryDraft(nextSummaryDraft)
         const reloadRows = (reloadJson.expenses || []).map((e: any) => ({
           expense_id: e.expense_id,
           expense_activity: e.expense_activity || '',
@@ -262,7 +274,22 @@ export default function ViewF4Modal({ summaryId, open, onOpenChange, onSaved }: 
           receipt_no: e.receipt_no || '',
           seller: e.seller || ''
         }))
-        setExpensesDraft(normalizeF4ExpenseActivitiesToSectors(reloadRows, f4Sectors))
+        const nextExpenses = normalizeF4ExpenseActivitiesToSectors(reloadRows, f4Sectors)
+        setExpensesDraft(nextExpenses)
+        const reloadGrant =
+          reloadJson.completion?.planned_total != null
+            ? Number(reloadJson.completion.planned_total) || 0
+            : Number(reSummary?.total_grant) || 0
+        if (reloadJson.completion?.planned_total != null) {
+          setProjectMeta({ total_grant_from_project: reloadGrant })
+        }
+        initialUpdatePayloadKeyRef.current = payloadCompareKey(
+          buildF4UpdateComparePayload({
+            summaryDraft: nextSummaryDraft,
+            expensesDraft: nextExpenses,
+            totalGrantUSD: reloadGrant,
+          })
+        )
       }
     } catch {
       alert('Failed to update F4')

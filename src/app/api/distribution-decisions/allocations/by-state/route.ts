@@ -6,11 +6,18 @@ import {
   poolRowFromParts,
   projectExpenseTotal,
 } from '@/lib/poolProjectClassification'
+import { getUserRoomAccess } from '@/lib/userRoomAccess'
 
 // GET /api/distribution-decisions/allocations/by-state
 // Returns aggregated allocations grouped by state
 export async function GET() {
   try {
+    // Nationwide allocation pool is not room-scopable: fail closed for Base ERR
+    const roomAccess = await getUserRoomAccess()
+    if (roomAccess.applies) {
+      return NextResponse.json([])
+    }
+
     const supabase = getSupabaseRouteClient()
 
     const fetchAllRows = async (table: string, select: string) => {

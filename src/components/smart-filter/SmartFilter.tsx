@@ -5,10 +5,32 @@ import { useSearchParams } from 'next/navigation'
 import { Filter, ChevronDown, Eraser } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { FilterChip } from './FilterChip'
 import type { ActiveFilter, FilterFieldConfig, FilterValues, SmartFilterProps, FilterValue } from './types'
 
 const DEFAULT_URL_PREFIX = 'f_'
+
+function mergeFiltersByFieldId(
+  existing: ActiveFilter[],
+  fromUrl: ActiveFilter[]
+): ActiveFilter[] {
+  if (fromUrl.length === 0) return existing
+  const byField = new Map(existing.map((f) => [f.fieldId, f]))
+  for (const f of fromUrl) {
+    byField.set(f.fieldId, f)
+  }
+  return Array.from(byField.values())
+}
+
+function filterValuesEqual(a: ActiveFilter[], b: ActiveFilter[]): boolean {
+  if (a.length !== b.length) return false
+  const sortKey = (f: ActiveFilter) => `${f.fieldId}:${JSON.stringify(f.value)}`
+  const aa = [...a].map(sortKey).sort()
+  const bb = [...b].map(sortKey).sort()
+  return aa.every((k, i) => k === bb[i])
+}
 
 /** Parse URL search params into filter values (for hydration / server) */
 export function parseFiltersFromSearchParams(
@@ -72,6 +94,7 @@ export function SmartFilter({
   onFiltersChange,
   urlParamPrefix = DEFAULT_URL_PREFIX,
   className,
+  layout = 'stacked',
   title,
   count,
   extraCounts,
@@ -80,22 +103,23 @@ export function SmartFilter({
   const [addFilterOpen, setAddFilterOpen] = React.useState(false)
 
   const activeFieldIds = React.useMemo(() => new Set(filters.map((f) => f.fieldId)), [filters])
-  const availableFields = React.useMemo(
-    () => fields.filter((f) => !activeFieldIds.has(f.id)),
-    [fields, activeFieldIds]
-  )
 
-  const addFilter = React.useCallback(
-    (field: FilterFieldConfig) => {
-      let defaultValue: FilterValue = ''
-      if (field.type === 'date_range') defaultValue = ['', '']
-      else if (field.type === 'multi_select') defaultValue = []
-      onFiltersChange([
-        ...filters,
-        { id: `${field.id}-${Date.now()}`, fieldId: field.id, value: defaultValue },
-      ])
+  const toggleCategoryFilter = React.useCallback(
+    (field: FilterFieldConfig, checked: boolean) => {
+      if (checked) {
+        if (activeFieldIds.has(field.id)) return
+        let defaultValue: FilterValue = ''
+        if (field.type === 'date_range') defaultValue = ['', '']
+        else if (field.type === 'multi_select') defaultValue = []
+        onFiltersChange([
+          ...filters,
+          { id: `${field.id}-${Date.now()}`, fieldId: field.id, value: defaultValue },
+        ])
+        return
+      }
+      onFiltersChange(filters.filter((f) => f.fieldId !== field.id))
     },
-    [filters, onFiltersChange]
+    [activeFieldIds, filters, onFiltersChange]
   )
 
   const updateFilter = React.useCallback(
@@ -123,26 +147,23 @@ export function SmartFilter({
     if (typeof window === 'undefined') return
     const params = new URLSearchParams(searchParams.toString())
     const newParams = filtersToSearchParams(filters, urlParamPrefix, fields)
-    let changed = false
-    const keysToDelete: string[] = []
+    const prefixKeys: string[] = []
     params.forEach((_, key) => {
-      if (key.startsWith(urlParamPrefix)) keysToDelete.push(key)
+      if (key.startsWith(urlParamPrefix)) prefixKeys.push(key)
     })
-    keysToDelete.forEach((k) => {
-      params.delete(k)
-      changed = true
-    })
-    Object.entries(newParams).forEach(([k, v]) => {
-      if (params.get(k) !== v) {
-        params.set(k, v)
-        changed = true
-      }
-    })
-    if (changed && window.history?.replaceState) {
+    const newKeys = new Set(Object.keys(newParams))
+    const changed =
+      prefixKeys.some((k) => !newKeys.has(k)) ||
+      Object.entries(newParams).some(([k, v]) => params.get(k) !== v)
+    if (!changed) return
+
+    prefixKeys.forEach((k) => params.delete(k))
+    Object.entries(newParams).forEach(([k, v]) => params.set(k, v))
+    if (window.history?.replaceState) {
       const url = `${window.location.pathname}${params.toString() ? `?${params.toString()}` : ''}`
       window.history.replaceState(null, '', url)
     }
-  }, [filters, urlParamPrefix, searchParams])
+  }, [filters, urlParamPrefix, searchParams, fields])
 
   // Hydrate from URL on mount (once)
   const hydratedRef = React.useRef(false)
@@ -164,8 +185,105 @@ export function SmartFilter({
       const field = fields.find((f) => f.id === fieldId)
       if (field) toAdd.push({ id: `${fieldId}-${Date.now()}-${Math.random()}`, fieldId, value })
     })
-    if (toAdd.length > 0) onFiltersChange(toAdd)
-  }, [fields, onFiltersChange, searchParams, urlParamPrefix])
+    const merged = mergeFiltersByFieldId(filters, toAdd)
+    if (!filterValuesEqual(merged, filters)) {
+      onFiltersChange(merged)
+    }
+  }, [fields, filters, onFiltersChange, searchParams, urlParamPrefix])
+
+  const addFilterButton = (
+    <Popover open={addFilterOpen} onOpenChange={setAddFilterOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="h-8 shrink-0 gap-1.5 text-xs font-medium"
+          aria-expanded={addFilterOpen}
+          aria-haspopup="listbox"
+        >
+          <Filter className="h-3.5 w-3.5" />
+          Add filter
+          <ChevronDown className="h-3.5 w-3.5 opacity-60" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="start"
+        side="bottom"
+        sideOffset={6}
+        collisionPadding={12}
+        className="z-[200] w-56 max-h-72 overflow-y-auto p-2"
+        role="group"
+        aria-label="Add filter"
+        onOpenAutoFocus={(e) => e.preventDefault()}
+        onCloseAutoFocus={(e) => e.preventDefault()}
+      >
+        <div className="px-2 pb-1.5 pt-0.5 text-xs font-medium text-muted-foreground">
+          Add filter
+        </div>
+        <div className="mb-1 h-px bg-border" role="separator" />
+        {fields.length === 0 ? (
+          <div className="px-2 py-2 text-xs text-muted-foreground">
+            No filters available
+          </div>
+        ) : (
+          fields.map((field) => {
+            const checked = activeFieldIds.has(field.id)
+            return (
+              <label
+                key={field.id}
+                className="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground"
+              >
+                <Checkbox
+                  checked={checked}
+                  onCheckedChange={(value) => {
+                    toggleCategoryFilter(field, value === true)
+                  }}
+                  aria-label={field.label}
+                />
+                <span className="truncate">{field.label}</span>
+              </label>
+            )
+          })
+        )}
+      </PopoverContent>
+    </Popover>
+  )
+
+  const filterChips = filters.length > 0 && (
+    <>
+      {filters.map((filter) => {
+        const field = fields.find((f) => f.id === filter.fieldId)
+        if (!field) return null
+        return (
+          <FilterChip
+            key={filter.id}
+            filter={filter}
+            field={field}
+            onValueChange={(v) => updateFilter(filter.id, v)}
+            onRemove={() => removeFilter(filter.id)}
+          />
+        )
+      })}
+      <button
+        type="button"
+        onClick={clearAll}
+        className="inline-flex shrink-0 items-center gap-1.5 rounded-sm px-2 py-1 text-xs text-muted-foreground hover:text-foreground"
+      >
+        <Eraser className="h-4 w-4 shrink-0" />
+        Clear all
+      </button>
+    </>
+  )
+
+  if (layout === 'inline') {
+    return (
+      <div className={cn('flex flex-row flex-wrap items-center gap-2', className)}>
+        {addFilterButton}
+        {filterChips}
+      </div>
+    )
+  }
 
   return (
     <div className={cn('flex flex-col gap-3', className)}>
@@ -184,79 +302,12 @@ export function SmartFilter({
             ))}
           </h2>
         )}
-        <div className="relative">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="min-w-0 border-0 bg-transparent p-0 shadow-none hover:bg-transparent text-muted-foreground hover:text-foreground"
-            onClick={() => setAddFilterOpen((o) => !o)}
-            aria-expanded={addFilterOpen}
-            aria-haspopup="listbox"
-          >
-            <Filter className="h-4 w-4 mr-1.5" />
-            Add filter
-            <ChevronDown className="h-4 w-4 ml-1" />
-          </Button>
-          {addFilterOpen && (
-            <>
-              <div
-                className="fixed inset-0 z-40"
-                aria-hidden
-                onClick={() => setAddFilterOpen(false)}
-              />
-              <div
-                className="absolute right-0 top-full z-50 mt-1 min-w-[12rem] rounded-md border border-border bg-popover py-1 shadow-md"
-                role="listbox"
-              >
-                {availableFields.length === 0 ? (
-                  <div className="px-3 py-2 text-xs text-muted-foreground">
-                    All filters added
-                  </div>
-                ) : (
-                  availableFields.map((field) => (
-                    <button
-                      key={field.id}
-                      type="button"
-                      role="option"
-                      className="w-full px-3 py-2 text-left text-sm hover:bg-accent hover:text-accent-foreground"
-                      onClick={() => {
-                        addFilter(field)
-                        setAddFilterOpen(false)
-                      }}
-                    >
-                      {field.label}
-                    </button>
-                  ))
-                )}
-              </div>
-            </>
-          )}
-        </div>
+        {addFilterButton}
       </div>
 
       {filters.length > 0 && (
-        <div className="flex flex-wrap items-center gap-2">
-          {filters.map((filter) => {
-            const field = fields.find((f) => f.id === filter.fieldId)
-            if (!field) return null
-            return (
-              <FilterChip
-                key={filter.id}
-                filter={filter}
-                field={field}
-                onValueChange={(v) => updateFilter(filter.id, v)}
-                onRemove={() => removeFilter(filter.id)}
-              />
-            )
-          })}
-          <button
-            type="button"
-            onClick={clearAll}
-            className="inline-flex items-center gap-1.5 rounded-sm px-2 py-1 text-xs text-muted-foreground hover:text-foreground"
-          >
-            <Eraser className="h-4 w-4 shrink-0" />
-            Clear all
-          </button>
+        <div className="flex flex-row flex-wrap items-center gap-2">
+          {filterChips}
         </div>
       )}
     </div>

@@ -135,14 +135,13 @@ export default function ERRAppSubmissions() {
 
   const fetchFeedbackHistory = async (projectId: string) => {
     try {
-      const { data, error } = await supabase
-        .from('project_feedback')
-        .select('*')
-        .eq('project_id', projectId)
-        .order('created_at', { ascending: true })
-
-      if (error) throw error
-      setFeedbackHistory(data || [])
+      const res = await fetch(
+        `/api/f1/err/submissions?project_id=${encodeURIComponent(projectId)}`,
+        { cache: 'no-store' }
+      )
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(json?.error || 'Failed to load feedback')
+      setFeedbackHistory(Array.isArray(json.feedback) ? json.feedback : [])
     } catch (error) {
       console.error('Error fetching feedback history:', error)
     }
@@ -150,14 +149,12 @@ export default function ERRAppSubmissions() {
 
   const fetchAllProjects = async () => {
     try {
-      // First fetch projects
-      const { data: projectsData, error: projectsError } = await supabase
-        .from('err_projects')
-        .select('*')
-        .or('source.is.null,source.neq.mutual_aid_portal')
-        .order('submitted_at', { ascending: false })
-
-      if (projectsError) throw projectsError
+      const res = await fetch('/api/f1/err/submissions', { cache: 'no-store' })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(json?.error || 'Failed to load submissions')
+      const projectsData = (Array.isArray(json) ? json : json.projects || []) as (F1Project & {
+        emergency_room_id?: string | null
+      })[]
 
       // Get unique emergency room IDs and funding cycle IDs
       const emergencyRoomIds = [...new Set(projectsData?.map(p => p.emergency_room_id).filter(Boolean) || [])]
@@ -273,14 +270,13 @@ export default function ERRAppSubmissions() {
 
   const fetchGrantSerials = async (fundingCycleId: string) => {
     try {
-      const { data, error } = await supabase
-        .from('grant_serials')
-        .select('grant_serial, funding_cycle_id, state_name, yymm')
-        .eq('funding_cycle_id', fundingCycleId)
-        .order('created_at', { ascending: false })
-
-      if (error) throw error
-      setGrantSerials(data || [])
+      const res = await fetch(
+        `/api/f1/err/submissions?funding_cycle_id=${encodeURIComponent(fundingCycleId)}`,
+        { cache: 'no-store' }
+      )
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(json?.error || 'Failed to load grant serials')
+      setGrantSerials(Array.isArray(json.grant_serials) ? json.grant_serials : [])
     } catch (error) {
       console.error('Error fetching grant serials:', error)
     }

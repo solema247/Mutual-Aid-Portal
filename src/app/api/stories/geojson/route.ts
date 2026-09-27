@@ -3,6 +3,12 @@ import { readFileSync } from 'fs'
 import { join } from 'path'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { getUserStateAccess } from '@/lib/userStateAccess'
+import {
+  applyGrantGridIdFilter,
+  chunkGrantScopeIds,
+  getUserGrantAccess,
+} from '@/lib/userGrantAccess'
+import { getUserRoomAccess } from '@/lib/userRoomAccess'
 import { getCategorySpend } from '@/lib/mutualAidCategorySpend'
 
 export const dynamic = 'force-dynamic'
@@ -74,14 +80,24 @@ function getPrimaryCategoryAndUsd(
  * GET /api/stories/geojson
  * Returns a GeoJSON FeatureCollection of Point features for each MAP project with F5.
  * Coordinates use state centroids (from sudan-states.json) with small jitter so clusters render.
+ * Partner scope is grant-based; other roles keep getUserStateAccess.
  */
 export async function GET() {
   const t0 = Date.now()
   console.log('[stories/geojson] start')
   try {
     const supabase = getSupabaseRouteClient()
-    const { allowedStateNames } = await getUserStateAccess()
-    console.log('[stories/geojson] getUserStateAccess', Date.now() - t0, 'ms')
+    const [grantAccess, roomAccess] = await Promise.all([
+      getUserGrantAccess(),
+      getUserRoomAccess(),
+    ])
+    const emptyFeatures = () =>
+      NextResponse.json(
+        { type: 'FeatureCollection', features: [] },
+        { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } }
+      )
+    if (roomAccess.mode === 'none') return emptyFeatures()
+    if (roomAccess.mode !== 'room' && grantAccess.mode === 'none') return emptyFeatures()
 
     const geoPath = join(process.cwd(), 'public', 'geo', 'sudan-states.json')
     const geo = JSON.parse(readFileSync(geoPath, 'utf-8')) as {
@@ -102,25 +118,80 @@ export async function GET() {
       stateCentroids.set(name, centroid)
     }
 
-    let projectsQuery = supabase
-      .from('err_projects')
-      .select('id, state, locality, project_name, planned_activities, expenses')
-      .eq('source', 'mutual_aid_portal')
-      .in('status', MAP_STATUSES)
+    const projectSelect = 'id, state, locality, project_name, planned_activities, expenses'
+    let projects: {
+      id: string
+      state?: string | null
+      locality?: string | null
+      project_name?: string | null
+      planned_activities?: unknown
+      expenses?: unknown
+    }[] = []
 
-    if (allowedStateNames !== null && allowedStateNames.length > 0) {
-      projectsQuery = projectsQuery.in('state', allowedStateNames)
+    if (roomAccess.mode === 'room') {
+      // Base ERR: emergency_room_id only (never state scope)
+      const { data, error: projectsError } = await supabase
+        .from('err_projects')
+        .select(projectSelect)
+        .eq('source', 'mutual_aid_portal')
+        .in('status', MAP_STATUSES)
+        .eq('emergency_room_id', roomAccess.emergencyRoomId)
+      if (projectsError) {
+        console.error('[stories/geojson] projects error:', projectsError)
+        return NextResponse.json(
+          { error: 'Failed to load projects' },
+          { status: 500, headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } }
+        )
+      }
+      projects = data || []
+    } else if (grantAccess.mode === 'partner') {
+      console.log('[stories/geojson] partner grant scope', Date.now() - t0, 'ms')
+      for (const batch of chunkGrantScopeIds(grantAccess.grantGridIds)) {
+        let projectsQuery = supabase
+          .from('err_projects')
+          .select(projectSelect)
+          .eq('source', 'mutual_aid_portal')
+          .in('status', MAP_STATUSES)
+        projectsQuery = applyGrantGridIdFilter(projectsQuery, {
+          ...grantAccess,
+          grantGridIds: batch,
+        })
+        const { data, error: projectsError } = await projectsQuery
+        if (projectsError) {
+          console.error('[stories/geojson] projects error:', projectsError)
+          return NextResponse.json(
+            { error: 'Failed to load projects' },
+            { status: 500, headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } }
+          )
+        }
+        if (data?.length) projects.push(...data)
+      }
+    } else {
+      const { allowedStateNames } = await getUserStateAccess()
+      console.log('[stories/geojson] getUserStateAccess', Date.now() - t0, 'ms')
+
+      let projectsQuery = supabase
+        .from('err_projects')
+        .select(projectSelect)
+        .eq('source', 'mutual_aid_portal')
+        .in('status', MAP_STATUSES)
+
+      if (allowedStateNames !== null && allowedStateNames.length > 0) {
+        projectsQuery = projectsQuery.in('state', allowedStateNames)
+      }
+
+      const { data, error: projectsError } = await projectsQuery
+      if (projectsError) {
+        console.error('[stories/geojson] projects error:', projectsError)
+        return NextResponse.json(
+          { error: 'Failed to load projects' },
+          { status: 500, headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } }
+        )
+      }
+      projects = data || []
     }
 
-    const { data: projects, error: projectsError } = await projectsQuery
-    console.log('[stories/geojson] projects query', Date.now() - t0, 'ms', (projects?.length ?? 0), 'rows')
-    if (projectsError) {
-      console.error('[stories/geojson] projects error:', projectsError)
-      return NextResponse.json(
-        { error: 'Failed to load projects' },
-        { status: 500, headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } }
-      )
-    }
+    console.log('[stories/geojson] projects query', Date.now() - t0, 'ms', projects.length, 'rows')
 
     const projectIds = (projects || []).map((p: any) => p.id).filter(Boolean)
     if (projectIds.length === 0) {

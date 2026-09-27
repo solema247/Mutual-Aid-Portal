@@ -1,0 +1,41 @@
+import { isPortalRole, type PortalRole } from '@/lib/userAccessRules'
+
+type TranslateFn = (
+  key: string,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  opts?: any
+) => string
+
+const ROLE_I18N_KEYS: Record<PortalRole, string> = {
+  support: 'users:support_role',
+  superadmin: 'users:superadmin_role',
+  admin: 'users:admin_role',
+  state_err: 'users:state_err_role',
+  base_err: 'users:base_err_role',
+  partner: 'users:partner_role',
+}
+
+/** English fallbacks when a locale key is missing */
+const ROLE_LABEL_FALLBACKS: Record<PortalRole, string> = {
+  support: 'Support',
+  superadmin: 'Superadmin',
+  admin: 'Admin',
+  state_err: 'Coordination Committee',
+  base_err: 'Beneficiary Entity',
+  partner: 'Partner',
+}
+
+/**
+ * Map an internal portal role key to a localized display label.
+ * Does not alter or rename the role key itself.
+ */
+export function getPortalRoleLabel(
+  role: string | null | undefined,
+  t: TranslateFn
+): string {
+  if (!role) return ''
+  if (!isPortalRole(role)) return role
+  return t(ROLE_I18N_KEYS[role], {
+    defaultValue: ROLE_LABEL_FALLBACKS[role],
+  })
+}

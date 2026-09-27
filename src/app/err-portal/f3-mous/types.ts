@@ -167,6 +167,7 @@ export interface GrantGridEntry {
   donor_name: string
   project_name: string
   donor_id: string
+  max_workplan_sequence?: number
 }
 
 export interface MouProjectAssignmentRow {

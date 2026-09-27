@@ -5,6 +5,8 @@ import {
   isErrSubmissionSource
 } from '@/lib/routeHandlerAuth'
 import { isApprovedUnassigned } from '../_shared'
+import { assertProjectInRoomAccess } from '@/lib/userRoomAccess'
+import { emitF123Audit } from '@/lib/f123Audit'
 import { z } from 'zod'
 
 const bodySchema = z.object({
@@ -46,13 +48,17 @@ export async function POST (request: Request) {
 
     const { data: project, error: projErr } = await auth.supabase
       .from('err_projects')
-      .select('id, source, status, funding_status')
+      .select('id, source, status, funding_status, grant_serial_id, workplan_number')
       .eq('id', project_id)
       .single()
 
     if (projErr || !project) {
       return NextResponse.json({ error: 'Project not found' }, { status: 404 })
     }
+
+    // Base ERR may only act on projects in its own emergency room
+    const roomCheck = await assertProjectInRoomAccess(project_id)
+    if (roomCheck.handled && !roomCheck.ok) return roomCheck.response
 
     if (!isErrSubmissionSource(project.source as string | null)) {
       return NextResponse.json({ error: 'Invalid project for ERR submissions' }, { status: 400 })
@@ -119,6 +125,29 @@ export async function POST (request: Request) {
       console.error(error)
       return NextResponse.json({ error: 'Failed to update project' }, { status: 500 })
     }
+
+    await emitF123Audit({
+      action: 'f1.serial_assigned',
+      actorUserId: auth.dbUser.id,
+      endpoint: 'POST /api/f1/err/assign-grant',
+      request,
+      targetType: 'project',
+      targetId: project_id,
+      oldValues: {
+        grant_serial_id: project.grant_serial_id ?? null,
+        workplan_number: project.workplan_number ?? null,
+        funding_status: project.funding_status ?? null
+      },
+      newValues: {
+        grant_serial_id: grantSerial,
+        workplan_number: nextWorkplanNumber,
+        funding_status: 'allocated'
+      },
+      metadata: {
+        grant_serial: grantSerial,
+        last_workplan_number: seqData?.last_workplan_number ?? null
+      }
+    })
 
     return NextResponse.json({ success: true, workplan_number: nextWorkplanNumber })
   } catch (e: unknown) {

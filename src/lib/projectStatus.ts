@@ -26,9 +26,17 @@ export function shouldAutoCompleteProject(
   )
 }
 
-type ReportingStatusChanges = {
+export type ReportingStatusChanges = {
   f4_status?: string
   f5_status?: string
+}
+
+export type ReportingStatusProjectRow = {
+  status: string | null
+  f4_status: string | null
+  f5_status: string | null
+  date_report_completed: string | null
+  completed_at: string | null
 }
 
 /** PATCH body with only the F4/F5 fields that actually changed. */
@@ -85,6 +93,129 @@ export async function resolveReportCompletedDate(
   return f4 || f5 || null
 }
 
+function normalizeReportingStatusField(value: string | null | undefined): string {
+  return String(value ?? '').trim().toLowerCase()
+}
+
+function normalizeDateReportCompletedField(value: string | null | undefined): string | null {
+  if (value == null || String(value).trim() === '') return null
+  const raw = String(value).trim()
+  if (/^\d{4}-\d{2}-\d{2}/.test(raw)) return raw.slice(0, 10)
+  const d = new Date(raw)
+  return isNaN(d.getTime()) ? raw : d.toISOString().slice(0, 10)
+}
+
+function reportingStatusFieldEqual(
+  key: string,
+  current: unknown,
+  next: string | null
+): boolean {
+  if (key === 'f4_status' || key === 'f5_status' || key === 'status') {
+    return (
+      normalizeReportingStatusField(current as string | null) ===
+      normalizeReportingStatusField(next)
+    )
+  }
+  if (key === 'date_report_completed') {
+    return (
+      normalizeDateReportCompletedField(current as string | null) ===
+      normalizeDateReportCompletedField(next)
+    )
+  }
+  if (key === 'completed_at') {
+    const cur =
+      current == null || String(current).trim() === '' ? null : String(current).trim()
+    const nxt = next == null || next.trim() === '' ? null : next.trim()
+    if (cur == null && nxt == null) return true
+    if (cur == null || nxt == null) return false
+    const curMs = new Date(cur).getTime()
+    const nxtMs = new Date(nxt).getTime()
+    if (Number.isNaN(curMs) || Number.isNaN(nxtMs)) return cur === nxt
+    return curMs === nxtMs
+  }
+  return (current ?? null) === next
+}
+
+/** True when every key in `update` already matches the stored project row. */
+export function reportingStatusUpdateHasEffectiveChange(
+  project: ReportingStatusProjectRow,
+  update: Record<string, string | null>
+): boolean {
+  for (const [key, nextVal] of Object.entries(update)) {
+    const cur = project[key as keyof ReportingStatusProjectRow]
+    if (!reportingStatusFieldEqual(key, cur, nextVal)) return true
+  }
+  return false
+}
+
+/**
+ * Builds the same UPDATE payload as applyReportingStatusUpdates (shared business rules).
+ */
+export async function buildReportingStatusUpdatePayload(
+  supabase: SupabaseClient,
+  projectId: string,
+  project: ReportingStatusProjectRow,
+  changes: ReportingStatusChanges
+): Promise<Record<string, string | null>> {
+  const nextF4 = changes.f4_status ?? project.f4_status
+  const nextF5 = changes.f5_status ?? project.f5_status
+  const wasBothCompleted =
+    isReportingStatusCompleted(project.f4_status) &&
+    isReportingStatusCompleted(project.f5_status)
+  const bothCompleted =
+    isReportingStatusCompleted(nextF4) && isReportingStatusCompleted(nextF5)
+
+  const update: Record<string, string | null> = {}
+  if (Object.prototype.hasOwnProperty.call(changes, 'f4_status') && changes.f4_status != null) {
+    update.f4_status = changes.f4_status
+  }
+  if (Object.prototype.hasOwnProperty.call(changes, 'f5_status') && changes.f5_status != null) {
+    update.f5_status = changes.f5_status
+  }
+
+  if (shouldAutoCompleteProject(project.status, nextF4, nextF5)) {
+    update.status = 'completed'
+    if (!project.completed_at) {
+      update.completed_at = new Date().toISOString()
+    }
+  }
+
+  if (bothCompleted) {
+    if (!wasBothCompleted || !project.date_report_completed) {
+      update.date_report_completed =
+        (await resolveReportCompletedDate(supabase, projectId)) || todayIsoDate()
+    }
+  } else {
+    update.date_report_completed = null
+  }
+
+  return update
+}
+
+export type ComputeReportingStatusUpdateResult = {
+  update: Record<string, string | null>
+  hasEffectiveChange: boolean
+}
+
+/** Preview effective DB update for PATCH /reporting-status (no write). */
+export async function computeReportingStatusUpdate(
+  supabase: SupabaseClient,
+  projectId: string,
+  project: ReportingStatusProjectRow,
+  changes: ReportingStatusChanges
+): Promise<ComputeReportingStatusUpdateResult> {
+  const update = await buildReportingStatusUpdatePayload(
+    supabase,
+    projectId,
+    project,
+    changes
+  )
+  return {
+    update,
+    hasEffectiveChange: reportingStatusUpdateHasEffectiveChange(project, update),
+  }
+}
+
 /**
  * Applies F4/F5 reporting status changes and auto-completes the project when both are completed.
  * Sets date_report_completed when both statuses become completed; clears it otherwise.
@@ -108,36 +239,12 @@ export async function applyReportingStatusUpdates(
     return { ok: false, error: 'Project not found' }
   }
 
-  const nextF4 = changes.f4_status ?? project.f4_status
-  const nextF5 = changes.f5_status ?? project.f5_status
-  const wasBothCompleted =
-    isReportingStatusCompleted(project.f4_status) && isReportingStatusCompleted(project.f5_status)
-  const bothCompleted = isReportingStatusCompleted(nextF4) && isReportingStatusCompleted(nextF5)
-
-  const update: Record<string, string | null> = {}
-  if (Object.prototype.hasOwnProperty.call(changes, 'f4_status') && changes.f4_status != null) {
-    update.f4_status = changes.f4_status
-  }
-  if (Object.prototype.hasOwnProperty.call(changes, 'f5_status') && changes.f5_status != null) {
-    update.f5_status = changes.f5_status
-  }
-
-  if (shouldAutoCompleteProject(project.status, nextF4, nextF5)) {
-    update.status = 'completed'
-    // Data Archive + Project Management rely on completed_at; keep any existing stamp.
-    if (!project.completed_at) {
-      update.completed_at = new Date().toISOString()
-    }
-  }
-
-  if (bothCompleted) {
-    if (!wasBothCompleted || !project.date_report_completed) {
-      update.date_report_completed =
-        (await resolveReportCompletedDate(supabase, projectId)) || todayIsoDate()
-    }
-  } else {
-    update.date_report_completed = null
-  }
+  const update = await buildReportingStatusUpdatePayload(
+    supabase,
+    projectId,
+    project as ReportingStatusProjectRow,
+    changes
+  )
 
   const { error: updateError } = await supabase
     .from('err_projects')

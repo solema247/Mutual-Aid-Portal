@@ -4,6 +4,12 @@ import {
   buildPaymentFileStoragePath,
   getSessionUserLabel,
 } from '@/lib/mouPaymentConfirmations'
+import {
+  assertMouInGrantAccess,
+  assertProjectInGrantAccess,
+  isProjectIdInMouScope,
+} from '@/lib/userGrantAccess'
+import { emitF123Audit } from '@/lib/f123Audit'
 
 type RouteContext = { params: { id: string; confirmationId: string } }
 
@@ -17,6 +23,9 @@ export async function POST(request: Request, { params }: RouteContext) {
     const supabase = getSupabaseRouteClient()
     const { id: mouId, confirmationId } = params
     const formData = await request.formData()
+
+    const mouScope = await assertMouInGrantAccess(mouId)
+    if (!mouScope.ok) return mouScope.response
 
     const { data: confirmation, error: fetchError } = await supabase
       .from('mou_payment_confirmations')
@@ -32,6 +41,16 @@ export async function POST(request: Request, { params }: RouteContext) {
     if (!confirmation) {
       return NextResponse.json({ error: 'Payment confirmation not found' }, { status: 404 })
     }
+
+    if (!isProjectIdInMouScope(mouScope.inScopeProjectIds, confirmation.project_id)) {
+      return NextResponse.json({ error: 'Payment confirmation not found' }, { status: 404 })
+    }
+
+    const projectScope = await assertProjectInGrantAccess(
+      String(confirmation.project_id),
+      mouScope.access
+    )
+    if (!projectScope.ok) return projectScope.response
 
     const files: File[] = []
     const single = formData.get('file')
@@ -99,6 +118,28 @@ export async function POST(request: Request, { params }: RouteContext) {
       }
 
       uploaded.push(fileRow)
+    }
+
+    for (const fileRow of uploaded) {
+      await emitF123Audit({
+        action: 'f3.payment_file_added',
+        endpoint: 'POST /api/f3/mous/[id]/payment-confirmation/[confirmationId]/files',
+        request,
+        targetType: 'payment_file',
+        targetId: fileRow?.id ?? null,
+        newValues: {
+          payment_confirmation_id: confirmationId,
+          file_path: fileRow?.file_path ?? null,
+          original_name: fileRow?.original_name ?? null,
+          file_type: fileRow?.file_type ?? null,
+          file_size: fileRow?.file_size ?? null,
+        },
+        metadata: {
+          mou_id: mouId,
+          project_id: confirmation.project_id ?? null,
+          payment_confirmation_id: confirmationId,
+        },
+      })
     }
 
     return NextResponse.json({ success: true, files: uploaded })
