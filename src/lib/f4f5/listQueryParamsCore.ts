@@ -1,6 +1,10 @@
 /** F4/F5 list query types and API URL parsing — safe for server handlers (no client SmartFilter). */
 
+import type { CompletionMode } from './listGates'
+import { parseCompletionMode } from './listGates'
+
 export type SortDirection = 'asc' | 'desc'
+export type { CompletionMode }
 
 export const PAGE_SIZE_OPTIONS = [10, 20, 50, 100] as const
 
@@ -33,6 +37,7 @@ export type F4ListFilters = {
   grantIdText: string
   baseRooms: string[]
   states: string[]
+  localities: string[]
   grants: string[]
   reportStatuses: string[]
 }
@@ -41,6 +46,7 @@ export type F5ListFilters = {
   grantIdText: string
   baseRooms: string[]
   states: string[]
+  localities: string[]
   grants: string[]
   reportStatuses: string[]
   endActivityStatuses: string[]
@@ -54,12 +60,14 @@ export type ListPaginationParams = {
 export type F4ListQuery = ListPaginationParams & {
   sortBy: F4SortKey
   sortDir: SortDirection
+  completion: CompletionMode
   filters: F4ListFilters
 }
 
 export type F5ListQuery = ListPaginationParams & {
   sortBy: F5SortKey
   sortDir: SortDirection
+  completion: CompletionMode
   filters: F5ListFilters
 }
 
@@ -155,8 +163,10 @@ export function buildF4ListSearchParams(query: F4ListQuery): string {
   if (f.grantIdText) p.set('grant_id', f.grantIdText)
   if (f.baseRooms.length) p.set('base_room', f.baseRooms.join('|'))
   if (f.states.length) p.set('state', f.states.join('|'))
+  if (f.localities.length) p.set('locality', f.localities.join('|'))
   if (f.grants.length) p.set('grant', f.grants.join('|'))
   if (f.reportStatuses.length) p.set('report_status', f.reportStatuses.join('|'))
+  if (query.completion !== 'active') p.set('completion', query.completion)
   return p.toString()
 }
 
@@ -170,9 +180,11 @@ export function buildF5ListSearchParams(query: F5ListQuery): string {
   if (f.grantIdText) p.set('grant_id', f.grantIdText)
   if (f.baseRooms.length) p.set('base_room', f.baseRooms.join('|'))
   if (f.states.length) p.set('state', f.states.join('|'))
+  if (f.localities.length) p.set('locality', f.localities.join('|'))
   if (f.grants.length) p.set('grant', f.grants.join('|'))
   if (f.reportStatuses.length) p.set('report_status', f.reportStatuses.join('|'))
   if (f.endActivityStatuses.length) p.set('end_activity_status', f.endActivityStatuses.join('|'))
+  if (query.completion !== 'active') p.set('completion', query.completion)
   return p.toString()
 }
 
@@ -189,10 +201,12 @@ export function parseF4ListQueryFromApiUrl(searchParams: URLSearchParams): F4Lis
     pageSize,
     sortBy,
     sortDir,
+    completion: parseCompletionMode(searchParams.get('completion')),
     filters: {
       grantIdText: String(searchParams.get('grant_id') ?? '').trim(),
       baseRooms: searchParams.get('base_room')?.split('|').filter(Boolean) ?? [],
       states: searchParams.get('state')?.split('|').filter(Boolean) ?? [],
+      localities: searchParams.get('locality')?.split('|').filter(Boolean) ?? [],
       grants: searchParams.get('grant')?.split('|').filter(Boolean) ?? [],
       reportStatuses: searchParams.get('report_status')?.split('|').filter(Boolean) ?? [],
     },
@@ -218,10 +232,12 @@ export function parseF5ListQueryFromApiUrl(searchParams: URLSearchParams): F5Lis
     pageSize,
     sortBy,
     sortDir,
+    completion: parseCompletionMode(searchParams.get('completion')),
     filters: {
       grantIdText: String(searchParams.get('grant_id') ?? '').trim(),
       baseRooms: baseRoom ? baseRoom.split('|').filter(Boolean) : [],
       states: state ? state.split('|').filter(Boolean) : [],
+      localities: searchParams.get('locality')?.split('|').filter(Boolean) ?? [],
       grants: grant ? grant.split('|').filter(Boolean) : [],
       reportStatuses: reportStatus ? reportStatus.split('|').filter(Boolean) : [],
       endActivityStatuses: endActivity ? endActivity.split('|').filter(Boolean) : [],

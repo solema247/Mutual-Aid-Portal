@@ -5,7 +5,6 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
 import { useAllowedFunctions } from '@/hooks/useAllowedFunctions'
 import { Input } from '@/components/ui/input'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
   EMPTY_REPORTING_LIST_SUMMARY,
   parseReportingListSummary,
@@ -18,7 +17,10 @@ import {
   ReportingToolbarRefreshIndicator,
 } from './ReportingSummaryCards'
 import {
-  buildReportingPageNumbers,
+  ReportingListPagination,
+  type ReportingPaginationPending,
+} from './ReportingListPagination'
+import {
   REPORTING_EMPTY,
   REPORTING_LOADING,
   REPORTING_PAGE_SECTION,
@@ -28,7 +30,6 @@ import {
   REPORTING_SORT_BUTTON,
   REPORTING_TABLE,
   REPORTING_TABLE_BODY_ROW,
-  REPORTING_TABLE_FOOTER,
   REPORTING_TABLE_HEADER_ROW,
   REPORTING_TABLE_SCROLL,
 } from './reportingTableShell'
@@ -41,7 +42,6 @@ import {
 import {
   buildF4ListSearchParams,
   buildF5ListSearchParams,
-  PAGE_SIZE_OPTIONS,
   parseF4ListQuery,
   parseF5ListQuery,
   type F4SortKey,
@@ -55,15 +55,19 @@ import { useTranslation } from 'react-i18next'
 import ViewF4Modal from './components/ViewF4Modal'
 import UploadF5Modal from './components/UploadF5Modal'
 import ViewF5Modal from './components/ViewF5Modal'
+import F1ProjectViewerSheet from './components/F1ProjectViewerSheet'
 import { useF4F5ReportingPageExplainer } from './F4F5ReportingPageExplainer'
 import { useSearchParams, useRouter } from 'next/navigation'
-import { Check, ChevronLeft, ChevronRight, Eye, Loader2 } from 'lucide-react'
+import { Check, CheckCircle2, Eye, FileText, Loader2, XCircle } from 'lucide-react'
 import { getStatusDisplay } from '@/components/smart-filter/status-config'
 import { isReportingStatusCompleted } from '@/lib/projectStatus'
-
-/** Set true to show F4 Accept/Reject actions again. Review API and dialog remain in place. */
-const SHOW_F4_REVIEW_BUTTONS = false
-
+import {
+  deriveLocationChipOptions,
+  sanitizeLocationActiveFilters,
+  sanitizeLocationListFilters,
+  type LocalityFilterOption,
+  type RoomFilterOption,
+} from '@/lib/f4f5/locationFilterMeta'
 interface F4Row {
   id: number | null
   project_id: string | null
@@ -135,6 +139,24 @@ type FilterMeta = {
   baseRooms: string[]
   states: string[]
   grants: { value: string; label: string }[]
+  localities: LocalityFilterOption[]
+  rooms: RoomFilterOption[]
+}
+
+function locationMetaFromFilterMeta(meta: FilterMeta) {
+  return {
+    localities: meta.localities ?? [],
+    rooms: meta.rooms ?? [],
+  }
+}
+
+function f4RowCanAccept(r: F4Row): boolean {
+  const hasReport = r.has_f4_report !== false && r.id != null
+  if (!hasReport || r.activities_raw_import_id) return false
+  if (r.review_status === 'accepted' || r.review_status === 'rejected') return false
+  const rs = String(r.report_status ?? '').toLowerCase()
+  if (rs === 'not_uploaded' || rs === 'complete_no_report' || rs === 'historical') return false
+  return true
 }
 
 function grantIdTableText(r: { grant_serial_id?: string | null; grant_id?: string | null }) {
@@ -192,8 +214,11 @@ function F4F5ReportingPageContent() {
   const [viewId, setViewId] = useState<number | null>(null)
   const [viewOpen, setViewOpen] = useState(false)
   const [rejectSummaryId, setRejectSummaryId] = useState<number | null>(null)
+  const [acceptSummaryId, setAcceptSummaryId] = useState<number | null>(null)
   const [rejectComment, setRejectComment] = useState('')
   const [reviewSaving, setReviewSaving] = useState(false)
+  const [f1ViewerOpen, setF1ViewerOpen] = useState(false)
+  const [f1ViewerProjectId, setF1ViewerProjectId] = useState<string | null>(null)
   const [markCompleteSavingId, setMarkCompleteSavingId] = useState<string | null>(null)
   const [confirmMarkComplete, setConfirmMarkComplete] = useState<{
     projectId: string
@@ -224,14 +249,30 @@ function F4F5ReportingPageContent() {
     hasNextPage: false,
     hasPreviousPage: false,
   })
-  const [f4FilterMeta, setF4FilterMeta] = useState<FilterMeta>({ baseRooms: [], states: [], grants: [] })
-  const [f5FilterMeta, setF5FilterMeta] = useState<FilterMeta>({ baseRooms: [], states: [], grants: [] })
+  const [f4FilterMeta, setF4FilterMeta] = useState<FilterMeta>({
+    baseRooms: [],
+    states: [],
+    grants: [],
+    localities: [],
+    rooms: [],
+  })
+  const [f5FilterMeta, setF5FilterMeta] = useState<FilterMeta>({
+    baseRooms: [],
+    states: [],
+    grants: [],
+    localities: [],
+    rooms: [],
+  })
   const [f4Summary, setF4Summary] = useState<ReportingListSummary | null>(null)
   const [f5Summary, setF5Summary] = useState<ReportingListSummary | null>(null)
   /** f5ListKey last served successfully by GET /api/f5/list (tab-switch dedup only) */
   const f5LoadedListKeyRef = useRef<string | null>(null)
   const f4FetchGenerationRef = useRef(0)
   const f5FetchGenerationRef = useRef(0)
+  const f4PaginationLockRef = useRef(false)
+  const f5PaginationLockRef = useRef(false)
+  const [f4PaginationPending, setF4PaginationPending] = useState<ReportingPaginationPending>(null)
+  const [f5PaginationPending, setF5PaginationPending] = useState<ReportingPaginationPending>(null)
 
   const f4Query = useMemo(() => parseF4ListQuery(searchParams), [searchParams])
   const f5Query = useMemo(() => parseF5ListQuery(searchParams), [searchParams])
@@ -251,6 +292,26 @@ function F4F5ReportingPageContent() {
     [router, searchParams]
   )
 
+  const beginF4Pagination = useCallback(
+    (pending: ReportingPaginationPending, updates: Record<string, string | null>) => {
+      if (f4PaginationLockRef.current) return
+      f4PaginationLockRef.current = true
+      setF4PaginationPending(pending)
+      patchUrlParams(updates)
+    },
+    [patchUrlParams]
+  )
+
+  const beginF5Pagination = useCallback(
+    (pending: ReportingPaginationPending, updates: Record<string, string | null>) => {
+      if (f5PaginationLockRef.current) return
+      f5PaginationLockRef.current = true
+      setF5PaginationPending(pending)
+      patchUrlParams(updates)
+    },
+    [patchUrlParams]
+  )
+
   const load = useCallback(async () => {
     const fetchGeneration = ++f4FetchGenerationRef.current
     try {
@@ -262,7 +323,15 @@ function F4F5ReportingPageContent() {
       if (fetchGeneration !== f4FetchGenerationRef.current) return
       setRows(body.data ?? [])
       if (body.pagination) setF4Pagination(body.pagination)
-      if (body.filterMeta) setF4FilterMeta(body.filterMeta)
+      if (body.filterMeta) {
+        setF4FilterMeta({
+          baseRooms: body.filterMeta.baseRooms ?? [],
+          states: body.filterMeta.states ?? [],
+          grants: body.filterMeta.grants ?? [],
+          localities: body.filterMeta.localities ?? [],
+          rooms: body.filterMeta.rooms ?? [],
+        })
+      }
       const parsedSummary = parseReportingListSummary(body.summary)
       if (parsedSummary !== null) {
         setF4Summary(parsedSummary)
@@ -274,6 +343,8 @@ function F4F5ReportingPageContent() {
     } finally {
       if (fetchGeneration === f4FetchGenerationRef.current) {
         setLoading(false)
+        f4PaginationLockRef.current = false
+        setF4PaginationPending(null)
       }
     }
   }, [f4ListKey])
@@ -293,7 +364,15 @@ function F4F5ReportingPageContent() {
       if (fetchGeneration !== f5FetchGenerationRef.current) return
       setF5Rows(body.data ?? [])
       if (body.pagination) setF5Pagination(body.pagination)
-      if (body.filterMeta) setF5FilterMeta(body.filterMeta)
+      if (body.filterMeta) {
+        setF5FilterMeta({
+          baseRooms: body.filterMeta.baseRooms ?? [],
+          states: body.filterMeta.states ?? [],
+          grants: body.filterMeta.grants ?? [],
+          localities: body.filterMeta.localities ?? [],
+          rooms: body.filterMeta.rooms ?? [],
+        })
+      }
       const parsedSummary = parseReportingListSummary(body.summary)
       if (parsedSummary !== null) {
         setF5Summary(parsedSummary)
@@ -306,6 +385,8 @@ function F4F5ReportingPageContent() {
     } finally {
       if (fetchGeneration === f5FetchGenerationRef.current) {
         setF5Loading(false)
+        f5PaginationLockRef.current = false
+        setF5PaginationPending(null)
       }
     }
   }, [f5ListKey])
@@ -322,10 +403,11 @@ function F4F5ReportingPageContent() {
       })
       if (!res.ok) throw new Error((await res.json()).error || 'Failed')
       setRejectSummaryId(null)
+      setAcceptSummaryId(null)
       setRejectComment('')
-      load()
-    } catch {
-      /* review submit failed */
+      await load()
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Review failed')
     } finally {
       setReviewSaving(false)
     }
@@ -379,6 +461,15 @@ function F4F5ReportingPageContent() {
     [f5Query.sortBy, f5Query.sortDir]
   )
 
+  const completionFilterOptions = useMemo(
+    () => [
+      { value: 'active', label: t('f4.filters.completion_active') },
+      { value: 'completed', label: t('f4.filters.completion_completed') },
+      { value: 'all', label: t('f4.filters.completion_all') },
+    ],
+    [t]
+  )
+
   const f4ReportStatusOptions = useMemo(
     () => [
       { value: 'not_uploaded', label: t('f4.report_status.not_uploaded') },
@@ -391,24 +482,47 @@ function F4F5ReportingPageContent() {
     [t]
   )
 
+  const f4DerivedLocation = useMemo(
+    () =>
+      deriveLocationChipOptions(
+        locationMetaFromFilterMeta(f4FilterMeta),
+        f4Query.filters.states,
+        f4Query.filters.localities
+      ),
+    [f4FilterMeta, f4Query.filters.states, f4Query.filters.localities]
+  )
+
+  const f4ChipOptionsByFieldId = useMemo(
+    () => ({
+      locality: f4DerivedLocation.locality,
+      base_room: f4DerivedLocation.base_room,
+    }),
+    [f4DerivedLocation]
+  )
+
   const f4FilterFields = useMemo(
     () =>
       getF4ReportingFilterFields({
-        baseRoomOptions: f4FilterMeta.baseRooms,
+        baseRoomOptions: f4DerivedLocation.base_room.map((o) => o.value),
+        localityOptions: f4DerivedLocation.locality,
         stateOptions: f4FilterMeta.states,
         grantOptions: f4FilterMeta.grants,
         reportStatusOptions: f4ReportStatusOptions,
+        completionOptions: completionFilterOptions,
         labels: {
           grantId: t('f4.filters.grant_id'),
           grantIdPlaceholder: t('f4.filters.grant_id_placeholder'),
           baseRoom: t('f4.filters.base_room'),
+          locality: t('f4.filters.locality'),
+          localitySelectStateFirst: t('f4.filters.locality_select_state_first'),
           state: t('f4.filters.state'),
           grant: t('f4.filters.grant'),
           reportStatus: t('f4.filters.report_status'),
+          completion: t('f4.filters.completion'),
           all: t('f4.filters.all'),
         },
       }),
-    [f4FilterMeta, f4ReportStatusOptions, t]
+    [f4FilterMeta.states, f4FilterMeta.grants, f4DerivedLocation, f4ReportStatusOptions, completionFilterOptions, t]
   )
 
   const f5ReportStatusOptions = useMemo(
@@ -427,43 +541,118 @@ function F4F5ReportingPageContent() {
     [t]
   )
 
+  const f5DerivedLocation = useMemo(
+    () =>
+      deriveLocationChipOptions(
+        locationMetaFromFilterMeta(f5FilterMeta),
+        f5Query.filters.states,
+        f5Query.filters.localities
+      ),
+    [f5FilterMeta, f5Query.filters.states, f5Query.filters.localities]
+  )
+
+  const f5ChipOptionsByFieldId = useMemo(
+    () => ({
+      locality: f5DerivedLocation.locality,
+      base_room: f5DerivedLocation.base_room,
+    }),
+    [f5DerivedLocation]
+  )
+
   const f5FilterFields = useMemo(
     () =>
       getF5ReportingFilterFields({
-        baseRoomOptions: f5FilterMeta.baseRooms,
+        baseRoomOptions: f5DerivedLocation.base_room.map((o) => o.value),
+        localityOptions: f5DerivedLocation.locality,
         stateOptions: f5FilterMeta.states,
         grantOptions: f5FilterMeta.grants,
         reportStatusOptions: f5ReportStatusOptions,
         endActivityStatusOptions: f5EndActivityStatusOptions,
+        completionOptions: completionFilterOptions.map((o) => ({
+          ...o,
+          label:
+            o.value === 'active'
+              ? t('f5.filters.completion_active')
+              : o.value === 'completed'
+                ? t('f5.filters.completion_completed')
+                : t('f5.filters.completion_all'),
+        })),
         labels: {
           grantId: t('f5.filters.grant_id'),
           grantIdPlaceholder: t('f5.filters.grant_id_placeholder'),
           baseRoom: t('f5.filters.base_room'),
+          locality: t('f5.filters.locality'),
+          localitySelectStateFirst: t('f5.filters.locality_select_state_first'),
           state: t('f5.filters.state'),
           grant: t('f5.filters.grant'),
           reportStatus: t('f5.filters.report_status'),
           endActivityStatus: t('f5.filters.end_activity_status'),
+          completion: t('f5.filters.completion'),
           all: t('f5.filters.all'),
         },
       }),
-    [f5FilterMeta, f5ReportStatusOptions, f5EndActivityStatusOptions, t]
+    [f5FilterMeta.states, f5FilterMeta.grants, f5DerivedLocation, f5ReportStatusOptions, f5EndActivityStatusOptions, completionFilterOptions, t]
   )
+
+  const openViewF1 = useCallback((projectId: string | null) => {
+    if (!projectId || projectId.startsWith('historical_')) return
+    setF1ViewerProjectId(projectId)
+    setF1ViewerOpen(true)
+  }, [])
 
   const onF4FiltersChange = useCallback(
     (filters: ActiveFilter[]) => {
-      setF4Filters(filters)
+      const sanitized = sanitizeLocationActiveFilters(filters, locationMetaFromFilterMeta(f4FilterMeta))
+      setF4Filters(sanitized)
       patchUrlParams({ f4p_page: '1' })
     },
-    [patchUrlParams]
+    [patchUrlParams, f4FilterMeta]
   )
 
   const onF5FiltersChange = useCallback(
     (filters: ActiveFilter[]) => {
-      setF5Filters(filters)
+      const sanitized = sanitizeLocationActiveFilters(filters, locationMetaFromFilterMeta(f5FilterMeta))
+      setF5Filters(sanitized)
       patchUrlParams({ f5p_page: '1' })
     },
-    [patchUrlParams]
+    [patchUrlParams, f5FilterMeta]
   )
+
+  useEffect(() => {
+    const locMeta = locationMetaFromFilterMeta(f4FilterMeta)
+    if (locMeta.localities.length === 0 && locMeta.rooms.length === 0) return
+    const { localities, baseRooms, changed } = sanitizeLocationListFilters(
+      {
+        states: f4Query.filters.states,
+        localities: f4Query.filters.localities,
+        baseRooms: f4Query.filters.baseRooms,
+      },
+      locMeta
+    )
+    if (!changed) return
+    patchUrlParams({
+      f4f_locality: localities.length ? localities.join('|') : null,
+      f4f_base_room: baseRooms.length ? baseRooms.join('|') : null,
+    })
+  }, [f4FilterMeta, f4Query.filters.states, f4Query.filters.localities, f4Query.filters.baseRooms, patchUrlParams])
+
+  useEffect(() => {
+    const locMeta = locationMetaFromFilterMeta(f5FilterMeta)
+    if (locMeta.localities.length === 0 && locMeta.rooms.length === 0) return
+    const { localities, baseRooms, changed } = sanitizeLocationListFilters(
+      {
+        states: f5Query.filters.states,
+        localities: f5Query.filters.localities,
+        baseRooms: f5Query.filters.baseRooms,
+      },
+      locMeta
+    )
+    if (!changed) return
+    patchUrlParams({
+      f5f_locality: localities.length ? localities.join('|') : null,
+      f5f_base_room: baseRooms.length ? baseRooms.join('|') : null,
+    })
+  }, [f5FilterMeta, f5Query.filters.states, f5Query.filters.localities, f5Query.filters.baseRooms, patchUrlParams])
 
   const toggleF4Sort = (key: F4SortKey) => {
     const dir: SortDirection =
@@ -505,15 +694,6 @@ function F4F5ReportingPageContent() {
   const f4Refreshing = loading && rows.length > 0
   const f5InitialLoading = f5Loading && f5Rows.length === 0
   const f5Refreshing = f5Loading && f5Rows.length > 0
-
-  const f4PageNumbers = useMemo(
-    () => buildReportingPageNumbers(f4Pagination.page, f4Pagination.totalPages),
-    [f4Pagination.page, f4Pagination.totalPages]
-  )
-  const f5PageNumbers = useMemo(
-    () => buildReportingPageNumbers(f5Pagination.page, f5Pagination.totalPages),
-    [f5Pagination.page, f5Pagination.totalPages]
-  )
 
   useF4F5ReportingPageExplainer(!permissionsLoading && canViewPage && !f4InitialLoading)
 
@@ -608,6 +788,7 @@ function F4F5ReportingPageContent() {
                     filters={f4Filters}
                     onFiltersChange={onF4FiltersChange}
                     urlParamPrefix="f4f_"
+                    chipOptionsByFieldId={f4ChipOptionsByFieldId}
                   />
                   {f4Refreshing && (
                     <ReportingToolbarRefreshIndicator
@@ -710,6 +891,18 @@ function F4F5ReportingPageContent() {
                             {hasReport && (r.review_status === 'accepted' || r.review_status === 'rejected') && (
                               <span className="text-[10px] leading-none text-muted-foreground capitalize shrink-0 mr-0.5">{r.review_status}</span>
                             )}
+                            {r.project_id && !r.project_id.startsWith('historical_') && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 w-8 p-0 shrink-0 text-muted-foreground hover:text-foreground"
+                                onClick={() => openViewF1(r.project_id)}
+                                aria-label={t('f4.view_f1')}
+                                title={t('f4.view_f1')}
+                              >
+                                <FileText className="size-4" />
+                              </Button>
+                            )}
                             {hasReport && canViewF4 && (
                               <Button
                                 variant="ghost"
@@ -760,15 +953,38 @@ function F4F5ReportingPageContent() {
                                   : <Check className="h-3.5 w-3.5" />}
                               </Button>
                             )}
-                            {SHOW_F4_REVIEW_BUTTONS && hasReport && canReviewF4 && !r.activities_raw_import_id && (
-                              <>
-                                {r.review_status !== 'accepted' && (
-                                  <Button variant="outline" size="sm" className="h-7 px-2 py-0 text-[11px] leading-none shrink-0 text-green-700 border-green-200 hover:bg-green-50" onClick={() => r.id != null && submitReview(r.id, 'accepted')} disabled={reviewSaving}>Accept</Button>
+                            {canReviewF4 && f4RowCanAccept(r) && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 w-8 p-0 shrink-0 text-green-700 hover:text-green-800 hover:bg-green-50"
+                                onClick={() => r.id != null && setAcceptSummaryId(r.id)}
+                                disabled={reviewSaving}
+                                aria-label={t('f4.accept')}
+                                title={t('f4.accept')}
+                              >
+                                {reviewSaving && acceptSummaryId === r.id ? (
+                                  <Loader2 className="size-4 animate-spin" />
+                                ) : (
+                                  <CheckCircle2 className="size-4" />
                                 )}
-                                {r.review_status !== 'rejected' && (
-                                  <Button variant="outline" size="sm" className="h-7 px-2 py-0 text-[11px] leading-none shrink-0 text-destructive border-destructive/30 hover:bg-destructive/5" onClick={() => r.id != null && setRejectSummaryId(r.id)} disabled={reviewSaving}>Reject</Button>
-                                )}
-                              </>
+                              </Button>
+                            )}
+                            {hasReport &&
+                              canReviewF4 &&
+                              !r.activities_raw_import_id &&
+                              r.review_status !== 'rejected' && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 w-8 p-0 shrink-0 text-destructive hover:bg-destructive/10"
+                                onClick={() => r.id != null && setRejectSummaryId(r.id)}
+                                disabled={reviewSaving}
+                                aria-label={t('f4.reject')}
+                                title={t('f4.reject')}
+                              >
+                                <XCircle className="size-4" />
+                              </Button>
                             )}
                           </div>
                         </TableCell>
@@ -777,74 +993,27 @@ function F4F5ReportingPageContent() {
                   </TableBody>
                 </Table>
             </div>
-            {f4Pagination.total > 0 && (rows.length > 0 || !loading) && (
-              <div className={REPORTING_TABLE_FOOTER}>
-                <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-                  <span className="tabular-nums">
-                    Showing {(f4Pagination.page - 1) * f4Pagination.pageSize + 1}–{Math.min(f4Pagination.page * f4Pagination.pageSize, f4Pagination.total)} of {f4Pagination.total}
-                  </span>
-                  <div className="flex items-center gap-2">
-                    <span>Rows</span>
-                    <Select
-                      value={String(f4Pagination.pageSize)}
-                      onValueChange={(v) => {
-                        patchUrlParams({ f4p_pageSize: v, f4p_page: '1' })
-                      }}
-                    >
-                      <SelectTrigger className="h-8 w-[72px] border-input bg-background text-xs">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {PAGE_SIZE_OPTIONS.map((n) => (
-                          <SelectItem key={n} value={String(n)}>{n}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-                <div className="flex items-center gap-1">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="h-8 px-2 text-xs"
-                    onClick={() => patchUrlParams({ f4p_page: String(Math.max(1, f4Pagination.page - 1)) })}
-                    disabled={!f4Pagination.hasPreviousPage}
-                  >
-                    <ChevronLeft className="size-3.5" />
-                    {t('common:previous', { defaultValue: 'Previous' })}
-                  </Button>
-                  {f4PageNumbers.map((page, idx) =>
-                    page === 'ellipsis' ? (
-                      <span key={`f4-e-${idx}`} className="px-1 text-xs text-muted-foreground">…</span>
-                    ) : (
-                      <Button
-                        key={page}
-                        type="button"
-                        variant={page === f4Pagination.page ? 'default' : 'outline'}
-                        size="sm"
-                        className="h-8 w-8 p-0 text-xs"
-                        onClick={() => patchUrlParams({ f4p_page: String(page) })}
-                        disabled={loading && rows.length === 0}
-                      >
-                        {page}
-                      </Button>
-                    )
-                  )}
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="h-8 px-2 text-xs"
-                    onClick={() => patchUrlParams({ f4p_page: String(f4Pagination.page + 1) })}
-                    disabled={!f4Pagination.hasNextPage}
-                  >
-                    {t('common:next', { defaultValue: 'Next' })}
-                    <ChevronRight className="size-3.5" />
-                  </Button>
-                </div>
-              </div>
-            )}
+            <ReportingListPagination
+              pagination={f4Pagination}
+              pending={f4PaginationPending}
+              listRefreshing={f4Refreshing}
+              hasRows={rows.length > 0}
+              listLoading={loading}
+              previousLabel={t('common:previous', { defaultValue: 'Previous' })}
+              nextLabel={t('common:next', { defaultValue: 'Next' })}
+              onGoToPage={(page) => beginF4Pagination({ page }, { f4p_page: String(page) })}
+              onPrevious={() =>
+                beginF4Pagination('prev', {
+                  f4p_page: String(Math.max(1, f4Pagination.page - 1)),
+                })
+              }
+              onNext={() =>
+                beginF4Pagination('next', { f4p_page: String(f4Pagination.page + 1) })
+              }
+              onPageSizeChange={(v) =>
+                beginF4Pagination('pageSize', { f4p_pageSize: v, f4p_page: '1' })
+              }
+            />
           </div>
 
           <UploadF4Modal
@@ -860,13 +1029,30 @@ function F4F5ReportingPageContent() {
 
           <Dialog open={rejectSummaryId != null} onOpenChange={(open) => { if (!open) { setRejectSummaryId(null); setRejectComment('') } }}>
             <DialogContent>
-              <DialogHeader><DialogTitle>Reject F4 report</DialogTitle></DialogHeader>
-              <p className="text-sm text-muted-foreground">Add a comment (optional). The report will be returned to ERR/LoHub for correction.</p>
-              <Input placeholder="Comment…" value={rejectComment} onChange={(e) => setRejectComment(e.target.value)} className="mt-2" />
+              <DialogHeader><DialogTitle>{t('f4.reject_dialog_title')}</DialogTitle></DialogHeader>
+              <p className="text-sm text-muted-foreground">{t('f4.reject_dialog_body')}</p>
+              <Input placeholder={t('f4.reject_dialog_comment_placeholder')} value={rejectComment} onChange={(e) => setRejectComment(e.target.value)} className="mt-2" />
               <DialogFooter>
-                <Button variant="outline" onClick={() => { setRejectSummaryId(null); setRejectComment('') }}>Cancel</Button>
+                <Button variant="outline" onClick={() => { setRejectSummaryId(null); setRejectComment('') }}>{t('common:cancel', { defaultValue: 'Cancel' })}</Button>
                 <Button variant="destructive" disabled={reviewSaving} onClick={() => rejectSummaryId != null && submitReview(rejectSummaryId, 'rejected', rejectComment)}>
-                  {reviewSaving ? 'Saving…' : 'Reject'}
+                  {reviewSaving ? t('f4.review_saving') : t('f4.reject')}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
+          <Dialog open={acceptSummaryId != null} onOpenChange={(open) => { if (!open) setAcceptSummaryId(null) }}>
+            <DialogContent>
+              <DialogHeader><DialogTitle>{t('f4.accept_dialog_title')}</DialogTitle></DialogHeader>
+              <p className="text-sm text-muted-foreground">{t('f4.accept_dialog_body')}</p>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setAcceptSummaryId(null)}>{t('common:cancel', { defaultValue: 'Cancel' })}</Button>
+                <Button
+                  disabled={reviewSaving}
+                  className="bg-green-700 hover:bg-green-800"
+                  onClick={() => acceptSummaryId != null && submitReview(acceptSummaryId, 'accepted')}
+                >
+                  {reviewSaving ? t('f4.review_saving') : t('f4.accept')}
                 </Button>
               </DialogFooter>
             </DialogContent>
@@ -893,6 +1079,7 @@ function F4F5ReportingPageContent() {
                     filters={f5Filters}
                     onFiltersChange={onF5FiltersChange}
                     urlParamPrefix="f5f_"
+                    chipOptionsByFieldId={f5ChipOptionsByFieldId}
                   />
                   {f5Refreshing && (
                     <ReportingToolbarRefreshIndicator
@@ -984,6 +1171,18 @@ function F4F5ReportingPageContent() {
                         <TableCell className="text-xs whitespace-nowrap">
                           <div className="flex flex-nowrap items-center justify-end gap-1">
                             <ReportingStatusChip status={r.f5_status} />
+                            {r.project_id && !r.project_id.startsWith('historical_') && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 w-8 p-0 shrink-0 text-muted-foreground hover:text-foreground"
+                                onClick={() => openViewF1(r.project_id)}
+                                aria-label={t('f5.view_f1')}
+                                title={t('f5.view_f1')}
+                              >
+                                <FileText className="size-4" />
+                              </Button>
+                            )}
                             {hasReport && canViewF5 && (
                               <Button
                                 variant="ghost"
@@ -1040,74 +1239,27 @@ function F4F5ReportingPageContent() {
                   </TableBody>
                 </Table>
             </div>
-            {f5Pagination.total > 0 && (f5Rows.length > 0 || !f5Loading) && (
-              <div className={REPORTING_TABLE_FOOTER}>
-                <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-                  <span className="tabular-nums">
-                    Showing {(f5Pagination.page - 1) * f5Pagination.pageSize + 1}–{Math.min(f5Pagination.page * f5Pagination.pageSize, f5Pagination.total)} of {f5Pagination.total}
-                  </span>
-                  <div className="flex items-center gap-2">
-                    <span>Rows</span>
-                    <Select
-                      value={String(f5Pagination.pageSize)}
-                      onValueChange={(v) => {
-                        patchUrlParams({ f5p_pageSize: v, f5p_page: '1' })
-                      }}
-                    >
-                      <SelectTrigger className="h-8 w-[72px] border-input bg-background text-xs">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {PAGE_SIZE_OPTIONS.map((n) => (
-                          <SelectItem key={n} value={String(n)}>{n}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-                <div className="flex items-center gap-1">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="h-8 px-2 text-xs"
-                    onClick={() => patchUrlParams({ f5p_page: String(Math.max(1, f5Pagination.page - 1)) })}
-                    disabled={!f5Pagination.hasPreviousPage}
-                  >
-                    <ChevronLeft className="size-3.5" />
-                    {t('common:previous', { defaultValue: 'Previous' })}
-                  </Button>
-                  {f5PageNumbers.map((page, idx) =>
-                    page === 'ellipsis' ? (
-                      <span key={`f5-e-${idx}`} className="px-1 text-xs text-muted-foreground">…</span>
-                    ) : (
-                      <Button
-                        key={page}
-                        type="button"
-                        variant={page === f5Pagination.page ? 'default' : 'outline'}
-                        size="sm"
-                        className="h-8 w-8 p-0 text-xs"
-                        onClick={() => patchUrlParams({ f5p_page: String(page) })}
-                        disabled={f5Loading && f5Rows.length === 0}
-                      >
-                        {page}
-                      </Button>
-                    )
-                  )}
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="h-8 px-2 text-xs"
-                    onClick={() => patchUrlParams({ f5p_page: String(f5Pagination.page + 1) })}
-                    disabled={!f5Pagination.hasNextPage}
-                  >
-                    {t('common:next', { defaultValue: 'Next' })}
-                    <ChevronRight className="size-3.5" />
-                  </Button>
-                </div>
-              </div>
-            )}
+            <ReportingListPagination
+              pagination={f5Pagination}
+              pending={f5PaginationPending}
+              listRefreshing={f5Refreshing}
+              hasRows={f5Rows.length > 0}
+              listLoading={f5Loading}
+              previousLabel={t('common:previous', { defaultValue: 'Previous' })}
+              nextLabel={t('common:next', { defaultValue: 'Next' })}
+              onGoToPage={(page) => beginF5Pagination({ page }, { f5p_page: String(page) })}
+              onPrevious={() =>
+                beginF5Pagination('prev', {
+                  f5p_page: String(Math.max(1, f5Pagination.page - 1)),
+                })
+              }
+              onNext={() =>
+                beginF5Pagination('next', { f5p_page: String(f5Pagination.page + 1) })
+              }
+              onPageSizeChange={(v) =>
+                beginF5Pagination('pageSize', { f5p_pageSize: v, f5p_page: '1' })
+              }
+            />
           </div>
 
           <UploadF5Modal
@@ -1170,6 +1322,15 @@ function F4F5ReportingPageContent() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <F1ProjectViewerSheet
+        projectId={f1ViewerProjectId}
+        open={f1ViewerOpen}
+        onOpenChange={(open) => {
+          setF1ViewerOpen(open)
+          if (!open) setF1ViewerProjectId(null)
+        }}
+      />
     </div>
   )
 }

@@ -12,6 +12,7 @@ import {
   type F5SortKey,
   type SortDirection,
 } from './listQueryParamsCore'
+import { parseCompletionMode } from './listGates'
 
 const F4_SORT_KEYS = new Set<string>([
   'base_room_name',
@@ -42,34 +43,50 @@ const F5_SORT_KEYS = new Set<string>([
 
 const F4_PARSE_FIELDS = getF4ReportingFilterFields({
   baseRoomOptions: [],
+  localityOptions: [],
   stateOptions: [],
   grantOptions: [] as FilterSelectOption[],
   reportStatusOptions: [],
+  completionOptions: [],
   labels: {
     grantId: '',
     grantIdPlaceholder: '',
     baseRoom: '',
+    locality: '',
+    localitySelectStateFirst: '',
     state: '',
     grant: '',
     reportStatus: '',
+    completion: '',
+    completionActive: '',
+    completionCompleted: '',
+    completionAll: '',
     all: '',
   },
 })
 
 const F5_PARSE_FIELDS = getF5ReportingFilterFields({
   baseRoomOptions: [],
+  localityOptions: [],
   stateOptions: [],
   grantOptions: [] as FilterSelectOption[],
   reportStatusOptions: [],
   endActivityStatusOptions: [],
+  completionOptions: [],
   labels: {
     grantId: '',
     grantIdPlaceholder: '',
     baseRoom: '',
+    locality: '',
+    localitySelectStateFirst: '',
     state: '',
     grant: '',
     reportStatus: '',
     endActivityStatus: '',
+    completion: '',
+    completionActive: '',
+    completionCompleted: '',
+    completionAll: '',
     all: '',
   },
 })
@@ -98,10 +115,16 @@ export function parseF4ListQuery(searchParams: URLSearchParams): F4ListQuery {
     pageSize,
     sortBy,
     sortDir,
+    completion: parseCompletionMode(
+      fromUrl.completion != null && String(fromUrl.completion).trim() !== ''
+        ? String(fromUrl.completion)
+        : searchParams.get('f4f_completion')
+    ),
     filters: {
       grantIdText: String(fromUrl.grant_id ?? '').trim(),
       baseRooms: parseMulti(fromUrl.base_room),
       states: parseMulti(fromUrl.state),
+      localities: parseMulti(fromUrl.locality),
       grants: parseMulti(fromUrl.grant),
       reportStatuses: parseMulti(fromUrl.report_status),
     },
@@ -124,10 +147,16 @@ export function parseF5ListQuery(searchParams: URLSearchParams): F5ListQuery {
     pageSize,
     sortBy,
     sortDir,
+    completion: parseCompletionMode(
+      fromUrl.completion != null && String(fromUrl.completion).trim() !== ''
+        ? String(fromUrl.completion)
+        : searchParams.get('f5f_completion')
+    ),
     filters: {
       grantIdText: String(fromUrl.grant_id ?? '').trim(),
       baseRooms: parseMulti(fromUrl.base_room),
       states: parseMulti(fromUrl.state),
+      localities: parseMulti(fromUrl.locality),
       grants: parseMulti(fromUrl.grant),
       reportStatuses: parseMulti(fromUrl.report_status),
       endActivityStatuses: parseMulti(fromUrl.end_activity_status),

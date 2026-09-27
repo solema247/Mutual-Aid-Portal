@@ -1,5 +1,6 @@
 import type { F4ListFilters, F5ListFilters, F4SortKey, F5SortKey, SortDirection } from './listQueryParams'
 import { grantSearchTexts } from './listCommon'
+import { buildLocationFilterMeta } from './locationFilterMeta'
 
 function compareNullableValues(a: unknown, b: unknown): number {
   if (a == null && b == null) return 0
@@ -20,6 +21,7 @@ export function applyF4ListFilters<T extends {
   grant_id?: string | null
   base_room_name?: string | null
   state?: string | null
+  locality?: string | null
   grant_call_id?: string | null
   report_status?: string | null
 }>(rows: T[], filters: F4ListFilters): T[] {
@@ -41,6 +43,13 @@ export function applyF4ListFilters<T extends {
     const set = new Set(filters.states.map((s) => s.toLowerCase()))
     result = result.filter((r) => {
       const v = (r.state ?? '').trim().toLowerCase()
+      return v && set.has(v)
+    })
+  }
+  if (filters.localities.length) {
+    const set = new Set(filters.localities.map((s) => s.toLowerCase()))
+    result = result.filter((r) => {
+      const v = (r.locality ?? '').trim().toLowerCase()
       return v && set.has(v)
     })
   }
@@ -84,6 +93,7 @@ export function applyF5ListFilters<T extends {
   grant_id?: string | null
   base_room_name?: string | null
   state?: string | null
+  locality?: string | null
   grant_call_id?: string | null
   report_status?: string | null
   end_activity_status?: string | null
@@ -106,6 +116,13 @@ export function applyF5ListFilters<T extends {
     const set = new Set(filters.states.map((s) => s.toLowerCase()))
     result = result.filter((r) => {
       const v = (r.state ?? '').trim().toLowerCase()
+      return v && set.has(v)
+    })
+  }
+  if (filters.localities.length) {
+    const set = new Set(filters.localities.map((s) => s.toLowerCase()))
+    result = result.filter((r) => {
+      const v = (r.locality ?? '').trim().toLowerCase()
       return v && set.has(v)
     })
   }
@@ -249,6 +266,7 @@ export function paginationMeta(total: number, page: number, pageSize: number) {
 export function buildFilterMeta(rows: {
   base_room_name?: string | null
   state?: string | null
+  locality?: string | null
   grant_call_id?: string | null
 }[]) {
   const baseRooms = new Set<string>()
@@ -260,11 +278,14 @@ export function buildFilterMeta(rows: {
     const g = r.grant_call_id != null ? String(r.grant_call_id).trim() : ''
     if (g) grants.add(g)
   }
+  const location = buildLocationFilterMeta(rows)
   return {
     baseRooms: Array.from(baseRooms).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' })),
     states: Array.from(states).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' })),
     grants: Array.from(grants)
       .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }))
       .map((value) => ({ value, label: value })),
+    localities: location.localities,
+    rooms: location.rooms,
   }
 }

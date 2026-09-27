@@ -36,7 +36,6 @@ import {
   enrichF4ListPlanFinancialFields,
   enrichPortalRowGrantFields,
   fetchPlanJsonForProjects,
-  fetchProjectIdsInStateScope,
   grantAmountUsd,
   grantCallIdForProject,
   grantNameForProject,
@@ -49,6 +48,12 @@ import {
 import { loadF4AttachmentCounts, loadMouPaymentMaps } from './listEnrichment'
 import { fetchScopedProjectsCached } from './scopedProjectsCache'
 import { computeF4ListSummary, EMPTY_REPORTING_LIST_SUMMARY } from './listSummary'
+import {
+  filterGrantAssignedProjects,
+  filterProjectsByF4Completion,
+  hasValidGrantAssignment,
+  shouldIncludeHistoricalF4Rows,
+} from './listGates'
 
 const F4_SUMMARY_SELECT = `
   id,
@@ -68,57 +73,29 @@ export type F4ListRow = Record<string, unknown>
 
 async function fetchF4PortalSummaries(
   supabase: ReturnType<typeof getSupabaseRouteClient>,
-  scope: Awaited<ReturnType<typeof resolveF4F5ListScope>>,
   scopedProjectIds: string[]
 ): Promise<Record<string, unknown>[]> {
-  if (scope.grantAccess.mode === 'partner' || scope.emergencyRoomId) {
-    if (scopedProjectIds.length === 0) return []
-    const out: Record<string, unknown>[] = []
-    for (const batch of chunkIds(scopedProjectIds)) {
-      const { data, error } = await supabase
-        .from('err_summary')
-        .select(F4_SUMMARY_SELECT)
-        .is('activities_raw_import_id', null)
-        .in('project_id', batch)
-        .order('created_at', { ascending: false })
-      if (error) throw error
-      out.push(...((data || []) as unknown as Record<string, unknown>[]))
-    }
-    return out
+  if (scopedProjectIds.length === 0) return []
+  const out: Record<string, unknown>[] = []
+  for (const batch of chunkIds(scopedProjectIds)) {
+    const { data, error } = await supabase
+      .from('err_summary')
+      .select(F4_SUMMARY_SELECT)
+      .is('activities_raw_import_id', null)
+      .in('project_id', batch)
+      .order('created_at', { ascending: false })
+    if (error) throw error
+    out.push(...((data || []) as unknown as Record<string, unknown>[]))
   }
-
-  if (scope.useStateScope && scope.allowedStateNames !== null) {
-    if (scope.allowedStateNames.length === 0) return []
-    const projectIds = await fetchProjectIdsInStateScope(supabase, scope.allowedStateNames)
-    if (projectIds.length === 0) return []
-    const out: Record<string, unknown>[] = []
-    for (const batch of chunkIds(projectIds)) {
-      const { data, error } = await supabase
-        .from('err_summary')
-        .select(F4_SUMMARY_SELECT)
-        .is('activities_raw_import_id', null)
-        .in('project_id', batch)
-        .order('created_at', { ascending: false })
-      if (error) throw error
-      out.push(...((data || []) as unknown as Record<string, unknown>[]))
-    }
-    return out
-  }
-
-  const { data, error } = await supabase
-    .from('err_summary')
-    .select(F4_SUMMARY_SELECT)
-    .is('activities_raw_import_id', null)
-    .order('created_at', { ascending: false })
-  if (error) throw error
-  return (data || []) as unknown as Record<string, unknown>[]
+  return out
 }
 
 async function ensureProjectsForSummaries(
   supabase: ReturnType<typeof getSupabaseRouteClient>,
   projectById: Map<string, Record<string, unknown>>,
   summaries: Record<string, unknown>[],
-  scope: Awaited<ReturnType<typeof resolveF4F5ListScope>>
+  scope: Awaited<ReturnType<typeof resolveF4F5ListScope>>,
+  validGrantGridIds: Set<string>
 ) {
   const missing: string[] = []
   for (const s of summaries) {
@@ -139,6 +116,7 @@ async function ensureProjectsForSummaries(
       const p = row as Record<string, unknown>
       const id = String(p.id)
       if (!projectInScope(p, scope)) continue
+      if (!hasValidGrantAssignment(p, validGrantGridIds)) continue
       projectById.set(id, p)
     }
   }
@@ -180,6 +158,7 @@ function projectRowFields(
     grant_call_id: grantCallIdForProject(project, gridGrantIdByUuid),
     grant_name: grantNameForProject(project, gridById, gridByGrantKey),
     state: project.state ?? null,
+    locality: project.locality ?? null,
     donor: donorLabel(project),
     payment_date: paymentDate,
     amount_sdg: amountSdg,
@@ -198,7 +177,13 @@ export async function handleF4ListGet(request: Request) {
     data: [] as F4ListRow[],
     pagination: paginationMeta(0, query.page, query.pageSize),
     sort: { sortBy: query.sortBy, sortDir: query.sortDir },
-    filterMeta: { baseRooms: [] as string[], states: [] as string[], grants: [] as { value: string; label: string }[] },
+    filterMeta: {
+      baseRooms: [] as string[],
+      states: [] as string[],
+      grants: [] as { value: string; label: string }[],
+      localities: [] as { value: string; label: string; state: string }[],
+      rooms: [] as { value: string; label: string; state: string; locality: string }[],
+    },
     summary: EMPTY_REPORTING_LIST_SUMMARY,
   }
 
@@ -209,20 +194,29 @@ export async function handleF4ListGet(request: Request) {
   try {
     const supabase = (await import('@/lib/supabaseRouteClient')).getSupabaseRouteClient()
 
-    const projects = await fetchScopedProjectsCached(supabase, scope, perm.user.id, 'f4')
+    const scopedRaw = await fetchScopedProjectsCached(supabase, scope, perm.user.id, 'f4')
+    const { projects: grantAssigned, validGrantGridIds } = await filterGrantAssignedProjects(
+      supabase,
+      scopedRaw as Record<string, unknown>[]
+    )
+    const gatedProjects = filterProjectsByF4Completion(grantAssigned, query.completion)
 
     const projectById = new Map<string, Record<string, unknown>>()
-    for (const p of projects) {
+    for (const p of gatedProjects) {
       projectById.set(String((p as { id: string }).id), p as Record<string, unknown>)
     }
 
     const scopedProjectIds = Array.from(projectById.keys())
-    const summaries = await fetchF4PortalSummaries(supabase, scope, scopedProjectIds)
-    await ensureProjectsForSummaries(supabase, projectById, summaries, scope)
+    const summaries = await fetchF4PortalSummaries(supabase, scopedProjectIds)
+    await ensureProjectsForSummaries(supabase, projectById, summaries, scope, validGrantGridIds)
 
     let filteredHistorical: Record<string, unknown>[] = []
     const importById: Record<string, Record<string, unknown>> = {}
-    if (scope.grantAccess.mode === 'all' && !scope.emergencyRoomId) {
+    if (
+      shouldIncludeHistoricalF4Rows(query.completion) &&
+      scope.grantAccess.mode === 'all' &&
+      !scope.emergencyRoomId
+    ) {
       const { data: historicalSummaries } = await supabase
         .from('err_summary')
         .select(`
@@ -421,6 +415,7 @@ export async function handleF4ListGet(request: Request) {
         grant_call_id: null,
         grant_name: serial,
         state: hist['State'] || null,
+        locality: null,
         donor: hist['Project Donor'] || null,
         payment_date: null,
         amount_sdg: null,

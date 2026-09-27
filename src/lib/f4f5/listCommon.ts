@@ -16,6 +16,7 @@ export const SLIM_PROJECT_SELECT = `
   id,
   err_id,
   state,
+  locality,
   grant_id,
   grant_serial_id,
   donor_id,

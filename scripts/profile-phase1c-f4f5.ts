@@ -15,7 +15,6 @@ import {
   enrichF4ListPlanFinancialFields,
   enrichF5ListPlanFinancialFields,
   fetchPlanJsonForProjects,
-  fetchProjectIdsInStateScope,
   fetchScopedProjects,
   isEligibleWithoutF4Report,
   isEligibleWithoutF5Report,
@@ -23,6 +22,12 @@ import {
   enrichPortalRowGrantFields,
   portalProjectsForListRows,
 } from '../src/lib/f4f5/listCommon'
+import {
+  filterGrantAssignedProjects,
+  filterProjectsByF4Completion,
+  filterProjectsByF5Completion,
+  shouldIncludeHistoricalF4Rows,
+} from '../src/lib/f4f5/listGates'
 import { loadF4AttachmentCounts, loadF5ReachForReports, loadMouPaymentMaps } from '../src/lib/f4f5/listEnrichment'
 import {
   buildPageProjectById,
@@ -182,71 +187,33 @@ const F4_SUMMARY_SELECT = `
 `
 const F5_REPORT_SELECT = `id, project_id, report_date, created_at`
 
-async function fetchF4Summaries(supabase: SupabaseClient, scope: F4F5ListScope, scopedProjectIds: string[]) {
-  if (scope.grantAccess.mode === 'partner' || scope.emergencyRoomId) {
-    const out: Record<string, unknown>[] = []
-    for (const batch of chunkIds(scopedProjectIds)) {
-      const { data, error } = await supabase
-        .from('err_summary')
-        .select(F4_SUMMARY_SELECT)
-        .is('activities_raw_import_id', null)
-        .in('project_id', batch)
-      if (error) throw error
-      out.push(...((data || []) as Record<string, unknown>[]))
-    }
-    return out
+async function fetchF4Summaries(supabase: SupabaseClient, _scope: F4F5ListScope, scopedProjectIds: string[]) {
+  if (scopedProjectIds.length === 0) return []
+  const out: Record<string, unknown>[] = []
+  for (const batch of chunkIds(scopedProjectIds)) {
+    const { data, error } = await supabase
+      .from('err_summary')
+      .select(F4_SUMMARY_SELECT)
+      .is('activities_raw_import_id', null)
+      .in('project_id', batch)
+    if (error) throw error
+    out.push(...((data || []) as Record<string, unknown>[]))
   }
-  if (scope.useStateScope && scope.allowedStateNames !== null) {
-    const projectIds = await fetchProjectIdsInStateScope(supabase as never, scope.allowedStateNames)
-    const out: Record<string, unknown>[] = []
-    for (const batch of chunkIds(projectIds)) {
-      const { data, error } = await supabase
-        .from('err_summary')
-        .select(F4_SUMMARY_SELECT)
-        .is('activities_raw_import_id', null)
-        .in('project_id', batch)
-      if (error) throw error
-      out.push(...((data || []) as Record<string, unknown>[]))
-    }
-    return out
-  }
-  const { data, error } = await supabase
-    .from('err_summary')
-    .select(F4_SUMMARY_SELECT)
-    .is('activities_raw_import_id', null)
-  if (error) throw error
-  return (data || []) as Record<string, unknown>[]
+  return out
 }
 
-async function fetchF5Reports(supabase: SupabaseClient, scope: F4F5ListScope, scopedProjectIds: string[]) {
-  if (scope.grantAccess.mode === 'partner' || scope.emergencyRoomId) {
-    const out: Record<string, unknown>[] = []
-    for (const batch of chunkIds(scopedProjectIds)) {
-      const { data, error } = await supabase
-        .from('err_program_report')
-        .select(F5_REPORT_SELECT)
-        .in('project_id', batch)
-      if (error) throw error
-      out.push(...((data || []) as Record<string, unknown>[]))
-    }
-    return out
+async function fetchF5Reports(supabase: SupabaseClient, _scope: F4F5ListScope, scopedProjectIds: string[]) {
+  if (scopedProjectIds.length === 0) return []
+  const out: Record<string, unknown>[] = []
+  for (const batch of chunkIds(scopedProjectIds)) {
+    const { data, error } = await supabase
+      .from('err_program_report')
+      .select(F5_REPORT_SELECT)
+      .in('project_id', batch)
+    if (error) throw error
+    out.push(...((data || []) as Record<string, unknown>[]))
   }
-  if (scope.useStateScope && scope.allowedStateNames !== null) {
-    const projectIds = await fetchProjectIdsInStateScope(supabase as never, scope.allowedStateNames)
-    const out: Record<string, unknown>[] = []
-    for (const batch of chunkIds(projectIds)) {
-      const { data, error } = await supabase
-        .from('err_program_report')
-        .select(F5_REPORT_SELECT)
-        .in('project_id', batch)
-      if (error) throw error
-      out.push(...((data || []) as Record<string, unknown>[]))
-    }
-    return out
-  }
-  const { data, error } = await supabase.from('err_program_report').select(F5_REPORT_SELECT)
-  if (error) throw error
-  return (data || []) as Record<string, unknown>[]
+  return out
 }
 
 function defaultF5Query(): F5ListQuery {
@@ -255,10 +222,12 @@ function defaultF5Query(): F5ListQuery {
     pageSize: 20,
     sortBy: 'report_date',
     sortDir: 'desc',
+    completion: 'active',
     filters: {
       grantIdText: '',
       baseRooms: [],
       states: [],
+      localities: [],
       grants: [],
       reportStatuses: [],
       endActivityStatuses: [],
@@ -295,7 +264,15 @@ function defaultF4Query(): F4ListQuery {
     pageSize: 20,
     sortBy: 'report_date',
     sortDir: 'desc',
-    filters: { grantIdText: '', baseRooms: [], states: [], grants: [], reportStatuses: [] },
+    completion: 'active',
+    filters: {
+      grantIdText: '',
+      baseRooms: [],
+      states: [],
+      localities: [],
+      grants: [],
+      reportStatuses: [],
+    },
   }
 }
 
@@ -312,14 +289,23 @@ async function profileF4(
   const phases: Record<string, number | string> = {}
   const tTotal = Date.now()
   const t0 = Date.now()
-  const projects = await fetchScopedProjects(supabase as never, {
+  const scopedProjects = await fetchScopedProjects(supabase as never, {
     grantGridIds: scope.grantGridIds,
     allowedStateNames: scope.allowedStateNames,
     useStateScope: scope.useStateScope,
     emergencyRoomId: scope.emergencyRoomId,
   })
   phases.projectFetch = ms('', t0).ms
-  phases.scopedProjects = projects.length
+  phases.scopedProjects = scopedProjects.length
+
+  const { projects: grantAssigned } = await filterGrantAssignedProjects(
+    supabase as never,
+    scopedProjects as Record<string, unknown>[]
+  )
+  phases.postGrantProjects = grantAssigned.length
+  const projects = filterProjectsByF4Completion(grantAssigned, query.completion)
+  phases.postCompletionProjects = projects.length
+  phases.completionMode = query.completion
 
   const projectById = new Map(projects.map((p) => [String((p as { id: string }).id), p as Record<string, unknown>]))
   const scopedProjectIds = [...projectById.keys()]
@@ -330,7 +316,11 @@ async function profileF4(
 
   t = Date.now()
   let historicalCount = 0
-  if (scope.grantAccess.mode === 'all' && !scope.emergencyRoomId) {
+  if (
+    shouldIncludeHistoricalF4Rows(query.completion) &&
+    scope.grantAccess.mode === 'all' &&
+    !scope.emergencyRoomId
+  ) {
     const { data: historicalSummaries } = await supabase
       .from('err_summary')
       .select(`
@@ -468,14 +458,23 @@ async function profileF5(
   const tTotal = Date.now()
 
   let t = Date.now()
-  const projects = await fetchScopedProjects(supabase as never, {
+  const scopedProjects = await fetchScopedProjects(supabase as never, {
     grantGridIds: scope.grantGridIds,
     allowedStateNames: scope.allowedStateNames,
     useStateScope: scope.useStateScope,
     emergencyRoomId: scope.emergencyRoomId,
   })
   phases.projectFetch = Date.now() - t
-  phases.scopedProjects = projects.length
+  phases.scopedProjects = scopedProjects.length
+
+  const { projects: grantAssigned } = await filterGrantAssignedProjects(
+    supabase as never,
+    scopedProjects as Record<string, unknown>[]
+  )
+  phases.postGrantProjects = grantAssigned.length
+  const projects = filterProjectsByF5Completion(grantAssigned, query.completion)
+  phases.postCompletionProjects = projects.length
+  phases.completionMode = query.completion
 
   const projectById = new Map(projects.map((p) => [String((p as { id: string }).id), p as Record<string, unknown>]))
   const scopedProjectIds = [...projectById.keys()]
@@ -662,6 +661,7 @@ async function main() {
     f4AdminVariants.push(
       await profileF4(supabase, admin, 'A', { ...q, sortBy: 'exchange_rate', sortDir: 'desc' }, 'sort_exchange_rate')
     )
+    f4AdminVariants.push(await profileF4(supabase, admin, 'A', { ...q, completion: 'all' }, 'completion_all'))
   }
 
   const f5Default = []
@@ -679,6 +679,7 @@ async function main() {
     f5Variants.push(await profileF5(supabase, admin, 'A', { ...q, sortBy: 'amount_sdg', sortDir: 'desc' }, 'sort_amount_sdg'))
     f5Variants.push(await profileF5(supabase, admin, 'A', { ...q, sortBy: 'payment_date', sortDir: 'desc' }, 'sort_payment_date'))
     f5Variants.push(await profileF5(supabase, admin, 'A', { ...q, sortBy: 'exchange_rate', sortDir: 'desc' }, 'sort_exchange_rate'))
+    f5Variants.push(await profileF5(supabase, admin, 'A', { ...q, completion: 'all' }, 'completion_all'))
   }
 
   console.log('\n--- F4 default ---')
