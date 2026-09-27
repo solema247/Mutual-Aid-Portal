@@ -118,6 +118,13 @@ function filteredMetadata(meta: Record<string, unknown> | null): Record<string, 
   return Object.fromEntries(entries)
 }
 
+function resolveTargetDisplayId(item: AuditEventItem): string | null {
+  if (item.target?.id) return item.target.id
+  const projectId = item.metadata?.project_id
+  if (projectId != null) return String(projectId)
+  return null
+}
+
 type Props = {
   item: AuditEventItem
   actionLabel: string
@@ -151,6 +158,7 @@ export function AuditEventDetailsSheet({
     item.endpoint
   const friendlyEndpoint = getAuditEndpointFriendlyLabel(item.endpoint, t)
   const metaFiltered = useMemo(() => filteredMetadata(item.metadata), [item.metadata])
+  const targetDisplayId = resolveTargetDisplayId(item)
 
   const copyPayload = async () => {
     const payload = {
@@ -375,15 +383,12 @@ export function AuditEventDetailsSheet({
                     />
                   </div>
                 </div>
-                {(item.target?.id || item.metadata?.project_id) && (
+                {targetDisplayId ? (
                   <code className="shrink-0 rounded border border-slate-100 bg-slate-50 px-2 py-1 font-mono text-[10px] text-muted-foreground dark:border-border">
-                    id:{' '}
-                    {String(item.target?.id || item.metadata?.project_id).slice(0, 18)}
-                    {String(item.target?.id || item.metadata?.project_id).length > 18
-                      ? '…'
-                      : ''}
+                    id: {targetDisplayId.slice(0, 18)}
+                    {targetDisplayId.length > 18 ? '…' : ''}
                   </code>
-                )}
+                ) : null}
               </div>
             </div>
 
