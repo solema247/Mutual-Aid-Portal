@@ -58,9 +58,6 @@ const F4_PARSE_FIELDS = getF4ReportingFilterFields({
     grant: '',
     reportStatus: '',
     completion: '',
-    completionActive: '',
-    completionCompleted: '',
-    completionAll: '',
     all: '',
   },
 })
@@ -84,9 +81,6 @@ const F5_PARSE_FIELDS = getF5ReportingFilterFields({
     reportStatus: '',
     endActivityStatus: '',
     completion: '',
-    completionActive: '',
-    completionCompleted: '',
-    completionAll: '',
     all: '',
   },
 })
