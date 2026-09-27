@@ -344,6 +344,21 @@ function isUuid(value: string | null | undefined): value is string {
   )
 }
 
+/** Validates audit_logs.target_id before insert (null/omit allowed; non-null must be UUID). */
+export function validateAuditLogTargetId(
+  targetId: string | null | undefined
+): { ok: true; normalized: string | null } | { ok: false; error: string } {
+  const targetIdRaw =
+    typeof targetId === 'string' && targetId.trim() ? targetId.trim() : null
+  if (targetIdRaw && !isUuid(targetIdRaw)) {
+    return {
+      ok: false,
+      error: 'logAuditEvent: targetId must be a UUID when provided',
+    }
+  }
+  return { ok: true, normalized: targetIdRaw }
+}
+
 /**
  * Append one audit event. Server-side only (service role).
  *
@@ -384,15 +399,12 @@ export async function logAuditEvent(
       return { ok: false, error: msg }
     }
 
-    const targetIdRaw =
-      typeof input.targetId === 'string' && input.targetId.trim()
-        ? input.targetId.trim()
-        : null
-    if (targetIdRaw && !isUuid(targetIdRaw)) {
-      const msg = 'logAuditEvent: targetId must be a UUID when provided'
-      console.error(msg, { targetId: targetIdRaw })
-      return { ok: false, error: msg }
+    const targetCheck = validateAuditLogTargetId(input.targetId)
+    if (!targetCheck.ok) {
+      console.error(targetCheck.error, { targetId: input.targetId })
+      return { ok: false, error: targetCheck.error }
     }
+    const targetIdRaw = targetCheck.normalized
 
     const { ipAddress, userAgent } = extractAuditRequestMeta(input.request ?? null)
     const inet = normalizeInet(ipAddress)

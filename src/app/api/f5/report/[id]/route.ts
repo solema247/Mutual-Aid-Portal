@@ -5,6 +5,10 @@ import { syncProjectEndDateFromF5 } from '@/lib/syncProjectEndDateFromF5'
 import { resetReportingStatusIfNoReportsRemaining } from '@/lib/projectStatus'
 import { assertProjectInGrantAccess, getUserGrantAccess } from '@/lib/userGrantAccess'
 import { emitF123Audit } from '@/lib/f123Audit'
+import {
+  f5ReportAuditTarget,
+  reportF5AuditInsertFailure,
+} from '@/lib/f5ReportAuditTarget'
 
 export async function GET(
   _req: Request,
@@ -132,12 +136,13 @@ export async function DELETE(
       console.warn('F5 delete: failed to sync project end_date', endDateResult.error)
     }
 
-    await emitF123Audit({
+    const f5AuditTarget = f5ReportAuditTarget(projectId)
+    const auditResult = await emitF123Audit({
       action: 'f5.report_deleted',
       endpoint: 'DELETE /api/f5/report/[id]',
       request: req,
-      targetType: 'f5_report',
-      targetId: String(id),
+      targetType: f5AuditTarget.targetType,
+      targetId: f5AuditTarget.targetId,
       oldValues: {
         report_id: id,
         reach_count: reachCount ?? 0,
@@ -151,6 +156,15 @@ export async function DELETE(
         ...(endDateResult.ok ? { end_date_side_effect: endDateResult.end_date } : {}),
       },
     })
+    reportF5AuditInsertFailure(
+      {
+        action: 'f5.report_deleted',
+        endpoint: 'DELETE /api/f5/report/[id]',
+        projectId,
+        reportId: id,
+      },
+      auditResult
+    )
 
     return NextResponse.json({ success: true })
   } catch (e) {

@@ -1,5 +1,9 @@
 import { NextResponse } from 'next/server'
-import { applyReportingStatusUpdates } from '@/lib/projectStatus'
+import {
+  applyReportingStatusUpdates,
+  computeReportingStatusUpdate,
+  type ReportingStatusProjectRow,
+} from '@/lib/projectStatus'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { assertProjectInGrantAccess } from '@/lib/userGrantAccess'
 import { emitF123Audit } from '@/lib/f123Audit'
@@ -45,15 +49,29 @@ export async function PATCH(
       return NextResponse.json({ error: 'Provide at least one of f4_status or f5_status.' }, { status: 400 })
     }
 
-    const { data: beforeProj } = await supabase
+    const { data: beforeProj, error: beforeFetchError } = await supabase
       .from('err_projects')
       .select('status, f4_status, f5_status, completed_at, date_report_completed')
       .eq('id', projectId)
       .maybeSingle()
 
+    if (beforeFetchError || !beforeProj) {
+      return NextResponse.json({ error: 'Project not found' }, { status: 404 })
+    }
+
     const changes: { f4_status?: string; f5_status?: string } = {}
     if (f4_status !== null) changes.f4_status = f4_status
     if (f5_status !== null) changes.f5_status = f5_status
+
+    const preview = await computeReportingStatusUpdate(
+      supabase,
+      projectId,
+      beforeProj as ReportingStatusProjectRow,
+      changes
+    )
+    if (!preview.hasEffectiveChange) {
+      return NextResponse.json({ success: true, noop: true })
+    }
 
     const result = await applyReportingStatusUpdates(supabase, projectId, changes)
     if (!result.ok) {

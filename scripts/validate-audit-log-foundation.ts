@@ -17,7 +17,12 @@ import {
   extractAuditRequestMeta,
   sanitizeAuditRecord,
   sanitizeAuditValue,
+  validateAuditLogTargetId,
 } from '../src/lib/auditLog'
+import {
+  f5ReportAuditTarget,
+  validateF5ReportAuditBind,
+} from '../src/lib/f5ReportAuditTarget'
 import {
   auditFieldEqual,
   pickChangedAuditFields,
@@ -92,6 +97,20 @@ async function runOffline() {
   const nested = dirty?.nested as Record<string, unknown> | undefined
   assert(nested?.pin_hash === '[REDACTED]', 'nested pin_hash redacted')
   assert(nested?.role === 'admin', 'nested safe field kept')
+
+  section('2b. F5 report audit target_id')
+  const f5ProjectId = 'a1b2c3d4-e5f6-4789-a012-3456789abcde'
+  const f5ReportNumericId = 9042
+  const f5Bind = f5ReportAuditTarget(f5ProjectId)
+  assert(f5Bind.targetType === 'f5_report', 'F5 target_type f5_report')
+  assert(f5Bind.targetId === f5ProjectId, 'F5 target_id is project UUID')
+  assert(validateF5ReportAuditBind(f5ProjectId).ok, 'F5 project bind validates')
+  const legacyTarget = validateAuditLogTargetId(String(f5ReportNumericId))
+  assert(!legacyTarget.ok, 'numeric report id rejected as target_id')
+  assert(
+    validateAuditLogTargetId(f5Bind.targetId).ok,
+    'F5 bind target_id passes UUID validation'
+  )
 
   section('3. JSON serialization')
   const json = sanitizeAuditValue({
@@ -264,6 +283,21 @@ async function runOffline() {
   assert(
     getActionsForAuditArea('f1').every((a) => a.startsWith('f1.')),
     'f1 area unchanged'
+  )
+  const f4Area = getActionsForAuditArea('f4')
+  assert(f4Area.every((a) => a.startsWith('f4.') || a === 'project.reporting_status_changed' || a === 'project.completed'), 'f4 area action allowlist shape')
+  assert(f4Area.includes('f4.report_created'), 'f4 area keeps f4.report_created')
+  assert(f4Area.includes('project.reporting_status_changed'), 'f4 area includes reporting status changed')
+  assert(f4Area.includes('project.completed'), 'f4 area includes project.completed')
+  assert(!f4Area.includes('project.implemented_sector_changed'), 'f4 area excludes other project.*')
+  const f5Area = getActionsForAuditArea('f5')
+  assert(f5Area.includes('f5.report_created'), 'f5 area keeps f5.report_created')
+  assert(f5Area.includes('project.reporting_status_changed'), 'f5 area includes reporting status changed')
+  assert(f5Area.includes('project.completed'), 'f5 area includes project.completed')
+  assert(
+    resolveEffectiveAuditActions('f4', ['project.reporting_status_changed']).join(',') ===
+      'project.reporting_status_changed',
+    'area f4 ∩ project.reporting_status_changed'
   )
 
   section('5e. Audit list search classification (Phase 1 perf)')
@@ -674,6 +708,46 @@ async function runOptionalWrite() {
 
   const { error: delErr } = await admin.from('audit_logs').delete().eq('id', inserted.id)
   assert(!delErr, 'cleanup delete succeeded')
+
+  const f5ProjectId = 'b2c3d4e5-f6a7-4890-b123-456789abcdef'
+  const f5ReportId = 9042
+  const f5Bind = f5ReportAuditTarget(f5ProjectId)
+  assert(validateAuditLogTargetId(f5Bind.targetId).ok, 'F5 write path target_id UUID ok')
+  const f5Metadata = sanitizeAuditRecord({
+    source: 'user',
+    endpoint: 'POST /api/f5/save',
+    project_id: f5ProjectId,
+    report_id: f5ReportId,
+    validation: true,
+    note: 'F5 target_id smoke — safe to delete',
+  })
+  const { data: f5Inserted, error: f5InsertErr } = await admin
+    .from('audit_logs')
+    .insert({
+      actor_user_id: null,
+      action: 'f5.report_created',
+      target_type: f5Bind.targetType,
+      target_id: f5Bind.targetId,
+      old_values: null,
+      new_values: sanitizeAuditRecord({ report_id: f5ReportId }),
+      metadata: f5Metadata,
+      ip_address: reqMeta.ipAddress,
+      user_agent: reqMeta.userAgent,
+    })
+    .select('id, target_type, target_id, metadata')
+    .single()
+
+  assert(!f5InsertErr && !!f5Inserted?.id, 'F5 report_created insert with project UUID target_id')
+  if (f5Inserted) {
+    assert(f5Inserted.target_type === 'f5_report', 'F5 target_type stored')
+    assert(f5Inserted.target_id === f5ProjectId, 'F5 target_id stored as project UUID')
+    assert(
+      (f5Inserted.metadata as { report_id?: number })?.report_id === f5ReportId,
+      'F5 metadata.report_id stores numeric report id'
+    )
+    const { error: f5DelErr } = await admin.from('audit_logs').delete().eq('id', f5Inserted.id)
+    assert(!f5DelErr, 'F5 smoke row cleanup delete succeeded')
+  }
 }
 
 async function main() {

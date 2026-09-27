@@ -6,6 +6,10 @@ import { translateF5Report, translateF5Reach } from '@/lib/translateHelper'
 import { assertProjectInGrantAccess } from '@/lib/userGrantAccess'
 import { emitF123Audit, pickChangedAuditFields } from '@/lib/f123Audit'
 import {
+  f5ReportAuditTarget,
+  reportF5AuditInsertFailure,
+} from '@/lib/f5ReportAuditTarget'
+import {
   buildF5UpdateComparePayload,
   buildF5UpdateComparePayloadFromDb,
   updatePayloadsEqual,
@@ -265,12 +269,13 @@ export async function POST(req: Request) {
       newValues.reach_line_count = afterReach
     }
 
-    await emitF123Audit({
+    const f5AuditTarget = f5ReportAuditTarget(String(project_id))
+    const auditResult = await emitF123Audit({
       action: 'f5.report_updated',
       endpoint: 'POST /api/f5/update',
       request: req,
-      targetType: 'f5_report',
-      targetId: String(report_id),
+      targetType: f5AuditTarget.targetType,
+      targetId: f5AuditTarget.targetId,
       oldValues,
       newValues,
       metadata: {
@@ -283,6 +288,15 @@ export async function POST(req: Request) {
           : {}),
       },
     })
+    reportF5AuditInsertFailure(
+      {
+        action: 'f5.report_updated',
+        endpoint: 'POST /api/f5/update',
+        projectId: String(project_id),
+        reportId: report_id,
+      },
+      auditResult
+    )
 
     return NextResponse.json({ report_id, reach_ids })
   } catch (e) {

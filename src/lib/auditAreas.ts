@@ -1,6 +1,6 @@
 /**
  * Audit Log business areas — shared action/target mapping (client + server).
- * project.* actions are only included in `all` (not attributed to F4/F5).
+ * F4/F5 workspaces include reporting/completion project.* actions alongside f4.* / f5.*.
  */
 
 import { KNOWN_AUDIT_ACTIONS } from '@/lib/auditActionLabels'
@@ -69,6 +69,24 @@ const PERMISSIONS_ACTIONS = [
   'user.permissions_reset',
 ] as const
 
+/** Mark Complete / explicit completion — shown in F4 and F5 workspaces (not all project.*). */
+const F4_F5_REPORTING_WORKSPACE_ACTIONS = [
+  'project.reporting_status_changed',
+  'project.completed',
+] as const
+
+function prefixActions(prefix: 'f1.' | 'f2.' | 'f4.' | 'f5.'): readonly string[] {
+  return KNOWN_AUDIT_ACTIONS.filter((a) => a.startsWith(prefix))
+}
+
+function f4OrF5WorkspaceActions(prefix: 'f4.' | 'f5.'): readonly string[] {
+  const base = [...prefixActions(prefix)]
+  for (const action of F4_F5_REPORTING_WORKSPACE_ACTIONS) {
+    if (!base.includes(action)) base.push(action)
+  }
+  return base
+}
+
 /** Target types commonly used by actions in each area (for filter restriction). */
 const AREA_TARGET_TYPES: Record<AuditArea, readonly string[]> = {
   all: AUDIT_TARGET_TYPE_VALUES,
@@ -109,10 +127,10 @@ export function areaFromWorkspaceId(id: string): AuditArea {
 
 export function getActionsForAuditArea(area: AuditArea): readonly string[] {
   if (area === 'all') return KNOWN_AUDIT_ACTIONS
-  if (area === 'f1') return KNOWN_AUDIT_ACTIONS.filter((a) => a.startsWith('f1.'))
-  if (area === 'f2') return KNOWN_AUDIT_ACTIONS.filter((a) => a.startsWith('f2.'))
-  if (area === 'f4') return KNOWN_AUDIT_ACTIONS.filter((a) => a.startsWith('f4.'))
-  if (area === 'f5') return KNOWN_AUDIT_ACTIONS.filter((a) => a.startsWith('f5.'))
+  if (area === 'f1') return prefixActions('f1.')
+  if (area === 'f2') return prefixActions('f2.')
+  if (area === 'f4') return f4OrF5WorkspaceActions('f4.')
+  if (area === 'f5') return f4OrF5WorkspaceActions('f5.')
   if (area === 'mou') return [...MOU_ACTIONS]
   if (area === 'payment') return [...PAYMENT_ACTIONS]
   if (area === 'user_management') return [...USER_MANAGEMENT_ACTIONS]

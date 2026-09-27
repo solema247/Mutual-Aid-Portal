@@ -6,6 +6,10 @@ import { syncImplementedSectorFromF5 } from '@/lib/activityShift'
 import { translateF5Report, translateF5Reach } from '@/lib/translateHelper'
 import { assertProjectInGrantAccess } from '@/lib/userGrantAccess'
 import { emitF123Audit } from '@/lib/f123Audit'
+import {
+  f5ReportAuditTarget,
+  reportF5AuditInsertFailure,
+} from '@/lib/f5ReportAuditTarget'
 
 export async function POST(req: Request) {
   try {
@@ -245,12 +249,13 @@ export async function POST(req: Request) {
     }
 
     // file count already tracked during finalize
-    await emitF123Audit({
+    const f5AuditTarget = f5ReportAuditTarget(String(project_id))
+    const auditResult = await emitF123Audit({
       action: 'f5.report_created',
       endpoint: 'POST /api/f5/save',
       request: req,
-      targetType: 'f5_report',
-      targetId: String(report_id),
+      targetType: f5AuditTarget.targetType,
+      targetId: f5AuditTarget.targetId,
       newValues: {
         report_id,
         reach_count: reach_ids.length,
@@ -268,6 +273,15 @@ export async function POST(req: Request) {
         ...(endDateSideEffect != null ? { end_date_side_effect: endDateSideEffect } : {}),
       },
     })
+    reportF5AuditInsertFailure(
+      {
+        action: 'f5.report_created',
+        endpoint: 'POST /api/f5/save',
+        projectId: String(project_id),
+        reportId: report_id,
+      },
+      auditResult
+    )
 
     return NextResponse.json({ report_id, reach_ids })
   } catch (e) {

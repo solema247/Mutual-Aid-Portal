@@ -3,7 +3,12 @@
  * Server-side only. Thin wrapper around logAuditEvent — never throws to callers.
  */
 
-import { logAuditEvent, type AuditAction, type AuditTargetType } from '@/lib/auditLog'
+import {
+  logAuditEvent,
+  type AuditAction,
+  type AuditTargetType,
+  type LogAuditEventResult,
+} from '@/lib/auditLog'
 import { auditFieldEqual, pickChangedAuditFields } from '@/lib/userManagementAudit'
 
 export { pickChangedAuditFields }
@@ -57,7 +62,7 @@ export async function emitF123Audit(args: {
   oldValues?: Record<string, unknown> | null
   newValues?: Record<string, unknown> | null
   metadata?: Record<string, unknown> | null
-}): Promise<void> {
+}): Promise<LogAuditEventResult> {
   try {
     const hasActor =
       typeof args.actorUserId === 'string' && args.actorUserId.trim().length > 0
@@ -81,14 +86,19 @@ export async function emitF123Audit(args: {
       console.error('F1/F2/F3 audit event failed', {
         action: args.action,
         endpoint: args.endpoint,
+        targetType: args.targetType,
+        targetId: args.targetId ?? null,
         error: result.error,
       })
     }
+    return result
   } catch (e) {
+    const msg = e instanceof Error ? e.message : 'emitF123Audit: unexpected error'
     console.error('F1/F2/F3 audit event unexpected error', {
       action: args.action,
       endpoint: args.endpoint,
       error: e,
     })
+    return { ok: false, error: msg }
   }
 }
