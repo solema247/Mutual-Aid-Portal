@@ -1,12 +1,50 @@
 import { NextResponse } from 'next/server'
 import { readSharedRollupCache } from '../rollup/route'
-
-/** Cache duration in milliseconds (3 minutes) */
-const CACHE_DURATION_MS = 3 * 60 * 1000
+import { getUserGrantAccess } from '@/lib/userGrantAccess'
 
 function getCacheKey(allowedStates: string[] | null): string {
   if (!allowedStates || allowedStates.length === 0) return 'all_states'
   return [...allowedStates].sort().join(',')
+}
+
+/** Same KPI fields as the rollup empty payload, without project rows. */
+function emptySummary() {
+  return {
+    kpis: {
+      projects: 0,
+      plan: 0,
+      actual: 0,
+      variance: 0,
+      burn: 0,
+      f4_count: 0,
+      last_report_date: null,
+      f5_count: 0,
+      last_f5_date: null,
+      f5_total_individuals: 0,
+      f5_total_families: 0,
+    },
+    stateAggregations: [] as unknown[],
+    roomAggregations: [] as unknown[],
+    timestamp: new Date().toISOString(),
+  }
+}
+
+function summaryFromCache(cached: { kpis?: unknown; stateAggregations?: unknown; roomAggregations?: unknown }) {
+  return {
+    kpis: cached.kpis,
+    stateAggregations: cached.stateAggregations,
+    roomAggregations: cached.roomAggregations,
+    timestamp: new Date().toISOString(),
+  }
+}
+
+/**
+ * Partner rollup cache key. Must match getCacheKey(null, partnerScope) in overview/rollup:
+ * v3|all_states|partner:{partnerId}:{sorted grant IDs}
+ */
+function partnerRollupCacheKey(partnerId: string, grantGridIds: string[]): string {
+  const grantScopeKey = `partner:${partnerId}:${[...grantGridIds].sort().join(',')}`
+  return `v3|all_states|${grantScopeKey}`
 }
 
 /**
@@ -17,6 +55,23 @@ export async function GET(request: Request) {
   const startTime = Date.now()
   
   try {
+    const grantAccess = await getUserGrantAccess()
+
+    if (grantAccess.mode === 'none') {
+      return NextResponse.json(emptySummary())
+    }
+
+    if (grantAccess.mode === 'partner') {
+      const cacheKey = partnerRollupCacheKey(grantAccess.partnerId, grantAccess.grantGridIds)
+      const cached = await readSharedRollupCache(cacheKey)
+      if (!cached) {
+        return NextResponse.json(emptySummary())
+      }
+      const elapsed = Date.now() - startTime
+      console.log(`[summary] Returned partner cached summary in ${elapsed}ms`)
+      return NextResponse.json(summaryFromCache(cached))
+    }
+
     const { getUserStateAccess } = await import('@/lib/userStateAccess')
     const { allowedStateNames } = await getUserStateAccess()
     const cacheKey = getCacheKey(allowedStateNames)
@@ -26,12 +81,7 @@ export async function GET(request: Request) {
     
     if (cached) {
       // Extract only the summary data (no rows array)
-      const summary = {
-        kpis: cached.kpis,
-        stateAggregations: cached.stateAggregations,
-        roomAggregations: cached.roomAggregations,
-        timestamp: new Date().toISOString()
-      }
+      const summary = summaryFromCache(cached)
       
       const elapsed = Date.now() - startTime
       console.log(`[summary] Returned cached summary in ${elapsed}ms`)

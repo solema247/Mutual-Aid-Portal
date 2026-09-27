@@ -14,6 +14,13 @@ export async function GET(request: Request) {
     const perm = await requirePermission('f4_fetch_by_serial')
     if (perm instanceof NextResponse) return perm
 
+    // Partner ownership cannot be resolved via grant_serial_id — fail closed
+    const { getUserGrantAccess } = await import('@/lib/userGrantAccess')
+    const grantAccess = await getUserGrantAccess()
+    if (grantAccess.mode !== 'all') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
     const { searchParams } = new URL(request.url)
     const serial = searchParams.get('serial')?.trim()
     if (!serial) {

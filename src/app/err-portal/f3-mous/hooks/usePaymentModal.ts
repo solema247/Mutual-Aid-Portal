@@ -2,7 +2,6 @@
 
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { supabase } from '@/lib/supabaseClient'
 import { sumExpensesUsd } from '../lib/project-helpers'
 import type {
   MOU,
@@ -90,11 +89,14 @@ export function usePaymentModal({ fetchMous }: UsePaymentModalOptions) {
         setPaymentFsps([])
       }
 
-      const { data: projects, error } = await supabase
-        .from('err_projects')
-        .select('id, err_id, state, locality, grant_id, expenses, emergency_rooms (name, name_ar, err_code)')
-        .eq('mou_id', mou.id)
-        .order('submitted_at', { ascending: true })
+      const { data: projects, error } = await (async () => {
+        const response = await fetch(`/api/f3/mous/${mou.id}`)
+        if (!response.ok) {
+          return { data: null, error: new Error('Failed to load MOU projects') }
+        }
+        const payload = await response.json()
+        return { data: Array.isArray(payload.projects) ? payload.projects : [], error: null }
+      })()
 
       if (error) {
         console.error('Error fetching MOU projects:', error)

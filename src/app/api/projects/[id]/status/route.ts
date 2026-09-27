@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { isReportingStatusCompleted } from '@/lib/projectStatus'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
+import { assertProjectInGrantAccess } from '@/lib/userGrantAccess'
 
 export async function PATCH(
   request: Request,
@@ -22,6 +23,9 @@ export async function PATCH(
         error: 'Cannot complete historical projects. This action is only available for projects uploaded via the Portal.' 
       }, { status: 400 })
     }
+
+    const scope = await assertProjectInGrantAccess(projectId)
+    if (!scope.ok) return scope.response
 
     // Verify the project exists in err_projects
     const { data: project, error: fetchError } = await supabase

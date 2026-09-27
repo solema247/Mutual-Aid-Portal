@@ -4,6 +4,10 @@ import {
   buildPaymentFileStoragePath,
   getSessionUserLabel,
 } from '@/lib/mouPaymentConfirmations'
+import {
+  assertMouInGrantAccess,
+  assertProjectInGrantAccess,
+} from '@/lib/userGrantAccess'
 
 type RouteContext = { params: { id: string; confirmationId: string } }
 
@@ -17,6 +21,9 @@ export async function POST(request: Request, { params }: RouteContext) {
     const supabase = getSupabaseRouteClient()
     const { id: mouId, confirmationId } = params
     const formData = await request.formData()
+
+    const mouScope = await assertMouInGrantAccess(mouId)
+    if (!mouScope.ok) return mouScope.response
 
     const { data: confirmation, error: fetchError } = await supabase
       .from('mou_payment_confirmations')
@@ -32,6 +39,12 @@ export async function POST(request: Request, { params }: RouteContext) {
     if (!confirmation) {
       return NextResponse.json({ error: 'Payment confirmation not found' }, { status: 404 })
     }
+
+    const projectScope = await assertProjectInGrantAccess(
+      String(confirmation.project_id),
+      mouScope.access
+    )
+    if (!projectScope.ok) return projectScope.response
 
     const files: File[] = []
     const single = formData.get('file')

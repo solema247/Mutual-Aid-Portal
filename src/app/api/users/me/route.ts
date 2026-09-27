@@ -21,7 +21,7 @@ export async function GET() {
 
     const { data: userData, error } = await supabase
       .from('users')
-      .select('id, display_name, role, status, err_id, created_at, updated_at, can_see_all_states, visible_states')
+      .select('id, display_name, role, status, err_id, partner_id, created_at, updated_at, can_see_all_states, visible_states')
       .eq('auth_user_id', session.user.id)
       .single()
 
@@ -32,6 +32,16 @@ export async function GET() {
 
     if (!userData) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
+    }
+
+    let partner_name: string | null = null
+    if (userData.partner_id) {
+      const { data: partnerRow } = await supabase
+        .from('partners')
+        .select('name')
+        .eq('id', userData.partner_id)
+        .maybeSingle()
+      partner_name = partnerRow?.name ?? null
     }
 
     const override = await getOverridesForUser(supabase, userData.id)
@@ -61,6 +71,8 @@ export async function GET() {
       role: userData.role,
       status: userData.status,
       err_id: userData.err_id,
+      partner_id: userData.partner_id ?? null,
+      partner_name,
       created_at: userData.created_at,
       updated_at: userData.updated_at,
       can_see_all_states: userData.can_see_all_states ?? true,

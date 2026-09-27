@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { allocateNextWorkplanSequence } from '@/lib/allocateNextWorkplanSequence'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { requirePermission } from '@/lib/requirePermission'
+import { assertProjectsInGrantAccess } from '@/lib/userGrantAccess'
 
 export async function POST(request: Request) {
   try {
@@ -14,6 +15,9 @@ export async function POST(request: Request) {
     if (!f1_ids || !Array.isArray(f1_ids) || f1_ids.length === 0) {
       return NextResponse.json({ error: 'F1 IDs array is required' }, { status: 400 })
     }
+
+    const scope = await assertProjectsInGrantAccess(f1_ids.map(String))
+    if (!scope.ok) return scope.response
     
     if (!grant_id || !donor_name || !mmyy) {
       return NextResponse.json({ error: 'Missing required fields: grant_id, donor_name, and mmyy are required' }, { status: 400 })

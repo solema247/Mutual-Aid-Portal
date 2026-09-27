@@ -67,6 +67,7 @@
     "mark_complete_confirm_action": "Mark Complete",
     "mark_complete_confirm_cancel": "Cancel",
     "loading": "Loading…",
+    "updating": "Updating…",
     "empty": "No records yet",
     "report_status": {
       "not_uploaded": "Not uploaded",
@@ -194,6 +195,7 @@
     "mark_complete_confirm_action": "Mark Complete",
     "mark_complete_confirm_cancel": "Cancel",
     "loading": "Loading…",
+    "updating": "Updating…",
     "empty": "No records yet",
     "report_status": {
       "not_uploaded": "Not uploaded",
@@ -248,6 +250,18 @@
       "file": { "uploaded_file": "Uploaded File", "no_preview": "No file preview available" },
       "buttons": { "back": "Back", "save": "Save F5", "saving": "Saving…" }
     }
+  },
+  "summary": {
+    "total_reports": "Total Reports",
+    "completed": "Completed",
+    "under_review": "Under Review",
+    "under_review_pending": "Under Review / Pending",
+    "not_uploaded": "Not Uploaded",
+    "badge_all": "All",
+    "badge_done": "Done",
+    "badge_review": "Review",
+    "badge_pending": "Pending",
+    "badge_missing": "Missing"
   },
   "explainer_tooltip": "About F4 & F5 Reporting",
   "explainer_title": "📊 F4 & F5 Reporting",

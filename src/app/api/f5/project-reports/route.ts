@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { getUserStateAccess } from '@/lib/userStateAccess'
+import { assertProjectInGrantAccess, getUserGrantAccess } from '@/lib/userGrantAccess'
 
 /**
  * GET /api/f5/project-reports?project_id=...
@@ -17,12 +18,25 @@ export async function GET(request: Request) {
       return NextResponse.json([])
     }
 
-    const { allowedStateNames } = await getUserStateAccess()
-    if (allowedStateNames !== null && allowedStateNames.length === 0) {
+    const grantAccess = await getUserGrantAccess()
+    if (grantAccess.mode === 'none') {
       return NextResponse.json([])
     }
 
-    if (allowedStateNames !== null) {
+    if (grantAccess.mode === 'partner') {
+      const scope = await assertProjectInGrantAccess(projectId, grantAccess, {
+        forbiddenStatus: 403,
+        notFoundMessage: 'Forbidden',
+      })
+      if (!scope.ok) return scope.response
+    }
+
+    const { allowedStateNames } = await getUserStateAccess()
+    if (grantAccess.mode === 'all' && allowedStateNames !== null && allowedStateNames.length === 0) {
+      return NextResponse.json([])
+    }
+
+    if (grantAccess.mode === 'all' && allowedStateNames !== null) {
       const { data: project, error: projectError } = await supabase
         .from('err_projects')
         .select('id, state')

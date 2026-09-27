@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { requirePermission } from '@/lib/requirePermission'
 import { getComplianceBlockedProjectIds } from '@/lib/compliance'
+import { assertProjectsInGrantAccess } from '@/lib/userGrantAccess'
 
 // POST /api/f2/uncommitted/commit - Commit selected F1s (set funding_status to committed and status to approved)
 export async function POST(request: Request) {
@@ -15,6 +16,9 @@ export async function POST(request: Request) {
     if (!f1_ids || !Array.isArray(f1_ids) || f1_ids.length === 0) {
       return NextResponse.json({ error: 'F1 IDs array is required' }, { status: 400 })
     }
+
+    const scope = await assertProjectsInGrantAccess(f1_ids.map(String))
+    if (!scope.ok) return scope.response
 
     // Compliance gate: F1s flagged by screening cannot be committed
     // until the finance team approves them

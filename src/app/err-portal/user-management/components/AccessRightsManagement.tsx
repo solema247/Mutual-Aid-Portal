@@ -14,11 +14,25 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Button } from '@/components/ui/button'
 import { ActiveUserListItem } from '@/app/api/users/types/users'
 import { getActiveUsers } from '@/app/api/users/utils/users'
+import { supabase } from '@/lib/supabaseClient'
+
+type PortalRole =
+  | 'support'
+  | 'superadmin'
+  | 'admin'
+  | 'state_err'
+  | 'base_err'
+  | 'partner'
 
 interface State {
   id: string
   state_name: string
   state_name_ar: string | null
+}
+
+interface PartnerOption {
+  id: string
+  name: string
 }
 
 interface AccessRightsManagementProps {
@@ -43,12 +57,15 @@ export default function AccessRightsManagement({
   const [selectedRole, setSelectedRole] = useState<string>('all')
   const [selectedState, setSelectedState] = useState<string>('all')
   const [states, setStates] = useState<State[]>([])
+  const [partners, setPartners] = useState<PartnerOption[]>([])
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null)
-  const [editingUser, setEditingUser] = useState<string | null>(null)
   const [savingUserId, setSavingUserId] = useState<string | null>(null)
+  /** Users who selected Partner role but have not yet chosen an organization */
+  const [pendingPartnerRoleUserIds, setPendingPartnerRoleUserIds] = useState<Set<string>>(
+    () => new Set()
+  )
   const dropdownRef = useRef<HTMLDivElement>(null)
 
-  // Fetch states
   useEffect(() => {
     const fetchStates = async () => {
       try {
@@ -63,7 +80,23 @@ export default function AccessRightsManagement({
     fetchStates()
   }, [])
 
-  // Close dropdown when clicking outside
+  useEffect(() => {
+    const fetchPartners = async () => {
+      try {
+        const { data, error: partnersError } = await supabase
+          .from('partners')
+          .select('id, name')
+          .eq('status', 'active')
+          .order('name')
+        if (partnersError) throw partnersError
+        setPartners((data || []) as PartnerOption[])
+      } catch (err) {
+        console.error('Error fetching partners:', err)
+      }
+    }
+    fetchPartners()
+  }, [])
+
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
@@ -83,7 +116,7 @@ export default function AccessRightsManagement({
       const { users: fetchedUsers, total } = await getActiveUsers({
         page: currentPage,
         pageSize: PAGE_SIZE,
-        role: selectedRole === 'all' ? undefined : selectedRole as 'support' | 'superadmin' | 'admin' | 'state_err' | 'base_err',
+        role: selectedRole === 'all' ? undefined : (selectedRole as PortalRole),
         status: 'active',
         sortOrder: 'desc',
         currentUserRole,
@@ -96,8 +129,9 @@ export default function AccessRightsManagement({
         .map(user => ({
           id: user.id,
           err_id: user.err_id,
+          partner_id: (user as { partner_id?: string | null }).partner_id ?? null,
           display_name: user.display_name,
-          role: user.role as 'support' | 'superadmin' | 'admin' | 'state_err' | 'base_err',
+          role: user.role as PortalRole,
           status: user.status as 'active' | 'suspended',
           createdAt: new Date(user.created_at || '').toLocaleDateString(),
           updatedAt: user.updated_at ? new Date(user.updated_at).toLocaleDateString() : null,
@@ -111,6 +145,7 @@ export default function AccessRightsManagement({
       setUsers(formattedUsers)
       const supportCount = currentUserRole === 'support' ? 0 : fetchedUsers.filter(u => u.role === 'support').length
       setTotalUsers(total - supportCount)
+      setPendingPartnerRoleUserIds(new Set())
     } catch (err) {
       setError(t('common:error_fetching_data'))
       console.error(err)
@@ -123,14 +158,26 @@ export default function AccessRightsManagement({
     fetchUsers()
   }, [fetchUsers])
 
-  // Reset to first page when filter changes
   useEffect(() => {
     setCurrentPage(1)
   }, [selectedRole, selectedState])
 
-  const handleRoleChange = async (userId: string, newRole: 'support' | 'superadmin' | 'admin' | 'state_err' | 'base_err') => {
+  const handleRoleChange = async (userId: string, newRole: PortalRole) => {
+    if (newRole === 'partner') {
+      setPendingPartnerRoleUserIds((prev) => new Set(prev).add(userId))
+      setUsers((prev) =>
+        prev.map((u) => (u.id === userId ? { ...u, role: 'partner', partner_id: u.partner_id } : u))
+      )
+      return
+    }
+
     try {
       setSavingUserId(userId)
+      setPendingPartnerRoleUserIds((prev) => {
+        const next = new Set(prev)
+        next.delete(userId)
+        return next
+      })
       const res = await fetch(`/api/users/${userId}/access-rights`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -138,14 +185,52 @@ export default function AccessRightsManagement({
       })
 
       if (!res.ok) {
-        throw new Error('Failed to update role')
+        const errorData = await res.json().catch(() => ({}))
+        throw new Error(errorData.error || 'Failed to update role')
       }
 
-      // Refresh users
       await fetchUsers()
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Error updating role:', error)
-      setError(t('common:error_updating_user'))
+      setError(error instanceof Error ? error.message : t('common:error_updating_user'))
+      setTimeout(() => setError(null), 5000)
+      await fetchUsers()
+    } finally {
+      setSavingUserId(null)
+    }
+  }
+
+  const handlePartnerOrgChange = async (userId: string, partnerId: string) => {
+    if (!partnerId) return
+    try {
+      setSavingUserId(userId)
+      const body: { partner_id: string; role?: 'partner' } = { partner_id: partnerId }
+      const user = users.find((u) => u.id === userId)
+      if (user?.role !== 'partner' || pendingPartnerRoleUserIds.has(userId)) {
+        body.role = 'partner'
+      }
+
+      const res = await fetch(`/api/users/${userId}/access-rights`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      })
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}))
+        throw new Error(errorData.error || 'Failed to update partner organization')
+      }
+
+      setPendingPartnerRoleUserIds((prev) => {
+        const next = new Set(prev)
+        next.delete(userId)
+        return next
+      })
+      await fetchUsers()
+    } catch (error: unknown) {
+      console.error('Error updating partner organization:', error)
+      setError(error instanceof Error ? error.message : t('common:error_updating_user'))
+      setTimeout(() => setError(null), 5000)
     } finally {
       setSavingUserId(null)
     }
@@ -157,6 +242,13 @@ export default function AccessRightsManagement({
     visibleStates: string[],
     userRole: string
   ) => {
+    if (userRole === 'partner') {
+      setError('Partner users do not use state access controls')
+      setTimeout(() => setError(null), 5000)
+      setOpenDropdownId(null)
+      return
+    }
+
     if (userRole === 'admin' && currentUserRole !== 'superadmin' && currentUserRole !== 'support') {
       setError('Only superadmin or support can change state access for admin users')
       setTimeout(() => setError(null), 5000)
@@ -180,12 +272,11 @@ export default function AccessRightsManagement({
         throw new Error(errorData.error || 'Failed to update access rights')
       }
 
-      // Refresh users
       await fetchUsers()
       setOpenDropdownId(null)
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error updating access rights:', error)
-      setError(error.message || t('common:error_updating_user'))
+      setError(error instanceof Error ? error.message : t('common:error_updating_user'))
       setTimeout(() => setError(null), 5000)
     } finally {
       setSavingUserId(null)
@@ -193,17 +284,21 @@ export default function AccessRightsManagement({
   }
 
   const totalPages = Math.ceil(totalUsers / PAGE_SIZE)
+  const partnerNameById = new Map(partners.map((p) => [p.id, p.name]))
 
   if (isLoading && users.length === 0) {
     return <div className="text-muted-foreground">{t('users:loading')}</div>
   }
 
-  if (error) {
+  if (error && users.length === 0) {
     return <div className="text-destructive text-sm">{error}</div>
   }
 
   return (
     <div className="space-y-2 text-xs">
+      {error && (
+        <div className="text-destructive text-sm">{error}</div>
+      )}
       <div className="flex flex-wrap gap-2 items-center">
         <Select
           value={selectedRole}
@@ -219,6 +314,7 @@ export default function AccessRightsManagement({
             <SelectItem value="admin">{t('users:admin_role')}</SelectItem>
             <SelectItem value="state_err">{t('users:state_err_role')}</SelectItem>
             <SelectItem value="base_err">{t('users:base_err_role')}</SelectItem>
+            <SelectItem value="partner">Partner</SelectItem>
           </SelectContent>
         </Select>
 
@@ -242,9 +338,10 @@ export default function AccessRightsManagement({
       </div>
 
       <div className="rounded-md border">
-        <div className="grid grid-cols-6 gap-2 py-1.5 px-2 font-medium border-b">
+        <div className="grid grid-cols-7 gap-2 py-1.5 px-2 font-medium border-b">
           <div>{t('users:display_name')}</div>
           <div>{t('users:role')}</div>
+          <div>Partner org</div>
           <div>State</div>
           <div>State Access</div>
           <div>{t('users:err_name')}</div>
@@ -255,21 +352,29 @@ export default function AccessRightsManagement({
             const isDropdownOpen = openDropdownId === user.id
             const userStates = user.visible_states || []
             const canSeeAll = user.can_see_all_states ?? true
-            const canChangeStateAccess = currentUserRole === 'support' || currentUserRole === 'superadmin' || user.role !== 'admin'
+            const isPartner = user.role === 'partner' || pendingPartnerRoleUserIds.has(user.id)
+            const canChangeStateAccess =
+              !isPartner &&
+              (currentUserRole === 'support' ||
+                currentUserRole === 'superadmin' ||
+                user.role !== 'admin')
+            const displayRole = pendingPartnerRoleUserIds.has(user.id) ? 'partner' : user.role
 
             return (
-              <div key={user.id} className="grid grid-cols-6 gap-2 py-1 px-2 items-center hover:bg-muted/50">
+              <div key={user.id} className="grid grid-cols-7 gap-2 py-1 px-2 items-center hover:bg-muted/50">
                 <div className="truncate">{user.display_name || '-'}</div>
-                
+
                 <div className="flex items-center gap-1.5 min-w-0">
                   <Select
-                    value={user.role}
-                    onValueChange={(value) => handleRoleChange(user.id, value as 'support' | 'superadmin' | 'admin' | 'state_err' | 'base_err')}
+                    value={displayRole}
+                    onValueChange={(value) => handleRoleChange(user.id, value as PortalRole)}
                     disabled={
                       savingUserId === user.id ||
-                      (user.role === 'support') ||
+                      user.role === 'support' ||
                       (user.role === 'superadmin' && currentUserRole !== 'support') ||
-                      (user.role === 'admin' && currentUserRole !== 'superadmin' && currentUserRole !== 'support')
+                      (user.role === 'admin' &&
+                        currentUserRole !== 'superadmin' &&
+                        currentUserRole !== 'support')
                     }
                   >
                     <SelectTrigger className="h-7 w-[110px] border-input bg-background text-xs">
@@ -285,6 +390,7 @@ export default function AccessRightsManagement({
                       )}
                       <SelectItem value="state_err">{t('users:state_err_role')}</SelectItem>
                       <SelectItem value="base_err">{t('users:base_err_role')}</SelectItem>
+                      <SelectItem value="partner">Partner</SelectItem>
                     </SelectContent>
                   </Select>
                   {savingUserId === user.id && (
@@ -292,119 +398,170 @@ export default function AccessRightsManagement({
                   )}
                 </div>
 
-                <div className="truncate">{user.state_name || '-'}</div>
+                <div className="min-w-0">
+                  {isPartner ? (
+                    <Select
+                      value={user.partner_id || undefined}
+                      onValueChange={(value) => handlePartnerOrgChange(user.id, value)}
+                      disabled={savingUserId === user.id}
+                    >
+                      <SelectTrigger className="h-7 w-full min-w-[120px] border-input bg-background text-xs">
+                        <SelectValue placeholder="Select partner…" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {partners.map((p) => (
+                          <SelectItem key={p.id} value={p.id}>
+                            {p.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <span className="text-muted-foreground">—</span>
+                  )}
+                  {pendingPartnerRoleUserIds.has(user.id) && !user.partner_id && (
+                    <div className="text-[10px] text-amber-700 mt-0.5">Select partner org to save</div>
+                  )}
+                </div>
+
+                <div className="truncate">
+                  {isPartner
+                    ? partnerNameById.get(user.partner_id || '') || '—'
+                    : user.state_name || '-'}
+                </div>
 
                 <div className="relative min-w-0" ref={openDropdownId === user.id ? dropdownRef : null}>
-                  <div
-                    className={`flex flex-wrap gap-0.5 min-h-[24px] px-1 py-0.5 border rounded-md ${
-                      canChangeStateAccess 
-                        ? 'cursor-pointer hover:bg-accent' 
-                        : 'cursor-not-allowed opacity-60'
-                    }`}
-                    onClick={() => {
-                      if (canChangeStateAccess) {
-                        setOpenDropdownId(isDropdownOpen ? null : user.id)
-                      }
-                    }}
-                    title={!canChangeStateAccess ? 'Only superadmin or support can change state access for admin users' : ''}
-                  >
-                    {canSeeAll ? (
-                      <Badge variant="default" className="h-5 px-1.5 text-[10px] bg-blue-200 hover:bg-blue-300 text-blue-800 border-blue-300">
-                        All States
-                      </Badge>
-                    ) : userStates.length > 0 ? (
-                      userStates.map((stateId, index) => {
-                        const state = states.find(s => s.id === stateId)
-                        // Use a palette of modern pastel colors
-                        const pastelColors = [
-                          'bg-pink-200 hover:bg-pink-300 text-pink-800 border-pink-300',
-                          'bg-purple-200 hover:bg-purple-300 text-purple-800 border-purple-300',
-                          'bg-indigo-200 hover:bg-indigo-300 text-indigo-800 border-indigo-300',
-                          'bg-cyan-200 hover:bg-cyan-300 text-cyan-800 border-cyan-300',
-                          'bg-teal-200 hover:bg-teal-300 text-teal-800 border-teal-300',
-                          'bg-emerald-200 hover:bg-emerald-300 text-emerald-800 border-emerald-300',
-                          'bg-lime-200 hover:bg-lime-300 text-lime-800 border-lime-300',
-                          'bg-amber-200 hover:bg-amber-300 text-amber-800 border-amber-300',
-                          'bg-orange-200 hover:bg-orange-300 text-orange-800 border-orange-300',
-                          'bg-rose-200 hover:bg-rose-300 text-rose-800 border-rose-300',
-                        ]
-                        const colorClass = pastelColors[index % pastelColors.length]
-                        return state ? (
-                          <Badge key={stateId} variant="secondary" className={`h-5 px-1.5 text-[10px] ${colorClass}`}>
-                            {state.state_name}
-                          </Badge>
-                        ) : null
-                      })
-                    ) : (
-                      <span className="text-muted-foreground">No states</span>
-                    )}
-                  </div>
-
-                  {isDropdownOpen && (
-                    <div className="absolute z-50 mt-1 w-72 bg-popover border rounded-md shadow-lg p-2.5 left-0 top-full">
-                      <div className="space-y-2">
-                        <div className="flex items-center gap-2">
-                          <Checkbox
-                            id={`all-states-${user.id}`}
-                            checked={canSeeAll}
-                            disabled={!canChangeStateAccess}
-                            onCheckedChange={(checked) => {
-                              if (canChangeStateAccess) {
-                                if (checked) {
-                                  handleAccessRightsChange(user.id, true, [], user.role)
-                                } else {
-                                  handleAccessRightsChange(user.id, false, userStates, user.role)
-                                }
-                              }
-                            }}
-                          />
-                          <label
-                            htmlFor={`all-states-${user.id}`}
-                            className="text-xs font-medium cursor-pointer"
+                  {isPartner ? (
+                    <span className="text-muted-foreground">N/A (grant-scoped)</span>
+                  ) : (
+                    <>
+                      <div
+                        className={`flex flex-wrap gap-0.5 min-h-[24px] px-1 py-0.5 border rounded-md ${
+                          canChangeStateAccess
+                            ? 'cursor-pointer hover:bg-accent'
+                            : 'cursor-not-allowed opacity-60'
+                        }`}
+                        onClick={() => {
+                          if (canChangeStateAccess) {
+                            setOpenDropdownId(isDropdownOpen ? null : user.id)
+                          }
+                        }}
+                        title={
+                          !canChangeStateAccess
+                            ? 'Only superadmin or support can change state access for admin users'
+                            : ''
+                        }
+                      >
+                        {canSeeAll ? (
+                          <Badge
+                            variant="default"
+                            className="h-5 px-1.5 text-[10px] bg-blue-200 hover:bg-blue-300 text-blue-800 border-blue-300"
                           >
-                            Can see all states
-                          </label>
-                        </div>
-
-                        {!canSeeAll && (
-                          <div className="space-y-1 max-h-52 overflow-y-auto border-t pt-2">
-                            <div className="text-[11px] font-medium text-muted-foreground mb-1">
-                              Select specific states:
-                            </div>
-                            {states.length === 0 ? (
-                              <div className="text-muted-foreground">Loading states...</div>
-                            ) : (
-                              states.map((state) => {
-                                const isSelected = userStates.includes(state.id)
-                                return (
-                                  <div key={state.id} className="flex items-center gap-2">
-                                  <Checkbox
-                                    id={`state-${user.id}-${state.id}`}
-                                    checked={isSelected}
-                                    disabled={!canChangeStateAccess}
-                                    onCheckedChange={(checked) => {
-                                      if (canChangeStateAccess) {
-                                        const newStates = checked
-                                          ? [...userStates, state.id]
-                                          : userStates.filter(id => id !== state.id)
-                                        handleAccessRightsChange(user.id, false, newStates, user.role)
-                                      }
-                                    }}
-                                  />
-                                    <label
-                                      htmlFor={`state-${user.id}-${state.id}`}
-                                      className="text-xs cursor-pointer flex-1"
-                                    >
-                                      {state.state_name}
-                                    </label>
-                                  </div>
-                                )
-                              })
-                            )}
-                          </div>
+                            All States
+                          </Badge>
+                        ) : userStates.length > 0 ? (
+                          userStates.map((stateId, index) => {
+                            const state = states.find((s) => s.id === stateId)
+                            const pastelColors = [
+                              'bg-pink-200 hover:bg-pink-300 text-pink-800 border-pink-300',
+                              'bg-purple-200 hover:bg-purple-300 text-purple-800 border-purple-300',
+                              'bg-indigo-200 hover:bg-indigo-300 text-indigo-800 border-indigo-300',
+                              'bg-cyan-200 hover:bg-cyan-300 text-cyan-800 border-cyan-300',
+                              'bg-teal-200 hover:bg-teal-300 text-teal-800 border-teal-300',
+                              'bg-emerald-200 hover:bg-emerald-300 text-emerald-800 border-emerald-300',
+                              'bg-lime-200 hover:bg-lime-300 text-lime-800 border-lime-300',
+                              'bg-amber-200 hover:bg-amber-300 text-amber-800 border-amber-300',
+                              'bg-orange-200 hover:bg-orange-300 text-orange-800 border-orange-300',
+                              'bg-rose-200 hover:bg-rose-300 text-rose-800 border-rose-300',
+                            ]
+                            const colorClass = pastelColors[index % pastelColors.length]
+                            return state ? (
+                              <Badge
+                                key={stateId}
+                                variant="secondary"
+                                className={`h-5 px-1.5 text-[10px] ${colorClass}`}
+                              >
+                                {state.state_name}
+                              </Badge>
+                            ) : null
+                          })
+                        ) : (
+                          <span className="text-muted-foreground">No states</span>
                         )}
                       </div>
-                    </div>
+
+                      {isDropdownOpen && (
+                        <div className="absolute z-50 mt-1 w-72 bg-popover border rounded-md shadow-lg p-2.5 left-0 top-full">
+                          <div className="space-y-2">
+                            <div className="flex items-center gap-2">
+                              <Checkbox
+                                id={`all-states-${user.id}`}
+                                checked={canSeeAll}
+                                disabled={!canChangeStateAccess}
+                                onCheckedChange={(checked) => {
+                                  if (canChangeStateAccess) {
+                                    if (checked) {
+                                      handleAccessRightsChange(user.id, true, [], user.role)
+                                    } else {
+                                      handleAccessRightsChange(user.id, false, userStates, user.role)
+                                    }
+                                  }
+                                }}
+                              />
+                              <label
+                                htmlFor={`all-states-${user.id}`}
+                                className="text-xs font-medium cursor-pointer"
+                              >
+                                Can see all states
+                              </label>
+                            </div>
+
+                            {!canSeeAll && (
+                              <div className="space-y-1 max-h-52 overflow-y-auto border-t pt-2">
+                                <div className="text-[11px] font-medium text-muted-foreground mb-1">
+                                  Select specific states:
+                                </div>
+                                {states.length === 0 ? (
+                                  <div className="text-muted-foreground">Loading states...</div>
+                                ) : (
+                                  states.map((state) => {
+                                    const isSelected = userStates.includes(state.id)
+                                    return (
+                                      <div key={state.id} className="flex items-center gap-2">
+                                        <Checkbox
+                                          id={`state-${user.id}-${state.id}`}
+                                          checked={isSelected}
+                                          disabled={!canChangeStateAccess}
+                                          onCheckedChange={(checked) => {
+                                            if (canChangeStateAccess) {
+                                              const newStates = checked
+                                                ? [...userStates, state.id]
+                                                : userStates.filter((id) => id !== state.id)
+                                              handleAccessRightsChange(
+                                                user.id,
+                                                false,
+                                                newStates,
+                                                user.role
+                                              )
+                                            }
+                                          }}
+                                        />
+                                        <label
+                                          htmlFor={`state-${user.id}-${state.id}`}
+                                          className="text-xs cursor-pointer flex-1"
+                                        >
+                                          {state.state_name}
+                                        </label>
+                                      </div>
+                                    )
+                                  })
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
 
@@ -446,4 +603,3 @@ export default function AccessRightsManagement({
     </div>
   )
 }
-

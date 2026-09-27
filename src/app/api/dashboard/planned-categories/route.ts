@@ -1,6 +1,10 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { getUserStateAccess } from '@/lib/userStateAccess'
+import {
+  chunkGrantScopeIds,
+  getUserGrantAccess,
+} from '@/lib/userGrantAccess'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -46,36 +50,72 @@ function parseJsonArray(raw: unknown): any[] {
 export async function GET(request: Request) {
   try {
     const supabase = getSupabaseRouteClient()
-    const { allowedStateNames } = await getUserStateAccess()
+    const [{ allowedStateNames }, grantAccess] = await Promise.all([
+      getUserStateAccess(),
+      getUserGrantAccess(),
+    ])
+
+    if (grantAccess.mode === 'none') {
+      return NextResponse.json(
+        { projectCount: 0, categories: [] },
+        { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } }
+      )
+    }
+
     const { searchParams } = new URL(request.url)
     const from = searchParams.get('from')
     const to = searchParams.get('to')
 
-    let query = supabase
-      .from('err_projects')
-      .select('date, state, planned_activities, source')
-      .in('status', ['approved', 'active', 'pending', 'completed'])
+    const projectSelect = 'date, state, planned_activities, source'
+    let data: PlannedCategoriesRow[] = []
 
-    // Restrict to portal projects (planned_activities JSONB lives there)
-    query = query.eq('source', 'mutual_aid_portal')
+    if (grantAccess.mode === 'partner') {
+      // Partner: grant_grid_id only — do not apply state scope
+      for (const batch of chunkGrantScopeIds(grantAccess.grantGridIds)) {
+        let query = supabase
+          .from('err_projects')
+          .select(projectSelect)
+          .in('status', ['approved', 'active', 'pending', 'completed'])
+          .eq('source', 'mutual_aid_portal')
+          .in('grant_grid_id', batch)
+        if (from) query = query.gte('date', from)
+        if (to) query = query.lte('date', to)
+        const { data: batchData, error } = await query
+        if (error) {
+          console.error('Dashboard planned-categories error:', error)
+          return NextResponse.json(
+            { error: 'Failed to load planned categories' },
+            { status: 500, headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } }
+          )
+        }
+        if (batchData?.length) data.push(...(batchData as PlannedCategoriesRow[]))
+      }
+    } else {
+      let query = supabase
+        .from('err_projects')
+        .select(projectSelect)
+        .in('status', ['approved', 'active', 'pending', 'completed'])
+        .eq('source', 'mutual_aid_portal')
 
-    if (allowedStateNames !== null && allowedStateNames.length > 0) {
-      query = query.in('state', allowedStateNames)
-    }
-    if (from) {
-      query = query.gte('date', from)
-    }
-    if (to) {
-      query = query.lte('date', to)
-    }
+      if (allowedStateNames !== null && allowedStateNames.length > 0) {
+        query = query.in('state', allowedStateNames)
+      }
+      if (from) {
+        query = query.gte('date', from)
+      }
+      if (to) {
+        query = query.lte('date', to)
+      }
 
-    const { data, error } = await query
-    if (error) {
-      console.error('Dashboard planned-categories error:', error)
-      return NextResponse.json(
-        { error: 'Failed to load planned categories' },
-        { status: 500, headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } }
-      )
+      const { data: rows, error } = await query
+      if (error) {
+        console.error('Dashboard planned-categories error:', error)
+        return NextResponse.json(
+          { error: 'Failed to load planned categories' },
+          { status: 500, headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } }
+        )
+      }
+      data = (rows || []) as PlannedCategoriesRow[]
     }
 
     const byCategory = new Map<
@@ -84,7 +124,7 @@ export async function GET(request: Request) {
     >()
     let projectCount = 0
 
-    for (const row of (data || []) as PlannedCategoriesRow[]) {
+    for (const row of data) {
       const raw = parseJsonArray(row.planned_activities)
       if (!Array.isArray(raw) || raw.length === 0) continue
       let contributed = false

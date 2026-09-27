@@ -67,6 +67,7 @@
     "mark_complete_confirm_action": "تعيين كمكتمل",
     "mark_complete_confirm_cancel": "إلغاء",
     "loading": "جارٍ التحميل…",
+    "updating": "جارٍ التحديث…",
     "empty": "لا توجد سجلات بعد",
     "report_status": {
       "not_uploaded": "لم يُرفع",
@@ -194,6 +195,7 @@
     "mark_complete_confirm_action": "تعيين كمكتمل",
     "mark_complete_confirm_cancel": "إلغاء",
     "loading": "جارٍ التحميل…",
+    "updating": "جارٍ التحديث…",
     "empty": "لا توجد سجلات بعد",
     "report_status": {
       "not_uploaded": "لم يُرفع",
@@ -248,6 +250,18 @@
       "file": { "uploaded_file": "الملف المرفوع", "no_preview": "لا تتوفر معاينة للملف" },
       "buttons": { "back": "رجوع", "save": "حفظ F5", "saving": "جارٍ الحفظ…" }
     }
+  },
+  "summary": {
+    "total_reports": "إجمالي التقارير",
+    "completed": "مكتمل",
+    "under_review": "قيد المراجعة",
+    "under_review_pending": "قيد المراجعة / معلّق",
+    "not_uploaded": "غير مرفوع",
+    "badge_all": "الكل",
+    "badge_done": "تم",
+    "badge_review": "مراجعة",
+    "badge_pending": "معلّق",
+    "badge_missing": "ناقص"
   },
   "explainer_tooltip": "عن تقارير F4 و F5",
   "explainer_title": "📊 تقارير F4 و F5",

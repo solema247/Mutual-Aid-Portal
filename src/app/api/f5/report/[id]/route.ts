@@ -3,6 +3,7 @@ import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { requirePermission } from '@/lib/requirePermission'
 import { syncProjectEndDateFromF5 } from '@/lib/syncProjectEndDateFromF5'
 import { resetReportingStatusIfNoReportsRemaining } from '@/lib/projectStatus'
+import { assertProjectInGrantAccess, getUserGrantAccess } from '@/lib/userGrantAccess'
 
 export async function GET(
   _req: Request,
@@ -15,10 +16,19 @@ export async function GET(
 
     const { data: report, error: repErr } = await supabase
       .from('err_program_report')
-      .select('*, err_projects (state, project_objectives, grant_id, emergency_rooms (name, name_ar, err_code))')
+      .select('*, err_projects (state, project_objectives, grant_id, grant_grid_id, emergency_rooms (name, name_ar, err_code))')
       .eq('id', id)
       .single()
     if (repErr) throw repErr
+
+    const grantAccess = await getUserGrantAccess()
+    if (grantAccess.mode !== 'all') {
+      if (!report?.project_id) {
+        return NextResponse.json({ error: 'Report not found' }, { status: 404 })
+      }
+      const scope = await assertProjectInGrantAccess(String(report.project_id), grantAccess)
+      if (!scope.ok) return scope.response
+    }
 
     const { data: reach, error: reachErr } = await supabase
       .from('err_program_reach')
@@ -84,6 +94,8 @@ export async function DELETE(
     }
 
     const projectId = row.project_id as string
+    const scope = await assertProjectInGrantAccess(projectId)
+    if (!scope.ok) return scope.response
 
     const { error: reachErr } = await supabase.from('err_program_reach').delete().eq('report_id', id)
     if (reachErr) throw reachErr

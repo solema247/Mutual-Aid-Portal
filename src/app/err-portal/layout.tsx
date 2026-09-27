@@ -3,6 +3,7 @@
 import { useTranslation } from 'react-i18next'
 import { useState, useEffect } from 'react'
 import MainLayout from '@/components/layout/MainLayout'
+import PortalPageTransition from '@/components/PortalPageTransition'
 import PageExplainerHeader from '@/components/layout/PageExplainerHeader'
 import { PageExplainerProvider } from '@/contexts/PageExplainerContext'
 import type { SidebarItem, SidebarLinkItem } from '@/components/layout/Sidebar'
@@ -285,6 +286,7 @@ export default function ErrPortalLayout({
 
   return (
     <PageExplainerProvider>
+    <PortalPageTransition>
     <MainLayout
         sidebarItems={sidebarItems}
         headerTitle="Mutual Aid Portal"
@@ -314,6 +316,7 @@ export default function ErrPortalLayout({
         </div>
       )}
     </MainLayout>
+    </PortalPageTransition>
     </PageExplainerProvider>
   )
 }

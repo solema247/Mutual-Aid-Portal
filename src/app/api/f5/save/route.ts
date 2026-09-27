@@ -4,12 +4,16 @@ import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { syncProjectEndDateFromF5 } from '@/lib/syncProjectEndDateFromF5'
 import { syncImplementedSectorFromF5 } from '@/lib/activityShift'
 import { translateF5Report, translateF5Reach } from '@/lib/translateHelper'
+import { assertProjectInGrantAccess } from '@/lib/userGrantAccess'
 
 export async function POST(req: Request) {
   try {
     const supabase = getSupabaseRouteClient()
     const { project_id, summary, reach, file_key_temp, uploaded_by } = await req.json()
     if (!project_id || !summary) return NextResponse.json({ error: 'project_id and summary required' }, { status: 400 })
+
+    const scope = await assertProjectInGrantAccess(String(project_id))
+    if (!scope.ok) return scope.response
 
     // Fetch project context (ERR, state, human project code)
     let err_id: string | null = null

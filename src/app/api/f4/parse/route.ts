@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { fetchF4SectorsForMatch, normalizeF4ExpenseActivitiesToSectors } from '@/lib/f4ExpenseSectors'
 import { processFForm } from '@/lib/ocrProcess'
+import { forbidIfPartner } from '@/lib/routeHandlerAuth'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -23,6 +24,9 @@ function previewText (s: string | null | undefined, max = 120): string {
 export async function POST(request: Request) {
   const routeStart = Date.now()
   try {
+    const partnerBlock = await forbidIfPartner()
+    if (partnerBlock) return partnerBlock
+
     const supabase = getSupabaseRouteClient()
     const { project_id, file_key_temp } = await request.json()
     if (!project_id || !file_key_temp) return NextResponse.json({ error: 'project_id and file_key_temp required' }, { status: 400 })

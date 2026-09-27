@@ -1,6 +1,10 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { aggregateObjectives, aggregateBeneficiaries, aggregatePlannedActivities, aggregatePlannedActivitiesDetailed, aggregateLocations, getBankingDetails, getBudgetTable } from '@/lib/mou-aggregation'
+import {
+  assertMouInGrantAccess,
+  grantGridIdInAccess,
+} from '@/lib/userGrantAccess'
 
 export async function POST(
   _request: Request,
@@ -9,17 +13,34 @@ export async function POST(
   try {
     const supabase = getSupabaseRouteClient()
     const id = params.id
+
+    const mouScope = await assertMouInGrantAccess(id)
+    if (!mouScope.ok) return mouScope.response
+
     const { data: mou, error: mouErr } = await supabase.from('mous').select('*').eq('id', id).single()
     if (mouErr || !mou) throw mouErr || new Error('MOU not found')
 
-    // Load all projects for aggregation
+    // Load projects for aggregation (Partner: in-scope only)
     const { data: projects } = await supabase
       .from('err_projects')
-      .select('project_objectives, intended_beneficiaries, estimated_beneficiaries, planned_activities, planned_activities_resolved, locality, state, banking_details, expenses, err_id, emergency_room_id, grant_id, emergency_rooms (name, name_ar, err_code)')
+      .select('id, grant_grid_id, project_objectives, intended_beneficiaries, estimated_beneficiaries, planned_activities, planned_activities_resolved, locality, state, banking_details, expenses, err_id, emergency_room_id, grant_id, emergency_rooms (name, name_ar, err_code)')
       .eq('mou_id', id)
+
+    const inScopeSet =
+      mouScope.inScopeProjectIds == null
+        ? null
+        : new Set(mouScope.inScopeProjectIds)
+
+    const scopedProjects = (projects || []).filter((p: any) => {
+      if (inScopeSet && !inScopeSet.has(String(p.id))) return false
+      if (mouScope.access.mode !== 'all' && !grantGridIdInAccess(mouScope.access, p.grant_grid_id)) {
+        return false
+      }
+      return true
+    })
     
     // Transform projects to match Project type (convert emergency_rooms array to object)
-    const transformedProjects = (projects || []).map((p: any) => ({
+    const transformedProjects = scopedProjects.map((p: any) => ({
       ...p,
       emergency_rooms: Array.isArray(p.emergency_rooms) && p.emergency_rooms.length > 0
         ? p.emergency_rooms[0]

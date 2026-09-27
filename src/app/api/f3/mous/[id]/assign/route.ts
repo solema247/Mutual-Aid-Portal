@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { allocateNextWorkplanSequence } from '@/lib/allocateNextWorkplanSequence'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
+import { assertMouInGrantAccess } from '@/lib/userGrantAccess'
 
 export async function POST(
   request: Request,
@@ -9,6 +10,10 @@ export async function POST(
   try {
     const supabase = getSupabaseRouteClient()
     const mouId = params.id
+
+    const mouScope = await assertMouInGrantAccess(mouId)
+    if (!mouScope.ok) return mouScope.response
+
     const { grant_id, donor_name, mmyy } = await request.json()
     
     if (!grant_id || !donor_name || !mmyy) {

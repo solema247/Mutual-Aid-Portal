@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { applyReportingStatusUpdates } from '@/lib/projectStatus'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
+import { assertProjectInGrantAccess } from '@/lib/userGrantAccess'
 
 const ALLOWED_F4 = ['waiting', 'partial', 'in review', 'completed'] as const
 const ALLOWED_F5 = ['waiting', 'partial', 'in review', 'completed'] as const
@@ -31,6 +32,9 @@ export async function PATCH(
     if (projectId.startsWith('historical_')) {
       return NextResponse.json({ error: 'Cannot update reporting status for historical projects.' }, { status: 400 })
     }
+
+    const scope = await assertProjectInGrantAccess(projectId)
+    if (!scope.ok) return scope.response
 
     const body = await request.json().catch(() => ({}))
     const f4_status = normalizeStatus(body.f4_status, ALLOWED_F4)
