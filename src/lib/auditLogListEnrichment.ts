@@ -280,7 +280,7 @@ export function resolveAuditTargetDisplay(args: {
   }
 
   if (tt === 'role_defaults') {
-    const role = metaString(meta, 'role') || roleKey
+    const role = metaString(meta, 'role') ?? roleKey ?? null
     return {
       type: 'role_defaults',
       id: null,
