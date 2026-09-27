@@ -1,6 +1,12 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { getUserStateAccess } from '@/lib/userStateAccess'
+import {
+  applyGrantGridIdFilter,
+  chunkGrantScopeIds,
+  getUserGrantAccess,
+} from '@/lib/userGrantAccess'
+import { getUserRoomAccess } from '@/lib/userRoomAccess'
 import { getActivityAndCategoryLists } from '@/lib/plannedActivitiesExpenses'
 import { pickF5TextForEnUi } from '@/lib/storiesEnDisplay'
 import { getCategorySpend, getOtherLabels } from '@/lib/mutualAidCategorySpend'
@@ -108,43 +114,118 @@ function getSpendDiversity(byCategory: Map<string, number>): number {
 
 /**
  * GET /api/stories/cards?state=Kassala | ?theme=community-kitchen | (no params = Total Sudan)
- * Returns story cards. No params = all Sudan (respects getUserStateAccess).
+ * Returns story cards. Partner scope is grant-based. state/theme only narrow results.
  */
 export async function GET(request: Request) {
   const t0 = Date.now()
   console.log('[stories/cards] start')
   try {
     const supabase = getSupabaseRouteClient()
-    const { allowedStateNames } = await getUserStateAccess()
-    console.log('[stories/cards] getUserStateAccess', Date.now() - t0, 'ms')
+    const [grantAccess, roomAccess] = await Promise.all([
+      getUserGrantAccess(),
+      getUserRoomAccess(),
+    ])
+    const emptyCards = () =>
+      NextResponse.json(
+        { summary: null, cards: [] },
+        { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } }
+      )
+    if (roomAccess.mode === 'none') return emptyCards()
+    if (roomAccess.mode !== 'room' && grantAccess.mode === 'none') return emptyCards()
+
     const { searchParams } = new URL(request.url)
     const stateParam = searchParams.get('state')?.trim() || null
     const themeParams = searchParams.getAll('theme').map((t) => t?.trim()).filter(Boolean)
     const locale = searchParams.get('locale')?.toLowerCase() ?? ''
     const useEnCache = locale === 'en'
 
-    let projectsQuery = supabase
-      .from('err_projects')
-      .select('id, state, locality, project_name, project_objectives, planned_activities, estimated_beneficiaries, expenses')
-      .eq('source', 'mutual_aid_portal')
-      .in('status', MAP_STATUSES)
+    const projectSelect =
+      'id, state, locality, project_name, project_objectives, planned_activities, estimated_beneficiaries, expenses'
+    let projects: {
+      id: string
+      state?: string | null
+      locality?: string | null
+      project_name?: string | null
+      project_objectives?: string | null
+      planned_activities?: unknown
+      estimated_beneficiaries?: number | null
+      expenses?: unknown
+    }[] = []
 
-    if (allowedStateNames !== null && allowedStateNames.length > 0) {
-      projectsQuery = projectsQuery.in('state', allowedStateNames)
-    }
-    if (stateParam) {
-      projectsQuery = projectsQuery.eq('state', stateParam)
+    if (roomAccess.mode === 'room') {
+      // Base ERR: emergency_room_id only (never state scope)
+      let projectsQuery = supabase
+        .from('err_projects')
+        .select(projectSelect)
+        .eq('source', 'mutual_aid_portal')
+        .in('status', MAP_STATUSES)
+        .eq('emergency_room_id', roomAccess.emergencyRoomId)
+      if (stateParam) {
+        projectsQuery = projectsQuery.eq('state', stateParam)
+      }
+      const { data, error: projectsError } = await projectsQuery
+      if (projectsError) {
+        console.error('Stories cards projects error', projectsError)
+        return NextResponse.json(
+          { error: 'Failed to load story cards' },
+          { status: 500, headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } }
+        )
+      }
+      projects = data || []
+    } else if (grantAccess.mode === 'partner') {
+      console.log('[stories/cards] partner grant scope', Date.now() - t0, 'ms')
+      for (const batch of chunkGrantScopeIds(grantAccess.grantGridIds)) {
+        let projectsQuery = supabase
+          .from('err_projects')
+          .select(projectSelect)
+          .eq('source', 'mutual_aid_portal')
+          .in('status', MAP_STATUSES)
+        projectsQuery = applyGrantGridIdFilter(projectsQuery, {
+          ...grantAccess,
+          grantGridIds: batch,
+        })
+        if (stateParam) {
+          projectsQuery = projectsQuery.eq('state', stateParam)
+        }
+        const { data, error: projectsError } = await projectsQuery
+        if (projectsError) {
+          console.error('Stories cards projects error', projectsError)
+          return NextResponse.json(
+            { error: 'Failed to load story cards' },
+            { status: 500, headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } }
+          )
+        }
+        if (data?.length) projects.push(...data)
+      }
+    } else {
+      const { allowedStateNames } = await getUserStateAccess()
+      console.log('[stories/cards] getUserStateAccess', Date.now() - t0, 'ms')
+
+      let projectsQuery = supabase
+        .from('err_projects')
+        .select(projectSelect)
+        .eq('source', 'mutual_aid_portal')
+        .in('status', MAP_STATUSES)
+
+      if (allowedStateNames !== null && allowedStateNames.length > 0) {
+        projectsQuery = projectsQuery.in('state', allowedStateNames)
+      }
+      if (stateParam) {
+        projectsQuery = projectsQuery.eq('state', stateParam)
+      }
+
+      const { data, error: projectsError } = await projectsQuery
+      if (projectsError) {
+        console.error('Stories cards projects error', projectsError)
+        return NextResponse.json(
+          { error: 'Failed to load story cards' },
+          { status: 500, headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } }
+        )
+      }
+      projects = data || []
     }
 
-    const { data: projects, error: projectsError } = await projectsQuery
-    console.log('[stories/cards] projects query', Date.now() - t0, 'ms', (projects?.length ?? 0), 'rows')
-    if (projectsError) {
-      console.error('Stories cards projects error', projectsError)
-      return NextResponse.json(
-        { error: 'Failed to load story cards' },
-        { status: 500, headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } }
-      )
-    }
+    console.log('[stories/cards] projects query', Date.now() - t0, 'ms', projects.length, 'rows')
 
     let filtered = (projects || []) as any[]
     if (themeParams.length > 0) {

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
+import { assertProjectInGrantAccess } from '@/lib/userGrantAccess'
 
 type RouteContext = { params: { id: string } }
 
@@ -7,6 +8,8 @@ async function requirePortalProject(supabase: ReturnType<typeof getSupabaseRoute
   if (!projectId || projectId.startsWith('historical_')) {
     return { ok: false as const, response: NextResponse.json({ error: 'Supporting documents are only available for portal projects' }, { status: 400 }) }
   }
+  const scope = await assertProjectInGrantAccess(projectId)
+  if (!scope.ok) return scope
   const { data: project, error } = await supabase
     .from('err_projects')
     .select('id')

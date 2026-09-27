@@ -90,7 +90,7 @@ export default function StoryDetailPage() {
   const projectId = params?.projectId as string
   const fromState = searchParams.get('fromState')
   const fromTheme = searchParams.get('fromTheme')
-  const { can } = useAllowedFunctions()
+  const { can, isLoading: permissionsLoading } = useAllowedFunctions()
   const { i18n } = useTranslation()
   const canViewPage = can('learnings_view_page')
 
@@ -144,13 +144,21 @@ export default function StoryDetailPage() {
   }, [projectId, i18n.language])
 
   useEffect(() => {
+    if (permissionsLoading) return
     if (!canViewPage) {
       router.replace('/err-portal')
       return
     }
     fetchProject()
-  }, [canViewPage, router, fetchProject])
+  }, [permissionsLoading, canViewPage, router, fetchProject])
 
+  if (permissionsLoading) {
+    return (
+      <div className="max-w-3xl mx-auto px-4 py-8">
+        <p className="text-muted-foreground">Loading…</p>
+      </div>
+    )
+  }
   if (!canViewPage) return null
   if (notFound) {
     return (

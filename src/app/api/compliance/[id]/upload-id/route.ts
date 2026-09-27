@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { requirePermission } from '@/lib/requirePermission'
+import { assertProjectInRoomAccess } from '@/lib/userRoomAccess'
 import { sendIdUploadedAlert } from '@/lib/complianceAlerts'
 
 /**
@@ -42,6 +43,13 @@ export async function POST(
     if (fetchError || !screening) {
       return NextResponse.json({ error: 'Screening not found' }, { status: 404 })
     }
+
+    // Base ERR may only act on screenings for projects in its own emergency room
+    const roomCheck = await assertProjectInRoomAccess(String(screening.project_id), undefined, {
+      notFoundMessage: 'Screening not found',
+    })
+    if (roomCheck.handled && !roomCheck.ok) return roomCheck.response
+
     if (screening.status !== 'flagged' || screening.flag_type !== 'missing_id') {
       return NextResponse.json(
         { error: 'ID upload is only allowed for flagged missing_id screenings' },

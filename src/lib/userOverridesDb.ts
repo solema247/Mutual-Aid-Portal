@@ -87,3 +87,15 @@ export async function saveOverrides(
     )
   return { error: error ?? null }
 }
+
+/** Remove all permission overrides for a user (e.g. after a role change). */
+export async function clearUserOverrides(
+  supabase: SupabaseClient,
+  userId: string
+): Promise<{ error: Error | null }> {
+  const { error } = await supabase
+    .from('user_permission_overrides')
+    .delete()
+    .eq('user_id', userId)
+  return { error: error ?? null }
+}

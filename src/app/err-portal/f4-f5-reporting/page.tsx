@@ -300,10 +300,11 @@ function F4F5ReportingPageContent() {
   }
 
   useEffect(() => {
+    if (permissionsLoading) return
     if (!canViewPage) {
       router.replace('/err-portal')
     }
-  }, [canViewPage, router])
+  }, [permissionsLoading, canViewPage, router])
 
   useEffect(() => { load() }, [])
   useEffect(() => { if (tab === 'f5') loadF5() }, [tab])
@@ -561,6 +562,9 @@ function F4F5ReportingPageContent() {
 
   useF4F5ReportingPageExplainer(!permissionsLoading && canViewPage && !loading)
 
+  if (permissionsLoading) {
+    return <div className="p-6 text-muted-foreground">Loading…</div>
+  }
   if (!canViewPage) return null
 
   return (

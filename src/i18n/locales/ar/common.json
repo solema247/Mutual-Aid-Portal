@@ -12,5 +12,6 @@
   "error_updating_user_status": "فشل في تحديث حالة المستخدم",
   "error_unexpected": "حدث خطأ غير متوقع",
   "cancel": "إلغاء",
-  "select_all": "تحديد الكل"
+  "select_all": "تحديد الكل",
+  "clear_all": "مسح الكل"
 }

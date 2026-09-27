@@ -1,8 +1,12 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
+import { forbidIfPartner } from '@/lib/routeHandlerAuth'
 
 export async function POST(request: Request) {
   try {
+    const partnerBlock = await forbidIfPartner()
+    if (partnerBlock) return partnerBlock
+
     const supabase = getSupabaseRouteClient()
     const { grant_serial, grant_serial_id } = await request.json()
     const serialId = grant_serial || grant_serial_id

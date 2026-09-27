@@ -1,5 +1,10 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
+import {
+  assertMouInGrantAccess,
+  assertProjectInGrantAccess,
+  isProjectIdInMouScope,
+} from '@/lib/userGrantAccess'
 
 type RouteContext = { params: { id: string; confirmationId: string } }
 
@@ -13,9 +18,12 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     const { id: mouId, confirmationId } = params
     const body = await request.json().catch(() => ({}))
 
+    const mouScope = await assertMouInGrantAccess(mouId)
+    if (!mouScope.ok) return mouScope.response
+
     const { data: existing, error: fetchError } = await supabase
       .from('mou_payment_confirmations')
-      .select('id, mou_id')
+      .select('id, mou_id, project_id')
       .eq('id', confirmationId)
       .eq('mou_id', mouId)
       .maybeSingle()
@@ -27,6 +35,16 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     if (!existing) {
       return NextResponse.json({ error: 'Payment confirmation not found' }, { status: 404 })
     }
+
+    if (!isProjectIdInMouScope(mouScope.inScopeProjectIds, existing.project_id)) {
+      return NextResponse.json({ error: 'Payment confirmation not found' }, { status: 404 })
+    }
+
+    const projectScope = await assertProjectInGrantAccess(
+      String(existing.project_id),
+      mouScope.access
+    )
+    if (!projectScope.ok) return projectScope.response
 
     const update: Record<string, unknown> = {}
     if ('exchange_rate' in body) {
@@ -117,9 +135,12 @@ export async function DELETE(_request: Request, { params }: RouteContext) {
     const supabase = getSupabaseRouteClient()
     const { id: mouId, confirmationId } = params
 
+    const mouScope = await assertMouInGrantAccess(mouId)
+    if (!mouScope.ok) return mouScope.response
+
     const { data: existing, error: fetchError } = await supabase
       .from('mou_payment_confirmations')
-      .select('id, mou_id')
+      .select('id, mou_id, project_id')
       .eq('id', confirmationId)
       .eq('mou_id', mouId)
       .maybeSingle()
@@ -131,6 +152,16 @@ export async function DELETE(_request: Request, { params }: RouteContext) {
     if (!existing) {
       return NextResponse.json({ error: 'Payment confirmation not found' }, { status: 404 })
     }
+
+    if (!isProjectIdInMouScope(mouScope.inScopeProjectIds, existing.project_id)) {
+      return NextResponse.json({ error: 'Payment confirmation not found' }, { status: 404 })
+    }
+
+    const projectScope = await assertProjectInGrantAccess(
+      String(existing.project_id),
+      mouScope.access
+    )
+    if (!projectScope.ok) return projectScope.response
 
     const { data: files, error: filesError } = await supabase
       .from('mou_payment_files')

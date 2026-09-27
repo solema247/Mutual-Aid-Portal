@@ -5,7 +5,7 @@ import functionsList from '@/data/functions.json'
 export type RoleDefaultsMap = Record<string, string[]>
 
 /** Roles whose default packs can be edited in the UI. */
-export const EDITABLE_ROLE_DEFAULTS = ['base_err', 'state_err', 'admin'] as const
+export const EDITABLE_ROLE_DEFAULTS = ['base_err', 'state_err', 'partner', 'admin'] as const
 export type EditableRoleDefault = (typeof EDITABLE_ROLE_DEFAULTS)[number]
 
 export function isEditableRoleDefault(role: string): role is EditableRoleDefault {
@@ -68,6 +68,37 @@ export async function getRoleDefaultsMap(
   return map
 }
 
+/**
+ * Admin JSON convention is [] = all codes. Older DB packs may predate users_create.
+ * Append only that code; do not rewrite the rest of the admin pack.
+ */
+async function ensureAdminUsersCreate(
+  supabase: SupabaseClient,
+  existing: RoleDefaultsMap
+): Promise<RoleDefaultsMap> {
+  if (!allFunctionCodes.includes('users_create')) return existing
+  const adminCodes = existing.admin
+  // Empty pack is ambiguous; do not turn it into a single-code pack.
+  if (!adminCodes || adminCodes.length === 0 || adminCodes.includes('users_create')) {
+    return existing
+  }
+
+  const updated = [...adminCodes, 'users_create']
+  const { error } = await supabase.from('role_permission_defaults').upsert(
+    {
+      role: 'admin',
+      function_codes: updated,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: 'role' }
+  )
+  if (error) {
+    console.warn('role_permission_defaults admin users_create append failed:', error.message)
+    return existing
+  }
+  return { ...existing, admin: updated }
+}
+
 /** Ensure editable role rows exist (seed from JSON / all-codes for admin). No-op if table missing. */
 export async function ensureRoleDefaultsSeeded(
   supabase: SupabaseClient
@@ -76,26 +107,30 @@ export async function ensureRoleDefaultsSeeded(
   if (existing === null) return getJsonRoleDefaults()
 
   const missing = EDITABLE_ROLE_DEFAULTS.filter((role) => !(role in existing))
-  if (missing.length === 0) {
-    return { ...getJsonRoleDefaults(), ...existing }
+  let map: RoleDefaultsMap = { ...existing }
+
+  if (missing.length > 0) {
+    const rows = missing.map((role) => ({
+      role,
+      function_codes: seedCodesForRole(role),
+      updated_at: new Date().toISOString(),
+    }))
+
+    const { error } = await supabase.from('role_permission_defaults').upsert(rows, {
+      onConflict: 'role',
+    })
+    if (error) {
+      console.warn('role_permission_defaults seed failed:', error.message)
+      map = await ensureAdminUsersCreate(supabase, map)
+      return { ...getJsonRoleDefaults(), ...map }
+    }
+
+    const refreshed = await getRoleDefaultsMap(supabase)
+    map = { ...(refreshed ?? existing) }
   }
 
-  const rows = missing.map((role) => ({
-    role,
-    function_codes: seedCodesForRole(role),
-    updated_at: new Date().toISOString(),
-  }))
-
-  const { error } = await supabase.from('role_permission_defaults').upsert(rows, {
-    onConflict: 'role',
-  })
-  if (error) {
-    console.warn('role_permission_defaults seed failed:', error.message)
-    return { ...getJsonRoleDefaults(), ...existing }
-  }
-
-  const refreshed = await getRoleDefaultsMap(supabase)
-  return { ...getJsonRoleDefaults(), ...(refreshed ?? existing) }
+  map = await ensureAdminUsersCreate(supabase, map)
+  return { ...getJsonRoleDefaults(), ...map }
 }
 
 export async function saveRoleDefaults(

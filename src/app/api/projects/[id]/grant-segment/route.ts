@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
+import { assertProjectInGrantAccess } from '@/lib/userGrantAccess'
 
 /**
  * PATCH /api/projects/[id]/grant-segment
@@ -22,6 +23,9 @@ export async function PATCH(
         { status: 400 }
       )
     }
+
+    const scope = await assertProjectInGrantAccess(projectId)
+    if (!scope.ok) return scope.response
 
     const body = await request.json().catch(() => ({}))
     const raw = body.grant_segment

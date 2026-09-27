@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { requirePermission } from '@/lib/requirePermission'
 import { resetReportingStatusIfNoReportsRemaining } from '@/lib/projectStatus'
+import { assertProjectInGrantAccess, getUserGrantAccess } from '@/lib/userGrantAccess'
 
 export async function GET(
   _req: Request,
@@ -14,10 +15,23 @@ export async function GET(
 
     const { data: summary, error } = await supabase
       .from('err_summary')
-      .select('*, err_projects (err_id, state, project_objectives, grant_id, emergency_rooms (name, name_ar, err_code)), activities_raw_import (id, "ERR CODE", "ERR Name", "State", "Description of ERRs activity", "Serial Number")')
+      .select('*, err_projects (err_id, state, project_objectives, grant_id, grant_grid_id, emergency_rooms (name, name_ar, err_code)), activities_raw_import (id, "ERR CODE", "ERR Name", "State", "Description of ERRs activity", "Serial Number")')
       .eq('id', summaryId)
       .single()
     if (error) throw error
+
+    const grantAccess = await getUserGrantAccess()
+    if (grantAccess.mode !== 'all') {
+      // Historical / import-only F4 is out of Partner scope
+      if (summary?.activities_raw_import_id && !summary?.project_id) {
+        return NextResponse.json({ error: 'Summary not found' }, { status: 404 })
+      }
+      if (!summary?.project_id) {
+        return NextResponse.json({ error: 'Summary not found' }, { status: 404 })
+      }
+      const scope = await assertProjectInGrantAccess(String(summary.project_id), grantAccess)
+      if (!scope.ok) return scope.response
+    }
 
     // Direct import row: nested embed is often null (RLS); FK still points at full tracker data for historical F4
     let summaryOut: any = summary
@@ -190,6 +204,9 @@ export async function DELETE(
         { status: 400 }
       )
     }
+
+    const scope = await assertProjectInGrantAccess(String(row.project_id))
+    if (!scope.ok) return scope.response
 
     const { data: expRows } = await supabase
       .from('err_expense')

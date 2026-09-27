@@ -239,49 +239,59 @@ export default function ErrPortalLayout({
     })
   }
 
-  const sidebarItems: SidebarItem[] = [
-    {
-      href: '/err-portal',
-      label: t('err:home'),
-      icon: <Home className="h-5 w-5" />,
-    },
-    ...(grantManagementChildren.length > 0
-      ? [
-          {
-            type: 'group' as const,
-            label: t('err:grant_management'),
-            children: grantManagementChildren,
-          },
-        ]
-      : []),
-    ...(fSystemChildren.length > 0
-      ? [
-          {
-            type: 'group' as const,
-            label: 'F-System',
-            children: fSystemChildren,
-          },
-        ]
-      : []),
-    ...(reportingGroupChildren.length > 0
-      ? [
-          {
-            type: 'group' as const,
-            label: 'Reporting & learnings',
-            children: reportingGroupChildren,
-          },
-        ]
-      : []),
-    ...(adminGroupChildren.length > 0
-      ? [
-          {
-            type: 'group' as const,
-            label: 'Admin',
-            children: adminGroupChildren,
-          },
-        ]
-      : []),
-  ]
+  // While permissions are unresolved: minimal non-protected shell only (Home).
+  // Do not render permission-gated nav items (fail closed — no flash).
+  const sidebarItems: SidebarItem[] = permissionsLoading
+    ? [
+        {
+          href: '/err-portal',
+          label: t('err:home'),
+          icon: <Home className="h-5 w-5" />,
+        },
+      ]
+    : [
+        {
+          href: '/err-portal',
+          label: t('err:home'),
+          icon: <Home className="h-5 w-5" />,
+        },
+        ...(grantManagementChildren.length > 0
+          ? [
+              {
+                type: 'group' as const,
+                label: t('err:grant_management'),
+                children: grantManagementChildren,
+              },
+            ]
+          : []),
+        ...(fSystemChildren.length > 0
+          ? [
+              {
+                type: 'group' as const,
+                label: 'F-System',
+                children: fSystemChildren,
+              },
+            ]
+          : []),
+        ...(reportingGroupChildren.length > 0
+          ? [
+              {
+                type: 'group' as const,
+                label: 'Reporting & learnings',
+                children: reportingGroupChildren,
+              },
+            ]
+          : []),
+        ...(adminGroupChildren.length > 0
+          ? [
+              {
+                type: 'group' as const,
+                label: 'Admin',
+                children: adminGroupChildren,
+              },
+            ]
+          : []),
+      ]
 
   return (
     <PageExplainerProvider>

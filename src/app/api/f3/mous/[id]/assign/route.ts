@@ -1,6 +1,10 @@
 import { NextResponse } from 'next/server'
 import { allocateNextWorkplanSequence } from '@/lib/allocateNextWorkplanSequence'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
+import {
+  applyMouInScopeProjectFilter,
+  assertMouInGrantAccess,
+} from '@/lib/userGrantAccess'
 
 export async function POST(
   request: Request,
@@ -9,6 +13,10 @@ export async function POST(
   try {
     const supabase = getSupabaseRouteClient()
     const mouId = params.id
+
+    const mouScope = await assertMouInGrantAccess(mouId)
+    if (!mouScope.ok) return mouScope.response
+
     const { grant_id, donor_name, mmyy } = await request.json()
     
     if (!grant_id || !donor_name || !mmyy) {
@@ -19,13 +27,15 @@ export async function POST(
       return NextResponse.json({ error: 'MMYY must be 4 digits' }, { status: 400 })
     }
     
-    // Fetch all projects linked to this MOU
-    const { data: f1s, error: fetchError } = await supabase
+    // Only in-scope projects (Base ERR room / Partner grants) — never all mou_id rows
+    let f1Query = supabase
       .from('err_projects')
       .select('id, state, temp_file_key, file_key, grant_id, mou_id')
       .eq('mou_id', mouId)
       .eq('funding_status', 'committed')
       .eq('status', 'approved')
+    f1Query = applyMouInScopeProjectFilter(f1Query, mouScope.inScopeProjectIds)
+    const { data: f1s, error: fetchError } = await f1Query
     
     if (fetchError) throw fetchError
     if (!f1s || f1s.length === 0) {

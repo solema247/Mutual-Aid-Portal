@@ -3,6 +3,7 @@ import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { syncProjectEndDateFromF5 } from '@/lib/syncProjectEndDateFromF5'
 import { syncImplementedSectorFromF5 } from '@/lib/activityShift'
 import { translateF5Report, translateF5Reach } from '@/lib/translateHelper'
+import { assertProjectInGrantAccess } from '@/lib/userGrantAccess'
 
 export async function POST(req: Request) {
   try {
@@ -20,6 +21,9 @@ export async function POST(req: Request) {
 
     const project_id = existingReport?.project_id
     if (!project_id) return NextResponse.json({ error: 'Project not found' }, { status: 400 })
+
+    const scope = await assertProjectInGrantAccess(String(project_id))
+    if (!scope.ok) return scope.response
 
     // Detect language and translate if needed
     const sourceLanguage = summary.language || existingReport?.language || 'en'

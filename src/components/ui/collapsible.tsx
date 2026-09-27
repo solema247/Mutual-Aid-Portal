@@ -50,7 +50,7 @@ const CollapsibleRow = ({
           })}
         />
       </CollapsibleTrigger>
-      <CollapsibleContent className="pt-2 pb-4">
+      <CollapsibleContent className="pt-2 pb-2 data-[state=closed]:animate-none">
         {children}
       </CollapsibleContent>
     </Collapsible>

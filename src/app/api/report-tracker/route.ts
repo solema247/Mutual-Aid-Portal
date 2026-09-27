@@ -1,6 +1,12 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { getUserStateAccess } from '@/lib/userStateAccess'
+import {
+  applyGrantGridIdFilter,
+  chunkGrantScopeIds,
+  getUserGrantAccess,
+} from '@/lib/userGrantAccess'
+import { getUserRoomAccess } from '@/lib/userRoomAccess'
 import { getActivityAndCategoryLists, getSectorWithHighestAmount } from '@/lib/plannedActivitiesExpenses'
 import { isActivityShifted } from '@/lib/activityShift'
 import { pickF5TextForEnUi } from '@/lib/storiesEnDisplay'
@@ -110,11 +116,20 @@ export async function GET(request: Request) {
     /** Arabic UI: prefer primary Arabic columns (+ en fallback). Other locales: same as Stories overview (en cache for ar-authored reports). */
     const useEnUi = loc === '' || !loc.startsWith('ar')
     const supabase = getSupabaseRouteClient()
-    const { allowedStateNames } = await getUserStateAccess()
+    const [grantAccess, roomAccess] = await Promise.all([
+      getUserGrantAccess(),
+      getUserRoomAccess(),
+    ])
 
-    let query = supabase
-      .from('err_projects')
-      .select(`
+    if (roomAccess.mode === 'none') {
+      return NextResponse.json([])
+    }
+
+    if (roomAccess.mode !== 'room' && grantAccess.mode === 'none') {
+      return NextResponse.json([])
+    }
+
+    const projectSelect = `
         id,
         grant_id,
         state,
@@ -136,18 +151,63 @@ export async function GET(request: Request) {
         activity_shift_note,
         emergency_rooms ( err_code ),
         donors ( name, short_name )
-      `)
-      .in('status', ['approved', 'active', 'pending', 'completed'])
+      `
 
-    if (allowedStateNames !== null && allowedStateNames.length > 0) {
-      query = query.in('state', allowedStateNames)
-    }
+    let rows: { id: string; state?: string | null; grant_id?: string | null }[] = []
 
-    const { data: rows, error } = await query.order('state').order('grant_id')
+    if (roomAccess.mode === 'room') {
+      // Base ERR: emergency_room_id only. Never state or grant scope.
+      const { data, error } = await supabase
+        .from('err_projects')
+        .select(projectSelect)
+        .in('status', ['approved', 'active', 'pending', 'completed'])
+        .eq('emergency_room_id', roomAccess.emergencyRoomId)
+        .order('state')
+        .order('grant_id')
+      if (error) {
+        console.error('Report tracker fetch error:', error)
+        return NextResponse.json({ error: 'Failed to fetch report tracker data' }, { status: 500 })
+      }
+      rows = data || []
+    } else if (grantAccess.mode === 'partner') {
+      // Partner: grant_grid_id only. Do not apply state scope or null grant_grid_id.
+      for (const batch of chunkGrantScopeIds(grantAccess.grantGridIds)) {
+        let query = supabase
+          .from('err_projects')
+          .select(projectSelect)
+          .in('status', ['approved', 'active', 'pending', 'completed'])
+        query = applyGrantGridIdFilter(query, { ...grantAccess, grantGridIds: batch })
+        const { data, error } = await query.order('state').order('grant_id')
+        if (error) {
+          console.error('Report tracker fetch error:', error)
+          return NextResponse.json({ error: 'Failed to fetch report tracker data' }, { status: 500 })
+        }
+        if (data?.length) rows.push(...data)
+      }
+      rows.sort((a, b) => {
+        const stateCmp = String(a.state ?? '').localeCompare(String(b.state ?? ''))
+        if (stateCmp !== 0) return stateCmp
+        return String(a.grant_id ?? '').localeCompare(String(b.grant_id ?? ''))
+      })
+    } else {
+      const { allowedStateNames } = await getUserStateAccess()
 
-    if (error) {
-      console.error('Report tracker fetch error:', error)
-      return NextResponse.json({ error: 'Failed to fetch report tracker data' }, { status: 500 })
+      let query = supabase
+        .from('err_projects')
+        .select(projectSelect)
+        .in('status', ['approved', 'active', 'pending', 'completed'])
+
+      if (allowedStateNames !== null && allowedStateNames.length > 0) {
+        query = query.in('state', allowedStateNames)
+      }
+
+      const { data, error } = await query.order('state').order('grant_id')
+
+      if (error) {
+        console.error('Report tracker fetch error:', error)
+        return NextResponse.json({ error: 'Failed to fetch report tracker data' }, { status: 500 })
+      }
+      rows = data || []
     }
 
     const projectIds = (rows || []).map((p: any) => p.id).filter(Boolean)

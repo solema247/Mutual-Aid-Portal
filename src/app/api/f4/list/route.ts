@@ -2,6 +2,11 @@ import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { getUserStateAccess } from '@/lib/userStateAccess'
 import { loadProjectPaymentSummaries } from '@/lib/mouPaymentConfirmations'
+import {
+  chunkGrantScopeIds,
+  getUserGrantAccess,
+} from '@/lib/userGrantAccess'
+import { getUserRoomAccess } from '@/lib/userRoomAccess'
 
 const SUPABASE_IN_BATCH = 80
 
@@ -273,7 +278,19 @@ async function fetchPortalSummaries(
 export async function GET() {
   try {
     const supabase = getSupabaseRouteClient()
-    const { allowedStateNames } = await getUserStateAccess()
+    const [{ allowedStateNames }, grantAccess, roomAccess] = await Promise.all([
+      getUserStateAccess(),
+      getUserGrantAccess(),
+      getUserRoomAccess(),
+    ])
+
+    if (roomAccess.mode === 'none') {
+      return NextResponse.json([])
+    }
+
+    if (roomAccess.mode !== 'room' && grantAccess.mode === 'none') {
+      return NextResponse.json([])
+    }
 
     const projectSelect = `
       id,
@@ -296,24 +313,53 @@ export async function GET() {
       donors ( name, short_name )
     `
 
-    if (allowedStateNames !== null && allowedStateNames.length === 0) {
+    // Base ERR uses room scope and Partner uses grant scope only;
+    // state empty-array fail-closed applies to neither
+    if (
+      roomAccess.mode !== 'room' &&
+      grantAccess.mode !== 'partner' &&
+      allowedStateNames !== null &&
+      allowedStateNames.length === 0
+    ) {
       return NextResponse.json([])
     }
 
-    let projectsQuery = supabase
-      .from('err_projects')
-      .select(projectSelect)
-      .in('status', ['active', 'approved', 'completed'])
+    let projects: Record<string, unknown>[] = []
+    if (roomAccess.mode === 'room') {
+      const { data, error } = await supabase
+        .from('err_projects')
+        .select(projectSelect)
+        .in('status', ['active', 'approved', 'completed'])
+        .eq('emergency_room_id', roomAccess.emergencyRoomId)
+      if (error) throw error
+      projects = (data || []) as unknown as Record<string, unknown>[]
+    } else if (grantAccess.mode === 'partner') {
+      for (const batch of chunkGrantScopeIds(grantAccess.grantGridIds)) {
+        const { data, error } = await supabase
+          .from('err_projects')
+          .select(projectSelect)
+          .in('status', ['active', 'approved', 'completed'])
+          .in('grant_grid_id', batch)
+        if (error) throw error
+        if (data?.length) projects.push(...(data as unknown as Record<string, unknown>[]))
+      }
+    } else {
+      let projectsQuery = supabase
+        .from('err_projects')
+        .select(projectSelect)
+        .in('status', ['active', 'approved', 'completed'])
 
-    if (allowedStateNames !== null && allowedStateNames.length > 0) {
-      projectsQuery = projectsQuery.in('state', allowedStateNames)
+      if (allowedStateNames !== null && allowedStateNames.length > 0) {
+        projectsQuery = projectsQuery.in('state', allowedStateNames)
+      }
+
+      const { data, error: projectsError } = await projectsQuery
+      if (projectsError) throw projectsError
+      projects = (data || []) as unknown as Record<string, unknown>[]
     }
 
-    const { data: projects, error: projectsError } = await projectsQuery
-    if (projectsError) throw projectsError
-
     const projectById = new Map<string, Record<string, unknown>>()
-    for (const p of projects || []) {
+    for (const p of projects) {
       projectById.set(String((p as { id: string }).id), p as Record<string, unknown>)
     }
 
@@ -350,15 +396,37 @@ export async function GET() {
         )
       `
 
-    const summaries = await fetchPortalSummaries(supabase, allowedStateNames, portalSelect)
+    // Base ERR / Partner: summaries only for in-scope project ids (never global unscoped fetch)
+    const summaries =
+      roomAccess.mode === 'room' || grantAccess.mode === 'partner'
+        ? await (async () => {
+            const ids = Array.from(projectById.keys())
+            if (ids.length === 0) return [] as Record<string, unknown>[]
+            const out: Record<string, unknown>[] = []
+            for (const batch of chunkIds(ids)) {
+              const { data, error } = await supabase
+                .from('err_summary')
+                .select(portalSelect)
+                .is('activities_raw_import_id', null)
+                .in('project_id', batch)
+                .order('created_at', { ascending: false })
+              if (error) throw error
+              out.push(...((data || []) as unknown as Record<string, unknown>[]))
+            }
+            return out
+          })()
+        : await fetchPortalSummaries(supabase, allowedStateNames, portalSelect)
 
     const allProjectsForGrants = Array.from(projectById.values())
     const { gridById, gridByGrantKey, gridGrantIdByUuid } = await loadGrantNameMaps(supabase, allProjectsForGrants)
 
-    // Historical F4 reports (unchanged)
-    const { data: historicalSummaries } = await supabase
-      .from('err_summary')
-      .select(`
+    // Historical F4: out of Partner scope (no grant_grid_id)
+    let filteredHistorical: Record<string, unknown>[] = []
+    const importById: Record<string, Record<string, unknown>> = {}
+    if (grantAccess.mode === 'all') {
+      const { data: historicalSummaries } = await supabase
+        .from('err_summary')
+        .select(`
         id,
         project_id,
         activities_raw_import_id,
@@ -379,43 +447,43 @@ export async function GET() {
           "Serial Number"
         )
       `)
-      .not('activities_raw_import_id', 'is', null)
-      .is('project_id', null)
-      .order('created_at', { ascending: false })
+        .not('activities_raw_import_id', 'is', null)
+        .is('project_id', null)
+        .order('created_at', { ascending: false })
 
-    const importById: Record<string, Record<string, unknown>> = {}
-    const impIds = [
-      ...new Set(
-        (historicalSummaries || [])
-          .map((s: { activities_raw_import_id?: string }) => s.activities_raw_import_id)
-          .filter(Boolean)
-      ),
-    ] as string[]
+      const impIds = [
+        ...new Set(
+          (historicalSummaries || [])
+            .map((s: { activities_raw_import_id?: string }) => s.activities_raw_import_id)
+            .filter(Boolean)
+        ),
+      ] as string[]
 
-    if (impIds.length) {
-      const { data: impRows } = await supabase
-        .from('activities_raw_import')
-        .select('id, "Serial Number", "ERR CODE", "ERR Name", "State", "Project Donor"')
-        .in('id', impIds)
-      for (const row of impRows || []) {
-        importById[String((row as { id: string }).id)] = row as Record<string, unknown>
+      if (impIds.length) {
+        const { data: impRows } = await supabase
+          .from('activities_raw_import')
+          .select('id, "Serial Number", "ERR CODE", "ERR Name", "State", "Project Donor"')
+          .in('id', impIds)
+        for (const row of impRows || []) {
+          importById[String((row as { id: string }).id)] = row as Record<string, unknown>
+        }
       }
-    }
 
-    let filteredHistorical = historicalSummaries || []
-    if (allowedStateNames !== null && allowedStateNames.length > 0) {
-      filteredHistorical = (historicalSummaries || []).filter((s: Record<string, unknown>) => {
-        const raw = s.activities_raw_import
-        const nested = (Array.isArray(raw) ? raw[0] : raw) || {}
-        const imp = importById[String(s.activities_raw_import_id)] || {}
-        const state = (nested as Record<string, unknown>)['State'] ?? imp['State']
-        return state && allowedStateNames.includes(String(state))
-      })
+      filteredHistorical = historicalSummaries || []
+      if (allowedStateNames !== null && allowedStateNames.length > 0) {
+        filteredHistorical = (historicalSummaries || []).filter((s: Record<string, unknown>) => {
+          const raw = s.activities_raw_import
+          const nested = (Array.isArray(raw) ? raw[0] : raw) || {}
+          const imp = importById[String(s.activities_raw_import_id)] || {}
+          const state = (nested as Record<string, unknown>)['State'] ?? imp['State']
+          return state && allowedStateNames.includes(String(state))
+        })
+      }
     }
 
     const mouIds = Array.from(
       new Set(
-        [...(projects || []), ...summaries.map((s) => s.err_projects)].flatMap((item) => {
+        [...projects, ...summaries.map((s) => s.err_projects)].flatMap((item) => {
           const p = item as Record<string, unknown> | null | undefined
           if (!p) return []
           const mouId = p.mou_id
@@ -472,7 +540,7 @@ export async function GET() {
     const attachCounts: Record<number, number> = {}
     const allSummaryIds = [
       ...summaries.map((s) => s.id),
-      ...filteredHistorical.map((s: { id: number }) => s.id),
+      ...filteredHistorical.map((s) => s.id as number),
     ].filter(Boolean) as number[]
 
     if (allSummaryIds.length) {

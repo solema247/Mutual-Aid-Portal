@@ -9,6 +9,11 @@ import {
 } from '@/lib/poolProjectClassification'
 import { normalizeRestrictionLabel } from '@/lib/poolRestrictionLabel'
 import {
+  applyGrantGridIdFilter,
+  chunkGrantScopeIds,
+  getUserGrantAccess,
+} from '@/lib/userGrantAccess'
+import {
   inDateRange,
   matchesDecisionId,
   matchesMulti,
@@ -79,6 +84,115 @@ export async function GET(request: Request) {
   try {
     const supabase = getSupabaseRouteClient()
     const filters = parsePoolSliceFilters(new URL(request.url).searchParams)
+    const grantAccess = await getUserGrantAccess()
+    const emptyByState = {
+      rows: [],
+      filter_options: {
+        partnerOptions: [] as string[],
+        restrictionOptions: [] as string[],
+        grantOptions: [] as string[],
+        stateOptions: [] as string[],
+      },
+    }
+    if (grantAccess.mode === 'none') {
+      return NextResponse.json(emptyByState, {
+        headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' },
+      })
+    }
+    if (grantAccess.mode === 'partner') {
+      const assignedFromProjectsByState = new Map<string, number>()
+      const committedByState = new Map<string, number>()
+      const pendingByState = new Map<string, number>()
+      const optionStates: string[] = []
+      const optionGrants: string[] = []
+      const optionRestrictions: string[] = []
+      const skipUsage = Boolean(filters.decisionId) || filters.partners.length > 0
+
+      if (!skipUsage) {
+        for (const batch of chunkGrantScopeIds(grantAccess.grantGridIds)) {
+          let from = 0
+          const pageSize = 1000
+          while (true) {
+            let query = supabase
+              .from('err_projects')
+              .select('expenses, funding_status, status, state, grant_id, grant_grid_id, grant_segment, date, date_transfer')
+            query = applyGrantGridIdFilter(query, { ...grantAccess, grantGridIds: batch })
+            const { data, error } = await query.range(from, from + pageSize - 1)
+            if (error) throw error
+            if (!data?.length) break
+            for (const p of data) {
+              const bucket = classifyPoolProject(p)
+              if (!bucket) continue
+              const state = normalizeStateName(p.state)
+              const grant = p.grant_id || null
+              const restriction = normalizeRestrictionLabel(p.grant_segment)
+              const date = p.date_transfer || p.date || null
+              optionStates.push(state)
+              if (grant && !/^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(String(grant))) {
+                optionGrants.push(String(grant))
+              }
+              if (p.grant_segment) optionRestrictions.push(restriction)
+              if (
+                !matchesPoolSlice(
+                  filters,
+                  { state, restriction, grant, date },
+                  { skipDecisionId: true }
+                )
+              ) {
+                continue
+              }
+              const amount = projectExpenseTotal(p.expenses)
+              const target =
+                bucket === 'assigned'
+                  ? assignedFromProjectsByState
+                  : bucket === 'committed'
+                    ? committedByState
+                    : pendingByState
+              target.set(state, (target.get(state) || 0) + amount)
+            }
+            if (data.length < pageSize) break
+            from += pageSize
+          }
+        }
+      }
+
+      const states = Array.from(
+        new Set<string>([
+          ...Array.from(assignedFromProjectsByState.keys()),
+          ...Array.from(committedByState.keys()),
+          ...Array.from(pendingByState.keys()),
+        ])
+      )
+      const rows = states
+        .map((state) => ({
+          state_name: state,
+          ...poolRowFromParts({
+            allocated: 0,
+            assigned: assignedFromProjectsByState.get(state) || 0,
+            committed: committedByState.get(state) || 0,
+            pending: pendingByState.get(state) || 0,
+          }),
+          available: 0,
+          balance: 0,
+          remaining: 0,
+          decision_count: 0,
+          overall_decision_count: 0,
+        }))
+        .sort((a, b) => a.state_name.localeCompare(b.state_name))
+
+      return NextResponse.json(
+        {
+          rows,
+          filter_options: {
+            partnerOptions: [],
+            restrictionOptions: uniqueSortedStrings(optionRestrictions),
+            grantOptions: uniqueSortedStrings(optionGrants),
+            stateOptions: uniqueSortedStrings(optionStates),
+          },
+        },
+        { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } }
+      )
+    }
 
     const { getUserStateAccess } = await import('@/lib/userStateAccess')
     const { allowedStateNames } = await getUserStateAccess()
