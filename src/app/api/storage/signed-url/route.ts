@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL as string
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string
-const client = createClient(supabaseUrl, supabaseKey)
+import { getActivePublic } from '@/lib/sbEnv'
 
 export async function GET(request: Request) {
   try {
+    const { url, anonKey } = getActivePublic()
+    const client = createClient(url, anonKey)
+
     const { searchParams } = new URL(request.url)
     const bucket = searchParams.get('bucket') || 'images'
     const path = searchParams.get('path')
@@ -21,5 +21,3 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Failed to create signed URL' }, { status: 500 })
   }
 }
-
-

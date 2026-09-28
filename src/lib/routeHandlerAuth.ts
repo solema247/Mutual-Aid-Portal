@@ -1,5 +1,3 @@
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
-import { cookies } from 'next/headers'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { can, type Role } from '@/lib/permissions'
 import { getOverridesForUser } from '@/lib/userOverridesDb'
@@ -9,6 +7,7 @@ import {
   getJsonRoleDefaults,
   type RoleDefaultsMap,
 } from '@/lib/roleDefaultsDb'
+import { createSbRouteClient } from '@/lib/sbRoute'
 
 export type RouteAuthContext = {
   supabase: SupabaseClient
@@ -18,7 +17,7 @@ export type RouteAuthContext = {
 }
 
 export async function getRouteHandlerAuth (): Promise<RouteAuthContext | null> {
-  const supabase = createRouteHandlerClient({ cookies })
+  const supabase = createSbRouteClient()
   const { data: { session } } = await supabase.auth.getSession()
   if (!session) return null
 

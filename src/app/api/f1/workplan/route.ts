@@ -1,6 +1,5 @@
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
-import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
+import { createSbRouteClient } from '@/lib/sbRoute'
 import { normalizeF1DateForDb } from '@/lib/f1WorkplanNormalize'
 import { f1WorkplanCreateSchema } from '@/lib/f1WorkplanSchema'
 import { ensureScreeningsForProjects } from '@/lib/compliance'
@@ -13,7 +12,7 @@ function emptyToNull<T extends string | null | undefined> (v: T): string | null 
 
 export async function POST (request: Request) {
   try {
-    const supabase = createRouteHandlerClient({ cookies })
+    const supabase = createSbRouteClient()
 
     const { data: { session }, error: sessionError } = await supabase.auth.getSession()
     if (sessionError || !session) {

@@ -1,6 +1,5 @@
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
-import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
+import { createSbRouteClient } from '@/lib/sbRoute'
 import { getAllowedFunctions } from '@/lib/permissions'
 import { getOverridesForUser } from '@/lib/userOverridesDb'
 import {
@@ -11,7 +10,7 @@ import {
 
 export async function GET() {
   try {
-    const supabase = createRouteHandlerClient({ cookies })
+    const supabase = createSbRouteClient()
 
     const { data: { session }, error: sessionError } = await supabase.auth.getSession()
 

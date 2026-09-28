@@ -1,6 +1,6 @@
-import { createMiddlewareClient } from '@supabase/auth-helpers-nextjs'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
+import { createSbMiddlewareClient } from '@/lib/sbRoute'
 
 export async function middleware(req: NextRequest) {
   const res = NextResponse.next()
@@ -12,7 +12,7 @@ export async function middleware(req: NextRequest) {
     // Only check session if we need to redirect authenticated users away from login
     // But do it safely with error handling
     try {
-      const supabase = createMiddlewareClient({ req, res })
+      const supabase = createSbMiddlewareClient(req, res)
       
       // Check if this is a magic link sign in
       const token = requestUrl.searchParams.get('token')
@@ -60,7 +60,7 @@ export async function middleware(req: NextRequest) {
   let session = null
   if (isAuthenticated) {
     try {
-      const supabase = createMiddlewareClient({ req, res })
+      const supabase = createSbMiddlewareClient(req, res)
       const { data: { session: sessionData } } = await supabase.auth.getSession()
       session = sessionData
     } catch (error) {

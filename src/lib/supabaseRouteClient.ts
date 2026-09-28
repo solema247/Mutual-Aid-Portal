@@ -1,8 +1,5 @@
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
-import { cookies } from 'next/headers'
+import { createSbRouteClient } from '@/lib/sbRoute'
 
 export function getSupabaseRouteClient() {
-  return createRouteHandlerClient({ cookies })
+  return createSbRouteClient()
 }
-
-

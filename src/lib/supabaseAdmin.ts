@@ -1,20 +1,43 @@
-import { createClient } from '@supabase/supabase-js'
+import { createClient, type SupabaseClient } from '@supabase/supabase-js'
+import { pairClients } from '@/lib/sbPair'
+import {
+  getActiveService,
+  getRemoteBService,
+  hasPairedWrite,
+  hasRemoteA,
+} from '@/lib/sbEnv'
 
-// Service role client for admin operations (bypasses RLS)
-// This is safe to use in server-side API routes only
-export function getSupabaseAdmin() {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-
-  if (!supabaseUrl || !supabaseServiceKey) {
-    throw new Error('Missing Supabase URL or Service Role Key')
-  }
-
-  return createClient(supabaseUrl, supabaseServiceKey, {
+function createServiceClient(url: string, serviceRoleKey: string): SupabaseClient {
+  return createClient(url, serviceRoleKey, {
     auth: {
       autoRefreshToken: false,
-      persistSession: false
-    }
+      persistSession: false,
+    },
   })
 }
 
+export function getSupabaseAdmin(): SupabaseClient {
+  const primary = getActiveService()
+  const primaryClient = createServiceClient(primary.url, primary.serviceRoleKey)
+
+  if (!hasPairedWrite()) {
+    return primaryClient
+  }
+
+  const secondary = getRemoteBService()
+  const secondaryClient = createServiceClient(secondary.url, secondary.serviceRoleKey)
+  return pairClients(primaryClient, secondaryClient)
+}
+
+export function getRemoteBAdmin(): SupabaseClient {
+  const remote = getRemoteBService()
+  return createServiceClient(remote.url, remote.serviceRoleKey)
+}
+
+export function getRemoteAAdmin(): SupabaseClient {
+  if (!hasRemoteA()) {
+    return getSupabaseAdmin()
+  }
+  const remote = getActiveService()
+  return createServiceClient(remote.url, remote.serviceRoleKey)
+}
