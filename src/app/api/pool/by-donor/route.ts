@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
-import { getSupabaseAdmin } from '@/lib/supabaseAdmin'
 import { normalizeProjectDonorToGrantId } from '@/lib/normalizeGrantId'
 
 export const dynamic = 'force-dynamic'
@@ -38,7 +37,7 @@ function toDisplayKey(grantId: string): string {
   return grantId.trim()
 }
 
-// Extract activity serials from grants.activities jsonb (array of strings or objects with id/serial)
+// Extract activity serials from grants_grid_view.activities (csv text or jsonb-like)
 function activitySerialsFromJsonb(activities: unknown): string[] {
   if (activities == null) return []
   if (Array.isArray(activities)) {
@@ -57,13 +56,12 @@ function activitySerialsFromJsonb(activities: unknown): string[] {
   return []
 }
 
-// GET /api/pool/by-donor - Aggregated by grant from grants table (foreign table). Included = total_transferred - transfer_fee
+// GET /api/pool/by-donor - Aggregated by grant from grants_grid_view. Included = total_transferred - transfer_fee
 export async function GET() {
   try {
     const supabase = getSupabaseRouteClient()
-    const grantsSupabase = getSupabaseAdmin()
 
-    // Fetch grants from public.grants (foreign table): grant_id, project_name, total_transferred_amount_usd, sum_transfer_fee_amount, activities
+    // Canonical grants (not Airtable FDW) — FDW vault is unreliable on prod
     const grants = await fetchAllRows<{
       grant_id: string | null;
       project_name: string | null;
@@ -71,8 +69,8 @@ export async function GET() {
       sum_transfer_fee_amount: number | null;
       activities: unknown;
     }>(
-      grantsSupabase,
-      'grants',
+      supabase,
+      'grants_grid_view',
       'grant_id, project_name, total_transferred_amount_usd, sum_transfer_fee_amount, activities',
       (q) => q.order('grant_id', { ascending: true })
     )

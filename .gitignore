@@ -69,6 +69,7 @@ LOCAL_PROD_CUTOVER_PLAN.md
 scripts/sync-storage-bucket.js
 scripts/retry-storage-paths.js
 scripts/copy-approved-beneficiaries.js
+scripts/fix-prod-arabic.js
 
 # Local CSV imports/exports — not committed
 data/imports/*

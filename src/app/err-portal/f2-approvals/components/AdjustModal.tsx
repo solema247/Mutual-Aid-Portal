@@ -74,12 +74,10 @@ export default function AdjustModal({
     try {
       setIsLoading(true)
 
-      // Get current workplan data
       const { data: workplanData, error: workplanError } = await supabase
         .from('err_projects')
         .select(`
           grant_call_id,
-          grant_call_state_allocation_id,
           grant_serial_id,
           grant_call_state_allocations (
             state_name
@@ -90,72 +88,45 @@ export default function AdjustModal({
 
       if (workplanError) throw workplanError
 
-      // Get current user
-      const { data: { user }, error: userError } = await supabase.auth.getUser()
-      if (userError) throw userError
-
-      let finalSerialId = workplanData.grant_serial_id
-
-      // If grant_serial_id is 'new', create a new serial
+      let grantSerialId: string | undefined
       if (workplanData.grant_serial_id === 'new') {
         const response = await fetch('/api/fsystem/grant-serials/create', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             grant_call_id: workplanData.grant_call_id,
-            state_name: Array.isArray(workplanData.grant_call_state_allocations) 
-              ? workplanData.grant_call_state_allocations[0]?.state_name 
-              : (workplanData.grant_call_state_allocations as any)?.state_name,
-            yymm: new Date().toISOString().slice(2, 4) + new Date().toISOString().slice(5, 7)
-          })
+            state_name: Array.isArray(workplanData.grant_call_state_allocations)
+              ? workplanData.grant_call_state_allocations[0]?.state_name
+              : (workplanData.grant_call_state_allocations as { state_name?: string } | null)?.state_name,
+            yymm: new Date().toISOString().slice(2, 4) + new Date().toISOString().slice(5, 7),
+          }),
         })
 
         if (!response.ok) throw new Error('Failed to create grant serial')
         const newSerial = await response.json()
-        finalSerialId = newSerial.grant_serial
-
-        // Update workplan with new serial
-        const { error: updateError } = await supabase
-          .from('err_projects')
-          .update({ grant_serial_id: finalSerialId })
-          .eq('id', workplanId)
-
-        if (updateError) throw updateError
+        grantSerialId = newSerial.grant_serial
       }
 
-      // Calculate delta amount
-      const oldTotal = calculateTotalAmount(expenses)
-      const newTotal = calculateTotalAmount(formData.expenses || [])
-      const deltaAmount = newTotal - oldTotal
-
-      // Update workplan expenses
-      const { error: expensesError } = await supabase
-        .from('err_projects')
-        .update({ expenses: JSON.stringify(formData.expenses) })
-        .eq('id', workplanId)
-
-      if (expensesError) throw expensesError
-
-      // Insert adjustment delta
-      const { error: ledgerError } = await supabase
-        .from('grant_project_commitment_ledger')
-        .insert({
+      const res = await fetch('/api/f2/workplans/adjust', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           workplan_id: workplanId,
-          grant_call_id: workplanData.grant_call_id,
-          grant_call_state_allocation_id: workplanData.grant_call_state_allocation_id,
-          grant_serial_id: finalSerialId,
-          delta_amount: deltaAmount,
+          expenses: formData.expenses,
           reason: formData.reason,
-          created_by: user?.id
-        })
-
-      if (ledgerError) throw ledgerError
+          ...(grantSerialId ? { grant_serial_id: grantSerialId } : {}),
+        }),
+      })
+      const payload = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        throw new Error(payload.error || t('f2:adjust_error'))
+      }
 
       onOpenChange(false)
-      onAdjust?.() // Notify parent that adjustment was made
+      onAdjust?.()
     } catch (error) {
       console.error('Error adjusting workplan:', error)
-      alert(t('f2:adjust_error'))
+      alert(error instanceof Error ? error.message : t('f2:adjust_error'))
     } finally {
       setIsLoading(false)
     }

@@ -164,92 +164,27 @@ export default function AssignToGrantCallModal({
     try {
       setIsLoading(true)
 
-      // Get current user
-      const { data: { user }, error: userError } = await supabase.auth.getUser()
-      if (userError) throw userError
-
-      // Get workplan details to get cycle state allocation and state
-      const { data: workplanData, error: workplanError } = await supabase
-        .from('err_projects')
-        .select('cycle_state_allocation_id, grant_serial_id, state')
-        .eq('id', workplanId)
-        .single()
-
-      if (workplanError) throw workplanError
-
-      // Find the grant call state allocation for this grant call and state
-      // This is needed because the database constraint requires grant_call_state_allocation_id to be NOT NULL
-      const { data: grantCallAllocation, error: allocationError } = await supabase
-        .from('grant_call_state_allocations')
-        .select('id')
-        .eq('grant_call_id', selectedGrantCallId)
-        .eq('state_name', workplanData.state)
-        .order('decision_no', { ascending: false })
-        .limit(1)
-        .single()
-
-      if (allocationError) {
-        console.error('Error fetching grant call allocation:', allocationError)
-        throw new Error(`No state allocation found for grant call and state: ${workplanData.state}`)
-      }
-
-      // Update workplan with grant call assignment
-      // Also populate donor_id from selected grant call
-      const { data: grantCallRow, error: grantCallFetchError } = await supabase
-        .from('grant_calls')
-        .select('donor_id')
-        .eq('id', selectedGrantCallId)
-        .single()
-
-      if (grantCallFetchError) throw grantCallFetchError
-
-      const { error: updateError } = await supabase
-        .from('err_projects')
-        .update({
-          grant_call_id: selectedGrantCallId,
-          grant_call_state_allocation_id: grantCallAllocation.id,
-          donor_id: grantCallRow?.donor_id || null
-        })
-        .eq('id', workplanId)
-
-      if (updateError) throw updateError
-
-      // Extract base grant serial from workplan's grant_serial_id
-      // Workplan ID format: LCC-CYCLEWK38-P2H-KA-1025-0001-001
-      // Base serial format: LCC-CYCLEWK38-P2H-KA-1025-0001
-      let baseGrantSerial = workplanData.grant_serial_id
-      if (baseGrantSerial && baseGrantSerial.includes('-')) {
-        const parts = baseGrantSerial.split('-')
-        const last = parts[parts.length - 1]
-        // Only strip a trailing 3-digit workplan suffix (e.g., -001). Keep 4-digit base segment (e.g., -0001)
-        if (/^\d{3}$/.test(last)) {
-          baseGrantSerial = parts.slice(0, -1).join('-')
-        }
-      }
-
-      // Create assignment record in commitment ledger
-      // Note: We include both old and new fields for compatibility
-      const { error: ledgerError } = await supabase
-        .from('grant_project_commitment_ledger')
-        .insert({
+      const res = await fetch('/api/f2/workplans/assign-grant-call', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           workplan_id: workplanId,
           grant_call_id: selectedGrantCallId,
-          grant_call_state_allocation_id: grantCallAllocation.id, // Required by database constraint
-          grant_serial_id: baseGrantSerial || workplanId,
-          delta_amount: workplanAmount,
-          reason: `Grant call assignment: ${assignmentReason}`,
-          created_by: user?.id,
+          reason: assignmentReason,
           funding_cycle_id: cycleId,
-          cycle_state_allocation_id: workplanData.cycle_state_allocation_id
-        })
-
-      if (ledgerError) throw ledgerError
+          workplan_amount: workplanAmount,
+        }),
+      })
+      const payload = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        throw new Error(payload.error || 'Failed to assign workplan to grant call')
+      }
 
       onOpenChange(false)
-      onAssign?.() // Notify parent that assignment was made
+      onAssign?.()
     } catch (error) {
       console.error('Error assigning to grant call:', error)
-      alert('Failed to assign workplan to grant call')
+      alert(error instanceof Error ? error.message : 'Failed to assign workplan to grant call')
     } finally {
       setIsLoading(false)
     }

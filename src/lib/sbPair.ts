@@ -29,6 +29,8 @@ type WriteOp = 'insert' | 'update' | 'upsert' | 'delete'
 
 type Filter = { op: FilterOp; args: unknown[] }
 
+const ID_KEYS = ['id', 'expense_id'] as const
+
 const FILTER_OPS = new Set<string>([
   'eq',
   'neq',
@@ -54,6 +56,36 @@ const FILTER_OPS = new Set<string>([
   'or',
   'filter',
 ])
+
+function mergeRowIds(row: unknown, returned: unknown): unknown {
+  if (!row || typeof row !== 'object' || Array.isArray(row)) return row
+  if (!returned || typeof returned !== 'object' || Array.isArray(returned)) return row
+  const out = { ...(row as Record<string, unknown>) }
+  const ret = returned as Record<string, unknown>
+  for (const key of ID_KEYS) {
+    if (ret[key] != null) out[key] = ret[key]
+  }
+  return out
+}
+
+/** Copy primary-generated ids onto the secondary insert/upsert payload. */
+function mergeReturnedIds(payload: unknown, data: unknown): unknown {
+  if (payload == null || data == null) return payload
+
+  if (Array.isArray(payload) && Array.isArray(data)) {
+    return payload.map((row, i) => mergeRowIds(row, data[i]))
+  }
+
+  if (Array.isArray(payload) && payload.length === 1 && !Array.isArray(data)) {
+    return [mergeRowIds(payload[0], data)]
+  }
+
+  if (!Array.isArray(payload) && !Array.isArray(data)) {
+    return mergeRowIds(payload, data)
+  }
+
+  return payload
+}
 
 function applyFilters(builder: any, filters: Filter[]) {
   let b = builder
@@ -105,10 +137,24 @@ function createWriteBuilder(
   const api: any = {
     then(onFulfilled: any, onRejected: any) {
       return Promise.resolve(chain)
-        .then(async (result: { error?: unknown }) => {
+        .then(async (result: { data?: unknown; error?: unknown }) => {
           if (!result?.error) {
             try {
-              await runSecondary(secondary, table, writeOp, payload, options, filters)
+              let secondaryPayload = payload
+              if (
+                (writeOp === 'insert' || writeOp === 'upsert') &&
+                result.data != null
+              ) {
+                secondaryPayload = mergeReturnedIds(payload, result.data)
+              }
+              await runSecondary(
+                secondary,
+                table,
+                writeOp,
+                secondaryPayload,
+                options,
+                filters
+              )
             } catch (err) {
               console.error(`[sb] ${table}.${writeOp}`, err)
             }

@@ -58,13 +58,18 @@ export async function GET(request: NextRequest) {
 
     const adminSupabase = getSupabaseAdmin()
 
-    // Grants table: only rows for this exact grant_id (e.g. FCDO-HELP-S → only that grant's total)
+    // Canonical grants_grid_view (not Airtable FDW) — FDW vault is unreliable on prod
     const grants = await fetchAllRows<{
       grant_id: string | null
       total_transferred_amount_usd: number | null
       sum_transfer_fee_amount: number | null
       activities: unknown
-    }>(adminSupabase, 'grants', 'grant_id, total_transferred_amount_usd, sum_transfer_fee_amount, activities')
+    }>(
+      adminSupabase,
+      'grants_grid_view',
+      'grant_id, total_transferred_amount_usd, sum_transfer_fee_amount, activities',
+      (q: any) => q.eq('grant_id', grantId)
+    )
 
     let totalIncluded = 0
     const activitySerials: string[] = []

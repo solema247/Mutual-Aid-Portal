@@ -69,6 +69,7 @@ export async function POST (request: Request) {
     const localityClean = emptyToNull(v.locality)
 
     const row = {
+      id: crypto.randomUUID(),
       date: dbDate,
       state: stateName,
       locality: localityClean,

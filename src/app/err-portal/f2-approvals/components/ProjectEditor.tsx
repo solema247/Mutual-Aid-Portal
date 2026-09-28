@@ -240,14 +240,15 @@ export default function ProjectEditor({ open, onOpenChange, projectId, onSaved }
               data.locality !== roomState.locality
             
             if (needsUpdate) {
-              // Silently update in background
-              await supabase
-                .from('err_projects')
-                .update({
+              // Silently update in background (paired via API)
+              await fetch(`/api/projects/${projectId}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
                   state: roomState.state_name,
                   locality: roomState.locality
                 })
-                .eq('id', projectId)
+              })
               
               // Update local form data with synced values
               data.state = roomState.state_name
@@ -507,35 +508,6 @@ export default function ProjectEditor({ open, onOpenChange, projectId, onSaved }
     if (!projectId) return
     setSaving(true)
     try {
-      // If emergency_room_id is set, ensure state/locality are synced from the room
-      let finalState = form.state
-      let finalLocality = form.locality
-
-      if (form.emergency_room_id) {
-        const { data: roomData } = await supabase
-          .from('emergency_rooms')
-          .select(`
-            state:states!emergency_rooms_state_reference_fkey(
-              state_name,
-              locality
-            )
-          `)
-          .eq('id', form.emergency_room_id)
-          .single()
-
-        if (roomData?.state) {
-          const roomState = Array.isArray(roomData.state) 
-            ? roomData.state[0] 
-            : roomData.state
-
-          if (roomState && typeof roomState === 'object' && 'state_name' in roomState) {
-            // Auto-sync: Always use the room's actual state and locality
-            finalState = roomState.state_name
-            finalLocality = roomState.locality || null
-          }
-        }
-      }
-
       // Build planned_activities payload from the plannedActivities state
       const plannedActivitiesForSave = plannedActivities.map(pa => ({
         activity: pa.activity || '',
@@ -545,7 +517,7 @@ export default function ProjectEditor({ open, onOpenChange, projectId, onSaved }
         planned_activity_cost: pa.planned_activity_cost ?? null
       }))
 
-      const payload: any = {
+      const payload: Record<string, unknown> = {
         date: form.date || null,
         project_objectives: form.project_objectives || null,
         intended_beneficiaries: form.intended_beneficiaries || null,
@@ -569,22 +541,25 @@ export default function ProjectEditor({ open, onOpenChange, projectId, onSaved }
         }))
       }
 
-      // Include emergency_room_id, state, and locality if they exist
       if (form.emergency_room_id) {
         payload.emergency_room_id = form.emergency_room_id
       }
-      if (finalState) {
-        payload.state = finalState
+      if (form.state) {
+        payload.state = form.state
       }
-      if (finalLocality !== undefined) {
-        payload.locality = finalLocality
+      if (form.locality !== undefined) {
+        payload.locality = form.locality
       }
 
-      const { error } = await supabase
-        .from('err_projects')
-        .update(payload)
-        .eq('id', projectId)
-      if (error) throw error
+      const res = await fetch(`/api/projects/${projectId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body.error || 'Failed to save project')
+      }
       onSaved?.()
       onOpenChange(false)
     } catch (e) {

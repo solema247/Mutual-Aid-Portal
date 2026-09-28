@@ -4,6 +4,22 @@ import { getUserStateAccess } from '@/lib/userStateAccess'
 import { requirePermission } from '@/lib/requirePermission'
 import { getComplianceBlockedProjectIds } from '@/lib/compliance'
 
+const PAGE_SIZE = 1000
+
+async function fetchAllRows<T>(buildQuery: () => any): Promise<T[]> {
+  const all: T[] = []
+  let from = 0
+  while (true) {
+    const { data, error } = await buildQuery().range(from, from + PAGE_SIZE - 1)
+    if (error) throw error
+    if (!data?.length) break
+    all.push(...(data as T[]))
+    if (data.length < PAGE_SIZE) break
+    from += PAGE_SIZE
+  }
+  return all
+}
+
 // GET /api/f2/uncommitted - Get all uncommitted F1s (optional: state, month_year_from, month_year_to as YYYY-MM)
 export async function GET(request: Request) {
   try {
@@ -27,49 +43,45 @@ export async function GET(request: Request) {
     // Get user's state access rights
     const { allowedStateNames } = await getUserStateAccess()
 
-    let query = supabase
-      .from('err_projects')
-      .select(`
-        id,
-        err_id,
-        date,
-        state,
-        locality,
-        status,
-        funding_status,
-        expenses,
-        grant_call_id,
-        grant_calls (id, name, donors (name)),
-        emergency_room_id,
-        emergency_rooms (err_code, name_ar, name),
-        submitted_at,
-        approval_file_key,
-        temp_file_key,
-        grant_id,
-        grant_segment
-      `)
-      .eq('status', 'pending')
-      .order('submitted_at', { ascending: false })
+    const data = await fetchAllRows<any>(() => {
+      let query = supabase
+        .from('err_projects')
+        .select(`
+          id,
+          err_id,
+          date,
+          state,
+          locality,
+          status,
+          funding_status,
+          expenses,
+          grant_call_id,
+          grant_calls (id, name, donors (name)),
+          emergency_room_id,
+          emergency_rooms (err_code, name_ar, name),
+          submitted_at,
+          approval_file_key,
+          temp_file_key,
+          grant_id,
+          grant_segment
+        `)
+        .eq('status', 'pending')
+        .order('submitted_at', { ascending: false })
 
-    // Apply state filter from user access rights (if not seeing all states)
-    if (allowedStateNames !== null && allowedStateNames.length > 0) {
-      query = query.in('state', allowedStateNames)
-    }
-
-    // Apply explicit state filter if provided
-    if (state) {
-      query = query.eq('state', state)
-    }
-    if (dateFrom) {
-      query = query.gte('date', dateFrom)
-    }
-    if (dateTo) {
-      query = query.lte('date', dateTo)
-    }
-
-    const { data, error } = await query
-
-    if (error) throw error
+      if (allowedStateNames !== null && allowedStateNames.length > 0) {
+        query = query.in('state', allowedStateNames)
+      }
+      if (state) {
+        query = query.eq('state', state)
+      }
+      if (dateFrom) {
+        query = query.gte('date', dateFrom)
+      }
+      if (dateTo) {
+        query = query.lte('date', dateTo)
+      }
+      return query
+    })
 
     // Attach compliance screening status so the UI can badge/block flagged F1s
     const complianceByProject = new Map<
@@ -278,7 +290,9 @@ export async function DELETE(request: Request) {
       }
     }
 
-    // Delete the project from database
+    // Delete related screenings first (FK), then the project — both paired
+    await supabase.from('compliance_screenings').delete().eq('project_id', id)
+
     const { error: deleteError } = await supabase
       .from('err_projects')
       .delete()

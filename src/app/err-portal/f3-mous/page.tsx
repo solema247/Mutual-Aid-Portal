@@ -1,7 +1,7 @@
 'use client'
 
-import { Suspense, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { Suspense, useEffect, useRef } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import PoolByDonor from '@/app/err-portal/f2-approvals/components/PoolByDonor'
 import { useAllowedFunctions } from '@/hooks/useAllowedFunctions'
 import { useF3MousPageExplainer } from './F3MousPageExplainer'
@@ -17,9 +17,12 @@ import { useMouPreview } from './hooks/useMouPreview'
 import { useGrantAssignment } from './hooks/useGrantAssignment'
 import { useListProjectsModal } from './hooks/useListProjectsModal'
 import { usePaymentModal } from './hooks/usePaymentModal'
+import type { MOU } from './types'
 
 function F3MOUsPageContent() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const deepLinkHandled = useRef<string | null>(null)
   const { can, isLoading: permissionsLoading } = useAllowedFunctions()
   const canViewPage = can('f3_view_page')
   const canEditMou = can('f3_edit_mou')
@@ -47,6 +50,20 @@ function F3MOUsPageContent() {
       router.replace('/err-portal')
     }
   }, [canViewPage, router])
+
+  // Deep-link from F2 "View MOU": /err-portal/f3-mous?mou=<id>
+  useEffect(() => {
+    const mouId = searchParams.get('mou')
+    if (!mouId || list.loading || !canViewMou) return
+    if (deepLinkHandled.current === mouId) return
+
+    const fromList = list.mous.find((m) => m.id === mouId)
+    deepLinkHandled.current = mouId
+    void preview.openPreview(fromList ?? ({ id: mouId } as MOU))
+    router.replace('/err-portal/f3-mous', { scroll: false })
+    // openPreview is stable enough for one-shot deep link; avoid depending on whole preview object
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, list.loading, list.mous, canViewMou, router])
 
   useF3MousPageExplainer(!permissionsLoading && canViewPage && !list.loading)
 

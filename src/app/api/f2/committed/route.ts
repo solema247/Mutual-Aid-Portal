@@ -2,6 +2,24 @@ import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { getUserStateAccess } from '@/lib/userStateAccess'
 
+const PAGE_SIZE = 1000
+
+async function fetchAllRows<T>(
+  buildQuery: () => any
+): Promise<T[]> {
+  const all: T[] = []
+  let from = 0
+  while (true) {
+    const { data, error } = await buildQuery().range(from, from + PAGE_SIZE - 1)
+    if (error) throw error
+    if (!data?.length) break
+    all.push(...(data as T[]))
+    if (data.length < PAGE_SIZE) break
+    from += PAGE_SIZE
+  }
+  return all
+}
+
 // GET /api/f2/committed - Get all committed F1s with optional filtering
 export async function GET(request: Request) {
   try {
@@ -28,63 +46,66 @@ export async function GET(request: Request) {
     // Get user's state access rights
     const { allowedStateNames } = await getUserStateAccess()
 
-    let query = supabase
-      .from('err_projects')
-      .select(`
-        id,
-        err_id,
-        date,
-        state,
-        locality,
-        status,
-        funding_status,
-        expenses,
-        planned_activities,
-        project_objectives,
-        grant_call_id,
-        emergency_room_id,
-        emergency_rooms (err_code, name_ar, name),
-        submitted_at,
-        funding_cycle_id,
-        funding_cycles (id, name, year),
-        mou_id,
-        source,
-        project_name,
-        file_key,
-        temp_file_key,
-        grant_id,
-        grant_serial_id,
-        workplan_number,
-        approval_file_key
-      `)
-      .eq('funding_status', 'committed')
-      .order('submitted_at', { ascending: false })
+    const data = await fetchAllRows<any>(() => {
+      let query = supabase
+        .from('err_projects')
+        .select(`
+          id,
+          err_id,
+          date,
+          state,
+          locality,
+          status,
+          funding_status,
+          expenses,
+          planned_activities,
+          project_objectives,
+          grant_call_id,
+          emergency_room_id,
+          emergency_rooms (err_code, name_ar, name),
+          submitted_at,
+          funding_cycle_id,
+          funding_cycles (id, name, year),
+          mou_id,
+          source,
+          project_name,
+          file_key,
+          temp_file_key,
+          grant_id,
+          grant_serial_id,
+          workplan_number,
+          approval_file_key
+        `)
+        .eq('funding_status', 'committed')
+        .order('submitted_at', { ascending: false })
 
-    // Apply state filter from user access rights (if not seeing all states)
-    if (allowedStateNames !== null && allowedStateNames.length > 0) {
-      query = query.in('state', allowedStateNames)
-    }
-
-    // Apply explicit state filter if provided (further restricts)
-    if (state) {
-      query = query.eq('state', state)
-    }
-    if (dateFrom) {
-      query = query.gte('date', dateFrom)
-    }
-    if (dateTo) {
-      query = query.lte('date', dateTo)
-    }
-
-    const { data, error } = await query
-
-    if (error) throw error
+      if (allowedStateNames !== null && allowedStateNames.length > 0) {
+        query = query.in('state', allowedStateNames)
+      }
+      if (state) {
+        query = query.eq('state', state)
+      }
+      if (dateFrom) {
+        query = query.gte('date', dateFrom)
+      }
+      if (dateTo) {
+        query = query.lte('date', dateTo)
+      }
+      return query
+    })
 
     // Fetch all grants from grants_grid_view to match project serials
-    const { data: grantsData } = await supabase
-      .from('grants_grid_view')
-      .select('grant_id, project_name, donor_name, activities')
-    
+    const grantsData = await fetchAllRows<{
+      grant_id: string
+      project_name: string | null
+      donor_name: string | null
+      activities: string | null
+    }>(() =>
+      supabase
+        .from('grants_grid_view')
+        .select('grant_id, project_name, donor_name, activities')
+    )
+
     // Build a map of project serial to grant info
     const serialToGrant = new Map<string, { grant_id: string; donor_name: string | null }>()
     for (const grant of grantsData || []) {

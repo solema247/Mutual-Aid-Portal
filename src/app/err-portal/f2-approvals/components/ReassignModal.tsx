@@ -132,104 +132,26 @@ export default function ReassignModal({
     try {
       setIsLoading(true)
 
-      // Get current workplan data
-      const { data: workplanData, error: workplanError } = await supabase
-        .from('err_projects')
-        .select('expenses, grant_call_id, grant_call_state_allocation_id, grant_serial_id')
-        .eq('id', workplanId)
-        .single()
-
-      if (workplanError) throw workplanError
-
-      // Calculate total amount from expenses
-      const calculateTotalAmount = (expenses: string | Array<{ activity: string; total_cost: number; }>): number => {
-        if (!expenses) return 0
-        
-        try {
-          const expensesArray = typeof expenses === 'string' ? JSON.parse(expenses) : expenses
-          return expensesArray.reduce((sum: number, expense: { total_cost: number }) => 
-            sum + (expense.total_cost || 0), 0)
-        } catch (error) {
-          console.warn('Error calculating total amount:', error)
-          return 0
-        }
-      }
-      
-      const totalAmount = calculateTotalAmount(workplanData.expenses)
-
-      // Get current user
-      const { data: { user }, error: userError } = await supabase.auth.getUser()
-      if (userError) throw userError
-
-      // Extract base grant serial from workplan's grant_serial_id
-      // Workplan ID format: LCC-CYCLEWK38-P2H-KA-1025-0001-001
-      // Base serial format: LCC-CYCLEWK38-P2H-KA-1025-0001
-      let baseGrantSerial = workplanData.grant_serial_id
-      if (baseGrantSerial && baseGrantSerial.includes('-')) {
-        const parts = baseGrantSerial.split('-')
-        const last = parts[parts.length - 1]
-        // Only strip a trailing 3-digit workplan suffix (e.g., -001). Keep 4-digit base segment (e.g., -0001)
-        if (/^\d{3}$/.test(last)) {
-          baseGrantSerial = parts.slice(0, -1).join('-')
-        }
-      }
-
-      // Insert negative delta for old allocation
-      const { error: oldLedgerError } = await supabase
-        .from('grant_project_commitment_ledger')
-        .insert({
+      const res = await fetch('/api/f2/workplans/reassign', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           workplan_id: workplanId,
-          grant_call_id: workplanData.grant_call_id,
-          grant_call_state_allocation_id: workplanData.grant_call_state_allocation_id,
-          grant_serial_id: baseGrantSerial,
-          delta_amount: -totalAmount,
+          new_grant_call_id: formData.new_grant_call_id,
+          new_allocation_id: formData.new_allocation_id,
+          new_serial_id: formData.new_serial_id,
           reason: formData.reason,
-          created_by: user?.id
-        })
-
-      if (oldLedgerError) throw oldLedgerError
-
-      // Insert positive delta for new allocation
-      const { error: newLedgerError } = await supabase
-        .from('grant_project_commitment_ledger')
-        .insert({
-          workplan_id: workplanId,
-          grant_call_id: formData.new_grant_call_id,
-          grant_call_state_allocation_id: formData.new_allocation_id,
-          grant_serial_id: formData.new_serial_id,
-          delta_amount: totalAmount,
-          reason: formData.reason,
-          created_by: user?.id
-        })
-
-      if (newLedgerError) throw newLedgerError
-
-      // Update workplan pointers
-      // Also update donor_id from the new grant call
-      const { data: newGrantCallRow, error: newGrantCallError } = await supabase
-        .from('grant_calls')
-        .select('donor_id')
-        .eq('id', formData.new_grant_call_id)
-        .single()
-
-      if (newGrantCallError) throw newGrantCallError
-
-      const { error: updateError } = await supabase
-        .from('err_projects')
-        .update({
-          grant_call_id: formData.new_grant_call_id,
-          grant_call_state_allocation_id: formData.new_allocation_id,
-          grant_serial_id: formData.new_serial_id,
-          donor_id: newGrantCallRow?.donor_id || null
-        })
-        .eq('id', workplanId)
-
-      if (updateError) throw updateError
+        }),
+      })
+      const payload = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        throw new Error(payload.error || t('f2:reassign_error'))
+      }
 
       onOpenChange(false)
     } catch (error) {
       console.error('Error reassigning workplan:', error)
-      alert(t('f2:reassign_error'))
+      alert(error instanceof Error ? error.message : t('f2:reassign_error'))
     } finally {
       setIsLoading(false)
     }

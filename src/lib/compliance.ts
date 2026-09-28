@@ -147,6 +147,7 @@ export async function ensureScreeningsForProjects(
   const rows = extracted.map(({ project, names, keys }) => {
     const autoApproved = names.length > 0 && keys.every(k => approvedKeys.has(k))
     return {
+      id: crypto.randomUUID(),
       project_id: project.id,
       names,
       status: (autoApproved ? 'auto_approved' : 'pending_screening') as ScreeningStatus

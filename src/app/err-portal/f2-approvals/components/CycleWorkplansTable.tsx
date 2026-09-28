@@ -267,12 +267,15 @@ export default function CycleWorkplansTable({
 
   const handlePrimarySectorChange = async (workplanId: string, value: string) => {
     try {
-      const { error } = await supabase
-        .from('err_projects')
-        .update({ 'Sector (Primary)': value })
-        .eq('id', workplanId)
-
-      if (error) throw error
+      const res = await fetch(`/api/projects/${workplanId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 'Sector (Primary)': value }),
+      })
+      const payload = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        throw new Error(payload.error || 'Failed to update sector')
+      }
 
       setWorkplans(prev => prev.map(w => w.id === workplanId ? { ...w, 'Sector (Primary)': value } : w))
     } catch (err) {

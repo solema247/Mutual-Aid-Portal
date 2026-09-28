@@ -343,7 +343,7 @@ export default function CommittedF1sTab() {
                   <TableCell>
                     {f1.mou_id ? (
                       canViewMou ? (
-                        <a className="text-primary underline" href="/err-portal/f3-mous">{t('f2:view_mou')}</a>
+                        <a className="text-primary underline" href={`/err-portal/f3-mous?mou=${encodeURIComponent(f1.mou_id)}`}>{t('f2:view_mou')}</a>
                       ) : (
                         <span className="text-muted-foreground">—</span>
                       )
