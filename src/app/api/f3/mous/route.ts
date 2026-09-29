@@ -25,6 +25,7 @@ function parseMouSignatures(mou: Record<string, unknown>) {
 
 /** PostgREST `.in()` with hundreds of UUIDs exceeds URL limits and can fail as "fetch failed". */
 const SUPABASE_IN_BATCH = 80
+const PAGE_SIZE = 1000
 
 function chunkIds(ids: string[]): string[][] {
   if (!ids.length) return []
@@ -33,6 +34,22 @@ function chunkIds(ids: string[]): string[][] {
     out.push(ids.slice(i, i + SUPABASE_IN_BATCH))
   }
   return out
+}
+
+async function fetchAllPages(
+  buildQuery: (from: number, to: number) => any
+): Promise<any[]> {
+  const all: any[] = []
+  let from = 0
+  for (;;) {
+    const { data, error } = await buildQuery(from, from + PAGE_SIZE - 1)
+    if (error) throw error
+    if (!data?.length) break
+    all.push(...data)
+    if (data.length < PAGE_SIZE) break
+    from += PAGE_SIZE
+  }
+  return all
 }
 
 async function fetchProjectEnrichment(
@@ -51,13 +68,15 @@ async function fetchProjectEnrichment(
   const batches = chunkIds(mouIds)
   const rows: MouProjectListRow[] = []
   for (const batch of batches) {
-    const { data: projects, error: projErr } = await supabase
-      .from('err_projects')
-      .select('mou_id, id, expenses, grant_id, grant_grid_id, funding_status, status')
-      .in('mou_id', batch)
-
-    if (projErr) throw projErr
-    if (projects?.length) rows.push(...(projects as MouProjectListRow[]))
+    const projects = await fetchAllPages((from, to) =>
+      supabase
+        .from('err_projects')
+        .select('mou_id, id, expenses, grant_id, grant_grid_id, funding_status, status')
+        .in('mou_id', batch)
+        .order('id', { ascending: true })
+        .range(from, to)
+    )
+    if (projects.length) rows.push(...(projects as MouProjectListRow[]))
   }
 
   const totalByMouId = sumExpensesByMouId(rows)
@@ -69,14 +88,16 @@ async function fetchProjectEnrichment(
   const grantIdByGridId: Record<string, string> = {}
   if (gridIds.length > 0) {
     for (const batch of chunkIds(gridIds)) {
-      const { data: grants, error: grantsErr } = await supabase
-        .from('grants_grid_view')
-        .select('id, grant_id')
-        .in('id', batch)
+      const grants = await fetchAllPages((from, to) =>
+        supabase
+          .from('grants_grid_view')
+          .select('id, grant_id')
+          .in('id', batch)
+          .order('id', { ascending: true })
+          .range(from, to)
+      )
 
-      if (grantsErr) throw grantsErr
-
-      for (const grant of grants || []) {
+      for (const grant of grants) {
         if (grant.id && grant.grant_id) {
           grantIdByGridId[grant.id] = grant.grant_id
         }
@@ -100,17 +121,24 @@ async function fetchProjectEnrichment(
   const confRows: ConfRow[] = []
   let confFailed = false
   for (const batch of batches) {
-    const { data, error: confErr } = await supabase
-      .from('mou_payment_confirmations')
-      .select('mou_id, project_id, exchange_rate, transfer_date, created_at')
-      .in('mou_id', batch)
-
-    if (confErr) {
+    try {
+      const data = await fetchAllPages((from, to) =>
+        supabase
+          .from('mou_payment_confirmations')
+          .select('mou_id, project_id, exchange_rate, transfer_date, created_at')
+          .in('mou_id', batch)
+          .order('id', { ascending: true })
+          .range(from, to)
+      )
+      if (data.length) confRows.push(...(data as ConfRow[]))
+    } catch (e) {
       confFailed = true
-      console.warn('[f3/mous] payment confirmation counts unavailable', confErr.message)
+      console.warn(
+        '[f3/mous] payment confirmation counts unavailable',
+        e instanceof Error ? e.message : e
+      )
       break
     }
-    if (data?.length) confRows.push(...(data as ConfRow[]))
   }
 
   if (!confFailed) {
@@ -246,52 +274,41 @@ export async function GET(request: Request) {
 
     const { allowedStateNames } = await getUserStateAccess()
 
-    let query = supabase
-      .from('mous')
-      .select('*')
-      .order('created_at', { ascending: false })
+    const mous = await fetchAllPages((from, to) => {
+      let query = supabase
+        .from('mous')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .order('id', { ascending: true })
+        .range(from, to)
 
-    if (allowedStateNames !== null && allowedStateNames.length > 0) {
-      query = query.in('state', allowedStateNames)
-    }
+      if (allowedStateNames !== null && allowedStateNames.length > 0) {
+        query = query.in('state', allowedStateNames)
+      }
+      // Preserve prior behavior: `state` filter only applies when not using `search`
+      if (!search && state && state !== 'all') {
+        query = query.eq('state', state)
+      }
+      return query
+    })
 
-    if (search) {
-      const { data, error } = await query
-      if (error) throw error
-      const s = search.toLowerCase()
-      const filtered = (data || []).filter((m: { mou_code?: string; partner_name?: string; err_name?: string }) =>
-        m.mou_code?.toLowerCase().includes(s) ||
-        m.partner_name?.toLowerCase().includes(s) ||
-        m.err_name?.toLowerCase().includes(s)
-      )
-      const filteredIds = filtered.map((m: { id: string }) => m.id).filter(Boolean)
-      const { totalByMouId, exchangeRateByMouId, totalSdgByMouId, enrichment } = await fetchProjectEnrichment(supabase, filteredIds)
+    const list = search
+      ? mous.filter((m: { mou_code?: string; partner_name?: string; err_name?: string }) => {
+          const s = search.toLowerCase()
+          return (
+            m.mou_code?.toLowerCase().includes(s) ||
+            m.partner_name?.toLowerCase().includes(s) ||
+            m.err_name?.toLowerCase().includes(s)
+          )
+        })
+      : mous
 
-      return NextResponse.json({
-        mous: buildMousListPayload(
-          filtered as Record<string, unknown>[],
-          totalByMouId,
-          exchangeRateByMouId,
-          totalSdgByMouId
-        ),
-        ...enrichment,
-      })
-    }
-
-    if (state && state !== 'all') {
-      query = query.eq('state', state)
-    }
-
-    const { data, error } = await query
-    if (error) throw error
-
-    const mous = data || []
-    const mouIds = mous.map((m: { id: string }) => m.id).filter(Boolean)
+    const mouIds = list.map((m: { id: string }) => m.id).filter(Boolean)
     const { totalByMouId, exchangeRateByMouId, totalSdgByMouId, enrichment } = await fetchProjectEnrichment(supabase, mouIds)
 
     return NextResponse.json({
       mous: buildMousListPayload(
-        mous as Record<string, unknown>[],
+        list as Record<string, unknown>[],
         totalByMouId,
         exchangeRateByMouId,
         totalSdgByMouId

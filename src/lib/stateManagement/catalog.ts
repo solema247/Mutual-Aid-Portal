@@ -26,43 +26,76 @@ function isMissingReviewsTable (error: { message?: string; code?: string } | nul
   return error.code === '42P01' || msg.includes('state_locality_reviews')
 }
 
+const PAGE_SIZE = 1000
+
+async function fetchAllPages<T>(
+  buildQuery: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: { message?: string; code?: string } | null }>
+): Promise<T[]> {
+  const all: T[] = []
+  let from = 0
+  for (;;) {
+    const { data, error } = await buildQuery(from, from + PAGE_SIZE - 1)
+    if (error) throw error
+    if (!data?.length) break
+    all.push(...data)
+    if (data.length < PAGE_SIZE) break
+    from += PAGE_SIZE
+  }
+  return all
+}
+
 export async function loadStateCatalog (supabase: SupabaseClient): Promise<StateGroup[]> {
-  const { data: stateRows, error: statesError } = await supabase
-    .from('states')
-    .select('id, state_name, state_name_ar, state_short, locality, locality_ar')
-    .order('state_name')
-    .order('locality')
-
-  if (statesError) throw statesError
-
-  const rows = (stateRows ?? []) as StateRow[]
-
-  const [{ data: rooms }, { data: projects }, reviewsResult] = await Promise.all([
-    supabase.from('emergency_rooms').select('state_reference'),
-    supabase.from('err_projects').select('state, locality'),
+  const rows = await fetchAllPages<StateRow>((from, to) =>
     supabase
-      .from('state_locality_reviews')
-      .select('id, state_id, comment, github_issue_url, github_issue_number, flagged_at, flagged_by')
-      .eq('status', 'open'),
+      .from('states')
+      .select('id, state_name, state_name_ar, state_short, locality, locality_ar')
+      .order('state_name')
+      .order('locality')
+      .order('id', { ascending: true })
+      .range(from, to)
+  )
+
+  const [rooms, projects, reviewsResult] = await Promise.all([
+    fetchAllPages<{ state_reference?: string | null }>((from, to) =>
+      supabase
+        .from('emergency_rooms')
+        .select('state_reference')
+        .order('id', { ascending: true })
+        .range(from, to)
+    ),
+    fetchAllPages<{ state?: string | null; locality?: string | null }>((from, to) =>
+      supabase
+        .from('err_projects')
+        .select('state, locality')
+        .order('id', { ascending: true })
+        .range(from, to)
+    ),
+    fetchAllPages<ReviewRow>((from, to) =>
+      supabase
+        .from('state_locality_reviews')
+        .select('id, state_id, comment, github_issue_url, github_issue_number, flagged_at, flagged_by')
+        .eq('status', 'open')
+        .order('id', { ascending: true })
+        .range(from, to)
+    ).catch((err: { message?: string; code?: string }) => {
+      if (isMissingReviewsTable(err)) return [] as ReviewRow[]
+      throw err
+    }),
   ])
 
-  if (reviewsResult.error && !isMissingReviewsTable(reviewsResult.error)) {
-    throw reviewsResult.error
-  }
-
-  const reviews = (reviewsResult.error ? [] : (reviewsResult.data ?? [])) as ReviewRow[]
+  const reviews = reviewsResult
 
   const roomCounts = new Map<string, number>()
-  for (const room of rooms ?? []) {
-    const id = (room as { state_reference?: string | null }).state_reference
+  for (const room of rooms) {
+    const id = room.state_reference
     if (!id) continue
     roomCounts.set(id, (roomCounts.get(id) ?? 0) + 1)
   }
 
   const projectCounts = new Map<string, number>()
-  for (const project of projects ?? []) {
-    const state = String((project as { state?: string | null }).state ?? '').trim()
-    const locality = String((project as { locality?: string | null }).locality ?? '').trim()
+  for (const project of projects) {
+    const state = String(project.state ?? '').trim()
+    const locality = String(project.locality ?? '').trim()
     const key = `${state.toLowerCase()}|${locality.toLowerCase()}`
     projectCounts.set(key, (projectCounts.get(key) ?? 0) + 1)
   }

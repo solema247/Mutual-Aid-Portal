@@ -112,9 +112,7 @@ export async function GET(request: Request) {
     const supabase = getSupabaseRouteClient()
     const { allowedStateNames } = await getUserStateAccess()
 
-    let query = supabase
-      .from('err_projects')
-      .select(`
+    const projectSelect = `
         id,
         grant_id,
         state,
@@ -136,22 +134,38 @@ export async function GET(request: Request) {
         activity_shift_note,
         emergency_rooms ( err_code ),
         donors ( name, short_name )
-      `)
-      .in('status', ['approved', 'active', 'pending', 'completed'])
+      `
+    // Paginate: PostgREST max-rows (often 1000) truncates otherwise
+    const rows: any[] = []
+    {
+      let from = 0
+      const pageSize = 1000
+      for (;;) {
+        let query = supabase
+          .from('err_projects')
+          .select(projectSelect)
+          .in('status', ['approved', 'active', 'pending', 'completed'])
+          .order('id', { ascending: true })
+          .range(from, from + pageSize - 1)
 
-    if (allowedStateNames !== null && allowedStateNames.length > 0) {
-      query = query.in('state', allowedStateNames)
+        if (allowedStateNames !== null && allowedStateNames.length > 0) {
+          query = query.in('state', allowedStateNames)
+        }
+
+        const { data: page, error } = await query
+        if (error) {
+          console.error('Report tracker fetch error:', error)
+          return NextResponse.json({ error: 'Failed to fetch report tracker data' }, { status: 500 })
+        }
+        if (!page?.length) break
+        rows.push(...page)
+        if (page.length < pageSize) break
+        from += pageSize
+      }
     }
 
-    const { data: rows, error } = await query.order('state').order('grant_id')
-
-    if (error) {
-      console.error('Report tracker fetch error:', error)
-      return NextResponse.json({ error: 'Failed to fetch report tracker data' }, { status: 500 })
-    }
-
-    const projectIds = (rows || []).map((p: any) => p.id).filter(Boolean)
-    const mouIds = Array.from(new Set((rows || []).map((p: any) => p.mou_id).filter(Boolean))) as string[]
+    const projectIds = rows.map((p: any) => p.id).filter(Boolean)
+    const mouIds = Array.from(new Set(rows.map((p: any) => p.mou_id).filter(Boolean))) as string[]
     const f5ReportedIndividualsByProject: Record<string, number> = {}
     const f5ReportedHouseholdsByProject: Record<string, number> = {}
     const f5ReportedMaleByProject: Record<string, number> = {}

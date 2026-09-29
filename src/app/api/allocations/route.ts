@@ -8,6 +8,24 @@ const ALLOCATIONS_SELECT =
 const DECISIONS_SELECT =
   'id, decision_id, decision_id_proposed, decision_date, restriction, notes, airtable_record_id'
 
+const PAGE_SIZE = 1000
+
+async function fetchAllPages(
+  buildQuery: (from: number, to: number) => any
+): Promise<any[]> {
+  const all: any[] = []
+  let from = 0
+  for (;;) {
+    const { data, error } = await buildQuery(from, from + PAGE_SIZE - 1)
+    if (error) throw error
+    if (!data?.length) break
+    all.push(...data)
+    if (data.length < PAGE_SIZE) break
+    from += PAGE_SIZE
+  }
+  return all
+}
+
 function mapAllocationsRow(row: Record<string, unknown>) {
   const allocationId = row['Allocation_ID'] != null ? String(row['Allocation_ID']) : null
   const decisionKey =
@@ -53,42 +71,48 @@ export async function GET() {
   }
 
   try {
-    const [allocationsRes, decisionsRes] = await Promise.all([
-      supabase.from('allocations_by_date').select(ALLOCATIONS_SELECT),
-      supabase.from('distribution_decision_master_sheet_1').select(DECISIONS_SELECT),
+    const [allocationsData, decisionsData] = await Promise.all([
+      fetchAllPages((from, to) =>
+        supabase
+          .from('allocations_by_date')
+          .select(ALLOCATIONS_SELECT)
+          .order('Allocation_ID', { ascending: true })
+          .range(from, to)
+      ),
+      fetchAllPages((from, to) =>
+        supabase
+          .from('distribution_decision_master_sheet_1')
+          .select(DECISIONS_SELECT)
+          .order('id', { ascending: true })
+          .range(from, to)
+      ).catch((err) => {
+        console.error('Error fetching decisions for allocations:', err)
+        return [] as any[]
+      }),
     ])
 
-    if (allocationsRes.error) {
-      console.error('Error fetching allocations:', allocationsRes.error)
-      return NextResponse.json({ error: 'Failed to fetch allocations' }, { status: 500 })
-    }
-
-    const list = (allocationsRes.data || []).map((row: Record<string, unknown>) =>
-      mapAllocationsRow(row)
-    )
+    const list = allocationsData.map((row: Record<string, unknown>) => mapAllocationsRow(row))
     list.sort((a, b) =>
       (a.allocation_id ?? '').localeCompare(b.allocation_id ?? '', undefined, { numeric: true })
     )
 
     const decisions: DecisionMeta[] = []
-    if (!decisionsRes.error && decisionsRes.data) {
-      for (const row of decisionsRes.data as Record<string, unknown>[]) {
-        const groupKey = decisionGroupKey({
-          decision_id_proposed: row['decision_id_proposed'] as string | null,
-          decision_id: row['decision_id'] as string | null,
-          id: row['id'] as string | null,
-        })
-        if (!groupKey) continue
-        decisions.push({
-          id: groupKey,
-          decision_id: row['decision_id'] != null ? String(row['decision_id']) : null,
-          decision_id_proposed:
-            row['decision_id_proposed'] != null ? String(row['decision_id_proposed']) : null,
-          decision_date: row['decision_date'] != null ? String(row['decision_date']) : null,
-          restriction: row['restriction'] != null ? String(row['restriction']) : null,
-          notes: row['notes'] != null ? String(row['notes']).trim() || null : null,
-        })
-      }
+    for (const row of decisionsData as Record<string, unknown>[]) {
+      const groupKey = decisionGroupKey({
+        decision_id_proposed: row['decision_id_proposed'] as string | null,
+        decision_id: row['decision_id'] as string | null,
+        id: row['id'] as string | null,
+      })
+      if (!groupKey) continue
+      decisions.push({
+        id: groupKey,
+        decision_id: row['decision_id'] != null ? String(row['decision_id']) : null,
+        decision_id_proposed:
+          row['decision_id_proposed'] != null ? String(row['decision_id_proposed']) : null,
+        decision_date: row['decision_date'] != null ? String(row['decision_date']) : null,
+        restriction: row['restriction'] != null ? String(row['restriction']) : null,
+        notes: row['notes'] != null ? String(row['notes']).trim() || null : null,
+      })
     }
 
     return NextResponse.json({ allocations: list, decisions })

@@ -9,7 +9,7 @@ import { resolveProjectCompletionDate } from '@/lib/projectStatus'
 export const runtime = 'nodejs'
 export const maxDuration = 300
 
-const MAX_PROJECTS_PER_EXPORT = 500
+const MAX_PROJECTS_PER_EXPORT = 250
 
 function csvCell(value: string | null | undefined): string {
   const s = value == null ? '' : String(value)

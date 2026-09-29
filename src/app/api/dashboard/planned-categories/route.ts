@@ -12,6 +12,24 @@ type PlannedCategoriesRow = {
   planned_activities: unknown
 }
 
+const PAGE_SIZE = 1000
+
+async function fetchAllPages(
+  buildQuery: (from: number, to: number) => any
+): Promise<PlannedCategoriesRow[]> {
+  const all: PlannedCategoriesRow[] = []
+  let from = 0
+  for (;;) {
+    const { data, error } = await buildQuery(from, from + PAGE_SIZE - 1)
+    if (error) throw error
+    if (!data?.length) break
+    all.push(...(data as PlannedCategoriesRow[]))
+    if (data.length < PAGE_SIZE) break
+    from += PAGE_SIZE
+  }
+  return all
+}
+
 function parseJsonArray(raw: unknown): any[] {
   if (Array.isArray(raw)) return raw
   if (typeof raw === 'string') {
@@ -51,32 +69,26 @@ export async function GET(request: Request) {
     const from = searchParams.get('from')
     const to = searchParams.get('to')
 
-    let query = supabase
-      .from('err_projects')
-      .select('date, state, planned_activities, source')
-      .in('status', ['approved', 'active', 'pending', 'completed'])
+    const data = await fetchAllPages((rangeFrom, rangeTo) => {
+      let query = supabase
+        .from('err_projects')
+        .select('date, state, planned_activities, source')
+        .in('status', ['approved', 'active', 'pending', 'completed'])
+        .eq('source', 'mutual_aid_portal')
+        .order('id', { ascending: true })
+        .range(rangeFrom, rangeTo)
 
-    // Restrict to portal projects (planned_activities JSONB lives there)
-    query = query.eq('source', 'mutual_aid_portal')
-
-    if (allowedStateNames !== null && allowedStateNames.length > 0) {
-      query = query.in('state', allowedStateNames)
-    }
-    if (from) {
-      query = query.gte('date', from)
-    }
-    if (to) {
-      query = query.lte('date', to)
-    }
-
-    const { data, error } = await query
-    if (error) {
-      console.error('Dashboard planned-categories error:', error)
-      return NextResponse.json(
-        { error: 'Failed to load planned categories' },
-        { status: 500, headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } }
-      )
-    }
+      if (allowedStateNames !== null && allowedStateNames.length > 0) {
+        query = query.in('state', allowedStateNames)
+      }
+      if (from) {
+        query = query.gte('date', from)
+      }
+      if (to) {
+        query = query.lte('date', to)
+      }
+      return query
+    })
 
     const byCategory = new Map<
       string,
@@ -84,7 +96,7 @@ export async function GET(request: Request) {
     >()
     let projectCount = 0
 
-    for (const row of (data || []) as PlannedCategoriesRow[]) {
+    for (const row of data) {
       const raw = parseJsonArray(row.planned_activities)
       if (!Array.isArray(raw) || raw.length === 0) continue
       let contributed = false

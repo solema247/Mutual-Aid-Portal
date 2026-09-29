@@ -96,37 +96,62 @@ function mapDecisionRow(row: {
 const DECISION_LIST_SELECT =
   'id, decision_id_proposed, decision_id, grant_name, restriction, sum_allocation_amount, decision_amount, decision_date, partner, decision_maker, flow_oversight, notes, file_name, file_link, decision_documents'
 
+const PAGE_SIZE = 1000
+
+async function fetchAllPages(
+  buildQuery: (from: number, to: number) => any
+): Promise<any[]> {
+  const all: any[] = []
+  let from = 0
+  for (;;) {
+    const { data, error } = await buildQuery(from, from + PAGE_SIZE - 1)
+    if (error) throw error
+    if (!data?.length) break
+    all.push(...data)
+    if (data.length < PAGE_SIZE) break
+    from += PAGE_SIZE
+  }
+  return all
+}
+
 /**
  * GET /api/distribution-decisions - List distribution decisions from canonical master sheet.
  */
 export async function GET() {
   try {
     const supabase = getSupabaseAdmin()
-    const [decisionsRes, allocRes] = await Promise.all([
-      supabase
-        .from('distribution_decision_master_sheet_1')
-        .select(DECISION_LIST_SELECT)
-        .order('decision_date', { ascending: false }),
-      supabase.from('allocations_by_date').select('Decision_ID, State'),
+    const [decisions, allocRows] = await Promise.all([
+      fetchAllPages((from, to) =>
+        supabase
+          .from('distribution_decision_master_sheet_1')
+          .select(DECISION_LIST_SELECT)
+          .order('decision_date', { ascending: false })
+          .order('id', { ascending: true })
+          .range(from, to)
+      ),
+      fetchAllPages((from, to) =>
+        supabase
+          .from('allocations_by_date')
+          .select('Decision_ID, State')
+          .order('Allocation_ID', { ascending: true })
+          .range(from, to)
+      ).catch((err) => {
+        console.error('Error fetching allocation states:', err)
+        return [] as any[]
+      }),
     ])
 
-    if (decisionsRes.error) throw decisionsRes.error
-
     const statesByDecision = new Map<string, Set<string>>()
-    if (allocRes.error) {
-      console.error('Error fetching allocation states:', allocRes.error)
-    } else {
-      for (const row of (allocRes.data || []) as Array<{ Decision_ID?: string | null; State?: string | null }>) {
-        const key = String(row.Decision_ID ?? '').trim()
-        const state = String(row.State ?? '').trim()
-        if (!key || !state) continue
-        if (!statesByDecision.has(key)) statesByDecision.set(key, new Set())
-        statesByDecision.get(key)!.add(state)
-      }
+    for (const row of allocRows as Array<{ Decision_ID?: string | null; State?: string | null }>) {
+      const key = String(row.Decision_ID ?? '').trim()
+      const state = String(row.State ?? '').trim()
+      if (!key || !state) continue
+      if (!statesByDecision.has(key)) statesByDecision.set(key, new Set())
+      statesByDecision.get(key)!.add(state)
     }
 
     return NextResponse.json(
-      (decisionsRes.data || []).map((row) => {
+      decisions.map((row) => {
         const mapped = mapDecisionRow(row)
         const key = decisionGroupKey(row)
         mapped.allocated_states = Array.from(statesByDecision.get(key) ?? []).sort((a, b) =>
@@ -171,13 +196,16 @@ export async function POST(request: Request) {
     }
 
     // Auto Decision ID: LCC.AD.{Partner}.{YY-MM-DD}-{last+1}
-    const { data: existingDecisions, error: serialError } = await auth.ctx.supabase
-      .from('distribution_decision_master_sheet_1')
-      .select('decision_id_proposed, decision_id')
-    if (serialError) throw serialError
+    const existingDecisions = await fetchAllPages((from, to) =>
+      auth.ctx.supabase
+        .from('distribution_decision_master_sheet_1')
+        .select('id, decision_id_proposed, decision_id')
+        .order('id', { ascending: true })
+        .range(from, to)
+    )
 
     let maxSerial = AD_DECISION_SERIAL_FLOOR
-    for (const row of existingDecisions || []) {
+    for (const row of existingDecisions) {
       for (const id of [row.decision_id_proposed, row.decision_id]) {
         const n = extractAdHyphenSerial(id)
         if (n != null && n > maxSerial) maxSerial = n

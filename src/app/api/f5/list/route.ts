@@ -4,6 +4,7 @@ import { getUserStateAccess } from '@/lib/userStateAccess'
 import { loadProjectPaymentSummaries } from '@/lib/mouPaymentConfirmations'
 
 const SUPABASE_IN_BATCH = 80
+const PAGE_SIZE = 1000
 
 function chunkIds<T extends string | number>(ids: T[]): T[][] {
   if (ids.length === 0) return []
@@ -12,6 +13,22 @@ function chunkIds<T extends string | number>(ids: T[]): T[][] {
     out.push(ids.slice(i, i + SUPABASE_IN_BATCH))
   }
   return out
+}
+
+async function fetchAllPages(
+  buildQuery: (from: number, to: number) => any
+): Promise<any[]> {
+  const all: any[] = []
+  let from = 0
+  for (;;) {
+    const { data, error } = await buildQuery(from, from + PAGE_SIZE - 1)
+    if (error) throw error
+    if (!data?.length) break
+    all.push(...data)
+    if (data.length < PAGE_SIZE) break
+    from += PAGE_SIZE
+  }
+  return all
 }
 
 function sumPlanFromPlannedActivities(planned: unknown): number {
@@ -205,14 +222,14 @@ async function fetchProjectIdsInScope(
     return []
   }
 
-  let query = supabase.from('err_projects').select('id')
-  if (allowedStateNames !== null && allowedStateNames.length > 0) {
-    query = query.in('state', allowedStateNames)
-  }
-
-  const { data, error } = await query
-  if (error) throw error
-  return (data || []).map((row: { id: string }) => row.id)
+  const rows = await fetchAllPages((from, to) => {
+    let query = supabase.from('err_projects').select('id').order('id', { ascending: true }).range(from, to)
+    if (allowedStateNames !== null && allowedStateNames.length > 0) {
+      query = query.in('state', allowedStateNames)
+    }
+    return query
+  })
+  return rows.map((row: { id: string }) => row.id)
 }
 
 async function fetchPortalReports(
@@ -225,12 +242,13 @@ async function fetchPortalReports(
   }
 
   if (allowedStateNames === null) {
-    const { data, error } = await supabase
-      .from('err_program_report')
-      .select(portalSelect)
-      .order('created_at', { ascending: false })
-    if (error) throw error
-    return (data || []) as unknown as Record<string, unknown>[]
+    return (await fetchAllPages((from, to) =>
+      supabase
+        .from('err_program_report')
+        .select(portalSelect)
+        .order('id', { ascending: true })
+        .range(from, to)
+    )) as unknown as Record<string, unknown>[]
   }
 
   const projectIds = await fetchProjectIdsInScope(supabase, allowedStateNames)
@@ -238,13 +256,15 @@ async function fetchPortalReports(
 
   const reports: Record<string, unknown>[] = []
   for (const batch of chunkIds(projectIds)) {
-    const { data, error } = await supabase
-      .from('err_program_report')
-      .select(portalSelect)
-      .in('project_id', batch)
-      .order('created_at', { ascending: false })
-    if (error) throw error
-    reports.push(...((data || []) as unknown as Record<string, unknown>[]))
+    const page = await fetchAllPages((from, to) =>
+      supabase
+        .from('err_program_report')
+        .select(portalSelect)
+        .in('project_id', batch)
+        .order('id', { ascending: true })
+        .range(from, to)
+    )
+    reports.push(...(page as unknown as Record<string, unknown>[]))
   }
   return reports
 }
@@ -308,20 +328,22 @@ export async function GET() {
       return NextResponse.json([])
     }
 
-    let projectsQuery = supabase
-      .from('err_projects')
-      .select(projectSelect)
-      .in('status', ['active', 'approved', 'completed'])
+    const projects = await fetchAllPages((from, to) => {
+      let projectsQuery = supabase
+        .from('err_projects')
+        .select(projectSelect)
+        .in('status', ['active', 'approved', 'completed'])
+        .order('id', { ascending: true })
+        .range(from, to)
 
-    if (allowedStateNames !== null && allowedStateNames.length > 0) {
-      projectsQuery = projectsQuery.in('state', allowedStateNames)
-    }
-
-    const { data: projects, error: projectsError } = await projectsQuery
-    if (projectsError) throw projectsError
+      if (allowedStateNames !== null && allowedStateNames.length > 0) {
+        projectsQuery = projectsQuery.in('state', allowedStateNames)
+      }
+      return projectsQuery
+    })
 
     const projectById = new Map<string, Record<string, unknown>>()
-    for (const p of projects || []) {
+    for (const p of projects) {
       projectById.set(String((p as { id: string }).id), p as Record<string, unknown>)
     }
 
@@ -358,7 +380,7 @@ export async function GET() {
 
     const mouIds = Array.from(
       new Set(
-        [...(projects || []), ...reports.map((r) => r.err_projects)].flatMap((item) => {
+        [...projects, ...reports.map((r) => r.err_projects)].flatMap((item) => {
           const p = item as Record<string, unknown> | null | undefined
           if (!p) return []
           const mouId = p.mou_id

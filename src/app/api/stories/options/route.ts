@@ -8,8 +8,25 @@ export const revalidate = 0
 export const fetchCache = 'force-no-store'
 
 const MAP_STATUSES = ['approved', 'active', 'pending', 'completed'] as const
+const PAGE_SIZE = 1000
 /** Same as stories/cards & geojson: huge `.in()` lists exceed PostgREST URL limits. */
 const REPORT_PROJECT_ID_CHUNK = 120
+
+async function fetchAllPages(
+  buildQuery: (from: number, to: number) => any
+): Promise<any[]> {
+  const all: any[] = []
+  let from = 0
+  for (;;) {
+    const { data, error } = await buildQuery(from, from + PAGE_SIZE - 1)
+    if (error) throw error
+    if (!data?.length) break
+    all.push(...data)
+    if (data.length < PAGE_SIZE) break
+    from += PAGE_SIZE
+  }
+  return all
+}
 
 function chunkArray<T>(arr: T[], size: number): T[][] {
   const out: T[][] = []
@@ -40,27 +57,32 @@ export async function GET() {
     const { allowedStateNames } = await getUserStateAccess()
     console.log('[stories/options] getUserStateAccess', Date.now() - t0, 'ms')
 
-    let projectsQuery = supabase
-      .from('err_projects')
-      .select('id, state, planned_activities')
-      .eq('source', 'mutual_aid_portal')
-      .in('status', MAP_STATUSES)
+    let projects: any[]
+    try {
+      projects = await fetchAllPages((from, to) => {
+        let projectsQuery = supabase
+          .from('err_projects')
+          .select('id, state, planned_activities')
+          .eq('source', 'mutual_aid_portal')
+          .in('status', MAP_STATUSES)
+          .order('id', { ascending: true })
+          .range(from, to)
 
-    if (allowedStateNames !== null && allowedStateNames.length > 0) {
-      projectsQuery = projectsQuery.in('state', allowedStateNames)
-    }
-
-    const { data: projects, error: projectsError } = await projectsQuery
-    console.log('[stories/options] projects query', Date.now() - t0, 'ms', (projects?.length ?? 0), 'rows')
-    if (projectsError) {
+        if (allowedStateNames !== null && allowedStateNames.length > 0) {
+          projectsQuery = projectsQuery.in('state', allowedStateNames)
+        }
+        return projectsQuery
+      })
+    } catch (projectsError) {
       console.error('Stories options projects error:', projectsError)
       return NextResponse.json(
         { error: 'Failed to load stories options' },
         { status: 500, headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } }
       )
     }
+    console.log('[stories/options] projects query', Date.now() - t0, 'ms', projects.length, 'rows')
 
-    const projectIds = (projects || []).map((p: any) => p.id).filter(Boolean)
+    const projectIds = projects.map((p: any) => p.id).filter(Boolean)
     if (projectIds.length === 0) {
       return NextResponse.json(
         { states: [], themes: [] },
@@ -71,18 +93,23 @@ export async function GET() {
     // Only projects that have at least one F5 report (story cards require F1 + F5)
     const reportRows: { project_id?: string }[] = []
     for (const chunk of chunkArray(projectIds, REPORT_PROJECT_ID_CHUNK)) {
-      const { data: rows, error: reportErr } = await supabase
-        .from('err_program_report')
-        .select('project_id')
-        .in('project_id', chunk)
-      if (reportErr) {
+      try {
+        const rows = await fetchAllPages((from, to) =>
+          supabase
+            .from('err_program_report')
+            .select('project_id')
+            .in('project_id', chunk)
+            .order('id', { ascending: true })
+            .range(from, to)
+        )
+        reportRows.push(...rows)
+      } catch (reportErr) {
         console.error('[stories/options] reports error:', reportErr)
         return NextResponse.json(
           { error: 'Failed to load stories options' },
           { status: 500, headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } }
         )
       }
-      reportRows.push(...(rows || []))
     }
     const projectIdsWithF5 = new Set<string>()
     const reportsByProject = new Map<string, number>()
@@ -93,7 +120,7 @@ export async function GET() {
         reportsByProject.set(pid, (reportsByProject.get(pid) || 0) + 1)
       }
     }
-    const projectsWithF5 = (projects || []).filter((p: any) => projectIdsWithF5.has(p.id))
+    const projectsWithF5 = projects.filter((p: any) => projectIdsWithF5.has(p.id))
 
     // States: distinct state, project_count (with F5 only), report_count
     const stateMap = new Map<string, { project_count: number; report_count: number }>()

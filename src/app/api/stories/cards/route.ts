@@ -11,9 +11,26 @@ export const fetchCache = 'force-no-store'
 
 const MAP_STATUSES = ['approved', 'active', 'pending', 'completed'] as const
 const SNIPPET_LENGTH = 150
+const PAGE_SIZE = 1000
 /** PostgREST GET URLs can exceed limits when `.in()` has hundreds of UUIDs. */
 const REPORT_IN_CHUNK = 120
 const REACH_IN_CHUNK = 200
+
+async function fetchAllPages(
+  buildQuery: (from: number, to: number) => any
+): Promise<any[]> {
+  const all: any[] = []
+  let from = 0
+  for (;;) {
+    const { data, error } = await buildQuery(from, from + PAGE_SIZE - 1)
+    if (error) throw error
+    if (!data?.length) break
+    all.push(...data)
+    if (data.length < PAGE_SIZE) break
+    from += PAGE_SIZE
+  }
+  return all
+}
 
 function chunkArray<T>(arr: T[], size: number): T[][] {
   const out: T[][] = []
@@ -43,13 +60,20 @@ async function fetchReportsChunked(
   if (projectIds.length === 0) return { data: [], error: null }
   const merged: any[] = []
   for (const chunk of chunkArray(projectIds, REPORT_IN_CHUNK)) {
-    const { data, error } = await supabase
-      .from('err_program_report')
-      .select(reportSelect)
-      .in('project_id', chunk)
-      .order('created_at', { ascending: false })
-    if (error) return { data: null, error }
-    merged.push(...(data || []))
+    try {
+      const data = await fetchAllPages((from, to) =>
+        supabase
+          .from('err_program_report')
+          .select(reportSelect)
+          .in('project_id', chunk)
+          .order('created_at', { ascending: false })
+          .order('id', { ascending: true })
+          .range(from, to)
+      )
+      merged.push(...data)
+    } catch (error) {
+      return { data: null, error: error as { message: string } }
+    }
   }
   return { data: merged, error: null }
 }
@@ -123,30 +147,37 @@ export async function GET(request: Request) {
     const locale = searchParams.get('locale')?.toLowerCase() ?? ''
     const useEnCache = locale === 'en'
 
-    let projectsQuery = supabase
-      .from('err_projects')
-      .select('id, state, locality, project_name, project_objectives, planned_activities, estimated_beneficiaries, expenses')
-      .eq('source', 'mutual_aid_portal')
-      .in('status', MAP_STATUSES)
+    let projects: any[]
+    try {
+      projects = await fetchAllPages((from, to) => {
+        let projectsQuery = supabase
+          .from('err_projects')
+          .select(
+            'id, state, locality, project_name, project_objectives, planned_activities, estimated_beneficiaries, expenses'
+          )
+          .eq('source', 'mutual_aid_portal')
+          .in('status', MAP_STATUSES)
+          .order('id', { ascending: true })
+          .range(from, to)
 
-    if (allowedStateNames !== null && allowedStateNames.length > 0) {
-      projectsQuery = projectsQuery.in('state', allowedStateNames)
-    }
-    if (stateParam) {
-      projectsQuery = projectsQuery.eq('state', stateParam)
-    }
-
-    const { data: projects, error: projectsError } = await projectsQuery
-    console.log('[stories/cards] projects query', Date.now() - t0, 'ms', (projects?.length ?? 0), 'rows')
-    if (projectsError) {
+        if (allowedStateNames !== null && allowedStateNames.length > 0) {
+          projectsQuery = projectsQuery.in('state', allowedStateNames)
+        }
+        if (stateParam) {
+          projectsQuery = projectsQuery.eq('state', stateParam)
+        }
+        return projectsQuery
+      })
+    } catch (projectsError) {
       console.error('Stories cards projects error', projectsError)
       return NextResponse.json(
         { error: 'Failed to load story cards' },
         { status: 500, headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } }
       )
     }
+    console.log('[stories/cards] projects query', Date.now() - t0, 'ms', projects.length, 'rows')
 
-    let filtered = (projects || []) as any[]
+    let filtered = projects as any[]
     if (themeParams.length > 0) {
       const themeSlugs = new Set(themeParams.map((t) => slugify(t)))
       filtered = filtered.filter((p) => {
@@ -206,14 +237,18 @@ export async function GET(request: Request) {
       const tReach = Date.now()
       const reachRows: any[] = []
       for (const chunk of chunkArray(reportIds, REACH_IN_CHUNK)) {
-        const { data, error: reachErr } = await supabase
-          .from('err_program_reach')
-          .select('report_id, individual_count, household_count')
-          .in('report_id', chunk)
-        if (reachErr) {
+        try {
+          const data = await fetchAllPages((from, to) =>
+            supabase
+              .from('err_program_reach')
+              .select('report_id, individual_count, household_count')
+              .in('report_id', chunk)
+              .order('id', { ascending: true })
+              .range(from, to)
+          )
+          reachRows.push(...data)
+        } catch (reachErr) {
           console.error('Stories cards reach error', reachErr)
-        } else {
-          reachRows.push(...(data || []))
         }
       }
       console.log('[stories/cards] reach query', Date.now() - tReach, 'ms', reachRows.length, 'rows')

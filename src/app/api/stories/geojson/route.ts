@@ -10,8 +10,25 @@ export const revalidate = 0
 export const fetchCache = 'force-no-store'
 
 const MAP_STATUSES = ['approved', 'active', 'pending', 'completed'] as const
+const PAGE_SIZE = 1000
 /** Same limit as stories/cards: large `.in()` lists exceed PostgREST URL limits. */
 const REPORT_PROJECT_ID_CHUNK = 120
+
+async function fetchAllPages(
+  buildQuery: (from: number, to: number) => any
+): Promise<any[]> {
+  const all: any[] = []
+  let from = 0
+  for (;;) {
+    const { data, error } = await buildQuery(from, from + PAGE_SIZE - 1)
+    if (error) throw error
+    if (!data?.length) break
+    all.push(...data)
+    if (data.length < PAGE_SIZE) break
+    from += PAGE_SIZE
+  }
+  return all
+}
 
 function chunkArray<T>(arr: T[], size: number): T[][] {
   const out: T[][] = []
@@ -102,27 +119,32 @@ export async function GET() {
       stateCentroids.set(name, centroid)
     }
 
-    let projectsQuery = supabase
-      .from('err_projects')
-      .select('id, state, locality, project_name, planned_activities, expenses')
-      .eq('source', 'mutual_aid_portal')
-      .in('status', MAP_STATUSES)
+    let projects: any[]
+    try {
+      projects = await fetchAllPages((from, to) => {
+        let projectsQuery = supabase
+          .from('err_projects')
+          .select('id, state, locality, project_name, planned_activities, expenses')
+          .eq('source', 'mutual_aid_portal')
+          .in('status', MAP_STATUSES)
+          .order('id', { ascending: true })
+          .range(from, to)
 
-    if (allowedStateNames !== null && allowedStateNames.length > 0) {
-      projectsQuery = projectsQuery.in('state', allowedStateNames)
-    }
-
-    const { data: projects, error: projectsError } = await projectsQuery
-    console.log('[stories/geojson] projects query', Date.now() - t0, 'ms', (projects?.length ?? 0), 'rows')
-    if (projectsError) {
+        if (allowedStateNames !== null && allowedStateNames.length > 0) {
+          projectsQuery = projectsQuery.in('state', allowedStateNames)
+        }
+        return projectsQuery
+      })
+    } catch (projectsError) {
       console.error('[stories/geojson] projects error:', projectsError)
       return NextResponse.json(
         { error: 'Failed to load projects' },
         { status: 500, headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } }
       )
     }
+    console.log('[stories/geojson] projects query', Date.now() - t0, 'ms', projects.length, 'rows')
 
-    const projectIds = (projects || []).map((p: any) => p.id).filter(Boolean)
+    const projectIds = projects.map((p: any) => p.id).filter(Boolean)
     if (projectIds.length === 0) {
       return NextResponse.json(
         { type: 'FeatureCollection', features: [] },
@@ -133,26 +155,32 @@ export async function GET() {
     const projectIdsWithF5 = new Set<string>()
     let reportRowCount = 0
     for (const chunk of chunkArray(projectIds, REPORT_PROJECT_ID_CHUNK)) {
-      const { data: reportRows, error: reportErr } = await supabase
-        .from('err_program_report')
-        .select('project_id')
-        .in('project_id', chunk)
-      if (reportErr) {
+      let reportRows: any[]
+      try {
+        reportRows = await fetchAllPages((from, to) =>
+          supabase
+            .from('err_program_report')
+            .select('project_id')
+            .in('project_id', chunk)
+            .order('id', { ascending: true })
+            .range(from, to)
+        )
+      } catch (reportErr) {
         console.error('[stories/geojson] reports error:', reportErr)
         return NextResponse.json(
           { error: 'Failed to load reports for map' },
           { status: 500, headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } }
         )
       }
-      reportRowCount += reportRows?.length ?? 0
-      for (const r of reportRows || []) {
+      reportRowCount += reportRows.length
+      for (const r of reportRows) {
         const pid = (r as any).project_id
         if (pid) projectIdsWithF5.add(pid)
       }
     }
     console.log('[stories/geojson] report rows', Date.now() - t0, 'ms', reportRowCount, 'rows')
 
-    const projectsWithF5 = (projects || []).filter((p: any) => projectIdsWithF5.has(p.id))
+    const projectsWithF5 = projects.filter((p: any) => projectIdsWithF5.has(p.id))
     const jitter = 0.04 // ~4 km spread so points don't stack exactly
 
     function seededOffset(id: string): [number, number] {

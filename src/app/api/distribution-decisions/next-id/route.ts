@@ -8,6 +8,24 @@ import {
   partnerCodeForId,
 } from '@/lib/grantManagement/adDecisionIds'
 
+const PAGE_SIZE = 1000
+
+async function fetchAllPages(
+  buildQuery: (from: number, to: number) => any
+): Promise<any[]> {
+  const all: any[] = []
+  let from = 0
+  for (;;) {
+    const { data, error } = await buildQuery(from, from + PAGE_SIZE - 1)
+    if (error) throw error
+    if (!data?.length) break
+    all.push(...data)
+    if (data.length < PAGE_SIZE) break
+    from += PAGE_SIZE
+  }
+  return all
+}
+
 /**
  * GET /api/distribution-decisions/next-id?partner=P2H&date=2026-07-15
  * Preview the next auto-generated decision_id_proposed.
@@ -28,14 +46,16 @@ export async function GET(request: Request) {
     }
 
     const supabase = getSupabaseAdmin()
-    const { data: decisions, error } = await supabase
-      .from('distribution_decision_master_sheet_1')
-      .select('decision_id_proposed, decision_id')
-
-    if (error) throw error
+    const decisions = await fetchAllPages((from, to) =>
+      supabase
+        .from('distribution_decision_master_sheet_1')
+        .select('id, decision_id_proposed, decision_id')
+        .order('id', { ascending: true })
+        .range(from, to)
+    )
 
     let maxSerial = AD_DECISION_SERIAL_FLOOR
-    for (const row of decisions || []) {
+    for (const row of decisions) {
       for (const id of [row.decision_id_proposed, row.decision_id]) {
         const n = extractAdHyphenSerial(id)
         if (n != null && n > maxSerial) maxSerial = n

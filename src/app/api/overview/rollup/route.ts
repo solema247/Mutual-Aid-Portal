@@ -309,23 +309,39 @@ export async function GET(request: Request) {
     console.log('[rollup] Cache miss or bypass - fetching fresh data')
 
     // Build project filter (include more statuses to catch F5 projects and completed projects)
+    // Paginate: PostgREST max-rows (often 1000) would otherwise truncate the rollup on prod.
     const projectsStart = Date.now()
-    let projectQuery = supabase
-      .from('err_projects')
-      .select('id, state, locality, grant_call_id, grant_grid_id, grant_id, grant_segment, emergency_rooms (id, name, name_ar, err_code), planned_activities, expenses, source, status, funding_status, mou_id, f4_status, f5_status, date, date_transfer, completed_at, date_report_completed, estimated_beneficiaries, implemented_sector, activity_shift_note')
-      .in('status', ['approved', 'active', 'pending', 'completed'])
-      .in('funding_status', ['committed', 'allocated', 'unassigned'])
+    const projectSelect =
+      'id, state, locality, grant_call_id, grant_grid_id, grant_id, grant_segment, emergency_rooms (id, name, name_ar, err_code), planned_activities, expenses, source, status, funding_status, mou_id, f4_status, f5_status, date, date_transfer, completed_at, date_report_completed, estimated_beneficiaries, implemented_sector, activity_shift_note'
+    const projects: any[] = []
+    {
+      let from = 0
+      const pageSize = 1000
+      for (;;) {
+        let projectQuery = supabase
+          .from('err_projects')
+          .select(projectSelect)
+          .in('status', ['approved', 'active', 'pending', 'completed'])
+          .in('funding_status', ['committed', 'allocated', 'unassigned'])
+          .order('id', { ascending: true })
+          .range(from, from + pageSize - 1)
 
-    // Apply state filter from user access rights (if not seeing all states)
-    if (allowedStateNames !== null && allowedStateNames.length > 0) {
-      projectQuery = projectQuery.in('state', allowedStateNames)
+        if (allowedStateNames !== null && allowedStateNames.length > 0) {
+          projectQuery = projectQuery.in('state', allowedStateNames)
+        }
+
+        const { data: page, error: projectsError } = await projectQuery
+        if (projectsError) throw projectsError
+        if (!page?.length) break
+        projects.push(...page)
+        if (page.length < pageSize) break
+        from += pageSize
+      }
     }
-
-    const { data: projects } = await projectQuery
     timer('fetch projects', projectsStart)
 
-    const projectIds = (projects || []).map((p:any)=> p.id)
-    const mouIds = Array.from(new Set(((projects || []).map((p:any)=> p.mou_id).filter(Boolean)))) as string[]
+    const projectIds = projects.map((p: any) => p.id)
+    const mouIds = Array.from(new Set(projects.map((p: any) => p.mou_id).filter(Boolean))) as string[]
     const dataSupabase = getSupabaseAdmin()
 
     // ===== PARALLEL BATCH 1: All independent data (historical + project-dependent) =====
@@ -351,7 +367,15 @@ export async function GET(request: Request) {
       ),
       // Project-dependent data (all independent of each other)
       mouIds.length > 0
-        ? supabase.from('mous').select('id, mou_code').in('id', mouIds).then(r => r.data)
+        ? (async () => {
+            const rows: any[] = []
+            for (const batch of chunkIds(mouIds)) {
+              const { data, error } = await supabase.from('mous').select('id, mou_code').in('id', batch)
+              if (error) throw error
+              rows.push(...(data || []))
+            }
+            return rows
+          })()
         : Promise.resolve([]),
       mouIds.length > 0
         ? loadProjectPaymentSummaries(supabase, { mouIds })

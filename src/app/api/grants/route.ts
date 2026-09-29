@@ -32,23 +32,32 @@ function mapGrantRow(
   }
 }
 
+const PAGE_SIZE = 1000
+
+async function fetchAllPages(
+  buildQuery: (from: number, to: number) => any
+): Promise<any[]> {
+  const all: any[] = []
+  let from = 0
+  for (;;) {
+    const { data, error } = await buildQuery(from, from + PAGE_SIZE - 1)
+    if (error) throw error
+    if (!data?.length) break
+    all.push(...data)
+    if (data.length < PAGE_SIZE) break
+    from += PAGE_SIZE
+  }
+  return all
+}
+
 async function fetchAllRows<T>(
   supabase: ReturnType<typeof getSupabaseAdmin>,
   table: string,
   select: string
 ): Promise<T[]> {
-  const rows: T[] = []
-  let from = 0
-  const pageSize = 1000
-  while (true) {
-    const { data, error } = await supabase.from(table).select(select).range(from, from + pageSize - 1)
-    if (error) throw error
-    if (!data?.length) break
-    rows.push(...(data as T[]))
-    if (data.length < pageSize) break
-    from += pageSize
-  }
-  return rows
+  return (await fetchAllPages((from, to) =>
+    supabase.from(table).select(select).range(from, to)
+  )) as T[]
 }
 
 function computeTransferFee(
@@ -126,16 +135,18 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const status = searchParams.get('status') ?? 'all'
 
-    let query = supabase.from('grants_grid_view').select(GRANT_SELECT).order('grant_start_date', {
-      ascending: false,
+    const data = await fetchAllPages((from, to) => {
+      let query = supabase
+        .from('grants_grid_view')
+        .select(GRANT_SELECT)
+        .order('grant_start_date', { ascending: false })
+        .order('id', { ascending: true })
+        .range(from, to)
+      if (status !== 'all') {
+        query = query.eq('status', status)
+      }
+      return query
     })
-
-    if (status !== 'all') {
-      query = query.eq('status', status)
-    }
-
-    const { data, error } = await query
-    if (error) throw error
 
     const gridRows = await fetchAllRows<{ id: string; grant_id: string | null }>(
       supabase,
@@ -192,9 +203,7 @@ export async function GET(request: NextRequest) {
     )
 
     return NextResponse.json(
-      (data || []).map((item) =>
-        mapGrantRow(item as Record<string, unknown>, disbursedByGrant)
-      )
+      data.map((item) => mapGrantRow(item as Record<string, unknown>, disbursedByGrant))
     )
   } catch (error) {
     console.error('Error fetching grants:', error)

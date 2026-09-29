@@ -6,6 +6,34 @@ import { transferAmount } from '@/lib/grantManagement/fundTransferHelpers'
 const FR_SELECT =
   'id, request_id, date_submitted, requested_amount, partner_name, file_name, file_link, airtable_record_id, created_at, updated_at'
 
+const SUPABASE_IN_BATCH = 80
+const PAGE_SIZE = 1000
+
+function chunkIds(ids: string[]): string[][] {
+  if (!ids.length) return []
+  const out: string[][] = []
+  for (let i = 0; i < ids.length; i += SUPABASE_IN_BATCH) {
+    out.push(ids.slice(i, i + SUPABASE_IN_BATCH))
+  }
+  return out
+}
+
+async function fetchAllPages(
+  buildQuery: (from: number, to: number) => any
+): Promise<any[]> {
+  const all: any[] = []
+  let from = 0
+  for (;;) {
+    const { data, error } = await buildQuery(from, from + PAGE_SIZE - 1)
+    if (error) throw error
+    if (!data?.length) break
+    all.push(...data)
+    if (data.length < PAGE_SIZE) break
+    from += PAGE_SIZE
+  }
+  return all
+}
+
 async function enrichFundRequests(
   supabase: ReturnType<typeof getSupabaseAdmin>,
   rows: Array<Record<string, unknown>>
@@ -13,23 +41,43 @@ async function enrichFundRequests(
   if (!rows.length) return []
   const ids = rows.map((r) => r.id as string)
 
-  const [{ data: links }, { data: transfers }] = await Promise.all([
-    supabase.from('fund_request_decisions').select('fund_request_id, decision_id_proposed').in('fund_request_id', ids),
-    supabase
-      .from('transfer_segments')
-      .select('id, fund_request_id, transfer_id, activity_amount, transfer_fee_amount, status, grant_id, fsp_id, transfer_received_date, purpose, comment, file_name, file_link')
-      .in('fund_request_id', ids),
-  ])
+  const links: Array<{ fund_request_id: string; decision_id_proposed: string }> = []
+  const transfers: Array<Record<string, unknown>> = []
+  for (const batch of chunkIds(ids)) {
+    const [linkPage, transferPage] = await Promise.all([
+      fetchAllPages((from, to) =>
+        supabase
+          .from('fund_request_decisions')
+          .select('fund_request_id, decision_id_proposed')
+          .in('fund_request_id', batch)
+          .order('fund_request_id', { ascending: true })
+          .order('decision_id_proposed', { ascending: true })
+          .range(from, to)
+      ),
+      fetchAllPages((from, to) =>
+        supabase
+          .from('transfer_segments')
+          .select(
+            'id, fund_request_id, transfer_id, activity_amount, transfer_fee_amount, status, grant_id, fsp_id, transfer_received_date, purpose, comment, file_name, file_link'
+          )
+          .in('fund_request_id', batch)
+          .order('id', { ascending: true })
+          .range(from, to)
+      ),
+    ])
+    links.push(...linkPage)
+    transfers.push(...transferPage)
+  }
 
   const decisionsByFr = new Map<string, string[]>()
-  for (const l of links || []) {
+  for (const l of links) {
     const list = decisionsByFr.get(l.fund_request_id) || []
     list.push(l.decision_id_proposed)
     decisionsByFr.set(l.fund_request_id, list)
   }
 
   const transfersByFr = new Map<string, typeof transfers>()
-  for (const t of transfers || []) {
+  for (const t of transfers) {
     const frId = t.fund_request_id as string
     if (!frId) continue
     const list = transfersByFr.get(frId) || []
@@ -74,12 +122,15 @@ async function setDecisions(
 export async function GET() {
   try {
     const supabase = getSupabaseAdmin()
-    const { data, error } = await supabase
-      .from('fund_requests')
-      .select(FR_SELECT)
-      .order('date_submitted', { ascending: false, nullsFirst: false })
-    if (error) throw error
-    const enriched = await enrichFundRequests(supabase, (data || []) as Record<string, unknown>[])
+    const data = await fetchAllPages((from, to) =>
+      supabase
+        .from('fund_requests')
+        .select(FR_SELECT)
+        .order('date_submitted', { ascending: false, nullsFirst: false })
+        .order('id', { ascending: true })
+        .range(from, to)
+    )
+    const enriched = await enrichFundRequests(supabase, data as Record<string, unknown>[])
     return NextResponse.json(enriched)
   } catch (error) {
     console.error('Error fetching fund requests:', error)
