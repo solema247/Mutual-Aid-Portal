@@ -71,6 +71,13 @@ scripts/retry-storage-paths.js
 scripts/copy-approved-beneficiaries.js
 scripts/fix-prod-arabic.js
 
+# Local prod cutover parity helpers — do not commit
+scripts/cutover/compare-staging-prod-counts.js
+scripts/cutover/sync-staging-gaps-to-prod.js
+scripts/cutover/sync-activities-raw-import-gaps.js
+scripts/cutover/sync-err-expense-gaps.js
+scripts/cutover/verify-project-mou-f4-f5-alignment.js
+
 # Local CSV imports/exports — not committed
 data/imports/*
 !data/imports/.gitkeep
