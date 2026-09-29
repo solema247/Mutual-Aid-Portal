@@ -78,6 +78,13 @@ scripts/cutover/sync-activities-raw-import-gaps.js
 scripts/cutover/sync-err-expense-gaps.js
 scripts/cutover/verify-project-mou-f4-f5-alignment.js
 scripts/cutover/check-latest-red-sea-f1.js
+scripts/cutover/compare-storage-buckets.js
+scripts/cutover/verify-storage-bytes.js
+scripts/cutover/purge-staging-f4-sample.js
+scripts/cutover/purge-staging-f5-sample.js
+scripts/cutover/purge-staging-f3-signed-payment.js
+scripts/cutover/purge-staging-f1-sample.js
+scripts/cutover/_storage-compare/
 
 # Local CSV imports/exports — not committed
 data/imports/*
