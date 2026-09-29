@@ -255,76 +255,23 @@ export default function DirectUpload() {
         return
       }
 
-      // Query for the state row with matching state_name and locality
-      const { data: stateRow, error: stateRowError } = await supabase
-        .from('states')
-        .select('id, state_short')
-        .eq('state_name', selectedState.state_name)
-        .eq('locality', selectedLocalityData.locality)
-        .single()
-
-      if (stateRowError || !stateRow) {
-        // Fallback: if exact match not found, use the selected locality's state_reference id
-        console.warn('Exact state row not found, using selected locality state_reference')
-      }
-
-      const correctStateReference = stateRow?.id || selectedLocality
-      const stateShort = stateRow?.state_short?.toUpperCase() || selectedState.state_short?.toUpperCase() || 'XX'
-
-      // Get existing rooms for this state to determine the next number
-      // Query across all state rows with the same state_name
-      const { data: allStateIds, error: allStateIdsError } = await supabase
-        .from('states')
-        .select('id')
-        .eq('state_name', selectedState.state_name)
-      
-      if (allStateIdsError) throw allStateIdsError
-      
-      const stateIds = (allStateIds || []).map((s: any) => s.id)
-      const { data: existingRooms, error: existingError } = await supabase
-        .from('emergency_rooms')
-        .select('err_code')
-        .in('state_reference', stateIds)
-        .not('err_code', 'is', null)
-
-      let roomNumber = '01' // Default to 01
-      if (!existingError && existingRooms && existingRooms.length > 0) {
-        // Find the highest room number
-        const numbers = existingRooms
-          .map((room: any) => {
-            const match = room.err_code?.match(/ERR-[A-Z]+-(\d+)-(\d+)/)
-            return match ? parseInt(match[1]) : 0
-          })
-          .filter((n: number) => !isNaN(n))
-        
-        if (numbers.length > 0) {
-          roomNumber = String(Math.max(...numbers) + 1).padStart(2, '0')
-        }
-      }
-
-      // Generate a unique 3-digit identifier
-      const uniqueId = String(Math.floor(Math.random() * 1000)).padStart(3, '0')
-
-      // Construct the err_code: ERR-{StateShort}-{RoomNumber}-{UniqueID}
-      const errCode = `ERR-${stateShort}-${roomNumber}-${uniqueId}`
-
-      // Create the new room with the correct state_reference
-      const { data: newRoom, error: createError } = await supabase
-        .from('emergency_rooms')
-        .insert({
+      const res = await fetch('/api/f1/room', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           name: newRoomName.trim(),
           name_ar: newRoomNameAr.trim() || null,
-          state_reference: correctStateReference,
-          type: 'base',
-          status: 'active',
-          err_code: errCode
-        })
-        .select()
-        .single()
-
-      if (createError) {
-        throw createError
+          state_name: selectedState.state_name,
+          state_short: selectedState.state_short,
+          state_reference: selectedLocality,
+          locality: selectedLocalityData.locality,
+        }),
+      })
+      const payload = await res.json().catch(() => null)
+      if (!res.ok) {
+        throw new Error(payload?.error || 'Failed to create room')
       }
+      const newRoom = payload.room
 
       // Add the new room to the list and select it
       setRooms(prev => [...prev, newRoom as EmergencyRoomWithState])
@@ -982,20 +929,22 @@ export default function DirectUpload() {
                             return
                           }
 
-                          // Create new state row with the new locality
-                          const { data: newState, error: createError } = await supabase
-                            .from('states')
-                            .insert({
+                          const res = await fetch('/api/f1/locality', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
                               state_name: selectedState.state_name,
                               state_name_ar: selectedState.state_name_ar,
+                              state_short: selectedState.state_short,
                               locality: newLocalityName.trim(),
                               locality_ar: newLocalityNameAr.trim() || null,
-                              state_short: selectedState.state_short
-                            })
-                            .select()
-                            .single()
-
-                          if (createError) throw createError
+                            }),
+                          })
+                          const payload = await res.json().catch(() => null)
+                          if (!res.ok) {
+                            throw new Error(payload?.error || 'Failed to create locality')
+                          }
+                          const newState = payload.locality
 
                           // Add to available localities and select it
                           const newLocality = {

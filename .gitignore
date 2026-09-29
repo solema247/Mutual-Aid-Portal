@@ -77,6 +77,7 @@ scripts/cutover/sync-staging-gaps-to-prod.js
 scripts/cutover/sync-activities-raw-import-gaps.js
 scripts/cutover/sync-err-expense-gaps.js
 scripts/cutover/verify-project-mou-f4-f5-alignment.js
+scripts/cutover/check-latest-red-sea-f1.js
 
 # Local CSV imports/exports — not committed
 data/imports/*
