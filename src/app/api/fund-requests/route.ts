@@ -42,7 +42,22 @@ async function enrichFundRequests(
   const ids = rows.map((r) => r.id as string)
 
   const links: Array<{ fund_request_id: string; decision_id_proposed: string }> = []
-  const transfers: Array<Record<string, unknown>> = []
+  type TransferSeg = {
+    id: string
+    fund_request_id: string
+    transfer_id?: string | null
+    activity_amount?: number | null
+    transfer_fee_amount?: number | null
+    status?: string | null
+    grant_id?: string | null
+    fsp_id?: string | null
+    transfer_received_date?: string | null
+    purpose?: string | null
+    comment?: string | null
+    file_name?: string | null
+    file_link?: string | null
+  }
+  const transfers: TransferSeg[] = []
   for (const batch of chunkIds(ids)) {
     const [linkPage, transferPage] = await Promise.all([
       fetchAllPages((from, to) =>
@@ -65,8 +80,8 @@ async function enrichFundRequests(
           .range(from, to)
       ),
     ])
-    links.push(...linkPage)
-    transfers.push(...transferPage)
+    links.push(...(linkPage as Array<{ fund_request_id: string; decision_id_proposed: string }>))
+    transfers.push(...(transferPage as TransferSeg[]))
   }
 
   const decisionsByFr = new Map<string, string[]>()
@@ -76,9 +91,9 @@ async function enrichFundRequests(
     decisionsByFr.set(l.fund_request_id, list)
   }
 
-  const transfersByFr = new Map<string, typeof transfers>()
+  const transfersByFr = new Map<string, TransferSeg[]>()
   for (const t of transfers) {
-    const frId = t.fund_request_id as string
+    const frId = t.fund_request_id
     if (!frId) continue
     const list = transfersByFr.get(frId) || []
     list.push(t)
