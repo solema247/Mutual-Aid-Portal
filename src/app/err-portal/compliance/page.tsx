@@ -44,7 +44,18 @@ interface Screening {
   identity_document_file_key: string | null
 }
 
+function committedWithoutClearance(s: Screening) {
+  return s.status === 'pending_screening' && s.funding_status === 'committed'
+}
+
 function StatusBadge({ s }: { s: Screening }) {
+  if (committedWithoutClearance(s)) {
+    return (
+      <Badge variant="destructive" className="text-[10px] px-1.5 py-0 font-semibold">
+        Committed without clearance
+      </Badge>
+    )
+  }
   if (s.status === 'pending_screening') {
     return <Badge variant="secondary" className="text-[10px] px-1.5 py-0">Pending screening</Badge>
   }
@@ -386,7 +397,9 @@ export default function CompliancePage() {
     s.finance_review_status === 'id_uploaded'
 
   const pending = screenings.filter(
-    s => s.status === 'pending_screening' || awaitingIdClearance(s)
+    s =>
+      (s.status === 'pending_screening' && !committedWithoutClearance(s)) ||
+      awaitingIdClearance(s)
   )
   const financeQueue = screenings.filter(
     s => s.status === 'flagged' && s.finance_review_status === 'pending'
@@ -399,15 +412,18 @@ export default function CompliancePage() {
   )
   const history = screenings.filter(
     s =>
-      s.status !== 'pending_screening' &&
-      !awaitingIdClearance(s) &&
-      !(s.status === 'flagged' && s.finance_review_status === 'pending')
+      committedWithoutClearance(s) ||
+      (s.status !== 'pending_screening' &&
+        !awaitingIdClearance(s) &&
+        !(s.status === 'flagged' && s.finance_review_status === 'pending'))
   )
+  const bypassedClearanceCount = history.filter(committedWithoutClearance).length
 
   const showScreeningActions =
     canScreen &&
-    (selected?.status === 'pending_screening' ||
-      (selected != null && awaitingIdClearance(selected)))
+    selected != null &&
+    !committedWithoutClearance(selected) &&
+    (selected.status === 'pending_screening' || awaitingIdClearance(selected))
   const showMissingIdFinance =
     canFinanceReview &&
     selected?.status === 'flagged' &&
@@ -469,7 +485,12 @@ export default function CompliancePage() {
               <TabsTrigger value="finance">
                 Finance review{financeQueue.length > 0 ? ` (${financeQueue.length})` : ''}
               </TabsTrigger>
-              <TabsTrigger value="history">History</TabsTrigger>
+              <TabsTrigger value="history">
+                History
+                {bypassedClearanceCount > 0
+                  ? ` (${bypassedClearanceCount} without clearance)`
+                  : ''}
+              </TabsTrigger>
             </TabsList>
 
             <TabsContent value="queue" className="mt-6">
@@ -488,7 +509,13 @@ export default function CompliancePage() {
               />
             </TabsContent>
 
-            <TabsContent value="history" className="mt-6">
+            <TabsContent value="history" className="mt-6 space-y-3">
+              {bypassedClearanceCount > 0 && (
+                <p className="text-sm text-muted-foreground">
+                  Rows tagged <span className="font-medium text-red-700">Committed without clearance</span> were
+                  committed at F2 while still pending Ahmed&apos;s screening.
+                </p>
+              )}
               <PaginatedScreeningsTable
                 rows={history}
                 emptyText="No screened F1s yet"
@@ -513,6 +540,12 @@ export default function CompliancePage() {
                 <div className="rounded-md border-2 border-red-600 bg-red-50 px-3 py-2 text-sm text-red-950 font-medium">
                   PAYMENT MUST BE STOPPED — potential Descartes / sanctions list match.
                   Alert recipients: Finance team, Yara, Josh, Nihal, Santiago.
+                </div>
+              )}
+
+              {committedWithoutClearance(selected) && (
+                <div className="rounded-md border border-red-500 bg-red-50 px-3 py-2 text-sm text-red-950">
+                  This F1 was committed at F2 without a compliance Clear or auto-approval.
                 </div>
               )}
 
