@@ -167,8 +167,13 @@ export async function GET(request: Request) {
     // 2) Active work should not include projects that already committed or are
     //    completed/declined. Active = pending screening, pending finance review,
     //    or missing-ID with ID uploaded awaiting Ahmed's Clear.
+    // 3) Exception: pending_screening + committed stays visible so History can
+    //    tag F1s that were committed without a compliance Clear.
     const visible = formatted.filter((r) => {
       if (!(r.f1_file_key || r.temp_file_key)) return false
+      const committedWithoutClearance =
+        r.status === 'pending_screening' && r.funding_status === 'committed'
+      if (committedWithoutClearance) return true
       const isActiveWork =
         r.status === 'pending_screening' ||
         (r.status === 'flagged' && r.finance_review_status === 'pending') ||
