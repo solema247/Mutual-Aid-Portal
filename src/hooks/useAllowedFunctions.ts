@@ -2,6 +2,21 @@
 
 import { useEffect, useState } from 'react'
 
+let allowedFunctionsInflight: Promise<string[]> | null = null
+
+function fetchAllowedFunctionsOnce(): Promise<string[]> {
+  if (!allowedFunctionsInflight) {
+    allowedFunctionsInflight = fetch('/api/users/me')
+      .then((r) => (r.ok ? r.json() : { allowed_functions: [] }))
+      .then((data) => (data.allowed_functions ?? []) as string[])
+      .catch(() => [] as string[])
+      .finally(() => {
+        allowedFunctionsInflight = null
+      })
+  }
+  return allowedFunctionsInflight
+}
+
 export function useAllowedFunctions(): {
   allowedFunctions: string[]
   can: (code: string) => boolean
@@ -11,13 +26,9 @@ export function useAllowedFunctions(): {
   const [isLoading, setIsLoading] = useState(true)
   useEffect(() => {
     let cancelled = false
-    fetch('/api/users/me')
-      .then((r) => (r.ok ? r.json() : { allowed_functions: [] }))
-      .then((data) => {
-        if (!cancelled) setAllowedFunctions(data.allowed_functions ?? [])
-      })
-      .catch(() => {
-        if (!cancelled) setAllowedFunctions([])
+    fetchAllowedFunctionsOnce()
+      .then((list) => {
+        if (!cancelled) setAllowedFunctions(list)
       })
       .finally(() => {
         if (!cancelled) setIsLoading(false)

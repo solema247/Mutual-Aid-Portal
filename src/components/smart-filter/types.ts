@@ -47,11 +47,18 @@ export interface SmartFilterProps {
   urlParamPrefix?: string
   /** Optional: custom class for container */
   className?: string
+  /**
+   * stacked (default): title row + chips on a second row
+   * inline: Add filter + chips in one horizontal wrapping row (compact toolbars)
+   */
+  layout?: 'stacked' | 'inline'
   /** Optional: show title/count (e.g. "Report Tracker (37)") */
   title?: string
   count?: number
   /** Optional: additional labeled counts shown after the primary count */
   extraCounts?: Array<{ label: string; count: number }>
+  /** Override multi-select options per field (e.g. cascading location filters) */
+  chipOptionsByFieldId?: Partial<Record<string, FilterSelectOption[]>>
 }
 
 /** Props for applying filters to data (client-side) */
