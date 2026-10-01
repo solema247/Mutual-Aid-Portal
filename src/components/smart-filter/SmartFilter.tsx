@@ -98,6 +98,7 @@ export function SmartFilter({
   title,
   count,
   extraCounts,
+  chipOptionsByFieldId,
 }: SmartFilterProps) {
   const searchParams = useSearchParams()
   const [addFilterOpen, setAddFilterOpen] = React.useState(false)
@@ -255,11 +256,18 @@ export function SmartFilter({
       {filters.map((filter) => {
         const field = fields.find((f) => f.id === filter.fieldId)
         if (!field) return null
+        const chipOptions = chipOptionsByFieldId?.[field.id] ?? field.options
+        const chipDisabled =
+          field.id === 'locality' &&
+          field.type === 'multi_select' &&
+          (chipOptions?.length ?? 0) === 0
         return (
           <FilterChip
             key={filter.id}
             filter={filter}
             field={field}
+            options={chipOptions}
+            disabled={chipDisabled}
             onValueChange={(v) => updateFilter(filter.id, v)}
             onRemove={() => removeFilter(filter.id)}
           />
