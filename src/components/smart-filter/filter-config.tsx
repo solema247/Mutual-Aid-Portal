@@ -659,3 +659,89 @@ export function getF5ReportingFilterFields(options: {
     },
   ]
 }
+
+/** User Management: Role, Status, Scope, State, ERR / Room, Partner (all multi-select) */
+export function getUserManagementFilterFields(options: {
+  stateOptions: FilterSelectOption[]
+  errOptions: FilterSelectOption[]
+  partnerOptions: FilterSelectOption[]
+  roleOptions: FilterSelectOption[]
+  labels?: {
+    role?: string
+    status?: string
+    scope?: string
+    state?: string
+    errRoom?: string
+    partner?: string
+    active?: string
+    suspended?: string
+    allStates?: string
+    stateScope?: string
+    emergencyRoom?: string
+    partnerGrant?: string
+    noState?: string
+  }
+}): FilterFieldConfig[] {
+  const labels = options.labels ?? {}
+  return [
+    {
+      id: 'role',
+      label: labels.role ?? 'Role',
+      type: 'multi_select',
+      options: options.roleOptions,
+      placeholder: 'All roles',
+      accessorKey: 'role',
+    },
+    {
+      id: 'status',
+      label: labels.status ?? 'Status',
+      type: 'multi_select',
+      options: [
+        { value: 'active', label: labels.active ?? 'Active' },
+        { value: 'suspended', label: labels.suspended ?? 'Suspended' },
+      ],
+      placeholder: 'All statuses',
+      accessorKey: 'status',
+    },
+    {
+      id: 'scope',
+      label: labels.scope ?? 'Scope',
+      type: 'multi_select',
+      options: [
+        { value: 'all_states', label: labels.allStates ?? 'All States' },
+        { value: 'state', label: labels.stateScope ?? 'State' },
+        { value: 'emergency_room', label: labels.emergencyRoom ?? 'Emergency Room' },
+        { value: 'partner_grant', label: labels.partnerGrant ?? 'Partner / Grant' },
+      ],
+      placeholder: 'All scopes',
+      accessorKey: 'scope',
+    },
+    {
+      id: 'state',
+      label: labels.state ?? 'State',
+      type: 'multi_select',
+      options: [
+        { value: 'no_state', label: labels.noState ?? 'No State' },
+        ...options.stateOptions,
+      ],
+      placeholder: 'All states',
+      accessorKey: 'state',
+    },
+    {
+      id: 'err',
+      label: labels.errRoom ?? 'ERR / Room',
+      type: 'multi_select',
+      options: options.errOptions,
+      placeholder: 'All ERRs',
+      accessorKey: 'err_id',
+    },
+    {
+      id: 'partner',
+      label: labels.partner ?? 'Partner',
+      type: 'multi_select',
+      options: options.partnerOptions,
+      placeholder: 'All partners',
+      accessorKey: 'partner_id',
+    },
+  ]
+}

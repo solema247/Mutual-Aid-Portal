@@ -16,6 +16,11 @@ import {
   grantGridIdInAccess,
   type UserGrantAccess,
 } from '@/lib/userGrantAccess'
+import {
+  fetchMouIdsForEmergencyRoom,
+  getUserRoomAccess,
+  type UserRoomAccess,
+} from '@/lib/userRoomAccess'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 function parseMouSignatures(mou: Record<string, unknown>) {
@@ -62,7 +67,8 @@ async function fetchAllPages(
 async function fetchProjectEnrichment(
   supabase: SupabaseClient,
   mouIds: string[],
-  grantAccess?: UserGrantAccess
+  grantAccess?: UserGrantAccess,
+  roomAccess?: UserRoomAccess
 ) {
   if (mouIds.length === 0) {
     return {
@@ -79,13 +85,19 @@ async function fetchProjectEnrichment(
     const projects = await fetchAllPages((from, to) =>
       supabase
         .from('err_projects')
-        .select('mou_id, id, expenses, grant_id, grant_grid_id, funding_status, status')
+        .select(
+          'mou_id, id, expenses, grant_id, grant_grid_id, funding_status, status, emergency_room_id'
+        )
         .in('mou_id', batch)
         .order('id', { ascending: true })
         .range(from, to)
     )
-    for (const p of projects as MouProjectListRow[]) {
-      if (grantAccess && grantAccess.mode !== 'all') {
+    for (const p of projects as (MouProjectListRow & { emergency_room_id?: string | null })[]) {
+      if (roomAccess?.mode === 'room') {
+        if (String(p.emergency_room_id ?? '') !== roomAccess.emergencyRoomId) continue
+      } else if (grantAccess && grantAccess.mode === 'partner') {
+        if (!grantGridIdInAccess(grantAccess, p.grant_grid_id)) continue
+      } else if (grantAccess && grantAccess.mode !== 'all') {
         if (!grantGridIdInAccess(grantAccess, p.grant_grid_id)) continue
       }
       rows.push(p)
@@ -155,11 +167,14 @@ async function fetchProjectEnrichment(
   }
 
   if (!confFailed) {
+    // Only count confirmations for projects already in room/grant enrichment rows
+    const inScopeProjectIds = new Set(rows.map((p) => String(p.id)).filter(Boolean))
     const projectsByMou = new Map<string, Set<string>>()
     // Latest rate per project (prefer transfer_date, then created_at)
     const rateByProject = new Map<string, { mou_id: string; rate: number; sortKey: string }>()
     for (const row of confRows) {
       if (!row.mou_id || !row.project_id) continue
+      if (!inScopeProjectIds.has(String(row.project_id))) continue
       if (!projectsByMou.has(row.mou_id)) projectsByMou.set(row.mou_id, new Set())
       projectsByMou.get(row.mou_id)!.add(row.project_id)
 
@@ -285,27 +300,30 @@ export async function GET(request: Request) {
     const search = searchParams.get('search')
     const state = searchParams.get('state')
 
-    const [{ allowedStateNames }, grantAccess] = await Promise.all([
+    const [{ allowedStateNames }, grantAccess, roomAccess] = await Promise.all([
       getUserStateAccess(),
       getUserGrantAccess(),
+      getUserRoomAccess(),
     ])
 
-    if (grantAccess.mode === 'none') {
-      return NextResponse.json({
+    const emptyMous = () =>
+      NextResponse.json({
         mous: [],
         ...aggregateMouEnrichment([]),
       })
-    }
 
-    const partnerMouIds =
-      grantAccess.mode === 'partner' ? await fetchMouIdsInGrantAccess(grantAccess) : null
+    if (roomAccess.mode === 'none') return emptyMous()
+    if (roomAccess.mode !== 'room' && grantAccess.mode === 'none') return emptyMous()
 
-    if (grantAccess.mode === 'partner' && (!partnerMouIds || partnerMouIds.length === 0)) {
-      return NextResponse.json({
-        mous: [],
-        ...aggregateMouEnrichment([]),
-      })
-    }
+    // MOU ids with ≥1 project in scope: Base ERR by room, Partner by grants
+    const scopedMouIds =
+      roomAccess.mode === 'room'
+        ? await fetchMouIdsForEmergencyRoom(roomAccess.emergencyRoomId)
+        : grantAccess.mode === 'partner'
+          ? await fetchMouIdsInGrantAccess(grantAccess)
+          : null
+
+    if (scopedMouIds != null && scopedMouIds.length === 0) return emptyMous()
 
     const mous = await fetchAllPages((from, to) => {
       let query = supabase
@@ -315,37 +333,37 @@ export async function GET(request: Request) {
         .order('id', { ascending: true })
         .range(from, to)
 
-      if (grantAccess.mode !== 'partner' && allowedStateNames !== null && allowedStateNames.length > 0) {
-        query = query.in('state', allowedStateNames)
-      }
-      if (!search && state && state !== 'all') {
-        query = query.eq('state', state)
+      // Base ERR / Partner: scoped via linked projects (never state scope)
+      if (scopedMouIds == null) {
+        if (allowedStateNames !== null && allowedStateNames.length > 0) {
+          query = query.in('state', allowedStateNames)
+        }
+        if (!search && state && state !== 'all') {
+          query = query.eq('state', state)
+        }
       }
       return query
     })
 
-    const partnerSet =
-      grantAccess.mode === 'partner' && partnerMouIds
-        ? new Set(partnerMouIds)
-        : null
-    const scopedMous = partnerSet
-      ? mous.filter((m: { id: string }) => partnerSet.has(m.id))
+    const scopedSet = scopedMouIds != null ? new Set(scopedMouIds) : null
+    let list = scopedSet
+      ? mous.filter((m: { id: string }) => scopedSet.has(m.id))
       : mous
 
-    const list = search
-      ? scopedMous.filter((m: { mou_code?: string; partner_name?: string; err_name?: string }) => {
-          const s = search.toLowerCase()
-          return (
-            m.mou_code?.toLowerCase().includes(s) ||
-            m.partner_name?.toLowerCase().includes(s) ||
-            m.err_name?.toLowerCase().includes(s)
-          )
-        })
-      : scopedMous
+    if (search) {
+      const s = search.toLowerCase()
+      list = list.filter((m: { mou_code?: string; partner_name?: string; err_name?: string }) => {
+        return (
+          m.mou_code?.toLowerCase().includes(s) ||
+          m.partner_name?.toLowerCase().includes(s) ||
+          m.err_name?.toLowerCase().includes(s)
+        )
+      })
+    }
 
     const mouIds = list.map((m: { id: string }) => m.id).filter(Boolean)
     const { totalByMouId, exchangeRateByMouId, totalSdgByMouId, enrichment } =
-      await fetchProjectEnrichment(supabase, mouIds, grantAccess)
+      await fetchProjectEnrichment(supabase, mouIds, grantAccess, roomAccess)
 
     return NextResponse.json({
       mous: buildMousListPayload(

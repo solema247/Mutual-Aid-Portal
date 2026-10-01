@@ -27,21 +27,24 @@ interface User {
 export default function UserManagement() {
   const { t } = useTranslation(['users', 'common'])
   const router = useRouter()
-  const { can } = useAllowedFunctions()
+  const { can, isLoading: permissionsLoading } = useAllowedFunctions()
   const canViewPage = can('users_view_page')
   const canViewPermissionsPage = can('users_view_permissions_page')
   const [pendingUsers, setPendingUsers] = useState<PendingUserListItem[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [currentUser, setCurrentUser] = useState<User | null>(null)
-  useUserManagementPageExplainer(canViewPage && currentUser !== null)
+  useUserManagementPageExplainer(
+    !permissionsLoading && canViewPage && currentUser !== null
+  )
 
   useEffect(() => {
+    // can() is false while permissions load — wait before redirecting.
+    if (permissionsLoading) return
     if (!canViewPage) {
       router.replace('/err-portal')
-      return
     }
-  }, [canViewPage, router])
+  }, [permissionsLoading, canViewPage, router])
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -101,8 +104,12 @@ export default function UserManagement() {
     }
   }, [currentUser, fetchPendingUsers])
 
-  if (!currentUser) return null
+  if (permissionsLoading) {
+    return <div className="p-6 text-muted-foreground">{t('common:loading', 'Loading...')}</div>
+  }
+
   if (!canViewPage) return null
+  if (!currentUser) return null
 
   const isAdmin = currentUser.role === 'support' || currentUser.role === 'admin' || currentUser.role === 'superadmin'
 

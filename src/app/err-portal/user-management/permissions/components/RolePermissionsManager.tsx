@@ -21,7 +21,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { ChevronDown, GripVertical } from 'lucide-react'
-import { useAllowedFunctions } from '@/hooks/useAllowedFunctions'
+import { notifyPortalPermissionsChanged, useAllowedFunctions } from '@/hooks/useAllowedFunctions'
 import type { FunctionDefinition } from '@/lib/permissions'
 
 const MODULE_LABELS: Record<string, string> = {
@@ -181,6 +181,15 @@ export default function RolePermissionsManager() {
   }, [load])
 
   useEffect(() => {
+    const onRoleChanged = () => {
+      setActiveUserId(null)
+      void load()
+    }
+    window.addEventListener('portal-user-role-changed', onRoleChanged)
+    return () => window.removeEventListener('portal-user-role-changed', onRoleChanged)
+  }, [load])
+
+  useEffect(() => {
     if (!data) return
     const fromUrl = searchParams.get('userId')
     if (fromUrl && data.users.some((u) => u.id === fromUrl)) {
@@ -308,6 +317,7 @@ export default function RolePermissionsManager() {
       setMessage('Type default saved.')
       setDefaultsDirty(false)
       await load()
+      notifyPortalPermissionsChanged()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to save defaults')
     } finally {
@@ -372,6 +382,7 @@ export default function RolePermissionsManager() {
       setMessage('Exceptions saved.')
       setExceptionsDirty(false)
       await load()
+      notifyPortalPermissionsChanged()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to save exceptions')
     } finally {
@@ -394,6 +405,7 @@ export default function RolePermissionsManager() {
       if (activeUserId === user.id) setActiveUserId(null)
       setConfirmMoveToDefault(null)
       await load()
+      notifyPortalPermissionsChanged()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to move user to default')
     } finally {

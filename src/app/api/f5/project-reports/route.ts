@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { getUserStateAccess } from '@/lib/userStateAccess'
 import { assertProjectInGrantAccess, getUserGrantAccess } from '@/lib/userGrantAccess'
+import { assertProjectInRoomAccess, getUserRoomAccess } from '@/lib/userRoomAccess'
 
 /**
  * GET /api/f5/project-reports?project_id=...
@@ -18,12 +19,23 @@ export async function GET(request: Request) {
       return NextResponse.json([])
     }
 
-    const grantAccess = await getUserGrantAccess()
-    if (grantAccess.mode === 'none') {
+    const [grantAccess, roomAccess] = await Promise.all([
+      getUserGrantAccess(),
+      getUserRoomAccess(),
+    ])
+    if (roomAccess.mode === 'none') {
+      return NextResponse.json([])
+    }
+    if (roomAccess.mode !== 'room' && grantAccess.mode === 'none') {
       return NextResponse.json([])
     }
 
-    if (grantAccess.mode === 'partner') {
+    if (roomAccess.mode === 'room') {
+      const roomCheck = await assertProjectInRoomAccess(projectId, roomAccess, {
+        notFoundMessage: 'Forbidden',
+      })
+      if (roomCheck.handled && !roomCheck.ok) return roomCheck.response
+    } else if (grantAccess.mode === 'partner') {
       const scope = await assertProjectInGrantAccess(projectId, grantAccess, {
         forbiddenStatus: 403,
         notFoundMessage: 'Forbidden',

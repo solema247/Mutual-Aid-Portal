@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Button } from '@/components/ui/button'
 import { FileUp } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
+import { useBaseErrRoomId } from '@/lib/useBaseErrRoom'
 import type { F1FormData, EmergencyRoom, State } from '@/app/api/fsystem/types/fsystem'
 import type { RoomWithState } from '@/app/api/rooms/types/rooms'
 
@@ -50,6 +51,8 @@ function countOcrEditedFields (initial: any, final: any): number {
 
 export default function DirectUpload() {
   const { t } = useTranslation(['common', 'fsystem'])
+  const { lockedRoomId, loading: baseErrRoomLoading } = useBaseErrRoomId()
+  const [lockedStateId, setLockedStateId] = useState('')
   const [rooms, setRooms] = useState<EmergencyRoomWithState[]>([])
   const [states, setStates] = useState<State[]>([])
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
@@ -116,6 +119,31 @@ export default function DirectUpload() {
   useEffect(() => {
     const fetchRoomsForState = async () => {
       try {
+        // Base ERR is locked to its own room: never list rooms by state
+        if (lockedRoomId) {
+          const { data: ownRoom, error: ownRoomError } = await supabase
+            .from('emergency_rooms')
+            .select(`
+              *,
+              state:states!emergency_rooms_state_reference_fkey(
+                id,
+                state_name,
+                locality,
+                state_name_ar,
+                locality_ar
+              )
+            `)
+            .eq('id', lockedRoomId)
+            .maybeSingle()
+          if (ownRoomError) throw ownRoomError
+          setRooms(ownRoom ? [ownRoom as any] : [])
+          setLockedStateId(
+            (ownRoom as { state?: { id?: string } } | null)?.state?.id
+              ? String((ownRoom as { state: { id: string } }).state.id)
+              : ''
+          )
+          return
+        }
         if (!formData.state_id) {
           setRooms([])
           return
@@ -154,7 +182,17 @@ export default function DirectUpload() {
       }
     }
     fetchRoomsForState()
-  }, [formData.state_id, states])
+  }, [formData.state_id, states, lockedRoomId])
+
+  // Base ERR: preselect (and keep) the user's own room and its state
+  useEffect(() => {
+    if (!lockedRoomId) return
+    setFormData(prev => {
+      const nextStateId = lockedStateId || prev.state_id
+      if (prev.emergency_room_id === lockedRoomId && prev.state_id === nextStateId) return prev
+      return { ...prev, emergency_room_id: lockedRoomId, state_id: nextStateId }
+    })
+  }, [lockedRoomId, lockedStateId, rooms])
 
   // Fetch localities for the selected state when modal opens or state changes
   useEffect(() => {
@@ -765,6 +803,7 @@ export default function DirectUpload() {
                       handleInputChange('state_id', value)
                       handleInputChange('emergency_room_id', '')
                     }}
+                    disabled={baseErrRoomLoading || Boolean(lockedRoomId)}
                   >
                                 <SelectTrigger className="h-[38px] w-full">
                       <SelectValue placeholder={t('fsystem:f1.state')} />
@@ -786,7 +825,7 @@ export default function DirectUpload() {
                       <Select
                         value={formData.emergency_room_id}
                         onValueChange={(value) => handleInputChange('emergency_room_id', value)}
-                        disabled={rooms.length === 0}
+                        disabled={baseErrRoomLoading || rooms.length === 0 || Boolean(lockedRoomId)}
                       >
                         <SelectTrigger className="h-[38px] w-full">
                         <SelectValue placeholder={t('fsystem:f1.select_emergency_room')} />
@@ -805,7 +844,7 @@ export default function DirectUpload() {
                       variant="outline"
                       size="icon"
                       onClick={() => setShowCreateRoomDialog(true)}
-                      disabled={!formData.state_id}
+                      disabled={baseErrRoomLoading || !formData.state_id || Boolean(lockedRoomId)}
                       className="h-[38px] w-[38px]"
                     >
                       <Plus className="h-4 w-4" />

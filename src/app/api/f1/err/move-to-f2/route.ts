@@ -5,6 +5,7 @@ import {
   isErrSubmissionSource
 } from '@/lib/routeHandlerAuth'
 import { isApprovedUnassigned } from '../_shared'
+import { getUserRoomAccess } from '@/lib/userRoomAccess'
 import { z } from 'zod'
 
 const bodySchema = z.object({
@@ -32,6 +33,26 @@ export async function POST (request: Request) {
     }
 
     const ids = [...new Set(parsed.data.project_ids)]
+
+    // Base ERR may only act on projects in its own emergency room
+    const roomAccess = await getUserRoomAccess()
+    if (roomAccess.mode === 'none') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+    if (roomAccess.mode === 'room') {
+      const { data: inRoom, error: roomErr } = await auth.supabase
+        .from('err_projects')
+        .select('id')
+        .in('id', ids)
+        .eq('emergency_room_id', roomAccess.emergencyRoomId)
+      if (roomErr) throw roomErr
+      if ((inRoom?.length ?? 0) !== ids.length) {
+        return NextResponse.json(
+          { error: 'One or more projects are outside your scope' },
+          { status: 403 }
+        )
+      }
+    }
 
     const { data: rows, error: fetchErr } = await auth.supabase
       .from('err_projects')

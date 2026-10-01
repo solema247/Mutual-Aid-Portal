@@ -9,6 +9,7 @@ import {
   assertProjectsInGrantAccess,
   getUserGrantAccess,
 } from '@/lib/userGrantAccess'
+import { getUserRoomAccess } from '@/lib/userRoomAccess'
 
 const PAGE_SIZE = 1000
 
@@ -46,12 +47,17 @@ export async function GET(request: Request) {
       dateTo = `${y}-${String(m).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
     }
 
-    const [{ allowedStateNames }, grantAccess] = await Promise.all([
+    const [{ allowedStateNames }, grantAccess, roomAccess] = await Promise.all([
       getUserStateAccess(),
       getUserGrantAccess(),
+      getUserRoomAccess(),
     ])
 
-    if (grantAccess.mode === 'none') {
+    if (roomAccess.mode === 'none') {
+      return NextResponse.json([])
+    }
+
+    if (roomAccess.mode !== 'room' && grantAccess.mode === 'none') {
       return NextResponse.json([])
     }
 
@@ -81,7 +87,10 @@ export async function GET(request: Request) {
         .eq('status', 'pending')
         .order('submitted_at', { ascending: false })
 
-      if (grantAccess.mode === 'partner') {
+      // Base ERR: emergency_room_id only. Partner: grant_grid_id only (never state scope).
+      if (roomAccess.mode === 'room') {
+        query = query.eq('emergency_room_id', roomAccess.emergencyRoomId)
+      } else if (grantAccess.mode === 'partner') {
         query = applyGrantGridIdFilter(query, grantAccess)
       } else if (allowedStateNames !== null && allowedStateNames.length > 0) {
         query = query.in('state', allowedStateNames)

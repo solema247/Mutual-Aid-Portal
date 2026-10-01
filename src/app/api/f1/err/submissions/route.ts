@@ -6,6 +6,7 @@ import {
   getUserGrantAccess,
   type UserGrantAccess,
 } from '@/lib/userGrantAccess'
+import { getUserRoomAccess } from '@/lib/userRoomAccess'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -46,6 +47,46 @@ async function fetchProjectsInGrantScope(
   return projects
 }
 
+/** Base ERR: ERR App submissions for the user's emergency room only. */
+async function fetchProjectsInRoomScope(
+  supabase: ReturnType<typeof getSupabaseRouteClient>,
+  emergencyRoomId: string
+) {
+  const projects: { id: string; submitted_at?: string | null }[] = []
+  let from = 0
+  const pageSize = 1000
+  while (true) {
+    const { data, error } = await supabase
+      .from('err_projects')
+      .select('*')
+      .or(SOURCE_FILTER)
+      .eq('emergency_room_id', emergencyRoomId)
+      .order('submitted_at', { ascending: false })
+      .range(from, from + pageSize - 1)
+    if (error) throw error
+    if (!data?.length) break
+    projects.push(...data)
+    if (data.length < pageSize) break
+    from += pageSize
+  }
+  return projects
+}
+
+async function projectInRoomScope(
+  supabase: ReturnType<typeof getSupabaseRouteClient>,
+  emergencyRoomId: string,
+  projectId: string
+) {
+  const { data, error } = await supabase
+    .from('err_projects')
+    .select('id')
+    .eq('id', projectId)
+    .eq('emergency_room_id', emergencyRoomId)
+    .limit(1)
+  if (error) throw error
+  return Boolean(data?.length)
+}
+
 async function projectInPartnerScope(
   supabase: ReturnType<typeof getSupabaseRouteClient>,
   grantAccess: ScopedAccess,
@@ -68,16 +109,26 @@ async function projectInPartnerScope(
 export async function GET(request: Request) {
   try {
     const supabase = getSupabaseRouteClient()
-    const grantAccess = await getUserGrantAccess()
+    const [grantAccess, roomAccess] = await Promise.all([
+      getUserGrantAccess(),
+      getUserRoomAccess(),
+    ])
     const { searchParams } = new URL(request.url)
     const projectId = searchParams.get('project_id')?.trim() || ''
     const fundingCycleId = searchParams.get('funding_cycle_id')?.trim() || ''
 
     if (projectId) {
-      if (grantAccess.mode === 'none') {
+      if (roomAccess.mode === 'none') {
         return NextResponse.json({ feedback: [] }, { headers: NO_STORE })
       }
-      if (grantAccess.mode === 'partner') {
+      if (roomAccess.mode === 'room') {
+        const allowed = await projectInRoomScope(supabase, roomAccess.emergencyRoomId, projectId)
+        if (!allowed) {
+          return NextResponse.json({ feedback: [] }, { headers: NO_STORE })
+        }
+      } else if (grantAccess.mode === 'none') {
+        return NextResponse.json({ feedback: [] }, { headers: NO_STORE })
+      } else if (grantAccess.mode === 'partner') {
         const allowed = await projectInPartnerScope(supabase, grantAccess, projectId)
         if (!allowed) {
           return NextResponse.json({ feedback: [] }, { headers: NO_STORE })
@@ -103,6 +154,15 @@ export async function GET(request: Request) {
         .order('created_at', { ascending: false })
       if (error) throw error
       return NextResponse.json({ grant_serials: data || [] }, { headers: NO_STORE })
+    }
+
+    if (roomAccess.mode === 'none') {
+      return NextResponse.json([], { headers: NO_STORE })
+    }
+
+    if (roomAccess.mode === 'room') {
+      const projects = await fetchProjectsInRoomScope(supabase, roomAccess.emergencyRoomId)
+      return NextResponse.json({ projects }, { headers: NO_STORE })
     }
 
     if (grantAccess.mode === 'none') {

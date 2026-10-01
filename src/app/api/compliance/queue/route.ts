@@ -2,6 +2,21 @@ import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { requirePermission } from '@/lib/requirePermission'
 import { sweepUnscreenedProjects } from '@/lib/compliance'
+import {
+  fetchProjectIdsForEmergencyRoom,
+  getUserRoomAccess,
+} from '@/lib/userRoomAccess'
+
+/** PostgREST `.in()` with hundreds of UUIDs can exceed URL limits. */
+const PROJECT_ID_IN_BATCH = 80
+
+function chunkProjectIds(ids: string[]): string[][] {
+  const out: string[][] = []
+  for (let i = 0; i < ids.length; i += PROJECT_ID_IN_BATCH) {
+    out.push(ids.slice(i, i + PROJECT_ID_IN_BATCH))
+  }
+  return out
+}
 
 // GET /api/compliance/queue - List compliance screenings joined with F1 details.
 // Runs an idempotent sweep first so F1s created outside portal API routes
@@ -19,19 +34,39 @@ export async function GET(request: Request) {
     const status = searchParams.get('status')
     const countOnly = searchParams.get('count_only') === '1'
 
+    // Base ERR: screenings for projects in the user's emergency room only
+    const roomAccess = await getUserRoomAccess()
+    if (roomAccess.mode === 'none') {
+      return NextResponse.json(countOnly ? { pending_count: 0 } : [])
+    }
+    const roomProjectIds =
+      roomAccess.mode === 'room'
+        ? await fetchProjectIdsForEmergencyRoom(roomAccess.emergencyRoomId)
+        : null
+    if (roomProjectIds != null && roomProjectIds.length === 0) {
+      return NextResponse.json(countOnly ? { pending_count: 0 } : [])
+    }
+    const projectIdBatches = roomProjectIds != null ? chunkProjectIds(roomProjectIds) : [null]
+
     if (countOnly) {
       // Sidebar badge: items that still need Ahmed's attention —
       // pending screening OR missing-ID with ID uploaded awaiting his Clear.
       // Must have an F1 file, and must not already be past the commit gate.
-      const { data, error } = await supabase
-        .from('compliance_screenings')
-        .select(
-          'id, status, flag_type, finance_review_status, err_projects!inner(file_key, temp_file_key, funding_status, status)'
-        )
-        .or(
-          'status.eq.pending_screening,and(status.eq.flagged,flag_type.eq.missing_id,finance_review_status.eq.id_uploaded)'
-        )
-      if (error) throw error
+      const data: Record<string, unknown>[] = []
+      for (const batch of projectIdBatches) {
+        let countQuery = supabase
+          .from('compliance_screenings')
+          .select(
+            'id, status, flag_type, finance_review_status, err_projects!inner(file_key, temp_file_key, funding_status, status)'
+          )
+          .or(
+            'status.eq.pending_screening,and(status.eq.flagged,flag_type.eq.missing_id,finance_review_status.eq.id_uploaded)'
+          )
+        if (batch) countQuery = countQuery.in('project_id', batch)
+        const { data: page, error } = await countQuery
+        if (error) throw error
+        if (page?.length) data.push(...(page as Record<string, unknown>[]))
+      }
       const count = (data || []).filter((r) => {
         const raw = (r as { err_projects?: unknown }).err_projects
         const p = (Array.isArray(raw) ? raw[0] : raw) as
@@ -51,16 +86,17 @@ export async function GET(request: Request) {
       return NextResponse.json({ pending_count: count })
     }
 
-    try {
-      await sweepUnscreenedProjects(supabase)
-    } catch (sweepError) {
-      // Sweep failure shouldn't block viewing the existing queue
-      console.error('Compliance sweep error:', sweepError)
+    // The sweep is a nationwide backfill; skip it for room-scoped users
+    if (roomProjectIds == null) {
+      try {
+        await sweepUnscreenedProjects(supabase)
+      } catch (sweepError) {
+        // Sweep failure shouldn't block viewing the existing queue
+        console.error('Compliance sweep error:', sweepError)
+      }
     }
 
-    let query = supabase
-      .from('compliance_screenings')
-      .select(`
+    const screeningSelect = `
         id,
         project_id,
         names,
@@ -90,15 +126,22 @@ export async function GET(request: Request) {
           identity_document_file_key,
           emergency_rooms (err_code, name_ar, name)
         )
-      `)
-      .order('created_at', { ascending: false })
+      `
 
-    if (status) {
-      query = query.eq('status', status)
+    const data: Record<string, any>[] = []
+    for (const batch of projectIdBatches) {
+      let query = supabase
+        .from('compliance_screenings')
+        .select(screeningSelect)
+        .order('created_at', { ascending: false })
+
+      if (batch) query = query.in('project_id', batch)
+      if (status) query = query.eq('status', status)
+
+      const { data: page, error } = await query
+      if (error) throw error
+      if (page?.length) data.push(...(page as Record<string, any>[]))
     }
-
-    const { data, error } = await query
-    if (error) throw error
 
     type RoomJoin = { err_code?: string | null; name_ar?: string | null; name?: string | null }
     type ProjectJoin = {

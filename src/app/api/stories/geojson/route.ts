@@ -8,6 +8,7 @@ import {
   chunkGrantScopeIds,
   getUserGrantAccess,
 } from '@/lib/userGrantAccess'
+import { getUserRoomAccess } from '@/lib/userRoomAccess'
 import { getCategorySpend } from '@/lib/mutualAidCategorySpend'
 
 export const dynamic = 'force-dynamic'
@@ -103,13 +104,17 @@ export async function GET() {
   console.log('[stories/geojson] start')
   try {
     const supabase = getSupabaseRouteClient()
-    const grantAccess = await getUserGrantAccess()
-    if (grantAccess.mode === 'none') {
-      return NextResponse.json(
+    const [grantAccess, roomAccess] = await Promise.all([
+      getUserGrantAccess(),
+      getUserRoomAccess(),
+    ])
+    const emptyFeatures = () =>
+      NextResponse.json(
         { type: 'FeatureCollection', features: [] },
         { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } }
       )
-    }
+    if (roomAccess.mode === 'none') return emptyFeatures()
+    if (roomAccess.mode !== 'room' && grantAccess.mode === 'none') return emptyFeatures()
 
     const geoPath = join(process.cwd(), 'public', 'geo', 'sudan-states.json')
     const geo = JSON.parse(readFileSync(geoPath, 'utf-8')) as {
@@ -140,7 +145,23 @@ export async function GET() {
       expenses?: unknown
     }[] = []
 
-    if (grantAccess.mode === 'partner') {
+    if (roomAccess.mode === 'room') {
+      // Base ERR: emergency_room_id only (never state scope)
+      const { data, error: projectsError } = await supabase
+        .from('err_projects')
+        .select(projectSelect)
+        .eq('source', 'mutual_aid_portal')
+        .in('status', MAP_STATUSES)
+        .eq('emergency_room_id', roomAccess.emergencyRoomId)
+      if (projectsError) {
+        console.error('[stories/geojson] projects error:', projectsError)
+        return NextResponse.json(
+          { error: 'Failed to load projects' },
+          { status: 500, headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } }
+        )
+      }
+      projects = data || []
+    } else if (grantAccess.mode === 'partner') {
       console.log('[stories/geojson] partner grant scope', Date.now() - t0, 'ms')
       for (const batch of chunkGrantScopeIds(grantAccess.grantGridIds)) {
         let projectsQuery = supabase

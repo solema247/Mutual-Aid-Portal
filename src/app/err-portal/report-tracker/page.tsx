@@ -501,6 +501,9 @@ export default function ReportTrackerPage() {
   const displayStatus = (s: string) =>
     STATUS_OPTIONS.find((o) => o.value === s)?.label ?? s
 
+  if (permissionsLoading) {
+    return <div className="p-6 text-muted-foreground">Loading…</div>
+  }
   if (!canViewPage) {
     return (
       <div className="p-6">

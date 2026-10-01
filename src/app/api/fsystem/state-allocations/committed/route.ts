@@ -1,11 +1,18 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { forbidIfPartner } from '@/lib/routeHandlerAuth'
+import { getUserRoomAccess } from '@/lib/userRoomAccess'
 
 export async function GET(request: Request) {
   try {
     const partnerBlock = await forbidIfPartner()
     if (partnerBlock) return partnerBlock
+
+    // State allocation totals are not room-scopable: fail closed for Base ERR
+    const roomAccess = await getUserRoomAccess()
+    if (roomAccess.applies) {
+      return NextResponse.json({ committed: 0, allocated: 0, total_used: 0 })
+    }
 
     const supabase = getSupabaseRouteClient()
     const { searchParams } = new URL(request.url)

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import {
+  applyMouInScopeProjectFilter,
   assertMouInGrantAccess,
   grantGridIdInAccess,
 } from '@/lib/userGrantAccess'
@@ -24,8 +25,8 @@ export async function GET(
       .single()
     if (mouErr) throw mouErr
 
-    // Load linked projects to pull banking/contact fields; prefer ones with rich details
-    const { data: projects, error: projErr } = await supabase
+    // Load linked projects — Base ERR / Partner: only in-scope project ids (never all mou_id rows)
+    let projectsQuery = supabase
       .from('err_projects')
       .select(`
         id,
@@ -56,7 +57,14 @@ export async function GET(
         "Sector (Secondary)"
       `)
       .eq('mou_id', id)
-      .order('submitted_at', { ascending: false })
+    projectsQuery = applyMouInScopeProjectFilter(
+      projectsQuery,
+      mouScope.inScopeProjectIds
+    )
+    const { data: projects, error: projErr } = await projectsQuery.order(
+      'submitted_at',
+      { ascending: false }
+    )
     if (projErr) throw projErr
 
     const inScopeSet =
@@ -68,8 +76,9 @@ export async function GET(
     const resolvedProjects = [] as any[]
     for (const p of projects || []) {
       if (inScopeSet && !inScopeSet.has(String(p.id))) continue
+      // Partner grant scope only; Base ERR room scope is already applied via inScopeProjectIds
       if (
-        mouScope.access.mode !== 'all' &&
+        mouScope.access.mode === 'partner' &&
         !grantGridIdInAccess(mouScope.access, (p as { grant_grid_id?: string | null }).grant_grid_id)
       ) {
         continue

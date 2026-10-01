@@ -4,6 +4,7 @@ import { normalizeF1DateForDb } from '@/lib/f1WorkplanNormalize'
 import { f1WorkplanCreateSchema } from '@/lib/f1WorkplanSchema'
 import { ensureScreeningsForProjects } from '@/lib/compliance'
 import { forbidIfPartner } from '@/lib/routeHandlerAuth'
+import { getUserRoomAccess } from '@/lib/userRoomAccess'
 
 function emptyToNull<T extends string | null | undefined> (v: T): string | null {
   if (v === undefined || v === null) return null
@@ -40,6 +41,20 @@ export async function POST (request: Request) {
 
     const v = parsed.data
 
+    // Base ERR may only create F1s for its own emergency room
+    const roomAccess = await getUserRoomAccess()
+    if (roomAccess.mode === 'none') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+    const emergencyRoomId =
+      roomAccess.mode === 'room' ? roomAccess.emergencyRoomId : v.emergency_room_id
+    if (roomAccess.mode === 'room' && v.emergency_room_id !== emergencyRoomId) {
+      return NextResponse.json(
+        { error: 'Emergency room is outside your scope' },
+        { status: 403 }
+      )
+    }
+
     const { data: room, error: roomErr } = await supabase
       .from('emergency_rooms')
       .select(`
@@ -48,7 +63,7 @@ export async function POST (request: Request) {
         status,
         state:states!emergency_rooms_state_reference_fkey(state_name)
       `)
-      .eq('id', v.emergency_room_id)
+      .eq('id', emergencyRoomId)
       .maybeSingle()
 
     if (roomErr || !room) {
@@ -91,7 +106,7 @@ export async function POST (request: Request) {
       finance_officer_phone: emptyToNull(v.finance_officer_phone),
       planned_activities: v.planned_activities,
       expenses: v.expenses,
-      emergency_room_id: v.emergency_room_id,
+      emergency_room_id: emergencyRoomId,
       err_id: emptyToNull(room.err_code),
       status: 'pending',
       source: 'mutual_aid_portal',

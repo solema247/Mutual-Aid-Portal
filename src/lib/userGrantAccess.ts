@@ -1,5 +1,9 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
+import {
+  assertProjectInRoomAccess,
+  getUserRoomAccess,
+} from '@/lib/userRoomAccess'
 
 export type UserGrantAccess =
   | {
@@ -144,6 +148,12 @@ export async function getUserGrantAccess(): Promise<UserGrantAccess> {
       ? String(userData.ops_partner_id)
       : null
 
+  // Base ERR must never receive global grant scope (mode 'all').
+  // Room scope is enforced via getUserRoomAccess / assertProjectInRoomAccess.
+  if (role === 'base_err') {
+    return noneAccess(null)
+  }
+
   // Partner must never fall through to mode 'all'
   if (role === 'partner') {
     if (!opsPartnerId) {
@@ -211,6 +221,22 @@ export async function assertProjectInGrantAccess(
   | { ok: true; access: UserGrantAccess; project: ProjectScopeRow }
   | { ok: false; response: NextResponse }
 > {
+  const roomCheck = await assertProjectInRoomAccess(projectId, undefined, {
+    notFoundMessage: options?.notFoundMessage,
+  })
+  if (roomCheck.handled) {
+    if (!roomCheck.ok) return { ok: false, response: roomCheck.response }
+    const grantAccess = access ?? (await getUserGrantAccess())
+    return {
+      ok: true,
+      access: grantAccess,
+      project: {
+        id: roomCheck.project.id,
+        grant_grid_id: roomCheck.project.grant_grid_id,
+      },
+    }
+  }
+
   const grantAccess = access ?? (await getUserGrantAccess())
   const notFoundMessage = options?.notFoundMessage ?? 'Project not found'
   const status = options?.forbiddenStatus ?? 404
@@ -305,6 +331,26 @@ export async function assertProjectsInGrantAccess(
   | { ok: true; access: UserGrantAccess }
   | { ok: false; response: NextResponse }
 > {
+  const roomAccess = await getUserRoomAccess()
+  if (roomAccess.applies) {
+    if (roomAccess.mode === 'none') {
+      return {
+        ok: false,
+        response: NextResponse.json(
+          { error: options?.notFoundMessage ?? 'Project not found' },
+          { status: 404 }
+        ),
+      }
+    }
+    for (const id of projectIds.filter(Boolean)) {
+      const check = await assertProjectInRoomAccess(id, roomAccess, options)
+      if (check.handled && !check.ok) {
+        return { ok: false, response: check.response }
+      }
+    }
+    return { ok: true, access: access ?? (await getUserGrantAccess()) }
+  }
+
   const grantAccess = access ?? (await getUserGrantAccess())
   const notFoundMessage = options?.notFoundMessage ?? 'Project not found'
   const unique = Array.from(new Set(projectIds.filter(Boolean)))
@@ -406,8 +452,46 @@ export async function assertMouInGrantAccess(
   | { ok: true; access: UserGrantAccess; inScopeProjectIds: string[] | null }
   | { ok: false; response: NextResponse }
 > {
-  const grantAccess = access ?? (await getUserGrantAccess())
+  const roomAccess = await getUserRoomAccess()
   const notFoundMessage = options?.notFoundMessage ?? 'MOU not found'
+
+  if (roomAccess.applies) {
+    if (roomAccess.mode === 'none') {
+      return {
+        ok: false,
+        response: NextResponse.json({ error: notFoundMessage }, { status: 404 }),
+      }
+    }
+    const supabase = getSupabaseRouteClient()
+    const { data, error } = await supabase
+      .from('err_projects')
+      .select('id')
+      .eq('mou_id', mouId)
+      .eq('emergency_room_id', roomAccess.emergencyRoomId)
+    if (error) {
+      console.error('[assertMouInGrantAccess] room', error)
+      return {
+        ok: false,
+        response: NextResponse.json({ error: 'Failed to load MOU' }, { status: 500 }),
+      }
+    }
+    const inScopeProjectIds = (data || [])
+      .map((r) => (r.id ? String(r.id) : ''))
+      .filter(Boolean)
+    if (inScopeProjectIds.length === 0) {
+      return {
+        ok: false,
+        response: NextResponse.json({ error: notFoundMessage }, { status: 404 }),
+      }
+    }
+    return {
+      ok: true,
+      access: access ?? (await getUserGrantAccess()),
+      inScopeProjectIds,
+    }
+  }
+
+  const grantAccess = access ?? (await getUserGrantAccess())
 
   if (grantAccess.mode === 'all') {
     return { ok: true, access: grantAccess, inScopeProjectIds: null }
@@ -449,6 +533,40 @@ export async function assertMouInGrantAccess(
   }
 
   return { ok: true, access: grantAccess, inScopeProjectIds }
+}
+
+/**
+ * Restrict an err_projects query that is already filtered by mou_id to the
+ * projects in assertMouInGrantAccess scope.
+ * - inScopeProjectIds === null → mode 'all' (no extra filter)
+ * - inScopeProjectIds === [] → impossible match (fail closed)
+ * - otherwise → .in('id', inScopeProjectIds)
+ */
+export function applyMouInScopeProjectFilter<
+  T extends {
+    in: (column: string, values: readonly string[]) => T
+    eq: (column: string, value: string) => T
+  },
+>(query: T, inScopeProjectIds: string[] | null): T {
+  if (inScopeProjectIds == null) return query
+  if (inScopeProjectIds.length === 0) {
+    // No in-scope projects: force empty result without changing Partner/all semantics elsewhere.
+    return query.eq('id', '00000000-0000-0000-0000-000000000000')
+  }
+  return query.in('id', inScopeProjectIds)
+}
+
+/**
+ * Whether a project id is within assertMouInGrantAccess in-scope set.
+ * null inScopeProjectIds = unrestricted (mode all).
+ */
+export function isProjectIdInMouScope(
+  inScopeProjectIds: string[] | null,
+  projectId: string | null | undefined
+): boolean {
+  if (inScopeProjectIds == null) return true
+  if (projectId == null || String(projectId).trim() === '') return false
+  return inScopeProjectIds.includes(String(projectId))
 }
 
 /**

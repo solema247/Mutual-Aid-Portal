@@ -7,6 +7,10 @@ import { parseSyncTargetFromBody, SYNC_TARGET } from '@/lib/grantManagement/sync
 import { sumDisbursedToErrsByGrant } from '@/lib/grantPaymentDisbursement'
 import { loadConfirmedProjectIds } from '@/lib/mouPaymentConfirmations'
 import { getUserGrantAccess } from '@/lib/userGrantAccess'
+import {
+  fetchGrantGridIdsForEmergencyRoom,
+  getUserRoomAccess,
+} from '@/lib/userRoomAccess'
 
 const GRANT_SELECT =
   'id, grant_id, donor_id, donor_name, partner_name, project_name, grant_start_date, grant_end_date, status, total_transferred_amount_usd, sum_activity_amount, sum_transfer_fee_amount, max_workplan_sequence'
@@ -56,11 +60,23 @@ async function fetchAllPages(
 async function fetchAllRows<T>(
   supabase: ReturnType<typeof getSupabaseAdmin>,
   table: string,
-  select: string
+  select: string,
+  filter?: (query: any) => any
 ): Promise<T[]> {
-  return (await fetchAllPages((from, to) =>
-    supabase.from(table).select(select).range(from, to)
-  )) as T[]
+  const rows: T[] = []
+  let from = 0
+  const pageSize = 1000
+  while (true) {
+    let query: any = supabase.from(table).select(select).range(from, from + pageSize - 1)
+    if (filter) query = filter(query)
+    const { data, error } = await query
+    if (error) throw error
+    if (!data?.length) break
+    rows.push(...(data as T[]))
+    if (data.length < pageSize) break
+    from += pageSize
+  }
+  return rows
 }
 
 function computeTransferFee(
@@ -133,11 +149,26 @@ function parseGrantBody(body: Record<string, unknown>) {
  * Query: ?status=all|Active|Complete (default all)
  * Partner users: only grants where grants_grid_view.partner_id = users.partner_id
  * (never trusts a client partner_id query param).
+ * Base ERR users: only grants funding ≥1 project in their emergency room.
  */
 export async function GET(request: NextRequest) {
   try {
-    const grantAccess = await getUserGrantAccess()
-    if (grantAccess.mode === 'none') {
+    const [grantAccess, roomAccess] = await Promise.all([
+      getUserGrantAccess(),
+      getUserRoomAccess(),
+    ])
+    if (roomAccess.mode === 'none') {
+      return NextResponse.json([])
+    }
+
+    const roomGridIdSet =
+      roomAccess.mode === 'room'
+        ? new Set(await fetchGrantGridIdsForEmergencyRoom(roomAccess.emergencyRoomId))
+        : null
+    if (roomGridIdSet != null && roomGridIdSet.size === 0) {
+      return NextResponse.json([])
+    }
+    if (roomAccess.mode !== 'room' && grantAccess.mode === 'none') {
       return NextResponse.json([])
     }
 
@@ -162,9 +193,13 @@ export async function GET(request: NextRequest) {
       return query
     })
 
+    const grantRows = roomGridIdSet
+      ? (data || []).filter((row) => roomGridIdSet.has(String((row as { id: string }).id)))
+      : data || []
+
     const scopedGridRows =
-      grantAccess.mode === 'partner'
-        ? (data || []).map((row) => ({
+      roomGridIdSet || grantAccess.mode === 'partner'
+        ? grantRows.map((row) => ({
             id: String((row as { id: string }).id),
             grant_id: (row as { grant_id?: string | null }).grant_id ?? null,
           }))
@@ -198,7 +233,10 @@ export async function GET(request: NextRequest) {
       }>(
         supabase,
         'err_projects',
-        'id, grant_id, grant_grid_id, mou_id, expenses, submitted_at'
+        'id, grant_id, grant_grid_id, mou_id, expenses, submitted_at',
+        roomAccess.mode === 'room'
+          ? (q) => q.eq('emergency_room_id', roomAccess.emergencyRoomId)
+          : undefined
       ).then((rows) =>
         partnerGrantGridIdSet
           ? rows.filter(
@@ -212,7 +250,7 @@ export async function GET(request: NextRequest) {
         exchange_rate: number | null
         transfer_date: string | null
       }>(supabase, 'mous', 'id, payment_confirmation_file, exchange_rate, transfer_date'),
-      grantAccess.mode === 'partner'
+      grantAccess.mode === 'partner' || roomAccess.mode === 'room'
         ? Promise.resolve(
             [] as {
               'Project Donor'?: string | null
@@ -241,7 +279,7 @@ export async function GET(request: NextRequest) {
     )
 
     return NextResponse.json(
-      data.map((item) => mapGrantRow(item as Record<string, unknown>, disbursedByGrant))
+      grantRows.map((item) => mapGrantRow(item as Record<string, unknown>, disbursedByGrant))
     )
   } catch (error) {
     console.error('Error fetching grants:', error)

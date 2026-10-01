@@ -1,12 +1,19 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { forbidIfPartner } from '@/lib/routeHandlerAuth'
+import { getUserRoomAccess } from '@/lib/userRoomAccess'
 
 // GET /api/f2/grant-calls - Get grant calls with remaining amounts for reassignment
 export async function GET() {
   try {
     const partnerBlock = await forbidIfPartner()
     if (partnerBlock) return partnerBlock
+
+    // Grant-call remaining amounts are nationwide figures: fail closed for Base ERR
+    const roomAccess = await getUserRoomAccess()
+    if (roomAccess.applies) {
+      return NextResponse.json([])
+    }
 
     const supabase = getSupabaseRouteClient()
     const { data, error } = await supabase

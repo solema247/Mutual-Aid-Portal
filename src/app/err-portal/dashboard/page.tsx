@@ -23,9 +23,9 @@ export default function DashboardPage() {
   const router = useRouter()
   const pathname = usePathname()
   const portalHomeHref = pathname.startsWith('/partner-portal') ? '/partner-portal' : '/err-portal'
-  const { can } = useAllowedFunctions()
+  const { can, isLoading: permissionsLoading } = useAllowedFunctions()
   const canViewPage = can('dashboard_view_page')
-  useDashboardPageExplainer(canViewPage)
+  useDashboardPageExplainer(!permissionsLoading && canViewPage)
   const [filters, setFilters] = useState<ActiveFilter[]>([])
 
   const dateFilterFields: FilterFieldConfig[] = useMemo(
@@ -49,11 +49,19 @@ export default function DashboardPage() {
   }, [filters])
 
   useEffect(() => {
+    if (permissionsLoading) return
     if (!canViewPage) {
       router.replace(portalHomeHref)
     }
-  }, [canViewPage, router, portalHomeHref])
+  }, [permissionsLoading, canViewPage, router, portalHomeHref])
 
+  if (permissionsLoading) {
+    return (
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex min-h-[200px] items-center justify-center text-muted-foreground">
+        Loading…
+      </div>
+    )
+  }
   if (!canViewPage) return null
 
   return (

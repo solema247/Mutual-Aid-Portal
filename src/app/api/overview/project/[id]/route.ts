@@ -264,16 +264,29 @@ export async function GET(
         return NextResponse.json({ error: 'Project not found' }, { status: 404 })
       }
 
-      // Partner grant scope: only projects with grant_grid_id in partner's grants
-      const { getUserGrantAccess, grantGridIdInAccess } = await import('@/lib/userGrantAccess')
-      const grantAccess = await getUserGrantAccess()
-      if (
-        !grantGridIdInAccess(
-          grantAccess,
-          (project as { grant_grid_id?: string | null }).grant_grid_id
-        )
-      ) {
-        return NextResponse.json({ error: 'Project not found' }, { status: 404 })
+      // Base ERR room scope takes precedence; Partner grant scope otherwise
+      const { getUserRoomAccess, isProjectInRoomAccess } = await import('@/lib/userRoomAccess')
+      const roomAccess = await getUserRoomAccess()
+      if (roomAccess.applies) {
+        if (
+          !isProjectInRoomAccess(
+            roomAccess,
+            (project as { emergency_room_id?: string | null }).emergency_room_id
+          )
+        ) {
+          return NextResponse.json({ error: 'Project not found' }, { status: 404 })
+        }
+      } else {
+        const { getUserGrantAccess, grantGridIdInAccess } = await import('@/lib/userGrantAccess')
+        const grantAccess = await getUserGrantAccess()
+        if (
+          !grantGridIdInAccess(
+            grantAccess,
+            (project as { grant_grid_id?: string | null }).grant_grid_id
+          )
+        ) {
+          return NextResponse.json({ error: 'Project not found' }, { status: 404 })
+        }
       }
 
       console.log('[overview/project] project load', Date.now() - t0, 'ms')

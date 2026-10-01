@@ -46,10 +46,11 @@ function F3MOUsPageContent() {
   const payment = usePaymentModal({ fetchMous: list.fetchMous })
 
   useEffect(() => {
+    if (permissionsLoading) return
     if (!canViewPage) {
       router.replace('/err-portal')
     }
-  }, [canViewPage, router])
+  }, [permissionsLoading, canViewPage, router])
 
   // Deep-link from F2 "View MOU": /err-portal/f3-mous?mou=<id>
   useEffect(() => {
@@ -67,6 +68,9 @@ function F3MOUsPageContent() {
 
   useF3MousPageExplainer(!permissionsLoading && canViewPage && !list.loading)
 
+  if (permissionsLoading) {
+    return <div className="p-6 text-muted-foreground">Loading…</div>
+  }
   if (!canViewPage) return null
 
   return (

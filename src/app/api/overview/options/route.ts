@@ -5,6 +5,7 @@ import {
   chunkGrantScopeIds,
   getUserGrantAccess,
 } from '@/lib/userGrantAccess'
+import { getUserRoomAccess } from '@/lib/userRoomAccess'
 
 const EMPTY_OPTIONS = { donors: [], grants: [], states: [], rooms: [] }
 
@@ -36,32 +37,50 @@ function emptyOptionsResponse() {
 export async function GET(request: Request) {
   try {
     const supabase = getSupabaseRouteClient()
-    const grantAccess = await getUserGrantAccess()
+    const [grantAccess, roomAccess] = await Promise.all([
+      getUserGrantAccess(),
+      getUserRoomAccess(),
+    ])
     const { searchParams } = new URL(request.url)
     const donor = searchParams.get('donor')
     const grant = searchParams.get('grant')
     const state = searchParams.get('state')
 
-    if (grantAccess.mode === 'none') {
+    if (roomAccess.mode === 'none') {
       return emptyOptionsResponse()
     }
 
-    if (grantAccess.mode === 'partner') {
+    if (roomAccess.mode !== 'room' && grantAccess.mode === 'none') {
+      return emptyOptionsResponse()
+    }
+
+    // Base ERR (room) and Partner (grant) both derive options from their scoped projects only
+    if (roomAccess.mode === 'room' || grantAccess.mode === 'partner') {
       const projectSelect = 'state, donor_id, grant_call_id, emergency_rooms ( id, name, name_ar, err_code )'
       const projects: OptionsProject[] = []
 
-      for (const batch of chunkGrantScopeIds(grantAccess.grantGridIds)) {
+      // Room scope takes precedence: a single unbatched query; Partner scope batches grant ids
+      const scopeBatches: (string[] | null)[] =
+        roomAccess.mode !== 'room' && grantAccess.mode === 'partner'
+          ? chunkGrantScopeIds(grantAccess.grantGridIds)
+          : [null]
+
+      for (const batch of scopeBatches) {
         let query = supabase
           .from('err_projects')
           .select(projectSelect)
           .eq('funding_status', 'committed')
           .in('status', PROJECT_STATUSES)
-        query = applyGrantGridIdFilter(query, { ...grantAccess, grantGridIds: batch })
+        if (batch == null) {
+          query = query.eq('emergency_room_id', roomAccess.emergencyRoomId!)
+        } else if (grantAccess.mode === 'partner') {
+          query = applyGrantGridIdFilter(query, { ...grantAccess, grantGridIds: batch })
+        }
         if (donor) query = query.eq('donor_id', donor)
         if (grant) query = query.eq('grant_call_id', grant)
         const { data, error } = await query
         if (error) {
-          console.error('overview/options partner projects error', error)
+          console.error('overview/options scoped projects error', error)
           return NextResponse.json({ error: 'Failed to load options' }, { status: 500 })
         }
         for (const row of data || []) {
