@@ -1,5 +1,10 @@
 import { supabase } from '@/lib/supabaseClient'
 import { User } from '../types/users'
+import type { SupabaseClient } from '@supabase/supabase-js'
+
+function escapeIlike(value: string): string {
+  return value.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_')
+}
 
 interface StateResponse {
   state: {
@@ -85,10 +90,17 @@ interface GetActiveUsersParams {
   stateFilters?: string[]
   /** Display name search (ilike). Applied before pagination. */
   search?: string | null
+  /**
+   * Auth user IDs whose email matched the search (resolved server-side).
+   * Combined with display_name search via OR when both are present.
+   */
+  emailMatchedAuthIds?: string[]
   /** Scope keys: all_states | state | emergency_room | partner_grant */
   scopes?: string[]
   errIds?: string[]
   partnerIds?: string[]
+  /** Optional Supabase client (route/server). Defaults to browser client. */
+  client?: SupabaseClient
 }
 
 interface GetActiveUsersResult {
@@ -141,11 +153,14 @@ export async function getActiveUsers({
   stateFilter,
   stateFilters,
   search,
+  emailMatchedAuthIds,
   scopes,
   errIds,
   partnerIds,
+  client,
 }: GetActiveUsersParams): Promise<GetActiveUsersResult> {
-  let query = supabase
+  const db = client ?? supabase
+  let query = db
     .from('users')
     .select(`
       *,
@@ -188,9 +203,18 @@ export async function getActiveUsers({
   }
 
   const searchTerm = search?.trim()
-  if (searchTerm) {
+  const emailIds = (emailMatchedAuthIds || []).filter(Boolean)
+  if (searchTerm && emailIds.length > 0) {
+    // Match display_name OR auth users whose email matched (server-resolved)
+    const escaped = escapeIlike(searchTerm)
+    query = query.or(
+      `display_name.ilike.%${escaped}%,auth_user_id.in.(${emailIds.join(',')})`
+    )
+  } else if (searchTerm) {
     // users table has no email column; search display_name across the full dataset
-    query = query.ilike('display_name', `%${searchTerm}%`)
+    query = query.ilike('display_name', `%${escapeIlike(searchTerm)}%`)
+  } else if (emailIds.length > 0) {
+    query = query.in('auth_user_id', emailIds)
   }
 
   if (scopes && scopes.length > 0) {
@@ -218,14 +242,14 @@ export async function getActiveUsers({
     let errIdsFromStates: string[] = []
 
     if (stateNames.length > 0) {
-      const { data: stateRefs } = await supabase
+      const { data: stateRefs } = await db
         .from('states')
         .select('id')
         .in('state_name', stateNames)
 
       if (stateRefs && stateRefs.length > 0) {
         const stateIds = stateRefs.map((ref) => ref.id)
-        const { data: errsInState } = await supabase
+        const { data: errsInState } = await db
           .from('emergency_rooms')
           .select('id')
           .in('state_reference', stateIds)
@@ -247,7 +271,7 @@ export async function getActiveUsers({
 
   // Filter based on caller role visibility
   if (currentUserRole === 'state_err' && currentUserErrId) {
-    const { data: currentERR } = await supabase
+    const { data: currentERR } = await db
       .from('emergency_rooms')
       .select(`
         state:states!emergency_rooms_state_reference_fkey(
@@ -259,14 +283,14 @@ export async function getActiveUsers({
 
     const stateName = (currentERR as StateResponse)?.state?.[0]?.state_name
     if (stateName) {
-      const { data: stateRefs } = await supabase
+      const { data: stateRefs } = await db
         .from('states')
         .select('id')
         .eq('state_name', stateName)
 
       if (stateRefs && stateRefs.length > 0) {
         const stateIds = stateRefs.map(ref => ref.id)
-        const { data: errsInState } = await supabase
+        const { data: errsInState } = await db
           .from('emergency_rooms')
           .select('id')
           .in('state_reference', stateIds)

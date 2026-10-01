@@ -150,7 +150,7 @@ export default function Sidebar({ items, title, isOpen, mobileSheetOpen, onMobil
       {/* Desktop sidebar */}
       <div
         className={cn(
-          'hidden lg:flex h-screen max-h-[100dvh] flex-col border-r rtl:border-l border-sidebar-border bg-sidebar text-sidebar-foreground transition-all duration-300 ease-in-out overflow-hidden',
+          'hidden lg:flex h-full shrink-0 flex-col self-stretch border-r rtl:border-l border-sidebar-border bg-sidebar text-sidebar-foreground transition-all duration-300 ease-in-out overflow-hidden',
           isExpanded ? 'w-64' : 'w-16'
         )}
         onMouseEnter={isOpen === undefined ? () => setIsExpandedHover(true) : undefined}

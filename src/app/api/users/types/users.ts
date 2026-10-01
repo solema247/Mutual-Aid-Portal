@@ -1,7 +1,8 @@
 export interface User {
   id: string
+  auth_user_id?: string | null
   err_id: string | null
-  ops_partner_id?: string | null
+  partner_id?: string | null
   display_name: string | null
   role: 'support' | 'superadmin' | 'admin' | 'state_err' | 'base_err' | 'partner'
   status: 'pending' | 'active' | 'suspended'
@@ -9,6 +10,8 @@ export interface User {
   updated_at: string | null
   can_see_all_states?: boolean
   visible_states?: string[]
+  /** Populated only by server-side list endpoints that enrich from auth.users */
+  email?: string | null
   emergency_rooms?: {
     name: string
     name_ar: string | null
@@ -22,7 +25,7 @@ export interface User {
 export interface PendingUserListItem {
   id: string
   err_id: string | null
-  ops_partner_id?: string | null
+  partner_id?: string | null
   display_name: string | null
   role: 'support' | 'superadmin' | 'admin' | 'state_err' | 'base_err' | 'partner'
   createdAt: string
@@ -35,7 +38,7 @@ export interface PendingUserListItem {
 export interface ActiveUserListItem {
   id: string
   err_id: string | null
-  ops_partner_id?: string | null
+  partner_id?: string | null
   display_name: string | null
   /** Present only when the users payload includes it; not all list sources provide email */
   email?: string | null

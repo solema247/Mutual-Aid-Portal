@@ -57,8 +57,6 @@ export interface SmartFilterProps {
   count?: number
   /** Optional: additional labeled counts shown after the primary count */
   extraCounts?: Array<{ label: string; count: number }>
-  /** Override multi-select options per field (e.g. cascading location filters) */
-  chipOptionsByFieldId?: Partial<Record<string, FilterSelectOption[]>>
 }
 
 /** Props for applying filters to data (client-side) */

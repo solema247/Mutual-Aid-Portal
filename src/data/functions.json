@@ -31,6 +31,7 @@
   { "code": "users_approve", "module": "users", "label_ar": "الموافقة على المستخدم", "label_en": "Approve user", "description_en": "Approve pending user registrations." },
   { "code": "users_manage_permissions", "module": "users", "label_ar": "إدارة صلاحيات الوظائف", "label_en": "Manage function permissions", "description_en": "Edit type default packs and individual permission exceptions." },
   { "code": "users_manage_access", "module": "users", "label_ar": "إدارة حقوق الوصول", "label_en": "Manage access rights", "description_en": "Edit user roles and state visibility (access rights)." },
+  { "code": "users_create", "module": "users", "label_ar": "إنشاء مستخدم", "label_en": "Create user", "description_en": "Create new portal user accounts from User Management." },
   { "code": "grant_decisions_view_page", "module": "grants", "label_ar": "عرض صفحة القرارات", "label_en": "View Decisions page", "description_en": "View the Grant Management Decisions page." },
   { "code": "grant_grants_view_page", "module": "grants", "label_ar": "عرض صفحة المنح", "label_en": "View Grants page", "description_en": "View the Grant Management Grants page." },
   { "code": "grant_allocation_view_page", "module": "grants", "label_ar": "عرض صفحة إدارة التخصيص", "label_en": "View Allocation Management page", "description_en": "View the Grant Management Allocation Management page." },

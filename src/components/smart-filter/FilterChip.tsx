@@ -45,8 +45,6 @@ export interface FilterChipProps {
   onValueChange: (value: FilterValue) => void
   onRemove: () => void
   options?: FilterSelectOption[]
-  /** When true, value controls are non-interactive (e.g. locality before state). */
-  disabled?: boolean
   className?: string
 }
 
@@ -56,7 +54,6 @@ export function FilterChip({
   onValueChange,
   onRemove,
   options = field.type === 'select' || field.type === 'multi_select' ? field.options : undefined,
-  disabled = false,
   className,
 }: FilterChipProps) {
   const { t } = useTranslation('common')
@@ -127,8 +124,7 @@ export function FilterChip({
           <PopoverTrigger asChild>
             <button
               type="button"
-              disabled={disabled}
-              className="h-7 min-w-[140px] rounded-sm border-0 bg-transparent px-2 text-left text-xs hover:bg-black/5 dark:hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-50"
+              className="h-7 min-w-[140px] rounded-sm border-0 bg-transparent px-2 text-left text-xs hover:bg-black/5 dark:hover:bg-white/5"
               aria-expanded={multiOpen}
               aria-haspopup="listbox"
             >
