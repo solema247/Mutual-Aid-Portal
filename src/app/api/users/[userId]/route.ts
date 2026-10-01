@@ -59,7 +59,7 @@ async function requireAdminCaller(): Promise<
 /**
  * PATCH /api/users/[userId]
  * Edit User fields only: display_name, role, status.
- * Does not accept partner_id / err_id / state access / permission overrides.
+ * Does not accept ops_partner_id / err_id / state access / permission overrides.
  */
 export async function PATCH(
   request: Request,
@@ -78,7 +78,7 @@ export async function PATCH(
     const { data: targetUser, error: targetError } = await supabase
       .from('users')
       .select(
-        'id, display_name, role, status, partner_id, err_id, auth_user_id, can_see_all_states, visible_states'
+        'id, display_name, role, status, ops_partner_id, err_id, auth_user_id, can_see_all_states, visible_states'
       )
       .eq('id', userId)
       .single()
@@ -98,9 +98,10 @@ export async function PATCH(
       return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
     }
 
-    // Reject scope / permission fields — those belong to Access Rights.
+    // Reject scope / permission fields â€” those belong to Access Rights.
     const forbiddenKeys = [
       'partner_id',
+      'ops_partner_id',
       'err_id',
       'can_see_all_states',
       'visible_states',
@@ -161,11 +162,11 @@ export async function PATCH(
         }
 
         // Partner role requires an existing partner org (set via Access Rights / Add User).
-        if (newRole === 'partner' && !targetUser.partner_id) {
+        if (newRole === 'partner' && !targetUser.ops_partner_id) {
           return NextResponse.json(
             {
               error:
-                'Assign a partner organization in Access Rights before setting the Partner role',
+                'Assign an ops partner in Access Rights before setting the partner role',
             },
             { status: 400 }
           )
@@ -176,7 +177,7 @@ export async function PATCH(
           return NextResponse.json(
             {
               error:
-                'Assign an ERR / room in Access Rights before setting the Beneficiary Entity role',
+                'Assign an ERR / room in Access Rights before setting the base_err role',
             },
             { status: 400 }
           )
@@ -188,12 +189,12 @@ export async function PATCH(
 
         // Match established access-rights role-change side effects for partner only.
         if (newRole === 'partner') {
-          updateData.partner_id = targetUser.partner_id
+          updateData.ops_partner_id = targetUser.ops_partner_id
           updateData.can_see_all_states = false
           updateData.visible_states = []
           updateData.err_id = null
         } else {
-          updateData.partner_id = null
+          updateData.ops_partner_id = null
         }
       }
     }
@@ -230,7 +231,7 @@ export async function PATCH(
       .update(updateData)
       .eq('id', userId)
       .select(
-        'id, display_name, role, status, err_id, partner_id, can_see_all_states, visible_states, updated_at, auth_user_id'
+        'id, display_name, role, status, err_id, ops_partner_id, can_see_all_states, visible_states, updated_at, auth_user_id'
       )
       .single()
 
@@ -274,7 +275,7 @@ export async function PATCH(
  * - Clear permission overrides
  * - Remove/ban auth.users login and null auth_user_id
  * - Keep public.users row so historical FKs remain valid
- * - Do not change partner_id / err_id / state scope fields (preserves audit context)
+ * - Do not change ops_partner_id / err_id / state scope fields (preserves audit context)
  */
 export async function DELETE(
   _request: Request,

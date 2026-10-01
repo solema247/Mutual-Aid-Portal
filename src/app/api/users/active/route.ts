@@ -121,7 +121,7 @@ export async function GET(request: Request) {
       return {
         id: user.id,
         err_id: user.err_id,
-        partner_id: user.partner_id ?? null,
+        ops_partner_id: user.ops_partner_id ?? null,
         display_name: user.display_name,
         email,
         role: user.role as PortalRole,

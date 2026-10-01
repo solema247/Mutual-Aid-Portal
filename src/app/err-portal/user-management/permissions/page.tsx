@@ -44,11 +44,11 @@ export default function PermissionsPage() {
         </Button>
         <div className="min-w-0">
           <h1 className="text-base font-semibold leading-tight">
-            {t('users:permissions_title', { defaultValue: 'Permissions' })}
+            {t('users:permissions_title', { defaultValue: 'User Type Permissions' })}
           </h1>
           <p className="text-xs text-muted-foreground leading-snug">
             {t('users:permissions_subtitle', {
-              defaultValue: 'Type defaults and individual exceptions.',
+              defaultValue: 'Default permission packs by user type, plus individual exceptions.',
             })}
           </p>
         </div>

@@ -149,15 +149,14 @@ export default function AddUserDialog({
         console.error('Failed to load states', e)
       }
       try {
-        const { data, error: partnersError } = await supabase
-          .from('partners')
-          .select('id, name')
-          .eq('status', 'active')
-          .order('name')
-        if (partnersError) throw partnersError
-        setPartners((data || []) as PartnerOption[])
+        const res = await fetch('/api/ops-partners', { cache: 'no-store' })
+        if (!res.ok) throw new Error('Failed to fetch ops partners')
+        const data = await res.json()
+        setPartners(
+          ((data || []) as PartnerOption[]).map((p) => ({ id: p.id, name: p.name }))
+        )
       } catch (e) {
-        console.error('Failed to load partners', e)
+        console.error('Failed to load ops partners', e)
       }
     })()
   }, [open])
@@ -254,12 +253,12 @@ export default function AddUserDialog({
       if (!partnerId) {
         setError(
           t('users:partner_org_required', {
-            defaultValue: 'Partner organization is required',
+            defaultValue: 'Ops partner is required',
           })
         )
         return
       }
-      body.partner_id = partnerId
+      body.ops_partner_id = partnerId
     } else if (role === 'state_err') {
       body.can_see_all_states = canSeeAllStates
       body.visible_states = canSeeAllStates ? [] : selectedStateIds
@@ -275,7 +274,7 @@ export default function AddUserDialog({
       if (!errId) {
         setError(
           t('users:err_required_for_base_err', {
-            defaultValue: 'ERR is required for Beneficiary Entity',
+            defaultValue: 'ERR is required for Base ERR',
           })
         )
         return
@@ -595,7 +594,7 @@ export default function AddUserDialog({
                 <div className="space-y-1.5 rounded-lg border border-slate-100 p-3 dark:border-border/40">
                   <Label className="text-xs font-medium">
                     {t('users:partner_organization', {
-                      defaultValue: 'Partner Organization',
+                      defaultValue: 'Ops partner',
                     })}
                     <span className="ms-0.5 text-destructive" aria-hidden>
                       *
@@ -609,7 +608,7 @@ export default function AddUserDialog({
                     <SelectTrigger className="h-10 rounded-md">
                       <SelectValue
                         placeholder={t('users:select_partner', {
-                          defaultValue: 'Select partner…',
+                          defaultValue: 'Select ops partner…',
                         })}
                       />
                     </SelectTrigger>
@@ -623,7 +622,7 @@ export default function AddUserDialog({
                   </Select>
                   <p className="text-[11px] text-muted-foreground">
                     {t('users:partner_scope_hint', {
-                      defaultValue: 'Partner users are grant-scoped.',
+                      defaultValue: 'Partner users are grant-scoped via ops_partners.',
                     })}
                   </p>
                 </div>
@@ -776,7 +775,7 @@ export default function AddUserDialog({
                   <p className="text-[11px] text-muted-foreground sm:col-span-2">
                     {t('users:base_err_scope_hint', {
                       defaultValue:
-                        'Beneficiary Entity users are scoped to a single emergency room.',
+                        'Base ERR users are scoped to a single emergency room.',
                     })}
                   </p>
                 </div>

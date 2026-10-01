@@ -226,7 +226,7 @@ export async function getActiveUsers({
   }
 
   if (partnerIds && partnerIds.length > 0) {
-    query = query.in('partner_id', partnerIds)
+    query = query.in('ops_partner_id', partnerIds)
   }
 
   const stateList =

@@ -15,19 +15,19 @@ const ROLE_I18N_KEYS: Record<PortalRole, string> = {
   partner: 'users:partner_role',
 }
 
-/** English fallbacks when a locale key is missing */
+/** Short display labels (not the old Coordination Committee / Beneficiary Entity names). */
 const ROLE_LABEL_FALLBACKS: Record<PortalRole, string> = {
   support: 'Support',
   superadmin: 'Superadmin',
   admin: 'Admin',
-  state_err: 'Coordination Committee',
-  base_err: 'Beneficiary Entity',
+  state_err: 'State ERR',
+  base_err: 'Base ERR',
   partner: 'Partner',
 }
 
 /**
- * Map an internal portal role key to a localized display label.
- * Does not alter or rename the role key itself.
+ * Map an internal portal role key to a short localized display label.
+ * DB values stay unchanged (`state_err`, etc.).
  */
 export function getPortalRoleLabel(
   role: string | null | undefined,

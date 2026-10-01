@@ -145,7 +145,7 @@ export default function UserManagement() {
               <Button variant="outline" size="sm" asChild>
                 <Link href="/err-portal/user-management/permissions">
                   <Shield className="size-4" />
-                  {t('users:manage_permissions', { defaultValue: 'Manage Permissions' })}
+                  {t('users:manage_permissions', { defaultValue: 'Manage User Type Permissions' })}
                 </Link>
               </Button>
             )}

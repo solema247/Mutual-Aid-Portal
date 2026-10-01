@@ -127,7 +127,7 @@ export function stateAccessEditError(
 
 export type NormalizedAccessFields = {
   role: PortalRole
-  partner_id: string | null
+  ops_partner_id: string | null
   err_id: string | null
   can_see_all_states: boolean
   visible_states: string[]
@@ -141,7 +141,7 @@ export type NormalizedAccessFields = {
 export function normalizeAccessFieldsForRole(
   role: PortalRole,
   input: {
-    partner_id?: unknown
+    ops_partner_id?: unknown
     err_id?: unknown
     can_see_all_states?: unknown
     visible_states?: unknown
@@ -154,11 +154,11 @@ export function normalizeAccessFieldsForRole(
 
   if (role === 'partner') {
     const pid =
-      input.partner_id != null && String(input.partner_id).trim() !== ''
-        ? String(input.partner_id).trim()
+      input.ops_partner_id != null && String(input.ops_partner_id).trim() !== ''
+        ? String(input.ops_partner_id).trim()
         : null
     if (!pid) {
-      return { ok: false, error: 'partner_id is required for partner role' }
+      return { ok: false, error: 'ops_partner_id is required for partner role' }
     }
     if (
       input.can_see_all_states !== undefined ||
@@ -170,7 +170,7 @@ export function normalizeAccessFieldsForRole(
       ok: true,
       data: {
         role,
-        partner_id: pid,
+        ops_partner_id: pid,
         err_id: null,
         can_see_all_states: false,
         visible_states: [],
@@ -179,8 +179,8 @@ export function normalizeAccessFieldsForRole(
     }
   }
 
-  if (input.partner_id !== undefined && input.partner_id != null && String(input.partner_id).trim() !== '') {
-    return { ok: false, error: 'partner_id can only be set for partner role users' }
+  if (input.ops_partner_id !== undefined && input.ops_partner_id != null && String(input.ops_partner_id).trim() !== '') {
+    return { ok: false, error: 'ops_partner_id can only be set for partner role users' }
   }
 
   // Base ERR is room-scoped via err_id only. State in the form is a UI filter.
@@ -191,7 +191,7 @@ export function normalizeAccessFieldsForRole(
     ) {
       return {
         ok: false,
-        error: 'Beneficiary Entity users do not use state access controls',
+        error: 'base_err users do not use state access controls',
       }
     }
     const eid =
@@ -199,13 +199,13 @@ export function normalizeAccessFieldsForRole(
         ? String(input.err_id).trim()
         : null
     if (!eid) {
-      return { ok: false, error: 'err_id is required for Beneficiary Entity role' }
+      return { ok: false, error: 'err_id is required for base_err role' }
     }
     return {
       ok: true,
       data: {
         role,
-        partner_id: null,
+        ops_partner_id: null,
         err_id: eid,
         can_see_all_states: false,
         visible_states: [],
@@ -258,14 +258,14 @@ export function normalizeAccessFieldsForRole(
   }
 
   if (input.err_id != null && String(input.err_id).trim() !== '') {
-    return { ok: false, error: 'err_id can only be set for Beneficiary Entity role' }
+    return { ok: false, error: 'err_id can only be set for base_err role' }
   }
 
   return {
     ok: true,
     data: {
       role,
-      partner_id: null,
+      ops_partner_id: null,
       err_id: null,
       can_see_all_states: canSeeAll,
       visible_states: visible,

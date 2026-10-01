@@ -161,7 +161,7 @@ function getAccessScopeParts(
   t: (key: string, opts?: Record<string, string | number>) => string
 ): { label: string; details: string[] } {
   if (user.role === 'partner') {
-    const name = user.partner_id ? partnerNameById.get(user.partner_id) : null
+    const name = user.ops_partner_id ? partnerNameById.get(user.ops_partner_id) : null
     return { label: name || '—', details: name ? [name] : [] }
   }
 
@@ -364,15 +364,14 @@ export default function AccessRightsManagement({
   useEffect(() => {
     const fetchPartners = async () => {
       try {
-        const { data, error: partnersError } = await supabase
-          .from('partners')
-          .select('id, name')
-          .eq('status', 'active')
-          .order('name')
-        if (partnersError) throw partnersError
-        setPartners((data || []) as PartnerOption[])
+        const res = await fetch('/api/ops-partners', { cache: 'no-store' })
+        if (!res.ok) throw new Error('Failed to fetch ops partners')
+        const data = await res.json()
+        setPartners(
+          ((data || []) as PartnerOption[]).map((p) => ({ id: p.id, name: p.name }))
+        )
       } catch (err) {
-        console.error('Error fetching partners:', err)
+        console.error('Error fetching ops partners:', err)
       }
     }
     fetchPartners()
@@ -534,7 +533,7 @@ export default function AccessRightsManagement({
           scope: t('users:filter_by_scope', { defaultValue: 'Scope' }),
           state: t('users:state'),
           errRoom: t('users:err_room_filter', { defaultValue: 'ERR / Room' }),
-          partner: t('users:partner_org', { defaultValue: 'Partner' }),
+          partner: t('users:partner_org', { defaultValue: 'Ops partner' }),
           active: t('users:active_status'),
           suspended: t('users:suspended_status'),
           allStates: t('users:scope_all_states', { defaultValue: 'All States' }),
@@ -594,7 +593,7 @@ export default function AccessRightsManagement({
     if (newRole === 'partner') {
       setPendingPartnerRoleUserIds((prev) => new Set(prev).add(userId))
       setUsers((prev) =>
-        prev.map((u) => (u.id === userId ? { ...u, role: 'partner', partner_id: u.partner_id } : u))
+        prev.map((u) => (u.id === userId ? { ...u, role: 'partner', ops_partner_id: u.ops_partner_id } : u))
       )
       return
     }
@@ -636,7 +635,7 @@ export default function AccessRightsManagement({
     if (!partnerId) return
     try {
       setSavingUserId(userId)
-      const body: { partner_id: string; role?: 'partner' } = { partner_id: partnerId }
+      const body: { ops_partner_id: string; role?: 'partner' } = { ops_partner_id: partnerId }
       const user = users.find((u) => u.id === userId)
       if (user?.role !== 'partner' || pendingPartnerRoleUserIds.has(userId)) {
         body.role = 'partner'
@@ -650,7 +649,7 @@ export default function AccessRightsManagement({
 
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}))
-        throw new Error(errorData.error || 'Failed to update partner organization')
+        throw new Error(errorData.error || 'Failed to update ops partner')
       }
 
       if (body.role && typeof window !== 'undefined') {
@@ -664,7 +663,7 @@ export default function AccessRightsManagement({
       await fetchUsers()
       await fetchSummary()
     } catch (error: unknown) {
-      console.error('Error updating partner organization:', error)
+      console.error('Error updating ops partner:', error)
       setError(error instanceof Error ? error.message : t('common:error_updating_user'))
       setTimeout(() => setError(null), 5000)
     } finally {
@@ -753,11 +752,11 @@ export default function AccessRightsManagement({
 
   const renderScopeDetails = (user: ActiveUserListItem) => {
     if (user.role === 'partner') {
-      const name = user.partner_id ? partnerNameById.get(user.partner_id) : null
+      const name = user.ops_partner_id ? partnerNameById.get(user.ops_partner_id) : null
       return (
         <div className="space-y-1">
           <div className="text-xs text-muted-foreground">
-            {t('users:partner_org', { defaultValue: 'Partner' })}
+            {t('users:partner_org', { defaultValue: 'Ops partner' })}
           </div>
           <div className="text-sm">{name || '—'}</div>
         </div>
@@ -903,7 +902,7 @@ export default function AccessRightsManagement({
             badgeClass: 'bg-amber-50 text-amber-800',
           },
           {
-            label: t('users:summary_base_err', { defaultValue: 'Beneficiary Entity' }),
+            label: t('users:summary_base_err', { defaultValue: 'base_err' }),
             value: summary.baseErr,
             description: t('users:summary_base_err_desc', {
               defaultValue: 'Room-scoped users',
@@ -1540,14 +1539,14 @@ function AccessRightsEditor({
             {t('users:partner_org', { defaultValue: 'Partner organization' })}
           </label>
           <Select
-            value={user.partner_id || undefined}
+            value={user.ops_partner_id || undefined}
             onValueChange={(value) => onPartnerChange(user.id, value)}
             disabled={saving}
           >
             <SelectTrigger className="h-8 w-full border-input bg-background text-xs">
               <SelectValue
                 placeholder={t('users:select_partner', {
-                  defaultValue: 'Select partner…',
+                  defaultValue: 'Select ops partner…',
                 })}
               />
             </SelectTrigger>
@@ -1559,7 +1558,7 @@ function AccessRightsEditor({
               ))}
             </SelectContent>
           </Select>
-          {pendingPartner && !user.partner_id && (
+          {pendingPartner && !user.ops_partner_id && (
             <div className="text-[11px] text-amber-700">
               {t('users:select_partner_to_save', {
                 defaultValue: 'Select partner org to save',

@@ -2,7 +2,7 @@ export interface User {
   id: string
   auth_user_id?: string | null
   err_id: string | null
-  partner_id?: string | null
+  ops_partner_id?: string | null
   display_name: string | null
   role: 'support' | 'superadmin' | 'admin' | 'state_err' | 'base_err' | 'partner'
   status: 'pending' | 'active' | 'suspended'
@@ -25,7 +25,7 @@ export interface User {
 export interface PendingUserListItem {
   id: string
   err_id: string | null
-  partner_id?: string | null
+  ops_partner_id?: string | null
   display_name: string | null
   role: 'support' | 'superadmin' | 'admin' | 'state_err' | 'base_err' | 'partner'
   createdAt: string
@@ -38,7 +38,7 @@ export interface PendingUserListItem {
 export interface ActiveUserListItem {
   id: string
   err_id: string | null
-  partner_id?: string | null
+  ops_partner_id?: string | null
   display_name: string | null
   /** Present only when the users payload includes it; not all list sources provide email */
   email?: string | null

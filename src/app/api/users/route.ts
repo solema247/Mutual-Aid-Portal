@@ -75,7 +75,7 @@ export async function POST(request: Request) {
   }
 
   const normalized = normalizeAccessFieldsForRole(role as PortalRole, {
-    partner_id: body.partner_id,
+    ops_partner_id: body.ops_partner_id,
     err_id: body.err_id,
     can_see_all_states: body.can_see_all_states,
     visible_states: body.visible_states,
@@ -90,19 +90,19 @@ export async function POST(request: Request) {
 
   const routeClient = getSupabaseRouteClient()
 
-  if (access.partner_id) {
+  if (access.ops_partner_id) {
     const { data: partnerRow, error: partnerErr } = await routeClient
-      .from('partners')
-      .select('id, status')
-      .eq('id', access.partner_id)
+      .from('ops_partners')
+      .select('id, is_active')
+      .eq('id', access.ops_partner_id)
       .maybeSingle()
     if (partnerErr) {
-      console.error('POST /api/users partner lookup:', partnerErr)
-      return NextResponse.json({ error: 'Failed to validate partner' }, { status: 500 })
+      console.error('POST /api/users ops_partner lookup:', partnerErr)
+      return NextResponse.json({ error: 'Failed to validate ops partner' }, { status: 500 })
     }
-    if (!partnerRow || partnerRow.status !== 'active') {
+    if (!partnerRow || partnerRow.is_active !== true) {
       return NextResponse.json(
-        { error: 'Invalid or inactive partner organization' },
+        { error: 'Invalid or inactive ops partner' },
         { status: 400 }
       )
     }
@@ -180,7 +180,7 @@ export async function POST(request: Request) {
       display_name: displayName,
       role: access.role,
       status,
-      partner_id: access.partner_id,
+      ops_partner_id: access.ops_partner_id,
       err_id: access.err_id,
       can_see_all_states: access.can_see_all_states,
       visible_states: access.visible_states,
@@ -188,7 +188,7 @@ export async function POST(request: Request) {
       updated_at: new Date().toISOString(),
     })
     .select(
-      'id, auth_user_id, display_name, role, status, err_id, partner_id, can_see_all_states, visible_states, created_at, updated_at'
+      'id, auth_user_id, display_name, role, status, err_id, ops_partner_id, can_see_all_states, visible_states, created_at, updated_at'
     )
     .single()
 
