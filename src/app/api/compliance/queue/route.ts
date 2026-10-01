@@ -113,6 +113,8 @@ export async function GET(request: Request) {
           id,
           err_id,
           date,
+          submitted_at,
+          last_modified,
           state,
           locality,
           status,
@@ -148,6 +150,8 @@ export async function GET(request: Request) {
       id?: string
       err_id?: string | null
       date?: string | null
+      submitted_at?: string | null
+      last_modified?: string | null
       state?: string | null
       locality?: string | null
       status?: string | null
@@ -191,6 +195,8 @@ export async function GET(request: Request) {
         err_id: p.err_id || null,
         err_name: room.name_ar || room.name || null,
         date: p.date || null,
+        submitted_at: p.submitted_at || null,
+        last_modified: p.last_modified || null,
         state: p.state || null,
         locality: p.locality || null,
         project_status: p.status || null,
@@ -210,8 +216,8 @@ export async function GET(request: Request) {
     // 2) Active work should not include projects that already committed or are
     //    completed/declined. Active = pending screening, pending finance review,
     //    or missing-ID with ID uploaded awaiting Ahmed's Clear.
-    // 3) Exception: pending_screening + committed stays visible so History can
-    //    tag F1s that were committed without a compliance Clear.
+    // 3) Exception: pending_screening + committed stays visible so the
+    //    "Without clearance" tab can list F1s committed without a Clear.
     const visible = formatted.filter((r) => {
       if (!(r.f1_file_key || r.temp_file_key)) return false
       const committedWithoutClearance =

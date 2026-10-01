@@ -31,6 +31,8 @@ interface Screening {
   err_id: string | null
   err_name: string | null
   date: string | null
+  submitted_at: string | null
+  last_modified: string | null
   state: string | null
   locality: string | null
   project_status: string | null
@@ -96,16 +98,31 @@ function StatusBadge({ s }: { s: Screening }) {
   return <Badge variant="destructive" className="text-[10px] px-1.5 py-0">Flagged — pending finance review</Badge>
 }
 
+function formatTimestamp(value: string | null | undefined) {
+  if (!value) return '—'
+  const d = new Date(value)
+  if (Number.isNaN(d.getTime())) return '—'
+  return d.toLocaleString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
 const ITEMS_PER_PAGE = 10
 
 function PaginatedScreeningsTable({
   rows,
   emptyText,
   onView,
+  showTimelineColumns = false,
 }: {
   rows: Screening[]
   emptyText: string
   onView: (s: Screening) => void
+  showTimelineColumns?: boolean
 }) {
   const [currentPage, setCurrentPage] = useState(1)
   const totalPages = Math.max(1, Math.ceil(rows.length / ITEMS_PER_PAGE))
@@ -113,6 +130,7 @@ function PaginatedScreeningsTable({
   const startIndex = (safePage - 1) * ITEMS_PER_PAGE
   const endIndex = startIndex + ITEMS_PER_PAGE
   const pageRows = rows.slice(startIndex, endIndex)
+  const colCount = showTimelineColumns ? 10 : 8
 
   useEffect(() => {
     setCurrentPage(1)
@@ -122,11 +140,17 @@ function PaginatedScreeningsTable({
     <div className="space-y-3">
       <Card>
         <CardContent className="p-0 overflow-x-auto">
-          <Table className="text-xs min-w-[700px]">
+          <Table className={`text-xs ${showTimelineColumns ? 'min-w-[980px]' : 'min-w-[700px]'}`}>
             <TableHeader>
               <TableRow className="[&>th]:py-2 [&>th]:px-2 [&>th]:text-xs">
                 <TableHead className="px-2">ERR ID</TableHead>
                 <TableHead className="px-2">Date</TableHead>
+                {showTimelineColumns && (
+                  <>
+                    <TableHead className="px-2">Raised</TableHead>
+                    <TableHead className="px-2">Last modified</TableHead>
+                  </>
+                )}
                 <TableHead className="px-2">State</TableHead>
                 <TableHead className="px-2">Locality</TableHead>
                 <TableHead className="px-2">Payee names</TableHead>
@@ -138,7 +162,7 @@ function PaginatedScreeningsTable({
             <TableBody>
               {pageRows.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center py-6 text-muted-foreground">
+                  <TableCell colSpan={colCount} className="text-center py-6 text-muted-foreground">
                     {emptyText}
                   </TableCell>
                 </TableRow>
@@ -156,6 +180,16 @@ function PaginatedScreeningsTable({
                   <TableCell className="whitespace-nowrap">
                     {s.date ? new Date(s.date).toLocaleDateString() : '—'}
                   </TableCell>
+                  {showTimelineColumns && (
+                    <>
+                      <TableCell className="whitespace-nowrap" title={s.submitted_at || ''}>
+                        {formatTimestamp(s.submitted_at)}
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap" title={s.last_modified || ''}>
+                        {formatTimestamp(s.last_modified)}
+                      </TableCell>
+                    </>
+                  )}
                   <TableCell className="whitespace-nowrap">{s.state || '—'}</TableCell>
                   <TableCell className="whitespace-nowrap max-w-[100px] truncate" title={s.locality || ''}>
                     {s.locality || '—'}
@@ -412,17 +446,26 @@ export default function CompliancePage() {
   )
   const history = screenings.filter(
     s =>
-      committedWithoutClearance(s) ||
-      (s.status !== 'pending_screening' &&
-        !awaitingIdClearance(s) &&
-        !(s.status === 'flagged' && s.finance_review_status === 'pending'))
+      !committedWithoutClearance(s) &&
+      s.status !== 'pending_screening' &&
+      !awaitingIdClearance(s) &&
+      !(s.status === 'flagged' && s.finance_review_status === 'pending')
   )
-  const bypassedClearanceCount = history.filter(committedWithoutClearance).length
+  const bypassedClearance = screenings
+    .filter(committedWithoutClearance)
+    .slice()
+    .sort((a, b) => {
+      const aTime = Date.parse(a.submitted_at || a.created_at || '') || 0
+      const bTime = Date.parse(b.submitted_at || b.created_at || '') || 0
+      return bTime - aTime
+    })
+  const bypassedClearanceCount = bypassedClearance.length
 
+  // Allow Clear / Flag even when already committed (retrospective review for
+  // F1s that bypassed the gate — shown on the Without clearance tab).
   const showScreeningActions =
     canScreen &&
     selected != null &&
-    !committedWithoutClearance(selected) &&
     (selected.status === 'pending_screening' || awaitingIdClearance(selected))
   const showMissingIdFinance =
     canFinanceReview &&
@@ -478,18 +521,18 @@ export default function CompliancePage() {
         </CardHeader>
         <CardContent>
           <Tabs defaultValue="queue" className="w-full">
-            <TabsList className="grid w-full grid-cols-3">
+            <TabsList className="grid w-full grid-cols-4">
               <TabsTrigger value="queue">
                 Screening queue{pending.length > 0 ? ` (${pending.length})` : ''}
               </TabsTrigger>
               <TabsTrigger value="finance">
                 Finance review{financeQueue.length > 0 ? ` (${financeQueue.length})` : ''}
               </TabsTrigger>
+              <TabsTrigger value="bypassed">
+                Without clearance{bypassedClearanceCount > 0 ? ` (${bypassedClearanceCount})` : ''}
+              </TabsTrigger>
               <TabsTrigger value="history">
                 History
-                {bypassedClearanceCount > 0
-                  ? ` (${bypassedClearanceCount} without clearance)`
-                  : ''}
               </TabsTrigger>
             </TabsList>
 
@@ -509,13 +552,26 @@ export default function CompliancePage() {
               />
             </TabsContent>
 
-            <TabsContent value="history" className="mt-6 space-y-3">
-              {bypassedClearanceCount > 0 && (
-                <p className="text-sm text-muted-foreground">
-                  Rows tagged <span className="font-medium text-red-700">Committed without clearance</span> were
-                  committed at F2 while still pending Ahmed&apos;s screening.
-                </p>
-              )}
+            <TabsContent value="bypassed" className="mt-6 space-y-3">
+              <p className="text-sm text-muted-foreground">
+                F1s that were committed at F2 while still pending Ahmed&apos;s screening.
+                Open any row to review payee names and <strong className="font-medium text-foreground">Clear</strong> or{' '}
+                <strong className="font-medium text-foreground">Flag</strong> retrospectively
+                (funding stays committed; a sanctions flag still stops payment).
+                <strong className="font-medium text-foreground"> Raised</strong> is{' '}
+                <code className="text-xs">submitted_at</code>.{' '}
+                <strong className="font-medium text-foreground">Last modified</strong> is the best
+                available proxy for later changes (there is no dedicated commit timestamp in the DB).
+              </p>
+              <PaginatedScreeningsTable
+                rows={bypassedClearance}
+                emptyText="No F1s committed without compliance clearance"
+                onView={openDetail}
+                showTimelineColumns
+              />
+            </TabsContent>
+
+            <TabsContent value="history" className="mt-6">
               <PaginatedScreeningsTable
                 rows={history}
                 emptyText="No screened F1s yet"
@@ -546,6 +602,8 @@ export default function CompliancePage() {
               {committedWithoutClearance(selected) && (
                 <div className="rounded-md border border-red-500 bg-red-50 px-3 py-2 text-sm text-red-950">
                   This F1 was committed at F2 without a compliance Clear or auto-approval.
+                  You can still <strong>Clear</strong> or <strong>Flag</strong> it now — clearing
+                  records retrospective approval; a sanctions flag still stops payment.
                 </div>
               )}
 
@@ -574,6 +632,14 @@ export default function CompliancePage() {
                 <div>
                   <div className="text-xs text-muted-foreground">Date</div>
                   <div>{selected.date ? new Date(selected.date).toLocaleDateString() : '—'}</div>
+                </div>
+                <div>
+                  <div className="text-xs text-muted-foreground">Raised (submitted_at)</div>
+                  <div>{formatTimestamp(selected.submitted_at)}</div>
+                </div>
+                <div>
+                  <div className="text-xs text-muted-foreground">Last modified</div>
+                  <div>{formatTimestamp(selected.last_modified)}</div>
                 </div>
                 <div>
                   <div className="text-xs text-muted-foreground">State / Locality</div>
