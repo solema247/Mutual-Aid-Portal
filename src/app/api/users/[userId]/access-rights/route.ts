@@ -55,7 +55,7 @@ export async function PUT(
 
     const { data: targetUser, error: targetUserError } = await supabase
       .from('users')
-      .select('role, partner_id')
+      .select('role, ops_partner_id')
       .eq('id', params.userId)
       .single()
 
@@ -64,7 +64,7 @@ export async function PUT(
     }
 
     const body = await request.json()
-    const { role, can_see_all_states, visible_states, partner_id } = body
+    const { role, can_see_all_states, visible_states, ops_partner_id } = body
 
     if (role !== undefined && !isAllowedRole(role)) {
       return NextResponse.json({ error: 'Invalid role' }, { status: 400 })
@@ -159,40 +159,40 @@ export async function PUT(
       updateData.role = role
       if (role === 'partner') {
         const pid =
-          partner_id != null && String(partner_id).trim() !== ''
-            ? String(partner_id).trim()
+          ops_partner_id != null && String(ops_partner_id).trim() !== ''
+            ? String(ops_partner_id).trim()
             : null
         if (!pid) {
           return NextResponse.json(
-            { error: 'partner_id is required for partner role' },
+            { error: 'ops_partner_id is required for partner role' },
             { status: 400 }
           )
         }
-        updateData.partner_id = pid
+        updateData.ops_partner_id = pid
         // Partner is org-scoped, not state-scoped
         updateData.can_see_all_states = false
         updateData.visible_states = []
       } else {
-        updateData.partner_id = null
+        updateData.ops_partner_id = null
       }
-    } else if (partner_id !== undefined) {
+    } else if (ops_partner_id !== undefined) {
       if (effectiveRole !== 'partner') {
         return NextResponse.json(
-          { error: 'partner_id can only be set for partner role users' },
+          { error: 'ops_partner_id can only be set for partner role users' },
           { status: 400 }
         )
       }
       const pid =
-        partner_id != null && String(partner_id).trim() !== ''
-          ? String(partner_id).trim()
+        ops_partner_id != null && String(ops_partner_id).trim() !== ''
+          ? String(ops_partner_id).trim()
           : null
       if (!pid) {
         return NextResponse.json(
-          { error: 'partner_id is required for partner role' },
+          { error: 'ops_partner_id is required for partner role' },
           { status: 400 }
         )
       }
-      updateData.partner_id = pid
+      updateData.ops_partner_id = pid
     }
 
     // Reject state-access updates for partner users (org-scoped only)
@@ -214,17 +214,17 @@ export async function PUT(
       updateData.visible_states = visible_states
     }
 
-    // Validate partner org exists when setting partner_id
-    if (typeof updateData.partner_id === 'string') {
-      const { data: partnerRow, error: partnerErr } = await supabase
-        .from('partners')
-        .select('id, status')
-        .eq('id', updateData.partner_id)
+    // Validate ops partner exists when setting ops_partner_id
+    if (typeof updateData.ops_partner_id === 'string') {
+      const { data: opsPartnerRow, error: opsPartnerErr } = await supabase
+        .from('ops_partners')
+        .select('id, is_active')
+        .eq('id', updateData.ops_partner_id)
         .maybeSingle()
-      if (partnerErr) throw partnerErr
-      if (!partnerRow || partnerRow.status !== 'active') {
+      if (opsPartnerErr) throw opsPartnerErr
+      if (!opsPartnerRow || opsPartnerRow.is_active !== true) {
         return NextResponse.json(
-          { error: 'Invalid or inactive partner organization' },
+          { error: 'Invalid or inactive ops partner' },
           { status: 400 }
         )
       }

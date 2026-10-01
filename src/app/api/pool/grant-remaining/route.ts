@@ -80,7 +80,6 @@ export async function GET(request: NextRequest) {
         const { data, error } = await supabase
           .from('grants_grid_view')
           .select('id, grant_id')
-          .eq('partner_id', grantAccess.partnerId)
           .in('id', batch)
         if (error) throw error
         for (const row of data || []) {

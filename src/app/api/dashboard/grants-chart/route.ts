@@ -119,7 +119,7 @@ export async function GET(request: Request) {
       (q) => {
         let query = q
         if (grantAccess.mode === 'partner') {
-          query = query.eq('partner_id', grantAccess.partnerId)
+          query = query.in('id', grantAccess.grantGridIds)
         }
         if (from) {
           query = query.gte('grant_start_date', from)

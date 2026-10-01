@@ -326,7 +326,7 @@ export async function GET(request: Request) {
 
     const grantScopeKey =
       grantAccess.mode === 'partner'
-        ? `partner:${grantAccess.partnerId}:${[...grantAccess.grantGridIds].sort().join(',')}`
+        ? `partner:${grantAccess.opsPartnerId}:${[...grantAccess.grantGridIds].sort().join(',')}`
         : 'all_grants'
 
     // Partners are grant-scoped (not state-scoped) for this endpoint

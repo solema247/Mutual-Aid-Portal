@@ -154,7 +154,7 @@ export async function GET(request: NextRequest) {
         .order('id', { ascending: true })
         .range(from, to)
       if (grantAccess.mode === 'partner') {
-        query = query.eq('partner_id', grantAccess.partnerId)
+        query = query.in('id', grantAccess.grantGridIds)
       }
       if (status !== 'all') {
         query = query.eq('status', status)

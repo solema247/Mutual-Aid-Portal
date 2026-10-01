@@ -117,7 +117,7 @@ export async function GET(request: Request) {
         .from('grants_grid_view')
         .select('grant_id, project_name, donor_name, activities')
       if (grantAccess.mode === 'partner') {
-        grantsQuery = grantsQuery.eq('partner_id', grantAccess.partnerId)
+        grantsQuery = grantsQuery.in('id', grantAccess.grantGridIds)
       }
       return grantsQuery
     })

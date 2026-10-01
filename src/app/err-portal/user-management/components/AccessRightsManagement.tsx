@@ -14,7 +14,6 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Button } from '@/components/ui/button'
 import { ActiveUserListItem } from '@/app/api/users/types/users'
 import { getActiveUsers } from '@/app/api/users/utils/users'
-import { supabase } from '@/lib/supabaseClient'
 
 type PortalRole =
   | 'support'
@@ -57,10 +56,10 @@ export default function AccessRightsManagement({
   const [selectedRole, setSelectedRole] = useState<string>('all')
   const [selectedState, setSelectedState] = useState<string>('all')
   const [states, setStates] = useState<State[]>([])
-  const [partners, setPartners] = useState<PartnerOption[]>([])
+  const [opsPartners, setOpsPartners] = useState<PartnerOption[]>([])
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null)
   const [savingUserId, setSavingUserId] = useState<string | null>(null)
-  /** Users who selected Partner role but have not yet chosen an organization */
+  /** Users who selected Partner role but have not yet chosen an ops partner */
   const [pendingPartnerRoleUserIds, setPendingPartnerRoleUserIds] = useState<Set<string>>(
     () => new Set()
   )
@@ -81,20 +80,19 @@ export default function AccessRightsManagement({
   }, [])
 
   useEffect(() => {
-    const fetchPartners = async () => {
+    const fetchOpsPartners = async () => {
       try {
-        const { data, error: partnersError } = await supabase
-          .from('partners')
-          .select('id, name')
-          .eq('status', 'active')
-          .order('name')
-        if (partnersError) throw partnersError
-        setPartners((data || []) as PartnerOption[])
+        const res = await fetch('/api/ops-partners', { cache: 'no-store' })
+        if (!res.ok) throw new Error('Failed to fetch ops partners')
+        const data = await res.json()
+        setOpsPartners(
+          ((data || []) as PartnerOption[]).map((p) => ({ id: p.id, name: p.name }))
+        )
       } catch (err) {
-        console.error('Error fetching partners:', err)
+        console.error('Error fetching ops partners:', err)
       }
     }
-    fetchPartners()
+    fetchOpsPartners()
   }, [])
 
   useEffect(() => {
@@ -129,7 +127,7 @@ export default function AccessRightsManagement({
         .map(user => ({
           id: user.id,
           err_id: user.err_id,
-          partner_id: (user as { partner_id?: string | null }).partner_id ?? null,
+          ops_partner_id: (user as { ops_partner_id?: string | null }).ops_partner_id ?? null,
           display_name: user.display_name,
           role: user.role as PortalRole,
           status: user.status as 'active' | 'suspended',
@@ -166,7 +164,7 @@ export default function AccessRightsManagement({
     if (newRole === 'partner') {
       setPendingPartnerRoleUserIds((prev) => new Set(prev).add(userId))
       setUsers((prev) =>
-        prev.map((u) => (u.id === userId ? { ...u, role: 'partner', partner_id: u.partner_id } : u))
+        prev.map((u) => (u.id === userId ? { ...u, role: 'partner', ops_partner_id: u.ops_partner_id } : u))
       )
       return
     }
@@ -200,11 +198,11 @@ export default function AccessRightsManagement({
     }
   }
 
-  const handlePartnerOrgChange = async (userId: string, partnerId: string) => {
-    if (!partnerId) return
+  const handlePartnerOrgChange = async (userId: string, opsPartnerId: string) => {
+    if (!opsPartnerId) return
     try {
       setSavingUserId(userId)
-      const body: { partner_id: string; role?: 'partner' } = { partner_id: partnerId }
+      const body: { ops_partner_id: string; role?: 'partner' } = { ops_partner_id: opsPartnerId }
       const user = users.find((u) => u.id === userId)
       if (user?.role !== 'partner' || pendingPartnerRoleUserIds.has(userId)) {
         body.role = 'partner'
@@ -218,7 +216,7 @@ export default function AccessRightsManagement({
 
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}))
-        throw new Error(errorData.error || 'Failed to update partner organization')
+        throw new Error(errorData.error || 'Failed to update ops partner')
       }
 
       setPendingPartnerRoleUserIds((prev) => {
@@ -228,7 +226,7 @@ export default function AccessRightsManagement({
       })
       await fetchUsers()
     } catch (error: unknown) {
-      console.error('Error updating partner organization:', error)
+      console.error('Error updating ops partner:', error)
       setError(error instanceof Error ? error.message : t('common:error_updating_user'))
       setTimeout(() => setError(null), 5000)
     } finally {
@@ -284,7 +282,7 @@ export default function AccessRightsManagement({
   }
 
   const totalPages = Math.ceil(totalUsers / PAGE_SIZE)
-  const partnerNameById = new Map(partners.map((p) => [p.id, p.name]))
+  const partnerNameById = new Map(opsPartners.map((p) => [p.id, p.name]))
 
   if (isLoading && users.length === 0) {
     return <div className="text-muted-foreground">{t('users:loading')}</div>
@@ -341,7 +339,7 @@ export default function AccessRightsManagement({
         <div className="grid grid-cols-7 gap-2 py-1.5 px-2 font-medium border-b">
           <div>{t('users:display_name')}</div>
           <div>{t('users:role')}</div>
-          <div>Partner org</div>
+          <div>Ops partner</div>
           <div>State</div>
           <div>State Access</div>
           <div>{t('users:err_name')}</div>
@@ -401,15 +399,15 @@ export default function AccessRightsManagement({
                 <div className="min-w-0">
                   {isPartner ? (
                     <Select
-                      value={user.partner_id || undefined}
+                      value={user.ops_partner_id || undefined}
                       onValueChange={(value) => handlePartnerOrgChange(user.id, value)}
                       disabled={savingUserId === user.id}
                     >
                       <SelectTrigger className="h-7 w-full min-w-[120px] border-input bg-background text-xs">
-                        <SelectValue placeholder="Select partner…" />
+                        <SelectValue placeholder="Select ops partner…" />
                       </SelectTrigger>
                       <SelectContent>
-                        {partners.map((p) => (
+                        {opsPartners.map((p) => (
                           <SelectItem key={p.id} value={p.id}>
                             {p.name}
                           </SelectItem>
@@ -419,14 +417,14 @@ export default function AccessRightsManagement({
                   ) : (
                     <span className="text-muted-foreground">—</span>
                   )}
-                  {pendingPartnerRoleUserIds.has(user.id) && !user.partner_id && (
-                    <div className="text-[10px] text-amber-700 mt-0.5">Select partner org to save</div>
+                  {pendingPartnerRoleUserIds.has(user.id) && !user.ops_partner_id && (
+                    <div className="text-[10px] text-amber-700 mt-0.5">Select ops partner to save</div>
                   )}
                 </div>
 
                 <div className="truncate">
                   {isPartner
-                    ? partnerNameById.get(user.partner_id || '') || '—'
+                    ? partnerNameById.get(user.ops_partner_id || '') || '—'
                     : user.state_name || '-'}
                 </div>
 

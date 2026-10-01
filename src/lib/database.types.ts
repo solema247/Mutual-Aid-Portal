@@ -3344,6 +3344,39 @@ export type Database = {
         }
         Relationships: []
       }
+      grant_ops_partners: {
+        Row: {
+          created_at: string
+          grant_grid_id: string
+          ops_partner_id: string
+        }
+        Insert: {
+          created_at?: string
+          grant_grid_id: string
+          ops_partner_id: string
+        }
+        Update: {
+          created_at?: string
+          grant_grid_id?: string
+          ops_partner_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "grant_ops_partners_grant_grid_id_fkey"
+            columns: ["grant_grid_id"]
+            isOneToOne: false
+            referencedRelation: "grants_grid_view"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "grant_ops_partners_ops_partner_id_fkey"
+            columns: ["ops_partner_id"]
+            isOneToOne: false
+            referencedRelation: "ops_partners"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       partners: {
         Row: {
           address: string | null
@@ -4047,6 +4080,7 @@ export type Database = {
           display_name: string | null
           err_id: string | null
           id: string
+          ops_partner_id: string | null
           partner_id: string | null
           pin_hash: string | null
           role: string | null
@@ -4062,6 +4096,7 @@ export type Database = {
           display_name?: string | null
           err_id?: string | null
           id?: string
+          ops_partner_id?: string | null
           partner_id?: string | null
           pin_hash?: string | null
           role?: string | null
@@ -4077,6 +4112,7 @@ export type Database = {
           display_name?: string | null
           err_id?: string | null
           id?: string
+          ops_partner_id?: string | null
           partner_id?: string | null
           pin_hash?: string | null
           role?: string | null
@@ -4091,6 +4127,13 @@ export type Database = {
             columns: ["err_id"]
             isOneToOne: false
             referencedRelation: "emergency_rooms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "users_ops_partner_id_fkey"
+            columns: ["ops_partner_id"]
+            isOneToOne: false
+            referencedRelation: "ops_partners"
             referencedColumns: ["id"]
           },
           {

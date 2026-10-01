@@ -4,19 +4,19 @@ import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 export type UserGrantAccess =
   | {
       mode: 'all'
-      partnerId: null
+      opsPartnerId: null
       grantGridIds: null
       grantIds: null
     }
   | {
       mode: 'partner'
-      partnerId: string
+      opsPartnerId: string
       grantGridIds: string[]
       grantIds: string[]
     }
   | {
       mode: 'none'
-      partnerId: string | null
+      opsPartnerId: string | null
       grantGridIds: []
       grantIds: []
     }
@@ -35,52 +35,74 @@ export function chunkGrantScopeIds<T extends string | number>(ids: T[]): T[][] {
 
 const ALL_ACCESS: UserGrantAccess = {
   mode: 'all',
-  partnerId: null,
+  opsPartnerId: null,
   grantGridIds: null,
   grantIds: null,
 }
 
-function noneAccess(partnerId: string | null): UserGrantAccess {
+function noneAccess(opsPartnerId: string | null): UserGrantAccess {
   return {
     mode: 'none',
-    partnerId,
+    opsPartnerId,
     grantGridIds: [],
     grantIds: [],
   }
 }
 
-async function fetchGrantsForPartner(
-  partnerId: string
+/**
+ * Resolve grants linked to an ops_partner via grant_ops_partners (many-to-many).
+ */
+async function fetchGrantsForOpsPartner(
+  opsPartnerId: string
 ): Promise<{ grantGridIds: string[]; grantIds: string[] }> {
   const supabase = getSupabaseRouteClient()
   const grantGridIds: string[] = []
-  const grantIds: string[] = []
   const pageSize = 1000
   let from = 0
 
   while (true) {
     const { data, error } = await supabase
-      .from('grants_grid_view')
-      .select('id, grant_id')
-      .eq('partner_id', partnerId)
+      .from('grant_ops_partners')
+      .select('grant_grid_id')
+      .eq('ops_partner_id', opsPartnerId)
       .range(from, from + pageSize - 1)
 
     if (error) {
-      console.error('Error fetching grants for partner scope:', error)
+      console.error('Error fetching grant_ops_partners for partner scope:', error)
       return { grantGridIds: [], grantIds: [] }
     }
 
     if (!data?.length) break
 
     for (const row of data) {
-      if (row.id) grantGridIds.push(String(row.id))
-      if (row.grant_id != null && String(row.grant_id).trim() !== '') {
-        grantIds.push(String(row.grant_id).trim())
-      }
+      if (row.grant_grid_id) grantGridIds.push(String(row.grant_grid_id))
     }
 
     if (data.length < pageSize) break
     from += pageSize
+  }
+
+  if (grantGridIds.length === 0) {
+    return { grantGridIds: [], grantIds: [] }
+  }
+
+  const grantIds: string[] = []
+  for (const batch of chunkGrantScopeIds(grantGridIds)) {
+    const { data: grantRows, error: grantErr } = await supabase
+      .from('grants_grid_view')
+      .select('id, grant_id')
+      .in('id', batch)
+
+    if (grantErr) {
+      console.error('Error fetching grants_grid_view for partner scope:', grantErr)
+      continue
+    }
+
+    for (const row of grantRows || []) {
+      if (row.grant_id != null && String(row.grant_id).trim() !== '') {
+        grantIds.push(String(row.grant_id).trim())
+      }
+    }
   }
 
   return { grantGridIds, grantIds }
@@ -91,6 +113,7 @@ async function fetchGrantsForPartner(
  *
  * Non-partner roles: mode 'all' (no grant filter from this helper).
  * Partner roles always fail closed: never return mode 'all'.
+ * Partner scope: users.ops_partner_id → grant_ops_partners (not partners.partner_id).
  */
 export async function getUserGrantAccess(): Promise<UserGrantAccess> {
   const supabase = getSupabaseRouteClient()
@@ -107,7 +130,7 @@ export async function getUserGrantAccess(): Promise<UserGrantAccess> {
 
   const { data: userData, error } = await supabase
     .from('users')
-    .select('role, partner_id')
+    .select('role, ops_partner_id')
     .eq('auth_user_id', session.user.id)
     .single()
 
@@ -116,25 +139,25 @@ export async function getUserGrantAccess(): Promise<UserGrantAccess> {
   }
 
   const role = userData.role ?? null
-  const partnerId =
-    userData.partner_id != null && String(userData.partner_id).trim() !== ''
-      ? String(userData.partner_id)
+  const opsPartnerId =
+    userData.ops_partner_id != null && String(userData.ops_partner_id).trim() !== ''
+      ? String(userData.ops_partner_id)
       : null
 
   // Partner must never fall through to mode 'all'
   if (role === 'partner') {
-    if (!partnerId) {
+    if (!opsPartnerId) {
       return noneAccess(null)
     }
 
-    const { grantGridIds, grantIds } = await fetchGrantsForPartner(partnerId)
+    const { grantGridIds, grantIds } = await fetchGrantsForOpsPartner(opsPartnerId)
     if (grantGridIds.length === 0) {
-      return noneAccess(partnerId)
+      return noneAccess(opsPartnerId)
     }
 
     return {
       mode: 'partner',
-      partnerId,
+      opsPartnerId,
       grantGridIds,
       grantIds,
     }

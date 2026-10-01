@@ -42,9 +42,9 @@ export async function resolveStoragePathGrant (
   }
 
   if (access.mode === 'none') {
-    // No session and a missing user row share partnerId null with a Partner
-    // who has no partner_id. Only the Partner role fails closed.
-    if (access.partnerId || (await currentUserIsPartner())) {
+    // No session and a missing user row share opsPartnerId null with a Partner
+    // who has no ops_partner_id. Only the Partner role fails closed.
+    if (access.opsPartnerId || (await currentUserIsPartner())) {
       return { status: 'deny' }
     }
     return { status: 'passthrough' }

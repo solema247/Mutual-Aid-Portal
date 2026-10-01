@@ -40,10 +40,10 @@ function summaryFromCache(cached: { kpis?: unknown; stateAggregations?: unknown;
 
 /**
  * Partner rollup cache key. Must match getCacheKey(null, partnerScope) in overview/rollup:
- * v3|all_states|partner:{partnerId}:{sorted grant IDs}
+ * v3|all_states|partner:{opsPartnerId}:{sorted grant IDs}
  */
-function partnerRollupCacheKey(partnerId: string, grantGridIds: string[]): string {
-  const grantScopeKey = `partner:${partnerId}:${[...grantGridIds].sort().join(',')}`
+function partnerRollupCacheKey(opsPartnerId: string, grantGridIds: string[]): string {
+  const grantScopeKey = `partner:${opsPartnerId}:${[...grantGridIds].sort().join(',')}`
   return `v3|all_states|${grantScopeKey}`
 }
 
@@ -62,7 +62,7 @@ export async function GET(request: Request) {
     }
 
     if (grantAccess.mode === 'partner') {
-      const cacheKey = partnerRollupCacheKey(grantAccess.partnerId, grantAccess.grantGridIds)
+      const cacheKey = partnerRollupCacheKey(grantAccess.opsPartnerId, grantAccess.grantGridIds)
       const cached = await readSharedRollupCache(cacheKey)
       if (!cached) {
         return NextResponse.json(emptySummary())
