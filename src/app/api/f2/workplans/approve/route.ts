@@ -109,7 +109,11 @@ export async function POST(request: Request) {
 
     const { error: updateError } = await supabase
       .from('err_projects')
-      .update({ status: 'approved', funding_status: 'committed' })
+      .update({
+        status: 'approved',
+        funding_status: 'committed',
+        committed_at: new Date().toISOString(),
+      })
       .in(
         'id',
         pendingWorkplans.map((w) => w.id)

@@ -79,6 +79,7 @@ export async function GET(request: Request) {
           date,
           submitted_at,
           last_modified,
+          committed_at,
           state,
           locality,
           status,
@@ -109,6 +110,7 @@ export async function GET(request: Request) {
       date?: string | null
       submitted_at?: string | null
       last_modified?: string | null
+      committed_at?: string | null
       state?: string | null
       locality?: string | null
       status?: string | null
@@ -154,6 +156,7 @@ export async function GET(request: Request) {
         date: p.date || null,
         submitted_at: p.submitted_at || null,
         last_modified: p.last_modified || null,
+        committed_at: p.committed_at || null,
         state: p.state || null,
         locality: p.locality || null,
         project_status: p.status || null,

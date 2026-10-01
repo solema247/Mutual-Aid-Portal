@@ -42,7 +42,11 @@ export async function POST(request: Request) {
 
     const { error: updateError } = await supabase
       .from('err_projects')
-      .update({ status: 'pending', funding_status: 'unassigned' })
+      .update({
+        status: 'pending',
+        funding_status: 'unassigned',
+        committed_at: null,
+      })
       .eq('id', id)
 
     if (updateError) throw updateError

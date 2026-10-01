@@ -33,6 +33,7 @@ interface Screening {
   date: string | null
   submitted_at: string | null
   last_modified: string | null
+  committed_at: string | null
   state: string | null
   locality: string | null
   project_status: string | null
@@ -148,7 +149,7 @@ function PaginatedScreeningsTable({
                 {showTimelineColumns && (
                   <>
                     <TableHead className="px-2">Raised</TableHead>
-                    <TableHead className="px-2">Last modified</TableHead>
+                    <TableHead className="px-2">Committed</TableHead>
                   </>
                 )}
                 <TableHead className="px-2">State</TableHead>
@@ -185,8 +186,19 @@ function PaginatedScreeningsTable({
                       <TableCell className="whitespace-nowrap" title={s.submitted_at || ''}>
                         {formatTimestamp(s.submitted_at)}
                       </TableCell>
-                      <TableCell className="whitespace-nowrap" title={s.last_modified || ''}>
-                        {formatTimestamp(s.last_modified)}
+                      <TableCell
+                        className="whitespace-nowrap"
+                        title={
+                          s.committed_at
+                            ? s.committed_at
+                            : 'No committed_at recorded (legacy commit before this field existed)'
+                        }
+                      >
+                        {s.committed_at ? (
+                          formatTimestamp(s.committed_at)
+                        ) : (
+                          <span className="text-muted-foreground italic">Unknown (legacy)</span>
+                        )}
                       </TableCell>
                     </>
                   )}
@@ -409,15 +421,44 @@ export default function CompliancePage() {
     }
   }
 
-  const openFile = async (fileKey: string) => {
+  const openFile = async (...keys: Array<string | null | undefined>) => {
+    const candidates = [...new Set(keys.map(k => k?.trim()).filter(Boolean) as string[])]
+    if (candidates.length === 0) {
+      alert('No file is attached to this F1')
+      return
+    }
+
+    // Open synchronously on the click gesture so browsers do not block the tab.
+    const win = window.open('about:blank', '_blank')
+    if (!win) {
+      alert('Pop-up blocked. Please allow pop-ups for this site and try again.')
+      return
+    }
+
     try {
-      const res = await fetch(`/api/storage/signed-url?path=${encodeURIComponent(fileKey)}`)
-      if (!res.ok) throw new Error('Failed to get file URL')
-      const { url } = await res.json()
-      if (url) window.open(url, '_blank')
-      else alert('File not available')
+      for (const path of candidates) {
+        // Cheap existence check (service-role signed URL); then stream same-origin.
+        const probe = await fetch(`/api/storage/signed-url?path=${encodeURIComponent(path)}`)
+        if (probe.status === 401) {
+          win.close()
+          alert('Your session expired. Please refresh and sign in again.')
+          return
+        }
+        if (!probe.ok) continue
+        const body = await probe.json().catch(() => ({} as { url?: string | null }))
+        if (!body.url) continue
+        win.location.href = `/api/storage/file?path=${encodeURIComponent(path)}`
+        return
+      }
+      win.close()
+      alert('F1 file not found in storage. The path on this record may be missing or moved.')
     } catch (e) {
       console.error('Error opening file:', e)
+      try {
+        win.close()
+      } catch {
+        // ignore
+      }
       alert('Failed to open file')
     }
   }
@@ -560,8 +601,9 @@ export default function CompliancePage() {
                 (funding stays committed; a sanctions flag still stops payment).
                 <strong className="font-medium text-foreground"> Raised</strong> is{' '}
                 <code className="text-xs">submitted_at</code>.{' '}
-                <strong className="font-medium text-foreground">Last modified</strong> is the best
-                available proxy for later changes (there is no dedicated commit timestamp in the DB).
+                <strong className="font-medium text-foreground">Committed</strong> is{' '}
+                <code className="text-xs">committed_at</code> (when F2 set funding_status to committed).
+                Legacy rows committed before this field existed show as unknown.
               </p>
               <PaginatedScreeningsTable
                 rows={bypassedClearance}
@@ -638,8 +680,14 @@ export default function CompliancePage() {
                   <div>{formatTimestamp(selected.submitted_at)}</div>
                 </div>
                 <div>
-                  <div className="text-xs text-muted-foreground">Last modified</div>
-                  <div>{formatTimestamp(selected.last_modified)}</div>
+                  <div className="text-xs text-muted-foreground">Committed (committed_at)</div>
+                  <div>
+                    {selected.committed_at ? (
+                      formatTimestamp(selected.committed_at)
+                    ) : (
+                      <span className="text-muted-foreground italic">Unknown (legacy)</span>
+                    )}
+                  </div>
                 </div>
                 <div>
                   <div className="text-xs text-muted-foreground">State / Locality</div>
@@ -687,9 +735,10 @@ export default function CompliancePage() {
               <div className="flex flex-wrap gap-2">
                 {(selected.f1_file_key || selected.temp_file_key) && (
                   <Button
+                    type="button"
                     variant="outline"
                     size="sm"
-                    onClick={() => openFile((selected.f1_file_key || selected.temp_file_key) as string)}
+                    onClick={() => openFile(selected.f1_file_key, selected.temp_file_key)}
                   >
                     <FileText className="w-4 h-4 mr-1" />
                     Open original F1 file
@@ -697,9 +746,10 @@ export default function CompliancePage() {
                 )}
                 {selected.identity_document_file_key && (
                   <Button
+                    type="button"
                     variant="outline"
                     size="sm"
-                    onClick={() => openFile(selected.identity_document_file_key as string)}
+                    onClick={() => openFile(selected.identity_document_file_key)}
                   >
                     <IdCard className="w-4 h-4 mr-1" />
                     Open uploaded ID

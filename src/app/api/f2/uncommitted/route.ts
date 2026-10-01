@@ -225,7 +225,10 @@ export async function POST(request: Request) {
 
     const { error } = await supabase
       .from('err_projects')
-      .update({ funding_status: 'committed' })
+      .update({
+        funding_status: 'committed',
+        committed_at: new Date().toISOString(),
+      })
       .in('id', f1_ids)
 
     if (error) throw error

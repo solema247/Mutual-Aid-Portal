@@ -44,6 +44,17 @@ export async function GET(request: Request) {
     const { data, error } = await admin.storage.from(bucket).download(path)
     if (error || !data) {
       console.error('storage file download:', error)
+      const accept = request.headers.get('accept') || ''
+      if (accept.includes('text/html')) {
+        return new NextResponse(
+          `<!doctype html><html><body style="font-family:sans-serif;padding:2rem">
+            <h1>File not found</h1>
+            <p>This F1 document is missing from storage. The path may have been moved or never uploaded.</p>
+            <p style="color:#666;word-break:break-all"><code>${path.replace(/[<>&]/g, '')}</code></p>
+          </body></html>`,
+          { status: 404, headers: { 'Content-Type': 'text/html; charset=utf-8' } }
+        )
+      }
       return NextResponse.json({ error: 'Object not found' }, { status: 404 })
     }
 
