@@ -3,6 +3,7 @@ import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { requirePermission } from '@/lib/requirePermission'
 import { resetReportingStatusIfNoReportsRemaining } from '@/lib/projectStatus'
 import { assertProjectInGrantAccess, getUserGrantAccess } from '@/lib/userGrantAccess'
+import { emitF123Audit } from '@/lib/f123Audit'
 
 export async function GET(
   _req: Request,
@@ -213,6 +214,7 @@ export async function DELETE(
       .select('expense_id')
       .eq('summary_id', summaryId)
     const expenseIds = (expRows || []).map((e: { expense_id: number }) => e.expense_id).filter(Boolean)
+    const expenseCount = expenseIds.length
     if (expenseIds.length) {
       const { error: recErr } = await supabase.from('err_expense_receipts').delete().in('expense_id', expenseIds)
       if (recErr) throw recErr
@@ -225,10 +227,40 @@ export async function DELETE(
     if (sumErr) throw sumErr
 
     const projectId = row.project_id as string
+    let f4StatusSideEffect: { from?: string | null; to: string } | null = null
+    const { data: beforeProj } = await supabase
+      .from('err_projects')
+      .select('f4_status')
+      .eq('id', projectId)
+      .maybeSingle()
     const statusResult = await resetReportingStatusIfNoReportsRemaining(supabase, projectId, 'f4')
     if (!statusResult.ok) {
       console.warn('F4 delete: failed to reset reporting status', statusResult.error)
+    } else if (!('skipped' in statusResult && statusResult.skipped) && statusResult.ok) {
+      f4StatusSideEffect = {
+        from: (beforeProj?.f4_status as string | null) ?? null,
+        to: 'waiting',
+      }
     }
+
+    await emitF123Audit({
+      action: 'f4.report_deleted',
+      endpoint: 'DELETE /api/f4/summary/[id]',
+      request: req,
+      targetType: 'f4_summary',
+      targetId: projectId,
+      oldValues: {
+        summary_id: summaryId,
+        expense_count: expenseCount,
+      },
+      newValues: null,
+      metadata: {
+        project_id: projectId,
+        summary_id: summaryId,
+        expense_count: expenseCount,
+        ...(f4StatusSideEffect ? { f4_status_side_effect: f4StatusSideEffect } : {}),
+      },
+    })
 
     return NextResponse.json({ success: true })
   } catch (e) {

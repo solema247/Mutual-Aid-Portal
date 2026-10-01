@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { assertProjectInGrantAccess } from '@/lib/userGrantAccess'
+import { emitF123Audit } from '@/lib/f123Audit'
 
 type RouteContext = { params: { id: string } }
 
@@ -93,6 +94,22 @@ export async function POST(request: Request, { params }: RouteContext) {
       console.error('[projects/documents POST]', error)
       return NextResponse.json({ error: 'Failed to save document' }, { status: 500 })
     }
+
+    await emitF123Audit({
+      action: 'f1.document_added',
+      endpoint: 'POST /api/projects/[id]/documents',
+      request,
+      targetType: 'project_document',
+      targetId: data?.id ?? null,
+      newValues: {
+        file_name,
+        file_key,
+        project_id: projectId,
+      },
+      metadata: {
+        project_id: projectId,
+      },
+    })
 
     return NextResponse.json({ document: data }, { status: 201 })
   } catch (e) {

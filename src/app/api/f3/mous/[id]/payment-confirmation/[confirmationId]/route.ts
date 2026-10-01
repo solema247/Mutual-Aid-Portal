@@ -5,8 +5,21 @@ import {
   assertProjectInGrantAccess,
   isProjectIdInMouScope,
 } from '@/lib/userGrantAccess'
+import { emitF123Audit, pickChangedAuditFields } from '@/lib/f123Audit'
 
 type RouteContext = { params: { id: string; confirmationId: string } }
+
+const PAYMENT_CONFIRMATION_AUDIT_KEYS = [
+  'exchange_rate',
+  'transfer_date',
+  'fsp_id',
+] as const
+
+function normalizeRate(value: unknown): number | null {
+  if (value == null || value === '') return null
+  const n = Number(value)
+  return Number.isFinite(n) ? n : null
+}
 
 /**
  * PATCH /api/f3/mous/[id]/payment-confirmation/[confirmationId]
@@ -21,12 +34,23 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     const mouScope = await assertMouInGrantAccess(mouId)
     if (!mouScope.ok) return mouScope.response
 
-    const { data: existing, error: fetchError } = await supabase
+    let { data: existing, error: fetchError } = await supabase
       .from('mou_payment_confirmations')
-      .select('id, mou_id, project_id')
+      .select('id, mou_id, project_id, exchange_rate, transfer_date, fsp_id')
       .eq('id', confirmationId)
       .eq('mou_id', mouId)
       .maybeSingle()
+
+    if (fetchError && /fsp_id/i.test(fetchError.message || '')) {
+      const retry = await supabase
+        .from('mou_payment_confirmations')
+        .select('id, mou_id, project_id, exchange_rate, transfer_date')
+        .eq('id', confirmationId)
+        .eq('mou_id', mouId)
+        .maybeSingle()
+      existing = retry.data ? { ...retry.data, fsp_id: null } : retry.data
+      fetchError = retry.error
+    }
 
     if (fetchError) {
       console.error('[payment-confirmation PATCH] fetch', fetchError)
@@ -85,7 +109,8 @@ export async function PATCH(request: Request, { params }: RouteContext) {
       .single()
 
     if (error && /fsp_id/i.test(error.message || '')) {
-      const { fsp_id: _ignored, ...withoutFsp } = update
+      const withoutFsp = { ...update }
+      delete withoutFsp.fsp_id
       if (Object.keys(withoutFsp).length === 0) {
         return NextResponse.json(
           {
@@ -113,6 +138,36 @@ export async function PATCH(request: Request, { params }: RouteContext) {
       return NextResponse.json({ error: 'Failed to update confirmation' }, { status: 500 })
     }
 
+    const confirmationChanges = pickChangedAuditFields(
+      {
+        exchange_rate: normalizeRate(existing.exchange_rate),
+        transfer_date: existing.transfer_date ?? null,
+        fsp_id: existing.fsp_id ?? null,
+      },
+      {
+        exchange_rate: normalizeRate(data.exchange_rate),
+        transfer_date: data.transfer_date ?? null,
+        fsp_id: data.fsp_id ?? null,
+      },
+      PAYMENT_CONFIRMATION_AUDIT_KEYS
+    )
+    if (confirmationChanges) {
+      await emitF123Audit({
+        action: 'f3.payment_confirmation_updated',
+        endpoint: 'PATCH /api/f3/mous/[id]/payment-confirmation/[confirmationId]',
+        request,
+        targetType: 'payment_confirmation',
+        targetId: confirmationId,
+        oldValues: confirmationChanges.oldValues,
+        newValues: confirmationChanges.newValues,
+        metadata: {
+          mou_id: mouId,
+          project_id: existing.project_id ?? null,
+          updated_fields: Object.keys(confirmationChanges.newValues),
+        },
+      })
+    }
+
     return NextResponse.json({
       success: true,
       payment_confirmation: {
@@ -130,7 +185,7 @@ export async function PATCH(request: Request, { params }: RouteContext) {
  * DELETE /api/f3/mous/[id]/payment-confirmation/[confirmationId]
  * Delete confirmation + all file rows + storage objects.
  */
-export async function DELETE(_request: Request, { params }: RouteContext) {
+export async function DELETE(request: Request, { params }: RouteContext) {
   try {
     const supabase = getSupabaseRouteClient()
     const { id: mouId, confirmationId } = params
@@ -138,12 +193,23 @@ export async function DELETE(_request: Request, { params }: RouteContext) {
     const mouScope = await assertMouInGrantAccess(mouId)
     if (!mouScope.ok) return mouScope.response
 
-    const { data: existing, error: fetchError } = await supabase
+    let { data: existing, error: fetchError } = await supabase
       .from('mou_payment_confirmations')
-      .select('id, mou_id, project_id')
+      .select('id, mou_id, project_id, exchange_rate, transfer_date, fsp_id')
       .eq('id', confirmationId)
       .eq('mou_id', mouId)
       .maybeSingle()
+
+    if (fetchError && /fsp_id/i.test(fetchError.message || '')) {
+      const retry = await supabase
+        .from('mou_payment_confirmations')
+        .select('id, mou_id, project_id, exchange_rate, transfer_date')
+        .eq('id', confirmationId)
+        .eq('mou_id', mouId)
+        .maybeSingle()
+      existing = retry.data ? { ...retry.data, fsp_id: null } : retry.data
+      fetchError = retry.error
+    }
 
     if (fetchError) {
       console.error('[payment-confirmation DELETE] fetch', fetchError)
@@ -185,6 +251,26 @@ export async function DELETE(_request: Request, { params }: RouteContext) {
       console.error('[payment-confirmation DELETE]', deleteError)
       return NextResponse.json({ error: 'Failed to delete confirmation' }, { status: 500 })
     }
+
+    await emitF123Audit({
+      action: 'f3.payment_confirmation_deleted',
+      endpoint: 'DELETE /api/f3/mous/[id]/payment-confirmation/[confirmationId]',
+      request,
+      targetType: 'payment_confirmation',
+      targetId: confirmationId,
+      oldValues: {
+        mou_id: existing.mou_id ?? mouId,
+        project_id: existing.project_id ?? null,
+        exchange_rate: normalizeRate(existing.exchange_rate),
+        transfer_date: existing.transfer_date ?? null,
+        fsp_id: existing.fsp_id ?? null,
+      },
+      metadata: {
+        mou_id: mouId,
+        project_id: existing.project_id ?? null,
+        file_count: paths.length,
+      },
+    })
 
     if (paths.length > 0) {
       try {

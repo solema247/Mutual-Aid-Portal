@@ -33,6 +33,7 @@ export {
   getF2UncommittedFilterFields,
   getF2CommittedFilterFields,
   getUserManagementFilterFields,
+  getAuditLogFilterFields,
   STATUS_OPTIONS,
 } from './filter-config'
 export { STATUS_DISPLAY, getStatusDisplay } from './status-config'

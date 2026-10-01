@@ -6,9 +6,10 @@ import {
   assertMouInGrantAccess,
   grantGridIdInAccess,
 } from '@/lib/userGrantAccess'
+import { emitF123Audit } from '@/lib/f123Audit'
 
 export async function POST(
-  _request: Request,
+  request: Request,
   { params }: { params: { id: string } }
 ) {
   try {
@@ -203,7 +204,22 @@ export async function POST(
     const blob = new Blob([html], { type: 'application/msword' })
     const { error: upErr } = await supabase.storage.from('images').upload(filePath, blob, { upsert: true })
     if (upErr) throw upErr
-    await supabase.from('mous').update({ file_key: filePath }).eq('id', mou.id)
+    const { error: fileKeyErr } = await supabase
+      .from('mous')
+      .update({ file_key: filePath })
+      .eq('id', mou.id)
+
+    if (!fileKeyErr) {
+      await emitF123Audit({
+        action: 'f3.mou_regenerated',
+        endpoint: 'POST /api/f3/mous/[id]/regenerate',
+        request,
+        targetType: 'mou',
+        targetId: id,
+        oldValues: { file_key: mou.file_key ?? null },
+        newValues: { file_key: filePath }
+      })
+    }
 
     return NextResponse.json({ success: true, file_key: filePath })
   } catch (error) {

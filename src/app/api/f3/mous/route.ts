@@ -21,6 +21,7 @@ import {
   getUserRoomAccess,
   type UserRoomAccess,
 } from '@/lib/userRoomAccess'
+import { emitF123Audit } from '@/lib/f123Audit'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 function parseMouSignatures(mou: Record<string, unknown>) {
@@ -475,6 +476,24 @@ export async function POST(request: Request) {
       .in('id', project_ids)
 
     if (linkErr) throw linkErr
+
+    await emitF123Audit({
+      action: 'f3.mou_created',
+      endpoint: 'POST /api/f3/mous',
+      request,
+      targetType: 'mou',
+      targetId: inserted.id,
+      newValues: {
+        mou_code: inserted.mou_code ?? null,
+        partner_name: inserted.partner_name ?? null,
+        err_name: inserted.err_name ?? null,
+        state: inserted.state ?? null,
+        total_amount
+      },
+      metadata: {
+        project_ids: project_ids.map(String)
+      }
+    })
 
     // Generate a styled Word-compatible HTML document (.doc) and upload
     try {

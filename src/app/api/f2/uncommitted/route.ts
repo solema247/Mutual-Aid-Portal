@@ -10,6 +10,23 @@ import {
   getUserGrantAccess,
 } from '@/lib/userGrantAccess'
 import { getUserRoomAccess } from '@/lib/userRoomAccess'
+import { emitF123Audit, pickChangedAuditFields } from '@/lib/f123Audit'
+
+const F2_PATCH_AUDIT_SELECT =
+  'expenses, grant_call_id, approval_file_key, donor_id, funding_cycle_id, grant_serial_id, workplan_number, cycle_state_allocation_id, grant_id, file_key'
+
+// Audit payloads never carry raw expense line items — only how many lines exist.
+function expensesLineCount(value: unknown): number | null {
+  let parsed: unknown = value
+  if (typeof value === 'string') {
+    try {
+      parsed = JSON.parse(value)
+    } catch {
+      return null
+    }
+  }
+  return Array.isArray(parsed) ? parsed.length : null
+}
 
 const PAGE_SIZE = 1000
 
@@ -213,12 +230,61 @@ export async function PATCH(request: Request) {
     if (grant_id !== undefined) updateData.grant_id = grant_id
     if (file_key !== undefined) updateData.file_key = file_key
 
+    const { data: currentRow } = await supabase
+      .from('err_projects')
+      .select(F2_PATCH_AUDIT_SELECT)
+      .eq('id', id)
+      .maybeSingle()
+
     const { error } = await supabase
       .from('err_projects')
       .update(updateData)
       .eq('id', id)
 
     if (error) throw error
+
+    const current = (currentRow ?? {}) as Record<string, unknown>
+    const isApprovalFileOnly = approval_file_key !== undefined && !isEditUpdate
+
+    if (isApprovalFileOnly) {
+      await emitF123Audit({
+        action: 'f2.approval_file_attached',
+        endpoint: 'PATCH /api/f2/uncommitted',
+        request,
+        targetType: 'project',
+        targetId: String(id),
+        oldValues: { approval_file_key: current.approval_file_key ?? null },
+        newValues: { approval_file_key: approval_file_key ?? null }
+      })
+    } else {
+      const auditKeys: string[] = []
+      const beforeAudit: Record<string, unknown> = {}
+      const afterAudit: Record<string, unknown> = {}
+      for (const key of Object.keys(updateData)) {
+        if (key === 'expenses') {
+          auditKeys.push('expenses_line_count')
+          beforeAudit.expenses_line_count = expensesLineCount(current.expenses)
+          afterAudit.expenses_line_count = expensesLineCount(updateData.expenses)
+          continue
+        }
+        auditKeys.push(key)
+        beforeAudit[key] = current[key] ?? null
+        afterAudit[key] = updateData[key] ?? null
+      }
+      const changes = pickChangedAuditFields(beforeAudit, afterAudit, auditKeys)
+      if (changes) {
+        await emitF123Audit({
+          action: 'f2.project_updated',
+          endpoint: 'PATCH /api/f2/uncommitted',
+          request,
+          targetType: 'project',
+          targetId: String(id),
+          oldValues: changes.oldValues,
+          newValues: changes.newValues,
+          metadata: { updated_fields: Object.keys(changes.newValues) }
+        })
+      }
+    }
 
     return NextResponse.json({ success: true })
   } catch (error) {
@@ -332,6 +398,24 @@ export async function DELETE(request: Request) {
       .eq('id', id)
 
     if (deleteError) throw deleteError
+
+    await emitF123Audit({
+      action: 'f2.project_deleted',
+      actorUserId: perm.user.id,
+      endpoint: 'DELETE /api/f2/uncommitted',
+      request,
+      targetType: 'project',
+      targetId: String(id),
+      oldValues: {
+        status: project.status ?? null,
+        funding_status: project.funding_status ?? null,
+        approval_file_key: project.approval_file_key ?? null,
+        temp_file_key: project.temp_file_key ?? null
+      },
+      metadata: {
+        deleted_file_count: filesToDelete.length
+      }
+    })
 
     return NextResponse.json({ success: true })
   } catch (error) {

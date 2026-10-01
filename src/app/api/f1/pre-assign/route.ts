@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { forbidIfPartner } from '@/lib/routeHandlerAuth'
 import { getUserRoomAccess } from '@/lib/userRoomAccess'
+import { emitF123Audit } from '@/lib/f123Audit'
 
 // POST /api/f1/pre-assign { workplan_id, grant_call_id }
 export async function POST(req: Request) {
@@ -24,14 +25,17 @@ export async function POST(req: Request) {
     // Load workplan and compute its total amount
     const { data: wp, error: wpErr } = await supabase
       .from('err_projects')
-      .select('id, expenses')
+      .select('id, expenses, grant_call_id, donor_id, funding_status')
       .eq('id', workplan_id)
       .single()
 
     if (wpErr || !wp) throw wpErr || new Error('Workplan not found')
 
-    const expenses = typeof (wp as any).expenses === 'string' ? JSON.parse((wp as any).expenses) : (wp as any).expenses
-    const workplanAmount = (expenses || []).reduce((s: number, e: any) => s + (e.total_cost || 0), 0)
+    const wpExpenses = typeof wp.expenses === 'string' ? JSON.parse(wp.expenses) : wp.expenses
+    const workplanAmount = (Array.isArray(wpExpenses) ? wpExpenses : []).reduce(
+      (s: number, e: { total_cost?: number }) => s + (e.total_cost || 0),
+      0
+    )
 
     // Compute remaining for this grant call: included - committed - pending
     const { data: includedRows, error: incErr } = await supabase
@@ -49,12 +53,25 @@ export async function POST(req: Request) {
 
     if (usageErr) throw usageErr
 
-    const sumExpenses = (rows: any[]) => rows.reduce((sum, p) => {
-      try {
-        const exps = typeof p.expenses === 'string' ? JSON.parse(p.expenses) : p.expenses
-        return sum + (exps || []).reduce((s2: number, e: any) => s2 + (e.total_cost || 0), 0)
-      } catch { return sum }
-    }, 0)
+    const sumExpenses = (
+      rows: { expenses?: unknown; funding_status?: string | null }[]
+    ) =>
+      rows.reduce((sum, p) => {
+        try {
+          const exps =
+            typeof p.expenses === 'string' ? JSON.parse(p.expenses) : p.expenses
+          const list = Array.isArray(exps) ? exps : []
+          return (
+            sum +
+            list.reduce(
+              (s2: number, e: { total_cost?: number }) => s2 + (e.total_cost || 0),
+              0
+            )
+          )
+        } catch {
+          return sum
+        }
+      }, 0)
 
     const committed = sumExpenses((usage || []).filter(u => u.funding_status === 'committed'))
     const pending = sumExpenses((usage || []).filter(u => u.funding_status === 'allocated'))
@@ -101,6 +118,28 @@ export async function POST(req: Request) {
         .eq('id', workplan_id)
       return NextResponse.json({ error: 'Overdrawn due to concurrent updates', remaining }, { status: 409 })
     }
+
+    await emitF123Audit({
+      action: 'f1.pre_assigned',
+      endpoint: 'POST /api/f1/pre-assign',
+      request: req,
+      targetType: 'project',
+      targetId: workplan_id,
+      oldValues: {
+        grant_call_id: wp.grant_call_id ?? null,
+        donor_id: wp.donor_id ?? null,
+        funding_status: wp.funding_status ?? null
+      },
+      newValues: {
+        grant_call_id,
+        donor_id: grantCall?.donor_id || null,
+        funding_status: 'allocated'
+      },
+      metadata: {
+        workplan_amount: workplanAmount,
+        remaining_after: remainingAfter
+      }
+    })
 
     return NextResponse.json({ ok: true, remaining_after: remainingAfter })
   } catch (error) {

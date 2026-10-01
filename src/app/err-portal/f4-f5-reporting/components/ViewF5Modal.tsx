@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
@@ -9,6 +9,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '@/components/ui/table'
 import { FileText } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
+import { useTranslation } from 'react-i18next'
+import {
+  buildF5UpdateComparePayload,
+  payloadCompareKey,
+} from '@/lib/f4f5UpdateCompare'
 
 interface ViewF5ModalProps {
   reportId: string | null
@@ -18,6 +23,8 @@ interface ViewF5ModalProps {
 }
 
 export default function ViewF5Modal({ reportId, open, onOpenChange, onSaved }: ViewF5ModalProps) {
+  const { t } = useTranslation(['projects'])
+  const initialUpdatePayloadKeyRef = useRef<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [data, setData] = useState<any | null>(null)
@@ -53,6 +60,7 @@ export default function ViewF5Modal({ reportId, open, onOpenChange, onSaved }: V
       setDeleteDialogOpen(false)
       setDeletePhrase('')
       setDeleting(false)
+      initialUpdatePayloadKeyRef.current = null
       return 
     }
     ;(async () => {
@@ -65,7 +73,7 @@ export default function ViewF5Modal({ reportId, open, onOpenChange, onSaved }: V
         
         // Initialize draft data
         const report = j.report
-        setSummaryDraft({
+        const summaryDraftInit = {
           report_date: report?.report_date || '',
           reporting_person: report?.reporting_person || '',
           positive_changes: report?.positive_changes || '',
@@ -73,10 +81,10 @@ export default function ViewF5Modal({ reportId, open, onOpenChange, onSaved }: V
           unexpected_results: report?.unexpected_results || '',
           lessons_learned: report?.lessons_learned || '',
           suggestions: report?.suggestions || ''
-        })
+        }
+        setSummaryDraft(summaryDraftInit)
         
-        // Initialize reach draft
-        setReachDraft((j.reach || []).map((r: any) => ({
+        const reachDraftInit = (j.reach || []).map((r: any) => ({
           id: r.id,
           activity_name: r.activity_name || '',
           activity_goal: r.activity_goal || '',
@@ -91,9 +99,18 @@ export default function ViewF5Modal({ reportId, open, onOpenChange, onSaved }: V
           under18_male: r.under18_male ?? null,
           under18_female: r.under18_female ?? null,
           people_with_disabilities: r.people_with_disabilities ?? null
-        })))
+        }))
+        setReachDraft(reachDraftInit)
+
+        initialUpdatePayloadKeyRef.current = payloadCompareKey(
+          buildF5UpdateComparePayload({
+            summaryDraft: summaryDraftInit,
+            reachDraft: reachDraftInit,
+          })
+        )
       } catch {
         setData(null)
+        initialUpdatePayloadKeyRef.current = null
       } finally {
         setLoading(false)
       }
@@ -113,6 +130,18 @@ export default function ViewF5Modal({ reportId, open, onOpenChange, onSaved }: V
 
   const handleSave = async () => {
     if (!reportId || !summaryDraft) return
+    const comparePayload = buildF5UpdateComparePayload({
+      summaryDraft: summaryDraft as Record<string, unknown>,
+      reachDraft: reachDraft as Record<string, unknown>[],
+    })
+    if (
+      initialUpdatePayloadKeyRef.current != null &&
+      payloadCompareKey(comparePayload) === initialUpdatePayloadKeyRef.current
+    ) {
+      alert(t('projects:no_changes_to_save') || 'No changes to save')
+      return
+    }
+
     setSaving(true)
     try {
       const res = await fetch('/api/f5/update', { 
@@ -134,17 +163,18 @@ export default function ViewF5Modal({ reportId, open, onOpenChange, onSaved }: V
       const reloadJson = await reloadRes.json()
       if (reloadRes.ok) {
         setData(reloadJson)
-        const report = reloadJson.report
-        setSummaryDraft({
-          report_date: report?.report_date || '',
-          reporting_person: report?.reporting_person || '',
-          positive_changes: report?.positive_changes || '',
-          negative_results: report?.negative_results || '',
-          unexpected_results: report?.unexpected_results || '',
-          lessons_learned: report?.lessons_learned || '',
-          suggestions: report?.suggestions || ''
-        })
-        setReachDraft((reloadJson.reach || []).map((r: any) => ({
+        const reReport = reloadJson.report
+        const nextSummaryDraft = {
+          report_date: reReport?.report_date || '',
+          reporting_person: reReport?.reporting_person || '',
+          positive_changes: reReport?.positive_changes || '',
+          negative_results: reReport?.negative_results || '',
+          unexpected_results: reReport?.unexpected_results || '',
+          lessons_learned: reReport?.lessons_learned || '',
+          suggestions: reReport?.suggestions || ''
+        }
+        setSummaryDraft(nextSummaryDraft)
+        const nextReach = (reloadJson.reach || []).map((r: any) => ({
           id: r.id,
           activity_name: r.activity_name || '',
           activity_goal: r.activity_goal || '',
@@ -159,7 +189,14 @@ export default function ViewF5Modal({ reportId, open, onOpenChange, onSaved }: V
           under18_male: r.under18_male ?? null,
           under18_female: r.under18_female ?? null,
           people_with_disabilities: r.people_with_disabilities ?? null
-        })))
+        }))
+        setReachDraft(nextReach)
+        initialUpdatePayloadKeyRef.current = payloadCompareKey(
+          buildF5UpdateComparePayload({
+            summaryDraft: nextSummaryDraft,
+            reachDraft: nextReach,
+          })
+        )
       }
     } catch {
       alert('Failed to update F5')

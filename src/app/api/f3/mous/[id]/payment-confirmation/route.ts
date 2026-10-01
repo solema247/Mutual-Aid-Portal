@@ -10,6 +10,7 @@ import {
   assertProjectInGrantAccess,
   isProjectIdInMouScope,
 } from '@/lib/userGrantAccess'
+import { emitF123Audit } from '@/lib/f123Audit'
 
 type RouteContext = { params: { id: string } }
 
@@ -243,7 +244,7 @@ export async function POST(request: Request, { params }: RouteContext) {
       )
     }
 
-    const uploadedFiles = []
+    const uploadedFiles: { id: string; file_path: string }[] = []
     for (const file of files) {
       try {
         const row = await uploadPaymentFile(supabase, {
@@ -257,7 +258,7 @@ export async function POST(request: Request, { params }: RouteContext) {
       } catch (e) {
         console.error('[payment-confirmation POST] file upload', e)
         // Roll back confirmation + any uploaded files if first file fails mid-way
-        const paths = uploadedFiles.map((f: any) => f.file_path).filter(Boolean)
+        const paths = uploadedFiles.map((f) => f.file_path).filter(Boolean)
         if (paths.length) {
           try {
             await supabase.storage.from('images').remove(paths)
@@ -272,6 +273,27 @@ export async function POST(request: Request, { params }: RouteContext) {
         )
       }
     }
+
+    await emitF123Audit({
+      action: 'f3.payment_confirmation_created',
+      endpoint: 'POST /api/f3/mous/[id]/payment-confirmation',
+      request,
+      targetType: 'payment_confirmation',
+      targetId: confirmation.id,
+      newValues: {
+        mou_id: mouId,
+        project_id: projectId,
+        exchange_rate: confirmation.exchange_rate == null ? null : Number(confirmation.exchange_rate),
+        transfer_date: confirmation.transfer_date ?? null,
+        fsp_id: (confirmation as { fsp_id?: string | null }).fsp_id ?? null,
+      },
+      metadata: {
+        mou_id: mouId,
+        project_id: projectId,
+        file_ids: uploadedFiles.map((f) => f.id).filter(Boolean),
+        file_count: uploadedFiles.length,
+      },
+    })
 
     return NextResponse.json({
       success: true,

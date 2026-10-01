@@ -5,6 +5,7 @@ import {
   applyMouInScopeProjectFilter,
   assertMouInGrantAccess,
 } from '@/lib/userGrantAccess'
+import { emitF123Audit } from '@/lib/f123Audit'
 
 export async function POST(
   request: Request,
@@ -97,6 +98,7 @@ export async function POST(
     // Process each F1
     let assignedCount = 0
     const errors: string[] = []
+    const assignedProjectIds: string[] = []
     
     for (const f1 of f1s) {
       try {
@@ -171,6 +173,7 @@ export async function POST(
         // Update grant reference for next iteration
         grant.activities = updatedActivities
         
+        assignedProjectIds.push(String(f1.id))
         assignedCount++
       } catch (error: any) {
         console.error(`Error assigning F1 ${f1.id}:`, error)
@@ -184,6 +187,26 @@ export async function POST(
         details: errors 
       }, { status: 500 })
     }
+    
+    await emitF123Audit({
+      action: 'f3.mou_assigned',
+      endpoint: 'POST /api/f3/mous/[id]/assign',
+      request,
+      targetType: 'mou',
+      targetId: mouId,
+      newValues: {
+        grant_grid_id: grant.id,
+        donor_id: grant.donor_id,
+        status: 'active'
+      },
+      metadata: {
+        project_ids: assignedProjectIds,
+        grant_id,
+        donor_name,
+        mmyy,
+        assigned_count: assignedCount
+      }
+    })
     
     return NextResponse.json({ 
       success: true, 

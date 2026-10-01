@@ -9,6 +9,7 @@ import {
   assertProjectInGrantAccess,
   isProjectIdInMouScope,
 } from '@/lib/userGrantAccess'
+import { emitF123Audit } from '@/lib/f123Audit'
 
 type RouteContext = { params: { id: string; confirmationId: string } }
 
@@ -117,6 +118,28 @@ export async function POST(request: Request, { params }: RouteContext) {
       }
 
       uploaded.push(fileRow)
+    }
+
+    for (const fileRow of uploaded) {
+      await emitF123Audit({
+        action: 'f3.payment_file_added',
+        endpoint: 'POST /api/f3/mous/[id]/payment-confirmation/[confirmationId]/files',
+        request,
+        targetType: 'payment_file',
+        targetId: fileRow?.id ?? null,
+        newValues: {
+          payment_confirmation_id: confirmationId,
+          file_path: fileRow?.file_path ?? null,
+          original_name: fileRow?.original_name ?? null,
+          file_type: fileRow?.file_type ?? null,
+          file_size: fileRow?.file_size ?? null,
+        },
+        metadata: {
+          mou_id: mouId,
+          project_id: confirmation.project_id ?? null,
+          payment_confirmation_id: confirmationId,
+        },
+      })
     }
 
     return NextResponse.json({ success: true, files: uploaded })

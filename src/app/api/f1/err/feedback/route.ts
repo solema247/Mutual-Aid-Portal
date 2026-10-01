@@ -5,6 +5,7 @@ import {
   isErrSubmissionSource
 } from '@/lib/routeHandlerAuth'
 import { assertProjectInRoomAccess } from '@/lib/userRoomAccess'
+import { emitF123Audit } from '@/lib/f123Audit'
 import { z } from 'zod'
 
 const bodySchema = z.object({
@@ -100,6 +101,26 @@ export async function POST (request: Request) {
       console.error(projectError)
       return NextResponse.json({ error: 'Failed to update project' }, { status: 500 })
     }
+
+    await emitF123Audit({
+      action: 'f1.feedback_submitted',
+      actorUserId: auth.dbUser.id,
+      endpoint: 'POST /api/f1/err/feedback',
+      request,
+      targetType: 'project',
+      targetId: project_id,
+      oldValues: {
+        status: project.status ?? null,
+        version: typeof project.version === 'number' ? project.version : null
+      },
+      newValues: {
+        status: newStatus,
+        version: nextVersion
+      },
+      metadata: {
+        feedback_action: action
+      }
+    })
 
     return NextResponse.json({ success: true, feedback_id: feedbackData.id })
   } catch (e: unknown) {

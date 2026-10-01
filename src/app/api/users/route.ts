@@ -9,6 +9,7 @@ import {
   roleAssignmentError,
   type PortalRole,
 } from '@/lib/userAccessRules'
+import { emitUserManagementAudits } from '@/lib/userManagementAudit'
 
 function generateTemporaryPassword(): string {
   // URL-safe, high entropy; not stored in public.users
@@ -203,6 +204,27 @@ export async function POST(request: Request) {
       { status: 500 }
     )
   }
+
+  await emitUserManagementAudits({
+    actorUserId: perm.user.id,
+    targetUserId: userRow.id,
+    endpoint: 'POST /api/users',
+    request,
+    events: [
+      {
+        action: 'user.created',
+        newValues: {
+          display_name: userRow.display_name,
+          role: userRow.role,
+          status: userRow.status,
+          ops_partner_id: userRow.ops_partner_id,
+          err_id: userRow.err_id,
+          can_see_all_states: userRow.can_see_all_states,
+          visible_states: userRow.visible_states,
+        },
+      },
+    ],
+  })
 
   return NextResponse.json(
     {

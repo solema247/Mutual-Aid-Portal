@@ -4,6 +4,27 @@ import { syncProjectEndDateFromF5 } from '@/lib/syncProjectEndDateFromF5'
 import { syncImplementedSectorFromF5 } from '@/lib/activityShift'
 import { translateF5Report, translateF5Reach } from '@/lib/translateHelper'
 import { assertProjectInGrantAccess } from '@/lib/userGrantAccess'
+import { emitF123Audit, pickChangedAuditFields } from '@/lib/f123Audit'
+import {
+  f5ReportAuditTarget,
+  reportF5AuditInsertFailure,
+} from '@/lib/f5ReportAuditTarget'
+import {
+  buildF5UpdateComparePayload,
+  buildF5UpdateComparePayloadFromDb,
+  updatePayloadsEqual,
+} from '@/lib/f4f5UpdateCompare'
+
+const F5_REPORT_AUDIT_KEYS = [
+  'report_date',
+  'positive_changes',
+  'negative_results',
+  'unexpected_results',
+  'lessons_learned',
+  'suggestions',
+  'reporting_person',
+  'language',
+] as const
 
 export async function POST(req: Request) {
   try {
@@ -14,7 +35,9 @@ export async function POST(req: Request) {
     // Get existing report to preserve project_id and other context
     const { data: existingReport, error: fetchErr } = await supabase
       .from('err_program_report')
-      .select('project_id, language')
+      .select(
+        'project_id, language, report_date, positive_changes, negative_results, unexpected_results, lessons_learned, suggestions, reporting_person'
+      )
       .eq('id', report_id)
       .single()
     if (fetchErr) throw fetchErr
@@ -24,6 +47,31 @@ export async function POST(req: Request) {
 
     const scope = await assertProjectInGrantAccess(String(project_id))
     if (!scope.ok) return scope.response
+
+    const { data: priorReachRows, error: priorReachErr } = await supabase
+      .from('err_program_reach')
+      .select(
+        'id, activity_name, activity_goal, category, location, start_date, end_date, individual_count, household_count, male_count, female_count, under18_male, under18_female, people_with_disabilities'
+      )
+      .eq('report_id', report_id)
+    if (priorReachErr) throw priorReachErr
+
+    const incomingCompare = buildF5UpdateComparePayload({
+      summaryDraft: summary as Record<string, unknown>,
+      reachDraft: (Array.isArray(reach) ? reach : []) as Record<string, unknown>[],
+    })
+    const dbCompare = buildF5UpdateComparePayloadFromDb({
+      reportRow: existingReport as Record<string, unknown>,
+      reachRows: (priorReachRows || []) as Record<string, unknown>[],
+    })
+    if (updatePayloadsEqual(incomingCompare, dbCompare)) {
+      return NextResponse.json({ report_id, unchanged: true })
+    }
+
+    const { count: priorReachCount } = await supabase
+      .from('err_program_reach')
+      .select('id', { count: 'exact', head: true })
+      .eq('report_id', report_id)
 
     // Detect language and translate if needed
     const sourceLanguage = summary.language || existingReport?.language || 'en'
@@ -89,7 +137,7 @@ export async function POST(req: Request) {
     const incomingIds = new Set((reach || []).filter((r: any) => r.id).map((r: any) => r.id))
 
     // Update or insert reach activities
-    let reach_ids: string[] = []
+    const reach_ids: string[] = []
     if (Array.isArray(reach) && reach.length) {
       // Translate reach activities if needed
       const { translatedData: translatedReach, originalText: reachOriginalText } = await translateF5Reach(reach, sourceLanguage)
@@ -196,6 +244,59 @@ export async function POST(req: Request) {
     if (!endDateResult.ok) {
       console.warn('F5 update: failed to sync project end_date', endDateResult.error)
     }
+
+    const afterReport = {
+      report_date: cleanDate(translatedSummary.report_date),
+      positive_changes: translatedSummary.positive_changes || null,
+      negative_results: translatedSummary.negative_results || null,
+      unexpected_results: translatedSummary.unexpected_results || null,
+      lessons_learned: translatedSummary.lessons_learned || null,
+      suggestions: translatedSummary.suggestions || null,
+      reporting_person: translatedSummary.reporting_person || null,
+      language: sourceLanguage,
+    }
+    const fieldChanges = pickChangedAuditFields(
+      existingReport as Record<string, unknown>,
+      afterReport as Record<string, unknown>,
+      F5_REPORT_AUDIT_KEYS
+    )
+    const beforeReach = priorReachCount ?? 0
+    const afterReach = reach_ids.length
+    const oldValues: Record<string, unknown> = { ...(fieldChanges?.oldValues ?? {}) }
+    const newValues: Record<string, unknown> = { ...(fieldChanges?.newValues ?? {}) }
+    if (beforeReach !== afterReach || !fieldChanges) {
+      oldValues.reach_line_count = beforeReach
+      newValues.reach_line_count = afterReach
+    }
+
+    const f5AuditTarget = f5ReportAuditTarget(String(project_id))
+    const auditResult = await emitF123Audit({
+      action: 'f5.report_updated',
+      endpoint: 'POST /api/f5/update',
+      request: req,
+      targetType: f5AuditTarget.targetType,
+      targetId: f5AuditTarget.targetId,
+      oldValues,
+      newValues,
+      metadata: {
+        project_id,
+        report_id,
+        reach_count: afterReach,
+        updated_fields: Object.keys(newValues),
+        ...(endDateResult.ok
+          ? { end_date_side_effect: endDateResult.end_date }
+          : {}),
+      },
+    })
+    reportF5AuditInsertFailure(
+      {
+        action: 'f5.report_updated',
+        endpoint: 'POST /api/f5/update',
+        projectId: String(project_id),
+        reportId: report_id,
+      },
+      auditResult
+    )
 
     return NextResponse.json({ report_id, reach_ids })
   } catch (e) {
