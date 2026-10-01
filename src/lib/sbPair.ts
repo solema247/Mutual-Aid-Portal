@@ -123,13 +123,19 @@ async function runSecondary(
   }
 }
 
+export type PairClientsOptions = {
+  /** Primary writes succeed; these tables are not copied to the secondary DB. */
+  skipMirrorTables?: ReadonlySet<string>
+}
+
 function createWriteBuilder(
   primaryBuilder: any,
   secondary: SupabaseClient,
   table: string,
   writeOp: WriteOp,
   payload: unknown,
-  options: unknown
+  options: unknown,
+  skipMirrorTables?: ReadonlySet<string>
 ) {
   const filters: Filter[] = []
   let chain = primaryBuilder
@@ -138,7 +144,7 @@ function createWriteBuilder(
     then(onFulfilled: any, onRejected: any) {
       return Promise.resolve(chain)
         .then(async (result: { data?: unknown; error?: unknown }) => {
-          if (!result?.error) {
+          if (!result?.error && !skipMirrorTables?.has(table)) {
             try {
               let secondaryPayload = payload
               if (
@@ -197,8 +203,10 @@ function createWriteBuilder(
 
 export function pairClients(
   primary: SupabaseClient,
-  secondary: SupabaseClient
+  secondary: SupabaseClient,
+  options?: PairClientsOptions
 ): SupabaseClient {
+  const skipMirrorTables = options?.skipMirrorTables
   return new Proxy(primary, {
     get(target, prop, receiver) {
       if (prop === 'from') {
@@ -226,7 +234,8 @@ export function pairClients(
                     table,
                     key as WriteOp,
                     payload,
-                    options
+                    options,
+                    skipMirrorTables
                   )
                 }
               }
