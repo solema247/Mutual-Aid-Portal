@@ -47,19 +47,19 @@ interface Screening {
   identity_document_file_key: string | null
 }
 
-function committedWithoutClearance(s: Screening) {
-  return s.status === 'pending_screening' && s.funding_status === 'committed'
+function paymentAlreadyCommitted(s: Screening) {
+  return s.funding_status === 'committed' && (s.status === 'pending_screening' || s.status === 'flagged')
+}
+
+function nameNotExtracted(s: Screening) {
+  return s.status === 'pending_screening' && (!s.names || s.names.length === 0)
 }
 
 function StatusBadge({ s }: { s: Screening }) {
-  if (committedWithoutClearance(s)) {
-    return (
-      <Badge variant="destructive" className="text-[10px] px-1.5 py-0 font-semibold">
-        Committed without clearance
-      </Badge>
-    )
-  }
   if (s.status === 'pending_screening') {
+    if (nameNotExtracted(s)) {
+      return <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-amber-500 text-amber-800">Name not extracted</Badge>
+    }
     return <Badge variant="secondary" className="text-[10px] px-1.5 py-0">Pending screening</Badge>
   }
   if (s.status === 'auto_approved') {
@@ -219,7 +219,14 @@ function PaginatedScreeningsTable({
                     {s.total_amount ? s.total_amount.toLocaleString() : '—'}
                   </TableCell>
                   <TableCell className="whitespace-nowrap">
-                    <StatusBadge s={s} />
+                    <div className="flex flex-col gap-0.5 items-start">
+                      <StatusBadge s={s} />
+                      {paymentAlreadyCommitted(s) && (
+                        <Badge variant="destructive" className="text-[10px] px-1.5 py-0 font-semibold">
+                          Payment already committed
+                        </Badge>
+                      )}
+                    </div>
                   </TableCell>
                   <TableCell className="whitespace-nowrap">
                     <Button
@@ -310,6 +317,22 @@ export default function CompliancePage() {
   useEffect(() => {
     fetchQueue()
   }, [fetchQueue])
+
+  // Deep-link from digest email: /err-portal/compliance?screening=<id>
+  useEffect(() => {
+    if (isLoading || screenings.length === 0) return
+    if (typeof window === 'undefined') return
+    const id = new URLSearchParams(window.location.search).get('screening')
+    if (!id) return
+    const match = screenings.find(s => s.id === id)
+    if (match) {
+      setSelected(match)
+      setNote('')
+      setActionError(null)
+      setActionInfo(null)
+      setDialogOpen(true)
+    }
+  }, [isLoading, screenings])
 
   const openDetail = (s: Screening) => {
     setSelected(s)
@@ -471,10 +494,9 @@ export default function CompliancePage() {
     s.flag_type === 'missing_id' &&
     s.finance_review_status === 'id_uploaded'
 
+  // Screening queue = full Ahmad workflow, including committed / name-not-extracted F1s.
   const pending = screenings.filter(
-    s =>
-      (s.status === 'pending_screening' && !committedWithoutClearance(s)) ||
-      awaitingIdClearance(s)
+    s => s.status === 'pending_screening' || awaitingIdClearance(s)
   )
   const financeQueue = screenings.filter(
     s => s.status === 'flagged' && s.finance_review_status === 'pending'
@@ -487,23 +509,13 @@ export default function CompliancePage() {
   )
   const history = screenings.filter(
     s =>
-      !committedWithoutClearance(s) &&
       s.status !== 'pending_screening' &&
       !awaitingIdClearance(s) &&
       !(s.status === 'flagged' && s.finance_review_status === 'pending')
   )
-  const bypassedClearance = screenings
-    .filter(committedWithoutClearance)
-    .slice()
-    .sort((a, b) => {
-      const aTime = Date.parse(a.submitted_at || a.created_at || '') || 0
-      const bTime = Date.parse(b.submitted_at || b.created_at || '') || 0
-      return bTime - aTime
-    })
-  const bypassedClearanceCount = bypassedClearance.length
+  const paymentCommittedCount = pending.filter(paymentAlreadyCommitted).length
 
-  // Allow Clear / Flag even when already committed (retrospective review for
-  // F1s that bypassed the gate — shown on the Without clearance tab).
+  // Same Clear / Flag actions for every pending F1, including already-committed ones.
   const showScreeningActions =
     canScreen &&
     selected != null &&
@@ -562,26 +574,32 @@ export default function CompliancePage() {
         </CardHeader>
         <CardContent>
           <Tabs defaultValue="queue" className="w-full">
-            <TabsList className="grid w-full grid-cols-4">
+            <TabsList className="grid w-full grid-cols-3">
               <TabsTrigger value="queue">
                 Screening queue{pending.length > 0 ? ` (${pending.length})` : ''}
               </TabsTrigger>
               <TabsTrigger value="finance">
                 Finance review{financeQueue.length > 0 ? ` (${financeQueue.length})` : ''}
               </TabsTrigger>
-              <TabsTrigger value="bypassed">
-                Without clearance{bypassedClearanceCount > 0 ? ` (${bypassedClearanceCount})` : ''}
-              </TabsTrigger>
               <TabsTrigger value="history">
                 History
               </TabsTrigger>
             </TabsList>
 
-            <TabsContent value="queue" className="mt-6">
+            <TabsContent value="queue" className="mt-6 space-y-3">
+              {paymentCommittedCount > 0 && (
+                <p className="text-sm text-muted-foreground">
+                  {paymentCommittedCount} F1{paymentCommittedCount === 1 ? '' : 's'} already have{' '}
+                  <span className="font-medium text-red-700">Payment already committed</span> —
+                  review them here with the same Clear / Flag Missing ID flow; they only leave
+                  this queue when moved to History as Cleared.
+                </p>
+              )}
               <PaginatedScreeningsTable
                 rows={pending}
                 emptyText="No F1s waiting for screening"
                 onView={openDetail}
+                showTimelineColumns
               />
             </TabsContent>
 
@@ -590,26 +608,6 @@ export default function CompliancePage() {
                 rows={financeQueue}
                 emptyText="No flagged F1s waiting for finance review"
                 onView={openDetail}
-              />
-            </TabsContent>
-
-            <TabsContent value="bypassed" className="mt-6 space-y-3">
-              <p className="text-sm text-muted-foreground">
-                F1s that were committed at F2 while still pending Ahmed&apos;s screening.
-                Open any row to review payee names and <strong className="font-medium text-foreground">Clear</strong> or{' '}
-                <strong className="font-medium text-foreground">Flag</strong> retrospectively
-                (funding stays committed; a sanctions flag still stops payment).
-                <strong className="font-medium text-foreground"> Raised</strong> is{' '}
-                <code className="text-xs">submitted_at</code>.{' '}
-                <strong className="font-medium text-foreground">Committed</strong> is{' '}
-                <code className="text-xs">committed_at</code> (when F2 set funding_status to committed).
-                Legacy rows committed before this field existed show as unknown.
-              </p>
-              <PaginatedScreeningsTable
-                rows={bypassedClearance}
-                emptyText="No F1s committed without compliance clearance"
-                onView={openDetail}
-                showTimelineColumns
               />
             </TabsContent>
 
@@ -641,11 +639,18 @@ export default function CompliancePage() {
                 </div>
               )}
 
-              {committedWithoutClearance(selected) && (
+              {paymentAlreadyCommitted(selected) && (
                 <div className="rounded-md border border-red-500 bg-red-50 px-3 py-2 text-sm text-red-950">
-                  This F1 was committed at F2 without a compliance Clear or auto-approval.
-                  You can still <strong>Clear</strong> or <strong>Flag</strong> it now — clearing
-                  records retrospective approval; a sanctions flag still stops payment.
+                  <strong>Payment already committed</strong> — funds may already have gone out.
+                  Complete the normal workflow: Clear, or Flag Missing ID → Finance upload → Clear.
+                  A sanctions flag still stops payment.
+                </div>
+              )}
+
+              {nameNotExtracted(selected) && (
+                <div className="rounded-md border border-amber-500 bg-amber-50 px-3 py-2 text-sm text-amber-950">
+                  <strong>Name not extracted</strong> — screen banking details manually, then Clear
+                  or Flag Missing ID as usual.
                 </div>
               )}
 
@@ -659,6 +664,16 @@ export default function CompliancePage() {
 
               <div className="flex items-center gap-2 flex-wrap">
                 <StatusBadge s={selected} />
+                {paymentAlreadyCommitted(selected) && (
+                  <Badge variant="destructive" className="text-[10px] px-1.5 py-0 font-semibold">
+                    Payment already committed
+                  </Badge>
+                )}
+                {selected.names.length > 1 && (
+                  <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                    {selected.names.length} names
+                  </Badge>
+                )}
                 {selected.funding_status && (
                   <Badge variant="outline" className="text-[10px] px-1.5 py-0">
                     {selected.funding_status}

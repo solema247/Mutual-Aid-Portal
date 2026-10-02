@@ -64,7 +64,6 @@ export async function GET(request: Request) {
           emergency_room_id,
           emergency_rooms (err_code, name_ar, name),
           submitted_at,
-          committed_at,
           funding_cycle_id,
           funding_cycles (id, name, year),
           mou_id,
@@ -154,8 +153,8 @@ export async function GET(request: Request) {
         err_code: f1.emergency_rooms?.err_code || null,
         err_name: f1.emergency_rooms?.name_ar || f1.emergency_rooms?.name || null,
         submitted_at: f1.submitted_at,
-        // Prefer real commit stamp; fall back to submitted_at for legacy rows
-        // that were committed before committed_at existed.
+        // Uses committed_at once sql/add_committed_at_to_err_projects.sql is applied;
+        // until then fall back to submitted_at (legacy alias).
         committed_at: f1.committed_at || f1.submitted_at,
         funding_cycle_id: f1.funding_cycle_id,
         funding_cycle_name: f1.funding_cycles?.name || null,

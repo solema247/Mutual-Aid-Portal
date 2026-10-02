@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { requirePermission } from '@/lib/requirePermission'
 import { getComplianceBlockedProjectIds } from '@/lib/compliance'
+import { markProjectsCommitted } from '@/lib/f2Commit'
 
 // POST /api/f2/uncommitted/commit - Commit selected F1s (set funding_status to committed and status to approved)
 export async function POST(request: Request) {
@@ -30,15 +31,10 @@ export async function POST(request: Request) {
       )
     }
 
-    const { error } = await supabase
-      .from('err_projects')
-      .update({
-        funding_status: 'committed',
-        status: 'approved',
-        committed_at: new Date().toISOString(),
-      })
-      .in('id', f1_ids)
-
+    const { error } = await markProjectsCommitted(supabase, f1_ids, {
+      status: 'approved',
+      committedBy: perm.user.email?.trim() || null,
+    })
     if (error) throw error
 
     return NextResponse.json({ success: true, committed_count: f1_ids.length })
@@ -47,5 +43,3 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Failed to commit F1s' }, { status: 500 })
   }
 }
-
-

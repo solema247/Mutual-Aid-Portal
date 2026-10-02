@@ -22,7 +22,7 @@ export async function GET(request: Request) {
     if (countOnly) {
       // Sidebar badge: items that still need Ahmed's attention —
       // pending screening OR missing-ID with ID uploaded awaiting his Clear.
-      // Must have an F1 file, and must not already be past the commit gate.
+      // Committed F1s stay in the workflow until Cleared (retrospective review).
       const { data, error } = await supabase
         .from('compliance_screenings')
         .select(
@@ -44,7 +44,6 @@ export async function GET(request: Request) {
           | undefined
         if (!p) return false
         if (!(p.file_key || p.temp_file_key)) return false
-        if (p.funding_status === 'committed') return false
         if (p.status === 'completed' || p.status === 'declined') return false
         return true
       }).length
@@ -58,9 +57,7 @@ export async function GET(request: Request) {
       console.error('Compliance sweep error:', sweepError)
     }
 
-    let query = supabase
-      .from('compliance_screenings')
-      .select(`
+    const selectWithCommitted = `
         id,
         project_id,
         names,
@@ -80,6 +77,7 @@ export async function GET(request: Request) {
           submitted_at,
           last_modified,
           committed_at,
+          committed_by,
           state,
           locality,
           status,
@@ -93,14 +91,68 @@ export async function GET(request: Request) {
           identity_document_file_key,
           emergency_rooms (err_code, name_ar, name)
         )
-      `)
+      `
+
+    const selectLegacy = `
+        id,
+        project_id,
+        names,
+        status,
+        flag_type,
+        flag_note,
+        alerted_at,
+        screened_at,
+        finance_review_status,
+        finance_review_note,
+        finance_reviewed_at,
+        created_at,
+        err_projects (
+          id,
+          err_id,
+          date,
+          submitted_at,
+          last_modified,
+          state,
+          locality,
+          status,
+          funding_status,
+          banking_details,
+          intended_beneficiaries,
+          project_objectives,
+          expenses,
+          file_key,
+          temp_file_key,
+          identity_document_file_key,
+          emergency_rooms (err_code, name_ar, name)
+        )
+      `
+
+    let query = supabase
+      .from('compliance_screenings')
+      .select(selectWithCommitted)
       .order('created_at', { ascending: false })
 
     if (status) {
       query = query.eq('status', status)
     }
 
-    const { data, error } = await query
+    let data: unknown[] | null = null
+    let error: { message?: string } | null = null
+    {
+      const first = await query
+      data = first.data as unknown[] | null
+      error = first.error
+    }
+    if (error && /committed_at|committed_by/i.test(error.message || '')) {
+      let legacy = supabase
+        .from('compliance_screenings')
+        .select(selectLegacy)
+        .order('created_at', { ascending: false })
+      if (status) legacy = legacy.eq('status', status)
+      const retry = await legacy
+      data = retry.data as unknown[] | null
+      error = retry.error
+    }
     if (error) throw error
 
     type RoomJoin = { err_code?: string | null; name_ar?: string | null; name?: string | null }
@@ -111,6 +163,7 @@ export async function GET(request: Request) {
       submitted_at?: string | null
       last_modified?: string | null
       committed_at?: string | null
+      committed_by?: string | null
       state?: string | null
       locality?: string | null
       status?: string | null
@@ -125,8 +178,23 @@ export async function GET(request: Request) {
       emergency_rooms?: RoomJoin | RoomJoin[] | null
     }
 
-    const formatted = (data || []).map((row) => {
-      const rawProject = row.err_projects as unknown
+    const formatted = (data || []).map((rawRow) => {
+      const row = rawRow as {
+        id: string
+        project_id: string
+        names: string[] | null
+        status: string
+        flag_type: string | null
+        flag_note: string | null
+        alerted_at: string | null
+        screened_at: string | null
+        finance_review_status: string | null
+        finance_review_note: string | null
+        finance_reviewed_at: string | null
+        created_at: string
+        err_projects: unknown
+      }
+      const rawProject = row.err_projects
       const p: ProjectJoin = (Array.isArray(rawProject) ? rawProject[0] : rawProject) || {}
       const rawRoom = p.emergency_rooms as unknown
       const room: RoomJoin = (Array.isArray(rawRoom) ? rawRoom[0] : rawRoom) || {}
@@ -157,6 +225,7 @@ export async function GET(request: Request) {
         submitted_at: p.submitted_at || null,
         last_modified: p.last_modified || null,
         committed_at: p.committed_at || null,
+        committed_by: p.committed_by || null,
         state: p.state || null,
         locality: p.locality || null,
         project_status: p.status || null,
@@ -171,18 +240,13 @@ export async function GET(request: Request) {
       }
     })
 
-    // Visibility rules (Ahmed feedback):
+    // Visibility rules (end-to-end lifecycle):
     // 1) Always require an F1 document (file_key, with temp_file_key fallback).
-    // 2) Active work should not include projects that already committed or are
-    //    completed/declined. Active = pending screening, pending finance review,
-    //    or missing-ID with ID uploaded awaiting Ahmed's Clear.
-    // 3) Exception: pending_screening + committed stays visible so the
-    //    "Without clearance" tab can list F1s committed without a Clear.
+    // 2) Active work stays visible until Cleared — including committed / FSP paid
+    //    F1s (retrospective "Payment already committed" review).
+    // 3) Declined/completed projects drop out of active work only.
     const visible = formatted.filter((r) => {
       if (!(r.f1_file_key || r.temp_file_key)) return false
-      const committedWithoutClearance =
-        r.status === 'pending_screening' && r.funding_status === 'committed'
-      if (committedWithoutClearance) return true
       const isActiveWork =
         r.status === 'pending_screening' ||
         (r.status === 'flagged' && r.finance_review_status === 'pending') ||
@@ -190,7 +254,6 @@ export async function GET(request: Request) {
           r.flag_type === 'missing_id' &&
           r.finance_review_status === 'id_uploaded')
       if (isActiveWork) {
-        if (r.funding_status === 'committed') return false
         if (r.project_status === 'completed' || r.project_status === 'declined') return false
       }
       return true

@@ -40,16 +40,7 @@ export function normalizedNameKey(name: string): string {
  * Combined EN+AR "alpha" key: the English key and the Arabic key joined into a
  * single identity for one beneficiary (e.g. "ahmed:1|ali:1::احمد:1|علي:1").
  *
- * This is the most precise, discrepancy-proof match because it requires BOTH the
- * English and Arabic name to line up — it also disambiguates Arabic names that
- * share the same token multiset in a different order.
- *
- * NOTE: it is intentionally NOT yet used for live screening. Incoming F1 banking
- * details currently carry only ONE language (~97% English), so a combined key
- * cannot be built at screening time and would flag every payee for manual review.
- * We keep it here, ready to switch on once the F1 intake captures a structured
- * English AND Arabic beneficiary name (with a single-language fallback). Until
- * then screening stays per-language (see ensureScreeningsForProjects).
+ * NOTE: not yet used for live screening — F1 banking details usually carry one language.
  */
 export function combinedNameKey(nameEn: string, nameAr: string): string | null {
   const keyEn = normalizedNameKey(nameEn)
@@ -99,7 +90,9 @@ export function extractNamesFromBanking(text: string | null | undefined): string
 /**
  * Ensure a compliance screening row exists for each given project.
  * Projects whose extracted names are all on the approved_beneficiaries
- * whitelist are auto-approved; everything else lands in the pending queue.
+ * whitelist are auto-approved; everything else lands in the pending queue —
+ * including F1s with blank banking details or zero extracted names
+ * ("Name not extracted") and F1s with multiple payee names (one row listing all).
  *
  * Idempotent: projects that already have a screening are skipped
  * (compliance_screenings.project_id is unique).
@@ -108,10 +101,9 @@ export async function ensureScreeningsForProjects(
   supabase: SupabaseClient,
   projects: Array<{ id: string; banking_details: string | null }>
 ): Promise<{ created: number }> {
-  const candidates = projects.filter(p => (p.banking_details || '').trim().length > 0)
-  if (candidates.length === 0) return { created: 0 }
+  if (projects.length === 0) return { created: 0 }
 
-  const ids = candidates.map(p => p.id)
+  const ids = projects.map(p => p.id)
   const existing = new Set<string>()
   for (let i = 0; i < ids.length; i += 200) {
     const chunk = ids.slice(i, i + 200)
@@ -123,7 +115,7 @@ export async function ensureScreeningsForProjects(
     for (const row of data || []) existing.add(row.project_id)
   }
 
-  const missing = candidates.filter(p => !existing.has(p.id))
+  const missing = projects.filter(p => !existing.has(p.id))
   if (missing.length === 0) return { created: 0 }
 
   // Collect normalized keys across all missing projects for one whitelist lookup
@@ -145,6 +137,7 @@ export async function ensureScreeningsForProjects(
   }
 
   const rows = extracted.map(({ project, names, keys }) => {
+    // Empty names never auto-approve — they must go through Ahmad (Name not extracted).
     const autoApproved = names.length > 0 && keys.every(k => approvedKeys.has(k))
     return {
       id: crypto.randomUUID(),
@@ -163,9 +156,9 @@ export async function ensureScreeningsForProjects(
 }
 
 /**
- * Sweep err_projects that have banking details but no screening yet and
- * create screenings for them. Covers F1s created outside portal API routes
- * (ERR App submissions, legacy client-side inserts) and acts as the backfill.
+ * Sweep err_projects that still need a compliance screening and create rows.
+ * Includes committed F1s (retrospective review) and projects with blank
+ * banking details (Name not extracted). Declined/completed stay excluded.
  */
 export async function sweepUnscreenedProjects(
   supabase: SupabaseClient
@@ -181,16 +174,16 @@ export async function sweepUnscreenedProjects(
   for (let start = 0; ; start += pageSize) {
     const { data, error } = await supabase
       .from('err_projects')
-      .select('id, banking_details, funding_status, status')
-      .not('banking_details', 'is', null)
+      .select('id, banking_details, funding_status, status, file_key, temp_file_key')
       .range(start, start + pageSize - 1)
     if (error) throw error
     const page = data || []
     for (const row of page) {
-      // Committed F1s already passed the gate; declined/completed ones
-      // will never commit — don't queue either retroactively
-      if (row.funding_status === 'committed') continue
       if (row.status === 'declined' || row.status === 'completed') continue
+      // Prefer F1s that have a document (or banking text) so the queue is actionable
+      const hasDoc = Boolean(row.file_key || row.temp_file_key)
+      const hasBanking = Boolean((row.banking_details || '').trim())
+      if (!hasDoc && !hasBanking) continue
       if (!screenedIds.has(row.id)) {
         unscreened.push({ id: row.id, banking_details: row.banking_details })
       }
@@ -242,4 +235,13 @@ export async function getComplianceBlockedProjectIds(
     }
   }
   return blocked
+}
+
+/** True when payment is already committed and compliance is still open. */
+export function isPaymentAlreadyCommitted(s: {
+  status: string
+  funding_status?: string | null
+}): boolean {
+  if (s.funding_status !== 'committed') return false
+  return s.status === 'pending_screening' || s.status === 'flagged'
 }
