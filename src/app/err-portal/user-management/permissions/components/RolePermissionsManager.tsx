@@ -65,6 +65,7 @@ const MODULE_ORDER = [
 const ROLE_TAB_IDS = [
   'base_err',
   'state_err',
+  'partner',
   'admin',
   'superadmin',
   'support',
