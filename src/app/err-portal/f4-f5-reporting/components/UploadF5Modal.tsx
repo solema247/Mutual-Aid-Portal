@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { supabase } from '@/lib/supabaseClient'
+import { useBaseErrRoomId } from '@/lib/useBaseErrRoom'
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '@/components/ui/table'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { CollapsibleRow } from '@/components/ui/collapsible'
@@ -45,6 +46,7 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved, initialProj
     cursor: 'text',
   }
 
+  const { lockedRoomId, loading: baseErrRoomLoading } = useBaseErrRoomId()
   const [states, setStates] = useState<string[]>([])
   const [selectedState, setSelectedState] = useState('')
   const [rooms, setRooms] = useState<Array<{ id: string; label: string }>>([])
@@ -413,7 +415,23 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved, initialProj
     })()
   }, [open, initialProjectId])
 
+  // Base ERR is locked to its own room: never load rooms by state
   useEffect(() => {
+    if (!open || !lockedRoomId) return
+    ;(async () => {
+      const { data } = await supabase
+        .from('emergency_rooms')
+        .select('id, name, name_ar, err_code')
+        .eq('id', lockedRoomId)
+        .maybeSingle()
+      const room = data as { id: string; name?: string | null; name_ar?: string | null; err_code?: string | null } | null
+      setRooms(room ? [{ id: room.id, label: room.name || room.name_ar || room.err_code || room.id }] : [])
+      setSelectedRoomId(lockedRoomId)
+    })()
+  }, [open, lockedRoomId])
+
+  useEffect(() => {
+    if (lockedRoomId) return
     if (!selectedState) { 
       if (!isRestoringRef.current) {
         setRooms([]); 
@@ -444,7 +462,7 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved, initialProj
         setProjectId('')
       }
     })()
-  }, [selectedState])
+  }, [selectedState, lockedRoomId])
 
   useEffect(() => {
     if (!selectedRoomId) { 
@@ -856,7 +874,7 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved, initialProj
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <div className="space-y-1">
                 <Label>{t('f5.modal.state')}</Label>
-                <Select value={selectedState} onValueChange={(v)=>{ setSelectedState(v); }}>
+                <Select value={selectedState} onValueChange={(v)=>{ setSelectedState(v); }} disabled={baseErrRoomLoading || Boolean(lockedRoomId)}>
                   <SelectTrigger className="w-full"><SelectValue placeholder={t('f5.modal.state_placeholder') as string} /></SelectTrigger>
                   <SelectContent>
                     {states.map(s => (
@@ -867,7 +885,11 @@ export default function UploadF5Modal({ open, onOpenChange, onSaved, initialProj
               </div>
               <div className="space-y-1">
                 <Label>{t('f5.modal.err')}</Label>
-                <Select value={selectedRoomId} onValueChange={(v)=>{ setSelectedRoomId(v); }} disabled={!selectedState}>
+                <Select
+                  value={selectedRoomId}
+                  onValueChange={(v)=>{ setSelectedRoomId(v); }}
+                  disabled={baseErrRoomLoading || Boolean(lockedRoomId) || !selectedState}
+                >
                   <SelectTrigger className="w-full"><SelectValue placeholder={t('f5.modal.err_placeholder') as string} /></SelectTrigger>
                   <SelectContent>
                     {rooms.map(r => (

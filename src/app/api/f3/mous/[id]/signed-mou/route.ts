@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
+import { assertMouInGrantAccess } from '@/lib/userGrantAccess'
+import { emitF123Audit } from '@/lib/f123Audit'
 
 // POST /api/f3/mous/[id]/signed-mou - Upload signed MOU file
 export async function POST(
@@ -9,6 +11,10 @@ export async function POST(
   try {
     const supabase = getSupabaseRouteClient()
     const { id: mouId } = params
+
+    const mouScope = await assertMouInGrantAccess(mouId)
+    if (!mouScope.ok) return mouScope.response
+
     const formData = await request.formData()
     const file = formData.get('file') as File
     
@@ -39,6 +45,12 @@ export async function POST(
       )
     }
 
+    const { data: mouBefore } = await supabase
+      .from('mous')
+      .select('signed_mou_file_key')
+      .eq('id', mouId)
+      .maybeSingle()
+
     // Update MOU record with file path
     const { error: updateError } = await supabase
       .from('mous')
@@ -52,6 +64,16 @@ export async function POST(
         { status: 500 }
       )
     }
+
+    await emitF123Audit({
+      action: 'f3.signed_mou_uploaded',
+      endpoint: 'POST /api/f3/mous/[id]/signed-mou',
+      request,
+      targetType: 'mou',
+      targetId: mouId,
+      oldValues: { signed_mou_file_key: mouBefore?.signed_mou_file_key ?? null },
+      newValues: { signed_mou_file_key: filePath }
+    })
 
     return NextResponse.json({ success: true, file_path: filePath })
   } catch (error) {

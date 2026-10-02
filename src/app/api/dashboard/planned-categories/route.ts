@@ -1,6 +1,14 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { getUserStateAccess } from '@/lib/userStateAccess'
+import {
+  chunkGrantScopeIds,
+  getUserGrantAccess,
+} from '@/lib/userGrantAccess'
+import {
+  applyEmergencyRoomIdFilter,
+  getUserRoomAccess,
+} from '@/lib/userRoomAccess'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -64,31 +72,92 @@ function parseJsonArray(raw: unknown): any[] {
 export async function GET(request: Request) {
   try {
     const supabase = getSupabaseRouteClient()
-    const { allowedStateNames } = await getUserStateAccess()
+    const [{ allowedStateNames }, grantAccess, roomAccess] = await Promise.all([
+      getUserStateAccess(),
+      getUserGrantAccess(),
+      getUserRoomAccess(),
+    ])
+
+    if (roomAccess.mode === 'none') {
+      return NextResponse.json(
+        { projectCount: 0, categories: [] },
+        { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } }
+      )
+    }
+
     const { searchParams } = new URL(request.url)
     const from = searchParams.get('from')
     const to = searchParams.get('to')
 
-    const data = await fetchAllPages((rangeFrom, rangeTo) => {
+    const projectSelect = 'date, state, planned_activities, source'
+    let data: PlannedCategoriesRow[] = []
+
+    if (roomAccess.mode === 'room') {
       let query = supabase
         .from('err_projects')
-        .select('date, state, planned_activities, source')
+        .select(projectSelect)
         .in('status', ['approved', 'active', 'pending', 'completed'])
         .eq('source', 'mutual_aid_portal')
-        .order('id', { ascending: true })
-        .range(rangeFrom, rangeTo)
+      query = applyEmergencyRoomIdFilter(query, roomAccess)
+      if (from) query = query.gte('date', from)
+      if (to) query = query.lte('date', to)
+      const { data: rows, error } = await query
+      if (error) {
+        console.error('Dashboard planned-categories error:', error)
+        return NextResponse.json(
+          { error: 'Failed to load planned categories' },
+          { status: 500, headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } }
+        )
+      }
+      data = (rows || []) as PlannedCategoriesRow[]
+    } else if (grantAccess.mode === 'none') {
+      return NextResponse.json(
+        { projectCount: 0, categories: [] },
+        { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } }
+      )
+    } else if (grantAccess.mode === 'partner') {
+      // Partner: grant_grid_id only — do not apply state scope
+      for (const batch of chunkGrantScopeIds(grantAccess.grantGridIds)) {
+        let query = supabase
+          .from('err_projects')
+          .select(projectSelect)
+          .in('status', ['approved', 'active', 'pending', 'completed'])
+          .eq('source', 'mutual_aid_portal')
+          .in('grant_grid_id', batch)
+        if (from) query = query.gte('date', from)
+        if (to) query = query.lte('date', to)
+        const { data: batchData, error } = await query
+        if (error) {
+          console.error('Dashboard planned-categories error:', error)
+          return NextResponse.json(
+            { error: 'Failed to load planned categories' },
+            { status: 500, headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } }
+          )
+        }
+        if (batchData?.length) data.push(...(batchData as PlannedCategoriesRow[]))
+      }
+    } else {
+      data = await fetchAllPages((rangeFrom, rangeTo) => {
+        let query = supabase
+          .from('err_projects')
+          .select(projectSelect)
+          .in('status', ['approved', 'active', 'pending', 'completed'])
+          .eq('source', 'mutual_aid_portal')
+          .order('id', { ascending: true })
+          .range(rangeFrom, rangeTo)
 
-      if (allowedStateNames !== null && allowedStateNames.length > 0) {
-        query = query.in('state', allowedStateNames)
-      }
-      if (from) {
-        query = query.gte('date', from)
-      }
-      if (to) {
-        query = query.lte('date', to)
-      }
-      return query
-    })
+        if (allowedStateNames !== null && allowedStateNames.length > 0) {
+          query = query.in('state', allowedStateNames)
+        }
+        if (from) {
+          query = query.gte('date', from)
+        }
+        if (to) {
+          query = query.lte('date', to)
+        }
+        return query
+      })
+    }
 
     const byCategory = new Map<
       string,

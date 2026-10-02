@@ -4,12 +4,17 @@ import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { translateF4Summary, translateF4Expenses } from '@/lib/translateHelper'
 import { inferF4SourceLanguage, normalizePaymentDateForDb } from '@/lib/f4SaveNormalize'
 import { fetchF4SectorsForMatch, normalizeF4ExpenseActivitiesToSectors } from '@/lib/f4ExpenseSectors'
+import { assertProjectInGrantAccess } from '@/lib/userGrantAccess'
+import { emitF123Audit } from '@/lib/f123Audit'
 
 export async function POST(req: Request) {
   try {
     const supabase = getSupabaseRouteClient()
     const { project_id, summary, expenses, file_key_temp, uploaded_by } = await req.json()
     if (!project_id || !summary) return NextResponse.json({ error: 'project_id and summary required' }, { status: 400 })
+
+    const scope = await assertProjectInGrantAccess(String(project_id))
+    if (!scope.ok) return scope.response
 
     // Check if this is a historical project from activities_raw_import
     const isHistorical = String(project_id).startsWith('historical_')
@@ -213,22 +218,55 @@ export async function POST(req: Request) {
     }
 
     // Mark F4 partial after upload; leave completed unchanged so re-edits do not demote
+    let f4StatusSideEffect: { from: string | null; to: string } | null = null
     if (actual_project_id) {
       const { data: proj } = await supabase
         .from('err_projects')
         .select('f4_status')
         .eq('id', actual_project_id)
         .maybeSingle()
-      const nextStatus = statusAfterUpload(proj?.f4_status)
+      const prevF4 = (proj?.f4_status as string | null) ?? null
+      const nextStatus = statusAfterUpload(prevF4)
       if (nextStatus) {
         const statusResult = await applyReportingStatusUpdates(supabase, actual_project_id, {
           f4_status: nextStatus,
         })
         if (!statusResult.ok) {
           console.warn('F4 save: failed to update reporting status', statusResult.error)
+        } else {
+          f4StatusSideEffect = { from: prevF4, to: nextStatus }
         }
       }
     }
+
+    // target_id must be UUID (audit_logs.target_id); numeric summary id lives in metadata.summary_id
+    await emitF123Audit({
+      action: 'f4.report_created',
+      endpoint: 'POST /api/f4/save',
+      request: req,
+      targetType: 'f4_summary',
+      targetId: actual_project_id,
+      newValues: {
+        summary_id: summary_id,
+        expense_count: expense_ids.length,
+        total_grant: translatedSummary.total_grant ?? null,
+        total_expenses: translatedSummary.total_expenses ?? null,
+        total_expenses_sdg: translatedSummary.total_expenses_sdg ?? null,
+        remainder: translatedSummary.remainder ?? null,
+        report_date: translatedSummary.report_date || null,
+      },
+      metadata: {
+        project_id: actual_project_id,
+        summary_id,
+        expense_count: expense_ids.length,
+        historical: isHistorical,
+        activities_raw_import_id: activities_raw_import_id,
+        has_attachment: Boolean(file_key_temp),
+        ...(f4StatusSideEffect
+          ? { f4_status_side_effect: f4StatusSideEffect }
+          : {}),
+      },
+    })
 
     return NextResponse.json({ summary_id, expense_ids })
   } catch (e) {

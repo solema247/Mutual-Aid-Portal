@@ -1,6 +1,11 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { normalizeProjectDonorToGrantId } from '@/lib/normalizeGrantId'
+import {
+  applyGrantGridIdFilter,
+  chunkGrantScopeIds,
+  getUserGrantAccess,
+} from '@/lib/userGrantAccess'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -60,6 +65,77 @@ function activitySerialsFromJsonb(activities: unknown): string[] {
 export async function GET() {
   try {
     const supabase = getSupabaseRouteClient()
+    const grantAccess = await getUserGrantAccess()
+    if (grantAccess.mode === 'none') {
+      return NextResponse.json([], { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } })
+    }
+    if (grantAccess.mode === 'partner') {
+      const grantMeta = new Map<string, { grant_id: string; project_name: string | null }>()
+      for (const batch of chunkGrantScopeIds(grantAccess.grantGridIds)) {
+        const { data, error } = await supabase
+          .from('grants_grid_view')
+          .select('id, grant_id, project_name')
+          .in('id', batch)
+        if (error) throw error
+        for (const row of data || []) {
+          const grantId = row.grant_id != null ? String(row.grant_id).trim() : ''
+          if (!row.id || !grantId) continue
+          grantMeta.set(String(row.id), { grant_id: grantId, project_name: row.project_name ?? null })
+        }
+      }
+
+      const assignedByGrant = new Map<string, number>()
+      const nameByGrant = new Map<string, string | null>()
+      for (const meta of grantMeta.values()) {
+        if (!assignedByGrant.has(meta.grant_id)) assignedByGrant.set(meta.grant_id, 0)
+        if (!nameByGrant.has(meta.grant_id)) nameByGrant.set(meta.grant_id, meta.project_name)
+      }
+
+      for (const batch of chunkGrantScopeIds(grantAccess.grantGridIds)) {
+        let from = 0
+        const pageSize = 1000
+        while (true) {
+          let query = supabase
+            .from('err_projects')
+            .select('expenses, grant_grid_id')
+          query = applyGrantGridIdFilter(query, { ...grantAccess, grantGridIds: batch })
+          const { data, error } = await query.range(from, from + pageSize - 1)
+          if (error) throw error
+          if (!data?.length) break
+          for (const p of data) {
+            const meta = p.grant_grid_id ? grantMeta.get(String(p.grant_grid_id)) : undefined
+            if (!meta) continue
+            let amount = 0
+            try {
+              const exps = typeof p.expenses === 'string' ? JSON.parse(p.expenses) : p.expenses
+              amount = (exps || []).reduce((sum: number, e: { total_cost?: number }) => sum + (e?.total_cost || 0), 0)
+            } catch {
+              amount = 0
+            }
+            assignedByGrant.set(meta.grant_id, (assignedByGrant.get(meta.grant_id) || 0) + amount)
+          }
+          if (data.length < pageSize) break
+          from += pageSize
+        }
+      }
+
+      const rows = Array.from(assignedByGrant.entries())
+        .map(([grantId, assigned]) => ({
+          donor_id: null,
+          donor_name: null,
+          grant_id: grantId,
+          grant_call_name: nameByGrant.get(grantId) || grantId,
+          project_name: nameByGrant.get(grantId) || grantId,
+          included: 0,
+          historical: 0,
+          assigned,
+          remaining: 0,
+        }))
+        .sort((a, b) => (a.grant_id || '').localeCompare(b.grant_id || ''))
+
+      return NextResponse.json(rows, { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } })
+    }
+
 
     // Canonical grants (not Airtable FDW) — FDW vault is unreliable on prod
     const grants = await fetchAllRows<{

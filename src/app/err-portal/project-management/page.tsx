@@ -13,15 +13,19 @@ function ProjectManagementFallback() {
 export default function ProjectManagementPage() {
   const { t } = useTranslation(['projects', 'err'])
   const router = useRouter()
-  const { can } = useAllowedFunctions()
+  const { can, isLoading: permissionsLoading } = useAllowedFunctions()
   const canViewPage = can('management_view_page')
 
   useEffect(() => {
+    if (permissionsLoading) return
     if (!canViewPage) {
       router.replace('/err-portal')
     }
-  }, [canViewPage, router])
+  }, [permissionsLoading, canViewPage, router])
 
+  if (permissionsLoading) {
+    return <div className="py-12 text-center text-muted-foreground">Loading…</div>
+  }
   if (!canViewPage) return null
 
   return (

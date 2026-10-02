@@ -12,7 +12,6 @@ import { Label } from '@/components/ui/label'
 import { RefreshCw, ChevronRight, CheckCircle, Download } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { normalizeProjectDonorToGrantId } from '@/lib/normalizeGrantId'
-import { supabase } from '@/lib/supabaseClient'
 import {
   SmartFilter,
   getProjectManagementFilterFields,
@@ -108,16 +107,14 @@ export default function ProjectManagement() {
 
   const fetchGrants = async () => {
     try {
-      const { data, error } = await supabase
-        .from('grants_grid_view')
-        .select('id, grant_id, donor_name, project_name')
-        .order('grant_id', { ascending: true })
-      
-      if (error) throw error
-      
+      // Use scoped grants API (Partner sees only own grants; others unchanged)
+      const res = await fetch('/api/grants?status=all', { cache: 'no-store' })
+      if (!res.ok) throw new Error('Failed to fetch grants')
+      const data = await res.json()
+
       // Get unique grants (group by grant_id and donor_name)
       const uniqueGrants = new Map<string, { id: string; grant_id: string; donor_name: string; project_name: string | null }>()
-      ;(data || []).forEach((grant: any) => {
+      ;(Array.isArray(data) ? data : []).forEach((grant: any) => {
         const key = `${grant.grant_id}|${grant.donor_name}`
         if (!uniqueGrants.has(key)) {
           uniqueGrants.set(key, {

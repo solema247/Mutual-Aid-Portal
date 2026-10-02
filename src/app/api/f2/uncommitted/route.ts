@@ -3,6 +3,30 @@ import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { getUserStateAccess } from '@/lib/userStateAccess'
 import { requirePermission } from '@/lib/requirePermission'
 import { getComplianceBlockedProjectIds } from '@/lib/compliance'
+import {
+  applyGrantGridIdFilter,
+  assertProjectInGrantAccess,
+  assertProjectsInGrantAccess,
+  getUserGrantAccess,
+} from '@/lib/userGrantAccess'
+import { getUserRoomAccess } from '@/lib/userRoomAccess'
+import { emitF123Audit, pickChangedAuditFields } from '@/lib/f123Audit'
+
+const F2_PATCH_AUDIT_SELECT =
+  'expenses, grant_call_id, approval_file_key, donor_id, funding_cycle_id, grant_serial_id, workplan_number, cycle_state_allocation_id, grant_id, file_key'
+
+// Audit payloads never carry raw expense line items — only how many lines exist.
+function expensesLineCount(value: unknown): number | null {
+  let parsed: unknown = value
+  if (typeof value === 'string') {
+    try {
+      parsed = JSON.parse(value)
+    } catch {
+      return null
+    }
+  }
+  return Array.isArray(parsed) ? parsed.length : null
+}
 
 const PAGE_SIZE = 1000
 
@@ -40,8 +64,19 @@ export async function GET(request: Request) {
       dateTo = `${y}-${String(m).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
     }
 
-    // Get user's state access rights
-    const { allowedStateNames } = await getUserStateAccess()
+    const [{ allowedStateNames }, grantAccess, roomAccess] = await Promise.all([
+      getUserStateAccess(),
+      getUserGrantAccess(),
+      getUserRoomAccess(),
+    ])
+
+    if (roomAccess.mode === 'none') {
+      return NextResponse.json([])
+    }
+
+    if (roomAccess.mode !== 'room' && grantAccess.mode === 'none') {
+      return NextResponse.json([])
+    }
 
     const data = await fetchAllRows<any>(() => {
       let query = supabase
@@ -63,12 +98,18 @@ export async function GET(request: Request) {
           approval_file_key,
           temp_file_key,
           grant_id,
-          grant_segment
+          grant_segment,
+          grant_grid_id
         `)
         .eq('status', 'pending')
         .order('submitted_at', { ascending: false })
 
-      if (allowedStateNames !== null && allowedStateNames.length > 0) {
+      // Base ERR: emergency_room_id only. Partner: grant_grid_id only (never state scope).
+      if (roomAccess.mode === 'room') {
+        query = query.eq('emergency_room_id', roomAccess.emergencyRoomId)
+      } else if (grantAccess.mode === 'partner') {
+        query = applyGrantGridIdFilter(query, grantAccess)
+      } else if (allowedStateNames !== null && allowedStateNames.length > 0) {
         query = query.in('state', allowedStateNames)
       }
       if (state) {
@@ -159,6 +200,9 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: 'F1 ID is required' }, { status: 400 })
     }
 
+    const scope = await assertProjectInGrantAccess(String(id))
+    if (!scope.ok) return scope.response
+
     // Require f2_upload_approval when updating approval_file_key
     if (approval_file_key !== undefined) {
       const perm = await requirePermission('f2_upload_approval')
@@ -186,12 +230,61 @@ export async function PATCH(request: Request) {
     if (grant_id !== undefined) updateData.grant_id = grant_id
     if (file_key !== undefined) updateData.file_key = file_key
 
+    const { data: currentRow } = await supabase
+      .from('err_projects')
+      .select(F2_PATCH_AUDIT_SELECT)
+      .eq('id', id)
+      .maybeSingle()
+
     const { error } = await supabase
       .from('err_projects')
       .update(updateData)
       .eq('id', id)
 
     if (error) throw error
+
+    const current = (currentRow ?? {}) as Record<string, unknown>
+    const isApprovalFileOnly = approval_file_key !== undefined && !isEditUpdate
+
+    if (isApprovalFileOnly) {
+      await emitF123Audit({
+        action: 'f2.approval_file_attached',
+        endpoint: 'PATCH /api/f2/uncommitted',
+        request,
+        targetType: 'project',
+        targetId: String(id),
+        oldValues: { approval_file_key: current.approval_file_key ?? null },
+        newValues: { approval_file_key: approval_file_key ?? null }
+      })
+    } else {
+      const auditKeys: string[] = []
+      const beforeAudit: Record<string, unknown> = {}
+      const afterAudit: Record<string, unknown> = {}
+      for (const key of Object.keys(updateData)) {
+        if (key === 'expenses') {
+          auditKeys.push('expenses_line_count')
+          beforeAudit.expenses_line_count = expensesLineCount(current.expenses)
+          afterAudit.expenses_line_count = expensesLineCount(updateData.expenses)
+          continue
+        }
+        auditKeys.push(key)
+        beforeAudit[key] = current[key] ?? null
+        afterAudit[key] = updateData[key] ?? null
+      }
+      const changes = pickChangedAuditFields(beforeAudit, afterAudit, auditKeys)
+      if (changes) {
+        await emitF123Audit({
+          action: 'f2.project_updated',
+          endpoint: 'PATCH /api/f2/uncommitted',
+          request,
+          targetType: 'project',
+          targetId: String(id),
+          oldValues: changes.oldValues,
+          newValues: changes.newValues,
+          metadata: { updated_fields: Object.keys(changes.newValues) }
+        })
+      }
+    }
 
     return NextResponse.json({ success: true })
   } catch (error) {
@@ -209,6 +302,9 @@ export async function POST(request: Request) {
     if (!f1_ids || !Array.isArray(f1_ids) || f1_ids.length === 0) {
       return NextResponse.json({ error: 'F1 IDs array is required' }, { status: 400 })
     }
+
+    const scope = await assertProjectsInGrantAccess(f1_ids.map(String))
+    if (!scope.ok) return scope.response
 
     // Compliance gate: flagged F1s need finance approval before commit
     const blocked = await getComplianceBlockedProjectIds(supabase, f1_ids)
@@ -254,6 +350,9 @@ export async function DELETE(request: Request) {
     if (!id) {
       return NextResponse.json({ error: 'F1 ID is required' }, { status: 400 })
     }
+
+    const scope = await assertProjectInGrantAccess(String(id))
+    if (!scope.ok) return scope.response
 
     // First, fetch the project to get file keys for cleanup
     const { data: project, error: fetchError } = await supabase
@@ -301,6 +400,24 @@ export async function DELETE(request: Request) {
       .eq('id', id)
 
     if (deleteError) throw deleteError
+
+    await emitF123Audit({
+      action: 'f2.project_deleted',
+      actorUserId: perm.user.id,
+      endpoint: 'DELETE /api/f2/uncommitted',
+      request,
+      targetType: 'project',
+      targetId: String(id),
+      oldValues: {
+        status: project.status ?? null,
+        funding_status: project.funding_status ?? null,
+        approval_file_key: project.approval_file_key ?? null,
+        temp_file_key: project.temp_file_key ?? null
+      },
+      metadata: {
+        deleted_file_count: filesToDelete.length
+      }
+    })
 
     return NextResponse.json({ success: true })
   } catch (error) {

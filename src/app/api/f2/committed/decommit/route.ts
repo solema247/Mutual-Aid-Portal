@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { requirePermission } from '@/lib/requirePermission'
+import { assertProjectInGrantAccess } from '@/lib/userGrantAccess'
+import { emitF123Audit } from '@/lib/f123Audit'
 
 // POST /api/f2/committed/decommit - Move a committed project back to uncommitted (only if not in an MOU)
 export async function POST(request: Request) {
@@ -15,9 +17,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Project ID is required' }, { status: 400 })
     }
 
+    const scope = await assertProjectInGrantAccess(String(id))
+    if (!scope.ok) return scope.response
+
     const { data: project, error: fetchError } = await supabase
       .from('err_projects')
-      .select('id, funding_status, mou_id')
+      .select('id, funding_status, mou_id, status')
       .eq('id', id)
       .single()
 
@@ -46,6 +51,23 @@ export async function POST(request: Request) {
       funding_status: 'unassigned',
     })
     if (updateError) throw updateError
+
+    await emitF123Audit({
+      action: 'f2.decommitted',
+      actorUserId: perm.user.id,
+      endpoint: 'POST /api/f2/committed/decommit',
+      request,
+      targetType: 'project',
+      targetId: String(id),
+      oldValues: {
+        status: project.status ?? null,
+        funding_status: project.funding_status ?? null
+      },
+      newValues: {
+        status: 'pending',
+        funding_status: 'unassigned'
+      }
+    })
 
     return NextResponse.json({ success: true })
   } catch (error) {

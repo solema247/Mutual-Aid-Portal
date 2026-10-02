@@ -725,6 +725,56 @@ export type Database = {
         }
         Relationships: []
       }
+      audit_logs: {
+        Row: {
+          action: string
+          actor_user_id: string | null
+          created_at: string
+          id: string
+          ip_address: unknown
+          metadata: Json | null
+          new_values: Json | null
+          old_values: Json | null
+          target_id: string | null
+          target_type: string | null
+          user_agent: string | null
+        }
+        Insert: {
+          action: string
+          actor_user_id?: string | null
+          created_at?: string
+          id?: string
+          ip_address?: unknown
+          metadata?: Json | null
+          new_values?: Json | null
+          old_values?: Json | null
+          target_id?: string | null
+          target_type?: string | null
+          user_agent?: string | null
+        }
+        Update: {
+          action?: string
+          actor_user_id?: string | null
+          created_at?: string
+          id?: string
+          ip_address?: unknown
+          metadata?: Json | null
+          new_values?: Json | null
+          old_values?: Json | null
+          target_id?: string | null
+          target_type?: string | null
+          user_agent?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "audit_logs_actor_user_id_fkey"
+            columns: ["actor_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       cycle_grant_inclusions: {
         Row: {
           amount_included: number
@@ -2759,6 +2809,7 @@ export type Database = {
           id: string
           last_pushed_at: string | null
           max_workplan_sequence: number | null
+          partner_id: string | null
           partner_name: string | null
           project_id: string | null
           project_name: string | null
@@ -2783,6 +2834,7 @@ export type Database = {
           id?: string
           last_pushed_at?: string | null
           max_workplan_sequence?: number | null
+          partner_id?: string | null
           partner_name?: string | null
           project_id?: string | null
           project_name?: string | null
@@ -2807,6 +2859,7 @@ export type Database = {
           id?: string
           last_pushed_at?: string | null
           max_workplan_sequence?: number | null
+          partner_id?: string | null
           partner_name?: string | null
           project_id?: string | null
           project_name?: string | null
@@ -2824,6 +2877,13 @@ export type Database = {
             columns: ["donor_id"]
             isOneToOne: false
             referencedRelation: "donors"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "grants_grid_view_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: false
+            referencedRelation: "partners"
             referencedColumns: ["id"]
           },
         ]
@@ -3339,6 +3399,39 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      grant_ops_partners: {
+        Row: {
+          created_at: string
+          grant_grid_id: string
+          ops_partner_id: string
+        }
+        Insert: {
+          created_at?: string
+          grant_grid_id: string
+          ops_partner_id: string
+        }
+        Update: {
+          created_at?: string
+          grant_grid_id?: string
+          ops_partner_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "grant_ops_partners_grant_grid_id_fkey"
+            columns: ["grant_grid_id"]
+            isOneToOne: false
+            referencedRelation: "grants_grid_view"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "grant_ops_partners_ops_partner_id_fkey"
+            columns: ["ops_partner_id"]
+            isOneToOne: false
+            referencedRelation: "ops_partners"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       partners: {
         Row: {
@@ -4043,6 +4136,8 @@ export type Database = {
           display_name: string | null
           err_id: string | null
           id: string
+          ops_partner_id: string | null
+          partner_id: string | null
           pin_hash: string | null
           role: string | null
           status: string | null
@@ -4057,6 +4152,8 @@ export type Database = {
           display_name?: string | null
           err_id?: string | null
           id?: string
+          ops_partner_id?: string | null
+          partner_id?: string | null
           pin_hash?: string | null
           role?: string | null
           status?: string | null
@@ -4071,6 +4168,8 @@ export type Database = {
           display_name?: string | null
           err_id?: string | null
           id?: string
+          ops_partner_id?: string | null
+          partner_id?: string | null
           pin_hash?: string | null
           role?: string | null
           status?: string | null
@@ -4084,6 +4183,20 @@ export type Database = {
             columns: ["err_id"]
             isOneToOne: false
             referencedRelation: "emergency_rooms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "users_ops_partner_id_fkey"
+            columns: ["ops_partner_id"]
+            isOneToOne: false
+            referencedRelation: "ops_partners"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "users_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: false
+            referencedRelation: "partners"
             referencedColumns: ["id"]
           },
         ]

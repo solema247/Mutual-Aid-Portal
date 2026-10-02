@@ -8,6 +8,8 @@ import {
   projectExpenseTotal,
 } from '@/lib/poolProjectClassification'
 import { normalizeRestrictionLabel } from '@/lib/poolRestrictionLabel'
+import { forbidIfPartner } from '@/lib/routeHandlerAuth'
+import { getUserRoomAccess } from '@/lib/userRoomAccess'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -55,9 +57,21 @@ function addAmount(map: Map<string, number>, key: string, amount: number) {
  * Allocated from allocations_by_date.Restriction.
  * Assigned / committed / pending from F1 grant_segment (portal + historical).
  * WRR and WERR are treated as WRR.
+ *
+ * The nationwide allocation pool is not room-scopable, so Base ERR fails closed.
  */
 export async function GET() {
   try {
+    const partnerBlock = await forbidIfPartner()
+    if (partnerBlock) return partnerBlock
+
+    const roomAccess = await getUserRoomAccess()
+    if (roomAccess.applies) {
+      return NextResponse.json([], {
+        headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' },
+      })
+    }
+
     const supabase = getSupabaseRouteClient()
     const { getUserStateAccess } = await import('@/lib/userStateAccess')
     const { allowedStateNames } = await getUserStateAccess()

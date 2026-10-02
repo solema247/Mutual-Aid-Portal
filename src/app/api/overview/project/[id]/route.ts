@@ -49,6 +49,13 @@ export async function GET(
     const actualId = isHistorical ? id.replace('historical_', '') : id
 
     if (isHistorical) {
+      // Partner v1: historical import rows are out of scope (no grant_grid_id)
+      const { getUserGrantAccess } = await import('@/lib/userGrantAccess')
+      const grantAccess = await getUserGrantAccess()
+      if (grantAccess.mode !== 'all') {
+        return NextResponse.json({ error: 'Historical project not found' }, { status: 404 })
+      }
+
       // Load historical project from activities_raw_import
       const { data: historicalProject, error: histErr } = await supabase
         .from('activities_raw_import')
@@ -230,6 +237,7 @@ export async function GET(
           expenses,
           planned_activities,
           grant_call_id,
+          grant_grid_id,
           emergency_room_id,
           file_key,
           approval_file_key,
@@ -244,7 +252,43 @@ export async function GET(
         `)
         .eq('id', id)
         .single()
-      if (projErr) throw projErr
+      if (projErr) {
+        const code = (projErr as { code?: string })?.code
+        const msg = (projErr as Error)?.message ?? ''
+        if (code === 'PGRST116' || /0 rows/i.test(msg) || /no rows/i.test(msg)) {
+          return NextResponse.json({ error: 'Project not found' }, { status: 404 })
+        }
+        throw projErr
+      }
+      if (!project) {
+        return NextResponse.json({ error: 'Project not found' }, { status: 404 })
+      }
+
+      // Base ERR room scope takes precedence; Partner grant scope otherwise
+      const { getUserRoomAccess, isProjectInRoomAccess } = await import('@/lib/userRoomAccess')
+      const roomAccess = await getUserRoomAccess()
+      if (roomAccess.applies) {
+        if (
+          !isProjectInRoomAccess(
+            roomAccess,
+            (project as { emergency_room_id?: string | null }).emergency_room_id
+          )
+        ) {
+          return NextResponse.json({ error: 'Project not found' }, { status: 404 })
+        }
+      } else {
+        const { getUserGrantAccess, grantGridIdInAccess } = await import('@/lib/userGrantAccess')
+        const grantAccess = await getUserGrantAccess()
+        if (
+          !grantGridIdInAccess(
+            grantAccess,
+            (project as { grant_grid_id?: string | null }).grant_grid_id
+          )
+        ) {
+          return NextResponse.json({ error: 'Project not found' }, { status: 404 })
+        }
+      }
+
       console.log('[overview/project] project load', Date.now() - t0, 'ms')
 
       // Load MOU file keys and per-project transfer date from payment confirmations

@@ -13,13 +13,23 @@ import {
   hasPairedWrite,
 } from '@/lib/sbEnv'
 
+/** F4 rows use integer IDs that diverge on staging; mirror only via cutover scripts. */
+export const F4_SKIP_MIRROR_TABLES = new Set([
+  'err_summary',
+  'err_expense',
+  'err_summary_attachments',
+  'err_expense_receipts',
+])
+
 function maybePair(primary: SupabaseClient): SupabaseClient {
   if (!hasPairedWrite()) return primary
   const secondary = getRemoteBService()
   const secondaryClient = createClient(secondary.url, secondary.serviceRoleKey, {
     auth: { autoRefreshToken: false, persistSession: false },
   })
-  return pairClients(primary, secondaryClient)
+  return pairClients(primary, secondaryClient, {
+    skipMirrorTables: F4_SKIP_MIRROR_TABLES,
+  })
 }
 
 export function createSbRouteClient() {

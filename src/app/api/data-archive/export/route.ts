@@ -5,6 +5,7 @@ import { requirePermission } from '@/lib/requirePermission'
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin'
 import { collectArchiveFiles, safeName, type ArchiveProjectRow } from '@/lib/dataArchive'
 import { resolveProjectCompletionDate } from '@/lib/projectStatus'
+import { getUserRoomAccess } from '@/lib/userRoomAccess'
 
 export const runtime = 'nodejs'
 export const maxDuration = 300
@@ -26,6 +27,12 @@ function monthFolder(completedAt: string | null): string {
 export async function POST(req: Request) {
   const perm = await requirePermission('data_archive_download')
   if (perm instanceof NextResponse) return perm
+
+  // The archive export is a nationwide dataset served via admin client: out of Base ERR scope
+  const roomAccess = await getUserRoomAccess()
+  if (roomAccess.applies) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
 
   let projectIds: string[]
   try {

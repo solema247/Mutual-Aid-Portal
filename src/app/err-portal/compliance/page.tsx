@@ -79,11 +79,8 @@ function StatusBadge({ s }: { s: Screening }) {
     )
   }
   if (s.flag_type === 'missing_id') {
-    if (s.finance_review_status === 'id_uploaded') {
+    if (s.finance_review_status === 'id_uploaded' || s.finance_review_status === 'approved') {
       return <Badge variant="default" className="text-[10px] px-1.5 py-0 bg-amber-500">ID uploaded — awaiting clearance</Badge>
-    }
-    if (s.finance_review_status === 'approved') {
-      return <Badge variant="default" className="text-[10px] px-1.5 py-0 bg-green-600">Missing ID — document uploaded</Badge>
     }
     if (s.finance_review_status === 'rejected') {
       return <Badge variant="secondary" className="text-[10px] px-1.5 py-0">Missing ID flag dismissed</Badge>
@@ -489,10 +486,13 @@ export default function CompliancePage() {
   if (!canViewPage) return null
   if (isLoading) return <div className="text-center py-8">Loading...</div>
 
+  // id_uploaded is the current finance handoff; approved covers legacy rows
+  // that finance marked approved before upload-id became the only path.
   const awaitingIdClearance = (s: Screening) =>
     s.status === 'flagged' &&
     s.flag_type === 'missing_id' &&
-    s.finance_review_status === 'id_uploaded'
+    (s.finance_review_status === 'id_uploaded' ||
+      s.finance_review_status === 'approved')
 
   // Screening queue = full Ahmad workflow, including committed / name-not-extracted F1s.
   const pending = screenings.filter(

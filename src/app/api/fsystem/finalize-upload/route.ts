@@ -1,10 +1,14 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
+import { forbidIfPartner } from '@/lib/routeHandlerAuth'
 
 // POST /api/fsystem/finalize-upload
 // body: { temp_key: string, final_path: string }
 export async function POST(request: Request) {
   try {
+    const partnerBlock = await forbidIfPartner()
+    if (partnerBlock) return partnerBlock
+
     const supabase = getSupabaseRouteClient()
     const { temp_key, final_path } = await request.json()
     if (!temp_key || !final_path) {

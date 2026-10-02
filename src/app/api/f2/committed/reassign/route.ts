@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { allocateNextWorkplanSequence } from '@/lib/allocateNextWorkplanSequence'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { requirePermission } from '@/lib/requirePermission'
+import { assertProjectsInGrantAccess } from '@/lib/userGrantAccess'
+import { emitF123Audit } from '@/lib/f123Audit'
 
 export async function POST(request: Request) {
   try {
@@ -14,6 +16,9 @@ export async function POST(request: Request) {
     if (!f1_ids || !Array.isArray(f1_ids) || f1_ids.length === 0) {
       return NextResponse.json({ error: 'F1 IDs array is required' }, { status: 400 })
     }
+
+    const scope = await assertProjectsInGrantAccess(f1_ids.map(String))
+    if (!scope.ok) return scope.response
     
     if (!grant_id || !donor_name || !mmyy) {
       return NextResponse.json({ error: 'Missing required fields: grant_id, donor_name, and mmyy are required' }, { status: 400 })
@@ -108,6 +113,11 @@ export async function POST(request: Request) {
     // Process each F1
     let reassignedCount = 0
     const errors: string[] = []
+    const reassignedAudits: {
+      id: string
+      oldValues: Record<string, unknown>
+      newValues: Record<string, unknown>
+    }[] = []
     
     for (const f1 of f1s) {
       try {
@@ -189,6 +199,23 @@ export async function POST(request: Request) {
         // Update grant reference for next iteration
         grant.activities = updatedActivities
         
+        reassignedAudits.push({
+          id: String(f1.id),
+          oldValues: {
+            grant_id: f1.grant_id ?? null,
+            donor_id: f1.donor_id ?? null,
+            file_key: f1.file_key ?? null
+          },
+          newValues: {
+            grant_id: generatedSerial,
+            grant_grid_id: grant.id,
+            donor_id: grant.donor_id,
+            workplan_number: workplanNumber,
+            file_key: finalFileKey ?? null,
+            temp_file_key: null,
+            status: 'active'
+          }
+        })
         reassignedCount++
       } catch (error: any) {
         console.error(`Error reassigning F1 ${f1.id}:`, error)
@@ -201,6 +228,25 @@ export async function POST(request: Request) {
         error: 'Failed to reassign any F1s', 
         details: errors 
       }, { status: 500 })
+    }
+    
+    for (const entry of reassignedAudits) {
+      await emitF123Audit({
+        action: 'f2.reassigned',
+        actorUserId: perm.user.id,
+        endpoint: 'POST /api/f2/committed/reassign',
+        request,
+        targetType: 'project',
+        targetId: entry.id,
+        oldValues: entry.oldValues,
+        newValues: entry.newValues,
+        metadata: {
+          grant_id,
+          donor_name,
+          mmyy,
+          reassigned_count: reassignedCount
+        }
+      })
     }
     
     return NextResponse.json({ 

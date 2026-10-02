@@ -5,6 +5,8 @@ import {
   isErrSubmissionSource
 } from '@/lib/routeHandlerAuth'
 import { isApprovedUnassigned } from '../_shared'
+import { getUserRoomAccess } from '@/lib/userRoomAccess'
+import { emitF123Audit } from '@/lib/f123Audit'
 import { z } from 'zod'
 
 const bodySchema = z.object({
@@ -32,6 +34,26 @@ export async function POST (request: Request) {
     }
 
     const ids = [...new Set(parsed.data.project_ids)]
+
+    // Base ERR may only act on projects in its own emergency room
+    const roomAccess = await getUserRoomAccess()
+    if (roomAccess.mode === 'none') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+    if (roomAccess.mode === 'room') {
+      const { data: inRoom, error: roomErr } = await auth.supabase
+        .from('err_projects')
+        .select('id')
+        .in('id', ids)
+        .eq('emergency_room_id', roomAccess.emergencyRoomId)
+      if (roomErr) throw roomErr
+      if ((inRoom?.length ?? 0) !== ids.length) {
+        return NextResponse.json(
+          { error: 'One or more projects are outside your scope' },
+          { status: 403 }
+        )
+      }
+    }
 
     const { data: rows, error: fetchErr } = await auth.supabase
       .from('err_projects')
@@ -71,6 +93,30 @@ export async function POST (request: Request) {
     if (updError) {
       console.error(updError)
       return NextResponse.json({ error: 'Failed to update projects' }, { status: 500 })
+    }
+
+    const rowsById = new Map(rows.map(row => [row.id as string, row]))
+    for (const id of ids) {
+      const before = rowsById.get(id)
+      await emitF123Audit({
+        action: 'f1.moved_to_f2',
+        actorUserId: auth.dbUser.id,
+        endpoint: 'POST /api/f1/err/move-to-f2',
+        request,
+        targetType: 'project',
+        targetId: id,
+        oldValues: {
+          status: before?.status ?? null,
+          funding_status: before?.funding_status ?? null
+        },
+        newValues: {
+          status: 'pending',
+          funding_status: before?.funding_status ?? null
+        },
+        metadata: {
+          batch_size: ids.length
+        }
+      })
     }
 
     return NextResponse.json({ success: true, updated: ids.length })

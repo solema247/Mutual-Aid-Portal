@@ -164,22 +164,25 @@ export default function CommittedF1sTab() {
 
   const fetchGrants = async () => {
     try {
-      const { data: grantsData } = await supabase
-        .from('grants_grid_view')
-        .select('grant_id, donor_name, project_name')
-        .order('grant_id', { ascending: true })
+      const response = await fetch('/api/grants?status=all')
+      if (!response.ok) throw new Error('Failed to fetch grants')
+      const grantsData = await response.json()
 
       const uniqueGrants = new Map<string, { grant_id: string; donor_name: string; project_name: string }>()
-      ;(grantsData || []).forEach((grant: { grant_id: string; donor_name: string; project_name: string | null }) => {
-        const key = `${grant.grant_id}|${grant.donor_name}`
-        if (!uniqueGrants.has(key)) {
-          uniqueGrants.set(key, {
-            grant_id: grant.grant_id,
-            donor_name: grant.donor_name,
-            project_name: grant.project_name || grant.grant_id,
-          })
+      ;(Array.isArray(grantsData) ? grantsData : []).forEach(
+        (grant: { grant_id?: string; donor_name?: string; project_name?: string | null }) => {
+          if (!grant.grant_id) return
+          const donor = grant.donor_name || ''
+          const key = `${grant.grant_id}|${donor}`
+          if (!uniqueGrants.has(key)) {
+            uniqueGrants.set(key, {
+              grant_id: grant.grant_id,
+              donor_name: donor,
+              project_name: grant.project_name || grant.grant_id,
+            })
+          }
         }
-      })
+      )
       setGrants(Array.from(uniqueGrants.values()))
     } catch (error) {
       console.error('Error fetching grants:', error)

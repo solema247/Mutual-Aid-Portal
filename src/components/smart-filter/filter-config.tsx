@@ -420,21 +420,42 @@ export function getF3MousFilterFields(options: {
 /** F4 reporting: multi-select filters + report status */
 export function getF4ReportingFilterFields(options: {
   baseRoomOptions: string[]
+  localityOptions: FilterSelectOption[]
   stateOptions: string[]
   grantOptions: FilterSelectOption[]
   reportStatusOptions: FilterSelectOption[]
+  completionOptions: FilterSelectOption[]
   labels: {
     grantId: string
     grantIdPlaceholder: string
     baseRoom: string
+    locality: string
+    localitySelectStateFirst: string
     state: string
     grant: string
     reportStatus: string
+    completion: string
     all: string
   }
 }): FilterFieldConfig[] {
-  const { baseRoomOptions, stateOptions, grantOptions, reportStatusOptions, labels } = options
+  const {
+    baseRoomOptions,
+    localityOptions,
+    stateOptions,
+    grantOptions,
+    reportStatusOptions,
+    completionOptions,
+    labels,
+  } = options
   return [
+    {
+      id: 'completion',
+      label: labels.completion,
+      type: 'select',
+      options: completionOptions,
+      placeholder: labels.all,
+      accessorKey: 'completion',
+    },
     {
       id: 'grant_id',
       label: labels.grantId,
@@ -443,20 +464,28 @@ export function getF4ReportingFilterFields(options: {
       accessorKey: 'grant_serial_id',
     },
     {
-      id: 'base_room',
-      label: labels.baseRoom,
-      type: 'multi_select',
-      options: baseRoomOptions.map((s) => ({ value: s, label: s })),
-      placeholder: labels.all,
-      accessorKey: 'base_room_name',
-    },
-    {
       id: 'state',
       label: labels.state,
       type: 'multi_select',
       options: stateOptions.map((s) => ({ value: s, label: s })),
       placeholder: labels.all,
       accessorKey: 'state',
+    },
+    {
+      id: 'locality',
+      label: labels.locality,
+      type: 'multi_select',
+      options: localityOptions,
+      placeholder: localityOptions.length ? labels.all : labels.localitySelectStateFirst,
+      accessorKey: 'locality',
+    },
+    {
+      id: 'base_room',
+      label: labels.baseRoom,
+      type: 'multi_select',
+      options: baseRoomOptions.map((s) => ({ value: s, label: s })),
+      placeholder: labels.all,
+      accessorKey: 'base_room_name',
     },
     {
       id: 'grant',
@@ -583,18 +612,23 @@ export function getF2CommittedFilterFields(options: {
 /** F5 reporting: F4 fields plus End Activity Status */
 export function getF5ReportingFilterFields(options: {
   baseRoomOptions: string[]
+  localityOptions: FilterSelectOption[]
   stateOptions: string[]
   grantOptions: FilterSelectOption[]
   reportStatusOptions: FilterSelectOption[]
   endActivityStatusOptions: FilterSelectOption[]
+  completionOptions: FilterSelectOption[]
   labels: {
     grantId: string
     grantIdPlaceholder: string
     baseRoom: string
+    locality: string
+    localitySelectStateFirst: string
     state: string
     grant: string
     reportStatus: string
     endActivityStatus: string
+    completion: string
     all: string
   }
 }): FilterFieldConfig[] {
@@ -606,9 +640,12 @@ export function getF5ReportingFilterFields(options: {
         grantId: labels.grantId,
         grantIdPlaceholder: labels.grantIdPlaceholder,
         baseRoom: labels.baseRoom,
+        locality: labels.locality,
+        localitySelectStateFirst: labels.localitySelectStateFirst,
         state: labels.state,
         grant: labels.grant,
         reportStatus: labels.reportStatus,
+        completion: labels.completion,
         all: labels.all,
       },
     }),
@@ -619,6 +656,140 @@ export function getF5ReportingFilterFields(options: {
       options: endActivityStatusOptions,
       placeholder: labels.all,
       accessorKey: 'end_activity_status',
+    },
+  ]
+}
+
+/** User Management: Role, Status, Scope, State, ERR / Room, Partner (all multi-select) */
+export function getUserManagementFilterFields(options: {
+  stateOptions: FilterSelectOption[]
+  errOptions: FilterSelectOption[]
+  partnerOptions: FilterSelectOption[]
+  roleOptions: FilterSelectOption[]
+  labels?: {
+    role?: string
+    status?: string
+    scope?: string
+    state?: string
+    errRoom?: string
+    partner?: string
+    active?: string
+    suspended?: string
+    allStates?: string
+    stateScope?: string
+    emergencyRoom?: string
+    partnerGrant?: string
+    noState?: string
+  }
+}): FilterFieldConfig[] {
+  const labels = options.labels ?? {}
+  return [
+    {
+      id: 'role',
+      label: labels.role ?? 'Role',
+      type: 'multi_select',
+      options: options.roleOptions,
+      placeholder: 'All roles',
+      accessorKey: 'role',
+    },
+    {
+      id: 'status',
+      label: labels.status ?? 'Status',
+      type: 'multi_select',
+      options: [
+        { value: 'active', label: labels.active ?? 'Active' },
+        { value: 'suspended', label: labels.suspended ?? 'Suspended' },
+      ],
+      placeholder: 'All statuses',
+      accessorKey: 'status',
+    },
+    {
+      id: 'scope',
+      label: labels.scope ?? 'Scope',
+      type: 'multi_select',
+      options: [
+        { value: 'all_states', label: labels.allStates ?? 'All States' },
+        { value: 'state', label: labels.stateScope ?? 'State' },
+        { value: 'emergency_room', label: labels.emergencyRoom ?? 'Emergency Room' },
+        { value: 'partner_grant', label: labels.partnerGrant ?? 'Partner / Grant' },
+      ],
+      placeholder: 'All scopes',
+      accessorKey: 'scope',
+    },
+    {
+      id: 'state',
+      label: labels.state ?? 'State',
+      type: 'multi_select',
+      options: [
+        { value: 'no_state', label: labels.noState ?? 'No State' },
+        ...options.stateOptions,
+      ],
+      placeholder: 'All states',
+      accessorKey: 'state',
+    },
+    {
+      id: 'err',
+      label: labels.errRoom ?? 'ERR / Room',
+      type: 'multi_select',
+      options: options.errOptions,
+      placeholder: 'All ERRs',
+      accessorKey: 'err_id',
+    },
+    {
+      id: 'partner',
+      label: labels.partner ?? 'Partner',
+      type: 'multi_select',
+      options: options.partnerOptions,
+      placeholder: 'All partners',
+      accessorKey: 'partner_id',
+    },
+  ]
+}
+
+/** Audit Log filter fields: Action, Actor, Target Type, Date Range */
+export function getAuditLogFilterFields(options: {
+  actionOptions: FilterSelectOption[]
+  actorOptions: FilterSelectOption[]
+  targetTypeOptions: FilterSelectOption[]
+  labels?: {
+    action?: string
+    actor?: string
+    targetType?: string
+    dateRange?: string
+  }
+}): FilterFieldConfig[] {
+  const labels = options.labels ?? {}
+  return [
+    {
+      id: 'action',
+      label: labels.action ?? 'Action',
+      type: 'multi_select',
+      options: options.actionOptions,
+      placeholder: 'All actions',
+      accessorKey: 'action',
+    },
+    {
+      id: 'actor',
+      label: labels.actor ?? 'Actor',
+      type: 'multi_select',
+      options: options.actorOptions,
+      placeholder: 'All actors',
+      accessorKey: 'actor',
+    },
+    {
+      id: 'target_type',
+      label: labels.targetType ?? 'Target Type',
+      type: 'multi_select',
+      options: options.targetTypeOptions,
+      placeholder: 'All types',
+      accessorKey: 'target_type',
+    },
+    {
+      id: 'date_range',
+      label: labels.dateRange ?? 'Date Range',
+      type: 'date_range',
+      placeholder: 'From – To',
+      accessorKey: 'created_at',
     },
   ]
 }

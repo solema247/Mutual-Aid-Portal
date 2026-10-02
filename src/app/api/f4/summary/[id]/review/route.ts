@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { requirePermission } from '@/lib/requirePermission'
+import { emitF123Audit } from '@/lib/f123Audit'
 
 /**
  * PATCH /api/f4/summary/[id]/review
@@ -21,7 +22,7 @@ export async function PATCH(
 
     const { data: summaryRow } = await supabase
       .from('err_summary')
-      .select('activities_raw_import_id')
+      .select('project_id, activities_raw_import_id, review_status, review_comment')
       .eq('id', summaryId)
       .maybeSingle()
     if (summaryRow?.activities_raw_import_id) {
@@ -45,17 +46,43 @@ export async function PATCH(
       .eq('auth_user_id', userId)
       .single()
 
+    const reviewComment = typeof comment === 'string' ? comment : null
+    const reviewedAt = new Date().toISOString()
+
     const { error } = await supabase
       .from('err_summary')
       .update({
         review_status: status,
-        review_comment: typeof comment === 'string' ? comment : null,
-        reviewed_at: new Date().toISOString(),
+        review_comment: reviewComment,
+        reviewed_at: reviewedAt,
         reviewed_by: userRow?.id || null
       })
       .eq('id', summaryId)
 
     if (error) throw error
+
+    const projectId = summaryRow?.project_id ? String(summaryRow.project_id) : null
+    await emitF123Audit({
+      action: 'f4.reviewed',
+      actorUserId: perm.user.id,
+      endpoint: 'PATCH /api/f4/summary/[id]/review',
+      request,
+      targetType: 'f4_summary',
+      targetId: projectId,
+      oldValues: {
+        review_status: summaryRow?.review_status ?? null,
+        review_comment: summaryRow?.review_comment ?? null,
+      },
+      newValues: {
+        review_status: status,
+        review_comment: reviewComment,
+      },
+      metadata: {
+        project_id: projectId,
+        summary_id: summaryId,
+        reviewed_at: reviewedAt,
+      },
+    })
 
     return NextResponse.json({ success: true, review_status: status })
   } catch (e) {

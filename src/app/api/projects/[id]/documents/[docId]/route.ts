@@ -1,9 +1,11 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
+import { assertProjectInGrantAccess } from '@/lib/userGrantAccess'
+import { emitF123Audit } from '@/lib/f123Audit'
 
 type RouteContext = { params: { id: string; docId: string } }
 
-export async function DELETE(_request: Request, { params }: RouteContext) {
+export async function DELETE(request: Request, { params }: RouteContext) {
   try {
     const supabase = getSupabaseRouteClient()
     const projectId = params.id
@@ -16,9 +18,12 @@ export async function DELETE(_request: Request, { params }: RouteContext) {
       return NextResponse.json({ error: 'Document ID is required' }, { status: 400 })
     }
 
+    const scope = await assertProjectInGrantAccess(projectId)
+    if (!scope.ok) return scope.response
+
     const { data: doc, error: fetchError } = await supabase
       .from('err_project_documents')
-      .select('id, project_id, file_key')
+      .select('id, project_id, file_key, file_name')
       .eq('id', docId)
       .eq('project_id', projectId)
       .maybeSingle()
@@ -41,6 +46,22 @@ export async function DELETE(_request: Request, { params }: RouteContext) {
       console.error('[projects/documents DELETE]', deleteError)
       return NextResponse.json({ error: 'Failed to delete document' }, { status: 500 })
     }
+
+    await emitF123Audit({
+      action: 'f1.document_removed',
+      endpoint: 'DELETE /api/projects/[id]/documents/[docId]',
+      request,
+      targetType: 'project_document',
+      targetId: docId,
+      oldValues: {
+        file_name: doc.file_name ?? null,
+        file_key: doc.file_key ?? null,
+        project_id: doc.project_id ?? projectId,
+      },
+      metadata: {
+        project_id: projectId,
+      },
+    })
 
     if (doc.file_key) {
       try {

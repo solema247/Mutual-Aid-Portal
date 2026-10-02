@@ -1,11 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin'
+import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { normalizeStateName } from '@/lib/normalizeStateName'
 import {
   classifyPoolProject,
   poolRowFromParts,
   projectExpenseTotal,
 } from '@/lib/poolProjectClassification'
+import {
+  applyGrantGridIdFilter,
+  chunkGrantScopeIds,
+  getUserGrantAccess,
+} from '@/lib/userGrantAccess'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -36,8 +42,26 @@ async function fetchAllRows<T>(supabase: any, table: string, select: string): Pr
  * Matches Pool by-state: Assigned = historical + grant-linked projects;
  * Available = total - assigned; Balance = available - committed - pending.
  */
+const EMPTY_STATE_REMAINING = {
+  total: 0,
+  assigned: 0,
+  available: 0,
+  committed: 0,
+  pending: 0,
+  balance: 0,
+  remaining: 0,
+  historical: 0,
+  allocated: 0,
+}
+const NO_STORE = { 'Cache-Control': 'no-store, no-cache, must-revalidate' }
+
 export async function GET(request: NextRequest) {
   try {
+    const grantAccess = await getUserGrantAccess()
+    if (grantAccess.mode === 'none') {
+      return NextResponse.json(EMPTY_STATE_REMAINING, { headers: NO_STORE })
+    }
+
     const { searchParams } = new URL(request.url)
     const stateParam = searchParams.get('state')?.trim()
     if (!stateParam) {
@@ -47,6 +71,50 @@ export async function GET(request: NextRequest) {
     const stateNormalized = normalizeState(stateParam)
     if (!stateNormalized) {
       return NextResponse.json({ error: 'Invalid state' }, { status: 400 })
+    }
+
+    if (grantAccess.mode === 'partner') {
+      const supabase = getSupabaseRouteClient()
+      const stateVariants = [stateNormalized, stateParam].filter((v, i, a) => v && a.indexOf(v) === i)
+      let assignedFromProjects = 0
+      let committed = 0
+      let pending = 0
+      for (const batch of chunkGrantScopeIds(grantAccess.grantGridIds)) {
+        let from = 0
+        const pageSize = 1000
+        while (true) {
+          let query = supabase
+            .from('err_projects')
+            .select('expenses, funding_status, state, status, grant_id, grant_grid_id')
+            .in('state', stateVariants)
+          query = applyGrantGridIdFilter(query, { ...grantAccess, grantGridIds: batch })
+          const { data, error } = await query.range(from, from + pageSize - 1)
+          if (error) throw error
+          if (!data?.length) break
+          for (const p of data) {
+            const rowState = normalizeState(p.state)
+            if (rowState !== stateNormalized) continue
+            const bucket = classifyPoolProject(p)
+            if (!bucket) continue
+            const amt = projectExpenseTotal(p.expenses)
+            if (bucket === 'assigned') assignedFromProjects += amt
+            else if (bucket === 'committed') committed += amt
+            else pending += amt
+          }
+          if (data.length < pageSize) break
+          from += pageSize
+        }
+      }
+      return NextResponse.json(
+        {
+          ...EMPTY_STATE_REMAINING,
+          assigned: assignedFromProjects,
+          committed,
+          pending,
+          allocated: pending,
+        },
+        { headers: NO_STORE }
+      )
     }
 
     const adminSupabase = getSupabaseAdmin()

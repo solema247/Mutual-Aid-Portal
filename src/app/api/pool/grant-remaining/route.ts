@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin'
+import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { normalizeProjectDonorToGrantId } from '@/lib/normalizeGrantId'
+import {
+  applyGrantGridIdFilter,
+  chunkGrantScopeIds,
+  getUserGrantAccess,
+} from '@/lib/userGrantAccess'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -48,12 +54,82 @@ async function fetchAllRows<T>(supabase: any, table: string, select: string, fil
  * Remaining = total - historical - committed - allocated.
  * All figures are for the exact grantId (e.g. FCDO-HELP-S shows only that grant's $650k, not aggregated FCDO).
  */
+const EMPTY_REMAINING = { total: 0, historical: 0, committed: 0, allocated: 0, remaining: 0 }
+const NO_STORE = { 'Cache-Control': 'no-store, no-cache, must-revalidate' }
+
 export async function GET(request: NextRequest) {
   try {
+    const grantAccess = await getUserGrantAccess()
+    if (grantAccess.mode === 'none') {
+      return NextResponse.json(EMPTY_REMAINING, { headers: NO_STORE })
+    }
+
     const { searchParams } = new URL(request.url)
     const grantId = searchParams.get('grantId')?.trim()
     if (!grantId) {
       return NextResponse.json({ error: 'grantId is required' }, { status: 400 })
+    }
+
+    if (grantAccess.mode === 'partner') {
+      if (!grantAccess.grantIds.includes(grantId)) {
+        return NextResponse.json(EMPTY_REMAINING, { headers: NO_STORE })
+      }
+      const supabase = getSupabaseRouteClient()
+      const gridIds: string[] = []
+      for (const batch of chunkGrantScopeIds(grantAccess.grantGridIds)) {
+        const { data, error } = await supabase
+          .from('grants_grid_view')
+          .select('id, grant_id')
+          .in('id', batch)
+        if (error) throw error
+        for (const row of data || []) {
+          if (row.id && String(row.grant_id ?? '').trim() === grantId) gridIds.push(String(row.id))
+        }
+      }
+      if (gridIds.length === 0) {
+        return NextResponse.json(EMPTY_REMAINING, { headers: NO_STORE })
+      }
+
+      let committed = 0
+      let allocated = 0
+      const fs = (s: string | null | undefined) => (s || '').toLowerCase()
+      const sumExpenses = (exp: unknown): number => {
+        try {
+          const arr = typeof exp === 'string' ? JSON.parse(exp || '[]') : exp || []
+          return Array.isArray(arr) ? arr.reduce((s: number, e: { total_cost?: number }) => s + (e?.total_cost || 0), 0) : 0
+        } catch {
+          return 0
+        }
+      }
+      for (const batch of chunkGrantScopeIds(gridIds)) {
+        let from = 0
+        const pageSize = 1000
+        while (true) {
+          let query = supabase
+            .from('err_projects')
+            .select('expenses, funding_status, status, grant_grid_id')
+          query = applyGrantGridIdFilter(query, { ...grantAccess, grantGridIds: batch })
+          const { data, error } = await query.range(from, from + pageSize - 1)
+          if (error) throw error
+          if (!data?.length) break
+          for (const p of data) {
+            const amt = sumExpenses(p.expenses)
+            if (fs(p.funding_status) === 'committed') committed += amt
+            else if (
+              fs(p.funding_status) === 'allocated' ||
+              (fs(p.funding_status) === 'unassigned' && (p.status || '').toLowerCase() === 'pending')
+            ) {
+              allocated += amt
+            }
+          }
+          if (data.length < pageSize) break
+          from += pageSize
+        }
+      }
+      return NextResponse.json(
+        { total: 0, historical: 0, committed, allocated, remaining: 0 },
+        { headers: NO_STORE }
+      )
     }
 
     const adminSupabase = getSupabaseAdmin()

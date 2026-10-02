@@ -1,6 +1,11 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { getUserStateAccess } from '@/lib/userStateAccess'
+import {
+  applyGrantGridIdFilter,
+  getUserGrantAccess,
+} from '@/lib/userGrantAccess'
+import { getUserRoomAccess } from '@/lib/userRoomAccess'
 
 const PAGE_SIZE = 1000
 
@@ -43,8 +48,19 @@ export async function GET(request: Request) {
       dateTo = `${y}-${String(m).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
     }
 
-    // Get user's state access rights
-    const { allowedStateNames } = await getUserStateAccess()
+    const [{ allowedStateNames }, grantAccess, roomAccess] = await Promise.all([
+      getUserStateAccess(),
+      getUserGrantAccess(),
+      getUserRoomAccess(),
+    ])
+
+    if (roomAccess.mode === 'none') {
+      return NextResponse.json([])
+    }
+
+    if (roomAccess.mode !== 'room' && grantAccess.mode === 'none') {
+      return NextResponse.json([])
+    }
 
     const data = await fetchAllRows<any>(() => {
       let query = supabase
@@ -64,6 +80,8 @@ export async function GET(request: Request) {
           emergency_room_id,
           emergency_rooms (err_code, name_ar, name),
           submitted_at,
+          committed_at,
+          committed_by,
           funding_cycle_id,
           funding_cycles (id, name, year),
           mou_id,
@@ -74,12 +92,18 @@ export async function GET(request: Request) {
           grant_id,
           grant_serial_id,
           workplan_number,
-          approval_file_key
+          approval_file_key,
+          grant_grid_id
         `)
         .eq('funding_status', 'committed')
         .order('submitted_at', { ascending: false })
 
-      if (allowedStateNames !== null && allowedStateNames.length > 0) {
+      // Base ERR: emergency_room_id only (never state / grant scope)
+      if (roomAccess.mode === 'room') {
+        query = query.eq('emergency_room_id', roomAccess.emergencyRoomId)
+      } else if (grantAccess.mode === 'partner') {
+        query = applyGrantGridIdFilter(query, grantAccess)
+      } else if (allowedStateNames !== null && allowedStateNames.length > 0) {
         query = query.in('state', allowedStateNames)
       }
       if (state) {
@@ -94,17 +118,20 @@ export async function GET(request: Request) {
       return query
     })
 
-    // Fetch all grants from grants_grid_view to match project serials
     const grantsData = await fetchAllRows<{
       grant_id: string
       project_name: string | null
       donor_name: string | null
       activities: string | null
-    }>(() =>
-      supabase
+    }>(() => {
+      let grantsQuery = supabase
         .from('grants_grid_view')
         .select('grant_id, project_name, donor_name, activities')
-    )
+      if (grantAccess.mode === 'partner') {
+        grantsQuery = grantsQuery.in('id', grantAccess.grantGridIds)
+      }
+      return grantsQuery
+    })
 
     // Build a map of project serial to grant info
     const serialToGrant = new Map<string, { grant_id: string; donor_name: string | null }>()
@@ -126,14 +153,14 @@ export async function GET(request: Request) {
       if (f1.grant_id && f1.grant_id.startsWith('LCC-')) {
         grantInfo = serialToGrant.get(f1.grant_id)
       }
-      
+
       // Filter by grant if specified
       if (grantId && donorName) {
         if (!grantInfo || grantInfo.grant_id !== grantId || grantInfo.donor_name !== donorName) {
           return null // Filter out this F1
         }
       }
-      
+
       return {
         id: f1.id,
         err_id: f1.err_id,
@@ -173,7 +200,7 @@ export async function GET(request: Request) {
     // Apply client-side filters that can't be done in SQL
     if (search) {
       const searchLower = search.toLowerCase()
-      formattedF1s = formattedF1s.filter(f1 => 
+      formattedF1s = formattedF1s.filter(f1 =>
         (f1.err_id && f1.err_id.toLowerCase().includes(searchLower)) ||
         (f1.state && f1.state.toLowerCase().includes(searchLower)) ||
         (f1.locality && f1.locality.toLowerCase().includes(searchLower)) ||

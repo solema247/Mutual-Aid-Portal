@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { supabase } from '@/lib/supabaseClient'
+import { useBaseErrRoomId } from '@/lib/useBaseErrRoom'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { CollapsibleRow } from '@/components/ui/collapsible'
 import type { RegionSelection, WizardKind, WizardPageEntry } from '../f4Wizard/types'
@@ -49,6 +50,7 @@ function recalcExpenseUsdFromSdg(fx: number | null, expenses: any[]): any[] {
 
 export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProjectId }: UploadF4ModalProps) {
   const { t } = useTranslation(['f4f5'])
+  const { lockedRoomId, loading: baseErrRoomLoading } = useBaseErrRoomId()
   
   // Style object to ensure text is selectable in inputs with visible selection
   const selectableInputStyle: React.CSSProperties = {
@@ -322,8 +324,24 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
     })()
   }, [open, initialProjectId])
 
+  // Base ERR is locked to its own room: never load rooms by state
+  useEffect(() => {
+    if (!open || !lockedRoomId) return
+    ;(async () => {
+      const { data } = await supabase
+        .from('emergency_rooms')
+        .select('id, name, name_ar, err_code')
+        .eq('id', lockedRoomId)
+        .maybeSingle()
+      const room = data as { id: string; name?: string | null; name_ar?: string | null; err_code?: string | null } | null
+      setRooms(room ? [{ id: room.id, label: room.name || room.name_ar || room.err_code || room.id }] : [])
+      setSelectedRoomId(lockedRoomId)
+    })()
+  }, [open, lockedRoomId])
+
   // When state changes, load ERR rooms in that state with active projects
   useEffect(() => {
+    if (lockedRoomId) return
     if (!selectedState) { 
       if (!isRestoringRef.current) {
         setRooms([]); 
@@ -354,7 +372,7 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
         setProjectId('')
       }
     })()
-  }, [selectedState])
+  }, [selectedState, lockedRoomId])
 
   // When room changes, load its active projects
   useEffect(() => {
@@ -889,7 +907,7 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <div className="space-y-1">
                 <Label>{t('f4.modal.state')}</Label>
-                <Select value={selectedState} onValueChange={(v)=>{ setSelectedState(v); }}>
+                <Select value={selectedState} onValueChange={(v)=>{ setSelectedState(v); }} disabled={baseErrRoomLoading || Boolean(lockedRoomId)}>
                   <SelectTrigger className="w-full"><SelectValue placeholder={t('f4.modal.state_placeholder') as string} /></SelectTrigger>
                   <SelectContent>
                     {states.map(s => (
@@ -900,7 +918,11 @@ export default function UploadF4Modal({ open, onOpenChange, onSaved, initialProj
               </div>
               <div className="space-y-1">
                 <Label>{t('f4.modal.err')}</Label>
-                <Select value={selectedRoomId} onValueChange={(v)=>{ setSelectedRoomId(v); }} disabled={!selectedState}>
+                <Select
+                  value={selectedRoomId}
+                  onValueChange={(v)=>{ setSelectedRoomId(v); }}
+                  disabled={baseErrRoomLoading || Boolean(lockedRoomId) || !selectedState}
+                >
                   <SelectTrigger className="w-full"><SelectValue placeholder={t('f4.modal.err_placeholder') as string} /></SelectTrigger>
                   <SelectContent>
                     {rooms.map(r => (

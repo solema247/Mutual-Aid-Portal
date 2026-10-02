@@ -1,5 +1,11 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
+import {
+  applyMouInScopeProjectFilter,
+  assertMouInGrantAccess,
+  assertProjectsInGrantAccess,
+} from '@/lib/userGrantAccess'
+import { emitF123Audit } from '@/lib/f123Audit'
 
 /**
  * POST /api/f3/mous/[id]/projects/add
@@ -19,21 +25,32 @@ export async function POST(
       return NextResponse.json({ error: 'project_ids is required (non-empty array)' }, { status: 400 })
     }
 
+    const mouScope = await assertMouInGrantAccess(mouId)
+    if (!mouScope.ok) return mouScope.response
+
+    const projectScope = await assertProjectsInGrantAccess(project_ids.map(String), mouScope.access)
+    if (!projectScope.ok) return projectScope.response
+
     // Load MOU
     const { data: mou, error: mouErr } = await supabase
       .from('mous')
-      .select('id')
+      .select('id, total_amount')
       .eq('id', mouId)
       .single()
     if (mouErr || !mou) {
       return NextResponse.json({ error: 'MOU not found' }, { status: 404 })
     }
 
-    // Ensure MOU is not assigned: no project linked to this MOU has grant_id starting with LCC-
-    const { data: existingProjects, error: existingErr } = await supabase
+    // Ensure MOU is not assigned: check in-scope linked projects only
+    let existingQuery = supabase
       .from('err_projects')
       .select('id, grant_id')
       .eq('mou_id', mouId)
+    existingQuery = applyMouInScopeProjectFilter(
+      existingQuery,
+      mouScope.inScopeProjectIds
+    )
+    const { data: existingProjects, error: existingErr } = await existingQuery
     if (existingErr) throw existingErr
     const hasAssigned = (existingProjects || []).some(
       (p: any) => p.grant_id && String(p.grant_id).startsWith('LCC-')
@@ -107,6 +124,20 @@ export async function POST(
       .eq('id', mouId)
 
     if (updateMouErr) throw updateMouErr
+
+    await emitF123Audit({
+      action: 'f3.mou_projects_added',
+      endpoint: 'POST /api/f3/mous/[id]/projects/add',
+      request,
+      targetType: 'mou',
+      targetId: mouId,
+      oldValues: { total_amount: mou.total_amount ?? null },
+      newValues: { total_amount },
+      metadata: {
+        project_ids: project_ids.map(String),
+        added_count: project_ids.length,
+      },
+    })
 
     return NextResponse.json({
       success: true,

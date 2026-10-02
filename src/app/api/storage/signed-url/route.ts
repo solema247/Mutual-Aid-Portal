@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { getActiveService } from '@/lib/sbEnv'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
+import { resolveStoragePathGrant } from '@/lib/storagePathGrantAccess'
 
 function safeStoragePath(path: string): string | null {
   const trimmed = path.trim().replace(/^\/+/, '')
@@ -10,8 +11,9 @@ function safeStoragePath(path: string): string | null {
 }
 
 // GET /api/storage/signed-url?path=...&bucket=images
-// Requires a logged-in session; signs with the service role so storage RLS
-// cannot block legitimate portal users from opening F1/MOU docs.
+// Requires a logged-in session; partners are path-scoped via resolveStoragePathGrant.
+// Signs with the service role so storage RLS cannot block legitimate portal users
+// from opening F1/MOU docs.
 export async function GET(request: Request) {
   try {
     const routeClient = getSupabaseRouteClient()
@@ -31,6 +33,11 @@ export async function GET(request: Request) {
     const path = safeStoragePath(rawPath)
     if (!path) {
       return NextResponse.json({ error: 'Invalid path' }, { status: 400 })
+    }
+
+    const decision = await resolveStoragePathGrant(path, bucket)
+    if (decision.status === 'deny') {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 })
     }
 
     const { url, serviceRoleKey } = getActiveService()

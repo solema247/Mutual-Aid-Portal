@@ -42,6 +42,7 @@
   "state_management": "State Management",
   "state_management_desc": "See states and localities, add a missing one, or ask the data team to fix a mistake",
   "user_management": "User Management",
+  "audit_log": "Audit Log",
   "user_management_desc": "Manage and approve ERR staff accounts",
   "project_management": "Project Management",
   "project_management_desc": "Review and manage ERR project proposals",

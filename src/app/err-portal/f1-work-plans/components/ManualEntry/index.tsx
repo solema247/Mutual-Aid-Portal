@@ -9,6 +9,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { supabase } from '@/lib/supabaseClient'
+import { useBaseErrRoomId } from '@/lib/useBaseErrRoom'
 import { Plus, Paperclip, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { defaultFormData, type ManualEntryFormData, type Expense, type PlannedActivity } from './types'
@@ -30,6 +31,7 @@ interface ManualEntryProps {
 
 export default function ManualEntry({ onSuccess }: ManualEntryProps) {
   const { t } = useTranslation(['common', 'fsystem'])
+  const { lockedRoomId, loading: baseErrRoomLoading } = useBaseErrRoomId()
   const [states, setStates] = useState<State[]>([])
   const [rooms, setRooms] = useState<RoomRow[]>([])
   const [stateId, setStateId] = useState<string>('')
@@ -68,6 +70,31 @@ export default function ManualEntry({ onSuccess }: ManualEntryProps) {
   }, [])
 
   useEffect(() => {
+    // Base ERR is locked to its own room: never list rooms by state
+    if (lockedRoomId) {
+      const fetchOwnRoom = async () => {
+        try {
+          const { data, error } = await supabase
+            .from('emergency_rooms')
+            .select(`
+              id, name, name_ar, err_code,
+              state:states!emergency_rooms_state_reference_fkey(id, state_name, locality)
+            `)
+            .eq('id', lockedRoomId)
+            .maybeSingle()
+          if (error) throw error
+          setRooms(data ? [data as RoomRow] : [])
+          setEmergencyRoomId(data ? lockedRoomId : '')
+          const roomStateId = (data as { state?: { id?: string } } | null)?.state?.id
+          if (roomStateId) setStateId(String(roomStateId))
+        } catch (e) {
+          console.error(e)
+          setRooms([])
+        }
+      }
+      fetchOwnRoom()
+      return
+    }
     if (!stateId) {
       setRooms([])
       setEmergencyRoomId('')
@@ -97,7 +124,7 @@ export default function ManualEntry({ onSuccess }: ManualEntryProps) {
       }
     }
     fetchRooms()
-  }, [stateId, states])
+  }, [stateId, states, lockedRoomId])
 
   useEffect(() => {
     const load = async () => {
@@ -338,7 +365,11 @@ export default function ManualEntry({ onSuccess }: ManualEntryProps) {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <Label>{t('fsystem:f1.state')}</Label>
-            <Select value={stateId} onValueChange={(v) => { setStateId(v); setEmergencyRoomId('') }}>
+            <Select
+              value={stateId}
+              onValueChange={(v) => { setStateId(v); setEmergencyRoomId('') }}
+              disabled={baseErrRoomLoading || Boolean(lockedRoomId)}
+            >
               <SelectTrigger className="w-full">
                 <SelectValue placeholder={t('fsystem:f1.state')} />
               </SelectTrigger>
@@ -353,7 +384,11 @@ export default function ManualEntry({ onSuccess }: ManualEntryProps) {
           </div>
           <div>
             <Label>{t('fsystem:f1.emergency_response_room')}</Label>
-            <Select value={emergencyRoomId} onValueChange={setEmergencyRoomId} disabled={rooms.length === 0}>
+            <Select
+              value={emergencyRoomId}
+              onValueChange={setEmergencyRoomId}
+              disabled={baseErrRoomLoading || rooms.length === 0 || Boolean(lockedRoomId)}
+            >
               <SelectTrigger className="w-full">
                 <SelectValue placeholder={t('fsystem:f1.select_emergency_room')} />
               </SelectTrigger>

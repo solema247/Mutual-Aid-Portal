@@ -4,6 +4,9 @@
   "loading": "Loading...",
   "back": "Back",
   "back_to_home": "Back to Home",
+  "back_to_portal": "Back to Portal",
+  "not_found_title": "Page not found",
+  "not_found_description": "The page you're looking for could not be found.",
   "note": "Note",
   "refresh": "Refresh",
   "error_fetching_data": "Failed to fetch data",
@@ -12,5 +15,6 @@
   "error_updating_user_status": "Failed to update user status",
   "error_unexpected": "An unexpected error occurred",
   "cancel": "Cancel",
-  "select_all": "Select all"
+  "select_all": "Select all",
+  "clear_all": "Clear all"
 } 

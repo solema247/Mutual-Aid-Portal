@@ -2,9 +2,14 @@ import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { getFunctionList } from '@/lib/permissions'
 import {
+  getJsonRoleDefaults,
+  getRoleDefaultsMap,
   isEditableRoleDefault,
+  mergeRoleDefaultsMaps,
   saveRoleDefaults,
 } from '@/lib/roleDefaultsDb'
+import { emitPermissionManagerAudit } from '@/lib/permissionManagerAudit'
+import { auditFieldEqual } from '@/lib/userManagementAudit'
 
 export async function PUT(
   request: Request,
@@ -57,6 +62,11 @@ export async function PUT(
     return NextResponse.json({ error: 'function_codes must be an array' }, { status: 400 })
   }
 
+  // Capture effective previous pack before mutation (DB overrides JSON fallback).
+  const dbMap = await getRoleDefaultsMap(supabase)
+  const previousCodes =
+    mergeRoleDefaultsMaps(getJsonRoleDefaults(), dbMap)[role] ?? []
+
   const { error } = await saveRoleDefaults(supabase, role, functionCodes, currentUser.id)
   if (error) {
     console.error('Save role defaults error:', error)
@@ -68,6 +78,20 @@ export async function PUT(
       },
       { status: 500 }
     )
+  }
+
+  if (!auditFieldEqual(previousCodes, functionCodes)) {
+    await emitPermissionManagerAudit({
+      action: 'user.permission_changed',
+      actorUserId: currentUser.id,
+      endpoint: 'PUT /api/permissions/role-defaults/[role]',
+      request,
+      targetType: 'role',
+      targetId: null,
+      oldValues: { role, function_codes: previousCodes },
+      newValues: { role, function_codes: functionCodes },
+      metadata: { role },
+    })
   }
 
   return NextResponse.json({ ok: true, role, function_codes: functionCodes })

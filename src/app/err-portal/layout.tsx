@@ -7,10 +7,10 @@ import PageExplainerHeader from '@/components/layout/PageExplainerHeader'
 import { PageExplainerProvider } from '@/contexts/PageExplainerContext'
 import type { SidebarItem, SidebarLinkItem } from '@/components/layout/Sidebar'
 import { useRouter } from 'next/navigation'
-import { Users, ClipboardList, BarChart2, BarChart3, PieChart, UserCog, Home, CheckSquare, BookOpen, PenTool, Cog, FileText, BookMarked, Ticket, ShieldCheck, Archive, Split, ArrowLeftRight, LayoutDashboard, MapPin } from 'lucide-react'
-import { supabase } from '@/lib/supabaseClient'
+import { Users, ClipboardList, BarChart2, BarChart3, PieChart, UserCog, Home, CheckSquare, BookOpen, PenTool, Cog, FileText, BookMarked, Ticket, ShieldCheck, Archive, Split, ArrowLeftRight, LayoutDashboard, MapPin, ScrollText } from 'lucide-react'
 import { useAllowedFunctions } from '@/hooks/useAllowedFunctions'
 import { isStateManagementRole } from '@/lib/stateManagement/roles'
+import { canViewAuditLogUi } from '@/lib/auditLogAccess'
 
 interface User {
   id: string;
@@ -210,6 +210,13 @@ export default function ErrPortalLayout({
       icon: <UserCog className="h-5 w-5" />,
     })
   }
+  if (canViewAuditLogUi(user?.role, user?.status)) {
+    adminGroupChildren.push({
+      href: '/err-portal/audit-log',
+      label: t('err:audit_log', { defaultValue: 'Audit Log' }),
+      icon: <ScrollText className="h-5 w-5" />,
+    })
+  }
   if (canViewCompliance) {
     adminGroupChildren.push({
       href: '/err-portal/compliance',
@@ -239,49 +246,59 @@ export default function ErrPortalLayout({
     })
   }
 
-  const sidebarItems: SidebarItem[] = [
-    {
-      href: '/err-portal',
-      label: t('err:home'),
-      icon: <Home className="h-5 w-5" />,
-    },
-    ...(grantManagementChildren.length > 0
-      ? [
-          {
-            type: 'group' as const,
-            label: t('err:grant_management'),
-            children: grantManagementChildren,
-          },
-        ]
-      : []),
-    ...(fSystemChildren.length > 0
-      ? [
-          {
-            type: 'group' as const,
-            label: 'F-System',
-            children: fSystemChildren,
-          },
-        ]
-      : []),
-    ...(reportingGroupChildren.length > 0
-      ? [
-          {
-            type: 'group' as const,
-            label: 'Reporting & learnings',
-            children: reportingGroupChildren,
-          },
-        ]
-      : []),
-    ...(adminGroupChildren.length > 0
-      ? [
-          {
-            type: 'group' as const,
-            label: 'Admin',
-            children: adminGroupChildren,
-          },
-        ]
-      : []),
-  ]
+  // While permissions are unresolved: minimal non-protected shell only (Home).
+  // Do not render permission-gated nav items (fail closed — no flash).
+  const sidebarItems: SidebarItem[] = permissionsLoading
+    ? [
+        {
+          href: '/err-portal',
+          label: t('err:home'),
+          icon: <Home className="h-5 w-5" />,
+        },
+      ]
+    : [
+        {
+          href: '/err-portal',
+          label: t('err:home'),
+          icon: <Home className="h-5 w-5" />,
+        },
+        ...(grantManagementChildren.length > 0
+          ? [
+              {
+                type: 'group' as const,
+                label: t('err:grant_management'),
+                children: grantManagementChildren,
+              },
+            ]
+          : []),
+        ...(fSystemChildren.length > 0
+          ? [
+              {
+                type: 'group' as const,
+                label: 'F-System',
+                children: fSystemChildren,
+              },
+            ]
+          : []),
+        ...(reportingGroupChildren.length > 0
+          ? [
+              {
+                type: 'group' as const,
+                label: 'Reporting & learnings',
+                children: reportingGroupChildren,
+              },
+            ]
+          : []),
+        ...(adminGroupChildren.length > 0
+          ? [
+              {
+                type: 'group' as const,
+                label: 'Admin',
+                children: adminGroupChildren,
+              },
+            ]
+          : []),
+      ]
 
   return (
     <PageExplainerProvider>
