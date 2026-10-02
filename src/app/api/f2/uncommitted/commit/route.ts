@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { requirePermission } from '@/lib/requirePermission'
 import { getComplianceBlockedProjectIds } from '@/lib/compliance'
+import { markProjectsCommitted } from '@/lib/f2Commit'
 import { assertProjectsInGrantAccess } from '@/lib/userGrantAccess'
 import { emitF123Audit } from '@/lib/f123Audit'
 
@@ -40,11 +41,10 @@ export async function POST(request: Request) {
       .select('id, status, funding_status')
       .in('id', f1_ids)
 
-    const { error } = await supabase
-      .from('err_projects')
-      .update({ funding_status: 'committed', status: 'approved' })
-      .in('id', f1_ids)
-
+    const { error } = await markProjectsCommitted(supabase, f1_ids, {
+      status: 'approved',
+      committedBy: perm.user.email?.trim() || null,
+    })
     if (error) throw error
 
     const beforeById = new Map(
@@ -79,5 +79,3 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Failed to commit F1s' }, { status: 500 })
   }
 }
-
-

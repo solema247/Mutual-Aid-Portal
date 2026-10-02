@@ -33,6 +33,7 @@ interface Screening {
   date: string | null
   submitted_at: string | null
   last_modified: string | null
+  committed_at: string | null
   state: string | null
   locality: string | null
   project_status: string | null
@@ -46,19 +47,19 @@ interface Screening {
   identity_document_file_key: string | null
 }
 
-function committedWithoutClearance(s: Screening) {
-  return s.status === 'pending_screening' && s.funding_status === 'committed'
+function paymentAlreadyCommitted(s: Screening) {
+  return s.funding_status === 'committed' && (s.status === 'pending_screening' || s.status === 'flagged')
+}
+
+function nameNotExtracted(s: Screening) {
+  return s.status === 'pending_screening' && (!s.names || s.names.length === 0)
 }
 
 function StatusBadge({ s }: { s: Screening }) {
-  if (committedWithoutClearance(s)) {
-    return (
-      <Badge variant="destructive" className="text-[10px] px-1.5 py-0 font-semibold">
-        Committed without clearance
-      </Badge>
-    )
-  }
   if (s.status === 'pending_screening') {
+    if (nameNotExtracted(s)) {
+      return <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-amber-500 text-amber-800">Name not extracted</Badge>
+    }
     return <Badge variant="secondary" className="text-[10px] px-1.5 py-0">Pending screening</Badge>
   }
   if (s.status === 'auto_approved') {
@@ -78,11 +79,8 @@ function StatusBadge({ s }: { s: Screening }) {
     )
   }
   if (s.flag_type === 'missing_id') {
-    if (s.finance_review_status === 'id_uploaded') {
+    if (s.finance_review_status === 'id_uploaded' || s.finance_review_status === 'approved') {
       return <Badge variant="default" className="text-[10px] px-1.5 py-0 bg-amber-500">ID uploaded — awaiting clearance</Badge>
-    }
-    if (s.finance_review_status === 'approved') {
-      return <Badge variant="default" className="text-[10px] px-1.5 py-0 bg-green-600">Missing ID — document uploaded</Badge>
     }
     if (s.finance_review_status === 'rejected') {
       return <Badge variant="secondary" className="text-[10px] px-1.5 py-0">Missing ID flag dismissed</Badge>
@@ -148,7 +146,7 @@ function PaginatedScreeningsTable({
                 {showTimelineColumns && (
                   <>
                     <TableHead className="px-2">Raised</TableHead>
-                    <TableHead className="px-2">Last modified</TableHead>
+                    <TableHead className="px-2">Committed</TableHead>
                   </>
                 )}
                 <TableHead className="px-2">State</TableHead>
@@ -185,8 +183,19 @@ function PaginatedScreeningsTable({
                       <TableCell className="whitespace-nowrap" title={s.submitted_at || ''}>
                         {formatTimestamp(s.submitted_at)}
                       </TableCell>
-                      <TableCell className="whitespace-nowrap" title={s.last_modified || ''}>
-                        {formatTimestamp(s.last_modified)}
+                      <TableCell
+                        className="whitespace-nowrap"
+                        title={
+                          s.committed_at
+                            ? s.committed_at
+                            : 'No committed_at recorded (legacy commit before this field existed)'
+                        }
+                      >
+                        {s.committed_at ? (
+                          formatTimestamp(s.committed_at)
+                        ) : (
+                          <span className="text-muted-foreground italic">Unknown (legacy)</span>
+                        )}
                       </TableCell>
                     </>
                   )}
@@ -207,7 +216,14 @@ function PaginatedScreeningsTable({
                     {s.total_amount ? s.total_amount.toLocaleString() : '—'}
                   </TableCell>
                   <TableCell className="whitespace-nowrap">
-                    <StatusBadge s={s} />
+                    <div className="flex flex-col gap-0.5 items-start">
+                      <StatusBadge s={s} />
+                      {paymentAlreadyCommitted(s) && (
+                        <Badge variant="destructive" className="text-[10px] px-1.5 py-0 font-semibold">
+                          Payment already committed
+                        </Badge>
+                      )}
+                    </div>
                   </TableCell>
                   <TableCell className="whitespace-nowrap">
                     <Button
@@ -298,6 +314,22 @@ export default function CompliancePage() {
   useEffect(() => {
     fetchQueue()
   }, [fetchQueue])
+
+  // Deep-link from digest email: /err-portal/compliance?screening=<id>
+  useEffect(() => {
+    if (isLoading || screenings.length === 0) return
+    if (typeof window === 'undefined') return
+    const id = new URLSearchParams(window.location.search).get('screening')
+    if (!id) return
+    const match = screenings.find(s => s.id === id)
+    if (match) {
+      setSelected(match)
+      setNote('')
+      setActionError(null)
+      setActionInfo(null)
+      setDialogOpen(true)
+    }
+  }, [isLoading, screenings])
 
   const openDetail = (s: Screening) => {
     setSelected(s)
@@ -409,15 +441,44 @@ export default function CompliancePage() {
     }
   }
 
-  const openFile = async (fileKey: string) => {
+  const openFile = async (...keys: Array<string | null | undefined>) => {
+    const candidates = [...new Set(keys.map(k => k?.trim()).filter(Boolean) as string[])]
+    if (candidates.length === 0) {
+      alert('No file is attached to this F1')
+      return
+    }
+
+    // Open synchronously on the click gesture so browsers do not block the tab.
+    const win = window.open('about:blank', '_blank')
+    if (!win) {
+      alert('Pop-up blocked. Please allow pop-ups for this site and try again.')
+      return
+    }
+
     try {
-      const res = await fetch(`/api/storage/signed-url?path=${encodeURIComponent(fileKey)}`)
-      if (!res.ok) throw new Error('Failed to get file URL')
-      const { url } = await res.json()
-      if (url) window.open(url, '_blank')
-      else alert('File not available')
+      for (const path of candidates) {
+        // Cheap existence check (service-role signed URL); then stream same-origin.
+        const probe = await fetch(`/api/storage/signed-url?path=${encodeURIComponent(path)}`)
+        if (probe.status === 401) {
+          win.close()
+          alert('Your session expired. Please refresh and sign in again.')
+          return
+        }
+        if (!probe.ok) continue
+        const body = await probe.json().catch(() => ({} as { url?: string | null }))
+        if (!body.url) continue
+        win.location.href = `/api/storage/file?path=${encodeURIComponent(path)}`
+        return
+      }
+      win.close()
+      alert('F1 file not found in storage. The path on this record may be missing or moved.')
     } catch (e) {
       console.error('Error opening file:', e)
+      try {
+        win.close()
+      } catch {
+        // ignore
+      }
       alert('Failed to open file')
     }
   }
@@ -425,15 +486,17 @@ export default function CompliancePage() {
   if (!canViewPage) return null
   if (isLoading) return <div className="text-center py-8">Loading...</div>
 
+  // id_uploaded is the current finance handoff; approved covers legacy rows
+  // that finance marked approved before upload-id became the only path.
   const awaitingIdClearance = (s: Screening) =>
     s.status === 'flagged' &&
     s.flag_type === 'missing_id' &&
-    s.finance_review_status === 'id_uploaded'
+    (s.finance_review_status === 'id_uploaded' ||
+      s.finance_review_status === 'approved')
 
+  // Screening queue = full Ahmad workflow, including committed / name-not-extracted F1s.
   const pending = screenings.filter(
-    s =>
-      (s.status === 'pending_screening' && !committedWithoutClearance(s)) ||
-      awaitingIdClearance(s)
+    s => s.status === 'pending_screening' || awaitingIdClearance(s)
   )
   const financeQueue = screenings.filter(
     s => s.status === 'flagged' && s.finance_review_status === 'pending'
@@ -446,23 +509,13 @@ export default function CompliancePage() {
   )
   const history = screenings.filter(
     s =>
-      !committedWithoutClearance(s) &&
       s.status !== 'pending_screening' &&
       !awaitingIdClearance(s) &&
       !(s.status === 'flagged' && s.finance_review_status === 'pending')
   )
-  const bypassedClearance = screenings
-    .filter(committedWithoutClearance)
-    .slice()
-    .sort((a, b) => {
-      const aTime = Date.parse(a.submitted_at || a.created_at || '') || 0
-      const bTime = Date.parse(b.submitted_at || b.created_at || '') || 0
-      return bTime - aTime
-    })
-  const bypassedClearanceCount = bypassedClearance.length
+  const paymentCommittedCount = pending.filter(paymentAlreadyCommitted).length
 
-  // Allow Clear / Flag even when already committed (retrospective review for
-  // F1s that bypassed the gate — shown on the Without clearance tab).
+  // Same Clear / Flag actions for every pending F1, including already-committed ones.
   const showScreeningActions =
     canScreen &&
     selected != null &&
@@ -521,26 +574,32 @@ export default function CompliancePage() {
         </CardHeader>
         <CardContent>
           <Tabs defaultValue="queue" className="w-full">
-            <TabsList className="grid w-full grid-cols-4">
+            <TabsList className="grid w-full grid-cols-3">
               <TabsTrigger value="queue">
                 Screening queue{pending.length > 0 ? ` (${pending.length})` : ''}
               </TabsTrigger>
               <TabsTrigger value="finance">
                 Finance review{financeQueue.length > 0 ? ` (${financeQueue.length})` : ''}
               </TabsTrigger>
-              <TabsTrigger value="bypassed">
-                Without clearance{bypassedClearanceCount > 0 ? ` (${bypassedClearanceCount})` : ''}
-              </TabsTrigger>
               <TabsTrigger value="history">
                 History
               </TabsTrigger>
             </TabsList>
 
-            <TabsContent value="queue" className="mt-6">
+            <TabsContent value="queue" className="mt-6 space-y-3">
+              {paymentCommittedCount > 0 && (
+                <p className="text-sm text-muted-foreground">
+                  {paymentCommittedCount} F1{paymentCommittedCount === 1 ? '' : 's'} already have{' '}
+                  <span className="font-medium text-red-700">Payment already committed</span> —
+                  review them here with the same Clear / Flag Missing ID flow; they only leave
+                  this queue when moved to History as Cleared.
+                </p>
+              )}
               <PaginatedScreeningsTable
                 rows={pending}
                 emptyText="No F1s waiting for screening"
                 onView={openDetail}
+                showTimelineColumns
               />
             </TabsContent>
 
@@ -549,25 +608,6 @@ export default function CompliancePage() {
                 rows={financeQueue}
                 emptyText="No flagged F1s waiting for finance review"
                 onView={openDetail}
-              />
-            </TabsContent>
-
-            <TabsContent value="bypassed" className="mt-6 space-y-3">
-              <p className="text-sm text-muted-foreground">
-                F1s that were committed at F2 while still pending Ahmed&apos;s screening.
-                Open any row to review payee names and <strong className="font-medium text-foreground">Clear</strong> or{' '}
-                <strong className="font-medium text-foreground">Flag</strong> retrospectively
-                (funding stays committed; a sanctions flag still stops payment).
-                <strong className="font-medium text-foreground"> Raised</strong> is{' '}
-                <code className="text-xs">submitted_at</code>.{' '}
-                <strong className="font-medium text-foreground">Last modified</strong> is the best
-                available proxy for later changes (there is no dedicated commit timestamp in the DB).
-              </p>
-              <PaginatedScreeningsTable
-                rows={bypassedClearance}
-                emptyText="No F1s committed without compliance clearance"
-                onView={openDetail}
-                showTimelineColumns
               />
             </TabsContent>
 
@@ -599,11 +639,18 @@ export default function CompliancePage() {
                 </div>
               )}
 
-              {committedWithoutClearance(selected) && (
+              {paymentAlreadyCommitted(selected) && (
                 <div className="rounded-md border border-red-500 bg-red-50 px-3 py-2 text-sm text-red-950">
-                  This F1 was committed at F2 without a compliance Clear or auto-approval.
-                  You can still <strong>Clear</strong> or <strong>Flag</strong> it now — clearing
-                  records retrospective approval; a sanctions flag still stops payment.
+                  <strong>Payment already committed</strong> — funds may already have gone out.
+                  Complete the normal workflow: Clear, or Flag Missing ID → Finance upload → Clear.
+                  A sanctions flag still stops payment.
+                </div>
+              )}
+
+              {nameNotExtracted(selected) && (
+                <div className="rounded-md border border-amber-500 bg-amber-50 px-3 py-2 text-sm text-amber-950">
+                  <strong>Name not extracted</strong> — screen banking details manually, then Clear
+                  or Flag Missing ID as usual.
                 </div>
               )}
 
@@ -617,6 +664,16 @@ export default function CompliancePage() {
 
               <div className="flex items-center gap-2 flex-wrap">
                 <StatusBadge s={selected} />
+                {paymentAlreadyCommitted(selected) && (
+                  <Badge variant="destructive" className="text-[10px] px-1.5 py-0 font-semibold">
+                    Payment already committed
+                  </Badge>
+                )}
+                {selected.names.length > 1 && (
+                  <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                    {selected.names.length} names
+                  </Badge>
+                )}
                 {selected.funding_status && (
                   <Badge variant="outline" className="text-[10px] px-1.5 py-0">
                     {selected.funding_status}
@@ -638,8 +695,14 @@ export default function CompliancePage() {
                   <div>{formatTimestamp(selected.submitted_at)}</div>
                 </div>
                 <div>
-                  <div className="text-xs text-muted-foreground">Last modified</div>
-                  <div>{formatTimestamp(selected.last_modified)}</div>
+                  <div className="text-xs text-muted-foreground">Committed (committed_at)</div>
+                  <div>
+                    {selected.committed_at ? (
+                      formatTimestamp(selected.committed_at)
+                    ) : (
+                      <span className="text-muted-foreground italic">Unknown (legacy)</span>
+                    )}
+                  </div>
                 </div>
                 <div>
                   <div className="text-xs text-muted-foreground">State / Locality</div>
@@ -687,9 +750,10 @@ export default function CompliancePage() {
               <div className="flex flex-wrap gap-2">
                 {(selected.f1_file_key || selected.temp_file_key) && (
                   <Button
+                    type="button"
                     variant="outline"
                     size="sm"
-                    onClick={() => openFile((selected.f1_file_key || selected.temp_file_key) as string)}
+                    onClick={() => openFile(selected.f1_file_key, selected.temp_file_key)}
                   >
                     <FileText className="w-4 h-4 mr-1" />
                     Open original F1 file
@@ -697,9 +761,10 @@ export default function CompliancePage() {
                 )}
                 {selected.identity_document_file_key && (
                   <Button
+                    type="button"
                     variant="outline"
                     size="sm"
-                    onClick={() => openFile(selected.identity_document_file_key as string)}
+                    onClick={() => openFile(selected.identity_document_file_key)}
                   >
                     <IdCard className="w-4 h-4 mr-1" />
                     Open uploaded ID

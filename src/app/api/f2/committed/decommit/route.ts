@@ -45,11 +45,11 @@ export async function POST(request: Request) {
       )
     }
 
-    const { error: updateError } = await supabase
-      .from('err_projects')
-      .update({ status: 'pending', funding_status: 'unassigned' })
-      .eq('id', id)
-
+    const { clearProjectCommittedStamp } = await import('@/lib/f2Commit')
+    const { error: updateError } = await clearProjectCommittedStamp(supabase, id, {
+      status: 'pending',
+      funding_status: 'unassigned',
+    })
     if (updateError) throw updateError
 
     await emitF123Audit({

@@ -1,19 +1,24 @@
 #!/usr/bin/env node
 
 /**
- * Import a compliance-officer "cleared names" list (English + Arabic) into the
- * approved_beneficiaries exception list, and reconcile it against the banking
- * details stored in err_projects so already-flagged/pending F1s for these
- * beneficiaries are cleared.
+ * Bulk auto-clear pending compliance screenings against names Ahmad has already
+ * cleared (visual compliance sheet / approved list).
+ *
+ * Matching: normalised exact match only by default (case, spacing, punctuation
+ * via the same normalizedNameKey as the app). Never fuzzy-name-only unless
+ * --fuzzy is passed (subset token match) — and never auto-clear open
+ * missing-ID / Finance Review steps.
+ *
+ * Clears move to History status "cleared" with an audit note citing the prior
+ * approval reference (sheet filename + matched name key).
  *
  * Input: .xlsx with two columns of names, e.g. "Name ENG" and "Name AR"
  * (falls back to the first two columns if those headers are absent).
  *
  * Usage:
  *   node scripts/import-cleared-names.js <file.xlsx>            # dry run (no writes)
- *   node scripts/import-cleared-names.js <file.xlsx> --commit   # write whitelist + clear exact matches
- *   node scripts/import-cleared-names.js <file.xlsx> --commit --fuzzy
- *        # also clear high-confidence subset matches (DB name tokens ⊆ a cleared full name, >=3 shared tokens)
+ *   node scripts/import-cleared-names.js <file.xlsx> --apply    # write whitelist + clear matches
+ *   node scripts/import-cleared-names.js <file.xlsx> --commit   # alias for --apply
  *
  * Requires NEXT_PUBLIC_SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY in .env.local.
  */
@@ -119,12 +124,21 @@ function readClearedNames(xlsxPath) {
     .filter(x => x.eng || x.ar)
 }
 
+function hasOpenFinanceStep(s) {
+  if (s.status !== 'flagged') return false
+  // Never auto-clear anything in Finance Review or with an open missing-ID path
+  if (s.flag_type === 'missing_id') return true
+  if (s.finance_review_status === 'pending' || s.finance_review_status === 'id_uploaded') return true
+  if (s.flag_type === 'sanctions_match') return true
+  return Boolean(s.finance_review_status)
+}
+
 async function main() {
   const inputPath = process.argv[2]
-  const commit = process.argv.includes('--commit')
+  const commit = process.argv.includes('--commit') || process.argv.includes('--apply')
   const fuzzy = process.argv.includes('--fuzzy')
   if (!inputPath) {
-    console.error('Usage: node scripts/import-cleared-names.js <file.xlsx> [--commit] [--fuzzy]')
+    console.error('Usage: node scripts/import-cleared-names.js <file.xlsx> [--apply|--commit] [--fuzzy]')
     process.exit(1)
   }
   if (!fs.existsSync(inputPath)) {
@@ -222,7 +236,12 @@ async function main() {
 
   const exactHits = []
   const fuzzyHits = []
+  let skippedFinance = 0
   for (const s of screenings) {
+    if (hasOpenFinanceStep(s)) {
+      skippedFinance++
+      continue
+    }
     // Prefer freshly extracting from the live banking details (relevant table)
     const banking = bankById.get(s.project_id) || ''
     const extracted = extractNamesFromBanking(banking)
@@ -231,12 +250,13 @@ async function main() {
     const keys = names.map(normalizedNameKey)
     const exact = keys.length > 0 && keys.every(k => clearedKeys.has(k))
     if (exact) {
-      exactHits.push({ s, names, banking })
+      exactHits.push({ s, names, banking, matchedKeys: keys })
       continue
     }
     const ev = subsetMatch(names)
     if (ev) fuzzyHits.push({ s, names, banking, evidence: ev })
   }
+  console.log(`Skipped (open missing-ID / Finance Review / sanctions): ${skippedFinance}`)
 
   const summarize = (label, hits) => {
     console.log(`\n${label}: ${hits.length}`)
@@ -267,19 +287,29 @@ async function main() {
   })
   const toClear = fuzzy ? [...exactHits, ...safeFuzzy] : exactHits
   const clearable = toClear.filter(h => h.s.status !== 'auto_approved' && h.s.status !== 'cleared')
+  const sheetRef = path.basename(inputPath)
   if (clearable.length === 0) {
     console.log('\nNo screenings need clearing.')
   } else if (commit) {
     let cleared = 0
     for (const h of clearable) {
+      const refNames = (h.matchedKeys || []).slice(0, 3).join('; ')
+      const audit =
+        `Auto-cleared by match to a prior approval (source: ${sheetRef}` +
+        (refNames ? `; matched key(s): ${refNames}` : '') +
+        '). Moved to History: Cleared via standard bulk transition.'
       const { error } = await supabase
         .from('compliance_screenings')
         .update({
-          status: 'auto_approved',
-          flag_note: 'Cleared via compliance-officer cleared-names list import',
+          status: 'cleared',
+          flag_type: null,
+          flag_note: audit,
+          screened_by: 'system:auto-clear-prior-approval',
           screened_at: new Date().toISOString(),
           finance_review_status: null,
-          finance_review_note: null
+          finance_review_note: null,
+          finance_reviewed_by: null,
+          finance_reviewed_at: null
         })
         .eq('id', h.s.id)
       if (error) {
@@ -288,9 +318,9 @@ async function main() {
       }
       cleared++
     }
-    console.log(`\nCleared ${cleared} screening(s) → status auto_approved (payments unblocked).`)
+    console.log(`\nCleared ${cleared} screening(s) → History status "cleared".`)
   } else {
-    console.log(`\nWould clear ${clearable.length} screening(s) (run with --commit).`)
+    console.log(`\nWould clear ${clearable.length} screening(s) (run with --apply).`)
   }
 
   console.log('\nDone.')

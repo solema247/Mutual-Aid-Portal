@@ -319,11 +319,13 @@ export async function POST(request: Request) {
       )
     }
 
-    const { error } = await supabase
-      .from('err_projects')
-      .update({ funding_status: 'committed' })
-      .in('id', f1_ids)
-
+    const { markProjectsCommitted } = await import('@/lib/f2Commit')
+    const {
+      data: { session },
+    } = await supabase.auth.getSession()
+    const { error } = await markProjectsCommitted(supabase, f1_ids, {
+      committedBy: session?.user?.email?.trim() || null,
+    })
     if (error) throw error
 
     return NextResponse.json({ 

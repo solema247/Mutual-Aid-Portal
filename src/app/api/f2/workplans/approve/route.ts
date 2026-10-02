@@ -107,13 +107,15 @@ export async function POST(request: Request) {
       .insert(ledgerEntries)
     if (ledgerError) throw ledgerError
 
-    const { error: updateError } = await supabase
-      .from('err_projects')
-      .update({ status: 'approved', funding_status: 'committed' })
-      .in(
-        'id',
-        pendingWorkplans.map((w) => w.id)
-      )
+    const { markProjectsCommitted } = await import('@/lib/f2Commit')
+    const { error: updateError } = await markProjectsCommitted(
+      supabase,
+      pendingWorkplans.map((w) => w.id),
+      {
+        status: 'approved',
+        committedBy: session.user.email?.trim() || null,
+      }
+    )
     if (updateError) throw updateError
 
     return NextResponse.json({ success: true, approved_count: pendingWorkplans.length })

@@ -1,4 +1,4 @@
-async function postComplianceSlack(text: string): Promise<{ sent: boolean; detail: string }> {
+export async function postComplianceSlack(text: string): Promise<{ sent: boolean; detail: string }> {
   const token = process.env.SLACK_BOT_TOKEN
   const channel = process.env.COMPLIANCE_ALERT_SLACK_CHANNEL
 

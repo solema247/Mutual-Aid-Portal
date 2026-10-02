@@ -91,3 +91,7 @@ data/imports/*
 !data/imports/.gitkeep
 data/exports/*
 !data/exports/.gitkeep
+
+# Compliance import review artefacts (may contain ID metadata) — not committed
+scripts/output/*.csv
+scripts/output/*preapproved*
