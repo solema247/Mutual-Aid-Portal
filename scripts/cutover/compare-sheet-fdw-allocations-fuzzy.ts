@@ -12,7 +12,7 @@ import { config } from 'dotenv'
 import { readFileSync, writeFileSync } from 'fs'
 import { resolve } from 'path'
 import Papa from 'papaparse'
-import { getSupabaseAdmin } from '../../src/lib/supabaseAdmin'
+import { getRemoteBAdmin } from '../../src/lib/supabaseAdmin'
 
 config({ path: resolve(process.cwd(), '.env.local') })
 
@@ -259,7 +259,8 @@ function parseSheetRow(r: Record<string, string>): SheetAlloc & { yymmddCandidat
 }
 
 async function fetchFdw() {
-  const supabase = getSupabaseAdmin()
+  // Cutover compares against staging AT FDW (Remote B), not prod-active admin.
+  const supabase = getRemoteBAdmin()
   const rows: Array<{
     allocation_id: unknown
     state: string | null

@@ -1,4 +1,6 @@
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
+import { can, type Role } from '@/lib/permissions'
+import { getRouteHandlerAuth } from '@/lib/routeHandlerAuth'
 import {
   assertMouInGrantAccess,
   assertProjectInGrantAccess,
@@ -11,6 +13,11 @@ import {
  * Non-partner and anonymous callers are passthrough: the route keeps its
  * existing sign-any-path behavior. A Partner is allowed only after an exact
  * stored-path match and the existing project/MOU grant helpers.
+ *
+ * Compliance exception: partners with compliance_view_page / compliance_screen
+ * may open F1 / identity files (file_key, temp_file_key, identity_document_file_key)
+ * even when the project has no grant_grid_id yet — grant assignment happens
+ * downstream of compliance screening.
  */
 export type StoragePathGrantDecision =
   | { status: 'passthrough' }
@@ -29,6 +36,8 @@ type PathOwner = {
   mouId: string | null
   /** Payment and project files must pass assertProjectInGrantAccess. MOU files use the MOU helper. */
   requireProject: boolean
+  /** F1 / ID docs used on the compliance screening page. */
+  complianceF1?: boolean
 }
 
 export async function resolveStoragePathGrant (
@@ -36,6 +45,7 @@ export async function resolveStoragePathGrant (
   bucket: string
 ): Promise<StoragePathGrantDecision> {
   const access = await getUserGrantAccess()
+  const complianceAccess = createComplianceAccessChecker()
 
   if (access.mode === 'all') {
     return { status: 'passthrough' }
@@ -43,8 +53,23 @@ export async function resolveStoragePathGrant (
 
   if (access.mode === 'none') {
     // No session and a missing user row share opsPartnerId null with a Partner
-    // who has no ops_partner_id. Only the Partner role fails closed.
+    // who has no ops_partner_id. Only the Partner role fails closed — except
+    // compliance F1/ID downloads for partners who have compliance access.
     if (access.opsPartnerId || (await currentUserIsPartner())) {
+      if (bucket === 'images') {
+        const complianceOwner = await findComplianceF1OwnerIfAllowed(
+          path,
+          complianceAccess
+        )
+        if (complianceOwner) {
+          return {
+            status: 'allow',
+            path,
+            projectId: complianceOwner.projectId,
+            mouId: null,
+          }
+        }
+      }
       return { status: 'deny' }
     }
     return { status: 'passthrough' }
@@ -54,7 +79,7 @@ export async function resolveStoragePathGrant (
     return { status: 'deny' }
   }
 
-  const owner = await findAuthorizedOwner(path, access)
+  const owner = await findAuthorizedOwner(path, access, complianceAccess)
   if (!owner) {
     return { status: 'deny' }
   }
@@ -89,9 +114,48 @@ async function currentUserIsPartner (): Promise<boolean> {
   return data?.role === 'partner'
 }
 
+function createComplianceAccessChecker (): () => Promise<boolean> {
+  let cached: Promise<boolean> | null = null
+  return () => {
+    if (!cached) {
+      cached = (async () => {
+        const ctx = await getRouteHandlerAuth()
+        if (!ctx || ctx.dbUser.role !== 'partner') return false
+        const user = {
+          id: ctx.dbUser.id,
+          role: ctx.dbUser.role as Role,
+        }
+        return (
+          can(user, 'compliance_view_page', ctx.overridesMap, ctx.roleDefaultsMap) ||
+          can(user, 'compliance_screen', ctx.overridesMap, ctx.roleDefaultsMap)
+        )
+      })()
+    }
+    return cached
+  }
+}
+
+async function findComplianceF1OwnerIfAllowed (
+  path: string,
+  hasComplianceAccess: () => Promise<boolean>
+): Promise<PathOwner | null> {
+  if (!(await hasComplianceAccess())) return null
+  const groups = await Promise.all([
+    projectColumnOwners('file_key', path),
+    projectColumnOwners('temp_file_key', path),
+    identityDocumentOwners(path),
+  ])
+  for (const owners of groups) {
+    const hit = owners.find((o) => o.complianceF1 && o.projectId)
+    if (hit) return hit
+  }
+  return null
+}
+
 async function findAuthorizedOwner (
   path: string,
-  access: PartnerAccess
+  access: PartnerAccess,
+  hasComplianceAccess: () => Promise<boolean>
 ): Promise<PathOwner | null> {
   const groups = await Promise.all([
     projectColumnOwners('file_key', path),
@@ -110,7 +174,7 @@ async function findAuthorizedOwner (
   let allowed: PathOwner | null = null
   for (const owners of groups) {
     for (const owner of owners) {
-      const verdict = await authorizeOwner(access, owner)
+      const verdict = await authorizeOwner(access, owner, hasComplianceAccess)
       if (verdict === 'deny') return null
       if (!allowed) allowed = owner
     }
@@ -120,7 +184,8 @@ async function findAuthorizedOwner (
 
 async function authorizeOwner (
   access: PartnerAccess,
-  owner: PathOwner
+  owner: PathOwner,
+  hasComplianceAccess: () => Promise<boolean>
 ): Promise<'allow' | 'deny'> {
   if (owner.requireProject) {
     if (!owner.projectId) return 'deny'
@@ -128,6 +193,10 @@ async function authorizeOwner (
     if (scope.ok) return 'allow'
     if (scope.response.status >= 500) {
       throw new Error('storage path grant check failed')
+    }
+    // Compliance screens F1s before grant assignment; allow F1/ID only.
+    if (owner.complianceF1 && (await hasComplianceAccess())) {
+      return 'allow'
     }
     return 'deny'
   }
@@ -151,10 +220,12 @@ async function projectColumnOwners (
     .select('id')
     .eq(column, path)
   if (error) throw error
+  const complianceF1 = column === 'file_key' || column === 'temp_file_key'
   return (data || []).map((row) => ({
     projectId: row.id,
     mouId: null,
     requireProject: true,
+    complianceF1,
   }))
 }
 
@@ -170,6 +241,7 @@ async function identityDocumentOwners (path: string): Promise<PathOwner[]> {
     projectId: row.id,
     mouId: null,
     requireProject: true,
+    complianceF1: true,
   }))
 }
 
