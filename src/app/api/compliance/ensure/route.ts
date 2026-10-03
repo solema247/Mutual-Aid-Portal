@@ -33,7 +33,7 @@ export async function POST(request: Request) {
 
     let projectQuery = supabase
       .from('err_projects')
-      .select('id, banking_details')
+      .select('id, banking_details, submitted_at, date')
       .in('id', project_ids)
     projectQuery = applyEmergencyRoomIdFilter(projectQuery, roomAccess)
     const { data: projects, error } = await projectQuery

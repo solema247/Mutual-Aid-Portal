@@ -1,7 +1,12 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { requirePermission } from '@/lib/requirePermission'
-import { sweepUnscreenedProjects } from '@/lib/compliance'
+import {
+  sweepUnscreenedProjects,
+  retagPreJulyScreenings,
+  complianceRaisedAt,
+  isBeforeComplianceQueueStart,
+} from '@/lib/compliance'
 import {
   fetchProjectIdsForEmergencyRoom,
   getUserRoomAccess,
@@ -130,7 +135,7 @@ export async function GET(request: Request) {
         let countQuery = supabase
           .from('compliance_screenings')
           .select(
-            'id, status, flag_type, finance_review_status, err_projects!inner(file_key, temp_file_key, funding_status, status)'
+            'id, status, flag_type, finance_review_status, err_projects!inner(file_key, temp_file_key, funding_status, status, submitted_at, date)'
           )
           .or(AWAITING_ID_CLEARANCE_OR)
         if (batch) countQuery = countQuery.in('project_id', batch)
@@ -146,11 +151,20 @@ export async function GET(request: Request) {
               temp_file_key?: string | null
               funding_status?: string | null
               status?: string | null
+              submitted_at?: string | null
+              date?: string | null
             }
           | undefined
         if (!p) return false
         if (!(p.file_key || p.temp_file_key)) return false
         if (p.status === 'completed' || p.status === 'declined') return false
+        if (
+          isBeforeComplianceQueueStart(
+            complianceRaisedAt({ submitted_at: p.submitted_at, date: p.date })
+          )
+        ) {
+          return false
+        }
         return true
       }).length
       return NextResponse.json({ pending_count: count })
@@ -163,6 +177,11 @@ export async function GET(request: Request) {
       } catch (sweepError) {
         // Sweep failure shouldn't block viewing the existing queue
         console.error('Compliance sweep error:', sweepError)
+      }
+      try {
+        await retagPreJulyScreenings(supabase)
+      } catch (retagError) {
+        console.error('Pre-July compliance retag error:', retagError)
       }
     }
 
@@ -284,13 +303,18 @@ export async function GET(request: Request) {
     // 3) Declined/completed projects drop out of active work only.
     const visible = formatted.filter((r) => {
       if (!(r.f1_file_key || r.temp_file_key)) return false
+      const preJuly = isBeforeComplianceQueueStart(
+        complianceRaisedAt({ submitted_at: r.submitted_at, date: r.date })
+      )
       const isActiveWork =
-        r.status === 'pending_screening' ||
-        (r.status === 'flagged' && r.finance_review_status === 'pending') ||
-        (r.status === 'flagged' &&
-          r.flag_type === 'missing_id' &&
-          (r.finance_review_status === 'id_uploaded' ||
-            r.finance_review_status === 'approved'))
+        !preJuly &&
+        r.status !== 'committed_without_clearance' &&
+        (r.status === 'pending_screening' ||
+          (r.status === 'flagged' && r.finance_review_status === 'pending') ||
+          (r.status === 'flagged' &&
+            r.flag_type === 'missing_id' &&
+            (r.finance_review_status === 'id_uploaded' ||
+              r.finance_review_status === 'approved')))
       if (isActiveWork) {
         if (r.project_status === 'completed' || r.project_status === 'declined') return false
       }

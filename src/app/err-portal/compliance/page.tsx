@@ -12,6 +12,10 @@ import { Textarea } from '@/components/ui/textarea'
 import { FileText, Eye, ShieldCheck, ShieldAlert, IdCard, Siren, Upload } from 'lucide-react'
 import { useAllowedFunctions } from '@/hooks/useAllowedFunctions'
 import { supabase } from '@/lib/supabaseClient'
+import {
+  complianceRaisedAt,
+  isBeforeComplianceQueueStart
+} from '@/lib/compliance'
 
 type FlagType = 'missing_id' | 'sanctions_match'
 
@@ -19,7 +23,7 @@ interface Screening {
   id: string
   project_id: string
   names: string[]
-  status: 'pending_screening' | 'cleared' | 'flagged' | 'auto_approved'
+  status: 'pending_screening' | 'cleared' | 'flagged' | 'auto_approved' | 'committed_without_clearance'
   flag_type: FlagType | null
   flag_note: string | null
   alerted_at: string | null
@@ -47,7 +51,14 @@ interface Screening {
   identity_document_file_key: string | null
 }
 
+function isPreJulyF1(s: Screening) {
+  return isBeforeComplianceQueueStart(
+    complianceRaisedAt({ submitted_at: s.submitted_at, date: s.date })
+  )
+}
+
 function paymentAlreadyCommitted(s: Screening) {
+  if (s.status === 'committed_without_clearance' || isPreJulyF1(s)) return false
   return s.funding_status === 'committed' && (s.status === 'pending_screening' || s.status === 'flagged')
 }
 
@@ -56,6 +67,13 @@ function nameNotExtracted(s: Screening) {
 }
 
 function StatusBadge({ s }: { s: Screening }) {
+  if (s.status === 'committed_without_clearance' || isPreJulyF1(s)) {
+    return (
+      <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-slate-400 text-slate-700">
+        Committed without clearance
+      </Badge>
+    )
+  }
   if (s.status === 'pending_screening') {
     if (nameNotExtracted(s)) {
       return <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-amber-500 text-amber-800">Name not extracted</Badge>
@@ -496,30 +514,43 @@ export default function CompliancePage() {
 
   // Screening queue = full Ahmad workflow, including committed / name-not-extracted F1s.
   const pending = screenings.filter(
-    s => s.status === 'pending_screening' || awaitingIdClearance(s)
+    s =>
+      !isPreJulyF1(s) &&
+      s.status !== 'committed_without_clearance' &&
+      (s.status === 'pending_screening' || awaitingIdClearance(s))
   )
   const financeQueue = screenings.filter(
-    s => s.status === 'flagged' && s.finance_review_status === 'pending'
+    s =>
+      !isPreJulyF1(s) &&
+      s.status === 'flagged' &&
+      s.finance_review_status === 'pending'
   )
   const sanctionsAlerts = screenings.filter(
     s =>
+      !isPreJulyF1(s) &&
       s.status === 'flagged' &&
       s.flag_type === 'sanctions_match' &&
       s.finance_review_status === 'pending'
   )
-  const history = screenings.filter(
-    s =>
+  const history = screenings.filter(s => {
+    if (s.status === 'committed_without_clearance' || isPreJulyF1(s)) {
+      return !(s.status === 'flagged' && s.finance_review_status === 'pending')
+    }
+    return (
       s.status !== 'pending_screening' &&
       !awaitingIdClearance(s) &&
       !(s.status === 'flagged' && s.finance_review_status === 'pending')
-  )
+    )
+  })
   const paymentCommittedCount = pending.filter(paymentAlreadyCommitted).length
 
   // Same Clear / Flag actions for every pending F1, including already-committed ones.
   const showScreeningActions =
     canScreen &&
     selected != null &&
-    (selected.status === 'pending_screening' || awaitingIdClearance(selected))
+    (selected.status === 'pending_screening' || awaitingIdClearance(selected)) &&
+    selected.status !== 'committed_without_clearance' &&
+    !isPreJulyF1(selected)
   const showMissingIdFinance =
     canFinanceReview &&
     selected?.status === 'flagged' &&
@@ -775,13 +806,17 @@ export default function CompliancePage() {
               {selected.flag_note && (
                 <div>
                   <div className="text-xs text-muted-foreground mb-1">
-                    {selected.status === 'cleared' || selected.status === 'auto_approved'
+                    {selected.status === 'committed_without_clearance' || isPreJulyF1(selected)
+                      ? 'Operational note'
+                      : selected.status === 'cleared' || selected.status === 'auto_approved'
                       ? 'Clearance note'
                       : 'Screening flag note'}
                   </div>
                   <p
                     className={`text-sm rounded-md p-3 ${
-                      selected.status === 'cleared' || selected.status === 'auto_approved'
+                      selected.status === 'committed_without_clearance' || isPreJulyF1(selected)
+                        ? 'bg-muted text-foreground'
+                        : selected.status === 'cleared' || selected.status === 'auto_approved'
                         ? 'bg-muted text-foreground'
                         : 'bg-red-50 text-red-900'
                     }`}
