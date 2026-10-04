@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { isPaymentAlreadyCommitted } from '@/lib/compliance'
+import { isPaymentAlreadyCommitted, complianceRaisedAt, isBeforeComplianceQueueStart } from '@/lib/compliance'
 import { postComplianceSlack } from '@/lib/complianceAlerts'
 
 export type DigestRow = {
@@ -68,7 +68,9 @@ export async function loadCommittedBeforeClearedRows(
         committed_by,
         status,
         file_key,
-        temp_file_key
+        temp_file_key,
+        submitted_at,
+        date
       )
     `
     )
@@ -99,10 +101,19 @@ export async function loadCommittedBeforeClearedRows(
       status?: string | null
       file_key?: string | null
       temp_file_key?: string | null
+      submitted_at?: string | null
+      date?: string | null
     } | null
     if (!p) continue
     if (!(p.file_key || p.temp_file_key)) continue
     if (p.status === 'completed' || p.status === 'declined') continue
+    if (
+      isBeforeComplianceQueueStart(
+        complianceRaisedAt({ submitted_at: p.submitted_at, date: p.date })
+      )
+    ) {
+      continue
+    }
 
     const hasFsp = Boolean(fspByProject.get(s.project_id))
     const committed = isPaymentAlreadyCommitted({
@@ -155,7 +166,9 @@ async function loadCommittedBeforeClearedRowsLegacy(
         funding_status,
         status,
         file_key,
-        temp_file_key
+        temp_file_key,
+        submitted_at,
+        date
       )
     `
     )
@@ -175,10 +188,19 @@ async function loadCommittedBeforeClearedRowsLegacy(
       status?: string | null
       file_key?: string | null
       temp_file_key?: string | null
+      submitted_at?: string | null
+      date?: string | null
     } | null
     if (!p) continue
     if (!(p.file_key || p.temp_file_key)) continue
     if (p.status === 'completed' || p.status === 'declined') continue
+    if (
+      isBeforeComplianceQueueStart(
+        complianceRaisedAt({ submitted_at: p.submitted_at, date: p.date })
+      )
+    ) {
+      continue
+    }
     const hasFsp = Boolean(fspByProject.get(s.project_id))
     const committed = isPaymentAlreadyCommitted({
       status: s.status,

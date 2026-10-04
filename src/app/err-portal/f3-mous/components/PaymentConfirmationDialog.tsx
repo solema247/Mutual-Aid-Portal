@@ -65,6 +65,7 @@ export default function PaymentConfirmationDialog(props: PaymentConfirmationDial
     bulkPaymentFspId,
     setBulkPaymentFspId,
     paymentFsps,
+    paymentBlockedProjectIds,
     applyBulkPaymentToAllProjects,
     closePaymentModal,
     refreshConfirmations,
@@ -347,6 +348,7 @@ export default function PaymentConfirmationDialog(props: PaymentConfirmationDial
                 files: [],
               }
               const creating = !!busyKeys[`create:${project.id}`]
+              const paymentBlocked = paymentBlockedProjectIds.includes(project.id)
               const rate = resolveExchangeRate(confirmations, draft.exchange_rate)
               const amountSdg = rate != null ? project.amount_usd * rate : null
 
@@ -376,6 +378,12 @@ export default function PaymentConfirmationDialog(props: PaymentConfirmationDial
                         : t('f3:payment_modal.payment_plural')}
                     </span>
                   </div>
+
+                  {paymentBlocked && (
+                    <p className="text-xs rounded-md border border-amber-300 bg-amber-50 text-amber-900 p-2">
+                      Compliance screening is not cleared for this F1. Payment cannot be recorded until it is cleared on the Compliance page.
+                    </p>
+                  )}
 
                   {confirmations.length === 0 ? (
                     <p className="text-xs text-muted-foreground">
@@ -422,7 +430,7 @@ export default function PaymentConfirmationDialog(props: PaymentConfirmationDial
                                   step="0.0001"
                                   className="h-8 w-[140px] text-sm"
                                   value={confirmation.exchange_rate ?? ''}
-                                  disabled={metaBusy}
+                                  disabled={metaBusy || paymentBlocked}
                                   onChange={(e) => {
                                     const v = e.target.value
                                     patchLocalConfirmation(project.id, confirmation.id, {
@@ -439,7 +447,7 @@ export default function PaymentConfirmationDialog(props: PaymentConfirmationDial
                                   type="date"
                                   className="h-8 w-[150px] text-sm"
                                   value={confirmation.transfer_date || ''}
-                                  disabled={metaBusy}
+                                  disabled={metaBusy || paymentBlocked}
                                   onChange={(e) =>
                                     patchLocalConfirmation(project.id, confirmation.id, {
                                       transfer_date: e.target.value || null,
@@ -456,7 +464,7 @@ export default function PaymentConfirmationDialog(props: PaymentConfirmationDial
                                       fsp_id: v === '__none__' ? null : v,
                                     })
                                   }
-                                  disabled={metaBusy}
+                                  disabled={metaBusy || paymentBlocked}
                                 >
                                   <SelectTrigger className="h-8 w-[200px] text-sm">
                                     <SelectValue placeholder={t('f3:payment_modal.fsp_placeholder')} />
@@ -478,7 +486,7 @@ export default function PaymentConfirmationDialog(props: PaymentConfirmationDial
                                 size="sm"
                                 variant="secondary"
                                 className="h-8"
-                                disabled={metaBusy}
+                                disabled={metaBusy || paymentBlocked}
                                 onClick={() =>
                                   saveConfirmationMeta(project.id, confirmation)
                                 }
@@ -584,7 +592,7 @@ export default function PaymentConfirmationDialog(props: PaymentConfirmationDial
                           step="0.0001"
                           className="h-8 w-[140px] text-sm"
                           value={draft.exchange_rate}
-                          disabled={creating}
+                          disabled={creating || paymentBlocked}
                           onChange={(e) =>
                             updateDraft(project.id, { exchange_rate: e.target.value })
                           }
@@ -598,7 +606,7 @@ export default function PaymentConfirmationDialog(props: PaymentConfirmationDial
                           type="date"
                           className="h-8 w-[150px] text-sm"
                           value={draft.transfer_date}
-                          disabled={creating}
+                          disabled={creating || paymentBlocked}
                           onChange={(e) =>
                             updateDraft(project.id, { transfer_date: e.target.value })
                           }
@@ -611,7 +619,7 @@ export default function PaymentConfirmationDialog(props: PaymentConfirmationDial
                           onValueChange={(v) =>
                             updateDraft(project.id, { fsp_id: v === '__none__' ? '' : v })
                           }
-                          disabled={creating}
+                          disabled={creating || paymentBlocked}
                         >
                           <SelectTrigger className="h-8 w-[200px] text-sm">
                             <SelectValue placeholder={t('f3:payment_modal.fsp_placeholder')} />
@@ -635,7 +643,7 @@ export default function PaymentConfirmationDialog(props: PaymentConfirmationDial
                           accept=".pdf,.jpg,.jpeg,.png"
                           multiple
                           className="h-8 text-xs w-[220px]"
-                          disabled={creating}
+                          disabled={creating || paymentBlocked}
                           onChange={(e) =>
                             updateDraft(project.id, {
                               files: Array.from(e.target.files || []),
@@ -647,7 +655,7 @@ export default function PaymentConfirmationDialog(props: PaymentConfirmationDial
                         type="button"
                         size="sm"
                         className="h-8"
-                        disabled={creating}
+                        disabled={creating || paymentBlocked}
                         onClick={() => createConfirmation(project.id)}
                       >
                         {creating ? '...' : t('f3:payment_modal.add_payment')}

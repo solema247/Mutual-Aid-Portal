@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { requirePermission } from '@/lib/requirePermission'
-import { getComplianceBlockedProjectIds } from '@/lib/compliance'
 import { markProjectsCommitted } from '@/lib/f2Commit'
 import { assertProjectsInGrantAccess } from '@/lib/userGrantAccess'
 import { emitF123Audit } from '@/lib/f123Audit'
@@ -21,20 +20,6 @@ export async function POST(request: Request) {
 
     const scope = await assertProjectsInGrantAccess(f1_ids.map(String))
     if (!scope.ok) return scope.response
-
-    // Compliance gate: F1s flagged by screening cannot be committed
-    // until the finance team approves them
-    const blocked = await getComplianceBlockedProjectIds(supabase, f1_ids)
-    if (blocked.length > 0) {
-      return NextResponse.json(
-        {
-          error: 'Some F1s are flagged by compliance screening and pending finance review. They cannot be committed.',
-          code: 'COMPLIANCE_BLOCKED',
-          blocked_ids: blocked
-        },
-        { status: 400 }
-      )
-    }
 
     const { data: beforeRows } = await supabase
       .from('err_projects')

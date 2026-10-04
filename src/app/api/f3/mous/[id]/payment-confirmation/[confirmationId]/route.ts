@@ -6,6 +6,7 @@ import {
   isProjectIdInMouScope,
 } from '@/lib/userGrantAccess'
 import { emitF123Audit, pickChangedAuditFields } from '@/lib/f123Audit'
+import { getPaymentBlockedProjectIds } from '@/lib/compliance'
 
 type RouteContext = { params: { id: string; confirmationId: string } }
 
@@ -69,6 +70,17 @@ export async function PATCH(request: Request, { params }: RouteContext) {
       mouScope.access
     )
     if (!projectScope.ok) return projectScope.response
+
+    const paymentBlocked = await getPaymentBlockedProjectIds(supabase, [String(existing.project_id)])
+    if (paymentBlocked.length > 0) {
+      return NextResponse.json(
+        {
+          error: 'Compliance screening is not cleared for this F1. Payment cannot be recorded yet.',
+          code: 'COMPLIANCE_PAYMENT_BLOCKED',
+        },
+        { status: 400 }
+      )
+    }
 
     const update: Record<string, unknown> = {}
     if ('exchange_rate' in body) {

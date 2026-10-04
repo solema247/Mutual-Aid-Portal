@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { getUserStateAccess } from '@/lib/userStateAccess'
 import { requirePermission } from '@/lib/requirePermission'
-import { getComplianceBlockedProjectIds } from '@/lib/compliance'
+import { isPaymentBlockedByCompliance, isPreJulyProject } from '@/lib/compliance'
 import {
   applyGrantGridIdFilter,
   assertProjectInGrantAccess,
@@ -149,15 +149,6 @@ export async function GET(request: Request) {
       }
     }
 
-    const isBlocked = (c: { status: string; finance_review_status: string | null; flag_type: string | null } | undefined) => {
-      if (!c || c.status !== 'flagged') return false
-      if (c.finance_review_status === 'rejected') return false
-      if (c.flag_type === 'sanctions_match') return true
-      // Missing ID stays blocked until Ahmed clears (including after id_uploaded)
-      if (c.flag_type === 'missing_id') return true
-      return c.finance_review_status !== 'approved'
-    }
-
     const formattedF1s = (data || []).map((f1: any) => ({
       id: f1.id,
       err_id: f1.err_id,
@@ -178,9 +169,17 @@ export async function GET(request: Request) {
       temp_file_key: f1.temp_file_key || null,
       grant_id: f1.grant_id || null,
       grant_segment: f1.grant_segment || null,
-      compliance_status: complianceByProject.get(f1.id)?.status || null,
+      compliance_status: isPreJulyProject({ submitted_at: f1.submitted_at, date: f1.date })
+        ? 'committed_without_clearance'
+        : complianceByProject.get(f1.id)?.status || null,
       compliance_flag_type: complianceByProject.get(f1.id)?.flag_type || null,
-      compliance_blocked: isBlocked(complianceByProject.get(f1.id))
+      compliance_finance_review_status: complianceByProject.get(f1.id)?.finance_review_status || null,
+      payment_blocked: (() => {
+        const c = complianceByProject.get(f1.id)
+        return c
+          ? isPaymentBlockedByCompliance(c, { submitted_at: f1.submitted_at, date: f1.date })
+          : false
+      })()
     }))
 
     return NextResponse.json(formattedF1s)
@@ -305,19 +304,6 @@ export async function POST(request: Request) {
 
     const scope = await assertProjectsInGrantAccess(f1_ids.map(String))
     if (!scope.ok) return scope.response
-
-    // Compliance gate: flagged F1s need finance approval before commit
-    const blocked = await getComplianceBlockedProjectIds(supabase, f1_ids)
-    if (blocked.length > 0) {
-      return NextResponse.json(
-        {
-          error: 'Some F1s are flagged by compliance screening and pending finance review. They cannot be committed.',
-          code: 'COMPLIANCE_BLOCKED',
-          blocked_ids: blocked
-        },
-        { status: 400 }
-      )
-    }
 
     const { markProjectsCommitted } = await import('@/lib/f2Commit')
     const {

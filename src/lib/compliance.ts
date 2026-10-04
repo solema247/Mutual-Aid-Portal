@@ -9,9 +9,53 @@ const STOP_WORDS = new Set([
   'name', 'account', 'number', 'bank', 'signature'
 ])
 
-export type ScreeningStatus = 'pending_screening' | 'cleared' | 'flagged' | 'auto_approved'
+export type ScreeningStatus =
+  | 'pending_screening'
+  | 'cleared'
+  | 'flagged'
+  | 'auto_approved'
+  | 'committed_without_clearance'
 export type FinanceReviewStatus = 'pending' | 'approved' | 'rejected'
 export type FlagType = 'missing_id' | 'sanctions_match'
+
+/** Portal screening queue starts on this instant (UTC). Earlier F1s are out of Screening. */
+export const COMPLIANCE_QUEUE_START_ISO = '2026-07-01T00:00:00.000Z'
+
+const PRE_JULY_AUDIT_NOTE =
+  'Operational cutoff: F1 raised before 2026-07-01. Tagged committed without clearance; not shown in Screening. Not a Clear.'
+
+/**
+ * Earliest of the F1 date and the portal submission time. An F1 counts as
+ * pre-July if either one is before the cutoff.
+ */
+export function complianceRaisedAt(p: {
+  submitted_at?: string | null
+  date?: string | null
+  created_at?: string | null
+}): string | null {
+  const candidates = [
+    p.submitted_at || null,
+    p.date ? (p.date.includes('T') ? p.date : `${p.date}T00:00:00.000Z`) : null,
+  ].filter((v): v is string => Boolean(v) && !Number.isNaN(Date.parse(v as string)))
+  if (candidates.length === 0) return p.created_at || null
+  return candidates.reduce((a, b) => (Date.parse(a) <= Date.parse(b) ? a : b))
+}
+
+/** True when the F1 falls before the portal screening cutoff (1 Jul 2026). */
+export function isPreJulyProject(p: {
+  submitted_at?: string | null
+  date?: string | null
+}): boolean {
+  return isBeforeComplianceQueueStart(complianceRaisedAt(p))
+}
+
+/** True when the F1 was raised before portal screening started (1 Jul 2026). */
+export function isBeforeComplianceQueueStart(raisedAt: string | null | undefined): boolean {
+  if (!raisedAt) return false
+  const t = Date.parse(raisedAt)
+  if (Number.isNaN(t)) return false
+  return t < Date.parse(COMPLIANCE_QUEUE_START_ISO)
+}
 
 /** Tokenize a payee name: lowercase, keep latin + arabic letters, drop stopwords/digits. */
 export function nameTokens(name: string): string[] {
@@ -99,7 +143,12 @@ export function extractNamesFromBanking(text: string | null | undefined): string
  */
 export async function ensureScreeningsForProjects(
   supabase: SupabaseClient,
-  projects: Array<{ id: string; banking_details: string | null }>
+  projects: Array<{
+    id: string
+    banking_details: string | null
+    submitted_at?: string | null
+    date?: string | null
+  }>
 ): Promise<{ created: number }> {
   if (projects.length === 0) return { created: 0 }
 
@@ -137,6 +186,20 @@ export async function ensureScreeningsForProjects(
   }
 
   const rows = extracted.map(({ project, names, keys }) => {
+    const preJuly = isBeforeComplianceQueueStart(
+      complianceRaisedAt({ submitted_at: project.submitted_at, date: project.date })
+    )
+    if (preJuly) {
+      return {
+        id: crypto.randomUUID(),
+        project_id: project.id,
+        names,
+        status: 'committed_without_clearance' as ScreeningStatus,
+        flag_note: PRE_JULY_AUDIT_NOTE,
+        screened_by: 'system:pre-july-cutoff',
+        screened_at: new Date().toISOString()
+      }
+    }
     // Empty names never auto-approve — they must go through Ahmad (Name not extracted).
     const autoApproved = names.length > 0 && keys.every(k => approvedKeys.has(k))
     return {
@@ -150,7 +213,19 @@ export async function ensureScreeningsForProjects(
   const { error: insertError } = await supabase
     .from('compliance_screenings')
     .upsert(rows, { onConflict: 'project_id', ignoreDuplicates: true })
-  if (insertError) throw insertError
+  if (insertError && /check|committed_without_clearance/i.test(insertError.message || '')) {
+    const fallback = rows.map((r) =>
+      r.status === 'committed_without_clearance'
+        ? { ...r, status: 'pending_screening' as ScreeningStatus }
+        : r
+    )
+    const retry = await supabase
+      .from('compliance_screenings')
+      .upsert(fallback, { onConflict: 'project_id', ignoreDuplicates: true })
+    if (retry.error) throw retry.error
+  } else if (insertError) {
+    throw insertError
+  }
 
   return { created: rows.length }
 }
@@ -169,12 +244,17 @@ export async function sweepUnscreenedProjects(
   if (screenedError) throw screenedError
   const screenedIds = new Set((screened || []).map(r => r.project_id))
 
-  const unscreened: Array<{ id: string; banking_details: string | null }> = []
+  const unscreened: Array<{
+    id: string
+    banking_details: string | null
+    submitted_at?: string | null
+    date?: string | null
+  }> = []
   const pageSize = 1000
   for (let start = 0; ; start += pageSize) {
     const { data, error } = await supabase
       .from('err_projects')
-      .select('id, banking_details, funding_status, status, file_key, temp_file_key')
+      .select('id, banking_details, funding_status, status, file_key, temp_file_key, submitted_at, date')
       .range(start, start + pageSize - 1)
     if (error) throw error
     const page = data || []
@@ -185,7 +265,12 @@ export async function sweepUnscreenedProjects(
       const hasBanking = Boolean((row.banking_details || '').trim())
       if (!hasDoc && !hasBanking) continue
       if (!screenedIds.has(row.id)) {
-        unscreened.push({ id: row.id, banking_details: row.banking_details })
+        unscreened.push({
+          id: row.id,
+          banking_details: row.banking_details,
+          submitted_at: row.submitted_at,
+          date: row.date
+        })
       }
     }
     if (page.length < pageSize) break
@@ -195,14 +280,93 @@ export async function sweepUnscreenedProjects(
 }
 
 /**
- * Return the subset of project ids that are blocked from committing.
- *
- * - sanctions_match: blocked until finance dismisses the flag as erroneous
- * - missing_id: blocked until Ahmed clears after finance uploads the ID
- *   (or dismisses the flag). ID upload alone does not unblock.
- * - legacy flagged rows with no flag_type: blocked until finance approves or dismisses
+ * Move every open screening (Screening queue and Finance Review) for F1s
+ * before 2026-07-01 to committed_without_clearance. Does not set cleared.
  */
-export async function getComplianceBlockedProjectIds(
+export async function retagPreJulyScreenings(
+  supabase: SupabaseClient
+): Promise<{ tagged: number }> {
+  const { data, error } = await supabase
+    .from('compliance_screenings')
+    .select(
+      'id, status, err_projects!inner(submitted_at, date)'
+    )
+    .in('status', ['pending_screening', 'flagged'])
+  if (error) throw error
+
+  const ids: string[] = []
+  for (const row of data || []) {
+    const raw = (row as { err_projects?: unknown }).err_projects
+    const p = (Array.isArray(raw) ? raw[0] : raw) as {
+      submitted_at?: string | null
+      date?: string | null
+    } | null
+    if (
+      isBeforeComplianceQueueStart(
+        complianceRaisedAt({ submitted_at: p?.submitted_at, date: p?.date })
+      )
+    ) {
+      ids.push(row.id)
+    }
+  }
+  if (ids.length === 0) return { tagged: 0 }
+
+  const now = new Date().toISOString()
+  let tagged = 0
+  for (let i = 0; i < ids.length; i += 200) {
+    const chunk = ids.slice(i, i + 200)
+    const { error: updError } = await supabase
+      .from('compliance_screenings')
+      .update({
+        status: 'committed_without_clearance',
+        flag_note: PRE_JULY_AUDIT_NOTE,
+        screened_by: 'system:pre-july-cutoff',
+        screened_at: now,
+        finance_review_status: null
+      })
+      .in('id', chunk)
+    if (updError) {
+      if (/check|committed_without_clearance/i.test(updError.message || '')) {
+        const retry = await supabase
+          .from('compliance_screenings')
+          .update({
+            flag_note: PRE_JULY_AUDIT_NOTE,
+            screened_by: 'system:pre-july-cutoff',
+            screened_at: now
+          })
+          .in('id', chunk)
+        if (retry.error) throw retry.error
+        tagged += chunk.length
+        continue
+      }
+      throw updError
+    }
+    tagged += chunk.length
+  }
+  return { tagged }
+}
+
+/** True when a screening row still stops payment from being recorded. Never for pre-July F1s. */
+export function isPaymentBlockedByCompliance(
+  s: { status: string; finance_review_status?: string | null },
+  project?: { submitted_at?: string | null; date?: string | null } | null
+): boolean {
+  if (project && isPreJulyProject(project)) return false
+  if (s.status === 'pending_screening') return true
+  if (s.status === 'flagged') return s.finance_review_status !== 'rejected'
+  return false
+}
+
+/**
+ * Return the subset of project ids whose payment cannot be recorded yet.
+ * Committing is never blocked by compliance; only payment confirmation is.
+ *
+ * - pending_screening: blocked until Ahmad clears
+ * - flagged (missing_id / sanctions_match / legacy): blocked until cleared,
+ *   or until finance dismisses the flag as erroneous (rejected)
+ * - cleared / auto_approved / committed_without_clearance / no screening: allowed
+ */
+export async function getPaymentBlockedProjectIds(
   supabase: SupabaseClient,
   projectIds: string[]
 ): Promise<string[]> {
@@ -212,26 +376,17 @@ export async function getComplianceBlockedProjectIds(
     const chunk = projectIds.slice(i, i + 200)
     const { data, error } = await supabase
       .from('compliance_screenings')
-      .select('project_id, status, flag_type, finance_review_status')
+      .select('project_id, status, finance_review_status, err_projects!inner(submitted_at, date)')
       .in('project_id', chunk)
-      .eq('status', 'flagged')
+      .in('status', ['pending_screening', 'flagged'])
     if (error) throw error
     for (const row of data || []) {
-      const review = row.finance_review_status
-      // Dismissed as erroneous → not blocked
-      if (review === 'rejected') continue
-      if (row.flag_type === 'sanctions_match') {
-        // Payment must be stopped until the flag is dismissed
-        blocked.push(row.project_id)
-        continue
-      }
-      if (row.flag_type === 'missing_id') {
-        // Stay blocked through ID upload until Ahmed clears the screening
-        blocked.push(row.project_id)
-        continue
-      }
-      // Legacy generic flag
-      if (review !== 'approved') blocked.push(row.project_id)
+      const raw = (row as { err_projects?: unknown }).err_projects
+      const project = (Array.isArray(raw) ? raw[0] : raw) as {
+        submitted_at?: string | null
+        date?: string | null
+      } | null
+      if (isPaymentBlockedByCompliance(row, project)) blocked.push(row.project_id)
     }
   }
   return blocked
@@ -243,5 +398,6 @@ export function isPaymentAlreadyCommitted(s: {
   funding_status?: string | null
 }): boolean {
   if (s.funding_status !== 'committed') return false
+  if (s.status === 'committed_without_clearance') return false
   return s.status === 'pending_screening' || s.status === 'flagged'
 }
