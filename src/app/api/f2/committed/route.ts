@@ -62,10 +62,7 @@ export async function GET(request: Request) {
       return NextResponse.json([])
     }
 
-    const data = await fetchAllRows<any>(() => {
-      let query = supabase
-        .from('err_projects')
-        .select(`
+    const baseColumns = `
           id,
           err_id,
           date,
@@ -80,8 +77,6 @@ export async function GET(request: Request) {
           emergency_room_id,
           emergency_rooms (err_code, name_ar, name),
           submitted_at,
-          committed_at,
-          committed_by,
           funding_cycle_id,
           funding_cycles (id, name, year),
           mou_id,
@@ -93,8 +88,12 @@ export async function GET(request: Request) {
           grant_serial_id,
           workplan_number,
           approval_file_key,
-          grant_grid_id
-        `)
+          grant_grid_id`
+
+    const buildCommittedQuery = (columns: string) => {
+      let query = supabase
+        .from('err_projects')
+        .select(columns)
         .eq('funding_status', 'committed')
         .order('submitted_at', { ascending: false })
 
@@ -116,7 +115,20 @@ export async function GET(request: Request) {
         query = query.lte('date', dateTo)
       }
       return query
-    })
+    }
+
+    // committed_at / committed_by only exist after sql/add_committed_at_to_err_projects.sql
+    let data: any[]
+    try {
+      data = await fetchAllRows<any>(() =>
+        buildCommittedQuery(`${baseColumns}, committed_at, committed_by`)
+      )
+    } catch (err) {
+      if (!/committed_at|committed_by/i.test((err as { message?: string })?.message || '')) {
+        throw err
+      }
+      data = await fetchAllRows<any>(() => buildCommittedQuery(baseColumns))
+    }
 
     const grantsData = await fetchAllRows<{
       grant_id: string

@@ -24,16 +24,29 @@ export const COMPLIANCE_QUEUE_START_ISO = '2026-07-01T00:00:00.000Z'
 const PRE_JULY_AUDIT_NOTE =
   'Operational cutoff: F1 raised before 2026-07-01. Tagged committed without clearance; not shown in Screening. Not a Clear.'
 
+/**
+ * Earliest of the F1 date and the portal submission time. An F1 counts as
+ * pre-July if either one is before the cutoff.
+ */
 export function complianceRaisedAt(p: {
   submitted_at?: string | null
   date?: string | null
   created_at?: string | null
 }): string | null {
-  if (p.submitted_at) return p.submitted_at
-  if (p.date) {
-    return p.date.includes('T') ? p.date : `${p.date}T00:00:00.000Z`
-  }
-  return p.created_at || null
+  const candidates = [
+    p.submitted_at || null,
+    p.date ? (p.date.includes('T') ? p.date : `${p.date}T00:00:00.000Z`) : null,
+  ].filter((v): v is string => Boolean(v) && !Number.isNaN(Date.parse(v as string)))
+  if (candidates.length === 0) return p.created_at || null
+  return candidates.reduce((a, b) => (Date.parse(a) <= Date.parse(b) ? a : b))
+}
+
+/** True when the F1 falls before the portal screening cutoff (1 Jul 2026). */
+export function isPreJulyProject(p: {
+  submitted_at?: string | null
+  date?: string | null
+}): boolean {
+  return isBeforeComplianceQueueStart(complianceRaisedAt(p))
 }
 
 /** True when the F1 was raised before portal screening started (1 Jul 2026). */
@@ -266,13 +279,9 @@ export async function sweepUnscreenedProjects(
   return ensureScreeningsForProjects(supabase, unscreened)
 }
 
-const PRE_JULY_RETAG_OR =
-  'status.eq.pending_screening,and(status.eq.flagged,flag_type.eq.missing_id,finance_review_status.eq.id_uploaded),and(status.eq.flagged,flag_type.eq.missing_id,finance_review_status.eq.approved)'
-
 /**
- * Move open Screening-queue rows for F1s raised before 2026-07-01 to
- * committed_without_clearance. Does not set cleared. Leaves Finance Review
- * (flagged + pending) untouched.
+ * Move every open screening (Screening queue and Finance Review) for F1s
+ * before 2026-07-01 to committed_without_clearance. Does not set cleared.
  */
 export async function retagPreJulyScreenings(
   supabase: SupabaseClient
@@ -282,7 +291,7 @@ export async function retagPreJulyScreenings(
     .select(
       'id, status, err_projects!inner(submitted_at, date)'
     )
-    .or(PRE_JULY_RETAG_OR)
+    .in('status', ['pending_screening', 'flagged'])
   if (error) throw error
 
   const ids: string[] = []
@@ -337,15 +346,27 @@ export async function retagPreJulyScreenings(
   return { tagged }
 }
 
+/** True when a screening row still stops payment from being recorded. Never for pre-July F1s. */
+export function isPaymentBlockedByCompliance(
+  s: { status: string; finance_review_status?: string | null },
+  project?: { submitted_at?: string | null; date?: string | null } | null
+): boolean {
+  if (project && isPreJulyProject(project)) return false
+  if (s.status === 'pending_screening') return true
+  if (s.status === 'flagged') return s.finance_review_status !== 'rejected'
+  return false
+}
+
 /**
- * Return the subset of project ids that are blocked from committing.
+ * Return the subset of project ids whose payment cannot be recorded yet.
+ * Committing is never blocked by compliance; only payment confirmation is.
  *
- * - sanctions_match: blocked until finance dismisses the flag as erroneous
- * - missing_id: blocked until Ahmed clears after finance uploads the ID
- *   (or dismisses the flag). ID upload alone does not unblock.
- * - legacy flagged rows with no flag_type: blocked until finance approves or dismisses
+ * - pending_screening: blocked until Ahmad clears
+ * - flagged (missing_id / sanctions_match / legacy): blocked until cleared,
+ *   or until finance dismisses the flag as erroneous (rejected)
+ * - cleared / auto_approved / committed_without_clearance / no screening: allowed
  */
-export async function getComplianceBlockedProjectIds(
+export async function getPaymentBlockedProjectIds(
   supabase: SupabaseClient,
   projectIds: string[]
 ): Promise<string[]> {
@@ -355,26 +376,17 @@ export async function getComplianceBlockedProjectIds(
     const chunk = projectIds.slice(i, i + 200)
     const { data, error } = await supabase
       .from('compliance_screenings')
-      .select('project_id, status, flag_type, finance_review_status')
+      .select('project_id, status, finance_review_status, err_projects!inner(submitted_at, date)')
       .in('project_id', chunk)
-      .eq('status', 'flagged')
+      .in('status', ['pending_screening', 'flagged'])
     if (error) throw error
     for (const row of data || []) {
-      const review = row.finance_review_status
-      // Dismissed as erroneous → not blocked
-      if (review === 'rejected') continue
-      if (row.flag_type === 'sanctions_match') {
-        // Payment must be stopped until the flag is dismissed
-        blocked.push(row.project_id)
-        continue
-      }
-      if (row.flag_type === 'missing_id') {
-        // Stay blocked through ID upload until Ahmed clears the screening
-        blocked.push(row.project_id)
-        continue
-      }
-      // Legacy generic flag
-      if (review !== 'approved') blocked.push(row.project_id)
+      const raw = (row as { err_projects?: unknown }).err_projects
+      const project = (Array.isArray(raw) ? raw[0] : raw) as {
+        submitted_at?: string | null
+        date?: string | null
+      } | null
+      if (isPaymentBlockedByCompliance(row, project)) blocked.push(row.project_id)
     }
   }
   return blocked

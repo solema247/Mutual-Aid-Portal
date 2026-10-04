@@ -36,6 +36,7 @@ export function usePaymentModal({ fetchMous }: UsePaymentModalOptions) {
   const [bulkPaymentTransferDate, setBulkPaymentTransferDate] = useState('')
   const [bulkPaymentFspId, setBulkPaymentFspId] = useState('')
   const [paymentFsps, setPaymentFsps] = useState<Array<{ id: string; name: string }>>([])
+  const [paymentBlockedProjectIds, setPaymentBlockedProjectIds] = useState<string[]>([])
 
   const setBusy = (key: string, value: boolean) => {
     setBusyKeys((prev) => {
@@ -55,6 +56,9 @@ export function usePaymentModal({ fetchMous }: UsePaymentModalOptions) {
     const byProject: Record<string, PaymentConfirmationRecord[]> =
       data.by_project || {}
     setConfirmationsByProject(byProject)
+    setPaymentBlockedProjectIds(
+      Array.isArray(data.payment_blocked_project_ids) ? data.payment_blocked_project_ids : []
+    )
     return byProject
   }
 
@@ -65,6 +69,7 @@ export function usePaymentModal({ fetchMous }: UsePaymentModalOptions) {
     setBulkPaymentFspId('')
     setNewDrafts({})
     setConfirmationsByProject({})
+    setPaymentBlockedProjectIds([])
     setLoadingConfirmations(true)
     setPaymentModalOpen(true)
 
@@ -156,6 +161,7 @@ export function usePaymentModal({ fetchMous }: UsePaymentModalOptions) {
     setNewDrafts((prev) => {
       const next = { ...prev }
       for (const project of paymentProjects) {
+        if (paymentBlockedProjectIds.includes(project.id)) continue
         const current = next[project.id] ?? emptyDraft()
         next[project.id] = {
           ...current,
@@ -173,6 +179,7 @@ export function usePaymentModal({ fetchMous }: UsePaymentModalOptions) {
     setSelectedMouForPayment(null)
     setPaymentProjects([])
     setConfirmationsByProject({})
+    setPaymentBlockedProjectIds([])
     setNewDrafts({})
     setBusyKeys({})
     setBulkPaymentExchangeRate('')
@@ -201,6 +208,7 @@ export function usePaymentModal({ fetchMous }: UsePaymentModalOptions) {
     bulkPaymentFspId,
     setBulkPaymentFspId,
     paymentFsps,
+    paymentBlockedProjectIds,
     openPaymentModal,
     applyBulkPaymentToAllProjects,
     closePaymentModal,

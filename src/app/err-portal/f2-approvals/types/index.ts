@@ -41,7 +41,9 @@ export interface UncommittedF1 {
   workplan_number?: number | null
   compliance_status?: 'pending_screening' | 'cleared' | 'flagged' | 'auto_approved' | 'committed_without_clearance' | null
   compliance_flag_type?: 'missing_id' | 'sanctions_match' | null
-  compliance_blocked?: boolean
+  compliance_finance_review_status?: string | null
+  /** Compliance not cleared yet: commit is allowed, payment confirmation is not. */
+  payment_blocked?: boolean
 }
 
 export interface CommittedF1 {

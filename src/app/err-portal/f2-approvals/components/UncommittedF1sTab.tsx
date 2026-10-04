@@ -96,7 +96,7 @@ export default function UncommittedF1sTab() {
 
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
-      setSelectedF1s(filteredF1s.filter(f1 => !f1.compliance_blocked).map(f1 => f1.id))
+      setSelectedF1s(filteredF1s.map(f1 => f1.id))
     } else {
       setSelectedF1s([])
     }
@@ -183,12 +183,8 @@ export default function UncommittedF1sTab() {
       })
 
       if (!response.ok) {
-        const err: { error?: string; code?: string } = await response.json().catch(() => ({}))
-        if (err.code === 'COMPLIANCE_BLOCKED') {
-          alert('Cannot commit: one or more selected F1s are blocked by compliance (missing ID or sanctions match — payment stopped).')
-        } else {
-          alert(err.error || 'Failed to commit F1s')
-        }
+        const err: { error?: string } = await response.json().catch(() => ({}))
+        alert(err.error || 'Failed to commit F1s')
         return
       }
 
@@ -286,7 +282,7 @@ export default function UncommittedF1sTab() {
                 <TableHead className="w-10 px-2">
                   {canCommit && (
                     <Checkbox
-                      checked={selectedF1s.length === filteredF1s.filter(f => !f.compliance_blocked).length && filteredF1s.filter(f => !f.compliance_blocked).length > 0}
+                      checked={selectedF1s.length === filteredF1s.length && filteredF1s.length > 0}
                       onCheckedChange={handleSelectAll}
                     />
                   )}
@@ -318,8 +314,7 @@ export default function UncommittedF1sTab() {
                     {canCommit && (
                       <Checkbox
                         checked={selectedF1s.includes(f1.id)}
-                        disabled={!!f1.compliance_blocked}
-                        title={f1.compliance_blocked ? 'Flagged by compliance screening — pending finance review' : undefined}
+                        title={f1.payment_blocked ? 'Can be committed. Payment cannot be recorded until compliance clears.' : undefined}
                         onCheckedChange={(checked) => handleSelectF1(f1.id, checked as boolean)}
                       />
                     )}
@@ -405,16 +400,18 @@ export default function UncommittedF1sTab() {
                   </TableCell>
                   {/* Compliance screening status */}
                   <TableCell className="whitespace-nowrap">
-                    {f1.compliance_flag_type === 'sanctions_match' && f1.compliance_blocked ? (
-                      <Badge variant="destructive" className="text-[10px] px-1.5 py-0 font-semibold" title="Potential Descartes/sanctions match — payment must be stopped">
+                    {f1.compliance_status === 'committed_without_clearance' ? (
+                      <span className="text-muted-foreground" title="F1 before 1 Jul 2026 — not screened on the portal">—</span>
+                    ) : f1.compliance_status === 'flagged' && f1.payment_blocked && f1.compliance_flag_type === 'sanctions_match' ? (
+                      <Badge variant="destructive" className="text-[10px] px-1.5 py-0 font-semibold" title="Potential Descartes/sanctions match — payment cannot be recorded">
                         PAYMENT STOPPED
                       </Badge>
-                    ) : f1.compliance_blocked ? (
-                      <Badge variant="destructive" className="text-[10px] px-1.5 py-0" title="Missing ID — finance must upload the document or dismiss the flag">
+                    ) : f1.compliance_status === 'flagged' && f1.payment_blocked ? (
+                      <Badge variant="destructive" className="text-[10px] px-1.5 py-0" title="Can be committed. Payment cannot be recorded until compliance clears.">
                         {f1.compliance_flag_type === 'missing_id' ? 'Missing ID' : 'Flagged — compliance'}
                       </Badge>
                     ) : f1.compliance_status === 'pending_screening' ? (
-                      <Badge variant="secondary" className="text-muted-foreground text-[10px] px-1.5 py-0">
+                      <Badge variant="secondary" className="text-muted-foreground text-[10px] px-1.5 py-0" title="Can be committed. Payment cannot be recorded until compliance clears.">
                         Screening pending
                       </Badge>
                     ) : f1.compliance_status === 'flagged' ? (

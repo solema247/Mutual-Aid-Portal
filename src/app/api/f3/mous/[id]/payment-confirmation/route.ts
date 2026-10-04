@@ -11,6 +11,7 @@ import {
   isProjectIdInMouScope,
 } from '@/lib/userGrantAccess'
 import { emitF123Audit } from '@/lib/f123Audit'
+import { getPaymentBlockedProjectIds } from '@/lib/compliance'
 
 type RouteContext = { params: { id: string } }
 
@@ -119,10 +120,21 @@ export async function GET(request: Request, { params }: RouteContext) {
       byProject[c.project_id].push(c)
     }
 
+    let mouProjectQuery = supabase.from('err_projects').select('id').eq('mou_id', mouId)
+    if (mouScope.inScopeProjectIds != null) {
+      mouProjectQuery = mouProjectQuery.in('id', mouScope.inScopeProjectIds)
+    }
+    const { data: mouProjects } = await mouProjectQuery
+    const paymentBlockedProjectIds = await getPaymentBlockedProjectIds(
+      supabase,
+      (mouProjects || []).map((p) => String(p.id))
+    )
+
     return NextResponse.json({
       mou_id: mouId,
       by_project: byProject,
       payment_confirmations: scopedConfirmations,
+      payment_blocked_project_ids: paymentBlockedProjectIds,
     })
   } catch (error) {
     console.error('[payment-confirmation GET]', error)
@@ -175,6 +187,17 @@ export async function POST(request: Request, { params }: RouteContext) {
     if (!project || project.mou_id !== mouId) {
       return NextResponse.json(
         { error: 'Project not found on this MOU' },
+        { status: 400 }
+      )
+    }
+
+    const paymentBlocked = await getPaymentBlockedProjectIds(supabase, [projectId])
+    if (paymentBlocked.length > 0) {
+      return NextResponse.json(
+        {
+          error: 'Compliance screening is not cleared for this F1. Payment cannot be recorded yet.',
+          code: 'COMPLIANCE_PAYMENT_BLOCKED',
+        },
         { status: 400 }
       )
     }
