@@ -84,8 +84,8 @@ export function classifyF4ListRowForSummary(
   const reportStatus = f4ReportStatusForRow(row)
   if (reportStatus === 'complete_no_report') return 'completed'
   if (reportStatus === 'not_uploaded' || row.has_f4_report === false) return 'notUploaded'
-  if (isInReviewReportingStatus(row.f4_status)) return 'underReview'
-  return 'other'
+  // Uploaded / in-flight statuses (waiting, partial, accepted, rejected, historical, in review, …)
+  return 'underReview'
 }
 
 export function classifyF5ListRowForSummary(
