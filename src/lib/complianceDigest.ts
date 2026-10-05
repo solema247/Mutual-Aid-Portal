@@ -14,9 +14,9 @@ export type DigestRow = {
   link: string
 }
 
-/** Slack message soft limit — keep each chunk under this. */
-const SLACK_CHUNK_CHARS = 3500
-const ROWS_PER_CHUNK = 25
+/** Slack truncates long messages; keep the digest under this. */
+const SLACK_MESSAGE_CHARS = 3800
+const ROWS_IN_MESSAGE = 20
 
 function appBaseUrl(): string {
   return (
@@ -290,44 +290,45 @@ function formatSlackRow(r: DigestRow): string {
   )
 }
 
-function buildSlackMessages(rows: DigestRow[]): string[] {
+/** One message per day: totals by stage, the most recent F1s, and a link for the rest. */
+function buildSlackMessage(rows: DigestRow[]): string {
+  const byStage = new Map<string, number>()
+  for (const r of rows) byStage.set(r.workflowStatus, (byStage.get(r.workflowStatus) || 0) + 1)
+  const stageLines = Array.from(byStage.entries())
+    .sort((a, b) => b[1] - a[1])
+    .map(([stage, n]) => `• ${stage}: *${n}*`)
+
+  const recent = rows
+    .slice()
+    .sort((a, b) => (Date.parse(b.committedAt || '') || 0) - (Date.parse(a.committedAt || '') || 0))
+
+  const mentions = (process.env.COMPLIANCE_DIGEST_MENTION_USER_IDS || '')
+    .split(',')
+    .map((id) => id.trim())
+    .filter(Boolean)
+    .map((id) => `<@${id}>`)
+    .join(' ')
+
   const header = [
-    ':clipboard: *Compliance daily digest*',
-    `${rows.length} F1(s) with payment committed / FSP assigned before Clear.`,
-    'Complete the normal Screening → Finance → History workflow. They leave the queue only when Cleared.',
-    `<${appBaseUrl()}/err-portal/compliance|Open compliance page>`,
-    ''
+    `:clipboard: *Compliance daily digest*${mentions ? ` ${mentions}` : ''}`,
+    `*${rows.length}* F1(s) from 1 Jul 2026 onward have payment committed / FSP assigned but are not Cleared yet.`,
+    ...stageLines,
+    `<${appBaseUrl()}/err-portal/compliance|Open the compliance page> to work through them.`,
   ].join('\n')
 
-  const messages: string[] = []
-  let chunkRows: string[] = []
-  let chunkStart = 0
-
-  const flush = () => {
-    if (chunkRows.length === 0) return
-    const part =
-      messages.length === 0
-        ? header
-        : `:clipboard: *Compliance daily digest* (cont. ${chunkStart + 1}–${chunkStart + chunkRows.length} of ${rows.length})\n\n`
-    messages.push(part + chunkRows.join('\n\n'))
-    chunkStart += chunkRows.length
-    chunkRows = []
-  }
-
-  for (const r of rows) {
+  const lines: string[] = []
+  for (const r of recent.slice(0, ROWS_IN_MESSAGE)) {
     const line = formatSlackRow(r)
-    const next = [...chunkRows, line]
-    const body = next.join('\n\n')
-    if (
-      chunkRows.length >= ROWS_PER_CHUNK ||
-      (chunkRows.length > 0 && body.length > SLACK_CHUNK_CHARS)
-    ) {
-      flush()
-    }
-    chunkRows.push(line)
+    if ((header + lines.join('\n\n') + line).length > SLACK_MESSAGE_CHARS) break
+    lines.push(line)
   }
-  flush()
-  return messages
+  const hasCommitDates = recent.some((r) => r.committedAt)
+  const listTitle = hasCommitDates
+    ? `*Most recently committed ${lines.length}:*`
+    : `*${lines.length} of ${rows.length}:*`
+  const remaining = rows.length - lines.length
+  const footer = remaining > 0 ? `\n\n_+${remaining} more on the compliance page._` : ''
+  return `${header}\n\n${listTitle}\n\n${lines.join('\n\n')}${footer}`
 }
 
 /**
@@ -342,26 +343,9 @@ export async function sendComplianceCommittedDigest(
     return { sent: false, count: 0, detail: 'Nothing to report — no Slack message sent' }
   }
 
-  const messages = buildSlackMessages(rows)
-  let sentCount = 0
-  let lastDetail = ''
-  for (const text of messages) {
-    const result = await postComplianceSlack(text)
-    lastDetail = result.detail
-    if (result.sent) sentCount++
+  const result = await postComplianceSlack(buildSlackMessage(rows))
+  if (!result.sent) {
+    return { sent: false, count: rows.length, detail: result.detail }
   }
-
-  if (sentCount === 0) {
-    return {
-      sent: false,
-      count: rows.length,
-      detail: lastDetail || 'Slack not configured (SLACK_BOT_TOKEN / COMPLIANCE_ALERT_SLACK_CHANNEL)'
-    }
-  }
-
-  return {
-    sent: true,
-    count: rows.length,
-    detail: `Slack digest posted (${sentCount} message${sentCount === 1 ? '' : 's'}, ${rows.length} F1s)`
-  }
+  return { sent: true, count: rows.length, detail: `Slack digest posted (${rows.length} F1s)` }
 }
