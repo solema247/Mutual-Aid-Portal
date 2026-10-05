@@ -208,10 +208,11 @@ export async function POST(req: Request) {
         // Best-effort delete temp
         try { await supabase.storage.from('images').remove([tempKey]) } catch {}
 
-        // Record attachment with final path
+        // Record attachment with final path (select id so staging mirror gets the same UUID)
         await supabase
           .from('err_summary_attachments')
           .insert({ summary_id, file_key: finalPath, file_type: 'summary_pdf', uploaded_by: uploaded_by || null })
+          .select('id')
       } catch (e) {
         console.warn('F4 file finalize failed, continuing without attachment', e)
       }
