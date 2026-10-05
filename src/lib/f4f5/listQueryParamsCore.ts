@@ -166,7 +166,7 @@ export function buildF4ListSearchParams(query: F4ListQuery): string {
   if (f.localities.length) p.set('locality', f.localities.join('|'))
   if (f.grants.length) p.set('grant', f.grants.join('|'))
   if (f.reportStatuses.length) p.set('report_status', f.reportStatuses.join('|'))
-  if (query.completion !== 'active') p.set('completion', query.completion)
+  if (query.completion !== 'all') p.set('completion', query.completion)
   return p.toString()
 }
 
@@ -184,7 +184,7 @@ export function buildF5ListSearchParams(query: F5ListQuery): string {
   if (f.grants.length) p.set('grant', f.grants.join('|'))
   if (f.reportStatuses.length) p.set('report_status', f.reportStatuses.join('|'))
   if (f.endActivityStatuses.length) p.set('end_activity_status', f.endActivityStatuses.join('|'))
-  if (query.completion !== 'active') p.set('completion', query.completion)
+  if (query.completion !== 'all') p.set('completion', query.completion)
   return p.toString()
 }
 

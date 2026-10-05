@@ -30,8 +30,8 @@ export type CompletionMode = 'active' | 'completed' | 'all'
 
 export function parseCompletionMode(raw: string | null | undefined): CompletionMode {
   const v = String(raw ?? '').trim().toLowerCase()
-  if (v === 'completed' || v === 'all') return v
-  return 'active'
+  if (v === 'active' || v === 'completed') return v
+  return 'all'
 }
 
 export async function loadExistingGrantGridIds(
