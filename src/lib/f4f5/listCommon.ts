@@ -509,18 +509,42 @@ export async function fetchPlanJsonForProjects(
   return out
 }
 
+/** PostgREST truncates a single request (often at 1000). Page until exhausted. */
+const SCOPED_PROJECTS_PAGE_SIZE = 1000
+
+async function fetchAllProjectRows(
+  buildQuery: () => any
+): Promise<Record<string, unknown>[]> {
+  const out: Record<string, unknown>[] = []
+  let from = 0
+  for (;;) {
+    const to = from + SCOPED_PROJECTS_PAGE_SIZE - 1
+    const { data, error } = await buildQuery()
+      .order('id', { ascending: true })
+      .range(from, to)
+    if (error) throw error
+    const rows = (data || []) as unknown as Record<string, unknown>[]
+    if (!rows.length) break
+    out.push(...rows)
+    if (rows.length < SCOPED_PROJECTS_PAGE_SIZE) break
+    from += SCOPED_PROJECTS_PAGE_SIZE
+  }
+  return out
+}
+
 export async function fetchProjectIdsInStateScope(
   supabase: SupabaseClient,
   allowedStateNames: string[] | null
 ): Promise<string[]> {
   if (allowedStateNames !== null && allowedStateNames.length === 0) return []
-  let query = supabase.from('err_projects').select('id')
-  if (allowedStateNames !== null && allowedStateNames.length > 0) {
-    query = query.in('state', allowedStateNames)
-  }
-  const { data, error } = await query
-  if (error) throw error
-  return (data || []).map((row: { id: string }) => row.id)
+  const rows = await fetchAllProjectRows(() => {
+    let query = supabase.from('err_projects').select('id')
+    if (allowedStateNames !== null && allowedStateNames.length > 0) {
+      query = query.in('state', allowedStateNames)
+    }
+    return query
+  })
+  return rows.map((row) => String(row.id))
 }
 
 export async function fetchScopedProjects(
@@ -533,39 +557,39 @@ export async function fetchScopedProjects(
   }
 ): Promise<Record<string, unknown>[]> {
   const statusFilter = ['active', 'approved', 'completed'] as const
-  let projects: Record<string, unknown>[] = []
 
   if (opts.grantGridIds !== null) {
+    const projects: Record<string, unknown>[] = []
     for (const batch of chunkGrantScopeIds(opts.grantGridIds)) {
-      let q = supabase
-        .from('err_projects')
-        .select(SLIM_PROJECT_SELECT)
-        .in('status', [...statusFilter])
-        .in('grant_grid_id', batch)
-      if (opts.emergencyRoomId) {
-        q = q.eq('emergency_room_id', opts.emergencyRoomId)
-      }
-      const { data, error } = await q
-      if (error) throw error
-      if (data?.length) projects.push(...(data as unknown as Record<string, unknown>[]))
+      const batchRows = await fetchAllProjectRows(() => {
+        let q = supabase
+          .from('err_projects')
+          .select(SLIM_PROJECT_SELECT)
+          .in('status', [...statusFilter])
+          .in('grant_grid_id', batch)
+        if (opts.emergencyRoomId) {
+          q = q.eq('emergency_room_id', opts.emergencyRoomId)
+        }
+        return q
+      })
+      projects.push(...batchRows)
     }
     return projects
   }
 
-  let projectsQuery = supabase
-    .from('err_projects')
-    .select(SLIM_PROJECT_SELECT)
-    .in('status', [...statusFilter])
+  return fetchAllProjectRows(() => {
+    let projectsQuery = supabase
+      .from('err_projects')
+      .select(SLIM_PROJECT_SELECT)
+      .in('status', [...statusFilter])
 
-  if (opts.emergencyRoomId) {
-    projectsQuery = projectsQuery.eq('emergency_room_id', opts.emergencyRoomId)
-  } else if (opts.useStateScope && opts.allowedStateNames !== null && opts.allowedStateNames.length > 0) {
-    projectsQuery = projectsQuery.in('state', opts.allowedStateNames)
-  }
-
-  const { data, error: projectsError } = await projectsQuery
-  if (projectsError) throw projectsError
-  return (data || []) as unknown as Record<string, unknown>[]
+    if (opts.emergencyRoomId) {
+      projectsQuery = projectsQuery.eq('emergency_room_id', opts.emergencyRoomId)
+    } else if (opts.useStateScope && opts.allowedStateNames !== null && opts.allowedStateNames.length > 0) {
+      projectsQuery = projectsQuery.in('state', opts.allowedStateNames)
+    }
+    return projectsQuery
+  })
 }
 
 export function grantSearchTexts(row: { grant_serial_id?: string | null; grant_id?: string | null }): string[] {
