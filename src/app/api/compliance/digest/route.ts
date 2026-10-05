@@ -4,21 +4,20 @@ import { sendComplianceCommittedDigest } from '@/lib/complianceDigest'
 
 /**
  * GET /api/compliance/digest
- * Daily cron: consolidated email of F1s committed / FSP-assigned before Clear.
- * Auth: Vercel Cron (`x-vercel-cron`) or Bearer CRON_SECRET / Authorization header.
+ * Daily cron: one Slack message listing F1s committed / FSP-assigned before Clear.
+ * Auth: Vercel Cron sends `Authorization: Bearer ${CRON_SECRET}` when CRON_SECRET is set.
  */
 export async function GET(request: Request) {
   try {
     const authHeader = request.headers.get('authorization') || ''
     const cronSecret = process.env.CRON_SECRET
-    const isVercelCron = request.headers.get('x-vercel-cron') === '1'
-    const bearerOk =
-      Boolean(cronSecret) &&
-      (authHeader === `Bearer ${cronSecret}` || authHeader === cronSecret)
 
-    if (!isVercelCron && !bearerOk) {
-      // Allow unauthenticated only in development for manual testing
-      if (process.env.NODE_ENV === 'production') {
+    if (process.env.NODE_ENV === 'production') {
+      if (!cronSecret) {
+        console.error('[compliance-digest] CRON_SECRET is not set; Vercel Cron cannot authenticate')
+        return NextResponse.json({ error: 'CRON_SECRET not configured' }, { status: 500 })
+      }
+      if (authHeader !== `Bearer ${cronSecret}`) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
       }
     }
