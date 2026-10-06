@@ -8,29 +8,43 @@ function asStringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((x): x is string => typeof x === 'string') : []
 }
 
+function splitLabel(line: string): { label: string; rest: string } | null {
+  const sep = ' — '
+  const i = line.indexOf(sep)
+  if (i <= 0) return null
+  return { label: line.slice(0, i), rest: line.slice(i + sep.length) }
+}
+
 function BulletList({ items }: { items: string[] }) {
   if (items.length === 0) return null
   return (
     <ul className="mt-2 list-disc space-y-1.5 ps-5 text-sm marker:text-brand-purple/80">
-      {items.map((line, i) => (
-        <li key={i} className="leading-relaxed">
-          {line}
-        </li>
-      ))}
+      {items.map((line, i) => {
+        const parts = splitLabel(line)
+        return (
+          <li key={i} className="leading-relaxed">
+            {parts ? (
+              <>
+                <span className="font-medium text-brand-dark-blue">{parts.label}</span>
+                {' — '}
+                {parts.rest}
+              </>
+            ) : (
+              line
+            )}
+          </li>
+        )
+      })}
     </ul>
   )
 }
 
 function ProjectManagementExplainerBody() {
   const { t } = useTranslation(['projects'])
-  const dataBullets = asStringArray(t('projects:management_explainer_data_bullets', { returnObjects: true }))
-  const metricsKpiBullets = asStringArray(t('projects:management_explainer_metrics_kpi_bullets', { returnObjects: true }))
-  const metricsTableBullets = asStringArray(t('projects:management_explainer_metrics_table_bullets', { returnObjects: true }))
+  const metricsBullets = asStringArray(t('projects:management_explainer_metrics_bullets', { returnObjects: true }))
   const metricsTrackerBullets = asStringArray(t('projects:management_explainer_metrics_tracker_bullets', { returnObjects: true }))
   const metricsOverdueBullets = asStringArray(t('projects:management_explainer_metrics_overdue_bullets', { returnObjects: true }))
-  const metricsGrantBullets = asStringArray(t('projects:management_explainer_metrics_grant_bullets', { returnObjects: true }))
   const uiBullets = asStringArray(t('projects:management_explainer_ui_bullets', { returnObjects: true }))
-  const actionsBullets = asStringArray(t('projects:management_explainer_actions_bullets', { returnObjects: true }))
 
   return (
     <div className="space-y-4 text-brand-body">
@@ -39,14 +53,7 @@ function ProjectManagementExplainerBody() {
       <div>
         <p className="mb-1 font-semibold text-brand-dark-blue">{t('projects:management_explainer_heading_metrics')}</p>
         <p className="text-sm leading-relaxed text-brand-body">{t('projects:management_explainer_metrics_scope')}</p>
-        <p className="mt-3 text-xs font-semibold uppercase tracking-wide text-brand-purple/80">
-          {t('projects:management_explainer_metrics_sub_kpi')}
-        </p>
-        <BulletList items={metricsKpiBullets} />
-        <p className="mt-3 text-xs font-semibold uppercase tracking-wide text-brand-purple/80">
-          {t('projects:management_explainer_metrics_sub_table')}
-        </p>
-        <BulletList items={metricsTableBullets} />
+        <BulletList items={metricsBullets} />
         <p className="mt-3 text-xs font-semibold uppercase tracking-wide text-brand-purple/80">
           {t('projects:management_explainer_metrics_sub_tracker')}
         </p>
@@ -55,26 +62,11 @@ function ProjectManagementExplainerBody() {
           {t('projects:management_explainer_metrics_sub_overdue')}
         </p>
         <BulletList items={metricsOverdueBullets} />
-        <p className="mt-3 text-xs font-semibold uppercase tracking-wide text-brand-purple/80">
-          {t('projects:management_explainer_metrics_sub_grant')}
-        </p>
-        <BulletList items={metricsGrantBullets} />
-      </div>
-
-      <div>
-        <p className="mb-1 font-semibold text-brand-dark-blue">{t('projects:management_explainer_heading_data')}</p>
-        <p className="text-sm leading-relaxed text-brand-body">{t('projects:management_explainer_data_lead')}</p>
-        <BulletList items={dataBullets} />
       </div>
 
       <div>
         <p className="mb-1 font-semibold text-brand-dark-blue">{t('projects:management_explainer_heading_ui')}</p>
         <BulletList items={uiBullets} />
-      </div>
-
-      <div>
-        <p className="mb-1 font-semibold text-brand-dark-blue">{t('projects:management_explainer_heading_actions')}</p>
-        <BulletList items={actionsBullets} />
       </div>
     </div>
   )

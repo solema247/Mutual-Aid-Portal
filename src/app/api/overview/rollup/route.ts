@@ -878,7 +878,8 @@ export async function GET(request: Request) {
       const f5Status = r.f5_status != null ? String(r.f5_status).toLowerCase() : null
       let f5Part: number
       if (f5Status === 'completed') f5Part = 0.5
-      else if (f5Status === 'under review' || f5Status === 'in review' || f5Status === 'partial') f5Part = 0.25
+      else if (f5Status === 'partial') f5Part = 0.25
+      else if (f5Status === 'under review' || f5Status === 'in review') f5Part = 0.125
       else if (f5Status === 'waiting') f5Part = 0
       else if (r.is_historical) f5Part = 0
       else f5Part = Number(r.f5_count || 0) > 0 ? 0.5 : 0
@@ -889,7 +890,8 @@ export async function GET(request: Request) {
         if (r.is_historical && hasActual && plan > 0) f4Part = 0.5 * Math.min(1, burn)
         else if (r.is_historical) f4Part = 0.5
         else f4Part = 0.5 * Math.min(1, burn)
-      } else if (f4Status === 'under review' || f4Status === 'in review' || f4Status === 'partial') f4Part = 0.25
+      } else if (f4Status === 'partial') f4Part = 0.25
+      else if (f4Status === 'under review' || f4Status === 'in review') f4Part = 0.125
       else if (f4Status === 'waiting') f4Part = 0
       else if (r.is_historical) f4Part = 0
       else f4Part = 0.5 * Math.min(1, burn)
@@ -953,7 +955,8 @@ export async function GET(request: Request) {
       const f5Status = r.f5_status != null ? String(r.f5_status).toLowerCase() : null
       let f5Part: number
       if (f5Status === 'completed') f5Part = 0.5
-      else if (f5Status === 'under review' || f5Status === 'in review' || f5Status === 'partial') f5Part = 0.25
+      else if (f5Status === 'partial') f5Part = 0.25
+      else if (f5Status === 'under review' || f5Status === 'in review') f5Part = 0.125
       else if (f5Status === 'waiting') f5Part = 0
       else if (r.is_historical) f5Part = 0
       else f5Part = Number(r.f5_count || 0) > 0 ? 0.5 : 0
@@ -964,7 +967,8 @@ export async function GET(request: Request) {
         if (r.is_historical && hasActual && plan > 0) f4Part = 0.5 * Math.min(1, burn)
         else if (r.is_historical) f4Part = 0.5
         else f4Part = 0.5 * Math.min(1, burn)
-      } else if (f4Status === 'under review' || f4Status === 'in review' || f4Status === 'partial') f4Part = 0.25
+      } else if (f4Status === 'partial') f4Part = 0.25
+      else if (f4Status === 'under review' || f4Status === 'in review') f4Part = 0.125
       else if (f4Status === 'waiting') f4Part = 0
       else if (r.is_historical) f4Part = 0
       else f4Part = 0.5 * Math.min(1, burn)
@@ -1030,7 +1034,8 @@ export async function GET(request: Request) {
       const f5Status = r.f5_status != null ? String(r.f5_status).toLowerCase() : null
       let f5Part: number
       if (f5Status === 'completed') f5Part = 0.5
-      else if (f5Status === 'under review' || f5Status === 'in review' || f5Status === 'partial') f5Part = 0.25
+      else if (f5Status === 'partial') f5Part = 0.25
+      else if (f5Status === 'under review' || f5Status === 'in review') f5Part = 0.125
       else if (f5Status === 'waiting') f5Part = 0
       else if (r.is_historical) f5Part = 0
       else f5Part = Number(r.f5_count || 0) > 0 ? 0.5 : 0
@@ -1041,7 +1046,8 @@ export async function GET(request: Request) {
         if (r.is_historical && hasActual && plan > 0) f4Part = 0.5 * Math.min(1, burn)
         else if (r.is_historical) f4Part = 0.5
         else f4Part = 0.5 * Math.min(1, burn)
-      } else if (f4Status === 'under review' || f4Status === 'in review' || f4Status === 'partial') f4Part = 0.25
+      } else if (f4Status === 'partial') f4Part = 0.25
+      else if (f4Status === 'under review' || f4Status === 'in review') f4Part = 0.125
       else if (f4Status === 'waiting') f4Part = 0
       else if (r.is_historical) f4Part = 0
       else f4Part = 0.5 * Math.min(1, burn)

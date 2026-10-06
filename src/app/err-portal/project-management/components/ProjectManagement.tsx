@@ -270,10 +270,8 @@ export default function ProjectManagement() {
     return result
   }, [allRows, filters, filterFields, getFieldValue])
 
-  // Tracker score: F4 half (max 0.5) + F5 half (max 0.5).
-  // Historical F4: Completed+actual>0 → actual/plan; else Completed → 0.5; Partial/Under Review → 0.25; Waiting → 0.
-  // Portal F4/F5: use stored f4_status / f5_status (upload sets partial; user marks completed). Completed → 0.5*min(1,burn) for F4 / 0.5 for F5; partial/in review → 0.25; waiting → 0.
-  // F5 (both): Completed → 0.5; Partial/Under Review → 0.25; Waiting → 0.
+  // Tracker score: F4 half (max 0.5) + F5 half (max 0.5). Matches projects_all_activities_view except completed F4 uses burn.
+  // Completed → 0.5 (portal/historical F4 completed with actuals: 0.5*min(1,burn)); Partial → 0.25; Under Review/In Review → 0.125; Waiting → 0.
   const trackerScore = (r: any) => {
     const plan = Number(r.plan || 0)
     const actual = Number(r.actual ?? 0)
@@ -282,7 +280,8 @@ export default function ProjectManagement() {
     const f5Status = r.f5_status != null ? String(r.f5_status).toLowerCase() : null
     let f5Part: number
     if (f5Status === 'completed') f5Part = 0.5
-    else if (f5Status === 'under review' || f5Status === 'in review' || f5Status === 'partial') f5Part = 0.25
+    else if (f5Status === 'partial') f5Part = 0.25
+    else if (f5Status === 'under review' || f5Status === 'in review') f5Part = 0.125
     else if (f5Status === 'waiting') f5Part = 0
     else if (r.is_historical) f5Part = 0
     else f5Part = Number(r.f5_count || 0) > 0 ? 0.5 : 0
@@ -293,7 +292,8 @@ export default function ProjectManagement() {
       if (r.is_historical && hasActual && plan > 0) f4Part = 0.5 * Math.min(1, burn)
       else if (r.is_historical) f4Part = 0.5
       else f4Part = 0.5 * Math.min(1, burn)
-    } else if (f4Status === 'under review' || f4Status === 'in review' || f4Status === 'partial') f4Part = 0.25
+    } else if (f4Status === 'partial') f4Part = 0.25
+    else if (f4Status === 'under review' || f4Status === 'in review') f4Part = 0.125
     else if (f4Status === 'waiting') f4Part = 0
     else if (r.is_historical) f4Part = 0
     else f4Part = 0.5 * Math.min(1, burn)
