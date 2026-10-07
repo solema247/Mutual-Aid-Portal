@@ -3,6 +3,7 @@ import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { requirePermission } from '@/lib/requirePermission'
 import { assertProjectInRoomAccess } from '@/lib/userRoomAccess'
 import { sendIdUploadedAlert } from '@/lib/complianceAlerts'
+import { isPreJulyProject } from '@/lib/compliance'
 
 /**
  * POST /api/compliance/[id]/upload-id
@@ -36,7 +37,7 @@ export async function POST(
       .from('compliance_screenings')
       .select(`
         id, status, flag_type, project_id, screened_by, names,
-        err_projects ( err_id )
+        err_projects ( err_id, submitted_at, date )
       `)
       .eq('id', params.id)
       .single()
@@ -78,21 +79,23 @@ export async function POST(
       .eq('id', params.id)
     if (screeningError) throw screeningError
 
-    const project = screening.err_projects as
-      | { err_id?: string | null }
-      | { err_id?: string | null }[]
-      | null
-    const errId = Array.isArray(project) ? project[0]?.err_id : project?.err_id
+    type ProjectRef = { err_id?: string | null; submitted_at?: string | null; date?: string | null }
+    const rawProject = screening.err_projects as ProjectRef | ProjectRef[] | null
+    const project = Array.isArray(rawProject) ? rawProject[0] : rawProject
 
-    const alert = await sendIdUploadedAlert({
-      errId: errId || null,
-      projectId: screening.project_id,
-      screeningId: screening.id,
-      names: Array.isArray(screening.names) ? screening.names : [],
-      screenedByLogin: screening.screened_by || null,
-      uploadedByLogin: actorLogin,
-      note: trimmedNote || null
-    })
+    // F1s raised before 1 Jul 2026 are outside system screening — never alert Slack for them.
+    const alert =
+      project && isPreJulyProject(project)
+        ? { detail: 'Raised before 1 Jul 2026 — no Slack alert' }
+        : await sendIdUploadedAlert({
+            errId: project?.err_id || null,
+            projectId: screening.project_id,
+            screeningId: screening.id,
+            names: Array.isArray(screening.names) ? screening.names : [],
+            screenedByLogin: screening.screened_by || null,
+            uploadedByLogin: actorLogin,
+            note: trimmedNote || null
+          })
 
     return NextResponse.json({
       success: true,

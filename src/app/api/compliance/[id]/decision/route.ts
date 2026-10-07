@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { requirePermission } from '@/lib/requirePermission'
 import { assertProjectInRoomAccess } from '@/lib/userRoomAccess'
-import { normalizedNameKey, type FlagType } from '@/lib/compliance'
+import { normalizedNameKey, isPreJulyProject, type FlagType } from '@/lib/compliance'
 import { sendSanctionsMatchAlert } from '@/lib/complianceAlerts'
 
 const VALID_FLAG_TYPES: FlagType[] = ['missing_id', 'sanctions_match']
@@ -44,7 +44,7 @@ export async function POST(
       .from('compliance_screenings')
       .select(`
         id, names, status, project_id,
-        err_projects ( err_id )
+        err_projects ( err_id, submitted_at, date )
       `)
       .eq('id', params.id)
       .single()
@@ -103,12 +103,16 @@ export async function POST(
     }
 
     let alertDetail: string | undefined
-    if (action === 'flag' && flag_type === 'sanctions_match') {
-      const project = screening.err_projects as
-        | { err_id?: string | null }
-        | { err_id?: string | null }[]
-        | null
-      const errId = Array.isArray(project) ? project[0]?.err_id : project?.err_id
+    type ProjectRef = { err_id?: string | null; submitted_at?: string | null; date?: string | null }
+    const rawProject = screening.err_projects as ProjectRef | ProjectRef[] | null
+    const project = Array.isArray(rawProject) ? rawProject[0] : rawProject
+    // F1s raised before 1 Jul 2026 are outside system screening — never alert Slack for them.
+    if (
+      action === 'flag' &&
+      flag_type === 'sanctions_match' &&
+      !(project && isPreJulyProject(project))
+    ) {
+      const errId = project?.err_id
       const alert = await sendSanctionsMatchAlert({
         errId: errId || null,
         projectId: screening.project_id,
