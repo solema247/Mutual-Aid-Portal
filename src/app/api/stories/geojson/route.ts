@@ -10,6 +10,14 @@ import {
 } from '@/lib/userGrantAccess'
 import { getUserRoomAccess } from '@/lib/userRoomAccess'
 import { getCategorySpend } from '@/lib/mutualAidCategorySpend'
+import {
+  applyOrganizationIdFilter,
+  filterRowsByDisclosureStates,
+  getUserOrgScope,
+  isDisclosedCoordinator,
+  orgScopeBlocksAllData,
+  orgScopeBlocksResourceType,
+} from '@/lib/canvas/orgScope'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -104,17 +112,27 @@ export async function GET() {
   console.log('[stories/geojson] start')
   try {
     const supabase = getSupabaseRouteClient()
-    const [grantAccess, roomAccess] = await Promise.all([
+    const [grantAccess, roomAccess, orgScope] = await Promise.all([
       getUserGrantAccess(),
       getUserRoomAccess(),
+      getUserOrgScope(),
     ])
     const emptyFeatures = () =>
       NextResponse.json(
         { type: 'FeatureCollection', features: [] },
         { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } }
       )
+    if (orgScopeBlocksAllData(orgScope) || orgScopeBlocksResourceType(orgScope, 'f5')) {
+      return emptyFeatures()
+    }
     if (roomAccess.mode === 'none') return emptyFeatures()
-    if (roomAccess.mode !== 'room' && grantAccess.mode === 'none') return emptyFeatures()
+    if (
+      !isDisclosedCoordinator(orgScope) &&
+      roomAccess.mode !== 'room' &&
+      grantAccess.mode === 'none'
+    ) {
+      return emptyFeatures()
+    }
 
     const geoPath = join(process.cwd(), 'public', 'geo', 'sudan-states.json')
     const geo = JSON.parse(readFileSync(geoPath, 'utf-8')) as {
@@ -135,9 +153,11 @@ export async function GET() {
       stateCentroids.set(name, centroid)
     }
 
-    const projectSelect = 'id, state, locality, project_name, planned_activities, expenses'
+    const projectSelect =
+      'id, organization_id, state, locality, project_name, planned_activities, expenses'
     let projects: {
       id: string
+      organization_id?: string | null
       state?: string | null
       locality?: string | null
       project_name?: string | null
@@ -147,12 +167,19 @@ export async function GET() {
 
     if (roomAccess.mode === 'room') {
       // Base ERR: emergency_room_id only (never state scope)
-      const { data, error: projectsError } = await supabase
+      let projectsQuery = supabase
         .from('err_projects')
         .select(projectSelect)
         .eq('source', 'mutual_aid_portal')
         .in('status', MAP_STATUSES)
         .eq('emergency_room_id', roomAccess.emergencyRoomId)
+      projectsQuery = applyOrganizationIdFilter(
+        projectsQuery,
+        orgScope,
+        'organization_id',
+        'f5'
+      )
+      const { data, error: projectsError } = await projectsQuery
       if (projectsError) {
         console.error('[stories/geojson] projects error:', projectsError)
         return NextResponse.json(
@@ -161,7 +188,7 @@ export async function GET() {
         )
       }
       projects = data || []
-    } else if (grantAccess.mode === 'partner') {
+    } else if (grantAccess.mode === 'partner' && !isDisclosedCoordinator(orgScope)) {
       console.log('[stories/geojson] partner grant scope', Date.now() - t0, 'ms')
       for (const batch of chunkGrantScopeIds(grantAccess.grantGridIds)) {
         let projectsQuery = supabase
@@ -173,6 +200,12 @@ export async function GET() {
           ...grantAccess,
           grantGridIds: batch,
         })
+        projectsQuery = applyOrganizationIdFilter(
+          projectsQuery,
+          orgScope,
+          'organization_id',
+          'f5'
+        )
         const { data, error: projectsError } = await projectsQuery
         if (projectsError) {
           console.error('[stories/geojson] projects error:', projectsError)
@@ -196,7 +229,17 @@ export async function GET() {
             .order('id', { ascending: true })
             .range(from, to)
 
-          if (allowedStateNames !== null && allowedStateNames.length > 0) {
+          projectsQuery = applyOrganizationIdFilter(
+            projectsQuery,
+            orgScope,
+            'organization_id',
+            'f5'
+          )
+          if (
+            !isDisclosedCoordinator(orgScope) &&
+            allowedStateNames !== null &&
+            allowedStateNames.length > 0
+          ) {
             projectsQuery = projectsQuery.in('state', allowedStateNames)
           }
           return projectsQuery
@@ -208,6 +251,10 @@ export async function GET() {
           { status: 500, headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } }
         )
       }
+    }
+
+    if (isDisclosedCoordinator(orgScope)) {
+      projects = filterRowsByDisclosureStates(projects, orgScope, 'f5')
     }
 
     console.log('[stories/geojson] projects query', Date.now() - t0, 'ms', projects.length, 'rows')

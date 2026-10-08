@@ -23,7 +23,6 @@ import {
 } from '@/components/ui/sheet'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { ActiveUserListItem } from '@/app/api/users/types/users'
-import { getActiveUsers } from '@/app/api/users/utils/users'
 import { supabase } from '@/lib/supabaseClient'
 import {
   SmartFilter,
@@ -395,29 +394,27 @@ export default function AccessRightsManagement({
 
   const fetchSummary = useCallback(async () => {
     try {
-      const base = {
-        page: 1,
-        pageSize: 1,
-        sortOrder: 'desc' as const,
-        currentUserRole,
-        currentUserErrId,
+      const fetchCount = async (extra: Record<string, string> = {}) => {
+        const params = new URLSearchParams({ page: '1', pageSize: '1', ...extra })
+        const res = await fetch(`/api/users/active?${params.toString()}`)
+        if (!res.ok) {
+          throw new Error('Failed to fetch user summary')
+        }
+        const data = (await res.json()) as { total?: number }
+        return data.total ?? 0
       }
-      const [totalRes, activeRes, suspendedRes, baseErrRes] = await Promise.all([
-        getActiveUsers({ ...base, status: 'all' }),
-        getActiveUsers({ ...base, status: 'active' }),
-        getActiveUsers({ ...base, status: 'suspended' }),
-        getActiveUsers({ ...base, status: 'all', role: 'base_err' }),
+      // Must use the scoped API (not client-side getActiveUsers) so org membership applies.
+      const [total, active, suspended, baseErr] = await Promise.all([
+        fetchCount(),
+        fetchCount({ statuses: 'active' }),
+        fetchCount({ statuses: 'suspended' }),
+        fetchCount({ roles: 'base_err' }),
       ])
-      setSummary({
-        total: totalRes.total,
-        active: activeRes.total,
-        suspended: suspendedRes.total,
-        baseErr: baseErrRes.total,
-      })
+      setSummary({ total, active, suspended, baseErr })
     } catch (err) {
       console.error('Error fetching user summary:', err)
     }
-  }, [currentUserRole, currentUserErrId])
+  }, [])
 
   const fetchUsers = useCallback(async () => {
     try {

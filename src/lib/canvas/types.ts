@@ -5,6 +5,8 @@ export type CanvasOrganization = {
   slug: string
   name: string
   org_type: OrgType
+  /** LoHub legacy imports (activities_raw_import) belong to the default-owner org only. */
+  is_default_owner?: boolean
 }
 
 export type CanvasEnvironment = {

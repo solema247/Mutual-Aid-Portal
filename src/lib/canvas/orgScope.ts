@@ -19,7 +19,12 @@ import { roleBypassesMountGating } from '@/lib/canvas/types'
  */
 export type UserOrgScope =
   | { mode: 'all'; organizationId: null }
-  | { mode: 'org'; organizationId: string }
+  | {
+      mode: 'org'
+      organizationId: string
+      /** True for the pipeline default-owner org (LoHub) — may include legacy import tables. */
+      isDefaultOwner: boolean
+    }
   | { mode: 'none'; organizationId: null }
   | {
       mode: 'disclosed'
@@ -91,7 +96,21 @@ export async function getUserOrgScope(
     }
   }
 
-  return { mode: 'org', organizationId: canvas.organization.id }
+  return {
+    mode: 'org',
+    organizationId: canvas.organization.id,
+    isDefaultOwner: canvas.organization.is_default_owner === true,
+  }
+}
+
+/**
+ * Legacy activities_raw_import / historical_financial_reports are LoHub-owned.
+ * Only default-owner org scope (or pre-canvas fallback mode all) may include them.
+ */
+export function orgScopeIncludesHistoricalImports(scope: UserOrgScope): boolean {
+  if (scope.mode === 'all') return true
+  if (scope.mode === 'org') return scope.isDefaultOwner
+  return false
 }
 
 /** Orgs that granted a given info type (empty ⇒ no access for that type). */
@@ -195,7 +214,9 @@ export function filterRowsByDisclosureStates<T extends Record<string, unknown>>(
  * Stable cache segment for disclosed scopes (avoids sharing LoHub caches with LCC).
  */
 export function orgScopeCacheKey(scope: UserOrgScope): string {
-  if (scope.mode === 'org') return `org:${scope.organizationId}`
+  if (scope.mode === 'org') {
+    return `org:${scope.organizationId}:hist:${scope.isDefaultOwner ? '1' : '0'}`
+  }
   if (scope.mode === 'all') return 'org:all'
   if (scope.mode === 'none') return 'org:none'
   const parts: string[] = [`coord:${scope.requestingOrganizationId}`]

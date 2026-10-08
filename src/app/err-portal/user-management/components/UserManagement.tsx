@@ -8,7 +8,6 @@ import { Plus, Shield } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { CollapsibleRow } from '@/components/ui/collapsible'
 import { PendingUserListItem } from '@/app/api/users/types/users'
-import { getPendingUsers } from '@/app/api/users/utils/users'
 import { useAllowedFunctions } from '@/hooks/useAllowedFunctions'
 import PendingUsersList from './PendingUsersList'
 import ActiveUsersList from './ActiveUsersList'
@@ -78,20 +77,32 @@ export default function UserManagement() {
 
     try {
       setIsLoading(true)
-      const users = await getPendingUsers(currentUser.role, currentUser.err_id)
-      const formattedUsers: PendingUserListItem[] = users
-        .filter(user => currentUser.role === 'support' || user.role !== 'support')
-        .map(user => ({
-          id: user.id,
-          err_id: user.err_id,
-          display_name: user.display_name,
-          role: user.role as 'support' | 'superadmin' | 'admin' | 'state_err' | 'base_err',
-          createdAt: new Date(user.created_at || '').toLocaleDateString(),
-          status: user.status as 'pending' | 'active' | 'suspended',
-          err_name: user.emergency_rooms?.name || '-',
-          err_code: user.emergency_rooms?.err_code || '-',
-          state_name: user.emergency_rooms?.state?.state_name || '-'
-        }))
+      const res = await fetch('/api/users/pending')
+      if (!res.ok) {
+        throw new Error('Failed to fetch pending users')
+      }
+      const data = (await res.json()) as { users: Array<Record<string, unknown>> }
+      const formattedUsers: PendingUserListItem[] = (data.users || []).map((user) => ({
+        id: user.id as string,
+        err_id: (user.err_id as string | null) ?? null,
+        display_name: user.display_name as string,
+        role: user.role as 'support' | 'superadmin' | 'admin' | 'state_err' | 'base_err',
+        createdAt: new Date((user.created_at as string) || '').toLocaleDateString(),
+        status: user.status as 'pending' | 'active' | 'suspended',
+        err_name:
+          ((user.emergency_rooms as { name?: string } | null)?.name) || '-',
+        err_code:
+          ((user.emergency_rooms as { err_code?: string } | null)?.err_code) ||
+          '-',
+        state_name:
+          (
+            (
+              user.emergency_rooms as {
+                state?: { state_name?: string } | null
+              } | null
+            )?.state?.state_name
+          ) || '-',
+      }))
       setPendingUsers(formattedUsers)
     } catch (err) {
       setError(t('common:error_fetching_data'))

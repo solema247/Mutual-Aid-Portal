@@ -12,8 +12,16 @@ interface StateResponse {
   }[];
 }
 
-export async function getPendingUsers(currentUserRole: string, currentUserErrId: string | null): Promise<User[]> {
-  let query = supabase
+export async function getPendingUsers(
+  currentUserRole: string,
+  currentUserErrId: string | null,
+  opts?: { userIds?: string[]; client?: SupabaseClient }
+): Promise<User[]> {
+  if (opts?.userIds && opts.userIds.length === 0) {
+    return []
+  }
+  const db = opts?.client ?? supabase
+  let query = db
     .from('users')
     .select(`
       *,
@@ -31,10 +39,14 @@ export async function getPendingUsers(currentUserRole: string, currentUserErrId:
     .eq('status', 'pending')
     .order('created_at', { ascending: false })
 
+  if (opts?.userIds && opts.userIds.length > 0) {
+    query = query.in('id', opts.userIds)
+  }
+
   // Filter based on role
   if (currentUserRole === 'state_err' && currentUserErrId) {
     // First get the state name for the current user's ERR
-    const { data: currentERR } = await supabase
+    const { data: currentERR } = await db
       .from('emergency_rooms')
       .select(`
         state:states!emergency_rooms_state_reference_fkey(
@@ -47,7 +59,7 @@ export async function getPendingUsers(currentUserRole: string, currentUserErrId:
     const stateName = (currentERR as StateResponse)?.state?.[0]?.state_name
     if (stateName) {
       // Get all state references for this state name
-      const { data: stateRefs } = await supabase
+      const { data: stateRefs } = await db
         .from('states')
         .select('id')
         .eq('state_name', stateName)

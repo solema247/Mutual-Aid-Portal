@@ -8,6 +8,14 @@ import {
 } from '@/lib/userGrantAccess'
 import { getUserRoomAccess } from '@/lib/userRoomAccess'
 import { getActivityAndCategoryLists } from '@/lib/plannedActivitiesExpenses'
+import {
+  applyOrganizationIdFilter,
+  filterRowsByDisclosureStates,
+  getUserOrgScope,
+  isDisclosedCoordinator,
+  orgScopeBlocksAllData,
+  orgScopeBlocksResourceType,
+} from '@/lib/canvas/orgScope'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -60,29 +68,51 @@ export async function GET() {
   console.log('[stories/options] start')
   try {
     const supabase = getSupabaseRouteClient()
-    const [grantAccess, roomAccess] = await Promise.all([
+    const [grantAccess, roomAccess, orgScope] = await Promise.all([
       getUserGrantAccess(),
       getUserRoomAccess(),
+      getUserOrgScope(),
     ])
     const emptyOptions = () =>
       NextResponse.json(
         { states: [], themes: [] },
         { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } }
       )
+    if (orgScopeBlocksAllData(orgScope) || orgScopeBlocksResourceType(orgScope, 'f5')) {
+      return emptyOptions()
+    }
     if (roomAccess.mode === 'none') return emptyOptions()
-    if (roomAccess.mode !== 'room' && grantAccess.mode === 'none') return emptyOptions()
+    if (
+      !isDisclosedCoordinator(orgScope) &&
+      roomAccess.mode !== 'room' &&
+      grantAccess.mode === 'none'
+    ) {
+      return emptyOptions()
+    }
 
-    const projectSelect = 'id, state, planned_activities'
-    let projects: { id: string; state?: string | null; planned_activities?: unknown }[] = []
+    const projectSelect = 'id, organization_id, state, planned_activities'
+    let projects: {
+      id: string
+      organization_id?: string | null
+      state?: string | null
+      planned_activities?: unknown
+    }[] = []
 
     if (roomAccess.mode === 'room') {
       // Base ERR: emergency_room_id only (never state scope)
-      const { data, error: projectsError } = await supabase
+      let projectsQuery = supabase
         .from('err_projects')
         .select(projectSelect)
         .eq('source', 'mutual_aid_portal')
         .in('status', MAP_STATUSES)
         .eq('emergency_room_id', roomAccess.emergencyRoomId)
+      projectsQuery = applyOrganizationIdFilter(
+        projectsQuery,
+        orgScope,
+        'organization_id',
+        'f5'
+      )
+      const { data, error: projectsError } = await projectsQuery
       if (projectsError) {
         console.error('Stories options projects error:', projectsError)
         return NextResponse.json(
@@ -91,7 +121,7 @@ export async function GET() {
         )
       }
       projects = data || []
-    } else if (grantAccess.mode === 'partner') {
+    } else if (grantAccess.mode === 'partner' && !isDisclosedCoordinator(orgScope)) {
       console.log('[stories/options] partner grant scope', Date.now() - t0, 'ms')
       for (const batch of chunkGrantScopeIds(grantAccess.grantGridIds)) {
         let projectsQuery = supabase
@@ -103,6 +133,12 @@ export async function GET() {
           ...grantAccess,
           grantGridIds: batch,
         })
+        projectsQuery = applyOrganizationIdFilter(
+          projectsQuery,
+          orgScope,
+          'organization_id',
+          'f5'
+        )
         const { data, error: projectsError } = await projectsQuery
         if (projectsError) {
           console.error('Stories options projects error:', projectsError)
@@ -126,7 +162,17 @@ export async function GET() {
             .order('id', { ascending: true })
             .range(from, to)
 
-          if (allowedStateNames !== null && allowedStateNames.length > 0) {
+          projectsQuery = applyOrganizationIdFilter(
+            projectsQuery,
+            orgScope,
+            'organization_id',
+            'f5'
+          )
+          if (
+            !isDisclosedCoordinator(orgScope) &&
+            allowedStateNames !== null &&
+            allowedStateNames.length > 0
+          ) {
             projectsQuery = projectsQuery.in('state', allowedStateNames)
           }
           return projectsQuery
@@ -138,6 +184,10 @@ export async function GET() {
           { status: 500, headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } }
         )
       }
+    }
+
+    if (isDisclosedCoordinator(orgScope)) {
+      projects = filterRowsByDisclosureStates(projects, orgScope, 'f5')
     }
 
     console.log('[stories/options] projects query', Date.now() - t0, 'ms', projects.length, 'rows')

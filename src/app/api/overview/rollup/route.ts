@@ -322,6 +322,7 @@ export async function GET(request: Request) {
       orgScopeBlocksAllData,
       orgScopeBlocksResourceType,
       orgScopeCacheKey,
+      orgScopeIncludesHistoricalImports,
     } = await import('@/lib/canvas/orgScope')
 
     // Get user's state access rights (ERR roles), grant access (Partner) and room access (Base ERR)
@@ -475,11 +476,12 @@ export async function GET(request: Request) {
     const dataSupabase = getSupabaseAdmin()
 
     // ===== PARALLEL BATCH 1: All independent data (historical + project-dependent) =====
-    // Partner / Base ERR / coordinator disclosure: never pull unscoped historical import tables
+    // Legacy import tables are LoHub-owned — skip for partners, Base ERR, coordinators,
+    // and non–default-owner orgs (e.g. Demo Empty).
     const skipHistorical =
       grantAccess.mode === 'partner' ||
       roomAccess.mode === 'room' ||
-      orgScope.mode === 'disclosed'
+      !orgScopeIncludesHistoricalImports(orgScope)
     const batch1Start = Date.now()
     const [
       allHistoricalData,

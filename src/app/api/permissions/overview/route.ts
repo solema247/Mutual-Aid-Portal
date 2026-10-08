@@ -14,6 +14,11 @@ import {
   getJsonRoleDefaults,
   mergeRoleDefaultsMaps,
 } from '@/lib/roleDefaultsDb'
+import {
+  getUserOrgScope,
+  loadSessionOrgMemberUserIds,
+  shouldScopeUsersToSessionOrg,
+} from '@/lib/canvas/orgScope'
 
 const FULL_ACCESS_ROLES = new Set(['superadmin', 'support'])
 
@@ -43,7 +48,36 @@ export async function GET() {
 
   const visibleRoles = new Set(rolesVisibleToViewer(currentUser.role))
 
-  const { data: users, error: usersError } = await supabase
+  const orgScope = await getUserOrgScope(supabase)
+  const orgScoped = shouldScopeUsersToSessionOrg(orgScope, currentUser.role)
+  let memberIds: string[] | null = null
+  if (orgScoped) {
+    memberIds = await loadSessionOrgMemberUserIds(supabase, orgScope)
+    if (!memberIds || memberIds.length === 0) {
+      const dbDefaults = await ensureRoleDefaultsSeeded(supabase)
+      const roleDefaultsMap = mergeRoleDefaultsMaps(getJsonRoleDefaults(), dbDefaults)
+      const editableRoles = EDITABLE_ROLE_DEFAULTS.filter((role) => visibleRoles.has(role))
+      const editableDefaults: Record<string, string[]> = {}
+      for (const role of editableRoles) {
+        editableDefaults[role] = roleDefaultsMap[role] ?? []
+      }
+      const roleCounts: Record<string, number> = {}
+      for (const role of visibleRoles) roleCounts[role] = 0
+      return NextResponse.json({
+        users: [],
+        roleCounts,
+        roleDefaults: editableDefaults,
+        fullAccessRoles: Array.from(FULL_ACCESS_ROLES),
+        editableRoles,
+        visibleRoles: rolesVisibleToViewer(currentUser.role),
+        viewerRole: currentUser.role,
+        functions: getFunctionList(),
+        functionsByModule: getFunctionsByModule(),
+      })
+    }
+  }
+
+  let usersQuery = supabase
     .from('users')
     .select(`
       id,
@@ -59,6 +93,12 @@ export async function GET() {
     .eq('status', 'active')
     .order('display_name', { ascending: true })
     .limit(500)
+
+  if (memberIds) {
+    usersQuery = usersQuery.in('id', memberIds)
+  }
+
+  const { data: users, error: usersError } = await usersQuery
 
   if (usersError) {
     console.error('permissions overview users error:', usersError)

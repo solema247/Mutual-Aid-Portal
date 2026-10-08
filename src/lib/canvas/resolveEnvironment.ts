@@ -16,6 +16,7 @@ function canvasUnavailableFallback(): ResolvedCanvasContext {
       slug: '',
       name: '',
       org_type: 'processor',
+      is_default_owner: false,
     },
     environment: {
       id: '',
@@ -52,7 +53,7 @@ export async function resolveEnvironmentForUser(
         is_default,
         organization_id,
         environment_id,
-        organizations:organization_id ( id, slug, name, org_type ),
+        organizations:organization_id ( id, slug, name, org_type, is_default_owner ),
         environments:environment_id (
           id, slug, display_name, logo_url, header_title, organization_id
         )
@@ -79,6 +80,7 @@ export async function resolveEnvironmentForUser(
       slug: string
       name: string
       org_type: string
+      is_default_owner?: boolean | null
     } | null
     const env = (Array.isArray(envRaw) ? envRaw[0] : envRaw) as {
       id: string
@@ -127,6 +129,7 @@ export async function resolveEnvironmentForUser(
         slug: org.slug,
         name: org.name,
         org_type: org.org_type as ResolvedCanvasContext['organization']['org_type'],
+        is_default_owner: org.is_default_owner === true,
       },
       environment: {
         id: env.id,

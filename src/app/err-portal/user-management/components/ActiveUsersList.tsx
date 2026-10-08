@@ -11,7 +11,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { ActiveUserListItem } from '@/app/api/users/types/users'
-import { getActiveUsers, suspendUser, activateUser } from '@/app/api/users/utils/users'
+import { suspendUser, activateUser } from '@/app/api/users/utils/users'
 import { getPortalRoleLabel } from '@/lib/roleLabels'
 
 interface ActiveUsersListProps {
@@ -37,41 +37,26 @@ export default function ActiveUsersList({
   const fetchUsers = useCallback(async () => {
     try {
       setIsLoading(true)
-      const { users: fetchedUsers } = await getActiveUsers({
-        page: 1,
-        pageSize: 20,
-        role: selectedRole === 'all' ? undefined : selectedRole as 'support' | 'superadmin' | 'admin' | 'state_err' | 'base_err',
-        status: selectedStatus,
-        sortOrder,
-        currentUserRole,
-        currentUserErrId
+      const params = new URLSearchParams({
+        page: '1',
+        pageSize: '25',
+        statuses: selectedStatus,
       })
+      if (selectedRole !== 'all') params.set('roles', selectedRole)
 
-      const formattedUsers: ActiveUserListItem[] = fetchedUsers
-        .filter(user => currentUserRole === 'support' || user.role !== 'support')
-        .map(user => ({
-          id: user.id,
-          err_id: user.err_id,
-          display_name: user.display_name,
-          role: user.role as 'support' | 'superadmin' | 'admin' | 'state_err' | 'base_err',
-          status: user.status as 'active' | 'suspended',
-          createdAt: new Date(user.created_at || '').toLocaleDateString(),
-          updatedAt: user.updated_at ? new Date(user.updated_at).toLocaleDateString() : null,
-          err_name: user.emergency_rooms?.name || '-',
-          err_code: user.emergency_rooms?.err_code || '-',
-          state_name: user.emergency_rooms?.state?.state_name || '-',
-          can_see_all_states: user.can_see_all_states ?? true,
-          visible_states: user.visible_states || []
-        }))
-
-      setUsers(formattedUsers)
+      const res = await fetch(`/api/users/active?${params.toString()}`)
+      if (!res.ok) {
+        throw new Error('Failed to fetch users')
+      }
+      const data = (await res.json()) as { users: ActiveUserListItem[] }
+      setUsers(data.users || [])
     } catch (err) {
       setError(t('common:error_fetching_data'))
       console.error(err)
     } finally {
       setIsLoading(false)
     }
-  }, [selectedRole, selectedStatus, sortOrder, currentUserRole, currentUserErrId, t])
+  }, [selectedRole, selectedStatus, t])
 
   useEffect(() => {
     fetchUsers()
