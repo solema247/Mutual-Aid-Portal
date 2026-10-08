@@ -5,10 +5,11 @@ import { useState, useEffect } from 'react'
 import MainLayout from '@/components/layout/MainLayout'
 import PortalPageTransition from '@/components/PortalPageTransition'
 import PageExplainerHeader from '@/components/layout/PageExplainerHeader'
+import PortalHeaderShortcuts from '@/components/layout/PortalHeaderShortcuts'
 import { PageExplainerProvider } from '@/contexts/PageExplainerContext'
 import type { SidebarItem, SidebarLinkItem } from '@/components/layout/Sidebar'
 import { useRouter } from 'next/navigation'
-import { Users, ClipboardList, BarChart2, BarChart3, PieChart, UserCog, Home, CheckSquare, BookOpen, PenTool, Cog, FileText, BookMarked, Ticket, ShieldCheck, Archive, Split, ArrowLeftRight, LayoutDashboard, MapPin, ScrollText, Layers, Eye, Inbox } from 'lucide-react'
+import { Users, ClipboardList, BarChart2, BarChart3, PieChart, UserCog, Home, CheckSquare, BookOpen, PenTool, Cog, FileText, BookMarked, Ticket, ShieldCheck, Archive, Split, ArrowLeftRight, LayoutDashboard, MapPin, ScrollText, Eye } from 'lucide-react'
 import { useAllowedFunctions } from '@/hooks/useAllowedFunctions'
 import { useCanvasSession } from '@/hooks/useCanvasSession'
 import { isModuleMounted } from '@/lib/canvas/mounts'
@@ -186,20 +187,6 @@ export default function ErrPortalLayout({
   }
 
   const adminGroupChildren: SidebarLinkItem[] = []
-  if (canViewEnvironment) {
-    adminGroupChildren.push({
-      href: '/err-portal/environment',
-      label: 'Environment',
-      icon: <Layers className="h-5 w-5" />,
-    })
-  }
-  if (canViewAccessInbox) {
-    adminGroupChildren.push({
-      href: '/err-portal/access-requests',
-      label: user?.organization_type === 'processor' ? 'Access inbox' : 'Access requests',
-      icon: <Inbox className="h-5 w-5" />,
-    })
-  }
   if (canViewRooms) {
     adminGroupChildren.push({
       href: '/err-portal/room-management',
@@ -323,6 +310,9 @@ export default function ErrPortalLayout({
   const lohubPageTransitions =
     !canvasLoading && isLocalizationHubOrg(user?.organization_slug)
 
+  const accessInboxLabel =
+    user?.organization_type === 'processor' ? 'Access inbox' : 'Access requests'
+
   return (
     <PageExplainerProvider>
     <PortalPageTransition enabled={lohubPageTransitions}>
@@ -331,7 +321,16 @@ export default function ErrPortalLayout({
         headerTitle={headerTitle}
         userName={user?.display_name ?? undefined}
         userRole={user?.role}
-        headerExtra={<PageExplainerHeader />}
+        headerExtra={
+          <>
+            <PortalHeaderShortcuts
+              showEnvironment={!navLoading && canViewEnvironment}
+              showAccessInbox={!navLoading && canViewAccessInbox}
+              accessInboxLabel={accessInboxLabel}
+            />
+            <PageExplainerHeader />
+          </>
+        }
       >
       {children}
       {minimizedType && (
