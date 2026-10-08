@@ -1,5 +1,9 @@
 import { NextResponse } from 'next/server'
 import { requireCanvasSession } from '@/lib/canvas/session'
+import {
+  filterMountCodesForOrgType,
+  mountAllowedForOrgType,
+} from '@/lib/canvas/mountEligibility'
 import { FULL_PORTAL_MOUNT_CODES } from '@/lib/canvas/types'
 
 export async function GET() {
@@ -7,10 +11,12 @@ export async function GET() {
   if (session instanceof NextResponse) return session
 
   const { supabase, canvas } = session
+  const orgType = canvas.organization.org_type
 
   if (canvas.is_fallback) {
+    const codes = filterMountCodesForOrgType([...FULL_PORTAL_MOUNT_CODES], orgType)
     return NextResponse.json({
-      mounts: FULL_PORTAL_MOUNT_CODES.map((code, i) => ({
+      mounts: codes.map((code, i) => ({
         code,
         name: code,
         description: null,
@@ -24,7 +30,7 @@ export async function GET() {
           name: 'Full portal (all modules)',
           description:
             'Fallback catalog — apply sql/canvas scripts so templates load from the database.',
-          mount_codes: [...FULL_PORTAL_MOUNT_CODES],
+          mount_codes: codes,
         },
       ],
       canvas_is_fallback: true,
@@ -50,9 +56,20 @@ export async function GET() {
     return NextResponse.json({ error: 'Failed to load catalog' }, { status: 500 })
   }
 
+  const filteredMounts = (mounts ?? []).filter((m) =>
+    mountAllowedForOrgType(m.code as string, orgType)
+  )
+  const filteredTemplates = (templates ?? []).map((t) => ({
+    ...t,
+    mount_codes: filterMountCodesForOrgType(
+      (t.mount_codes ?? []) as string[],
+      orgType
+    ),
+  }))
+
   return NextResponse.json({
-    mounts: mounts ?? [],
-    templates: templates ?? [],
+    mounts: filteredMounts,
+    templates: filteredTemplates,
     canvas_is_fallback: false,
   })
 }

@@ -1,4 +1,8 @@
 import { NextResponse } from 'next/server'
+import {
+  filterMountCodesForOrgType,
+  mountAllowedForOrgType,
+} from '@/lib/canvas/mountEligibility'
 import { isCanvasAdmin, requireCanvasSession } from '@/lib/canvas/session'
 
 type Body = {
@@ -33,6 +37,7 @@ export async function POST(req: Request) {
   }
 
   const envId = canvas.environment.id
+  const orgType = canvas.organization.org_type
 
   if (body.action === 'apply_template') {
     const templateCode = (body.template_code || '').trim()
@@ -48,7 +53,10 @@ export async function POST(req: Request) {
     if (tErr || !template) {
       return NextResponse.json({ error: 'Template not found' }, { status: 404 })
     }
-    const codes = (template.mount_codes ?? []) as string[]
+    const codes = filterMountCodesForOrgType(
+      (template.mount_codes ?? []) as string[],
+      orgType
+    )
     const { error: delErr } = await supabase
       .from('environment_mounts')
       .delete()
@@ -89,6 +97,15 @@ export async function POST(req: Request) {
     }
   } else {
     // enable (default)
+    if (!mountAllowedForOrgType(mountCode, orgType)) {
+      const msg =
+        mountCode === 'oversight'
+          ? 'Oversight is only available for coordinator organizations'
+          : mountCode === 'access_inbox'
+            ? 'Access inbox is only available for host organizations'
+            : 'This module cannot be mounted for your organization type'
+      return NextResponse.json({ error: msg }, { status: 403 })
+    }
     const { data: cat } = await supabase
       .from('mount_catalog')
       .select('code, sort_order')
