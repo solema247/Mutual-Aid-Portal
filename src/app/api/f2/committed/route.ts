@@ -6,6 +6,11 @@ import {
   getUserGrantAccess,
 } from '@/lib/userGrantAccess'
 import { getUserRoomAccess } from '@/lib/userRoomAccess'
+import {
+  applyOrganizationIdFilter,
+  getUserOrgScope,
+  orgScopeBlocksAllData,
+} from '@/lib/canvas/orgScope'
 
 const PAGE_SIZE = 1000
 
@@ -48,11 +53,16 @@ export async function GET(request: Request) {
       dateTo = `${y}-${String(m).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
     }
 
-    const [{ allowedStateNames }, grantAccess, roomAccess] = await Promise.all([
+    const [{ allowedStateNames }, grantAccess, roomAccess, orgScope] = await Promise.all([
       getUserStateAccess(),
       getUserGrantAccess(),
       getUserRoomAccess(),
+      getUserOrgScope(),
     ])
+
+    if (orgScopeBlocksAllData(orgScope)) {
+      return NextResponse.json([])
+    }
 
     if (roomAccess.mode === 'none') {
       return NextResponse.json([])
@@ -96,6 +106,8 @@ export async function GET(request: Request) {
         .select(columns)
         .eq('funding_status', 'committed')
         .order('submitted_at', { ascending: false })
+
+      query = applyOrganizationIdFilter(query, orgScope)
 
       // Base ERR: emergency_room_id only (never state / grant scope)
       if (roomAccess.mode === 'room') {

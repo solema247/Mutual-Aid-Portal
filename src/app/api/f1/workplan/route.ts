@@ -6,6 +6,11 @@ import { ensureScreeningsForProjects } from '@/lib/compliance'
 import { emitF123Audit } from '@/lib/f123Audit'
 import { forbidIfPartner } from '@/lib/routeHandlerAuth'
 import { getUserRoomAccess } from '@/lib/userRoomAccess'
+import {
+  getUserOrgScope,
+  orgScopeBlocksAllData,
+  withOrganizationId,
+} from '@/lib/canvas/orgScope'
 
 function emptyToNull<T extends string | null | undefined> (v: T): string | null {
   if (v === undefined || v === null) return null
@@ -88,37 +93,45 @@ export async function POST (request: Request) {
 
     const localityClean = emptyToNull(v.locality)
 
-    const row = {
-      id: crypto.randomUUID(),
-      date: dbDate,
-      state: stateName,
-      locality: localityClean,
-      project_objectives: emptyToNull(v.project_objectives),
-      intended_beneficiaries: emptyToNull(v.intended_beneficiaries),
-      estimated_beneficiaries: v.estimated_beneficiaries ?? null,
-      estimated_timeframe: emptyToNull(v.estimated_timeframe),
-      additional_support: emptyToNull(v.additional_support),
-      banking_details: emptyToNull(v.banking_details),
-      program_officer_name: emptyToNull(v.program_officer_name),
-      program_officer_phone: emptyToNull(v.program_officer_phone),
-      reporting_officer_name: emptyToNull(v.reporting_officer_name),
-      reporting_officer_phone: emptyToNull(v.reporting_officer_phone),
-      finance_officer_name: emptyToNull(v.finance_officer_name),
-      finance_officer_phone: emptyToNull(v.finance_officer_phone),
-      planned_activities: v.planned_activities,
-      expenses: v.expenses,
-      emergency_room_id: emergencyRoomId,
-      err_id: emptyToNull(room.err_code),
-      status: 'pending',
-      source: 'mutual_aid_portal',
-      project_name: localityClean,
-      temp_file_key: v.temp_file_key ?? null,
-      original_text: v.original_text ?? null,
-      language: v.language || 'en',
-      grant_segment: grantSegment,
-      ocr_edited_fields_count:
-        v.mode === 'ocr' ? (v.ocr_edited_fields_count ?? null) : null
+    const orgScope = await getUserOrgScope(supabase)
+    if (orgScopeBlocksAllData(orgScope)) {
+      return NextResponse.json({ error: 'No organization scope' }, { status: 403 })
     }
+
+    const row = withOrganizationId(
+      {
+        id: crypto.randomUUID(),
+        date: dbDate,
+        state: stateName,
+        locality: localityClean,
+        project_objectives: emptyToNull(v.project_objectives),
+        intended_beneficiaries: emptyToNull(v.intended_beneficiaries),
+        estimated_beneficiaries: v.estimated_beneficiaries ?? null,
+        estimated_timeframe: emptyToNull(v.estimated_timeframe),
+        additional_support: emptyToNull(v.additional_support),
+        banking_details: emptyToNull(v.banking_details),
+        program_officer_name: emptyToNull(v.program_officer_name),
+        program_officer_phone: emptyToNull(v.program_officer_phone),
+        reporting_officer_name: emptyToNull(v.reporting_officer_name),
+        reporting_officer_phone: emptyToNull(v.reporting_officer_phone),
+        finance_officer_name: emptyToNull(v.finance_officer_name),
+        finance_officer_phone: emptyToNull(v.finance_officer_phone),
+        planned_activities: v.planned_activities,
+        expenses: v.expenses,
+        emergency_room_id: emergencyRoomId,
+        err_id: emptyToNull(room.err_code),
+        status: 'pending',
+        source: 'mutual_aid_portal',
+        project_name: localityClean,
+        temp_file_key: v.temp_file_key ?? null,
+        original_text: v.original_text ?? null,
+        language: v.language || 'en',
+        grant_segment: grantSegment,
+        ocr_edited_fields_count:
+          v.mode === 'ocr' ? (v.ocr_edited_fields_count ?? null) : null,
+      },
+      orgScope
+    )
 
     const { data: inserted, error: insertError } = await supabase
       .from('err_projects')

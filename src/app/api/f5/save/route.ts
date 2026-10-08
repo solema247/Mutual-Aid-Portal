@@ -6,6 +6,7 @@ import { syncImplementedSectorFromF5 } from '@/lib/activityShift'
 import { translateF5Report, translateF5Reach } from '@/lib/translateHelper'
 import { assertProjectInGrantAccess } from '@/lib/userGrantAccess'
 import { emitF123Audit } from '@/lib/f123Audit'
+import { getUserOrgScope, withOrganizationId } from '@/lib/canvas/orgScope'
 import {
   f5ReportAuditTarget,
   reportF5AuditInsertFailure,
@@ -99,22 +100,29 @@ export async function POST(req: Request) {
       return null
     }
 
+    const orgScope = await getUserOrgScope(supabase)
+
     // Insert program report summary
     const { data: inserted, error: insErr } = await supabase
       .from('err_program_report')
-      .insert({
-        project_id,
-        report_date: cleanDate(translatedSummary.report_date),
-        positive_changes: translatedSummary.positive_changes || null,
-        negative_results: translatedSummary.negative_results || null,
-        unexpected_results: translatedSummary.unexpected_results || null,
-        lessons_learned: translatedSummary.lessons_learned || null,
-        suggestions: translatedSummary.suggestions || null,
-        reporting_person: translatedSummary.reporting_person || null,
-        is_draft: translatedSummary.is_draft || false,
-        original_text: summaryOriginalText,
-        language: sourceLanguage
-      })
+      .insert(
+        withOrganizationId(
+          {
+            project_id,
+            report_date: cleanDate(translatedSummary.report_date),
+            positive_changes: translatedSummary.positive_changes || null,
+            negative_results: translatedSummary.negative_results || null,
+            unexpected_results: translatedSummary.unexpected_results || null,
+            lessons_learned: translatedSummary.lessons_learned || null,
+            suggestions: translatedSummary.suggestions || null,
+            reporting_person: translatedSummary.reporting_person || null,
+            is_draft: translatedSummary.is_draft || false,
+            original_text: summaryOriginalText,
+            language: sourceLanguage,
+          },
+          orgScope
+        )
+      )
       .select('id')
       .single()
     if (insErr) throw insErr

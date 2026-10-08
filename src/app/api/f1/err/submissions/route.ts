@@ -7,6 +7,12 @@ import {
   type UserGrantAccess,
 } from '@/lib/userGrantAccess'
 import { getUserRoomAccess } from '@/lib/userRoomAccess'
+import {
+  applyOrganizationIdFilter,
+  getUserOrgScope,
+  orgScopeBlocksAllData,
+  type UserOrgScope,
+} from '@/lib/canvas/orgScope'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -21,7 +27,8 @@ type ScopedAccess = Extract<UserGrantAccess, { mode: 'partner' }>
 
 async function fetchProjectsInGrantScope(
   supabase: ReturnType<typeof getSupabaseRouteClient>,
-  grantAccess: ScopedAccess
+  grantAccess: ScopedAccess,
+  orgScope: UserOrgScope
 ) {
   const projects: { id: string; submitted_at?: string | null }[] = []
   for (const batch of chunkGrantScopeIds(grantAccess.grantGridIds)) {
@@ -32,6 +39,7 @@ async function fetchProjectsInGrantScope(
         .from('err_projects')
         .select('*')
         .or(SOURCE_FILTER)
+      query = applyOrganizationIdFilter(query, orgScope)
       query = applyGrantGridIdFilter(query, { ...grantAccess, grantGridIds: batch })
       const { data, error } = await query
         .order('submitted_at', { ascending: false })
@@ -50,17 +58,20 @@ async function fetchProjectsInGrantScope(
 /** Base ERR: ERR App submissions for the user's emergency room only. */
 async function fetchProjectsInRoomScope(
   supabase: ReturnType<typeof getSupabaseRouteClient>,
-  emergencyRoomId: string
+  emergencyRoomId: string,
+  orgScope: UserOrgScope
 ) {
   const projects: { id: string; submitted_at?: string | null }[] = []
   let from = 0
   const pageSize = 1000
   while (true) {
-    const { data, error } = await supabase
+    let query = supabase
       .from('err_projects')
       .select('*')
       .or(SOURCE_FILTER)
       .eq('emergency_room_id', emergencyRoomId)
+    query = applyOrganizationIdFilter(query, orgScope)
+    const { data, error } = await query
       .order('submitted_at', { ascending: false })
       .range(from, from + pageSize - 1)
     if (error) throw error
@@ -109,13 +120,18 @@ async function projectInPartnerScope(
 export async function GET(request: Request) {
   try {
     const supabase = getSupabaseRouteClient()
-    const [grantAccess, roomAccess] = await Promise.all([
+    const [grantAccess, roomAccess, orgScope] = await Promise.all([
       getUserGrantAccess(),
       getUserRoomAccess(),
+      getUserOrgScope(),
     ])
     const { searchParams } = new URL(request.url)
     const projectId = searchParams.get('project_id')?.trim() || ''
     const fundingCycleId = searchParams.get('funding_cycle_id')?.trim() || ''
+
+    if (orgScopeBlocksAllData(orgScope)) {
+      return NextResponse.json([], { headers: NO_STORE })
+    }
 
     if (projectId) {
       if (roomAccess.mode === 'none') {
@@ -161,7 +177,11 @@ export async function GET(request: Request) {
     }
 
     if (roomAccess.mode === 'room') {
-      const projects = await fetchProjectsInRoomScope(supabase, roomAccess.emergencyRoomId)
+      const projects = await fetchProjectsInRoomScope(
+        supabase,
+        roomAccess.emergencyRoomId,
+        orgScope
+      )
       return NextResponse.json({ projects }, { headers: NO_STORE })
     }
 
@@ -170,15 +190,16 @@ export async function GET(request: Request) {
     }
 
     if (grantAccess.mode === 'partner') {
-      const projects = await fetchProjectsInGrantScope(supabase, grantAccess)
+      const projects = await fetchProjectsInGrantScope(supabase, grantAccess, orgScope)
       return NextResponse.json({ projects }, { headers: NO_STORE })
     }
 
-    const { data, error } = await supabase
+    let allQuery = supabase
       .from('err_projects')
       .select('*')
       .or(SOURCE_FILTER)
-      .order('submitted_at', { ascending: false })
+    allQuery = applyOrganizationIdFilter(allQuery, orgScope)
+    const { data, error } = await allQuery.order('submitted_at', { ascending: false })
     if (error) throw error
     return NextResponse.json({ projects: data || [] }, { headers: NO_STORE })
   } catch (e) {

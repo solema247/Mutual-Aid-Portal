@@ -1,6 +1,12 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import {
+  applyOrganizationIdFilter,
+  getUserOrgScope,
+  organizationIdMatchesScope,
+  orgScopeBlocksAllData,
+} from '@/lib/canvas/orgScope'
+import {
   assertProjectInRoomAccess,
   getUserRoomAccess,
 } from '@/lib/userRoomAccess'
@@ -160,9 +166,26 @@ export async function getUserGrantAccess(): Promise<UserGrantAccess> {
       return noneAccess(null)
     }
 
-    const { grantGridIds, grantIds } = await fetchGrantsForOpsPartner(opsPartnerId)
+    let { grantGridIds, grantIds } = await fetchGrantsForOpsPartner(opsPartnerId)
     if (grantGridIds.length === 0) {
       return noneAccess(opsPartnerId)
+    }
+
+    // Outer ring: only grants owned by the session organization
+    const orgScope = await getUserOrgScope(supabase)
+    if (orgScope.mode === 'none') {
+      return noneAccess(opsPartnerId)
+    }
+    if (orgScope.mode === 'org') {
+      const filtered = await filterGrantGridIdsByOrganization(
+        grantGridIds,
+        orgScope.organizationId
+      )
+      grantGridIds = filtered.grantGridIds
+      grantIds = filtered.grantIds
+      if (grantGridIds.length === 0) {
+        return noneAccess(opsPartnerId)
+      }
     }
 
     return {
@@ -174,6 +197,33 @@ export async function getUserGrantAccess(): Promise<UserGrantAccess> {
   }
 
   return ALL_ACCESS
+}
+
+async function filterGrantGridIdsByOrganization(
+  grantGridIds: string[],
+  organizationId: string
+): Promise<{ grantGridIds: string[]; grantIds: string[] }> {
+  const supabase = getSupabaseRouteClient()
+  const outGrid: string[] = []
+  const outGrantIds: string[] = []
+  for (const batch of chunkGrantScopeIds(grantGridIds)) {
+    const { data, error } = await supabase
+      .from('grants_grid_view')
+      .select('id, grant_id')
+      .in('id', batch)
+      .eq('organization_id', organizationId)
+    if (error) {
+      console.error('[filterGrantGridIdsByOrganization]', error)
+      return { grantGridIds: [], grantIds: [] }
+    }
+    for (const row of data || []) {
+      if (row.id) outGrid.push(String(row.id))
+      if (row.grant_id != null && String(row.grant_id).trim() !== '') {
+        outGrantIds.push(String(row.grant_id).trim())
+      }
+    }
+  }
+  return { grantGridIds: outGrid, grantIds: outGrantIds }
 }
 
 /**
@@ -206,12 +256,64 @@ export function applyGrantGridIdFilter<T extends { in: (column: string, values: 
   return query.in(column, access.grantGridIds)
 }
 
-type ProjectScopeRow = { id: string; grant_grid_id: string | null }
+type ProjectScopeRow = {
+  id: string
+  grant_grid_id: string | null
+  organization_id?: string | null
+}
+
+async function assertProjectOrganizationScope(
+  projectId: string,
+  notFoundMessage: string,
+  status: 403 | 404
+): Promise<
+  | { ok: true; organization_id: string | null }
+  | { ok: false; response: NextResponse }
+> {
+  const orgScope = await getUserOrgScope()
+  if (orgScopeBlocksAllData(orgScope)) {
+    return {
+      ok: false,
+      response: NextResponse.json({ error: notFoundMessage }, { status }),
+    }
+  }
+  if (orgScope.mode === 'all') {
+    return { ok: true, organization_id: null }
+  }
+  if (projectId.startsWith('historical_')) {
+    // Historical rows have no organization_id; fail closed when org scope is live
+    return {
+      ok: false,
+      response: NextResponse.json({ error: notFoundMessage }, { status }),
+    }
+  }
+  const supabase = getSupabaseRouteClient()
+  const { data: row, error } = await supabase
+    .from('err_projects')
+    .select('organization_id')
+    .eq('id', projectId)
+    .maybeSingle()
+  if (error) {
+    console.error('[assertProjectOrganizationScope]', error)
+    return {
+      ok: false,
+      response: NextResponse.json({ error: 'Failed to load project' }, { status: 500 }),
+    }
+  }
+  if (!row || !organizationIdMatchesScope(orgScope, row.organization_id)) {
+    return {
+      ok: false,
+      response: NextResponse.json({ error: notFoundMessage }, { status }),
+    }
+  }
+  return { ok: true, organization_id: row.organization_id ?? null }
+}
 
 /**
  * Load grant_grid_id for a portal project and assert Partner scope.
  * Historical IDs (`historical_*`) are out of Partner scope.
  * Uses 404 to match existing overview/project convention (no existence leak).
+ * Also enforces canvas organization_id scope (Phase 2).
  */
 export async function assertProjectInGrantAccess(
   projectId: string,
@@ -221,6 +323,12 @@ export async function assertProjectInGrantAccess(
   | { ok: true; access: UserGrantAccess; project: ProjectScopeRow }
   | { ok: false; response: NextResponse }
 > {
+  const notFoundMessage = options?.notFoundMessage ?? 'Project not found'
+  const status = options?.forbiddenStatus ?? 404
+
+  const orgCheck = await assertProjectOrganizationScope(projectId, notFoundMessage, status)
+  if (!orgCheck.ok) return orgCheck
+
   const roomCheck = await assertProjectInRoomAccess(projectId, undefined, {
     notFoundMessage: options?.notFoundMessage,
   })
@@ -233,13 +341,12 @@ export async function assertProjectInGrantAccess(
       project: {
         id: roomCheck.project.id,
         grant_grid_id: roomCheck.project.grant_grid_id,
+        organization_id: orgCheck.organization_id,
       },
     }
   }
 
   const grantAccess = access ?? (await getUserGrantAccess())
-  const notFoundMessage = options?.notFoundMessage ?? 'Project not found'
-  const status = options?.forbiddenStatus ?? 404
 
   if (grantAccess.mode === 'all') {
     const supabase = getSupabaseRouteClient()
@@ -247,12 +354,12 @@ export async function assertProjectInGrantAccess(
       return {
         ok: true,
         access: grantAccess,
-        project: { id: projectId, grant_grid_id: null },
+        project: { id: projectId, grant_grid_id: null, organization_id: null },
       }
     }
     const { data: project, error } = await supabase
       .from('err_projects')
-      .select('id, grant_grid_id')
+      .select('id, grant_grid_id, organization_id')
       .eq('id', projectId)
       .maybeSingle()
     if (error) {
@@ -271,7 +378,11 @@ export async function assertProjectInGrantAccess(
     return {
       ok: true,
       access: grantAccess,
-      project: { id: String(project.id), grant_grid_id: project.grant_grid_id ?? null },
+      project: {
+        id: String(project.id),
+        grant_grid_id: project.grant_grid_id ?? null,
+        organization_id: project.organization_id ?? null,
+      },
     }
   }
 
@@ -293,7 +404,7 @@ export async function assertProjectInGrantAccess(
   const supabase = getSupabaseRouteClient()
   const { data: project, error } = await supabase
     .from('err_projects')
-    .select('id, grant_grid_id')
+    .select('id, grant_grid_id, organization_id')
     .eq('id', projectId)
     .maybeSingle()
 
@@ -315,7 +426,11 @@ export async function assertProjectInGrantAccess(
   return {
     ok: true,
     access: grantAccess,
-    project: { id: String(project.id), grant_grid_id: project.grant_grid_id ?? null },
+    project: {
+      id: String(project.id),
+      grant_grid_id: project.grant_grid_id ?? null,
+      organization_id: project.organization_id ?? null,
+    },
   }
 }
 
@@ -420,13 +535,44 @@ export async function fetchProjectIdsInGrantAccess(
   access: UserGrantAccess,
   options?: { extraFilter?: (q: any) => any }
 ): Promise<string[] | null> {
-  if (access.mode === 'all') return null
+  const orgScope = await getUserOrgScope()
+  if (orgScopeBlocksAllData(orgScope)) return []
+
+  if (access.mode === 'all') {
+    // Still org-bound when canvas is live: return null only when no org filter
+    if (orgScope.mode !== 'org') return null
+    const supabase = getSupabaseRouteClient()
+    const ids: string[] = []
+    const pageSize = 1000
+    let from = 0
+    while (true) {
+      let q: any = supabase
+        .from('err_projects')
+        .select('id')
+        .eq('organization_id', orgScope.organizationId)
+        .range(from, from + pageSize - 1)
+      if (options?.extraFilter) q = options.extraFilter(q)
+      const { data, error } = await q
+      if (error) {
+        console.error('[fetchProjectIdsInGrantAccess]', error)
+        throw error
+      }
+      if (!data?.length) break
+      for (const row of data) {
+        if (row.id) ids.push(String(row.id))
+      }
+      if (data.length < pageSize) break
+      from += pageSize
+    }
+    return ids
+  }
   if (access.mode === 'none' || access.grantGridIds.length === 0) return []
 
   const supabase = getSupabaseRouteClient()
   const ids: string[] = []
   for (const batch of chunkGrantScopeIds(access.grantGridIds)) {
     let q: any = supabase.from('err_projects').select('id').in('grant_grid_id', batch)
+    q = applyOrganizationIdFilter(q, orgScope)
     if (options?.extraFilter) q = options.extraFilter(q)
     const { data, error } = await q
     if (error) {

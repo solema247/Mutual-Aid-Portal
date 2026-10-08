@@ -7,6 +7,11 @@ import {
   getUserGrantAccess,
 } from '@/lib/userGrantAccess'
 import { getUserRoomAccess } from '@/lib/userRoomAccess'
+import {
+  applyOrganizationIdFilter,
+  getUserOrgScope,
+  orgScopeBlocksAllData,
+} from '@/lib/canvas/orgScope'
 import { getActivityAndCategoryLists, getSectorWithHighestAmount } from '@/lib/plannedActivitiesExpenses'
 import { isActivityShifted } from '@/lib/activityShift'
 import { pickF5TextForEnUi } from '@/lib/storiesEnDisplay'
@@ -116,10 +121,15 @@ export async function GET(request: Request) {
     /** Arabic UI: prefer primary Arabic columns (+ en fallback). Other locales: same as Stories overview (en cache for ar-authored reports). */
     const useEnUi = loc === '' || !loc.startsWith('ar')
     const supabase = getSupabaseRouteClient()
-    const [grantAccess, roomAccess] = await Promise.all([
+    const [grantAccess, roomAccess, orgScope] = await Promise.all([
       getUserGrantAccess(),
       getUserRoomAccess(),
+      getUserOrgScope(),
     ])
+
+    if (orgScopeBlocksAllData(orgScope)) {
+      return NextResponse.json([])
+    }
 
     if (roomAccess.mode === 'none') {
       return NextResponse.json([])
@@ -156,13 +166,13 @@ export async function GET(request: Request) {
 
     if (roomAccess.mode === 'room') {
       // Base ERR: emergency_room_id only. Never state or grant scope.
-      const { data, error } = await supabase
+      let roomQuery = supabase
         .from('err_projects')
         .select(projectSelect)
         .in('status', ['approved', 'active', 'pending', 'completed'])
         .eq('emergency_room_id', roomAccess.emergencyRoomId)
-        .order('state')
-        .order('grant_id')
+      roomQuery = applyOrganizationIdFilter(roomQuery, orgScope)
+      const { data, error } = await roomQuery.order('state').order('grant_id')
       if (error) {
         console.error('Report tracker fetch error:', error)
         return NextResponse.json({ error: 'Failed to fetch report tracker data' }, { status: 500 })
@@ -175,6 +185,7 @@ export async function GET(request: Request) {
           .from('err_projects')
           .select(projectSelect)
           .in('status', ['approved', 'active', 'pending', 'completed'])
+        query = applyOrganizationIdFilter(query, orgScope)
         query = applyGrantGridIdFilter(query, { ...grantAccess, grantGridIds: batch })
         const { data, error } = await query.order('state').order('grant_id')
         if (error) {
@@ -200,6 +211,7 @@ export async function GET(request: Request) {
           .order('id', { ascending: true })
           .range(from, from + pageSize - 1)
 
+        query = applyOrganizationIdFilter(query, orgScope)
         if (allowedStateNames !== null && allowedStateNames.length > 0) {
           query = query.in('state', allowedStateNames)
         }

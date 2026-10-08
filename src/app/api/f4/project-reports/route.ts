@@ -39,16 +39,18 @@ export async function GET(request: Request) {
         notFoundMessage: 'Forbidden',
       })
       if (roomCheck.handled && !roomCheck.ok) return roomCheck.response
-    } else if (grantAccess.mode === 'partner') {
-      // Partner: no historical; portal projects must be in grant scope
-      if (isHistorical) {
+    } else {
+      // Partner / admin: enforce grant + organization scope (no historical for partners)
+      if (isHistorical && grantAccess.mode === 'partner') {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
       }
-      const scope = await assertProjectInGrantAccess(projectId, grantAccess, {
-        forbiddenStatus: 403,
-        notFoundMessage: 'Forbidden',
-      })
-      if (!scope.ok) return scope.response
+      if (!isHistorical) {
+        const scope = await assertProjectInGrantAccess(projectId, grantAccess, {
+          forbiddenStatus: 403,
+          notFoundMessage: 'Forbidden',
+        })
+        if (!scope.ok) return scope.response
+      }
     }
 
     const { allowedStateNames } = await getUserStateAccess()

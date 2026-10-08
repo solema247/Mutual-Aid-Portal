@@ -23,6 +23,12 @@ import {
 } from '@/lib/userRoomAccess'
 import { emitF123Audit } from '@/lib/f123Audit'
 import type { SupabaseClient } from '@supabase/supabase-js'
+import {
+  applyOrganizationIdFilter,
+  getUserOrgScope,
+  orgScopeBlocksAllData,
+  withOrganizationId,
+} from '@/lib/canvas/orgScope'
 
 function parseMouSignatures(mou: Record<string, unknown>) {
   if (mou.signatures && typeof mou.signatures === 'string') {
@@ -301,10 +307,11 @@ export async function GET(request: Request) {
     const search = searchParams.get('search')
     const state = searchParams.get('state')
 
-    const [{ allowedStateNames }, grantAccess, roomAccess] = await Promise.all([
+    const [{ allowedStateNames }, grantAccess, roomAccess, orgScope] = await Promise.all([
       getUserStateAccess(),
       getUserGrantAccess(),
       getUserRoomAccess(),
+      getUserOrgScope(),
     ])
 
     const emptyMous = () =>
@@ -313,6 +320,7 @@ export async function GET(request: Request) {
         ...aggregateMouEnrichment([]),
       })
 
+    if (orgScopeBlocksAllData(orgScope)) return emptyMous()
     if (roomAccess.mode === 'none') return emptyMous()
     if (roomAccess.mode !== 'room' && grantAccess.mode === 'none') return emptyMous()
 
@@ -333,6 +341,8 @@ export async function GET(request: Request) {
         .order('created_at', { ascending: false })
         .order('id', { ascending: true })
         .range(from, to)
+
+      query = applyOrganizationIdFilter(query, orgScope)
 
       // Base ERR / Partner: scoped via linked projects (never state scope)
       if (scopedMouIds == null) {
@@ -452,18 +462,28 @@ export async function POST(request: Request) {
     const rand = Math.floor(100 + Math.random() * 900) // 3 digits
     const autoCode = `${partnerPrefix}-${statePrefix}-${datePart}-${rand}`
 
+    const orgScope = await getUserOrgScope(supabase)
+    if (orgScopeBlocksAllData(orgScope)) {
+      return NextResponse.json({ error: 'No organization scope' }, { status: 403 })
+    }
+
     // Create MOU row
     const { data: inserted, error: insErr } = await supabase
       .from('mous')
-      .insert({
-        mou_code: mou_code || autoCode,
-        partner_name: inferredPartner,
-        err_name: inferredErrName,
-        state: inferredState,
-        total_amount,
-        end_date: end_date || null,
-        file_key: null
-      })
+      .insert(
+        withOrganizationId(
+          {
+            mou_code: mou_code || autoCode,
+            partner_name: inferredPartner,
+            err_name: inferredErrName,
+            state: inferredState,
+            total_amount,
+            end_date: end_date || null,
+            file_key: null,
+          },
+          orgScope
+        )
+      )
       .select('*')
       .single()
 

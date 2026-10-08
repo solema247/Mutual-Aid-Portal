@@ -35,7 +35,13 @@ export async function GET(request: Request) {
         notFoundMessage: 'Forbidden',
       })
       if (roomCheck.handled && !roomCheck.ok) return roomCheck.response
-    } else if (grantAccess.mode === 'partner') {
+      // Also enforce organization scope for room users
+      const orgScope = await assertProjectInGrantAccess(projectId, grantAccess, {
+        forbiddenStatus: 403,
+        notFoundMessage: 'Forbidden',
+      })
+      if (!orgScope.ok) return orgScope.response
+    } else {
       const scope = await assertProjectInGrantAccess(projectId, grantAccess, {
         forbiddenStatus: 403,
         notFoundMessage: 'Forbidden',
