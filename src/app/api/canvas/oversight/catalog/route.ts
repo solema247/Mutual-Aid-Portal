@@ -5,10 +5,6 @@ import {
   listOversightCatalogForCoordinator,
 } from '@/lib/canvas/disclosure'
 
-/**
- * Legacy path — returns empty projects list and points clients to /catalog.
- * Kept so old clients fail soft.
- */
 export async function GET() {
   const session = await requireCanvasSession()
   if (session instanceof NextResponse) return session
@@ -17,12 +13,9 @@ export async function GET() {
 
   if (canvas.is_fallback) {
     return NextResponse.json({
-      projects: [],
       processors: [],
       canvas_is_fallback: true,
       disclosure_unavailable: true,
-      deprecated: true,
-      use: '/api/canvas/oversight/catalog',
     })
   }
 
@@ -33,17 +26,22 @@ export async function GET() {
     )
   }
 
-  const { processors, unavailable } = await listOversightCatalogForCoordinator(
-    supabase,
-    canvas.organization.id
-  )
-
-  return NextResponse.json({
-    projects: [],
-    processors,
-    canvas_is_fallback: false,
-    disclosure_unavailable: unavailable,
-    deprecated: true,
-    use: '/api/canvas/oversight/catalog',
-  })
+  try {
+    const { processors, unavailable } = await listOversightCatalogForCoordinator(
+      supabase,
+      canvas.organization.id
+    )
+    return NextResponse.json({
+      processors,
+      canvas_is_fallback: false,
+      disclosure_unavailable: unavailable,
+    })
+  } catch (e) {
+    console.error('GET /api/canvas/oversight/catalog', e)
+    return NextResponse.json({
+      processors: [],
+      canvas_is_fallback: false,
+      disclosure_unavailable: true,
+    })
+  }
 }

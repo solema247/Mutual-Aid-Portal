@@ -782,8 +782,9 @@ export type Database = {
           granted_by: string | null
           id: string
           requesting_organization_id: string
-          resource_id: string
+          resource_id: string | null
           resource_type: string
+          states: string[] | null
           target_organization_id: string
         }
         Insert: {
@@ -792,8 +793,9 @@ export type Database = {
           granted_by?: string | null
           id?: string
           requesting_organization_id: string
-          resource_id: string
+          resource_id?: string | null
           resource_type?: string
+          states?: string[] | null
           target_organization_id: string
         }
         Update: {
@@ -802,8 +804,9 @@ export type Database = {
           granted_by?: string | null
           id?: string
           requesting_organization_id?: string
-          resource_id?: string
+          resource_id?: string | null
           resource_type?: string
+          states?: string[] | null
           target_organization_id?: string
         }
         Relationships: [
@@ -843,6 +846,7 @@ export type Database = {
           resource_id: string | null
           resource_type: string
           scope: string
+          states: string[] | null
           status: string
           target_organization_id: string
           updated_at: string
@@ -859,6 +863,7 @@ export type Database = {
           resource_id?: string | null
           resource_type?: string
           scope?: string
+          states?: string[] | null
           status?: string
           target_organization_id: string
           updated_at?: string
@@ -875,6 +880,7 @@ export type Database = {
           resource_id?: string | null
           resource_type?: string
           scope?: string
+          states?: string[] | null
           status?: string
           target_organization_id?: string
           updated_at?: string

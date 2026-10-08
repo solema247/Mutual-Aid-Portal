@@ -1,5 +1,5 @@
 /**
- * Canvas Phase 3 — disclosure policies and LCC visibility helpers.
+ * Canvas disclosure — info-type + optional state grants.
  * Server-side only.
  */
 
@@ -7,47 +7,75 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type { CanvasOrganization } from '@/lib/canvas/types'
 import { logAuditEvent } from '@/lib/auditLog'
 
-export type DisclosureResourceType = 'err_project'
+/** Primary catalog types for Oversight requests. */
+export const INFO_RESOURCE_TYPES = [
+  'f1',
+  'decisions',
+  'fund_requests',
+  'mous',
+  'f4',
+  'f5',
+] as const
+
+export type InfoResourceType = (typeof INFO_RESOURCE_TYPES)[number]
+
+/** Includes legacy err_project (treated as f1). */
+export type DisclosureResourceType = InfoResourceType | 'err_project'
+
 export type DisclosureVisibility = 'disclosed' | 'withheld' | 'hidden'
 export type AccessRequestScope = 'record' | 'org_resource_type'
 export type AccessRequestStatus = 'pending' | 'approved' | 'denied'
 
+export const INFO_RESOURCE_TYPE_LABELS: Record<InfoResourceType, string> = {
+  f1: 'F1 work plans',
+  decisions: 'Decisions',
+  fund_requests: 'Fund requests',
+  mous: 'MOUs',
+  f4: 'F4 reports',
+  f5: 'F5 reports',
+}
+
+export function isInfoResourceType(value: string): value is InfoResourceType {
+  return (INFO_RESOURCE_TYPES as readonly string[]).includes(value)
+}
+
+/** Normalize legacy err_project → f1 for comparisons. */
+export function normalizeResourceType(value: string): InfoResourceType | null {
+  if (value === 'err_project') return 'f1'
+  if (isInfoResourceType(value)) return value
+  return null
+}
+
 export type DisclosurePolicy = {
   id: string
   organization_id: string
-  resource_type: DisclosureResourceType
+  resource_type: string
   advertise_existence: boolean
   disclose_content: boolean
   stage_filter: string[] | null
 }
 
-export type ProjectExistenceStub = {
-  id: string
-  organization_id: string
-  owning_org_name: string
-  state: string | null
-  locality: string | null
-  err_code: string | null
-  funding_status: string | null
-  status: string
-  date: string | null
+export type TypeAccessGrant = {
+  resource_type: string
+  /** null / empty = all states */
+  states: string[] | null
 }
 
-/** Disclosed project shape — still omits expenses/files in oversight list MVP. */
-export type ProjectDisclosedSummary = ProjectExistenceStub & {
-  project_name: string | null
-  grant_serial: string | null
-  workplan_number: number | null
-  project_objectives: string | null
-  estimated_beneficiaries: number | null
-  'Sector (Primary)': string | null
-}
-
-export type OversightProjectRow = {
+export type OversightTypeRow = {
+  resource_type: InfoResourceType
+  label: string
   visibility: 'disclosed' | 'withheld'
-  project: ProjectDisclosedSummary | ProjectExistenceStub
+  /** null = all states granted; [] unused; list = partial */
+  states_granted: string[] | null
   pending_request_id: string | null
-  has_access_grant: boolean
+  count: number | null
+}
+
+export type OversightProcessorCatalog = {
+  organization_id: string
+  organization_name: string
+  organization_slug: string
+  types: OversightTypeRow[]
 }
 
 export function isCoordinatorOrg(
@@ -62,138 +90,83 @@ export function isProcessorOrg(
   return org?.org_type === 'processor'
 }
 
-function matchesStageFilter(
-  fundingStatus: string | null | undefined,
-  stageFilter: string[] | null | undefined
-): boolean {
-  if (!stageFilter || stageFilter.length === 0) return true
-  const status = (fundingStatus ?? '').trim().toLowerCase()
-  return stageFilter.some((s) => s.trim().toLowerCase() === status)
+/** null or empty array ⇒ all states */
+export function isAllStates(states: string[] | null | undefined): boolean {
+  return states == null || states.length === 0
+}
+
+export function normalizeStatesInput(states: unknown): string[] | null {
+  if (states == null) return null
+  if (!Array.isArray(states)) return null
+  const cleaned = states
+    .filter((s): s is string => typeof s === 'string')
+    .map((s) => s.trim())
+    .filter(Boolean)
+  return cleaned.length === 0 ? null : Array.from(new Set(cleaned))
+}
+
+export function formatStatesLabel(states: string[] | null | undefined): string {
+  if (isAllStates(states)) return 'all states'
+  return (states ?? []).join(', ')
 }
 
 /**
- * Resolve LCC visibility for one processor project.
- * - disclosed: org-wide disclose_content OR per-record access_grant
- * - withheld: advertise_existence and stage match, but content locked
+ * Type-level visibility for Oversight catalog.
+ * - disclosed: type grant exists (any states) OR policy.disclose_content
+ * - withheld: advertised
  * - hidden: not advertised and no grant
  */
-export function canLccSeeProjectContent(args: {
-  project: {
-    id: string
-    organization_id: string | null
-    funding_status?: string | null
-  }
-  viewerOrgId: string
+export function canLccSeeInfoType(args: {
   policy: DisclosurePolicy | null
-  hasAccessGrant: boolean
+  grant: TypeAccessGrant | null
 }): DisclosureVisibility {
-  const { project, policy, hasAccessGrant } = args
-  if (!project.organization_id) return 'hidden'
-
-  if (hasAccessGrant || policy?.disclose_content === true) {
-    return 'disclosed'
-  }
-
-  if (!policy || !policy.advertise_existence) {
-    return 'hidden'
-  }
-
-  if (!matchesStageFilter(project.funding_status, policy.stage_filter)) {
-    return 'hidden'
-  }
-
-  return 'withheld'
+  const { policy, grant } = args
+  if (grant || policy?.disclose_content === true) return 'disclosed'
+  if (policy?.advertise_existence === true) return 'withheld'
+  // Default advertise when policy missing but tables exist (seed lag)
+  if (!policy) return 'withheld'
+  return 'hidden'
 }
 
-export function toExistenceStub(
-  project: {
-    id: string
-    organization_id: string | null
-    state?: string | null
-    locality?: string | null
-    funding_status?: string | null
-    status?: string | null
-    date?: string | null
-    emergency_rooms?: { err_code?: string | null } | null
-  },
-  owningOrgName: string
-): ProjectExistenceStub {
-  return {
-    id: project.id,
-    organization_id: project.organization_id ?? '',
-    owning_org_name: owningOrgName,
-    state: project.state ?? null,
-    locality: project.locality ?? null,
-    err_code: project.emergency_rooms?.err_code ?? null,
-    funding_status: project.funding_status ?? null,
-    status: project.status ?? '',
-    date: project.date ?? null,
-  }
-}
-
-export function toDisclosedSummary(
-  project: {
-    id: string
-    organization_id: string | null
-    state?: string | null
-    locality?: string | null
-    funding_status?: string | null
-    status?: string | null
-    date?: string | null
-    project_name?: string | null
-    grant_serial?: string | null
-    workplan_number?: number | null
-    project_objectives?: string | null
-    estimated_beneficiaries?: number | null
-    'Sector (Primary)'?: string | null
-    emergency_rooms?: { err_code?: string | null } | null
-  },
-  owningOrgName: string
-): ProjectDisclosedSummary {
-  return {
-    ...toExistenceStub(project, owningOrgName),
-    project_name: project.project_name ?? null,
-    grant_serial: project.grant_serial ?? null,
-    workplan_number: project.workplan_number ?? null,
-    project_objectives: project.project_objectives ?? null,
-    estimated_beneficiaries: project.estimated_beneficiaries ?? null,
-    'Sector (Primary)': project['Sector (Primary)'] ?? null,
-  }
+function tableMissing(error: { code?: string; message?: string } | null): boolean {
+  if (!error) return false
+  return error.code === '42P01' || /does not exist/i.test(error.message ?? '')
 }
 
 export async function getDisclosurePolicy(
   supabase: SupabaseClient,
   processorOrgId: string,
-  resourceType: DisclosureResourceType = 'err_project'
+  resourceType: DisclosureResourceType
 ): Promise<DisclosurePolicy | null> {
+  const types = resourceType === 'f1' ? ['f1', 'err_project'] : [resourceType]
   const { data, error } = await supabase
     .from('disclosure_policies')
     .select(
       'id, organization_id, resource_type, advertise_existence, disclose_content, stage_filter'
     )
     .eq('organization_id', processorOrgId)
-    .eq('resource_type', resourceType)
-    .maybeSingle()
+    .in('resource_type', types)
 
   if (error) {
-    // Missing table (staging) or other soft failure
-    if (error.code === '42P01' || /does not exist/i.test(error.message ?? '')) {
-      return null
-    }
+    if (tableMissing(error)) return null
     console.error('getDisclosurePolicy', error)
     return null
   }
-  if (!data) return null
-  return data as DisclosurePolicy
+  const rows = (data ?? []) as DisclosurePolicy[]
+  return (
+    rows.find((r) => r.resource_type === resourceType) ??
+    rows.find((r) => r.resource_type === 'f1') ??
+    rows[0] ??
+    null
+  )
 }
 
-export async function getDisclosurePoliciesForOrgs(
+export async function listTypePoliciesForOrgs(
   supabase: SupabaseClient,
-  orgIds: string[],
-  resourceType: DisclosureResourceType = 'err_project'
-): Promise<Map<string, DisclosurePolicy>> {
-  const map = new Map<string, DisclosurePolicy>()
-  if (orgIds.length === 0) return map
+  orgIds: string[]
+): Promise<Map<string, Map<string, DisclosurePolicy>>> {
+  const out = new Map<string, Map<string, DisclosurePolicy>>()
+  if (orgIds.length === 0) return out
 
   const { data, error } = await supabase
     .from('disclosure_policies')
@@ -201,154 +174,197 @@ export async function getDisclosurePoliciesForOrgs(
       'id, organization_id, resource_type, advertise_existence, disclose_content, stage_filter'
     )
     .in('organization_id', orgIds)
-    .eq('resource_type', resourceType)
 
   if (error) {
-    if (error.code === '42P01' || /does not exist/i.test(error.message ?? '')) {
-      return map
-    }
-    console.error('getDisclosurePoliciesForOrgs', error)
-    return map
+    if (!tableMissing(error)) console.error('listTypePoliciesForOrgs', error)
+    return out
   }
 
   for (const row of data ?? []) {
-    map.set(row.organization_id, row as DisclosurePolicy)
+    const orgMap = out.get(row.organization_id) ?? new Map()
+    const norm = normalizeResourceType(row.resource_type) ?? row.resource_type
+    // Prefer explicit f1 over legacy err_project
+    if (row.resource_type === 'err_project' && orgMap.has('f1')) {
+      out.set(row.organization_id, orgMap)
+      continue
+    }
+    orgMap.set(norm, row as DisclosurePolicy)
+    out.set(row.organization_id, orgMap)
   }
-  return map
+  return out
 }
 
-export async function getAccessGrantSet(
+export async function listTypeGrantsForRequester(
   supabase: SupabaseClient,
-  requestingOrgId: string,
-  resourceType: DisclosureResourceType = 'err_project'
-): Promise<Set<string>> {
-  const granted = new Set<string>()
+  requestingOrgId: string
+): Promise<Map<string, Map<string, TypeAccessGrant>>> {
+  // Map: targetOrgId → resourceType → grant
+  const out = new Map<string, Map<string, TypeAccessGrant>>()
   const { data, error } = await supabase
     .from('access_grants')
-    .select('resource_id')
+    .select('target_organization_id, resource_type, states, resource_id')
     .eq('requesting_organization_id', requestingOrgId)
-    .eq('resource_type', resourceType)
+    .is('resource_id', null)
 
   if (error) {
-    if (error.code === '42P01' || /does not exist/i.test(error.message ?? '')) {
-      return granted
-    }
-    console.error('getAccessGrantSet', error)
-    return granted
+    if (!tableMissing(error)) console.error('listTypeGrantsForRequester', error)
+    return out
   }
 
   for (const row of data ?? []) {
-    if (row.resource_id) granted.add(String(row.resource_id))
+    const type = normalizeResourceType(row.resource_type)
+    if (!type) continue
+    const byType = out.get(row.target_organization_id) ?? new Map()
+    byType.set(type, {
+      resource_type: type,
+      states: row.states ?? null,
+    })
+    out.set(row.target_organization_id, byType)
   }
-  return granted
+  return out
 }
 
-export async function listOversightProjectsForCoordinator(
+async function countForType(
+  supabase: SupabaseClient,
+  orgId: string,
+  resourceType: InfoResourceType
+): Promise<number | null> {
+  try {
+    if (resourceType === 'f1') {
+      const { count, error } = await supabase
+        .from('err_projects')
+        .select('id', { count: 'exact', head: true })
+        .eq('organization_id', orgId)
+        .eq('is_draft', false)
+      if (error) return null
+      return count ?? 0
+    }
+    if (resourceType === 'decisions') {
+      const { count, error } = await supabase
+        .from('distribution_decision_master_sheet_1')
+        .select('id', { count: 'exact', head: true })
+        .eq('organization_id', orgId)
+      if (error) return null
+      return count ?? 0
+    }
+    if (resourceType === 'mous') {
+      const { count, error } = await supabase
+        .from('mous')
+        .select('id', { count: 'exact', head: true })
+        .eq('organization_id', orgId)
+      if (error) return null
+      return count ?? 0
+    }
+    if (resourceType === 'f4') {
+      const { count, error } = await supabase
+        .from('err_summary')
+        .select('id', { count: 'exact', head: true })
+        .eq('organization_id', orgId)
+      if (error) return null
+      return count ?? 0
+    }
+    if (resourceType === 'f5') {
+      const { count, error } = await supabase
+        .from('err_program_report')
+        .select('id', { count: 'exact', head: true })
+        .eq('organization_id', orgId)
+      if (error) return null
+      return count ?? 0
+    }
+    // fund_requests — may lack organization_id
+    return null
+  } catch {
+    return null
+  }
+}
+
+export async function listOversightCatalogForCoordinator(
   supabase: SupabaseClient,
   viewerOrgId: string
-): Promise<{ rows: OversightProjectRow[]; unavailable: boolean }> {
+): Promise<{ processors: OversightProcessorCatalog[]; unavailable: boolean }> {
   const { data: processorOrgs, error: orgError } = await supabase
     .from('organizations')
-    .select('id, name, org_type')
+    .select('id, name, slug, org_type')
     .eq('org_type', 'processor')
     .eq('is_active', true)
+    .order('name')
 
   if (orgError) {
-    if (orgError.code === '42P01' || /does not exist/i.test(orgError.message ?? '')) {
-      return { rows: [], unavailable: true }
-    }
-    console.error('listOversightProjectsForCoordinator orgs', orgError)
-    return { rows: [], unavailable: true }
+    if (tableMissing(orgError)) return { processors: [], unavailable: true }
+    console.error('listOversightCatalogForCoordinator orgs', orgError)
+    return { processors: [], unavailable: true }
   }
 
-  const orgIds = (processorOrgs ?? []).map((o) => o.id)
-  if (orgIds.length === 0) return { rows: [], unavailable: false }
+  const orgs = processorOrgs ?? []
+  if (orgs.length === 0) return { processors: [], unavailable: false }
 
-  const orgNameById = new Map((processorOrgs ?? []).map((o) => [o.id, o.name]))
-  const policies = await getDisclosurePoliciesForOrgs(supabase, orgIds)
-  if (policies.size === 0) {
-    // Policies table missing or unseeded — soft empty
+  const orgIds = orgs.map((o) => o.id)
+  const policiesByOrg = await listTypePoliciesForOrgs(supabase, orgIds)
+  if (policiesByOrg.size === 0) {
     const sample = await supabase.from('disclosure_policies').select('id').limit(1)
-    if (sample.error && (sample.error.code === '42P01' || /does not exist/i.test(sample.error.message ?? ''))) {
-      return { rows: [], unavailable: true }
+    if (sample.error && tableMissing(sample.error)) {
+      return { processors: [], unavailable: true }
     }
   }
 
-  const grants = await getAccessGrantSet(supabase, viewerOrgId)
+  const grantsByOrg = await listTypeGrantsForRequester(supabase, viewerOrgId)
 
   const { data: pendingReqs } = await supabase
     .from('access_requests')
-    .select('id, resource_id, target_organization_id')
+    .select('id, target_organization_id, resource_type')
     .eq('requesting_organization_id', viewerOrgId)
-    .eq('resource_type', 'err_project')
+    .eq('scope', 'org_resource_type')
     .eq('status', 'pending')
-    .eq('scope', 'record')
 
-  const pendingByResource = new Map<string, string>()
+  const pendingKey = new Map<string, string>()
   for (const r of pendingReqs ?? []) {
-    if (r.resource_id) pendingByResource.set(String(r.resource_id), r.id)
+    const type = normalizeResourceType(r.resource_type)
+    if (!type) continue
+    pendingKey.set(`${r.target_organization_id}:${type}`, r.id)
   }
 
-  // Fetch candidate projects from processor orgs (committed+ typically via stage_filter)
-  const { data: projects, error: projError } = await supabase
-    .from('err_projects')
-    .select(
-      `
-      id,
-      organization_id,
-      state,
-      locality,
-      funding_status,
-      status,
-      date,
-      project_name,
-      grant_serial,
-      workplan_number,
-      project_objectives,
-      estimated_beneficiaries,
-      "Sector (Primary)",
-      emergency_rooms (err_code)
-    `
-    )
-    .in('organization_id', orgIds)
-    .eq('is_draft', false)
-    .order('date', { ascending: false })
-    .limit(500)
+  const processors: OversightProcessorCatalog[] = []
 
-  if (projError) {
-    console.error('listOversightProjectsForCoordinator projects', projError)
-    return { rows: [], unavailable: false }
+  for (const org of orgs) {
+    const policyMap = policiesByOrg.get(org.id) ?? new Map()
+    const grantMap = grantsByOrg.get(org.id) ?? new Map()
+    const types: OversightTypeRow[] = []
+
+    for (const resourceType of INFO_RESOURCE_TYPES) {
+      const policy = policyMap.get(resourceType) ?? null
+      const grant = grantMap.get(resourceType) ?? null
+      const visibility = canLccSeeInfoType({ policy, grant })
+      if (visibility === 'hidden') continue
+
+      const count = await countForType(supabase, org.id, resourceType)
+      types.push({
+        resource_type: resourceType,
+        label: INFO_RESOURCE_TYPE_LABELS[resourceType],
+        visibility,
+        states_granted:
+          visibility === 'disclosed'
+            ? grant
+              ? isAllStates(grant.states)
+                ? null
+                : grant.states
+              : null
+            : null,
+        pending_request_id: pendingKey.get(`${org.id}:${resourceType}`) ?? null,
+        count,
+      })
+    }
+
+    if (types.length > 0) {
+      processors.push({
+        organization_id: org.id,
+        organization_name: org.name,
+        organization_slug: org.slug,
+        types,
+      })
+    }
   }
 
-  const rows: OversightProjectRow[] = []
-  for (const p of projects ?? []) {
-    const orgId = p.organization_id
-    if (!orgId) continue
-    const policy = policies.get(orgId) ?? null
-    const hasGrant = grants.has(p.id)
-    const visibility = canLccSeeProjectContent({
-      project: p,
-      viewerOrgId,
-      policy,
-      hasAccessGrant: hasGrant,
-    })
-    if (visibility === 'hidden') continue
-
-    const owningName = orgNameById.get(orgId) ?? 'Unknown org'
-    const stubOrFull =
-      visibility === 'disclosed'
-        ? toDisclosedSummary(p as Parameters<typeof toDisclosedSummary>[0], owningName)
-        : toExistenceStub(p as Parameters<typeof toExistenceStub>[0], owningName)
-
-    rows.push({
-      visibility,
-      project: stubOrFull,
-      pending_request_id: pendingByResource.get(p.id) ?? null,
-      has_access_grant: hasGrant,
-    })
-  }
-
-  return { rows, unavailable: false }
+  return { processors, unavailable: false }
 }
 
 export async function emitAccessRequestAudit(args: {

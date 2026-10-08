@@ -7,6 +7,12 @@ import {
   chunkGrantScopeIds,
   getUserGrantAccess,
 } from '@/lib/userGrantAccess'
+import {
+  applyOrganizationIdFilter,
+  getUserOrgScope,
+  orgScopeBlocksAllData,
+} from '@/lib/canvas/orgScope'
+import { resolveOrgDecisionKeyScope } from '@/lib/canvas/orgResourceScope'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -49,7 +55,10 @@ const fetchAllRows = async (supabase: any, table: string, select: string) => {
 export async function GET() {
   try {
     const supabase = getSupabaseRouteClient()
-    const grantAccess = await getUserGrantAccess()
+    const [grantAccess, orgScope] = await Promise.all([
+      getUserGrantAccess(),
+      getUserOrgScope(),
+    ])
     const emptySummary = {
       total_allocated: 0,
       total_assigned: 0,
@@ -58,7 +67,7 @@ export async function GET() {
       total_pending: 0,
       total_balance: 0,
     }
-    if (grantAccess.mode === 'none') {
+    if (grantAccess.mode === 'none' || orgScopeBlocksAllData(orgScope)) {
       return NextResponse.json(emptySummary, { headers: { 'Cache-Control': 'no-store' } })
     }
     if (grantAccess.mode === 'partner') {
@@ -73,6 +82,7 @@ export async function GET() {
             .from('err_projects')
             .select('expenses, funding_status, status, grant_id, grant_grid_id')
           query = applyGrantGridIdFilter(query, { ...grantAccess, grantGridIds: batch })
+          query = applyOrganizationIdFilter(query, orgScope)
           const { data, error } = await query.range(from, from + pageSize - 1)
           if (error) throw error
           if (!data?.length) break
@@ -98,27 +108,66 @@ export async function GET() {
       )
     }
     
-    // 1. Total Included = sum of all allocation amounts from allocations_by_date (canonical)
+    // 1. Total Included = sum of allocation amounts for this org's decisions
     const allocationsSupabase = getSupabaseAdmin()
-    const allocData = await fetchAllRows(allocationsSupabase, 'allocations_by_date', '"Allocation Amount"')
+    const decisionKeyScope = await resolveOrgDecisionKeyScope(allocationsSupabase, orgScope)
+    let allocData: any[] = []
+    if (decisionKeyScope.mode === 'all') {
+      allocData = await fetchAllRows(allocationsSupabase, 'allocations_by_date', '"Allocation Amount"')
+    } else if (decisionKeyScope.mode === 'keys' && decisionKeyScope.keys.length > 0) {
+      let from = 0
+      const pageSize = 1000
+      while (true) {
+        const { data: page, error } = await allocationsSupabase
+          .from('allocations_by_date')
+          .select('"Allocation Amount"')
+          .in('Decision_ID', decisionKeyScope.keys)
+          .range(from, from + pageSize - 1)
+        if (error) throw error
+        if (!page?.length) break
+        allocData.push(...page)
+        if (page.length < pageSize) break
+        from += pageSize
+      }
+    }
     const total_included = (allocData || []).reduce((sum, row) => {
       const amount = row['Allocation Amount'] != null ? Number(row['Allocation Amount']) : 0
       return sum + (Number.isNaN(amount) ? 0 : amount)
     }, 0)
 
-    // 2. Get Historical (Assigned) from activities_raw_import
-    const historicalData = await fetchAllRows(supabase, 'activities_raw_import', 'USD')
-    const historical = (historicalData || []).reduce((sum, row) => {
-      const rawUSD = row['USD'] || row['usd'] || row.USD
-      if (rawUSD === null || rawUSD === undefined) return sum
-      const usd = Number(rawUSD)
-      if (isNaN(usd) || usd === 0) return sum
-      return sum + usd
-    }, 0)
+    // 2. Historical import is global LoHub data — omit for org-bound sessions
+    let historical = 0
+    if (orgScope.mode === 'all') {
+      const historicalData = await fetchAllRows(supabase, 'activities_raw_import', 'USD')
+      historical = (historicalData || []).reduce((sum, row) => {
+        const rawUSD = row['USD'] || row['usd'] || row.USD
+        if (rawUSD === null || rawUSD === undefined) return sum
+        const usd = Number(rawUSD)
+        if (isNaN(usd) || usd === 0) return sum
+        return sum + usd
+      }, 0)
+    }
 
-    // 3. Classify projects using the new logic
-    const projects = await fetchAllRows(supabase, 'err_projects', 'expenses, funding_status, status, grant_id, grant_grid_id')
-    
+    // 3. Classify projects using the new logic (org-scoped)
+    let projects: any[] = []
+    {
+      let from = 0
+      const pageSize = 1000
+      while (true) {
+        let q = supabase
+          .from('err_projects')
+          .select('expenses, funding_status, status, grant_id, grant_grid_id')
+          .range(from, from + pageSize - 1)
+        q = applyOrganizationIdFilter(q, orgScope)
+        const { data: page, error } = await q
+        if (error) throw error
+        if (!page?.length) break
+        projects.push(...page)
+        if (page.length < pageSize) break
+        from += pageSize
+      }
+    }
+
     let assignedFromProjects = 0
     let committed = 0
     let pending = 0

@@ -7,9 +7,10 @@ import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/ca
 import { Users, BarChart2, BarChart3, ClipboardList, PieChart, UserCog, CheckSquare, LogOut, BookOpen, BookMarked, PenTool, Cog, MapPin } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 import { useAllowedFunctions } from '@/hooks/useAllowedFunctions'
+import { useCanvasSession } from '@/hooks/useCanvasSession'
 import { useHomePageExplainer } from './HomePageExplainer'
 import { isStateManagementRole } from '@/lib/stateManagement/roles'
-import { isThinEnvironment } from '@/lib/canvas/mounts'
+import { isModuleMounted, isThinEnvironment } from '@/lib/canvas/mounts'
 import '@/i18n/config'
 
 interface User {
@@ -24,22 +25,28 @@ interface User {
 export default function ErrPortalPage() {
   const { t } = useTranslation(['common', 'err'])
   const { can, isLoading: permissionsLoading } = useAllowedFunctions()
+  const { mountedModules } = useCanvasSession()
+  const mounted = (code: string) => isModuleMounted(mountedModules, code)
   const canViewGrantManagement =
-    can('grant_decisions_view_page') ||
-    can('grant_grants_view_page') ||
-    can('grant_allocation_view_page')
-  const canViewF1 = can('f1_view_page')
-  const canViewF2 = can('f2_view_page')
-  const canViewF3 = can('f3_view_page')
-  const canViewF4F5 = can('f4_f5_view_page')
-  const canViewProjectManagement = can('management_view_page')
-  const canViewUserManagement = can('users_view_page')
-  const canViewRooms = can('rooms_view_page')
-  const canViewDashboard = can('dashboard_view_page')
-  const canViewLearnings = can('learnings_view_page')
+    (can('grant_decisions_view_page') && mounted('grant_decisions')) ||
+    (can('grant_grants_view_page') && mounted('grant_grants')) ||
+    (can('grant_allocation_view_page') && mounted('grant_allocation'))
+  const canViewF1 = can('f1_view_page') && mounted('f1_workplans')
+  const canViewF2 = can('f2_view_page') && mounted('f2_approvals')
+  const canViewF3 = can('f3_view_page') && mounted('f3_mous')
+  const canViewF4F5 = can('f4_f5_view_page') && mounted('f4_f5_reporting')
+  const canViewReportTracker = can('f4_f5_view_page') && mounted('report_tracker')
+  const canViewProjectManagement = can('management_view_page') && mounted('project_management')
+  const canViewUserManagement = can('users_view_page') && mounted('user_management')
+  const canViewRooms = can('rooms_view_page') && mounted('room_management')
+  const canViewDashboard = can('dashboard_view_page') && mounted('dashboard')
+  const canViewLearnings = can('learnings_view_page') && mounted('learnings')
   const [isLoading, setIsLoading] = useState(true)
   const [user, setUser] = useState<User | null>(null)
-  const canViewStates = can('states_view_page') && isStateManagementRole(user?.role)
+  const canViewStates =
+    can('states_view_page') &&
+    mounted('state_management') &&
+    isStateManagementRole(user?.role)
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -197,7 +204,7 @@ export default function ErrPortalPage() {
         )}
 
         {/* Report Tracker */}
-        {canViewF4F5 && (
+        {canViewReportTracker && (
           <Link href="/err-portal/report-tracker" className="block">
             <Card className="h-full hover:bg-muted/50 transition-colors">
               <CardHeader className="h-full flex flex-col justify-center items-center text-center p-4">

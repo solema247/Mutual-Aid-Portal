@@ -1,6 +1,12 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin'
 import { decisionGroupKey } from '@/lib/grantManagement/resolveDecisionKey'
+import {
+  applyOrganizationIdFilter,
+  getUserOrgScope,
+  orgScopeBlocksAllData,
+} from '@/lib/canvas/orgScope'
+import { resolveOrgDecisionKeyScope } from '@/lib/canvas/orgResourceScope'
 
 const ALLOCATIONS_SELECT =
   'Allocation_ID, Decision_ID, Decision_Date, State, "Allocation Amount", "%_Decision_Amount", Restriction, Notes'
@@ -71,21 +77,37 @@ export async function GET() {
   }
 
   try {
+    const orgScope = await getUserOrgScope()
+    if (orgScopeBlocksAllData(orgScope)) {
+      return NextResponse.json({ allocations: [], decisions: [] })
+    }
+    const decisionKeyScope = await resolveOrgDecisionKeyScope(supabase, orgScope)
+    if (decisionKeyScope.mode === 'none') {
+      return NextResponse.json({ allocations: [], decisions: [] })
+    }
+    if (decisionKeyScope.mode === 'keys' && decisionKeyScope.keys.length === 0) {
+      return NextResponse.json({ allocations: [], decisions: [] })
+    }
+
     const [allocationsData, decisionsData] = await Promise.all([
-      fetchAllPages((from, to) =>
-        supabase
+      fetchAllPages((from, to) => {
+        let q = supabase
           .from('allocations_by_date')
           .select(ALLOCATIONS_SELECT)
           .order('Allocation_ID', { ascending: true })
-          .range(from, to)
-      ),
-      fetchAllPages((from, to) =>
-        supabase
+        if (decisionKeyScope.mode === 'keys') {
+          q = q.in('Decision_ID', decisionKeyScope.keys)
+        }
+        return q.range(from, to)
+      }),
+      fetchAllPages((from, to) => {
+        let q = supabase
           .from('distribution_decision_master_sheet_1')
           .select(DECISIONS_SELECT)
           .order('id', { ascending: true })
-          .range(from, to)
-      ).catch((err) => {
+        q = applyOrganizationIdFilter(q, orgScope)
+        return q.range(from, to)
+      }).catch((err) => {
         console.error('Error fetching decisions for allocations:', err)
         return [] as any[]
       }),

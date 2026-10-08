@@ -14,6 +14,12 @@ import {
   getUserGrantAccess,
 } from '@/lib/userGrantAccess'
 import {
+  applyOrganizationIdFilter,
+  getUserOrgScope,
+  orgScopeBlocksAllData,
+} from '@/lib/canvas/orgScope'
+import { resolveOrgDecisionKeyScope } from '@/lib/canvas/orgResourceScope'
+import {
   inDateRange,
   matchesDecisionId,
   matchesMulti,
@@ -84,7 +90,10 @@ export async function GET(request: Request) {
   try {
     const supabase = getSupabaseRouteClient()
     const filters = parsePoolSliceFilters(new URL(request.url).searchParams)
-    const grantAccess = await getUserGrantAccess()
+    const [grantAccess, orgScope] = await Promise.all([
+      getUserGrantAccess(),
+      getUserOrgScope(),
+    ])
     const emptyByState = {
       rows: [],
       filter_options: {
@@ -94,7 +103,7 @@ export async function GET(request: Request) {
         stateOptions: [] as string[],
       },
     }
-    if (grantAccess.mode === 'none') {
+    if (grantAccess.mode === 'none' || orgScopeBlocksAllData(orgScope)) {
       return NextResponse.json(emptyByState, {
         headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' },
       })
@@ -117,6 +126,7 @@ export async function GET(request: Request) {
               .from('err_projects')
               .select('expenses, funding_status, status, state, grant_id, grant_grid_id, grant_segment, date, date_transfer')
             query = applyGrantGridIdFilter(query, { ...grantAccess, grantGridIds: batch })
+            query = applyOrganizationIdFilter(query, orgScope)
             const { data, error } = await query.range(from, from + pageSize - 1)
             if (error) throw error
             if (!data?.length) break
@@ -198,11 +208,32 @@ export async function GET(request: Request) {
     const { allowedStateNames } = await getUserStateAccess()
 
     const allocationsSupabase = getSupabaseAdmin()
-    const allocationsData = await fetchAllRows(
-      allocationsSupabase,
-      'allocations_by_date',
-      'State,"Allocation Amount","Decision_ID",Partner,Restriction,"Grant_ID","Decision_Date"'
-    )
+    const decisionKeyScope = await resolveOrgDecisionKeyScope(allocationsSupabase, orgScope)
+    let allocationsData: any[] = []
+    if (decisionKeyScope.mode === 'all') {
+      allocationsData = await fetchAllRows(
+        allocationsSupabase,
+        'allocations_by_date',
+        'State,"Allocation Amount","Decision_ID",Partner,Restriction,"Grant_ID","Decision_Date"'
+      )
+    } else if (decisionKeyScope.mode === 'keys' && decisionKeyScope.keys.length > 0) {
+      let from = 0
+      const pageSize = 1000
+      while (true) {
+        const { data: page, error } = await allocationsSupabase
+          .from('allocations_by_date')
+          .select(
+            'State,"Allocation Amount","Decision_ID",Partner,Restriction,"Grant_ID","Decision_Date"'
+          )
+          .in('Decision_ID', decisionKeyScope.keys)
+          .range(from, from + pageSize - 1)
+        if (error) throw error
+        if (!page?.length) break
+        allocationsData.push(...page)
+        if (page.length < pageSize) break
+        from += pageSize
+      }
+    }
 
     const optionPartners: string[] = []
     const optionRestrictions: string[] = []
@@ -254,11 +285,15 @@ export async function GET(request: Request) {
 
     const skipUsageByDecision = Boolean(filters.decisionId)
 
-    const historicalData = await fetchAllRows(
-      supabase,
-      'activities_raw_import',
-      'State,USD,Partner,"Project Donor","Grant Segment","Date Transfer","Start Date (Activity)"'
-    )
+    // Historical import is LoHub-global — skip for org-bound sessions
+    const historicalData =
+      orgScope.mode === 'all'
+        ? await fetchAllRows(
+            supabase,
+            'activities_raw_import',
+            'State,USD,Partner,"Project Donor","Grant Segment","Date Transfer","Start Date (Activity)"'
+          )
+        : []
 
     const historicalByState = new Map<string, number>()
     if (!skipUsageByDecision) {
@@ -293,11 +328,26 @@ export async function GET(request: Request) {
       }
     }
 
-    const projects = await fetchAllRows(
-      supabase,
-      'err_projects',
-      'expenses, funding_status, status, state, grant_id, grant_grid_id, grant_segment, date, date_transfer'
-    )
+    let projects: any[] = []
+    {
+      let from = 0
+      const pageSize = 1000
+      while (true) {
+        let q = supabase
+          .from('err_projects')
+          .select(
+            'expenses, funding_status, status, state, grant_id, grant_grid_id, grant_segment, date, date_transfer'
+          )
+          .range(from, from + pageSize - 1)
+        q = applyOrganizationIdFilter(q, orgScope)
+        const { data: page, error } = await q
+        if (error) throw error
+        if (!page?.length) break
+        projects.push(...page)
+        if (page.length < pageSize) break
+        from += pageSize
+      }
+    }
 
     const assignedFromProjectsByState = new Map<string, number>()
     const committedByState = new Map<string, number>()

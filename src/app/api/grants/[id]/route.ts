@@ -6,6 +6,30 @@ import {
   syncGrantToAirtable,
 } from '@/lib/grantManagement/pushToAirtable'
 import { SYNC_STATUS } from '@/lib/grantManagement/syncStatus'
+import {
+  getUserOrgScope,
+  organizationIdMatchesScope,
+  orgScopeForbiddenResponse,
+} from '@/lib/canvas/orgScope'
+
+async function assertGrantInOrgScope(
+  supabase: { from: (t: string) => any },
+  grantId: string
+): Promise<NextResponse | null> {
+  const orgScope = await getUserOrgScope(supabase as any)
+  const { data } = await supabase
+    .from('grants_grid_view')
+    .select('organization_id')
+    .eq('id', grantId)
+    .maybeSingle()
+  if (!data) {
+    return NextResponse.json({ error: 'Grant not found' }, { status: 404 })
+  }
+  if (!organizationIdMatchesScope(orgScope, data.organization_id)) {
+    return orgScopeForbiddenResponse()
+  }
+  return null
+}
 
 const GRANT_SELECT =
   'id, grant_id, donor_id, donor_name, partner_name, project_name, grant_start_date, grant_end_date, status, total_transferred_amount_usd, sum_activity_amount, sum_transfer_fee_amount'
@@ -97,6 +121,9 @@ export async function PUT(
   if (!auth.ok) return auth.response
 
   try {
+    const denied = await assertGrantInOrgScope(auth.ctx.supabase, params.id)
+    if (denied) return denied
+
     const body = await request.json()
     const parsed = parseGrantBody(body)
     if ('error' in parsed) {
@@ -138,6 +165,9 @@ export async function DELETE(
   if (!auth.ok) return auth.response
 
   try {
+    const denied = await assertGrantInOrgScope(auth.ctx.supabase, params.id)
+    if (denied) return denied
+
     const { data: existing, error: fetchError } = await auth.ctx.supabase
       .from('grants_grid_view')
       .select('airtable_record_id, last_pushed_at')

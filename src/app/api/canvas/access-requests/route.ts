@@ -2,9 +2,14 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireCanvasSession, isCanvasAdmin } from '@/lib/canvas/session'
 import {
   emitAccessRequestAudit,
+  formatStatesLabel,
   getDisclosurePolicy,
+  INFO_RESOURCE_TYPE_LABELS,
   isCoordinatorOrg,
+  isInfoResourceType,
   isProcessorOrg,
+  normalizeResourceType,
+  normalizeStatesInput,
 } from '@/lib/canvas/disclosure'
 
 function tableMissing(error: { code?: string; message?: string } | null): boolean {
@@ -38,6 +43,7 @@ export async function GET() {
       resource_type,
       resource_id,
       scope,
+      states,
       reason,
       status,
       decided_by,
@@ -67,16 +73,21 @@ export async function GET() {
       })
     }
     console.error('GET access-requests', error)
-    return NextResponse.json({ error: 'Failed to load access requests' }, { status: 500 })
+    return NextResponse.json(
+      {
+        error:
+          error.message?.includes('states')
+            ? 'Apply sql/canvas/005_info_type_disclosure.sql (states column missing)'
+            : 'Failed to load access requests',
+      },
+      { status: 500 }
+    )
   }
 
-  // Enrich with org names + project stub fields where useful
   const orgIds = new Set<string>()
-  const projectIds = new Set<string>()
   for (const r of data ?? []) {
     orgIds.add(r.requesting_organization_id)
     orgIds.add(r.target_organization_id)
-    if (r.resource_id) projectIds.add(r.resource_id)
   }
 
   const orgNameById = new Map<string, string>()
@@ -88,31 +99,22 @@ export async function GET() {
     for (const o of orgs ?? []) orgNameById.set(o.id, o.name)
   }
 
-  const projectMeta = new Map<string, { state: string | null; funding_status: string | null; status: string }>()
-  if (projectIds.size > 0) {
-    const { data: projects } = await supabase
-      .from('err_projects')
-      .select('id, state, funding_status, status')
-      .in('id', Array.from(projectIds))
-    for (const p of projects ?? []) {
-      projectMeta.set(p.id, {
-        state: p.state,
-        funding_status: p.funding_status,
-        status: p.status,
-      })
+  const requests = (data ?? []).map((r) => {
+    const norm = normalizeResourceType(r.resource_type)
+    return {
+      ...r,
+      requesting_org_name: orgNameById.get(r.requesting_organization_id) ?? null,
+      target_org_name: orgNameById.get(r.target_organization_id) ?? null,
+      resource_type_label: norm
+        ? INFO_RESOURCE_TYPE_LABELS[norm]
+        : r.resource_type,
+      states_label: formatStatesLabel(r.states ?? null),
+      can_decide:
+        isProcessorOrg(canvas.organization) &&
+        r.status === 'pending' &&
+        isCanvasAdmin(user.role),
     }
-  }
-
-  const requests = (data ?? []).map((r) => ({
-    ...r,
-    requesting_org_name: orgNameById.get(r.requesting_organization_id) ?? null,
-    target_org_name: orgNameById.get(r.target_organization_id) ?? null,
-    project: r.resource_id ? projectMeta.get(r.resource_id) ?? null : null,
-    can_decide:
-      isProcessorOrg(canvas.organization) &&
-      r.status === 'pending' &&
-      isCanvasAdmin(user.role),
-  }))
+  })
 
   return NextResponse.json({ requests, canvas_is_fallback: false })
 }
@@ -139,10 +141,11 @@ export async function POST(request: NextRequest) {
 
   let body: {
     resource_type?: string
-    resource_id?: string
     target_organization_id?: string
-    scope?: string
+    states?: string[] | null
     reason?: string
+    scope?: string
+    resource_id?: string
   }
   try {
     body = await request.json()
@@ -150,87 +153,79 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
   }
 
-  const resourceType = body.resource_type ?? 'err_project'
-  if (resourceType !== 'err_project') {
-    return NextResponse.json({ error: 'Unsupported resource_type' }, { status: 400 })
-  }
-
-  const scope = body.scope === 'org_resource_type' ? 'org_resource_type' : 'record'
-  const resourceId = typeof body.resource_id === 'string' ? body.resource_id.trim() : null
-  let targetOrgId =
-    typeof body.target_organization_id === 'string'
-      ? body.target_organization_id.trim()
-      : null
-
-  if (scope === 'record') {
-    if (!resourceId) {
-      return NextResponse.json({ error: 'resource_id required for record scope' }, { status: 400 })
-    }
-    const { data: project, error: projErr } = await supabase
-      .from('err_projects')
-      .select('id, organization_id, funding_status')
-      .eq('id', resourceId)
-      .maybeSingle()
-
-    if (projErr || !project) {
-      return NextResponse.json({ error: 'Project not found' }, { status: 404 })
-    }
-    if (!project.organization_id) {
-      return NextResponse.json({ error: 'Project has no owning organization' }, { status: 400 })
-    }
-    const owningOrgId = project.organization_id
-    targetOrgId = owningOrgId
-
-    const policy = await getDisclosurePolicy(supabase, owningOrgId, 'err_project')
-    if (!policy?.advertise_existence) {
-      return NextResponse.json(
-        { error: 'Project is not advertised for access requests' },
-        { status: 403 }
-      )
-    }
-  } else if (!targetOrgId) {
+  // Soft-reject legacy per-record creates
+  if (body.scope === 'record' || body.resource_id) {
     return NextResponse.json(
-      { error: 'target_organization_id required for org_resource_type scope' },
+      {
+        error:
+          'Per-project access requests are retired. Request an information type (e.g. F1) for all or selected states.',
+        code: 'RECORD_SCOPE_DEPRECATED',
+      },
       { status: 400 }
     )
+  }
+
+  const rawType = typeof body.resource_type === 'string' ? body.resource_type.trim() : ''
+  if (!isInfoResourceType(rawType)) {
+    return NextResponse.json(
+      { error: 'resource_type must be one of f1, decisions, fund_requests, mous, f4, f5' },
+      { status: 400 }
+    )
+  }
+
+  const targetOrgId =
+    typeof body.target_organization_id === 'string'
+      ? body.target_organization_id.trim()
+      : ''
+  if (!targetOrgId) {
+    return NextResponse.json({ error: 'target_organization_id required' }, { status: 400 })
   }
 
   const { data: targetOrg } = await supabase
     .from('organizations')
     .select('id, org_type')
-    .eq('id', targetOrgId!)
+    .eq('id', targetOrgId)
     .maybeSingle()
 
   if (!targetOrg || targetOrg.org_type !== 'processor') {
     return NextResponse.json({ error: 'Target must be a processor organization' }, { status: 400 })
   }
 
-  // Prevent duplicate pending requests for same record
-  if (scope === 'record' && resourceId) {
-    const { data: existing } = await supabase
-      .from('access_requests')
-      .select('id')
-      .eq('requesting_organization_id', canvas.organization.id)
-      .eq('resource_type', resourceType)
-      .eq('resource_id', resourceId)
-      .eq('status', 'pending')
-      .maybeSingle()
+  const policy = await getDisclosurePolicy(supabase, targetOrgId, rawType)
+  if (policy && policy.advertise_existence === false) {
+    return NextResponse.json(
+      { error: 'This information type is not advertised for access requests' },
+      { status: 403 }
+    )
+  }
 
-    if (existing) {
-      return NextResponse.json(
-        { error: 'A pending request already exists', request: existing },
-        { status: 409 }
-      )
-    }
+  const states = normalizeStatesInput(body.states)
+
+  const { data: existing } = await supabase
+    .from('access_requests')
+    .select('id')
+    .eq('requesting_organization_id', canvas.organization.id)
+    .eq('target_organization_id', targetOrgId)
+    .eq('resource_type', rawType)
+    .eq('scope', 'org_resource_type')
+    .eq('status', 'pending')
+    .maybeSingle()
+
+  if (existing) {
+    return NextResponse.json(
+      { error: 'A pending request already exists for this type', request: existing },
+      { status: 409 }
+    )
   }
 
   const insert = {
     requesting_organization_id: canvas.organization.id,
-    target_organization_id: targetOrgId!,
+    target_organization_id: targetOrgId,
     requested_by: user.id,
-    resource_type: resourceType,
-    resource_id: scope === 'record' ? resourceId : null,
-    scope,
+    resource_type: rawType,
+    resource_id: null,
+    scope: 'org_resource_type',
+    states,
     reason: typeof body.reason === 'string' ? body.reason.trim() || null : null,
     status: 'pending',
   }
@@ -249,7 +244,19 @@ export async function POST(request: NextRequest) {
       )
     }
     console.error('POST access-requests', error)
-    return NextResponse.json({ error: 'Failed to create request' }, { status: 500 })
+    const needs005 =
+      error.code === 'PGRST204' ||
+      /states/i.test(error.message ?? '') ||
+      /resource_type/i.test(error.message ?? '')
+    return NextResponse.json(
+      {
+        error: needs005
+          ? 'Database is missing info-type columns. Apply sql/canvas/005_info_type_disclosure.sql on production, then retry.'
+          : 'Failed to create request',
+        code: needs005 ? 'APPLY_005' : 'CREATE_FAILED',
+      },
+      { status: 500 }
+    )
   }
 
   await emitAccessRequestAudit({
@@ -260,9 +267,9 @@ export async function POST(request: NextRequest) {
     request,
     newValues: {
       status: 'pending',
-      scope,
-      resource_type: resourceType,
-      resource_id: resourceId,
+      scope: 'org_resource_type',
+      resource_type: rawType,
+      states,
       target_organization_id: targetOrgId,
     },
   })

@@ -13,6 +13,11 @@ import {
   primaryFileFields,
   type DecisionDocument,
 } from '@/lib/grantManagement/decisionDocument'
+import {
+  getUserOrgScope,
+  organizationIdMatchesScope,
+  orgScopeForbiddenResponse,
+} from '@/lib/canvas/orgScope'
 
 function mapDecisionRow(row: {
   id: string
@@ -119,6 +124,16 @@ export async function PATCH(
       return NextResponse.json({ error: 'Distribution decision not found' }, { status: 404 })
     }
 
+    const orgScope = await getUserOrgScope(auth.ctx.supabase)
+    const { data: orgRow } = await auth.ctx.supabase
+      .from('distribution_decision_master_sheet_1')
+      .select('organization_id')
+      .eq('id', decision.id)
+      .maybeSingle()
+    if (!organizationIdMatchesScope(orgScope, orgRow?.organization_id)) {
+      return orgScopeForbiddenResponse()
+    }
+
     const { data: current, error: currentError } = await auth.ctx.supabase
       .from('distribution_decision_master_sheet_1')
       .select(DECISION_SELECT)
@@ -204,14 +219,19 @@ export async function DELETE(
       return NextResponse.json({ error: 'Distribution decision not found' }, { status: 404 })
     }
 
+    const orgScope = await getUserOrgScope(auth.ctx.supabase)
     const { data: fullRow, error: fullError } = await auth.ctx.supabase
       .from('distribution_decision_master_sheet_1')
-      .select('id, decision_id_proposed, airtable_record_id, last_pushed_at')
+      .select('id, decision_id_proposed, airtable_record_id, last_pushed_at, organization_id')
       .eq('id', decision.id)
       .single()
 
     if (fullError || !fullRow) {
       return NextResponse.json({ error: 'Distribution decision not found' }, { status: 404 })
+    }
+
+    if (!organizationIdMatchesScope(orgScope, fullRow.organization_id)) {
+      return orgScopeForbiddenResponse()
     }
 
     const push = await removeDecisionFromAirtable(

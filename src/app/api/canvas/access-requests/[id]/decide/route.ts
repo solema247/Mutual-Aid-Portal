@@ -3,6 +3,7 @@ import { requireCanvasSession, isCanvasAdmin } from '@/lib/canvas/session'
 import {
   emitAccessRequestAudit,
   isProcessorOrg,
+  normalizeResourceType,
 } from '@/lib/canvas/disclosure'
 
 function tableMissing(error: { code?: string; message?: string } | null): boolean {
@@ -41,7 +42,7 @@ export async function POST(
     )
   }
 
-  let body: { decision?: string; decision_note?: string }
+  let body: { decision?: string; decision_note?: string; states?: string[] | null }
   try {
     body = await request.json()
   } catch {
@@ -105,7 +106,55 @@ export async function POST(
   }
 
   if (decision === 'approved') {
-    if (existing.scope === 'record' && existing.resource_id) {
+    const resourceType =
+      normalizeResourceType(existing.resource_type) ?? existing.resource_type
+    // Approve exactly what was requested (states on request); optional override ignored for MVP
+    const states =
+      Array.isArray(existing.states) && existing.states.length > 0
+        ? existing.states
+        : null
+
+    if (existing.scope === 'org_resource_type' || !existing.resource_id) {
+      // Delete any prior type-level grant then insert (partial unique index)
+      await supabase
+        .from('access_grants')
+        .delete()
+        .eq('requesting_organization_id', existing.requesting_organization_id)
+        .eq('target_organization_id', existing.target_organization_id)
+        .eq('resource_type', resourceType)
+        .is('resource_id', null)
+
+      // Also clean legacy err_project type rows if approving f1
+      if (resourceType === 'f1') {
+        await supabase
+          .from('access_grants')
+          .delete()
+          .eq('requesting_organization_id', existing.requesting_organization_id)
+          .eq('target_organization_id', existing.target_organization_id)
+          .eq('resource_type', 'err_project')
+          .is('resource_id', null)
+      }
+
+      const { error: grantErr } = await supabase.from('access_grants').insert({
+        requesting_organization_id: existing.requesting_organization_id,
+        target_organization_id: existing.target_organization_id,
+        resource_type: resourceType,
+        resource_id: null,
+        states,
+        access_request_id: existing.id,
+        granted_by: user.id,
+        granted_at: now,
+      })
+
+      if (grantErr) {
+        console.error('access_grants insert', grantErr)
+        return NextResponse.json(
+          { error: 'Approved but failed to create access grant', request: updated },
+          { status: 500 }
+        )
+      }
+    } else if (existing.scope === 'record' && existing.resource_id) {
+      // Legacy path
       const { error: grantErr } = await supabase.from('access_grants').upsert(
         {
           requesting_organization_id: existing.requesting_organization_id,
@@ -122,31 +171,7 @@ export async function POST(
         }
       )
       if (grantErr) {
-        console.error('access_grants upsert', grantErr)
-        return NextResponse.json(
-          { error: 'Approved but failed to create access grant', request: updated },
-          { status: 500 }
-        )
-      }
-    } else if (existing.scope === 'org_resource_type') {
-      const { error: policyErr } = await supabase
-        .from('disclosure_policies')
-        .upsert(
-          {
-            organization_id: existing.target_organization_id,
-            resource_type: existing.resource_type,
-            advertise_existence: true,
-            disclose_content: true,
-            updated_at: now,
-          },
-          { onConflict: 'organization_id,resource_type' }
-        )
-      if (policyErr) {
-        console.error('disclosure_policies upsert', policyErr)
-        return NextResponse.json(
-          { error: 'Approved but failed to update disclosure policy', request: updated },
-          { status: 500 }
-        )
+        console.error('access_grants upsert legacy', grantErr)
       }
     }
   }
@@ -162,7 +187,8 @@ export async function POST(
       status: decision,
       decided_by: user.id,
       scope: existing.scope,
-      resource_id: existing.resource_id,
+      resource_type: existing.resource_type,
+      states: existing.states ?? null,
     },
   })
 

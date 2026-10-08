@@ -9,6 +9,11 @@ import {
   applyEmergencyRoomIdFilter,
   getUserRoomAccess,
 } from '@/lib/userRoomAccess'
+import {
+  applyOrganizationIdFilter,
+  getUserOrgScope,
+  orgScopeBlocksAllData,
+} from '@/lib/canvas/orgScope'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -72,13 +77,14 @@ function parseJsonArray(raw: unknown): any[] {
 export async function GET(request: Request) {
   try {
     const supabase = getSupabaseRouteClient()
-    const [{ allowedStateNames }, grantAccess, roomAccess] = await Promise.all([
+    const [{ allowedStateNames }, grantAccess, roomAccess, orgScope] = await Promise.all([
       getUserStateAccess(),
       getUserGrantAccess(),
       getUserRoomAccess(),
+      getUserOrgScope(),
     ])
 
-    if (roomAccess.mode === 'none') {
+    if (roomAccess.mode === 'none' || orgScopeBlocksAllData(orgScope)) {
       return NextResponse.json(
         { projectCount: 0, categories: [] },
         { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } }
@@ -99,6 +105,7 @@ export async function GET(request: Request) {
         .in('status', ['approved', 'active', 'pending', 'completed'])
         .eq('source', 'mutual_aid_portal')
       query = applyEmergencyRoomIdFilter(query, roomAccess)
+      query = applyOrganizationIdFilter(query, orgScope)
       if (from) query = query.gte('date', from)
       if (to) query = query.lte('date', to)
       const { data: rows, error } = await query
@@ -124,6 +131,7 @@ export async function GET(request: Request) {
           .in('status', ['approved', 'active', 'pending', 'completed'])
           .eq('source', 'mutual_aid_portal')
           .in('grant_grid_id', batch)
+        query = applyOrganizationIdFilter(query, orgScope)
         if (from) query = query.gte('date', from)
         if (to) query = query.lte('date', to)
         const { data: batchData, error } = await query
@@ -149,6 +157,7 @@ export async function GET(request: Request) {
         if (allowedStateNames !== null && allowedStateNames.length > 0) {
           query = query.in('state', allowedStateNames)
         }
+        query = applyOrganizationIdFilter(query, orgScope)
         if (from) {
           query = query.gte('date', from)
         }

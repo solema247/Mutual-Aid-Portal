@@ -314,13 +314,15 @@ export async function GET(request: Request) {
     const { getUserStateAccess } = await import('@/lib/userStateAccess')
     const { getUserGrantAccess } = await import('@/lib/userGrantAccess')
     const { getUserRoomAccess, roomAccessCacheKey } = await import('@/lib/userRoomAccess')
+    const { getUserOrgScope, applyOrganizationIdFilter } = await import('@/lib/canvas/orgScope')
 
     // Get user's state access rights (ERR roles), grant access (Partner) and room access (Base ERR)
     const accessStart = Date.now()
-    const [{ allowedStateNames }, grantAccess, roomAccess] = await Promise.all([
+    const [{ allowedStateNames }, grantAccess, roomAccess, orgScope] = await Promise.all([
       getUserStateAccess(),
       getUserGrantAccess(),
       getUserRoomAccess(),
+      getUserOrgScope(),
     ])
     timer('getUserStateAccess+getUserGrantAccess+getUserRoomAccess', accessStart)
 
@@ -329,15 +331,22 @@ export async function GET(request: Request) {
       return NextResponse.json(emptyRollupPayload())
     }
 
+    if (orgScope.mode === 'none') {
+      return NextResponse.json(emptyRollupPayload())
+    }
+
     // Partner with no org / no grants: empty dataset (fail closed)
     if (roomAccess.mode !== 'room' && grantAccess.mode === 'none') {
       return NextResponse.json(emptyRollupPayload())
     }
 
+    const orgScopeKey =
+      orgScope.mode === 'org' ? `org:${orgScope.organizationId}` : 'org:all'
+
     const grantScopeKey =
       grantAccess.mode === 'partner'
         ? `partner:${grantAccess.opsPartnerId}:${[...grantAccess.grantGridIds].sort().join(',')}`
-        : 'all_grants'
+        : `all_grants|${orgScopeKey}`
 
     // Partners are grant-scoped and Base ERR is room-scoped (neither is state-scoped) here
     const stateFilterForQuery =
@@ -376,12 +385,14 @@ export async function GET(request: Request) {
 
     if (roomAccess.mode === 'room') {
       // Base ERR: emergency_room_id only (never state / grant scope)
-      const { data, error: roomErr } = await supabase
+      let roomQuery = supabase
         .from('err_projects')
         .select(projectSelect)
         .in('status', ['approved', 'active', 'pending', 'completed'])
         .in('funding_status', ['committed', 'allocated', 'unassigned'])
         .eq('emergency_room_id', roomAccess.emergencyRoomId)
+      roomQuery = applyOrganizationIdFilter(roomQuery, orgScope)
+      const { data, error: roomErr } = await roomQuery
       if (roomErr) throw roomErr
       projects = data || []
     } else if (grantAccess.mode === 'partner') {
@@ -389,12 +400,14 @@ export async function GET(request: Request) {
         return NextResponse.json(emptyRollupPayload())
       }
       for (const batch of chunkIds(grantAccess.grantGridIds)) {
-        const { data: batchProjects, error: batchErr } = await supabase
+        let batchQuery = supabase
           .from('err_projects')
           .select(projectSelect)
           .in('status', ['approved', 'active', 'pending', 'completed'])
           .in('funding_status', ['committed', 'allocated', 'unassigned'])
           .in('grant_grid_id', batch)
+        batchQuery = applyOrganizationIdFilter(batchQuery, orgScope)
+        const { data: batchProjects, error: batchErr } = await batchQuery
         if (batchErr) throw batchErr
         if (batchProjects?.length) projects.push(...batchProjects)
       }
@@ -413,6 +426,7 @@ export async function GET(request: Request) {
         if (stateFilterForQuery !== null && stateFilterForQuery.length > 0) {
           projectQuery = projectQuery.in('state', stateFilterForQuery)
         }
+        projectQuery = applyOrganizationIdFilter(projectQuery, orgScope)
 
         const { data: page, error: projectsError } = await projectQuery
         if (projectsError) throw projectsError

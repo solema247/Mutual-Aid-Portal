@@ -1,66 +1,104 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { Fragment, useCallback, useEffect, useState } from 'react'
+import { Minus, Plus, RefreshCw } from 'lucide-react'
 import { useCanvasSession } from '@/hooks/useCanvasSession'
 import { isModuleMounted } from '@/lib/canvas/mounts'
+import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
+import { Input } from '@/components/ui/input'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
 
-type OversightRow = {
+type TypeRow = {
+  resource_type: string
+  label: string
   visibility: 'disclosed' | 'withheld'
+  states_granted: string[] | null
   pending_request_id: string | null
-  has_access_grant: boolean
-  project: {
-    id: string
-    organization_id: string
-    owning_org_name: string
-    state: string | null
-    locality: string | null
-    err_code: string | null
-    funding_status: string | null
-    status: string
-    date: string | null
-    project_name?: string | null
-    grant_serial?: string | null
-    workplan_number?: number | null
-    project_objectives?: string | null
-    estimated_beneficiaries?: number | null
-    'Sector (Primary)'?: string | null
-  }
+  count: number | null
 }
+
+type ProcessorRow = {
+  organization_id: string
+  organization_name: string
+  organization_slug: string
+  types: TypeRow[]
+}
+
+const COMMON_STATES = [
+  'Khartoum',
+  'Red Sea',
+  'Blue Nile',
+  'White Nile',
+  'Kassala',
+  'Gedaref',
+  'North Darfur',
+  'South Darfur',
+  'East Darfur',
+  'West Darfur',
+  'Central Darfur',
+  'North Kordofan',
+  'South Kordofan',
+  'West Kordofan',
+  'Northern',
+  'River Nile',
+  'Sennar',
+  'Al Jazirah',
+]
 
 export default function OversightPage() {
   const { me, mountedModules, isLoading: meLoading } = useCanvasSession()
   const mounted = isModuleMounted(mountedModules, 'oversight')
   const isCoordinator = me?.organization_type === 'coordinator'
-  const [rows, setRows] = useState<OversightRow[]>([])
+  const [processors, setProcessors] = useState<ProcessorRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [unavailable, setUnavailable] = useState(false)
-  const [busyId, setBusyId] = useState<string | null>(null)
-  const [reasonById, setReasonById] = useState<Record<string, string>>({})
+  const [busyKey, setBusyKey] = useState<string | null>(null)
+  const [expandedOrgs, setExpandedOrgs] = useState<Set<string>>(new Set())
+
+  // Request dialog state
+  const [dialog, setDialog] = useState<{
+    orgId: string
+    orgName: string
+    resourceType: string
+    label: string
+  } | null>(null)
+  const [allStates, setAllStates] = useState(true)
+  const [selectedStates, setSelectedStates] = useState<string[]>([])
+  const [reason, setReason] = useState('')
+  const [customState, setCustomState] = useState('')
 
   const reload = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch('/api/canvas/oversight/projects')
+      const res = await fetch('/api/canvas/oversight/catalog')
       const data = await res.json().catch(() => ({}))
       if (res.status === 403) {
         setError(data.error || 'Coordinator access required')
-        setRows([])
+        setProcessors([])
         return
       }
       if (!res.ok) {
-        setError(data.error || 'Failed to load oversight projects')
-        setRows([])
+        setError(data.error || 'Failed to load oversight catalog')
+        setProcessors([])
         return
       }
-      setRows(data.projects ?? [])
+      setProcessors(data.processors ?? [])
       setUnavailable(!!data.disclosure_unavailable || !!data.canvas_is_fallback)
     } catch {
-      setError('Failed to load oversight projects')
+      setError('Failed to load oversight catalog')
     } finally {
       setLoading(false)
     }
@@ -75,39 +113,69 @@ export default function OversightPage() {
     void reload()
   }, [meLoading, mounted, isCoordinator, reload])
 
-  async function requestAccess(row: OversightRow) {
-    setBusyId(row.project.id)
+  function toggleOrg(orgId: string) {
+    setExpandedOrgs((prev) => {
+      const next = new Set(prev)
+      if (next.has(orgId)) next.delete(orgId)
+      else next.add(orgId)
+      return next
+    })
+  }
+
+  function openRequest(org: ProcessorRow, t: TypeRow) {
+    setDialog({
+      orgId: org.organization_id,
+      orgName: org.organization_name,
+      resourceType: t.resource_type,
+      label: t.label,
+    })
+    setAllStates(true)
+    setSelectedStates([])
+    setReason('')
+    setCustomState('')
+  }
+
+  function toggleState(name: string) {
+    setSelectedStates((prev) =>
+      prev.includes(name) ? prev.filter((s) => s !== name) : [...prev, name]
+    )
+  }
+
+  async function submitRequest() {
+    if (!dialog) return
+    const key = `${dialog.orgId}:${dialog.resourceType}`
+    setBusyKey(key)
     setError(null)
     try {
       const res = await fetch('/api/canvas/access-requests', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          resource_type: 'err_project',
-          resource_id: row.project.id,
-          target_organization_id: row.project.organization_id,
-          scope: 'record',
-          reason: reasonById[row.project.id]?.trim() || undefined,
+          target_organization_id: dialog.orgId,
+          resource_type: dialog.resourceType,
+          states: allStates ? null : selectedStates,
+          reason: reason.trim() || undefined,
         }),
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data.error || 'Request failed')
+      setDialog(null)
       await reload()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Request failed')
     } finally {
-      setBusyId(null)
+      setBusyKey(null)
     }
   }
 
   if (meLoading) {
-    return <div className="p-6 text-sm text-muted-foreground">Loading…</div>
+    return <div className="py-12 text-center text-muted-foreground">Loading…</div>
   }
 
   if (!mounted || !isCoordinator) {
     return (
-      <div className="mx-auto max-w-3xl space-y-3 p-6">
-        <h1 className="text-2xl font-semibold tracking-tight">Oversight</h1>
+      <div className="space-y-6">
+        <h1 className="text-3xl font-bold">Oversight</h1>
         <p className="text-sm text-muted-foreground">
           This view is available only for coordinator organizations with the Oversight module
           mounted.
@@ -117,130 +185,249 @@ export default function OversightPage() {
   }
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6 p-6">
-      <header className="space-y-2">
-        <h1 className="text-2xl font-semibold tracking-tight">Oversight</h1>
-        <p className="text-sm text-muted-foreground">
-          Processor projects advertised to your organization. Disclosed rows show content; withheld
-          rows show existence only — request access from the owning processor.
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h1 className="text-3xl font-bold">Oversight</h1>
+      </div>
+
+      {unavailable && (
+        <p className="rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          Disclosure tables may be incomplete. Apply{' '}
+          <code className="text-xs">sql/canvas/005_info_type_disclosure.sql</code> on production.
         </p>
-        {unavailable && (
-          <p className="rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-            Disclosure tables are not available on this database yet. Apply{' '}
-            <code className="text-xs">sql/canvas/004_disclosure_access_requests.sql</code> on
-            production.
-          </p>
-        )}
-      </header>
+      )}
 
       {error && (
         <p className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{error}</p>
       )}
 
-      {loading && <p className="text-sm text-muted-foreground">Loading…</p>}
+      <Card>
+        <CardHeader className="pb-4">
+          <div className="flex items-center justify-between">
+            <CardTitle>Processor organizations</CardTitle>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void reload()}
+              disabled={loading}
+            >
+              <RefreshCw className={cn('h-4 w-4 mr-2', loading && 'animate-spin')} />
+              Refresh
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="mb-2 text-xs text-muted-foreground">
+            Expand an organization to request access by information type. After approval,{' '}
+            <span className="font-medium text-foreground">Granted states</span> shows whether you
+            can see all Sudan states or only selected ones.
+            <span className="ml-2 font-medium text-foreground">→ Click + to expand</span>
+          </div>
 
-      {!loading && rows.length === 0 && !unavailable && (
-        <p className="text-sm text-muted-foreground">No advertised processor projects yet.</p>
-      )}
-
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[640px] border-collapse text-sm">
-          <thead>
-            <tr className="border-b text-left text-muted-foreground">
-              <th className="py-2 pr-3 font-medium">Visibility</th>
-              <th className="py-2 pr-3 font-medium">Owning org</th>
-              <th className="py-2 pr-3 font-medium">Project</th>
-              <th className="py-2 pr-3 font-medium">State / locality</th>
-              <th className="py-2 pr-3 font-medium">Room</th>
-              <th className="py-2 pr-3 font-medium">Status</th>
-              <th className="py-2 pr-3 font-medium">Date</th>
-              <th className="py-2 font-medium">Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row) => {
-              const p = row.project
-              const withheld = row.visibility === 'withheld'
-              return (
-                <tr key={p.id} className="border-b align-top">
-                  <td className="py-3 pr-3">
-                    <span
-                      className={
-                        withheld
-                          ? 'text-amber-800'
-                          : 'text-emerald-800'
-                      }
-                    >
-                      {withheld ? 'Withheld' : 'Disclosed'}
-                    </span>
-                  </td>
-                  <td className="py-3 pr-3">{p.owning_org_name}</td>
-                  <td className="py-3 pr-3">
-                    {withheld ? (
-                      <span className="text-muted-foreground">Content locked</span>
-                    ) : (
-                      <div className="space-y-1">
-                        <div className="font-medium">{p.project_name || 'Untitled project'}</div>
-                        {p.grant_serial && (
-                          <div className="text-xs text-muted-foreground">{p.grant_serial}</div>
-                        )}
-                        {p.project_objectives && (
-                          <div className="max-w-xs text-xs text-muted-foreground line-clamp-2">
-                            {p.project_objectives}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                    <div className="mt-1 font-mono text-xs text-muted-foreground">{p.id.slice(0, 8)}…</div>
-                  </td>
-                  <td className="py-3 pr-3">
-                    {[p.state, p.locality].filter(Boolean).join(' / ') || '—'}
-                  </td>
-                  <td className="py-3 pr-3">{p.err_code || '—'}</td>
-                  <td className="py-3 pr-3">
-                    <div>{p.funding_status || '—'}</div>
-                    <div className="text-xs text-muted-foreground">{p.status}</div>
-                  </td>
-                  <td className="py-3 pr-3">{p.date || '—'}</td>
-                  <td className="py-3">
-                    {withheld && !row.pending_request_id && (
-                      <div className="space-y-2 min-w-[160px]">
-                        <div className="space-y-1">
-                          <Label htmlFor={`reason-${p.id}`} className="text-xs">
-                            Reason (optional)
-                          </Label>
-                          <Textarea
-                            id={`reason-${p.id}`}
-                            rows={2}
-                            className="text-xs"
-                            value={reasonById[p.id] ?? ''}
-                            onChange={(e) =>
-                              setReasonById((prev) => ({ ...prev, [p.id]: e.target.value }))
-                            }
-                          />
-                        </div>
-                        <Button
-                          size="sm"
-                          disabled={!!busyId}
-                          onClick={() => void requestAccess(row)}
+          {loading ? (
+            <div className="py-8 text-center text-muted-foreground">Loading…</div>
+          ) : processors.length === 0 ? (
+            <div className="py-8 text-center text-muted-foreground">
+              No processor organizations to show yet.
+            </div>
+          ) : (
+            <div className="w-full overflow-x-auto">
+              <Table className="w-full text-[11px] [&_th]:px-1 [&_td]:px-1 [&_th]:py-1 [&_td]:py-0.5 [&_th]:leading-tight">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="whitespace-nowrap">Organization / information type</TableHead>
+                    <TableHead className="whitespace-nowrap">Status</TableHead>
+                    <TableHead className="whitespace-nowrap">Granted states</TableHead>
+                    <TableHead className="text-right whitespace-nowrap">Records</TableHead>
+                    <TableHead className="text-right whitespace-nowrap">Action</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {processors.map((org) => {
+                    const isOpen = expandedOrgs.has(org.organization_id)
+                    const withheldCount = org.types.filter((t) => t.visibility === 'withheld').length
+                    const disclosedCount = org.types.filter(
+                      (t) => t.visibility === 'disclosed'
+                    ).length
+                    return (
+                      <Fragment key={org.organization_id}>
+                        <TableRow
+                          className="cursor-pointer bg-muted/50 font-semibold transition-colors hover:bg-muted/50"
+                          onClick={() => toggleOrg(org.organization_id)}
                         >
-                          {busyId === p.id ? 'Requesting…' : 'Request access'}
-                        </Button>
-                      </div>
-                    )}
-                    {withheld && row.pending_request_id && (
-                      <span className="text-xs text-muted-foreground">Request pending</span>
-                    )}
-                    {!withheld && (
-                      <span className="text-xs text-muted-foreground">Visible</span>
-                    )}
-                  </td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
-      </div>
+                          <TableCell>
+                            <span className="inline-flex items-center gap-1">
+                              {isOpen ? (
+                                <Minus className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                              ) : (
+                                <Plus className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                              )}
+                              {org.organization_name}
+                            </span>
+                          </TableCell>
+                          <TableCell className="font-normal">
+                            <span className="text-amber-800">{withheldCount} withheld</span>
+                            <span className="mx-1 text-muted-foreground">·</span>
+                            <span className="text-emerald-800">{disclosedCount} disclosed</span>
+                          </TableCell>
+                          <TableCell />
+                          <TableCell />
+                          <TableCell />
+                        </TableRow>
+
+                        {isOpen &&
+                          org.types.map((t) => {
+                            const withheld = t.visibility === 'withheld'
+                            return (
+                              <TableRow
+                                key={`${org.organization_id}:${t.resource_type}`}
+                                className="transition-colors hover:bg-muted/50"
+                              >
+                                <TableCell className="pl-6 font-normal">{t.label}</TableCell>
+                                <TableCell>
+                                  <span
+                                    className={
+                                      withheld ? 'text-amber-800' : 'text-emerald-800'
+                                    }
+                                  >
+                                    {withheld ? 'Withheld' : 'Disclosed'}
+                                  </span>
+                                </TableCell>
+                                <TableCell className="text-muted-foreground">
+                                  {withheld
+                                    ? 'None yet'
+                                    : t.states_granted == null
+                                      ? 'All states'
+                                      : t.states_granted.join(', ')}
+                                </TableCell>
+                                <TableCell className="text-right tabular-nums">
+                                  {t.count != null ? t.count : '—'}
+                                </TableCell>
+                                <TableCell
+                                  className="text-right"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  {withheld && !t.pending_request_id && (
+                                    <Button
+                                      size="sm"
+                                      className="h-6 shrink-0 px-1.5 py-0.5 text-xs"
+                                      disabled={!!busyKey}
+                                      onClick={() => openRequest(org, t)}
+                                    >
+                                      Request access
+                                    </Button>
+                                  )}
+                                  {withheld && t.pending_request_id && (
+                                    <span className="text-muted-foreground">Pending</span>
+                                  )}
+                                  {!withheld && (
+                                    <span className="text-muted-foreground">Granted</span>
+                                  )}
+                                </TableCell>
+                              </TableRow>
+                            )
+                          })}
+                      </Fragment>
+                    )
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {dialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md space-y-4 rounded-lg border bg-background p-5 shadow-lg">
+            <h3 className="text-lg font-semibold">Request access</h3>
+            <p className="text-sm text-muted-foreground">
+              {dialog.label} from <span className="font-medium">{dialog.orgName}</span>
+            </p>
+
+            <div className="space-y-2">
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="radio"
+                  checked={allStates}
+                  onChange={() => setAllStates(true)}
+                />
+                All states
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="radio"
+                  checked={!allStates}
+                  onChange={() => setAllStates(false)}
+                />
+                Specific states
+              </label>
+            </div>
+
+            {!allStates && (
+              <div className="max-h-40 space-y-1 overflow-y-auto rounded border p-2">
+                {COMMON_STATES.map((s) => (
+                  <label key={s} className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={selectedStates.includes(s)}
+                      onChange={() => toggleState(s)}
+                    />
+                    {s}
+                  </label>
+                ))}
+                <div className="flex gap-2 pt-2">
+                  <Input
+                    placeholder="Other state name"
+                    value={customState}
+                    onChange={(e) => setCustomState(e.target.value)}
+                    className="h-8 text-sm"
+                  />
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      const v = customState.trim()
+                      if (v && !selectedStates.includes(v)) {
+                        setSelectedStates((prev) => [...prev, v])
+                      }
+                      setCustomState('')
+                    }}
+                  >
+                    Add
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            <div className="space-y-1">
+              <Label htmlFor="req-reason" className="text-xs">
+                Reason (optional)
+              </Label>
+              <Textarea
+                id="req-reason"
+                rows={2}
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+              />
+            </div>
+
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => setDialog(null)}>
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                disabled={!!busyKey || (!allStates && selectedStates.length === 0)}
+                onClick={() => void submitRequest()}
+              >
+                {busyKey ? 'Submitting…' : 'Submit request'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

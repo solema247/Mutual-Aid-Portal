@@ -15,6 +15,13 @@ import {
   extractAdHyphenSerial,
 } from '@/lib/grantManagement/adDecisionIds'
 import { decisionGroupKey } from '@/lib/grantManagement/resolveDecisionKey'
+import {
+  applyOrganizationIdFilter,
+  getUserOrgScope,
+  orgScopeBlocksAllData,
+  withOrganizationId,
+} from '@/lib/canvas/orgScope'
+import { resolveOrgDecisionKeyScope } from '@/lib/canvas/orgResourceScope'
 
 function parseIncomingDocuments(body: any): DecisionDocument[] {
   const docs: DecisionDocument[] = []
@@ -119,26 +126,40 @@ async function fetchAllPages(
  */
 export async function GET() {
   try {
+    const orgScope = await getUserOrgScope()
+    if (orgScopeBlocksAllData(orgScope)) {
+      return NextResponse.json([])
+    }
+
     const supabase = getSupabaseAdmin()
+    const decisionKeyScope = await resolveOrgDecisionKeyScope(supabase, orgScope)
+
     const [decisions, allocRows] = await Promise.all([
-      fetchAllPages((from, to) =>
-        supabase
+      fetchAllPages((from, to) => {
+        let q = supabase
           .from('distribution_decision_master_sheet_1')
           .select(DECISION_LIST_SELECT)
           .order('decision_date', { ascending: false })
           .order('id', { ascending: true })
-          .range(from, to)
-      ),
-      fetchAllPages((from, to) =>
-        supabase
-          .from('allocations_by_date')
-          .select('Decision_ID, State')
-          .order('Allocation_ID', { ascending: true })
-          .range(from, to)
-      ).catch((err) => {
-        console.error('Error fetching allocation states:', err)
-        return [] as any[]
+        q = applyOrganizationIdFilter(q, orgScope)
+        return q.range(from, to)
       }),
+      decisionKeyScope.mode === 'none' ||
+      (decisionKeyScope.mode === 'keys' && decisionKeyScope.keys.length === 0)
+        ? Promise.resolve([] as any[])
+        : fetchAllPages((from, to) => {
+            let q = supabase
+              .from('allocations_by_date')
+              .select('Decision_ID, State')
+              .order('Allocation_ID', { ascending: true })
+            if (decisionKeyScope.mode === 'keys') {
+              q = q.in('Decision_ID', decisionKeyScope.keys)
+            }
+            return q.range(from, to)
+          }).catch((err) => {
+            console.error('Error fetching allocation states:', err)
+            return [] as any[]
+          }),
     ])
 
     const statesByDecision = new Map<string, Set<string>>()
@@ -195,14 +216,20 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'decision_amount must be a positive number' }, { status: 400 })
     }
 
+    const orgScope = await getUserOrgScope(auth.ctx.supabase)
+    if (orgScopeBlocksAllData(orgScope)) {
+      return NextResponse.json({ error: 'Forbidden — no organization scope' }, { status: 403 })
+    }
+
     // Auto Decision ID: LCC.AD.{Partner}.{YY-MM-DD}-{last+1}
-    const existingDecisions = await fetchAllPages((from, to) =>
-      auth.ctx.supabase
+    const existingDecisions = await fetchAllPages((from, to) => {
+      let q = auth.ctx.supabase
         .from('distribution_decision_master_sheet_1')
         .select('id, decision_id_proposed, decision_id')
         .order('id', { ascending: true })
-        .range(from, to)
-    )
+      q = applyOrganizationIdFilter(q, orgScope)
+      return q.range(from, to)
+    })
 
     let maxSerial = AD_DECISION_SERIAL_FLOOR
     for (const row of existingDecisions) {
@@ -218,25 +245,28 @@ export async function POST(request: Request) {
     const documents = parseIncomingDocuments(body)
     const primary = primaryFileFields(documents)
 
-    const row = {
-      decision_id_proposed,
-      decision_id,
-      decision_amount,
-      decision_date,
-      partner,
-      decision_maker:
-        typeof body.decision_maker === 'string' ? body.decision_maker.trim() || null : null,
-      flow_oversight:
-        typeof body.flow_oversight === 'string' ? body.flow_oversight.trim() || null : null,
-      restriction: typeof body.restriction === 'string' ? body.restriction.trim() || null : null,
-      notes: typeof body.notes === 'string' ? body.notes.trim() || null : null,
-      grant_name: typeof body.grant_name === 'string' ? body.grant_name.trim() || null : null,
-      file_name: primary.file_name,
-      file_link: primary.file_link,
-      decision_documents: documents,
-      sum_allocation_amount: 0,
-      sync_status: SYNC_STATUS.PENDING,
-    }
+    const row = withOrganizationId(
+      {
+        decision_id_proposed,
+        decision_id,
+        decision_amount,
+        decision_date,
+        partner,
+        decision_maker:
+          typeof body.decision_maker === 'string' ? body.decision_maker.trim() || null : null,
+        flow_oversight:
+          typeof body.flow_oversight === 'string' ? body.flow_oversight.trim() || null : null,
+        restriction: typeof body.restriction === 'string' ? body.restriction.trim() || null : null,
+        notes: typeof body.notes === 'string' ? body.notes.trim() || null : null,
+        grant_name: typeof body.grant_name === 'string' ? body.grant_name.trim() || null : null,
+        file_name: primary.file_name,
+        file_link: primary.file_link,
+        decision_documents: documents,
+        sum_allocation_amount: 0,
+        sync_status: SYNC_STATUS.PENDING,
+      },
+      orgScope
+    )
 
     const { data, error } = await auth.ctx.supabase
       .from('distribution_decision_master_sheet_1')

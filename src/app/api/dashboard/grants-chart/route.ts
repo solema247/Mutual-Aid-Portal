@@ -10,6 +10,11 @@ import {
   fetchGrantGridIdsForEmergencyRoom,
   getUserRoomAccess,
 } from '@/lib/userRoomAccess'
+import {
+  applyOrganizationIdFilter,
+  getUserOrgScope,
+  orgScopeBlocksAllData,
+} from '@/lib/canvas/orgScope'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -100,9 +105,10 @@ export type GrantsChartRow = {
  */
 export async function GET(request: Request) {
   try {
-    const [grantAccess, roomAccess] = await Promise.all([
+    const [grantAccess, roomAccess, orgScope] = await Promise.all([
       getUserGrantAccess(),
       getUserRoomAccess(),
+      getUserOrgScope(),
     ])
     const emptyChart = () =>
       NextResponse.json([], {
@@ -110,6 +116,7 @@ export async function GET(request: Request) {
       })
 
     if (roomAccess.mode === 'none') return emptyChart()
+    if (orgScopeBlocksAllData(orgScope)) return emptyChart()
 
     const supabase = getSupabaseAdmin()
 
@@ -141,6 +148,7 @@ export async function GET(request: Request) {
         if (grantAccess.mode === 'partner') {
           query = query.in('id', grantAccess.grantGridIds)
         }
+        query = applyOrganizationIdFilter(query, orgScope)
         if (from) {
           query = query.gte('grant_start_date', from)
         }
@@ -180,18 +188,26 @@ export async function GET(request: Request) {
     const [projects, mous, historicalRows] = await Promise.all([
       roomAccess.mode === 'room'
         ? fetchAllRows<ChartProject>(supabase, 'err_projects', projectSelect, (q) =>
-            q.eq('emergency_room_id', roomAccess.emergencyRoomId)
+            applyOrganizationIdFilter(
+              q.eq('emergency_room_id', roomAccess.emergencyRoomId),
+              orgScope
+            )
           )
         : grantAccess.mode === 'partner'
           ? fetchPartnerProjects(supabase, grantAccess.grantGridIds)
-          : fetchAllRows<ChartProject>(supabase, 'err_projects', projectSelect),
+          : fetchAllRows<ChartProject>(supabase, 'err_projects', projectSelect, (q) =>
+              applyOrganizationIdFilter(q, orgScope)
+            ),
       fetchAllRows<{
         id: string
         payment_confirmation_file: string | null
         exchange_rate: number | null
         transfer_date: string | null
-      }>(supabase, 'mous', 'id, payment_confirmation_file, exchange_rate, transfer_date'),
-      projectScoped
+      }>(supabase, 'mous', 'id, payment_confirmation_file, exchange_rate, transfer_date', (q) =>
+        applyOrganizationIdFilter(q, orgScope)
+      ),
+      // Historical import is LoHub-global; hide from org-bound sessions
+      projectScoped || orgScope.mode === 'org'
         ? Promise.resolve([] as Array<{ 'Project Donor'?: string | null; USD?: number | null }>)
         : fetchAllRows<{
             'Project Donor'?: string | null

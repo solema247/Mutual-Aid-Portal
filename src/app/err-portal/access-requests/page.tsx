@@ -14,19 +14,17 @@ type AccessRequestRow = {
   requesting_org_name: string | null
   target_org_name: string | null
   resource_type: string
+  resource_type_label?: string
   resource_id: string | null
   scope: string
+  states: string[] | null
+  states_label?: string
   reason: string | null
   status: string
   decided_at: string | null
   decision_note: string | null
   created_at: string
   can_decide: boolean
-  project: {
-    state: string | null
-    funding_status: string | null
-    status: string
-  } | null
 }
 
 export default function AccessRequestsPage() {
@@ -112,6 +110,12 @@ export default function AccessRequestsPage() {
   const pending = rows.filter((r) => r.status === 'pending')
   const decided = rows.filter((r) => r.status !== 'pending')
 
+  function describe(r: AccessRequestRow) {
+    const typeLabel = r.resource_type_label || r.resource_type
+    const states = r.states_label || (r.states?.length ? r.states.join(', ') : 'all states')
+    return `${typeLabel} — ${states}`
+  }
+
   return (
     <div className="mx-auto max-w-4xl space-y-6 p-6">
       <header className="space-y-2">
@@ -120,14 +124,12 @@ export default function AccessRequestsPage() {
         </h1>
         <p className="text-sm text-muted-foreground">
           {isProcessor
-            ? 'Coordinator organizations can request access to advertised projects. Approve to disclose content for that record only.'
-            : 'Track requests you have submitted to processor organizations.'}
+            ? 'Approve or deny requests for information types (e.g. all F1s, or F1s in selected states).'
+            : 'Track type-level access requests you have submitted to processor organizations.'}
         </p>
         {unavailable && (
           <p className="rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-            Disclosure tables are not available yet. Apply{' '}
-            <code className="text-xs">sql/canvas/004_disclosure_access_requests.sql</code> on
-            production.
+            Disclosure tables are not available yet. Apply canvas SQL on production.
           </p>
         )}
       </header>
@@ -158,22 +160,8 @@ export default function AccessRequestsPage() {
                         {new Date(r.created_at).toLocaleString()}
                       </div>
                     </div>
-                    <div className="text-sm text-muted-foreground">
-                      Scope: {r.scope}
-                      {r.resource_id && (
-                        <>
-                          {' '}
-                          · project <span className="font-mono">{r.resource_id.slice(0, 8)}…</span>
-                        </>
-                      )}
-                      {r.project && (
-                        <>
-                          {' '}
-                          · {r.project.state || '—'} · {r.project.funding_status || '—'}
-                        </>
-                      )}
-                    </div>
-                    {r.reason && <p className="text-sm">Reason: {r.reason}</p>}
+                    <div className="text-sm">{describe(r)}</div>
+                    {r.reason && <p className="text-sm text-muted-foreground">Reason: {r.reason}</p>}
                     {r.can_decide && (
                       <div className="space-y-2 pt-1">
                         <div className="space-y-1">
@@ -227,9 +215,8 @@ export default function AccessRequestsPage() {
                       {isProcessor
                         ? r.requesting_org_name ?? 'coordinator'
                         : r.target_org_name ?? 'processor'}
-                      {r.resource_id && (
-                        <> · {r.resource_id.slice(0, 8)}…</>
-                      )}
+                      {' · '}
+                      {describe(r)}
                       {r.decided_at && <> · {new Date(r.decided_at).toLocaleString()}</>}
                     </span>
                     {r.decision_note && (

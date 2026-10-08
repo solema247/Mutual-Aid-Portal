@@ -554,9 +554,13 @@ export async function fetchScopedProjects(
     allowedStateNames: string[] | null
     useStateScope: boolean
     emergencyRoomId: string | null
+    /** Canvas org data plane — filter err_projects.organization_id when set */
+    organizationId?: string | null
   }
 ): Promise<Record<string, unknown>[]> {
   const statusFilter = ['active', 'approved', 'completed'] as const
+  const applyOrg = <T extends { eq: (c: string, v: string) => T }>(q: T): T =>
+    opts.organizationId ? q.eq('organization_id', opts.organizationId) : q
 
   if (opts.grantGridIds !== null) {
     const projects: Record<string, unknown>[] = []
@@ -570,6 +574,7 @@ export async function fetchScopedProjects(
         if (opts.emergencyRoomId) {
           q = q.eq('emergency_room_id', opts.emergencyRoomId)
         }
+        q = applyOrg(q)
         return q
       })
       projects.push(...batchRows)
@@ -588,6 +593,7 @@ export async function fetchScopedProjects(
     } else if (opts.useStateScope && opts.allowedStateNames !== null && opts.allowedStateNames.length > 0) {
       projectsQuery = projectsQuery.in('state', opts.allowedStateNames)
     }
+    projectsQuery = applyOrg(projectsQuery)
     return projectsQuery
   })
 }
