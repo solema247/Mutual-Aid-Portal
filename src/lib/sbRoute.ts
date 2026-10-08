@@ -12,10 +12,12 @@ import {
   getRemoteBService,
   hasPairedWrite,
 } from '@/lib/sbEnv'
+import { CANVAS_MIRROR_SKIP_TABLES } from '@/lib/canvas/types'
 
 /**
  * When prod + staging service keys are set, table writes go to prod first then
  * mirror to staging. Storage is never paired (PDF/files stay on prod only).
+ * Canvas control-plane tables stay prod-only until staging is synced.
  */
 function maybePair(primary: SupabaseClient): SupabaseClient {
   if (!hasPairedWrite()) return primary
@@ -23,7 +25,9 @@ function maybePair(primary: SupabaseClient): SupabaseClient {
   const secondaryClient = createClient(secondary.url, secondary.serviceRoleKey, {
     auth: { autoRefreshToken: false, persistSession: false },
   })
-  return pairClients(primary, secondaryClient)
+  return pairClients(primary, secondaryClient, {
+    skipMirrorTables: CANVAS_MIRROR_SKIP_TABLES,
+  })
 }
 
 export function createSbRouteClient() {

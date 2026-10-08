@@ -9,6 +9,7 @@ import { supabase } from '@/lib/supabaseClient'
 import { useAllowedFunctions } from '@/hooks/useAllowedFunctions'
 import { useHomePageExplainer } from './HomePageExplainer'
 import { isStateManagementRole } from '@/lib/stateManagement/roles'
+import { isThinEnvironment } from '@/lib/canvas/mounts'
 import '@/i18n/config'
 
 interface User {
@@ -58,6 +59,12 @@ export default function ErrPortalPage() {
         if (userData.status !== 'active') {
           console.error('User account is not active')
           window.location.href = '/login'
+          return
+        }
+
+        const modules = (userData.mounted_modules ?? []) as string[]
+        if (!userData.canvas_is_fallback && isThinEnvironment(modules)) {
+          window.location.href = '/err-portal/environment'
           return
         }
 

@@ -6,6 +6,7 @@ import {
   hasPairedWrite,
   hasRemoteA,
 } from '@/lib/sbEnv'
+import { CANVAS_MIRROR_SKIP_TABLES } from '@/lib/canvas/types'
 
 function createServiceClient(url: string, serviceRoleKey: string): SupabaseClient {
   return createClient(url, serviceRoleKey, {
@@ -26,7 +27,9 @@ export function getSupabaseAdmin(): SupabaseClient {
 
   const secondary = getRemoteBService()
   const secondaryClient = createServiceClient(secondary.url, secondary.serviceRoleKey)
-  return pairClients(primaryClient, secondaryClient)
+  return pairClients(primaryClient, secondaryClient, {
+    skipMirrorTables: CANVAS_MIRROR_SKIP_TABLES,
+  })
 }
 
 export function getRemoteBAdmin(): SupabaseClient {

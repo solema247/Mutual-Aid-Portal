@@ -88,7 +88,15 @@ export default function LoginPage() {
         password: errPassword
       })
       if (authError) {
-        setError('Authentication failed')
+        const msg = (authError.message || '').toLowerCase()
+        const status = (authError as { status?: number }).status
+        if (status === 429 || msg.includes('rate limit') || msg.includes('too many')) {
+          setError(
+            'Too many login attempts. Wait a few minutes, then try once — do not keep retrying.'
+          )
+        } else {
+          setError('Authentication failed')
+        }
         return
       }
       const needsPasswordChange = authData.user?.user_metadata?.is_temporary_password === true ||
@@ -136,7 +144,15 @@ export default function LoginPage() {
         password
       })
       if (authError) {
-        setError('Authentication failed')
+        const msg = (authError.message || '').toLowerCase()
+        const status = (authError as { status?: number }).status
+        if (status === 429 || msg.includes('rate limit') || msg.includes('too many')) {
+          setError(
+            'Too many login attempts. Wait a few minutes, then try once — do not keep retrying.'
+          )
+        } else {
+          setError('Authentication failed')
+        }
         return
       }
       if (!authData.user?.user_metadata?.has_changed_password) {

@@ -7,6 +7,8 @@ import {
   getJsonRoleDefaults,
   mergeRoleDefaultsMaps,
 } from '@/lib/roleDefaultsDb'
+import { resolveEnvironmentForUser } from '@/lib/canvas/resolveEnvironment'
+import { roleBypassesMountGating } from '@/lib/canvas/types'
 
 export async function GET() {
   try {
@@ -63,6 +65,10 @@ export async function GET() {
       }
     }
 
+    const canvas = await resolveEnvironmentForUser(supabase, userData.id, {
+      bypassMountGating: roleBypassesMountGating(userData.role),
+    })
+
     // Explicitly exclude sensitive fields - only return safe data
     return NextResponse.json({
       id: userData.id,
@@ -77,6 +83,17 @@ export async function GET() {
       can_see_all_states: userData.can_see_all_states ?? true,
       visible_states: visibleStates || [],
       allowed_functions,
+      organization_id: canvas.organization.id,
+      organization_slug: canvas.organization.slug,
+      organization_name: canvas.organization.name,
+      organization_type: canvas.organization.org_type,
+      environment_id: canvas.environment.id,
+      environment_slug: canvas.environment.slug,
+      environment_display_name: canvas.environment.display_name,
+      environment_logo_url: canvas.environment.logo_url,
+      environment_header_title: canvas.environment.header_title,
+      mounted_modules: canvas.mounted_modules,
+      canvas_is_fallback: canvas.is_fallback,
     })
   } catch (error) {
     console.error('Unexpected error in /api/users/me:', error)

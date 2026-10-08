@@ -969,6 +969,7 @@ export type Database = {
       }
       distribution_decision_master_sheet_1: {
         Row: {
+          organization_id: string | null
           airtable_record_id: string | null
           allocation_id: string | null
           created_at: string | null
@@ -994,6 +995,7 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
+          organization_id?: string | null
           airtable_record_id?: string | null
           allocation_id?: string | null
           created_at?: string | null
@@ -1019,6 +1021,7 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
+          organization_id?: string | null
           airtable_record_id?: string | null
           allocation_id?: string | null
           created_at?: string | null
@@ -1556,6 +1559,7 @@ export type Database = {
       }
       err_program_report: {
         Row: {
+          organization_id: string | null
           created_at: string | null
           id: string
           is_draft: boolean | null
@@ -1576,6 +1580,7 @@ export type Database = {
           unexpected_results_en: string | null
         }
         Insert: {
+          organization_id?: string | null
           created_at?: string | null
           id?: string
           is_draft?: boolean | null
@@ -1596,6 +1601,7 @@ export type Database = {
           unexpected_results_en?: string | null
         }
         Update: {
+          organization_id?: string | null
           created_at?: string | null
           id?: string
           is_draft?: boolean | null
@@ -1662,6 +1668,7 @@ export type Database = {
       }
       err_projects: {
         Row: {
+          organization_id: string | null
           additional_support: string | null
           approval_file_key: string | null
           approval_uploaded_at: string | null
@@ -1724,6 +1731,7 @@ export type Database = {
           workplan_number: number | null
         }
         Insert: {
+          organization_id?: string | null
           additional_support?: string | null
           approval_file_key?: string | null
           approval_uploaded_at?: string | null
@@ -1786,6 +1794,7 @@ export type Database = {
           workplan_number?: number | null
         }
         Update: {
+          organization_id?: string | null
           additional_support?: string | null
           approval_file_key?: string | null
           approval_uploaded_at?: string | null
@@ -1922,6 +1931,7 @@ export type Database = {
       }
       err_summary: {
         Row: {
+          organization_id: string | null
           activities_raw_import_id: string | null
           beneficiaries: string | null
           created_at: string
@@ -1950,6 +1960,7 @@ export type Database = {
           training: string | null
         }
         Insert: {
+          organization_id?: string | null
           activities_raw_import_id?: string | null
           beneficiaries?: string | null
           created_at?: string
@@ -1978,6 +1989,7 @@ export type Database = {
           training?: string | null
         }
         Update: {
+          organization_id?: string | null
           activities_raw_import_id?: string | null
           beneficiaries?: string | null
           created_at?: string
@@ -2797,6 +2809,7 @@ export type Database = {
       }
       grants_grid_view: {
         Row: {
+          organization_id: string | null
           activities: string | null
           airtable_record_id: string | null
           allocations: string | null
@@ -2822,6 +2835,7 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
+          organization_id?: string | null
           activities?: string | null
           airtable_record_id?: string | null
           allocations?: string | null
@@ -2847,6 +2861,7 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
+          organization_id?: string | null
           activities?: string | null
           airtable_record_id?: string | null
           allocations?: string | null
@@ -3202,6 +3217,7 @@ export type Database = {
       }
       mous: {
         Row: {
+          organization_id: string | null
           banking_details_override: string | null
           created_at: string
           created_by: string | null
@@ -3224,6 +3240,7 @@ export type Database = {
           transfer_date: string | null
         }
         Insert: {
+          organization_id?: string | null
           banking_details_override?: string | null
           created_at?: string
           created_by?: string | null
@@ -3246,6 +3263,7 @@ export type Database = {
           transfer_date?: string | null
         }
         Update: {
+          organization_id?: string | null
           banking_details_override?: string | null
           created_at?: string
           created_by?: string | null
@@ -3370,6 +3388,293 @@ export type Database = {
           name?: string
           sort_order?: number
           updated_at?: string
+        }
+        Relationships: []
+      }
+      environments: {
+        Row: {
+          created_at: string
+          display_name: string
+          header_title: string | null
+          id: string
+          is_active: boolean
+          logo_url: string | null
+          organization_id: string
+          slug: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          display_name: string
+          header_title?: string | null
+          id?: string
+          is_active?: boolean
+          logo_url?: string | null
+          organization_id: string
+          slug: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          display_name?: string
+          header_title?: string | null
+          id?: string
+          is_active?: boolean
+          logo_url?: string | null
+          organization_id?: string
+          slug?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "environments_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      environment_mounts: {
+        Row: {
+          config: Json
+          created_at: string
+          environment_id: string
+          id: string
+          mount_code: string
+          sort_order: number
+        }
+        Insert: {
+          config?: Json
+          created_at?: string
+          environment_id: string
+          id?: string
+          mount_code: string
+          sort_order?: number
+        }
+        Update: {
+          config?: Json
+          created_at?: string
+          environment_id?: string
+          id?: string
+          mount_code?: string
+          sort_order?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "environment_mounts_environment_id_fkey"
+            columns: ["environment_id"]
+            isOneToOne: false
+            referencedRelation: "environments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "environment_mounts_mount_code_fkey"
+            columns: ["mount_code"]
+            isOneToOne: false
+            referencedRelation: "mount_catalog"
+            referencedColumns: ["code"]
+          },
+        ]
+      }
+      mount_catalog: {
+        Row: {
+          code: string
+          created_at: string
+          description: string | null
+          is_active: boolean
+          name: string
+          nav_group: string | null
+          route_href: string | null
+          sort_order: number
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          description?: string | null
+          is_active?: boolean
+          name: string
+          nav_group?: string | null
+          route_href?: string | null
+          sort_order?: number
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          description?: string | null
+          is_active?: boolean
+          name?: string
+          nav_group?: string | null
+          route_href?: string | null
+          sort_order?: number
+        }
+        Relationships: []
+      }
+      organization_memberships: {
+        Row: {
+          created_at: string
+          environment_id: string
+          id: string
+          is_default: boolean
+          organization_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          environment_id: string
+          id?: string
+          is_default?: boolean
+          organization_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          environment_id?: string
+          id?: string
+          is_default?: boolean
+          organization_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organization_memberships_environment_id_fkey"
+            columns: ["environment_id"]
+            isOneToOne: false
+            referencedRelation: "environments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "organization_memberships_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "organization_memberships_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      organizations: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean
+          is_default_owner: boolean
+          name: string
+          ops_partner_id: string | null
+          org_type: string
+          slug: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          is_default_owner?: boolean
+          name: string
+          ops_partner_id?: string | null
+          org_type: string
+          slug: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          is_default_owner?: boolean
+          name?: string
+          ops_partner_id?: string | null
+          org_type?: string
+          slug?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organizations_ops_partner_id_fkey"
+            columns: ["ops_partner_id"]
+            isOneToOne: false
+            referencedRelation: "ops_partners"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      workflow_requests: {
+        Row: {
+          body: string | null
+          created_at: string
+          id: string
+          organization_id: string
+          requested_by: string | null
+          status: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          body?: string | null
+          created_at?: string
+          id?: string
+          organization_id: string
+          requested_by?: string | null
+          status?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          body?: string | null
+          created_at?: string
+          id?: string
+          organization_id?: string
+          requested_by?: string | null
+          status?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workflow_requests_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "workflow_requests_requested_by_fkey"
+            columns: ["requested_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      workflow_templates: {
+        Row: {
+          code: string
+          created_at: string
+          description: string | null
+          is_active: boolean
+          mount_codes: string[]
+          name: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          description?: string | null
+          is_active?: boolean
+          mount_codes?: string[]
+          name: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          description?: string | null
+          is_active?: boolean
+          mount_codes?: string[]
+          name?: string
         }
         Relationships: []
       }
