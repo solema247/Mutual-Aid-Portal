@@ -3,9 +3,15 @@ import { getSupabaseAdmin } from '@/lib/supabaseAdmin'
 import { requireGrantEditor } from '@/lib/grantManagement/requireGrantEditor'
 import { FSP_STATUSES } from '@/lib/grantManagement/fundTransferHelpers'
 import { attachFspTreasuryRollups } from '@/lib/grantManagement/fspTreasury'
+import {
+  coordinatorWriteForbiddenResponse,
+  getUserOrgScope,
+  isDisclosedCoordinator,
+} from '@/lib/canvas/orgScope'
+import { assertTreasuryRowInScope } from '@/lib/grantManagement/orgTreasuryScope'
 
 const FSP_SELECT =
-  'id, name, status, contact_person, contact_email, contract_filename, contract_url, contract_signed, transfer_fee_percent, airtable_record_id, created_at, updated_at'
+  'id, organization_id, name, status, contact_person, contact_email, contract_filename, contract_url, contract_signed, transfer_fee_percent, airtable_record_id, created_at, updated_at'
 
 /** PUT /api/fsps/[id] */
 export async function PUT(
@@ -14,6 +20,15 @@ export async function PUT(
 ) {
   const auth = await requireGrantEditor()
   if (!auth.ok) return auth.response
+
+  const orgScope = await getUserOrgScope(auth.ctx.supabase)
+  if (isDisclosedCoordinator(orgScope)) {
+    return coordinatorWriteForbiddenResponse()
+  }
+  const access = await assertTreasuryRowInScope(auth.ctx.supabase, orgScope, 'fsps', params.id)
+  if (access !== 'ok') {
+    return NextResponse.json({ error: 'FSP not found' }, { status: 404 })
+  }
 
   try {
     const body = await request.json()
@@ -59,6 +74,15 @@ export async function DELETE(
 ) {
   const auth = await requireGrantEditor()
   if (!auth.ok) return auth.response
+
+  const orgScope = await getUserOrgScope(auth.ctx.supabase)
+  if (isDisclosedCoordinator(orgScope)) {
+    return coordinatorWriteForbiddenResponse()
+  }
+  const access = await assertTreasuryRowInScope(auth.ctx.supabase, orgScope, 'fsps', params.id)
+  if (access !== 'ok') {
+    return NextResponse.json({ error: 'FSP not found' }, { status: 404 })
+  }
 
   try {
     const { error } = await auth.ctx.supabase.from('fsps').delete().eq('id', params.id)

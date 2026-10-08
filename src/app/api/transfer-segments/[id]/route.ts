@@ -7,6 +7,12 @@ import {
   normalizeTransferStatus,
   transferAmount,
 } from '@/lib/grantManagement/fundTransferHelpers'
+import {
+  coordinatorWriteForbiddenResponse,
+  getUserOrgScope,
+  isDisclosedCoordinator,
+} from '@/lib/canvas/orgScope'
+import { assertTreasuryRowInScope } from '@/lib/grantManagement/orgTreasuryScope'
 
 const TS_SELECT =
   'id, transfer_id, auto_number, fund_request_id, request_id, grant_id, fsp_id, decision_id_proposed, purpose, status, activity_amount, transfer_fee_amount, transfer_received_date, partner_name, comment, file_name, file_link, airtable_record_id, created_at, updated_at'
@@ -47,7 +53,31 @@ export async function PUT(
   const auth = await requireGrantEditor()
   if (!auth.ok) return auth.response
 
+  const orgScope = await getUserOrgScope(auth.ctx.supabase)
+  if (isDisclosedCoordinator(orgScope)) {
+    return coordinatorWriteForbiddenResponse()
+  }
+
   try {
+    const { data: existing, error: existingError } = await auth.ctx.supabase
+      .from('transfer_segments')
+      .select('fund_request_id')
+      .eq('id', params.id)
+      .maybeSingle()
+    if (existingError) throw existingError
+    if (!existing?.fund_request_id) {
+      return NextResponse.json({ error: 'Transfer segment not found' }, { status: 404 })
+    }
+    const access = await assertTreasuryRowInScope(
+      auth.ctx.supabase,
+      orgScope,
+      'fund_requests',
+      existing.fund_request_id as string
+    )
+    if (access !== 'ok') {
+      return NextResponse.json({ error: 'Transfer segment not found' }, { status: 404 })
+    }
+
     const body = await request.json()
     const patch: Record<string, unknown> = { updated_at: new Date().toISOString() }
 
@@ -130,7 +160,31 @@ export async function DELETE(
   const auth = await requireGrantEditor()
   if (!auth.ok) return auth.response
 
+  const orgScope = await getUserOrgScope(auth.ctx.supabase)
+  if (isDisclosedCoordinator(orgScope)) {
+    return coordinatorWriteForbiddenResponse()
+  }
+
   try {
+    const { data: existing, error: existingError } = await auth.ctx.supabase
+      .from('transfer_segments')
+      .select('fund_request_id')
+      .eq('id', params.id)
+      .maybeSingle()
+    if (existingError) throw existingError
+    if (!existing?.fund_request_id) {
+      return NextResponse.json({ error: 'Transfer segment not found' }, { status: 404 })
+    }
+    const access = await assertTreasuryRowInScope(
+      auth.ctx.supabase,
+      orgScope,
+      'fund_requests',
+      existing.fund_request_id as string
+    )
+    if (access !== 'ok') {
+      return NextResponse.json({ error: 'Transfer segment not found' }, { status: 404 })
+    }
+
     const { error } = await auth.ctx.supabase.from('transfer_segments').delete().eq('id', params.id)
     if (error) throw error
     return NextResponse.json({ ok: true })

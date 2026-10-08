@@ -9,6 +9,12 @@ import {
   normalizeTransferStatus,
   transferAmount,
 } from '@/lib/grantManagement/fundTransferHelpers'
+import {
+  coordinatorWriteForbiddenResponse,
+  getUserOrgScope,
+  isDisclosedCoordinator,
+} from '@/lib/canvas/orgScope'
+import { assertTreasuryRowInScope } from '@/lib/grantManagement/orgTreasuryScope'
 
 const TS_SELECT =
   'id, transfer_id, auto_number, fund_request_id, request_id, grant_id, fsp_id, decision_id_proposed, purpose, status, activity_amount, transfer_fee_amount, transfer_received_date, partner_name, comment, file_name, file_link, airtable_record_id, created_at, updated_at'
@@ -54,11 +60,27 @@ async function nextAutoNumber(supabase: ReturnType<typeof getSupabaseAdmin>): Pr
 /** GET /api/transfer-segments?fund_request_id= */
 export async function GET(request: NextRequest) {
   try {
+    const orgScope = await getUserOrgScope()
     const supabase = getSupabaseAdmin()
     const fundRequestId = new URL(request.url).searchParams.get('fund_request_id')
-    let query = supabase.from('transfer_segments').select(TS_SELECT).order('transfer_id')
-    if (fundRequestId) query = query.eq('fund_request_id', fundRequestId)
-    const { data, error } = await query
+    if (!fundRequestId) {
+      // Never dump all transfer segments across orgs
+      return NextResponse.json([])
+    }
+    const access = await assertTreasuryRowInScope(
+      supabase,
+      orgScope,
+      'fund_requests',
+      fundRequestId
+    )
+    if (access !== 'ok') {
+      return NextResponse.json([])
+    }
+    const { data, error } = await supabase
+      .from('transfer_segments')
+      .select(TS_SELECT)
+      .eq('fund_request_id', fundRequestId)
+      .order('transfer_id')
     if (error) throw error
     return NextResponse.json((data || []).map((r) => mapRow(r as Record<string, unknown>)))
   } catch (error) {
@@ -72,12 +94,27 @@ export async function POST(request: NextRequest) {
   const auth = await requireGrantEditor()
   if (!auth.ok) return auth.response
 
+  const orgScope = await getUserOrgScope(auth.ctx.supabase)
+  if (isDisclosedCoordinator(orgScope)) {
+    return coordinatorWriteForbiddenResponse()
+  }
+
   try {
     const body = await request.json()
     const fund_request_id =
       typeof body.fund_request_id === 'string' ? body.fund_request_id.trim() : ''
     if (!fund_request_id) {
       return NextResponse.json({ error: 'fund_request_id is required' }, { status: 400 })
+    }
+
+    const access = await assertTreasuryRowInScope(
+      auth.ctx.supabase,
+      orgScope,
+      'fund_requests',
+      fund_request_id
+    )
+    if (access !== 'ok') {
+      return NextResponse.json({ error: 'Fund request not found' }, { status: 404 })
     }
 
     const { data: fr, error: frError } = await auth.ctx.supabase

@@ -3,15 +3,32 @@ import { getSupabaseAdmin } from '@/lib/supabaseAdmin'
 import { requireGrantEditor } from '@/lib/grantManagement/requireGrantEditor'
 import { FSP_STATUSES } from '@/lib/grantManagement/fundTransferHelpers'
 import { attachFspTreasuryRollups } from '@/lib/grantManagement/fspTreasury'
+import {
+  coordinatorWriteForbiddenResponse,
+  getUserOrgScope,
+  isDisclosedCoordinator,
+} from '@/lib/canvas/orgScope'
+import {
+  applyTreasuryOrgFilter,
+  stampTreasuryOrganizationId,
+  treasuryListBlocked,
+} from '@/lib/grantManagement/orgTreasuryScope'
 
 const FSP_SELECT =
-  'id, name, status, contact_person, contact_email, contract_filename, contract_url, contract_signed, transfer_fee_percent, airtable_record_id, created_at, updated_at'
+  'id, organization_id, name, status, contact_person, contact_email, contract_filename, contract_url, contract_signed, transfer_fee_percent, airtable_record_id, created_at, updated_at'
 
 /** GET /api/fsps */
 export async function GET() {
   try {
+    const orgScope = await getUserOrgScope()
+    if (treasuryListBlocked(orgScope, 'fsps')) {
+      return NextResponse.json([])
+    }
+
     const supabase = getSupabaseAdmin()
-    const { data, error } = await supabase.from('fsps').select(FSP_SELECT).order('name')
+    let q = supabase.from('fsps').select(FSP_SELECT).order('name')
+    q = applyTreasuryOrgFilter(q, orgScope, 'fsps')
+    const { data, error } = await q
     if (error) throw error
     const withRollups = await attachFspTreasuryRollups(
       supabase,
@@ -29,6 +46,11 @@ export async function POST(request: NextRequest) {
   const auth = await requireGrantEditor()
   if (!auth.ok) return auth.response
 
+  const orgScope = await getUserOrgScope(auth.ctx.supabase)
+  if (isDisclosedCoordinator(orgScope) || treasuryListBlocked(orgScope, 'fsps')) {
+    return coordinatorWriteForbiddenResponse()
+  }
+
   try {
     const body = await request.json()
     const name = typeof body.name === 'string' ? body.name.trim() : ''
@@ -40,9 +62,8 @@ export async function POST(request: NextRequest) {
         ? body.status
         : 'Prospect'
 
-    const { data, error } = await auth.ctx.supabase
-      .from('fsps')
-      .insert({
+    const payload = stampTreasuryOrganizationId(
+      {
         name,
         status,
         contact_person: body.contact_person?.trim() || null,
@@ -55,7 +76,13 @@ export async function POST(request: NextRequest) {
             ? Number(body.transfer_fee_percent)
             : null,
         updated_at: new Date().toISOString(),
-      })
+      },
+      orgScope
+    )
+
+    const { data, error } = await auth.ctx.supabase
+      .from('fsps')
+      .insert(payload)
       .select(FSP_SELECT)
       .single()
 

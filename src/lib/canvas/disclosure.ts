@@ -271,7 +271,14 @@ async function countForType(
       if (error) return null
       return count ?? 0
     }
-    // fund_requests — may lack organization_id
+    if (resourceType === 'fund_requests') {
+      const { count, error } = await supabase
+        .from('fund_requests')
+        .select('id', { count: 'exact', head: true })
+        .eq('organization_id', orgId)
+      if (error) return null // pre-006: column missing
+      return count ?? 0
+    }
     return null
   } catch {
     return null

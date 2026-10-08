@@ -7,9 +7,14 @@ import {
   getUserOrgScope,
   isDisclosedCoordinator,
 } from '@/lib/canvas/orgScope'
+import {
+  applyTreasuryOrgFilter,
+  stampTreasuryOrganizationId,
+  treasuryListBlocked,
+} from '@/lib/grantManagement/orgTreasuryScope'
 
 const FR_SELECT =
-  'id, request_id, date_submitted, requested_amount, partner_name, file_name, file_link, airtable_record_id, created_at, updated_at'
+  'id, organization_id, request_id, date_submitted, requested_amount, partner_name, file_name, file_link, airtable_record_id, created_at, updated_at'
 
 const SUPABASE_IN_BATCH = 80
 const PAGE_SIZE = 1000
@@ -142,19 +147,20 @@ async function setDecisions(
 export async function GET() {
   try {
     const orgScope = await getUserOrgScope()
-    if (isDisclosedCoordinator(orgScope)) {
+    if (treasuryListBlocked(orgScope, 'fund_requests')) {
       return NextResponse.json([])
     }
 
     const supabase = getSupabaseAdmin()
-    const data = await fetchAllPages((from, to) =>
-      supabase
+    const data = await fetchAllPages((from, to) => {
+      let q = supabase
         .from('fund_requests')
         .select(FR_SELECT)
         .order('date_submitted', { ascending: false, nullsFirst: false })
         .order('id', { ascending: true })
-        .range(from, to)
-    )
+      q = applyTreasuryOrgFilter(q, orgScope, 'fund_requests')
+      return q.range(from, to)
+    })
     const enriched = await enrichFundRequests(supabase, data as Record<string, unknown>[])
     return NextResponse.json(enriched)
   } catch (error) {
@@ -172,6 +178,9 @@ export async function POST(request: NextRequest) {
   if (isDisclosedCoordinator(orgScope)) {
     return coordinatorWriteForbiddenResponse()
   }
+  if (treasuryListBlocked(orgScope, 'fund_requests')) {
+    return coordinatorWriteForbiddenResponse()
+  }
 
   try {
     const body = await request.json()
@@ -180,9 +189,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'request_id is required' }, { status: 400 })
     }
 
-    const { data, error } = await auth.ctx.supabase
-      .from('fund_requests')
-      .insert({
+    const payload = stampTreasuryOrganizationId(
+      {
         request_id,
         date_submitted: body.date_submitted || null,
         requested_amount:
@@ -193,7 +201,13 @@ export async function POST(request: NextRequest) {
         file_name: body.file_name?.trim() || null,
         file_link: body.file_link?.trim() || null,
         updated_at: new Date().toISOString(),
-      })
+      },
+      orgScope
+    )
+
+    const { data, error } = await auth.ctx.supabase
+      .from('fund_requests')
+      .insert(payload)
       .select(FR_SELECT)
       .single()
 

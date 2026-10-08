@@ -2266,6 +2266,7 @@ export type Database = {
           created_at: string
           id: string
           name: string
+          organization_id: string | null
           status: string
           transfer_fee_percent: number | null
           treasury_in_usd: number
@@ -2282,6 +2283,7 @@ export type Database = {
           created_at?: string
           id?: string
           name: string
+          organization_id?: string | null
           status?: string
           transfer_fee_percent?: number | null
           treasury_in_usd?: number
@@ -2298,13 +2300,22 @@ export type Database = {
           created_at?: string
           id?: string
           name?: string
+          organization_id?: string | null
           status?: string
           transfer_fee_percent?: number | null
           treasury_in_usd?: number
           treasury_out_usd?: number
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "fsps_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       fund_requests: {
         Row: {
@@ -2314,6 +2325,7 @@ export type Database = {
           file_link: string | null
           file_name: string | null
           id: string
+          organization_id: string | null
           partner_name: string | null
           request_id: string
           requested_amount: number | null
@@ -2326,6 +2338,7 @@ export type Database = {
           file_link?: string | null
           file_name?: string | null
           id?: string
+          organization_id?: string | null
           partner_name?: string | null
           request_id: string
           requested_amount?: number | null
@@ -2338,12 +2351,21 @@ export type Database = {
           file_link?: string | null
           file_name?: string | null
           id?: string
+          organization_id?: string | null
           partner_name?: string | null
           request_id?: string
           requested_amount?: number | null
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "fund_requests_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       fund_request_decisions: {
         Row: {
