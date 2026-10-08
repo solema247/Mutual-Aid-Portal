@@ -10,6 +10,11 @@ import {
   isProjectIdInMouScope,
 } from '@/lib/userGrantAccess'
 import { emitF123Audit } from '@/lib/f123Audit'
+import {
+  coordinatorWriteForbiddenResponse,
+  getUserOrgScope,
+  isDisclosedCoordinator,
+} from '@/lib/canvas/orgScope'
 
 type RouteContext = { params: { id: string; confirmationId: string } }
 
@@ -20,6 +25,8 @@ type RouteContext = { params: { id: string; confirmationId: string } }
  */
 export async function POST(request: Request, { params }: RouteContext) {
   try {
+    if (isDisclosedCoordinator(await getUserOrgScope())) return coordinatorWriteForbiddenResponse()
+
     const supabase = getSupabaseRouteClient()
     const { id: mouId, confirmationId } = params
     const formData = await request.formData()

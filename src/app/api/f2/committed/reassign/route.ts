@@ -4,11 +4,17 @@ import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { requirePermission } from '@/lib/requirePermission'
 import { assertProjectsInGrantAccess } from '@/lib/userGrantAccess'
 import { emitF123Audit } from '@/lib/f123Audit'
+import {
+  coordinatorWriteForbiddenResponse,
+  getUserOrgScope,
+  isDisclosedCoordinator,
+} from '@/lib/canvas/orgScope'
 
 export async function POST(request: Request) {
   try {
     const perm = await requirePermission('f3_reassign_grant')
     if (perm instanceof NextResponse) return perm
+    if (isDisclosedCoordinator(await getUserOrgScope())) return coordinatorWriteForbiddenResponse()
 
     const supabase = getSupabaseRouteClient()
     const { f1_ids, grant_id, donor_name, mmyy } = await request.json()

@@ -12,7 +12,9 @@ import {
 import { getUserRoomAccess } from '@/lib/userRoomAccess'
 import {
   applyOrganizationIdFilter,
+  coordinatorWriteForbiddenResponse,
   getUserOrgScope,
+  isDisclosedCoordinator,
   orgScopeBlocksAllData,
   orgScopeBlocksResourceType,
 } from '@/lib/canvas/orgScope'
@@ -214,6 +216,8 @@ export async function GET(request: Request) {
 // PATCH /api/f2/uncommitted - Update F1 expenses, grant call, or metadata
 export async function PATCH(request: Request) {
   try {
+    if (isDisclosedCoordinator(await getUserOrgScope())) return coordinatorWriteForbiddenResponse()
+
     const body = await request.json()
     const { id, expenses, grant_call_id, approval_file_key, donor_id, funding_cycle_id, grant_serial_id, workplan_number, cycle_state_allocation_id, grant_id, file_key } = body
 
@@ -317,6 +321,8 @@ export async function PATCH(request: Request) {
 // POST /api/f2/uncommitted/commit - Commit selected F1s
 export async function POST(request: Request) {
   try {
+    if (isDisclosedCoordinator(await getUserOrgScope())) return coordinatorWriteForbiddenResponse()
+
     const supabase = getSupabaseRouteClient()
     const { f1_ids } = await request.json()
     
@@ -351,6 +357,7 @@ export async function DELETE(request: Request) {
   try {
     const perm = await requirePermission('f2_commit')
     if (perm instanceof NextResponse) return perm
+    if (isDisclosedCoordinator(await getUserOrgScope())) return coordinatorWriteForbiddenResponse()
 
     const supabase = getSupabaseRouteClient()
     const { id } = await request.json()

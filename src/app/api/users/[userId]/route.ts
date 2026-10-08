@@ -15,6 +15,11 @@ import {
   USER_SCOPE_AUDIT_KEYS,
   type UserManagementAuditEvent,
 } from '@/lib/userManagementAudit'
+import {
+  getUserOrgScope,
+  isUserInSessionOrg,
+  shouldScopeUsersToSessionOrg,
+} from '@/lib/canvas/orgScope'
 
 type CallerUser = { id: string; role: string }
 
@@ -79,6 +84,14 @@ export async function PATCH(
     const userId = params.userId
     if (!userId) {
       return NextResponse.json({ error: 'User id is required' }, { status: 400 })
+    }
+
+    const orgScope = await getUserOrgScope(supabase)
+    if (
+      shouldScopeUsersToSessionOrg(orgScope, caller.role) &&
+      !(await isUserInSessionOrg(supabase, orgScope, userId))
+    ) {
+      return NextResponse.json({ error: 'Target user not found' }, { status: 404 })
     }
 
     const { data: targetUser, error: targetError } = await supabase
@@ -372,6 +385,14 @@ export async function DELETE(
         { error: 'You cannot delete your own account' },
         { status: 403 }
       )
+    }
+
+    const orgScope = await getUserOrgScope(supabase)
+    if (
+      shouldScopeUsersToSessionOrg(orgScope, caller.role) &&
+      !(await isUserInSessionOrg(supabase, orgScope, userId))
+    ) {
+      return NextResponse.json({ error: 'Target user not found' }, { status: 404 })
     }
 
     const { data: targetUser, error: targetError } = await supabase

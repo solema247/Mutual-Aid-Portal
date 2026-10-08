@@ -6,7 +6,12 @@ import { syncImplementedSectorFromF5 } from '@/lib/activityShift'
 import { translateF5Report, translateF5Reach } from '@/lib/translateHelper'
 import { assertProjectInGrantAccess } from '@/lib/userGrantAccess'
 import { emitF123Audit } from '@/lib/f123Audit'
-import { getUserOrgScope, withOrganizationId } from '@/lib/canvas/orgScope'
+import {
+  coordinatorWriteForbiddenResponse,
+  getUserOrgScope,
+  isDisclosedCoordinator,
+  withOrganizationId,
+} from '@/lib/canvas/orgScope'
 import {
   f5ReportAuditTarget,
   reportF5AuditInsertFailure,
@@ -15,6 +20,8 @@ import {
 export async function POST(req: Request) {
   try {
     const supabase = getSupabaseRouteClient()
+    if (isDisclosedCoordinator(await getUserOrgScope())) return coordinatorWriteForbiddenResponse()
+
     const { project_id, summary, reach, file_key_temp, uploaded_by } = await req.json()
     if (!project_id || !summary) return NextResponse.json({ error: 'project_id and summary required' }, { status: 400 })
 

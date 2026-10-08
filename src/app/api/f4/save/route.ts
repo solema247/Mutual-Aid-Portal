@@ -6,11 +6,18 @@ import { inferF4SourceLanguage, normalizePaymentDateForDb } from '@/lib/f4SaveNo
 import { fetchF4SectorsForMatch, normalizeF4ExpenseActivitiesToSectors } from '@/lib/f4ExpenseSectors'
 import { assertProjectInGrantAccess } from '@/lib/userGrantAccess'
 import { emitF123Audit } from '@/lib/f123Audit'
-import { getUserOrgScope, withOrganizationId } from '@/lib/canvas/orgScope'
+import {
+  coordinatorWriteForbiddenResponse,
+  getUserOrgScope,
+  isDisclosedCoordinator,
+  withOrganizationId,
+} from '@/lib/canvas/orgScope'
 
 export async function POST(req: Request) {
   try {
     const supabase = getSupabaseRouteClient()
+    if (isDisclosedCoordinator(await getUserOrgScope())) return coordinatorWriteForbiddenResponse()
+
     const { project_id, summary, expenses, file_key_temp, uploaded_by } = await req.json()
     if (!project_id || !summary) return NextResponse.json({ error: 'project_id and summary required' }, { status: 400 })
 

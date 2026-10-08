@@ -7,16 +7,23 @@ import {
 } from '@/lib/grantManagement/pushToAirtable'
 import { SYNC_STATUS } from '@/lib/grantManagement/syncStatus'
 import {
+  coordinatorWriteForbiddenResponse,
   getUserOrgScope,
+  isDisclosedCoordinator,
   organizationIdMatchesScope,
+  orgIdsForGrantsModule,
   orgScopeForbiddenResponse,
 } from '@/lib/canvas/orgScope'
 
 async function assertGrantInOrgScope(
   supabase: { from: (t: string) => any },
-  grantId: string
+  grantId: string,
+  opts?: { forWrite?: boolean }
 ): Promise<NextResponse | null> {
   const orgScope = await getUserOrgScope(supabase as any)
+  if (opts?.forWrite && isDisclosedCoordinator(orgScope)) {
+    return coordinatorWriteForbiddenResponse()
+  }
   const { data } = await supabase
     .from('grants_grid_view')
     .select('organization_id')
@@ -24,6 +31,12 @@ async function assertGrantInOrgScope(
     .maybeSingle()
   if (!data) {
     return NextResponse.json({ error: 'Grant not found' }, { status: 404 })
+  }
+  if (isDisclosedCoordinator(orgScope)) {
+    if (!orgIdsForGrantsModule(orgScope).includes(String(data.organization_id ?? ''))) {
+      return orgScopeForbiddenResponse()
+    }
+    return null
   }
   if (!organizationIdMatchesScope(orgScope, data.organization_id)) {
     return orgScopeForbiddenResponse()
@@ -121,7 +134,7 @@ export async function PUT(
   if (!auth.ok) return auth.response
 
   try {
-    const denied = await assertGrantInOrgScope(auth.ctx.supabase, params.id)
+    const denied = await assertGrantInOrgScope(auth.ctx.supabase, params.id, { forWrite: true })
     if (denied) return denied
 
     const body = await request.json()
@@ -165,7 +178,7 @@ export async function DELETE(
   if (!auth.ok) return auth.response
 
   try {
-    const denied = await assertGrantInOrgScope(auth.ctx.supabase, params.id)
+    const denied = await assertGrantInOrgScope(auth.ctx.supabase, params.id, { forWrite: true })
     if (denied) return denied
 
     const { data: existing, error: fetchError } = await auth.ctx.supabase

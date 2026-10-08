@@ -6,6 +6,12 @@ import {
   chunkGrantScopeIds,
   getUserGrantAccess,
 } from '@/lib/userGrantAccess'
+import {
+  applyOrganizationIdFilter,
+  getUserOrgScope,
+  orgScopeBlocksAllData,
+  orgScopeBlocksResourceType,
+} from '@/lib/canvas/orgScope'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -65,11 +71,25 @@ function activitySerialsFromJsonb(activities: unknown): string[] {
 export async function GET() {
   try {
     const supabase = getSupabaseRouteClient()
-    const grantAccess = await getUserGrantAccess()
-    if (grantAccess.mode === 'none') {
-      return NextResponse.json([], { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } })
+    const [grantAccess, orgScope] = await Promise.all([
+      getUserGrantAccess(),
+      getUserOrgScope(),
+    ])
+    const noStore = { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } }
+    if (orgScopeBlocksAllData(orgScope)) {
+      return NextResponse.json([], noStore)
     }
-    if (grantAccess.mode === 'partner') {
+    if (
+      orgScope.mode === 'disclosed' &&
+      orgScopeBlocksResourceType(orgScope, 'decisions') &&
+      orgScopeBlocksResourceType(orgScope, 'f1')
+    ) {
+      return NextResponse.json([], noStore)
+    }
+    if (orgScope.mode !== 'disclosed' && grantAccess.mode === 'none') {
+      return NextResponse.json([], noStore)
+    }
+    if (grantAccess.mode === 'partner' && orgScope.mode !== 'disclosed') {
       const grantMeta = new Map<string, { grant_id: string; project_name: string | null }>()
       for (const batch of chunkGrantScopeIds(grantAccess.grantGridIds)) {
         const { data, error } = await supabase
@@ -99,6 +119,7 @@ export async function GET() {
             .from('err_projects')
             .select('expenses, grant_grid_id')
           query = applyGrantGridIdFilter(query, { ...grantAccess, grantGridIds: batch })
+          query = applyOrganizationIdFilter(query, orgScope, 'organization_id', 'f1')
           const { data, error } = await query.range(from, from + pageSize - 1)
           if (error) throw error
           if (!data?.length) break
@@ -148,7 +169,13 @@ export async function GET() {
       supabase,
       'grants_grid_view',
       'grant_id, project_name, total_transferred_amount_usd, sum_transfer_fee_amount, activities',
-      (q) => q.order('grant_id', { ascending: true })
+      (q) =>
+        applyOrganizationIdFilter(
+          q.order('grant_id', { ascending: true }),
+          orgScope,
+          'organization_id',
+          'decisions'
+        )
     )
 
     // Group by grant_id (one row per grant); Included = total_transferred - transfer_fee
@@ -185,17 +212,15 @@ export async function GET() {
       }
     }
 
-    // Fetch historical data from activities_raw_import
-    const historicalData = await fetchAllRows<{
-      'Project Donor'?: string | null;
-      project_donor?: string | null;
-      USD?: number | null;
-      usd?: number | null;
-    }>(
-      supabase,
-      'activities_raw_import',
-      '"Project Donor",USD'
-    )
+    const historicalData =
+      orgScope.mode === 'all'
+        ? await fetchAllRows<{
+            'Project Donor'?: string | null;
+            project_donor?: string | null;
+            USD?: number | null;
+            usd?: number | null;
+          }>(supabase, 'activities_raw_import', '"Project Donor",USD')
+        : []
 
     // Historical by grant_id (from activities_raw_import "Project Donor")
     // Normalize donor string (e.g. "FCDO SHPR" -> "FCDO-SHPR") so it matches grants.grant_id
@@ -224,7 +249,13 @@ export async function GET() {
       supabase,
       'grants_grid_view',
       'id, grant_id',
-      (q) => q.not('grant_id', 'is', null)
+      (q) =>
+        applyOrganizationIdFilter(
+          q.not('grant_id', 'is', null),
+          orgScope,
+          'organization_id',
+          'decisions'
+        )
     )
     const grantGridIdToGrantId = new Map<string, string>()
     for (const row of gridViewRows || []) {
@@ -232,23 +263,33 @@ export async function GET() {
     }
 
     // Fetch all projects (include grant_grid_id for assignment lookup)
-    const projects = await fetchAllRows<{
+    let projects: {
       expenses: any;
       funding_status: string | null;
       grant_id: string | null;
       grant_grid_id: string | null;
       state: string | null;
-    }>(
-      supabase,
-      'err_projects',
-      'expenses, funding_status, grant_id, grant_grid_id, state',
-      (q) => {
+    }[] = []
+    {
+      let from = 0
+      const pageSize = 1000
+      while (true) {
+        let q = supabase
+          .from('err_projects')
+          .select('expenses, funding_status, grant_id, grant_grid_id, state')
+          .range(from, from + pageSize - 1)
+        q = applyOrganizationIdFilter(q, orgScope, 'organization_id', 'f1')
         if (allowedStateNames !== null && allowedStateNames.length > 0) {
-          return q.in('state', allowedStateNames)
+          q = q.in('state', allowedStateNames)
         }
-        return q
+        const { data: page, error } = await q
+        if (error) throw error
+        if (!page?.length) break
+        projects.push(...page)
+        if (page.length < pageSize) break
+        from += pageSize
       }
-    )
+    }
 
     const sumExpenses = (rows: any[]) => rows.reduce((sum, p) => {
       try {

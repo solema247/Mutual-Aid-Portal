@@ -7,6 +7,11 @@ import {
 } from '@/lib/userGrantAccess'
 import { emitF123Audit, pickChangedAuditFields } from '@/lib/f123Audit'
 import { getPaymentBlockedProjectIds } from '@/lib/compliance'
+import {
+  coordinatorWriteForbiddenResponse,
+  getUserOrgScope,
+  isDisclosedCoordinator,
+} from '@/lib/canvas/orgScope'
 
 type RouteContext = { params: { id: string; confirmationId: string } }
 
@@ -28,6 +33,8 @@ function normalizeRate(value: unknown): number | null {
  */
 export async function PATCH(request: Request, { params }: RouteContext) {
   try {
+    if (isDisclosedCoordinator(await getUserOrgScope())) return coordinatorWriteForbiddenResponse()
+
     const supabase = getSupabaseRouteClient()
     const { id: mouId, confirmationId } = params
     const body = await request.json().catch(() => ({}))
@@ -199,6 +206,8 @@ export async function PATCH(request: Request, { params }: RouteContext) {
  */
 export async function DELETE(request: Request, { params }: RouteContext) {
   try {
+    if (isDisclosedCoordinator(await getUserOrgScope())) return coordinatorWriteForbiddenResponse()
+
     const supabase = getSupabaseRouteClient()
     const { id: mouId, confirmationId } = params
 

@@ -2,9 +2,16 @@ import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { assertProjectsInGrantAccess } from '@/lib/userGrantAccess'
 import { emitF123Audit } from '@/lib/f123Audit'
+import {
+  coordinatorWriteForbiddenResponse,
+  getUserOrgScope,
+  isDisclosedCoordinator,
+} from '@/lib/canvas/orgScope'
 
 export async function POST(request: Request) {
   try {
+    if (isDisclosedCoordinator(await getUserOrgScope())) return coordinatorWriteForbiddenResponse()
+
     const supabase = getSupabaseRouteClient()
     const { f1_ids, funding_cycle_id, grant_call_id, mmyy, grant_serial } = await request.json()
     

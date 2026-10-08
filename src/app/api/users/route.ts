@@ -10,6 +10,10 @@ import {
   type PortalRole,
 } from '@/lib/userAccessRules'
 import { emitUserManagementAudits } from '@/lib/userManagementAudit'
+import {
+  getUserOrgScope,
+  sessionOrganizationId,
+} from '@/lib/canvas/orgScope'
 
 function generateTemporaryPassword(): string {
   // URL-safe, high entropy; not stored in public.users
@@ -203,6 +207,34 @@ export async function POST(request: Request) {
       { error: insertError?.message || 'Failed to create user profile' },
       { status: 500 }
     )
+  }
+
+  // Attach new user to the caller's canvas organization (tenant scope)
+  const orgScope = await getUserOrgScope(routeClient)
+  const orgId = sessionOrganizationId(orgScope)
+  if (orgId) {
+    const { data: env } = await admin
+      .from('environments')
+      .select('id')
+      .eq('organization_id', orgId)
+      .eq('is_active', true)
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .maybeSingle()
+    if (env?.id) {
+      const { error: memErr } = await admin.from('organization_memberships').upsert(
+        {
+          user_id: userRow.id,
+          organization_id: orgId,
+          environment_id: env.id,
+          is_default: true,
+        },
+        { onConflict: 'user_id,environment_id' }
+      )
+      if (memErr) {
+        console.error('POST /api/users membership attach:', memErr)
+      }
+    }
   }
 
   await emitUserManagementAudits({

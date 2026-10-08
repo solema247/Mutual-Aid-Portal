@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import { createSbRouteClient } from '@/lib/sbRoute'
+import { getSupabaseAdmin } from '@/lib/supabaseAdmin'
 import { resolveEnvironmentForUser } from '@/lib/canvas/resolveEnvironment'
 import {
   isAllStates,
@@ -266,4 +267,103 @@ export function orgScopeForbiddenResponse(
   message = 'Forbidden — outside your organization scope'
 ): NextResponse {
   return NextResponse.json({ error: message, code: 'ORG_SCOPE_DENIED' }, { status: 403 })
+}
+
+/** Coordinators may read granted data but not mutate processor pipeline rows. */
+export function coordinatorWriteForbiddenResponse(
+  message = 'Coordinator organizations cannot modify processor data'
+): NextResponse {
+  return NextResponse.json({ error: message, code: 'COORDINATOR_READ_ONLY' }, { status: 403 })
+}
+
+export function isDisclosedCoordinator(scope: UserOrgScope): boolean {
+  return scope.mode === 'disclosed'
+}
+
+/** Session tenant org id (processor own org, or coordinator’s own org — not granted processors). */
+export function sessionOrganizationId(scope: UserOrgScope): string | null {
+  if (scope.mode === 'org') return scope.organizationId
+  if (scope.mode === 'disclosed') return scope.requestingOrganizationId
+  return null
+}
+
+/**
+ * User ids that are members of the session organization.
+ * Uses the service-role client because RLS on organization_memberships
+ * only allows selecting the caller's own row.
+ */
+export async function loadSessionOrgMemberUserIds(
+  _supabase: SupabaseClient,
+  scope: UserOrgScope
+): Promise<string[] | null> {
+  const orgId = sessionOrganizationId(scope)
+  if (!orgId) return null
+  try {
+    const admin = getSupabaseAdmin()
+    const { data, error } = await admin
+      .from('organization_memberships')
+      .select('user_id')
+      .eq('organization_id', orgId)
+    if (error) {
+      console.error('loadSessionOrgMemberUserIds', error)
+      return []
+    }
+    return (data ?? []).map((r) => r.user_id).filter(Boolean)
+  } catch (e) {
+    console.error('loadSessionOrgMemberUserIds admin:', e)
+    return []
+  }
+}
+
+/**
+ * Support / superadmin / fallback (mode all) see portal-wide users & audit.
+ * Admins in an org (or coordinator session org) are membership-scoped.
+ */
+export function shouldScopeUsersToSessionOrg(
+  scope: UserOrgScope,
+  callerRole: string
+): boolean {
+  if (callerRole === 'support' || callerRole === 'superadmin') return false
+  return sessionOrganizationId(scope) != null
+}
+
+/**
+ * True when userId has membership in the session organization.
+ * Uses service role (same RLS limitation as loadSessionOrgMemberUserIds).
+ */
+export async function isUserInSessionOrg(
+  _supabase: SupabaseClient,
+  scope: UserOrgScope,
+  userId: string
+): Promise<boolean> {
+  const orgId = sessionOrganizationId(scope)
+  if (!orgId) return true
+  try {
+    const admin = getSupabaseAdmin()
+    const { data, error } = await admin
+      .from('organization_memberships')
+      .select('user_id')
+      .eq('organization_id', orgId)
+      .eq('user_id', userId)
+      .maybeSingle()
+    if (error) {
+      console.error('isUserInSessionOrg', error)
+      return false
+    }
+    return !!data?.user_id
+  } catch (e) {
+    console.error('isUserInSessionOrg admin:', e)
+    return false
+  }
+}
+
+/**
+ * Prefer decisions-granted orgs for Grants module; fall back to any granted processor org.
+ */
+export function orgIdsForGrantsModule(scope: UserOrgScope): string[] {
+  if (scope.mode === 'org') return [scope.organizationId]
+  if (scope.mode !== 'disclosed') return []
+  const decisions = orgIdsGrantedForType(scope, 'decisions')
+  if (decisions.length > 0) return decisions
+  return scope.allowedOrganizationIds
 }

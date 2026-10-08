@@ -6,12 +6,19 @@ import {
   assertMouInGrantAccess,
 } from '@/lib/userGrantAccess'
 import { emitF123Audit } from '@/lib/f123Audit'
+import {
+  coordinatorWriteForbiddenResponse,
+  getUserOrgScope,
+  isDisclosedCoordinator,
+} from '@/lib/canvas/orgScope'
 
 export async function POST(
   request: Request,
   { params }: { params: { id: string } }
 ) {
   try {
+    if (isDisclosedCoordinator(await getUserOrgScope())) return coordinatorWriteForbiddenResponse()
+
     const supabase = getSupabaseRouteClient()
     const mouId = params.id
 

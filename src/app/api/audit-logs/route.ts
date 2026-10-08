@@ -1,11 +1,17 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin'
+import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import {
   createAuthEmailAdminMetrics,
   findAuthUserIdsByEmailSearch,
   getEmailsByAuthUserIds,
 } from '@/app/api/users/utils/authEmails'
 import { requireAuditLogViewer } from '@/lib/requireAuditLogViewer'
+import {
+  getUserOrgScope,
+  loadSessionOrgMemberUserIds,
+  shouldScopeUsersToSessionOrg,
+} from '@/lib/canvas/orgScope'
 import { sanitizeAuditRecord } from '@/lib/auditLog'
 import { KNOWN_AUDIT_ACTIONS } from '@/lib/auditActionLabels'
 import {
@@ -215,6 +221,45 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Server not configured' }, { status: 500 })
   }
 
+  // Own-org audit plane: admins only see events acted by session-org members.
+  // Support / superadmin / fallback (mode all) keep portal-wide visibility.
+  const routeClient = getSupabaseRouteClient()
+  const orgScope = await getUserOrgScope(routeClient)
+  const orgScoped = shouldScopeUsersToSessionOrg(orgScope, auth.user.role)
+  let memberSet: Set<string> | null = null
+  let effectiveActorUserIds = actorUserIds
+  if (orgScoped) {
+    const memberIds = await loadSessionOrgMemberUserIds(routeClient, orgScope)
+    if (!memberIds || memberIds.length === 0) {
+      return NextResponse.json({
+        items: [],
+        total: 0,
+        page,
+        pageSize,
+        nextCursor: null,
+        hasNextPage: false,
+        lookups: { partners: {}, rooms: {}, states: {}, projects: {}, mous: {} },
+      })
+    }
+    memberSet = new Set(memberIds)
+    if (actorUserIds.length > 0) {
+      effectiveActorUserIds = actorUserIds.filter((id) => memberSet!.has(id))
+      if (effectiveActorUserIds.length === 0) {
+        return NextResponse.json({
+          items: [],
+          total: 0,
+          page,
+          pageSize,
+          nextCursor: null,
+          hasNextPage: false,
+          lookups: { partners: {}, rooms: {}, states: {}, projects: {}, mous: {} },
+        })
+      }
+    } else {
+      effectiveActorUserIds = memberIds
+    }
+  }
+
   const parsedSearch = perf
     ? perf.timeStageSync('search_parse', () =>
         search ? parseAuditSearchTerm(search) : null
@@ -294,6 +339,10 @@ export async function GET(request: Request) {
       }
     }
 
+    if (memberSet && searchUserIds.length > 0) {
+      searchUserIds = searchUserIds.filter((id) => memberSet!.has(id))
+    }
+
     if (preQuery.projectGrantId) {
       const pattern = `%${parsedSearch.escaped}%`
       const runGrantPrequeries = async () => {
@@ -348,7 +397,7 @@ export async function GET(request: Request) {
   const filterArgs: AuditLogListFilterArgs = {
     area,
     actions,
-    actorUserIds,
+    actorUserIds: effectiveActorUserIds,
     targetTypes,
     from,
     to,

@@ -99,6 +99,8 @@ interface GetActiveUsersParams {
   scopes?: string[]
   errIds?: string[]
   partnerIds?: string[]
+  /** When set, only return these user ids (org membership scope). */
+  userIds?: string[]
   /** Optional Supabase client (route/server). Defaults to browser client. */
   client?: SupabaseClient
 }
@@ -157,9 +159,13 @@ export async function getActiveUsers({
   scopes,
   errIds,
   partnerIds,
+  userIds,
   client,
 }: GetActiveUsersParams): Promise<GetActiveUsersResult> {
   const db = client ?? supabase
+  if (userIds && userIds.length === 0) {
+    return { users: [], total: 0 }
+  }
   let query = db
     .from('users')
     .select(`
@@ -200,6 +206,10 @@ export async function getActiveUsers({
     query = query.eq('status', statusList[0])
   } else if (statusList.length > 1) {
     query = query.in('status', statusList)
+  }
+
+  if (userIds && userIds.length > 0) {
+    query = query.in('id', userIds)
   }
 
   const searchTerm = search?.trim()

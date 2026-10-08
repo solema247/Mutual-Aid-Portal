@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin'
 import { requireGrantEditor } from '@/lib/grantManagement/requireGrantEditor'
 import { transferAmount } from '@/lib/grantManagement/fundTransferHelpers'
+import {
+  coordinatorWriteForbiddenResponse,
+  getUserOrgScope,
+  isDisclosedCoordinator,
+} from '@/lib/canvas/orgScope'
 
 const FR_SELECT =
   'id, request_id, date_submitted, requested_amount, partner_name, file_name, file_link, airtable_record_id, created_at, updated_at'
@@ -51,6 +56,11 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
+    const orgScope = await getUserOrgScope()
+    // No organization_id on fund_requests yet — coordinators fail closed
+    if (isDisclosedCoordinator(orgScope)) {
+      return NextResponse.json({ error: 'Fund request not found' }, { status: 404 })
+    }
     const supabase = getSupabaseAdmin()
     const { data, error } = await supabase.from('fund_requests').select(FR_SELECT).eq('id', params.id).single()
     if (error) throw error
@@ -68,6 +78,11 @@ export async function PUT(
 ) {
   const auth = await requireGrantEditor()
   if (!auth.ok) return auth.response
+
+  const orgScope = await getUserOrgScope(auth.ctx.supabase)
+  if (isDisclosedCoordinator(orgScope)) {
+    return coordinatorWriteForbiddenResponse()
+  }
 
   try {
     const body = await request.json()
@@ -111,6 +126,11 @@ export async function DELETE(
 ) {
   const auth = await requireGrantEditor()
   if (!auth.ok) return auth.response
+
+  const orgScope = await getUserOrgScope(auth.ctx.supabase)
+  if (isDisclosedCoordinator(orgScope)) {
+    return coordinatorWriteForbiddenResponse()
+  }
 
   try {
     // Explicit cleanup so transfers go even if FK is still ON DELETE SET NULL

@@ -1,5 +1,10 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
+import {
+  coordinatorWriteForbiddenResponse,
+  getUserOrgScope,
+  isDisclosedCoordinator,
+} from '@/lib/canvas/orgScope'
 
 function totalFromExpenses(expenses: unknown): number {
   if (!expenses) return 0
@@ -29,6 +34,7 @@ export async function POST(request: Request) {
       data: { session },
     } = await supabase.auth.getSession()
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    if (isDisclosedCoordinator(await getUserOrgScope())) return coordinatorWriteForbiddenResponse()
 
     const body = await request.json()
     const workplanIds = body.workplan_ids as string[] | undefined

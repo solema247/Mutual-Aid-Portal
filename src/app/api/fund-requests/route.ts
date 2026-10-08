@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin'
 import { requireGrantEditor } from '@/lib/grantManagement/requireGrantEditor'
 import { transferAmount } from '@/lib/grantManagement/fundTransferHelpers'
+import {
+  coordinatorWriteForbiddenResponse,
+  getUserOrgScope,
+  isDisclosedCoordinator,
+} from '@/lib/canvas/orgScope'
 
 const FR_SELECT =
   'id, request_id, date_submitted, requested_amount, partner_name, file_name, file_link, airtable_record_id, created_at, updated_at'
@@ -136,6 +141,11 @@ async function setDecisions(
 /** GET /api/fund-requests */
 export async function GET() {
   try {
+    const orgScope = await getUserOrgScope()
+    if (isDisclosedCoordinator(orgScope)) {
+      return NextResponse.json([])
+    }
+
     const supabase = getSupabaseAdmin()
     const data = await fetchAllPages((from, to) =>
       supabase
@@ -157,6 +167,11 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   const auth = await requireGrantEditor()
   if (!auth.ok) return auth.response
+
+  const orgScope = await getUserOrgScope(auth.ctx.supabase)
+  if (isDisclosedCoordinator(orgScope)) {
+    return coordinatorWriteForbiddenResponse()
+  }
 
   try {
     const body = await request.json()

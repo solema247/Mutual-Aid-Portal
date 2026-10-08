@@ -7,6 +7,14 @@ import {
   getUserGrantAccess,
 } from '@/lib/userGrantAccess'
 import { getUserRoomAccess } from '@/lib/userRoomAccess'
+import {
+  applyOrganizationIdFilter,
+  filterRowsByDisclosureStates,
+  getUserOrgScope,
+  isDisclosedCoordinator,
+  orgScopeBlocksAllData,
+  orgScopeBlocksResourceType,
+} from '@/lib/canvas/orgScope'
 import { getActivityAndCategoryLists } from '@/lib/plannedActivitiesExpenses'
 import { pickF5TextForEnUi } from '@/lib/storiesEnDisplay'
 import { getCategorySpend, getOtherLabels } from '@/lib/mutualAidCategorySpend'
@@ -145,17 +153,27 @@ export async function GET(request: Request) {
   console.log('[stories/cards] start')
   try {
     const supabase = getSupabaseRouteClient()
-    const [grantAccess, roomAccess] = await Promise.all([
+    const [grantAccess, roomAccess, orgScope] = await Promise.all([
       getUserGrantAccess(),
       getUserRoomAccess(),
+      getUserOrgScope(),
     ])
     const emptyCards = () =>
       NextResponse.json(
         { summary: null, cards: [] },
         { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } }
       )
+    if (orgScopeBlocksAllData(orgScope) || orgScopeBlocksResourceType(orgScope, 'f5')) {
+      return emptyCards()
+    }
     if (roomAccess.mode === 'none') return emptyCards()
-    if (roomAccess.mode !== 'room' && grantAccess.mode === 'none') return emptyCards()
+    if (
+      !isDisclosedCoordinator(orgScope) &&
+      roomAccess.mode !== 'room' &&
+      grantAccess.mode === 'none'
+    ) {
+      return emptyCards()
+    }
 
     const { searchParams } = new URL(request.url)
     const stateParam = searchParams.get('state')?.trim() || null
@@ -164,9 +182,10 @@ export async function GET(request: Request) {
     const useEnCache = locale === 'en'
 
     const projectSelect =
-      'id, state, locality, project_name, project_objectives, planned_activities, estimated_beneficiaries, expenses'
+      'id, organization_id, state, locality, project_name, project_objectives, planned_activities, estimated_beneficiaries, expenses'
     let projects: {
       id: string
+      organization_id?: string | null
       state?: string | null
       locality?: string | null
       project_name?: string | null
@@ -184,6 +203,12 @@ export async function GET(request: Request) {
         .eq('source', 'mutual_aid_portal')
         .in('status', MAP_STATUSES)
         .eq('emergency_room_id', roomAccess.emergencyRoomId)
+      projectsQuery = applyOrganizationIdFilter(
+        projectsQuery,
+        orgScope,
+        'organization_id',
+        'f5'
+      )
       if (stateParam) {
         projectsQuery = projectsQuery.eq('state', stateParam)
       }
@@ -196,7 +221,7 @@ export async function GET(request: Request) {
         )
       }
       projects = data || []
-    } else if (grantAccess.mode === 'partner') {
+    } else if (grantAccess.mode === 'partner' && !isDisclosedCoordinator(orgScope)) {
       console.log('[stories/cards] partner grant scope', Date.now() - t0, 'ms')
       for (const batch of chunkGrantScopeIds(grantAccess.grantGridIds)) {
         let projectsQuery = supabase
@@ -234,7 +259,17 @@ export async function GET(request: Request) {
             .order('id', { ascending: true })
             .range(from, to)
 
-          if (allowedStateNames !== null && allowedStateNames.length > 0) {
+          projectsQuery = applyOrganizationIdFilter(
+            projectsQuery,
+            orgScope,
+            'organization_id',
+            'f5'
+          )
+          if (
+            !isDisclosedCoordinator(orgScope) &&
+            allowedStateNames !== null &&
+            allowedStateNames.length > 0
+          ) {
             projectsQuery = projectsQuery.in('state', allowedStateNames)
           }
           if (stateParam) {
@@ -249,6 +284,10 @@ export async function GET(request: Request) {
           { status: 500, headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } }
         )
       }
+    }
+
+    if (isDisclosedCoordinator(orgScope)) {
+      projects = filterRowsByDisclosureStates(projects, orgScope, 'f5')
     }
 
     console.log('[stories/cards] projects query', Date.now() - t0, 'ms', projects.length, 'rows')

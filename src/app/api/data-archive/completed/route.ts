@@ -4,9 +4,18 @@ import { getSupabaseAdmin } from '@/lib/supabaseAdmin'
 import { collectArchiveFiles, type ArchiveProjectRow } from '@/lib/dataArchive'
 import { resolveProjectCompletionDate } from '@/lib/projectStatus'
 import { getUserRoomAccess } from '@/lib/userRoomAccess'
+import {
+  applyOrganizationIdFilter,
+  filterRowsByDisclosureStates,
+  getUserOrgScope,
+  isDisclosedCoordinator,
+  orgScopeBlocksAllData,
+  orgScopeBlocksResourceType,
+} from '@/lib/canvas/orgScope'
 
 const PROJECT_SELECT = `
   id,
+  organization_id,
   grant_id,
   grant_serial_id,
   state,
@@ -51,7 +60,11 @@ function grantNameLabel(p: any): string | null {
   return p.grant_calls?.name || p.donors?.name || null
 }
 
-async function fetchAllCompleted(supabase: ReturnType<typeof getSupabaseAdmin>, grantCallId: string | null) {
+async function fetchAllCompleted(
+  supabase: ReturnType<typeof getSupabaseAdmin>,
+  grantCallId: string | null,
+  orgScope: Awaited<ReturnType<typeof getUserOrgScope>>
+) {
   const projects: any[] = []
   for (let from = 0; ; from += PAGE) {
     let query = supabase
@@ -60,13 +73,16 @@ async function fetchAllCompleted(supabase: ReturnType<typeof getSupabaseAdmin>, 
       .eq('status', 'completed')
       .order('id', { ascending: true })
       .range(from, from + PAGE - 1)
+    query = applyOrganizationIdFilter(query, orgScope, 'organization_id', 'f1')
     if (grantCallId) query = query.eq('grant_call_id', grantCallId)
     const { data, error } = await query
     if (error) throw error
     projects.push(...(data || []))
     if (!data || data.length < PAGE) break
   }
-  return projects
+  return isDisclosedCoordinator(orgScope)
+    ? filterRowsByDisclosureStates(projects, orgScope, 'f1')
+    : projects
 }
 
 export async function GET(req: Request) {
@@ -83,6 +99,14 @@ export async function GET(req: Request) {
   }
 
   try {
+    const orgScope = await getUserOrgScope()
+    if (orgScopeBlocksAllData(orgScope) || orgScopeBlocksResourceType(orgScope, 'f1')) {
+      return NextResponse.json({
+        rows: [],
+        meta: { total_completed: 0, matched: 0, range: null, include_undated: false },
+      })
+    }
+
     // Use admin after permission check so date filters are not affected by RLS quirks.
     const supabase = getSupabaseAdmin()
     const url = new URL(req.url)
@@ -90,7 +114,7 @@ export async function GET(req: Request) {
     const includeUndated = url.searchParams.get('include_undated') === 'true'
     const grantCallId = url.searchParams.get('grant_call_id')
 
-    const projects = await fetchAllCompleted(supabase, grantCallId)
+    const projects = await fetchAllCompleted(supabase, grantCallId, orgScope)
 
     // Filter strictly by effective Project Completion Date in application code.
     // Prefer completed_at; fall back to date_report_completed for legacy rows.

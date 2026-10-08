@@ -10,6 +10,13 @@ import {
 import { normalizeRestrictionLabel } from '@/lib/poolRestrictionLabel'
 import { forbidIfPartner } from '@/lib/routeHandlerAuth'
 import { getUserRoomAccess } from '@/lib/userRoomAccess'
+import {
+  applyOrganizationIdFilter,
+  getUserOrgScope,
+  orgScopeBlocksAllData,
+  orgScopeBlocksResourceType,
+} from '@/lib/canvas/orgScope'
+import { resolveOrgDecisionKeyScope } from '@/lib/canvas/orgResourceScope'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -62,25 +69,56 @@ function addAmount(map: Map<string, number>, key: string, amount: number) {
  */
 export async function GET() {
   try {
+    const orgScope = await getUserOrgScope()
+    const noStore = { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } }
+    if (orgScopeBlocksAllData(orgScope)) {
+      return NextResponse.json([], noStore)
+    }
+    if (
+      orgScope.mode === 'disclosed' &&
+      orgScopeBlocksResourceType(orgScope, 'decisions') &&
+      orgScopeBlocksResourceType(orgScope, 'f1')
+    ) {
+      return NextResponse.json([], noStore)
+    }
+
     const partnerBlock = await forbidIfPartner()
     if (partnerBlock) return partnerBlock
 
     const roomAccess = await getUserRoomAccess()
     if (roomAccess.applies) {
-      return NextResponse.json([], {
-        headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' },
-      })
+      return NextResponse.json([], noStore)
     }
 
     const supabase = getSupabaseRouteClient()
     const { getUserStateAccess } = await import('@/lib/userStateAccess')
     const { allowedStateNames } = await getUserStateAccess()
 
-    const allocationsData = await fetchAllRows(
-      getSupabaseAdmin(),
-      'allocations_by_date',
-      'State,"Allocation Amount",Restriction'
-    )
+    const allocationsSupabase = getSupabaseAdmin()
+    const decisionKeyScope = await resolveOrgDecisionKeyScope(allocationsSupabase, orgScope)
+    let allocationsData: any[] = []
+    if (decisionKeyScope.mode === 'all') {
+      allocationsData = await fetchAllRows(
+        allocationsSupabase,
+        'allocations_by_date',
+        'State,"Allocation Amount",Restriction'
+      )
+    } else if (decisionKeyScope.mode === 'keys' && decisionKeyScope.keys.length > 0) {
+      let from = 0
+      const pageSize = 1000
+      while (true) {
+        const { data: page, error } = await allocationsSupabase
+          .from('allocations_by_date')
+          .select('State,"Allocation Amount",Restriction')
+          .in('Decision_ID', decisionKeyScope.keys)
+          .range(from, from + pageSize - 1)
+        if (error) throw error
+        if (!page?.length) break
+        allocationsData.push(...page)
+        if (page.length < pageSize) break
+        from += pageSize
+      }
+    }
 
     const allocatedByRestriction = new Map<string, number>()
     for (const row of allocationsData || []) {
@@ -93,11 +131,14 @@ export async function GET() {
       addAmount(allocatedByRestriction, key, amount)
     }
 
-    const historicalData = await fetchAllRows(
-      supabase,
-      'activities_raw_import',
-      'State,USD,"Grant Segment"'
-    )
+    const historicalData =
+      orgScope.mode === 'all'
+        ? await fetchAllRows(
+            supabase,
+            'activities_raw_import',
+            'State,USD,"Grant Segment"'
+          )
+        : []
 
     const historicalByRestriction = new Map<string, number>()
     for (const row of historicalData || []) {
@@ -110,11 +151,24 @@ export async function GET() {
       addAmount(historicalByRestriction, key, usd)
     }
 
-    const projects = await fetchAllRows(
-      supabase,
-      'err_projects',
-      'expenses, funding_status, status, state, grant_id, grant_grid_id, grant_segment'
-    )
+    let projects: any[] = []
+    {
+      let from = 0
+      const pageSize = 1000
+      while (true) {
+        let q = supabase
+          .from('err_projects')
+          .select('expenses, funding_status, status, state, grant_id, grant_grid_id, grant_segment')
+          .range(from, from + pageSize - 1)
+        q = applyOrganizationIdFilter(q, orgScope, 'organization_id', 'f1')
+        const { data: page, error } = await q
+        if (error) throw error
+        if (!page?.length) break
+        projects.push(...page)
+        if (page.length < pageSize) break
+        from += pageSize
+      }
+    }
 
     const assignedFromProjects = new Map<string, number>()
     const committedByRestriction = new Map<string, number>()

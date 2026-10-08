@@ -25,8 +25,10 @@ import { emitF123Audit } from '@/lib/f123Audit'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import {
   applyOrganizationIdFilter,
+  coordinatorWriteForbiddenResponse,
   filterRowsByDisclosureStates,
   getUserOrgScope,
+  isDisclosedCoordinator,
   orgScopeBlocksAllData,
   orgScopeBlocksResourceType,
   withOrganizationId,
@@ -415,6 +417,7 @@ export async function POST(request: Request) {
     const permF2 = await requirePermission('f2_create_mou')
     const permF3 = await requirePermission('f3_assign')
     if (permF2 instanceof NextResponse && permF3 instanceof NextResponse) return permF2
+    if (isDisclosedCoordinator(await getUserOrgScope())) return coordinatorWriteForbiddenResponse()
 
     const supabase = getSupabaseRouteClient()
     const body = await request.json()

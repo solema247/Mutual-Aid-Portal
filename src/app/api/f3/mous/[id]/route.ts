@@ -6,6 +6,11 @@ import {
   grantGridIdInAccess,
 } from '@/lib/userGrantAccess'
 import { emitF123Audit, pickMouAuditChanges } from '@/lib/f123Audit'
+import {
+  coordinatorWriteForbiddenResponse,
+  getUserOrgScope,
+  isDisclosedCoordinator,
+} from '@/lib/canvas/orgScope'
 
 export async function GET(
   _request: Request,
@@ -144,6 +149,8 @@ export async function PATCH(
   { params }: { params: { id: string } }
 ) {
   try {
+    if (isDisclosedCoordinator(await getUserOrgScope())) return coordinatorWriteForbiddenResponse()
+
     const supabase = getSupabaseRouteClient()
     const id = params.id
 

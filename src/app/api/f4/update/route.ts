@@ -10,6 +10,11 @@ import {
   buildF4UpdateComparePayloadFromDb,
   updatePayloadsEqual,
 } from '@/lib/f4f5UpdateCompare'
+import {
+  coordinatorWriteForbiddenResponse,
+  getUserOrgScope,
+  isDisclosedCoordinator,
+} from '@/lib/canvas/orgScope'
 
 const F4_SUMMARY_AUDIT_KEYS = [
   'report_date',
@@ -30,6 +35,8 @@ const F4_SUMMARY_AUDIT_KEYS = [
 
 export async function POST(req: Request) {
   try {
+    if (isDisclosedCoordinator(await getUserOrgScope())) return coordinatorWriteForbiddenResponse()
+
     const supabase = getSupabaseRouteClient()
     const { summary_id, summary, expenses } = await req.json()
     if (!summary_id || !summary) return NextResponse.json({ error: 'summary_id and summary required' }, { status: 400 })

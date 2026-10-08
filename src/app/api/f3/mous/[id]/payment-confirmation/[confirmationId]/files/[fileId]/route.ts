@@ -6,6 +6,11 @@ import {
   isProjectIdInMouScope,
 } from '@/lib/userGrantAccess'
 import { emitF123Audit } from '@/lib/f123Audit'
+import {
+  coordinatorWriteForbiddenResponse,
+  getUserOrgScope,
+  isDisclosedCoordinator,
+} from '@/lib/canvas/orgScope'
 
 type RouteContext = {
   params: { id: string; confirmationId: string; fileId: string }
@@ -17,6 +22,8 @@ type RouteContext = {
  */
 export async function DELETE(request: Request, { params }: RouteContext) {
   try {
+    if (isDisclosedCoordinator(await getUserOrgScope())) return coordinatorWriteForbiddenResponse()
+
     const supabase = getSupabaseRouteClient()
     const { id: mouId, confirmationId, fileId } = params
 

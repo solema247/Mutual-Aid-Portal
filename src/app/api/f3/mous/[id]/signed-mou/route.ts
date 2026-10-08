@@ -2,6 +2,11 @@ import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { assertMouInGrantAccess } from '@/lib/userGrantAccess'
 import { emitF123Audit } from '@/lib/f123Audit'
+import {
+  coordinatorWriteForbiddenResponse,
+  getUserOrgScope,
+  isDisclosedCoordinator,
+} from '@/lib/canvas/orgScope'
 
 // POST /api/f3/mous/[id]/signed-mou - Upload signed MOU file
 export async function POST(
@@ -9,6 +14,8 @@ export async function POST(
   { params }: { params: { id: string } }
 ) {
   try {
+    if (isDisclosedCoordinator(await getUserOrgScope())) return coordinatorWriteForbiddenResponse()
+
     const supabase = getSupabaseRouteClient()
     const { id: mouId } = params
 

@@ -12,6 +12,11 @@ import {
   USER_SCOPE_AUDIT_KEYS,
   type UserManagementAuditEvent,
 } from '@/lib/userManagementAudit'
+import {
+  getUserOrgScope,
+  isUserInSessionOrg,
+  shouldScopeUsersToSessionOrg,
+} from '@/lib/canvas/orgScope'
 
 export async function PUT(
   request: Request,
@@ -48,6 +53,14 @@ export async function PUT(
         { error: 'Forbidden - Admin, Superadmin or Support only' },
         { status: 403 }
       )
+    }
+
+    const orgScope = await getUserOrgScope(supabase)
+    if (
+      shouldScopeUsersToSessionOrg(orgScope, currentUser.role) &&
+      !(await isUserInSessionOrg(supabase, orgScope, params.userId))
+    ) {
+      return NextResponse.json({ error: 'Target user not found' }, { status: 404 })
     }
 
     const { data: targetUser, error: targetUserError } = await supabase

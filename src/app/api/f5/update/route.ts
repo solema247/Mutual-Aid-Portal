@@ -14,6 +14,11 @@ import {
   buildF5UpdateComparePayloadFromDb,
   updatePayloadsEqual,
 } from '@/lib/f4f5UpdateCompare'
+import {
+  coordinatorWriteForbiddenResponse,
+  getUserOrgScope,
+  isDisclosedCoordinator,
+} from '@/lib/canvas/orgScope'
 
 const F5_REPORT_AUDIT_KEYS = [
   'report_date',
@@ -28,6 +33,8 @@ const F5_REPORT_AUDIT_KEYS = [
 
 export async function POST(req: Request) {
   try {
+    if (isDisclosedCoordinator(await getUserOrgScope())) return coordinatorWriteForbiddenResponse()
+
     const supabase = getSupabaseRouteClient()
     const { report_id, summary, reach } = await req.json()
     if (!report_id || !summary) return NextResponse.json({ error: 'report_id and summary required' }, { status: 400 })

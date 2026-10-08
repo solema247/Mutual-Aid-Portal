@@ -1,6 +1,12 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { getUserGrantAccess } from '@/lib/userGrantAccess'
+import {
+  getUserOrgScope,
+  isDisclosedCoordinator,
+  orgScopeBlocksAllData,
+  orgScopeBlocksResourceType,
+} from '@/lib/canvas/orgScope'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -61,8 +67,17 @@ function toDateKey(d: string | null): string | null {
  */
 export async function GET(request: Request) {
   try {
-    const grantAccess = await getUserGrantAccess()
-    if (grantAccess.mode !== 'all') {
+    const [grantAccess, orgScope] = await Promise.all([
+      getUserGrantAccess(),
+      getUserOrgScope(),
+    ])
+    // View is not organization_id-scoped — coordinators fail closed; partners/base ERR empty
+    if (
+      grantAccess.mode !== 'all' ||
+      orgScopeBlocksAllData(orgScope) ||
+      isDisclosedCoordinator(orgScope) ||
+      orgScopeBlocksResourceType(orgScope, 'f1')
+    ) {
       return NextResponse.json(
         { chartData: [], series: [] as string[] },
         { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } }

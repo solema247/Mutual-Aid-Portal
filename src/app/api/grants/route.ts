@@ -13,7 +13,10 @@ import {
 } from '@/lib/userRoomAccess'
 import {
   applyOrganizationIdFilter,
+  coordinatorWriteForbiddenResponse,
   getUserOrgScope,
+  isDisclosedCoordinator,
+  orgIdsForGrantsModule,
   orgScopeBlocksAllData,
   withOrganizationId,
 } from '@/lib/canvas/orgScope'
@@ -167,10 +170,6 @@ export async function GET(request: NextRequest) {
     if (orgScopeBlocksAllData(orgScope)) {
       return NextResponse.json([])
     }
-    // Coordinators: Grants module is not an info-type grant yet — fail closed
-    if (orgScope.mode === 'disclosed') {
-      return NextResponse.json([])
-    }
     if (roomAccess.mode === 'none') {
       return NextResponse.json([])
     }
@@ -182,7 +181,18 @@ export async function GET(request: NextRequest) {
     if (roomGridIdSet != null && roomGridIdSet.size === 0) {
       return NextResponse.json([])
     }
-    if (roomAccess.mode !== 'room' && grantAccess.mode === 'none') {
+    if (
+      !isDisclosedCoordinator(orgScope) &&
+      roomAccess.mode !== 'room' &&
+      grantAccess.mode === 'none'
+    ) {
+      return NextResponse.json([])
+    }
+
+    const disclosedOrgIds = isDisclosedCoordinator(orgScope)
+      ? orgIdsForGrantsModule(orgScope)
+      : null
+    if (disclosedOrgIds && disclosedOrgIds.length === 0) {
       return NextResponse.json([])
     }
 
@@ -198,8 +208,12 @@ export async function GET(request: NextRequest) {
         .order('grant_start_date', { ascending: false })
         .order('id', { ascending: true })
         .range(from, to)
-      query = applyOrganizationIdFilter(query, orgScope)
-      if (grantAccess.mode === 'partner') {
+      if (disclosedOrgIds) {
+        query = query.in('organization_id', disclosedOrgIds)
+      } else {
+        query = applyOrganizationIdFilter(query, orgScope)
+      }
+      if (!isDisclosedCoordinator(orgScope) && grantAccess.mode === 'partner') {
         query = query.in('id', grantAccess.grantGridIds)
       }
       if (status !== 'all') {
@@ -317,6 +331,9 @@ export async function POST(request: NextRequest) {
     const orgScope = await getUserOrgScope(auth.ctx.supabase)
     if (orgScopeBlocksAllData(orgScope)) {
       return NextResponse.json({ error: 'No organization scope' }, { status: 403 })
+    }
+    if (isDisclosedCoordinator(orgScope)) {
+      return coordinatorWriteForbiddenResponse()
     }
 
     const { data, error } = await auth.ctx.supabase

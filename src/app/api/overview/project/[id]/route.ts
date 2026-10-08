@@ -49,10 +49,14 @@ export async function GET(
     const actualId = isHistorical ? id.replace('historical_', '') : id
 
     if (isHistorical) {
-      // Partner v1: historical import rows are out of scope (no grant_grid_id)
+      // Partner v1 / coordinator disclosure: historical import rows are out of scope
       const { getUserGrantAccess } = await import('@/lib/userGrantAccess')
-      const grantAccess = await getUserGrantAccess()
-      if (grantAccess.mode !== 'all') {
+      const { getUserOrgScope, isDisclosedCoordinator } = await import('@/lib/canvas/orgScope')
+      const [grantAccess, orgScope] = await Promise.all([
+        getUserGrantAccess(),
+        getUserOrgScope(),
+      ])
+      if (grantAccess.mode !== 'all' || isDisclosedCoordinator(orgScope)) {
         return NextResponse.json({ error: 'Historical project not found' }, { status: 404 })
       }
 
@@ -227,6 +231,7 @@ export async function GET(
           id,
           date,
           state,
+          organization_id,
           locality,
           status,
           project_objectives,
@@ -266,8 +271,29 @@ export async function GET(
 
       // Base ERR room scope takes precedence; Partner grant scope otherwise
       const { getUserRoomAccess, isProjectInRoomAccess } = await import('@/lib/userRoomAccess')
-      const roomAccess = await getUserRoomAccess()
-      if (roomAccess.applies) {
+      const {
+        getUserOrgScope,
+        isDisclosedCoordinator,
+        organizationIdMatchesScope,
+        statesGrantedForOrgType,
+      } = await import('@/lib/canvas/orgScope')
+      const [roomAccess, orgScope] = await Promise.all([
+        getUserRoomAccess(),
+        getUserOrgScope(),
+      ])
+      if (isDisclosedCoordinator(orgScope)) {
+        const orgId = (project as { organization_id?: string | null }).organization_id
+        const state = (project as { state?: string | null }).state
+        if (!organizationIdMatchesScope(orgScope, orgId, 'f1')) {
+          return NextResponse.json({ error: 'Project not found' }, { status: 404 })
+        }
+        const states = statesGrantedForOrgType(orgScope, String(orgId), 'f1')
+        if (Array.isArray(states) && states.length > 0) {
+          if (!state || !states.includes(String(state))) {
+            return NextResponse.json({ error: 'Project not found' }, { status: 404 })
+          }
+        }
+      } else if (roomAccess.applies) {
         if (
           !isProjectInRoomAccess(
             roomAccess,

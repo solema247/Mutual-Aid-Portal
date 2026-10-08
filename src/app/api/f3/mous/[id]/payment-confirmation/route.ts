@@ -12,6 +12,11 @@ import {
 } from '@/lib/userGrantAccess'
 import { emitF123Audit } from '@/lib/f123Audit'
 import { getPaymentBlockedProjectIds } from '@/lib/compliance'
+import {
+  coordinatorWriteForbiddenResponse,
+  getUserOrgScope,
+  isDisclosedCoordinator,
+} from '@/lib/canvas/orgScope'
 
 type RouteContext = { params: { id: string } }
 
@@ -152,6 +157,8 @@ export async function GET(request: Request, { params }: RouteContext) {
  */
 export async function POST(request: Request, { params }: RouteContext) {
   try {
+    if (isDisclosedCoordinator(await getUserOrgScope())) return coordinatorWriteForbiddenResponse()
+
     const supabase = getSupabaseRouteClient()
     const mouId = params.id
     const formData = await request.formData()

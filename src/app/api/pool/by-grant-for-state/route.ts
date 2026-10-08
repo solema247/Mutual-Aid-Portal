@@ -5,13 +5,32 @@ import {
   chunkGrantScopeIds,
   getUserGrantAccess,
 } from '@/lib/userGrantAccess'
+import {
+  applyOrganizationIdFilter,
+  getUserOrgScope,
+  orgScopeBlocksAllData,
+  orgScopeBlocksResourceType,
+} from '@/lib/canvas/orgScope'
 
 // GET /api/pool/by-grant-for-state?state=Kassala
 export async function GET(request: Request) {
   try {
     const supabase = getSupabaseRouteClient()
-    const grantAccess = await getUserGrantAccess()
-    if (grantAccess.mode === 'none') {
+    const [grantAccess, orgScope] = await Promise.all([
+      getUserGrantAccess(),
+      getUserOrgScope(),
+    ])
+    if (orgScopeBlocksAllData(orgScope)) {
+      return NextResponse.json([])
+    }
+    if (
+      orgScope.mode === 'disclosed' &&
+      orgScopeBlocksResourceType(orgScope, 'decisions') &&
+      orgScopeBlocksResourceType(orgScope, 'f1')
+    ) {
+      return NextResponse.json([])
+    }
+    if (orgScope.mode !== 'disclosed' && grantAccess.mode === 'none') {
       return NextResponse.json([])
     }
 
@@ -19,7 +38,7 @@ export async function GET(request: Request) {
     const state = searchParams.get('state')
     if (!state) return NextResponse.json({ error: 'state is required' }, { status: 400 })
 
-    if (grantAccess.mode === 'partner') {
+    if (grantAccess.mode === 'partner' && orgScope.mode !== 'disclosed') {
       const grantCallIds = new Set<string>()
       for (const batch of chunkGrantScopeIds(grantAccess.grantGridIds)) {
         let from = 0
@@ -27,6 +46,7 @@ export async function GET(request: Request) {
         while (true) {
           let query = supabase.from('err_projects').select('grant_call_id, state')
           query = applyGrantGridIdFilter(query, { ...grantAccess, grantGridIds: batch })
+          query = applyOrganizationIdFilter(query, orgScope, 'organization_id', 'f1')
           const { data, error } = await query.range(from, from + pageSize - 1)
           if (error) throw error
           if (!data?.length) break
@@ -93,11 +113,29 @@ export async function GET(request: Request) {
       includedByGrant.set(key, prev)
     }
 
-    // Usage overall per grant
-    const { data: usage, error: usageErr } = await supabase
-      .from('err_projects')
-      .select('expenses, funding_status, grant_call_id, state')
-    if (usageErr) throw usageErr
+    let usage: {
+      expenses: unknown
+      funding_status: string | null
+      grant_call_id: string | null
+      state: string | null
+    }[] = []
+    {
+      let from = 0
+      const pageSize = 1000
+      while (true) {
+        let q = supabase
+          .from('err_projects')
+          .select('expenses, funding_status, grant_call_id, state')
+          .range(from, from + pageSize - 1)
+        q = applyOrganizationIdFilter(q, orgScope, 'organization_id', 'f1')
+        const { data: page, error: usageErr } = await q
+        if (usageErr) throw usageErr
+        if (!page?.length) break
+        usage.push(...page)
+        if (page.length < pageSize) break
+        from += pageSize
+      }
+    }
 
     const sumExpenses = (rows: any[]) => rows.reduce((sum, p) => {
       try {

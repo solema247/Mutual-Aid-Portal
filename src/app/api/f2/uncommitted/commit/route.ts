@@ -4,12 +4,18 @@ import { requirePermission } from '@/lib/requirePermission'
 import { markProjectsCommitted } from '@/lib/f2Commit'
 import { assertProjectsInGrantAccess } from '@/lib/userGrantAccess'
 import { emitF123Audit } from '@/lib/f123Audit'
+import {
+  coordinatorWriteForbiddenResponse,
+  getUserOrgScope,
+  isDisclosedCoordinator,
+} from '@/lib/canvas/orgScope'
 
 // POST /api/f2/uncommitted/commit - Commit selected F1s (set funding_status to committed and status to approved)
 export async function POST(request: Request) {
   try {
     const perm = await requirePermission('f2_commit')
     if (perm instanceof NextResponse) return perm
+    if (isDisclosedCoordinator(await getUserOrgScope())) return coordinatorWriteForbiddenResponse()
 
     const supabase = getSupabaseRouteClient()
     const { f1_ids } = await request.json()

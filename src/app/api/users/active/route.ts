@@ -7,6 +7,11 @@ import {
   getEmailsByAuthUserIds,
 } from '@/app/api/users/utils/authEmails'
 import type { PortalRole } from '@/lib/userAccessRules'
+import {
+  getUserOrgScope,
+  loadSessionOrgMemberUserIds,
+  shouldScopeUsersToSessionOrg,
+} from '@/lib/canvas/orgScope'
 
 const PORTAL_ROLES = new Set([
   'support',
@@ -83,6 +88,21 @@ export async function GET(request: Request) {
   }
 
   try {
+    const orgScope = await getUserOrgScope(supabase)
+    const orgScoped = shouldScopeUsersToSessionOrg(orgScope, caller.role)
+    const memberIds = orgScoped
+      ? await loadSessionOrgMemberUserIds(supabase, orgScope)
+      : null
+    if (orgScoped && (!memberIds || memberIds.length === 0)) {
+      return NextResponse.json({
+        users: [],
+        total: 0,
+        page,
+        pageSize,
+        supportHidden: 0,
+      })
+    }
+
     const { users, total } = await getActiveUsers({
       page,
       pageSize,
@@ -98,6 +118,7 @@ export async function GET(request: Request) {
       scopes: scopes.length > 0 ? scopes : undefined,
       errIds: errIds.length > 0 ? errIds : undefined,
       partnerIds: partnerIds.length > 0 ? partnerIds : undefined,
+      userIds: memberIds ?? undefined,
       client: supabase,
     })
 

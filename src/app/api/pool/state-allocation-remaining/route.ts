@@ -12,6 +12,13 @@ import {
   chunkGrantScopeIds,
   getUserGrantAccess,
 } from '@/lib/userGrantAccess'
+import {
+  applyOrganizationIdFilter,
+  getUserOrgScope,
+  orgScopeBlocksAllData,
+  orgScopeBlocksResourceType,
+} from '@/lib/canvas/orgScope'
+import { resolveOrgDecisionKeyScope } from '@/lib/canvas/orgResourceScope'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -57,8 +64,21 @@ const NO_STORE = { 'Cache-Control': 'no-store, no-cache, must-revalidate' }
 
 export async function GET(request: NextRequest) {
   try {
-    const grantAccess = await getUserGrantAccess()
-    if (grantAccess.mode === 'none') {
+    const [grantAccess, orgScope] = await Promise.all([
+      getUserGrantAccess(),
+      getUserOrgScope(),
+    ])
+    if (orgScopeBlocksAllData(orgScope)) {
+      return NextResponse.json(EMPTY_STATE_REMAINING, { headers: NO_STORE })
+    }
+    if (
+      orgScope.mode === 'disclosed' &&
+      orgScopeBlocksResourceType(orgScope, 'decisions') &&
+      orgScopeBlocksResourceType(orgScope, 'f1')
+    ) {
+      return NextResponse.json(EMPTY_STATE_REMAINING, { headers: NO_STORE })
+    }
+    if (orgScope.mode !== 'disclosed' && grantAccess.mode === 'none') {
       return NextResponse.json(EMPTY_STATE_REMAINING, { headers: NO_STORE })
     }
 
@@ -73,7 +93,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid state' }, { status: 400 })
     }
 
-    if (grantAccess.mode === 'partner') {
+    if (grantAccess.mode === 'partner' && orgScope.mode !== 'disclosed') {
       const supabase = getSupabaseRouteClient()
       const stateVariants = [stateNormalized, stateParam].filter((v, i, a) => v && a.indexOf(v) === i)
       let assignedFromProjects = 0
@@ -88,6 +108,7 @@ export async function GET(request: NextRequest) {
             .select('expenses, funding_status, state, status, grant_id, grant_grid_id')
             .in('state', stateVariants)
           query = applyGrantGridIdFilter(query, { ...grantAccess, grantGridIds: batch })
+          query = applyOrganizationIdFilter(query, orgScope, 'organization_id', 'f1')
           const { data, error } = await query.range(from, from + pageSize - 1)
           if (error) throw error
           if (!data?.length) break
@@ -118,13 +139,32 @@ export async function GET(request: NextRequest) {
     }
 
     const adminSupabase = getSupabaseAdmin()
+    const routeSupabase = getSupabaseRouteClient()
 
-    // allocations_by_date (canonical): sum allocation amount for this state (match normalized)
-    const allocRows = await fetchAllRows<{ State?: string | null; 'Allocation Amount'?: number | null }>(
-      adminSupabase,
-      'allocations_by_date',
-      'State,"Allocation Amount"'
-    )
+    const decisionKeyScope = await resolveOrgDecisionKeyScope(adminSupabase, orgScope)
+    let allocRows: { State?: string | null; 'Allocation Amount'?: number | null }[] = []
+    if (decisionKeyScope.mode === 'all') {
+      allocRows = await fetchAllRows<{ State?: string | null; 'Allocation Amount'?: number | null }>(
+        adminSupabase,
+        'allocations_by_date',
+        'State,"Allocation Amount"'
+      )
+    } else if (decisionKeyScope.mode === 'keys' && decisionKeyScope.keys.length > 0) {
+      let from = 0
+      const pageSize = 1000
+      while (true) {
+        const { data: page, error } = await adminSupabase
+          .from('allocations_by_date')
+          .select('State,"Allocation Amount"')
+          .in('Decision_ID', decisionKeyScope.keys)
+          .range(from, from + pageSize - 1)
+        if (error) throw error
+        if (!page?.length) break
+        allocRows.push(...page)
+        if (page.length < pageSize) break
+        from += pageSize
+      }
+    }
 
     let totalAllocated = 0
     for (const row of allocRows || []) {
@@ -135,11 +175,15 @@ export async function GET(request: NextRequest) {
     }
 
     // Historical commitments for this state from activities_raw_import (State, USD)
-    const historicalRows = await fetchAllRows<{ State?: string | null; state?: string | null; USD?: number | null; usd?: number | null }>(
-      adminSupabase,
-      'activities_raw_import',
-      'State,USD'
-    )
+    const historicalRows =
+      orgScope.mode === 'all'
+        ? await fetchAllRows<{
+            State?: string | null
+            state?: string | null
+            USD?: number | null
+            usd?: number | null
+          }>(adminSupabase, 'activities_raw_import', 'State,USD')
+        : []
     let historical = 0
     for (const row of historicalRows || []) {
       const rawState = row['State'] ?? row['state'] ?? row.State
@@ -152,12 +196,32 @@ export async function GET(request: NextRequest) {
     }
 
     const stateVariants = [stateNormalized, stateParam].filter((v, i, a) => v && a.indexOf(v) === i)
-    const { data: projects, error: projectsError } = await adminSupabase
-      .from('err_projects')
-      .select('expenses, funding_status, state, status, grant_id, grant_grid_id')
-      .in('state', stateVariants)
-
-    if (projectsError) throw projectsError
+    let projects: {
+      expenses: unknown
+      funding_status: string | null
+      state: string | null
+      status: string | null
+      grant_id: string | null
+      grant_grid_id: string | null
+    }[] = []
+    {
+      let from = 0
+      const pageSize = 1000
+      while (true) {
+        let q = routeSupabase
+          .from('err_projects')
+          .select('expenses, funding_status, state, status, grant_id, grant_grid_id')
+          .in('state', stateVariants)
+          .range(from, from + pageSize - 1)
+        q = applyOrganizationIdFilter(q, orgScope, 'organization_id', 'f1')
+        const { data: page, error: projectsError } = await q
+        if (projectsError) throw projectsError
+        if (!page?.length) break
+        projects.push(...page)
+        if (page.length < pageSize) break
+        from += pageSize
+      }
+    }
 
     let assignedFromProjects = 0
     let committed = 0

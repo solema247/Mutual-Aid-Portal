@@ -7,6 +7,11 @@ import {
   isProjectIdInMouScope,
 } from '@/lib/userGrantAccess'
 import { emitF123Audit } from '@/lib/f123Audit'
+import {
+  coordinatorWriteForbiddenResponse,
+  getUserOrgScope,
+  isDisclosedCoordinator,
+} from '@/lib/canvas/orgScope'
 
 /**
  * POST /api/f3/mous/[id]/projects/remove
@@ -17,6 +22,8 @@ export async function POST(
   { params }: { params: { id: string } }
 ) {
   try {
+    if (isDisclosedCoordinator(await getUserOrgScope())) return coordinatorWriteForbiddenResponse()
+
     const supabase = getSupabaseRouteClient()
     const mouId = params.id
     const body = await request.json()

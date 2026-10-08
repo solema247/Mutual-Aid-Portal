@@ -7,6 +7,12 @@ import {
   chunkGrantScopeIds,
   getUserGrantAccess,
 } from '@/lib/userGrantAccess'
+import {
+  applyOrganizationIdFilter,
+  getUserOrgScope,
+  orgScopeBlocksAllData,
+  orgScopeBlocksResourceType,
+} from '@/lib/canvas/orgScope'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -59,8 +65,21 @@ const NO_STORE = { 'Cache-Control': 'no-store, no-cache, must-revalidate' }
 
 export async function GET(request: NextRequest) {
   try {
-    const grantAccess = await getUserGrantAccess()
-    if (grantAccess.mode === 'none') {
+    const [grantAccess, orgScope] = await Promise.all([
+      getUserGrantAccess(),
+      getUserOrgScope(),
+    ])
+    if (orgScopeBlocksAllData(orgScope)) {
+      return NextResponse.json(EMPTY_REMAINING, { headers: NO_STORE })
+    }
+    if (
+      orgScope.mode === 'disclosed' &&
+      orgScopeBlocksResourceType(orgScope, 'decisions') &&
+      orgScopeBlocksResourceType(orgScope, 'f1')
+    ) {
+      return NextResponse.json(EMPTY_REMAINING, { headers: NO_STORE })
+    }
+    if (orgScope.mode !== 'disclosed' && grantAccess.mode === 'none') {
       return NextResponse.json(EMPTY_REMAINING, { headers: NO_STORE })
     }
 
@@ -70,7 +89,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'grantId is required' }, { status: 400 })
     }
 
-    if (grantAccess.mode === 'partner') {
+    if (grantAccess.mode === 'partner' && orgScope.mode !== 'disclosed') {
       if (!grantAccess.grantIds.includes(grantId)) {
         return NextResponse.json(EMPTY_REMAINING, { headers: NO_STORE })
       }
@@ -109,6 +128,7 @@ export async function GET(request: NextRequest) {
             .from('err_projects')
             .select('expenses, funding_status, status, grant_grid_id')
           query = applyGrantGridIdFilter(query, { ...grantAccess, grantGridIds: batch })
+          query = applyOrganizationIdFilter(query, orgScope, 'organization_id', 'f1')
           const { data, error } = await query.range(from, from + pageSize - 1)
           if (error) throw error
           if (!data?.length) break
@@ -133,6 +153,7 @@ export async function GET(request: NextRequest) {
     }
 
     const adminSupabase = getSupabaseAdmin()
+    const routeSupabase = getSupabaseRouteClient()
 
     // Canonical grants_grid_view (not Airtable FDW) — FDW vault is unreliable on prod
     const grants = await fetchAllRows<{
@@ -144,7 +165,13 @@ export async function GET(request: NextRequest) {
       adminSupabase,
       'grants_grid_view',
       'grant_id, total_transferred_amount_usd, sum_transfer_fee_amount, activities',
-      (q: any) => q.eq('grant_id', grantId)
+      (q: any) =>
+        applyOrganizationIdFilter(
+          q.eq('grant_id', grantId),
+          orgScope,
+          'organization_id',
+          'decisions'
+        )
     )
 
     let totalIncluded = 0
@@ -166,7 +193,13 @@ export async function GET(request: NextRequest) {
       adminSupabase,
       'grants_grid_view',
       'id, grant_id',
-      (q: any) => q.eq('grant_id', grantId)
+      (q: any) =>
+        applyOrganizationIdFilter(
+          q.eq('grant_id', grantId),
+          orgScope,
+          'organization_id',
+          'decisions'
+        )
     )
     const gridIdsForDisplayKey = new Set<string>()
     for (const row of gridRows || []) {
@@ -184,11 +217,15 @@ export async function GET(request: NextRequest) {
     }
     addForHistorical(grantId)
 
-    const historicalData = await fetchAllRows<{ 'Project Donor'?: string | null; project_donor?: string | null; USD?: number | null; usd?: number | null }>(
-      adminSupabase,
-      'activities_raw_import',
-      '"Project Donor",USD'
-    )
+    const historicalData =
+      orgScope.mode === 'all'
+        ? await fetchAllRows<{
+            'Project Donor'?: string | null
+            project_donor?: string | null
+            USD?: number | null
+            usd?: number | null
+          }>(adminSupabase, 'activities_raw_import', '"Project Donor",USD')
+        : []
     let historical = 0
     for (const row of historicalData || []) {
       const rawDonor = row['Project Donor'] ?? row['project_donor']
@@ -202,13 +239,30 @@ export async function GET(request: NextRequest) {
     }
 
     // Projects assigned to this grant: by grant_grid_id (in gridIdsForDisplayKey) or by serial in activitySerials
-    const projects = await fetchAllRows<{
+    let projects: {
       expenses: unknown
       funding_status: string | null
       grant_id: string | null
       grant_grid_id: string | null
       status?: string | null
-    }>(adminSupabase, 'err_projects', 'expenses, funding_status, grant_id, grant_grid_id, status')
+    }[] = []
+    {
+      let from = 0
+      const pageSize = 1000
+      while (true) {
+        let q = routeSupabase
+          .from('err_projects')
+          .select('expenses, funding_status, grant_id, grant_grid_id, status')
+          .range(from, from + pageSize - 1)
+        q = applyOrganizationIdFilter(q, orgScope, 'organization_id', 'f1')
+        const { data: page, error } = await q
+        if (error) throw error
+        if (!page?.length) break
+        projects.push(...page)
+        if (page.length < pageSize) break
+        from += pageSize
+      }
+    }
 
     const sumExpenses = (exp: unknown): number => {
       try {

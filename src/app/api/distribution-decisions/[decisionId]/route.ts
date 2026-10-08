@@ -14,7 +14,9 @@ import {
   type DecisionDocument,
 } from '@/lib/grantManagement/decisionDocument'
 import {
+  coordinatorWriteForbiddenResponse,
   getUserOrgScope,
+  isDisclosedCoordinator,
   organizationIdMatchesScope,
   orgScopeForbiddenResponse,
 } from '@/lib/canvas/orgScope'
@@ -125,6 +127,7 @@ export async function PATCH(
     }
 
     const orgScope = await getUserOrgScope(auth.ctx.supabase)
+    if (isDisclosedCoordinator(orgScope)) return coordinatorWriteForbiddenResponse()
     const { data: orgRow } = await auth.ctx.supabase
       .from('distribution_decision_master_sheet_1')
       .select('organization_id')
@@ -220,6 +223,7 @@ export async function DELETE(
     }
 
     const orgScope = await getUserOrgScope(auth.ctx.supabase)
+    if (isDisclosedCoordinator(orgScope)) return coordinatorWriteForbiddenResponse()
     const { data: fullRow, error: fullError } = await auth.ctx.supabase
       .from('distribution_decision_master_sheet_1')
       .select('id, decision_id_proposed, airtable_record_id, last_pushed_at, organization_id')

@@ -11,6 +11,11 @@ import {
   fetchProjectIdsForEmergencyRoom,
   getUserRoomAccess,
 } from '@/lib/userRoomAccess'
+import {
+  getUserOrgScope,
+  isDisclosedCoordinator,
+  sessionOrganizationId,
+} from '@/lib/canvas/orgScope'
 
 /** PostgREST `.in()` with hundreds of UUIDs can exceed URL limits. */
 const PROJECT_ID_IN_BATCH = 80
@@ -21,6 +26,32 @@ function chunkProjectIds(ids: string[]): string[][] {
     out.push(ids.slice(i, i + PROJECT_ID_IN_BATCH))
   }
   return out
+}
+
+/** null = unrestricted; intersect room + org project id lists. */
+function intersectProjectIds(
+  a: string[] | null,
+  b: string[] | null
+): string[] | null {
+  if (a == null) return b
+  if (b == null) return a
+  const set = new Set(b)
+  return a.filter((id) => set.has(id))
+}
+
+async function fetchProjectIdsForOrganization(
+  supabase: ReturnType<typeof getSupabaseRouteClient>,
+  organizationId: string
+): Promise<string[]> {
+  const { data, error } = await supabase
+    .from('err_projects')
+    .select('id')
+    .eq('organization_id', organizationId)
+  if (error) {
+    console.error('fetchProjectIdsForOrganization', error)
+    return []
+  }
+  return (data ?? []).map((r) => r.id as string).filter(Boolean)
 }
 
 const AWAITING_ID_CLEARANCE_OR =
@@ -112,6 +143,20 @@ export async function GET(request: Request) {
     const status = searchParams.get('status')
     const countOnly = searchParams.get('count_only') === '1'
 
+    // Coordinators: compliance is processor-only (empty). Processors: own-org projects.
+    const orgScope = await getUserOrgScope(supabase)
+    if (isDisclosedCoordinator(orgScope)) {
+      return NextResponse.json(countOnly ? { pending_count: 0 } : [])
+    }
+    const ownOrgId = sessionOrganizationId(orgScope)
+    const orgProjectIds =
+      orgScope.mode === 'org' && ownOrgId
+        ? await fetchProjectIdsForOrganization(supabase, ownOrgId)
+        : null
+    if (orgProjectIds != null && orgProjectIds.length === 0) {
+      return NextResponse.json(countOnly ? { pending_count: 0 } : [])
+    }
+
     // Base ERR: screenings for projects in the user's emergency room only
     const roomAccess = await getUserRoomAccess()
     if (roomAccess.mode === 'none') {
@@ -124,7 +169,12 @@ export async function GET(request: Request) {
     if (roomProjectIds != null && roomProjectIds.length === 0) {
       return NextResponse.json(countOnly ? { pending_count: 0 } : [])
     }
-    const projectIdBatches = roomProjectIds != null ? chunkProjectIds(roomProjectIds) : [null]
+    const scopedProjectIds = intersectProjectIds(roomProjectIds, orgProjectIds)
+    if (scopedProjectIds != null && scopedProjectIds.length === 0) {
+      return NextResponse.json(countOnly ? { pending_count: 0 } : [])
+    }
+    const projectIdBatches =
+      scopedProjectIds != null ? chunkProjectIds(scopedProjectIds) : [null]
 
     if (countOnly) {
       // Sidebar badge: items that still need Ahmed's attention —
@@ -170,8 +220,8 @@ export async function GET(request: Request) {
       return NextResponse.json({ pending_count: count })
     }
 
-    // The sweep is a nationwide backfill; skip it for room-scoped users
-    if (roomProjectIds == null) {
+    // The sweep is a nationwide backfill; skip for room-/org-scoped users
+    if (scopedProjectIds == null && orgScope.mode === 'all') {
       try {
         await sweepUnscreenedProjects(supabase)
       } catch (sweepError) {

@@ -3,12 +3,18 @@ import { getSupabaseRouteClient } from '@/lib/supabaseRouteClient'
 import { requirePermission } from '@/lib/requirePermission'
 import { assertProjectInGrantAccess } from '@/lib/userGrantAccess'
 import { emitF123Audit } from '@/lib/f123Audit'
+import {
+  coordinatorWriteForbiddenResponse,
+  getUserOrgScope,
+  isDisclosedCoordinator,
+} from '@/lib/canvas/orgScope'
 
 // POST /api/f2/committed/decommit - Move a committed project back to uncommitted (only if not in an MOU)
 export async function POST(request: Request) {
   try {
     const perm = await requirePermission('f2_commit')
     if (perm instanceof NextResponse) return perm
+    if (isDisclosedCoordinator(await getUserOrgScope())) return coordinatorWriteForbiddenResponse()
 
     const supabase = getSupabaseRouteClient()
     const { id } = await request.json()
