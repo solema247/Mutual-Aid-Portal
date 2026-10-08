@@ -30,7 +30,7 @@ export async function POST(
 
   if (!isProcessorOrg(canvas.organization)) {
     return NextResponse.json(
-      { error: 'Only processor organizations can decide access requests' },
+      { error: 'Only host organizations can decide access requests' },
       { status: 403 }
     )
   }

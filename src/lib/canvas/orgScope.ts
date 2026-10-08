@@ -13,8 +13,8 @@ import { roleBypassesMountGating } from '@/lib/canvas/types'
 
 /**
  * Canvas org data plane.
- * - processor: own organization_id only
- * - coordinator: data from access_grants (processor orgs × types × states)
+ * - host org (DB org_type `processor`): own organization_id only
+ * - coordinator: data from access_grants (host orgs × types × states)
  * - fallback: mode 'all' (staging / pre-SQL)
  */
 export type UserOrgScope =
@@ -292,7 +292,7 @@ export function orgScopeForbiddenResponse(
 
 /** Coordinators may read granted data but not mutate processor pipeline rows. */
 export function coordinatorWriteForbiddenResponse(
-  message = 'Coordinator organizations cannot modify processor data'
+  message = 'Coordinator organizations cannot modify host organization data'
 ): NextResponse {
   return NextResponse.json({ error: message, code: 'COORDINATOR_READ_ONLY' }, { status: 403 })
 }

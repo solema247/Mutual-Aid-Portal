@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { PORTAL_PERMISSIONS_CHANGED_EVENT } from '@/hooks/useAllowedFunctions'
-import { FULL_PORTAL_MOUNT_CODES } from '@/lib/canvas/types'
 
 export type CanvasMePayload = {
   role?: string
@@ -53,10 +52,8 @@ export function useCanvasSession(): {
     }
   }, [load])
 
-  const mountedModules =
-    me?.mounted_modules ??
-    // While loading, assume full portal mounts so we don't flash empty nav; permissions still fail-closed.
-    (isLoading ? [...FULL_PORTAL_MOUNT_CODES] : [])
+  // Fail closed until /api/users/me returns mounts — never flash the full catalog.
+  const mountedModules = me?.mounted_modules ?? []
 
   return {
     me,

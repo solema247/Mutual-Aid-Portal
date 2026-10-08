@@ -101,7 +101,7 @@ export default function AccessRequestsPage() {
       <div className="mx-auto max-w-3xl space-y-3 p-6">
         <h1 className="text-2xl font-semibold tracking-tight">Access requests</h1>
         <p className="text-sm text-muted-foreground">
-          Access requests are available for processor and coordinator organizations.
+          Access requests are available for host and coordinator organizations.
         </p>
       </div>
     )
@@ -125,7 +125,7 @@ export default function AccessRequestsPage() {
         <p className="text-sm text-muted-foreground">
           {isProcessor
             ? 'Approve or deny requests for information types (e.g. all F1s, or F1s in selected states).'
-            : 'Track type-level access requests you have submitted to processor organizations.'}
+            : 'Track type-level access requests you have submitted to host organizations.'}
         </p>
         {unavailable && (
           <p className="rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
@@ -154,7 +154,7 @@ export default function AccessRequestsPage() {
                       <div className="font-medium">
                         {isProcessor
                           ? `From ${r.requesting_org_name ?? 'coordinator'}`
-                          : `To ${r.target_org_name ?? 'processor'}`}
+                          : `To ${r.target_org_name ?? 'host organization'}`}
                       </div>
                       <div className="text-xs text-muted-foreground">
                         {new Date(r.created_at).toLocaleString()}
@@ -214,7 +214,7 @@ export default function AccessRequestsPage() {
                       —{' '}
                       {isProcessor
                         ? r.requesting_org_name ?? 'coordinator'
-                        : r.target_org_name ?? 'processor'}
+                        : r.target_org_name ?? 'host organization'}
                       {' · '}
                       {describe(r)}
                       {r.decided_at && <> · {new Date(r.decided_at).toLocaleString()}</>}

@@ -27,8 +27,8 @@ export function isModuleMounted(
   mountedModules: string[] | null | undefined,
   mountCode: string
 ): boolean {
-  // Cutover / loading: if modules unknown, allow (permissions still gate).
-  if (mountedModules == null) return true
+  // Unknown / not yet loaded: fail closed (avoid flashing unmounted modules).
+  if (mountedModules == null) return false
   // Explicit empty list = thin environment (only what is listed — usually environment_home)
   return mountedModules.includes(mountCode)
 }

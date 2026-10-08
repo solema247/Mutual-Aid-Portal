@@ -204,7 +204,7 @@ export default function OversightPage() {
       <Card>
         <CardHeader className="pb-4">
           <div className="flex items-center justify-between">
-            <CardTitle>Processor organizations</CardTitle>
+            <CardTitle>Host organizations</CardTitle>
             <Button
               variant="outline"
               size="sm"
@@ -228,7 +228,7 @@ export default function OversightPage() {
             <div className="py-8 text-center text-muted-foreground">Loading…</div>
           ) : processors.length === 0 ? (
             <div className="py-8 text-center text-muted-foreground">
-              No processor organizations to show yet.
+              No host organizations to show yet.
             </div>
           ) : (
             <div className="w-full overflow-x-auto">

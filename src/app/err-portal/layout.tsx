@@ -20,7 +20,7 @@ export default function ErrPortalLayout({
   children: React.ReactNode
 }) {
   const { t } = useTranslation(['err'])
-  const { me: user, mountedModules } = useCanvasSession()
+  const { me: user, mountedModules, isLoading: canvasLoading } = useCanvasSession()
   const [minimizedType, setMinimizedType] = useState<'f4'|'f5'|null>(null)
   const [compliancePendingCount, setCompliancePendingCount] = useState<number>(0)
   const router = useRouter()
@@ -255,9 +255,12 @@ export default function ErrPortalLayout({
     })
   }
 
-  // While permissions are unresolved: minimal non-protected shell only (Home).
-  // Do not render permission-gated nav items (fail closed — no flash).
-  const sidebarItems: SidebarItem[] = permissionsLoading
+  // Wait for permissions AND canvas mounts — otherwise mounts briefly look like full catalog.
+  const navLoading = permissionsLoading || canvasLoading
+
+  // While unresolved: minimal non-protected shell only (Home).
+  // Do not render permission-/mount-gated nav items (fail closed — no flash).
+  const sidebarItems: SidebarItem[] = navLoading
     ? [
         {
           href: '/err-portal',

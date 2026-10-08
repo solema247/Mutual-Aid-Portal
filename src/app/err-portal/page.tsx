@@ -25,7 +25,7 @@ interface User {
 export default function ErrPortalPage() {
   const { t } = useTranslation(['common', 'err'])
   const { can, isLoading: permissionsLoading } = useAllowedFunctions()
-  const { mountedModules } = useCanvasSession()
+  const { mountedModules, isLoading: canvasLoading } = useCanvasSession()
   const mounted = (code: string) => isModuleMounted(mountedModules, code)
   const canViewGrantManagement =
     (can('grant_decisions_view_page') && mounted('grant_decisions')) ||
@@ -87,9 +87,9 @@ export default function ErrPortalPage() {
     checkAuth()
   }, [])
 
-  useHomePageExplainer(!isLoading && !permissionsLoading)
+  useHomePageExplainer(!isLoading && !permissionsLoading && !canvasLoading)
 
-  if (isLoading) return <div>Loading...</div>
+  if (isLoading || permissionsLoading || canvasLoading) return <div>Loading...</div>
 
   const handleLogout = async () => {
     try {

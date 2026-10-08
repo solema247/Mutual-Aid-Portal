@@ -11,7 +11,7 @@ import {
 
 /**
  * Fund requests / FSPs are org-owned (`sql/canvas/006_fund_requests_fsps_organization_id.sql`).
- * Processors: own organization_id. Coordinators: fund_requests via access_grants; FSPs empty.
+ * Host orgs: own organization_id. Coordinators: fund_requests via access_grants; FSPs empty.
  */
 export function treasuryListBlocked(scope: UserOrgScope, kind: 'fund_requests' | 'fsps'): boolean {
   if (orgScopeBlocksAllData(scope)) return true

@@ -188,7 +188,7 @@ export async function POST(request: NextRequest) {
     .maybeSingle()
 
   if (!targetOrg || targetOrg.org_type !== 'processor') {
-    return NextResponse.json({ error: 'Target must be a processor organization' }, { status: 400 })
+    return NextResponse.json({ error: 'Target must be a host organization' }, { status: 400 })
   }
 
   const policy = await getDisclosurePolicy(supabase, targetOrgId, rawType)
