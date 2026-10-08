@@ -5,6 +5,7 @@ import {
   applyOrganizationIdFilter,
   getUserOrgScope,
   orgScopeBlocksAllData,
+  orgScopeBlocksResourceType,
 } from '@/lib/canvas/orgScope'
 import { resolveOrgDecisionKeyScope } from '@/lib/canvas/orgResourceScope'
 
@@ -78,7 +79,7 @@ export async function GET() {
 
   try {
     const orgScope = await getUserOrgScope()
-    if (orgScopeBlocksAllData(orgScope)) {
+    if (orgScopeBlocksAllData(orgScope) || orgScopeBlocksResourceType(orgScope, 'decisions')) {
       return NextResponse.json({ allocations: [], decisions: [] })
     }
     const decisionKeyScope = await resolveOrgDecisionKeyScope(supabase, orgScope)
@@ -105,7 +106,7 @@ export async function GET() {
           .from('distribution_decision_master_sheet_1')
           .select(DECISIONS_SELECT)
           .order('id', { ascending: true })
-        q = applyOrganizationIdFilter(q, orgScope)
+        q = applyOrganizationIdFilter(q, orgScope, 'organization_id', 'decisions')
         return q.range(from, to)
       }).catch((err) => {
         console.error('Error fetching decisions for allocations:', err)

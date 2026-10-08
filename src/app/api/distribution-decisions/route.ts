@@ -19,6 +19,7 @@ import {
   applyOrganizationIdFilter,
   getUserOrgScope,
   orgScopeBlocksAllData,
+  orgScopeBlocksResourceType,
   withOrganizationId,
 } from '@/lib/canvas/orgScope'
 import { resolveOrgDecisionKeyScope } from '@/lib/canvas/orgResourceScope'
@@ -127,7 +128,7 @@ async function fetchAllPages(
 export async function GET() {
   try {
     const orgScope = await getUserOrgScope()
-    if (orgScopeBlocksAllData(orgScope)) {
+    if (orgScopeBlocksAllData(orgScope) || orgScopeBlocksResourceType(orgScope, 'decisions')) {
       return NextResponse.json([])
     }
 
@@ -141,7 +142,7 @@ export async function GET() {
           .select(DECISION_LIST_SELECT)
           .order('decision_date', { ascending: false })
           .order('id', { ascending: true })
-        q = applyOrganizationIdFilter(q, orgScope)
+        q = applyOrganizationIdFilter(q, orgScope, 'organization_id', 'decisions')
         return q.range(from, to)
       }),
       decisionKeyScope.mode === 'none' ||
@@ -219,6 +220,12 @@ export async function POST(request: Request) {
     const orgScope = await getUserOrgScope(auth.ctx.supabase)
     if (orgScopeBlocksAllData(orgScope)) {
       return NextResponse.json({ error: 'Forbidden — no organization scope' }, { status: 403 })
+    }
+    if (orgScope.mode === 'disclosed') {
+      return NextResponse.json(
+        { error: 'Coordinator organizations cannot create distribution decisions' },
+        { status: 403 }
+      )
     }
 
     // Auto Decision ID: LCC.AD.{Partner}.{YY-MM-DD}-{last+1}

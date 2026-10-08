@@ -14,6 +14,7 @@ import {
   applyOrganizationIdFilter,
   getUserOrgScope,
   orgScopeBlocksAllData,
+  orgScopeBlocksResourceType,
 } from '@/lib/canvas/orgScope'
 import { emitF123Audit, pickChangedAuditFields } from '@/lib/f123Audit'
 
@@ -76,7 +77,7 @@ export async function GET(request: Request) {
       getUserOrgScope(),
     ])
 
-    if (orgScopeBlocksAllData(orgScope)) {
+    if (orgScopeBlocksAllData(orgScope) || orgScopeBlocksResourceType(orgScope, 'f1')) {
       return NextResponse.json([])
     }
 
@@ -84,7 +85,11 @@ export async function GET(request: Request) {
       return NextResponse.json([])
     }
 
-    if (roomAccess.mode !== 'room' && grantAccess.mode === 'none') {
+    if (
+      orgScope.mode !== 'disclosed' &&
+      roomAccess.mode !== 'room' &&
+      grantAccess.mode === 'none'
+    ) {
       return NextResponse.json([])
     }
 
@@ -93,6 +98,7 @@ export async function GET(request: Request) {
         .from('err_projects')
         .select(`
           id,
+          organization_id,
           err_id,
           date,
           state,
@@ -114,14 +120,18 @@ export async function GET(request: Request) {
         .eq('status', 'pending')
         .order('submitted_at', { ascending: false })
 
-      query = applyOrganizationIdFilter(query, orgScope)
+      query = applyOrganizationIdFilter(query, orgScope, 'organization_id', 'f1')
 
       // Base ERR: emergency_room_id only. Partner: grant_grid_id only (never state scope).
       if (roomAccess.mode === 'room') {
         query = query.eq('emergency_room_id', roomAccess.emergencyRoomId)
-      } else if (grantAccess.mode === 'partner') {
+      } else if (orgScope.mode !== 'disclosed' && grantAccess.mode === 'partner') {
         query = applyGrantGridIdFilter(query, grantAccess)
-      } else if (allowedStateNames !== null && allowedStateNames.length > 0) {
+      } else if (
+        orgScope.mode !== 'disclosed' &&
+        allowedStateNames !== null &&
+        allowedStateNames.length > 0
+      ) {
         query = query.in('state', allowedStateNames)
       }
       if (state) {

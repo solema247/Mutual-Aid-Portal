@@ -11,6 +11,7 @@ import {
   applyOrganizationIdFilter,
   getUserOrgScope,
   orgScopeBlocksAllData,
+  orgScopeBlocksResourceType,
 } from '@/lib/canvas/orgScope'
 import { resolveOrgDecisionKeyScope } from '@/lib/canvas/orgResourceScope'
 
@@ -67,10 +68,21 @@ export async function GET() {
       total_pending: 0,
       total_balance: 0,
     }
-    if (grantAccess.mode === 'none' || orgScopeBlocksAllData(orgScope)) {
+    if (orgScopeBlocksAllData(orgScope)) {
       return NextResponse.json(emptySummary, { headers: { 'Cache-Control': 'no-store' } })
     }
-    if (grantAccess.mode === 'partner') {
+    if (orgScope.mode !== 'disclosed' && grantAccess.mode === 'none') {
+      return NextResponse.json(emptySummary, { headers: { 'Cache-Control': 'no-store' } })
+    }
+    // Pool needs decisions and/or f1; without either, empty
+    if (
+      orgScope.mode === 'disclosed' &&
+      orgScopeBlocksResourceType(orgScope, 'decisions') &&
+      orgScopeBlocksResourceType(orgScope, 'f1')
+    ) {
+      return NextResponse.json(emptySummary, { headers: { 'Cache-Control': 'no-store' } })
+    }
+    if (grantAccess.mode === 'partner' && orgScope.mode !== 'disclosed') {
       let assignedFromProjects = 0
       let committed = 0
       let pending = 0
@@ -82,7 +94,7 @@ export async function GET() {
             .from('err_projects')
             .select('expenses, funding_status, status, grant_id, grant_grid_id')
           query = applyGrantGridIdFilter(query, { ...grantAccess, grantGridIds: batch })
-          query = applyOrganizationIdFilter(query, orgScope)
+          query = applyOrganizationIdFilter(query, orgScope, 'organization_id', 'f1')
           const { data, error } = await query.range(from, from + pageSize - 1)
           if (error) throw error
           if (!data?.length) break
@@ -158,7 +170,7 @@ export async function GET() {
           .from('err_projects')
           .select('expenses, funding_status, status, grant_id, grant_grid_id')
           .range(from, from + pageSize - 1)
-        q = applyOrganizationIdFilter(q, orgScope)
+        q = applyOrganizationIdFilter(q, orgScope, 'organization_id', 'f1')
         const { data: page, error } = await q
         if (error) throw error
         if (!page?.length) break

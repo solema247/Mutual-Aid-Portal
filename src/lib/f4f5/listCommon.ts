@@ -14,6 +14,7 @@ export function chunkIds<T extends string | number>(ids: T[]): T[][] {
 
 export const SLIM_PROJECT_SELECT = `
   id,
+  organization_id,
   err_id,
   state,
   locality,
@@ -556,11 +557,20 @@ export async function fetchScopedProjects(
     emergencyRoomId: string | null
     /** Canvas org data plane — filter err_projects.organization_id when set */
     organizationId?: string | null
+    /** Coordinator disclosure: multiple granted processor orgs */
+    organizationIds?: string[] | null
   }
 ): Promise<Record<string, unknown>[]> {
   const statusFilter = ['active', 'approved', 'completed'] as const
-  const applyOrg = <T extends { eq: (c: string, v: string) => T }>(q: T): T =>
-    opts.organizationId ? q.eq('organization_id', opts.organizationId) : q
+  const applyOrg = <T extends { eq: (c: string, v: string) => T; in: (c: string, v: string[]) => T }>(
+    q: T
+  ): T => {
+    if (opts.organizationIds && opts.organizationIds.length > 0) {
+      return q.in('organization_id', opts.organizationIds)
+    }
+    if (opts.organizationId) return q.eq('organization_id', opts.organizationId)
+    return q
+  }
 
   if (opts.grantGridIds !== null) {
     const projects: Record<string, unknown>[] = []

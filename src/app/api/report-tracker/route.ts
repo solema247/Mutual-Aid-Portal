@@ -9,8 +9,10 @@ import {
 import { getUserRoomAccess } from '@/lib/userRoomAccess'
 import {
   applyOrganizationIdFilter,
+  filterRowsByDisclosureStates,
   getUserOrgScope,
   orgScopeBlocksAllData,
+  orgScopeBlocksResourceType,
 } from '@/lib/canvas/orgScope'
 import { getActivityAndCategoryLists, getSectorWithHighestAmount } from '@/lib/plannedActivitiesExpenses'
 import { isActivityShifted } from '@/lib/activityShift'
@@ -127,7 +129,7 @@ export async function GET(request: Request) {
       getUserOrgScope(),
     ])
 
-    if (orgScopeBlocksAllData(orgScope)) {
+    if (orgScopeBlocksAllData(orgScope) || orgScopeBlocksResourceType(orgScope, 'f1')) {
       return NextResponse.json([])
     }
 
@@ -135,12 +137,17 @@ export async function GET(request: Request) {
       return NextResponse.json([])
     }
 
-    if (roomAccess.mode !== 'room' && grantAccess.mode === 'none') {
+    if (
+      orgScope.mode !== 'disclosed' &&
+      roomAccess.mode !== 'room' &&
+      grantAccess.mode === 'none'
+    ) {
       return NextResponse.json([])
     }
 
     const projectSelect = `
         id,
+        organization_id,
         grant_id,
         state,
         locality,
@@ -171,21 +178,21 @@ export async function GET(request: Request) {
         .select(projectSelect)
         .in('status', ['approved', 'active', 'pending', 'completed'])
         .eq('emergency_room_id', roomAccess.emergencyRoomId)
-      roomQuery = applyOrganizationIdFilter(roomQuery, orgScope)
+      roomQuery = applyOrganizationIdFilter(roomQuery, orgScope, 'organization_id', 'f1')
       const { data, error } = await roomQuery.order('state').order('grant_id')
       if (error) {
         console.error('Report tracker fetch error:', error)
         return NextResponse.json({ error: 'Failed to fetch report tracker data' }, { status: 500 })
       }
       rows = data || []
-    } else if (grantAccess.mode === 'partner') {
+    } else if (grantAccess.mode === 'partner' && orgScope.mode !== 'disclosed') {
       // Partner: grant_grid_id only. Do not apply state scope or null grant_grid_id.
       for (const batch of chunkGrantScopeIds(grantAccess.grantGridIds)) {
         let query = supabase
           .from('err_projects')
           .select(projectSelect)
           .in('status', ['approved', 'active', 'pending', 'completed'])
-        query = applyOrganizationIdFilter(query, orgScope)
+        query = applyOrganizationIdFilter(query, orgScope, 'organization_id', 'f1')
         query = applyGrantGridIdFilter(query, { ...grantAccess, grantGridIds: batch })
         const { data, error } = await query.order('state').order('grant_id')
         if (error) {
@@ -211,8 +218,12 @@ export async function GET(request: Request) {
           .order('id', { ascending: true })
           .range(from, from + pageSize - 1)
 
-        query = applyOrganizationIdFilter(query, orgScope)
-        if (allowedStateNames !== null && allowedStateNames.length > 0) {
+        query = applyOrganizationIdFilter(query, orgScope, 'organization_id', 'f1')
+        if (
+          orgScope.mode !== 'disclosed' &&
+          allowedStateNames !== null &&
+          allowedStateNames.length > 0
+        ) {
           query = query.in('state', allowedStateNames)
         }
 
@@ -226,6 +237,10 @@ export async function GET(request: Request) {
         if (page.length < pageSize) break
         from += pageSize
       }
+    }
+
+    if (orgScope.mode === 'disclosed') {
+      rows = filterRowsByDisclosureStates(rows, orgScope, 'f1')
     }
 
     const projectIds = rows.map((p: any) => p.id).filter(Boolean)

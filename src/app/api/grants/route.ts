@@ -167,6 +167,10 @@ export async function GET(request: NextRequest) {
     if (orgScopeBlocksAllData(orgScope)) {
       return NextResponse.json([])
     }
+    // Coordinators: Grants module is not an info-type grant yet — fail closed
+    if (orgScope.mode === 'disclosed') {
+      return NextResponse.json([])
+    }
     if (roomAccess.mode === 'none') {
       return NextResponse.json([])
     }

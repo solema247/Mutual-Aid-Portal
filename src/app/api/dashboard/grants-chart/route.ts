@@ -117,6 +117,8 @@ export async function GET(request: Request) {
 
     if (roomAccess.mode === 'none') return emptyChart()
     if (orgScopeBlocksAllData(orgScope)) return emptyChart()
+    // Coordinators: Grants chart is not grant-type scoped yet — fail closed
+    if (orgScope.mode === 'disclosed') return emptyChart()
 
     const supabase = getSupabaseAdmin()
 

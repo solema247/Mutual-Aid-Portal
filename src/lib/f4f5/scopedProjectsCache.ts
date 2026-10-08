@@ -24,6 +24,7 @@ function scopeFetchOpts(scope: F4F5ListScope) {
     useStateScope: scope.useStateScope,
     emergencyRoomId: scope.emergencyRoomId,
     organizationId: scope.organizationId,
+    organizationIds: scope.organizationIds,
   }
 }
 
@@ -59,6 +60,8 @@ export function buildScopedProjectsCacheKey(userId: string, scope: F4F5ListScope
     stateSegment,
     adminSegment,
     `org:${scope.organizationId ?? 'all'}`,
+    `orgs:${(scope.organizationIds ?? []).slice().sort().join(',') || 'none'}`,
+    `oscope:${scope.orgScope.mode}`,
   ].join('|')
 }
 

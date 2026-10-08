@@ -97,6 +97,13 @@ export async function POST (request: Request) {
     if (orgScopeBlocksAllData(orgScope)) {
       return NextResponse.json({ error: 'No organization scope' }, { status: 403 })
     }
+    // Coordinators may view granted data but not create F1s into processor orgs
+    if (orgScope.mode === 'disclosed') {
+      return NextResponse.json(
+        { error: 'Coordinator organizations cannot create F1 work plans' },
+        { status: 403 }
+      )
+    }
 
     const row = withOrganizationId(
       {

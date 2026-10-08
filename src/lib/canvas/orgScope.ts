@@ -2,21 +2,33 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import { createSbRouteClient } from '@/lib/sbRoute'
 import { resolveEnvironmentForUser } from '@/lib/canvas/resolveEnvironment'
+import {
+  isAllStates,
+  listTypeGrantsForRequester,
+  normalizeResourceType,
+  type InfoResourceType,
+} from '@/lib/canvas/disclosure'
 import { roleBypassesMountGating } from '@/lib/canvas/types'
 
 /**
- * Canvas org data plane (Phase 2).
- * Outer ring around grant/room/state scope: processor users only see/write
- * pipeline rows for their session organization.
- *
- * mode 'all' — canvas unavailable / fallback (staging or pre-SQL): no org filter
- * mode 'org' — filter/write with organizationId
- * mode 'none' — authenticated but no usable org (fail closed)
+ * Canvas org data plane.
+ * - processor: own organization_id only
+ * - coordinator: data from access_grants (processor orgs × types × states)
+ * - fallback: mode 'all' (staging / pre-SQL)
  */
 export type UserOrgScope =
   | { mode: 'all'; organizationId: null }
   | { mode: 'org'; organizationId: string }
   | { mode: 'none'; organizationId: null }
+  | {
+      mode: 'disclosed'
+      organizationId: null
+      requestingOrganizationId: string
+      /** Processor orgs with ≥1 type grant */
+      allowedOrganizationIds: string[]
+      /** targetOrgId → resourceType → states (null = all states) */
+      grantsByOrgType: Record<string, Record<string, string[] | null>>
+    }
 
 const ALL_SCOPE: UserOrgScope = { mode: 'all', organizationId: null }
 const NONE_SCOPE: UserOrgScope = { mode: 'none', organizationId: null }
@@ -53,26 +65,174 @@ export async function getUserOrgScope(
     return ALL_SCOPE
   }
 
+  // Coordinators only see processor data they've been granted
+  if (canvas.organization.org_type === 'coordinator') {
+    const grants = await listTypeGrantsForRequester(client, canvas.organization.id)
+    const grantsByOrgType: Record<string, Record<string, string[] | null>> = {}
+    const allowedOrganizationIds: string[] = []
+
+    for (const [targetOrgId, byType] of grants.entries()) {
+      const typeMap: Record<string, string[] | null> = {}
+      for (const [type, grant] of byType.entries()) {
+        typeMap[type] = isAllStates(grant.states) ? null : grant.states
+      }
+      if (Object.keys(typeMap).length === 0) continue
+      grantsByOrgType[targetOrgId] = typeMap
+      allowedOrganizationIds.push(targetOrgId)
+    }
+
+    return {
+      mode: 'disclosed',
+      organizationId: null,
+      requestingOrganizationId: canvas.organization.id,
+      allowedOrganizationIds,
+      grantsByOrgType,
+    }
+  }
+
   return { mode: 'org', organizationId: canvas.organization.id }
 }
 
-/** Apply organization_id equality when scope is org-bound. */
-export function applyOrganizationIdFilter<
-  T extends { eq: (column: string, value: string) => T },
->(query: T, scope: UserOrgScope, column: string = 'organization_id'): T {
-  if (scope.mode !== 'org') return query
-  return query.eq(column, scope.organizationId)
+/** Orgs that granted a given info type (empty ⇒ no access for that type). */
+export function orgIdsGrantedForType(
+  scope: UserOrgScope,
+  resourceType: InfoResourceType | string
+): string[] {
+  const type = normalizeResourceType(String(resourceType)) ?? String(resourceType)
+  if (scope.mode === 'org') return [scope.organizationId]
+  if (scope.mode === 'all') return [] // caller must not filter by org
+  if (scope.mode === 'none') return []
+  const out: string[] = []
+  for (const orgId of scope.allowedOrganizationIds) {
+    if (scope.grantsByOrgType[orgId]?.[type] !== undefined) out.push(orgId)
+  }
+  return out
+}
+
+/** States granted for org+type; null = all states; [] = none. */
+export function statesGrantedForOrgType(
+  scope: UserOrgScope,
+  organizationId: string,
+  resourceType: InfoResourceType | string
+): string[] | null | undefined {
+  if (scope.mode === 'all' || scope.mode === 'org') return null
+  if (scope.mode === 'none') return []
+  const type = normalizeResourceType(String(resourceType)) ?? String(resourceType)
+  const states = scope.grantsByOrgType[organizationId]?.[type]
+  if (states === undefined) return []
+  return states // null = all
+}
+
+export function hasDisclosureGrant(
+  scope: UserOrgScope,
+  resourceType: InfoResourceType | string
+): boolean {
+  if (scope.mode === 'all' || scope.mode === 'org') return true
+  if (scope.mode === 'none') return false
+  return orgIdsGrantedForType(scope, resourceType).length > 0
 }
 
 /**
- * For list endpoints: if scope is none, return empty immediately.
- * If all, no filter. If org, caller must applyOrganizationIdFilter.
+ * Apply organization_id filter.
+ * For disclosed coordinators, pass resourceType so only orgs that granted that type are included.
  */
-export function orgScopeBlocksAllData(scope: UserOrgScope): boolean {
-  return scope.mode === 'none'
+export function applyOrganizationIdFilter<
+  T extends {
+    eq: (column: string, value: string) => T
+    in: (column: string, values: string[]) => T
+  },
+>(
+  query: T,
+  scope: UserOrgScope,
+  column: string = 'organization_id',
+  resourceType?: InfoResourceType | string
+): T {
+  if (scope.mode === 'org') {
+    return query.eq(column, scope.organizationId)
+  }
+  if (scope.mode === 'disclosed') {
+    const ids = resourceType
+      ? orgIdsGrantedForType(scope, resourceType)
+      : scope.allowedOrganizationIds
+    if (ids.length === 0) {
+      // Impossible match — fail closed
+      return query.eq(column, '00000000-0000-0000-0000-000000000000')
+    }
+    return query.in(column, ids)
+  }
+  return query
 }
 
-/** Merge organization_id onto insert/update payloads when org-scoped. */
+/** Post-filter rows by per-org state grants for a resource type. */
+export function filterRowsByDisclosureStates<T extends Record<string, unknown>>(
+  rows: T[],
+  scope: UserOrgScope,
+  resourceType: InfoResourceType | string,
+  opts?: {
+    organizationIdKey?: keyof T
+    stateKey?: keyof T
+  }
+): T[] {
+  if (scope.mode !== 'disclosed') return rows
+  const orgKey = (opts?.organizationIdKey ?? 'organization_id') as string
+  const stateKey = (opts?.stateKey ?? 'state') as string
+  const type = normalizeResourceType(String(resourceType)) ?? String(resourceType)
+
+  return rows.filter((row) => {
+    const orgId = row[orgKey]
+    if (typeof orgId !== 'string' || !orgId) return false
+    const states = scope.grantsByOrgType[orgId]?.[type]
+    if (states === undefined) return false
+    if (states == null || states.length === 0) return true // all states
+    const state = row[stateKey]
+    if (typeof state !== 'string' || !state) return false
+    return states.includes(state)
+  })
+}
+
+/**
+ * Stable cache segment for disclosed scopes (avoids sharing LoHub caches with LCC).
+ */
+export function orgScopeCacheKey(scope: UserOrgScope): string {
+  if (scope.mode === 'org') return `org:${scope.organizationId}`
+  if (scope.mode === 'all') return 'org:all'
+  if (scope.mode === 'none') return 'org:none'
+  const parts: string[] = [`coord:${scope.requestingOrganizationId}`]
+  for (const orgId of [...scope.allowedOrganizationIds].sort()) {
+    const types = scope.grantsByOrgType[orgId] ?? {}
+    for (const type of Object.keys(types).sort()) {
+      const st = types[type]
+      const stKey = st == null || st.length === 0 ? '*' : [...st].sort().join('+')
+      parts.push(`${orgId}:${type}:${stKey}`)
+    }
+  }
+  return parts.join('|')
+}
+
+/**
+ * For list endpoints: if scope is none, or disclosed with no grants, return empty.
+ */
+export function orgScopeBlocksAllData(scope: UserOrgScope): boolean {
+  if (scope.mode === 'none') return true
+  if (scope.mode === 'disclosed' && scope.allowedOrganizationIds.length === 0) {
+    return true
+  }
+  return false
+}
+
+/** True when coordinator disclosed scope has no grant for this type. */
+export function orgScopeBlocksResourceType(
+  scope: UserOrgScope,
+  resourceType: InfoResourceType | string
+): boolean {
+  if (orgScopeBlocksAllData(scope)) return true
+  if (scope.mode === 'disclosed') {
+    return orgIdsGrantedForType(scope, resourceType).length === 0
+  }
+  return false
+}
+
+/** Merge organization_id onto insert/update payloads when org-scoped (processors only). */
 export function withOrganizationId<T extends Record<string, unknown>>(
   payload: T,
   scope: UserOrgScope
@@ -83,15 +243,23 @@ export function withOrganizationId<T extends Record<string, unknown>>(
 
 export function organizationIdMatchesScope(
   scope: UserOrgScope,
-  rowOrganizationId: string | null | undefined
+  rowOrganizationId: string | null | undefined,
+  resourceType?: InfoResourceType | string
 ): boolean {
   if (scope.mode === 'all') return true
   if (scope.mode === 'none') return false
   if (rowOrganizationId == null || String(rowOrganizationId).trim() === '') {
-    // Legacy null rows: fail closed once canvas is live (backfill should have set them)
     return false
   }
-  return String(rowOrganizationId) === scope.organizationId
+  const orgId = String(rowOrganizationId)
+  if (scope.mode === 'org') {
+    return orgId === scope.organizationId
+  }
+  // disclosed
+  if (resourceType) {
+    return orgIdsGrantedForType(scope, resourceType).includes(orgId)
+  }
+  return scope.allowedOrganizationIds.includes(orgId)
 }
 
 export function orgScopeForbiddenResponse(

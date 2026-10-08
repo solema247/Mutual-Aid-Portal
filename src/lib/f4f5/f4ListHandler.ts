@@ -123,6 +123,15 @@ async function ensureProjectsForSummaries(
 }
 
 function projectInScope(project: Record<string, unknown>, scope: Awaited<ReturnType<typeof resolveF4F5ListScope>>): boolean {
+  if (scope.orgScope.mode === 'disclosed') {
+    const orgId = project.organization_id != null ? String(project.organization_id) : ''
+    if (!orgId || !(scope.organizationIds ?? []).includes(orgId)) return false
+    const states = scope.orgScope.grantsByOrgType[orgId]?.f4
+    if (states === undefined) return false
+    if (states == null || states.length === 0) return true
+    const st = project.state != null ? String(project.state) : ''
+    return st !== '' && states.includes(st)
+  }
   if (scope.grantAccess.mode === 'partner') {
     const gridId = project.grant_grid_id != null ? String(project.grant_grid_id) : ''
     return gridId !== '' && scope.grantAccess.grantGridIds.includes(gridId)
@@ -170,7 +179,7 @@ export async function handleF4ListGet(request: Request) {
   const perm = await requirePermission('f4_f5_view_page')
   if (perm instanceof NextResponse) return perm
 
-  const scope = await resolveF4F5ListScope()
+  const scope = await resolveF4F5ListScope('f4')
   const query = parseF4ListQueryFromApiUrl(new URL(request.url).searchParams)
 
   const emptyBody = {

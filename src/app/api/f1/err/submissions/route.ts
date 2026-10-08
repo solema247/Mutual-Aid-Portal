@@ -9,8 +9,10 @@ import {
 import { getUserRoomAccess } from '@/lib/userRoomAccess'
 import {
   applyOrganizationIdFilter,
+  filterRowsByDisclosureStates,
   getUserOrgScope,
   orgScopeBlocksAllData,
+  orgScopeBlocksResourceType,
   type UserOrgScope,
 } from '@/lib/canvas/orgScope'
 
@@ -39,7 +41,7 @@ async function fetchProjectsInGrantScope(
         .from('err_projects')
         .select('*')
         .or(SOURCE_FILTER)
-      query = applyOrganizationIdFilter(query, orgScope)
+      query = applyOrganizationIdFilter(query, orgScope, 'organization_id', 'f1')
       query = applyGrantGridIdFilter(query, { ...grantAccess, grantGridIds: batch })
       const { data, error } = await query
         .order('submitted_at', { ascending: false })
@@ -70,7 +72,7 @@ async function fetchProjectsInRoomScope(
       .select('*')
       .or(SOURCE_FILTER)
       .eq('emergency_room_id', emergencyRoomId)
-    query = applyOrganizationIdFilter(query, orgScope)
+    query = applyOrganizationIdFilter(query, orgScope, 'organization_id', 'f1')
     const { data, error } = await query
       .order('submitted_at', { ascending: false })
       .range(from, from + pageSize - 1)
@@ -129,7 +131,7 @@ export async function GET(request: Request) {
     const projectId = searchParams.get('project_id')?.trim() || ''
     const fundingCycleId = searchParams.get('funding_cycle_id')?.trim() || ''
 
-    if (orgScopeBlocksAllData(orgScope)) {
+    if (orgScopeBlocksAllData(orgScope) || orgScopeBlocksResourceType(orgScope, 'f1')) {
       return NextResponse.json([], { headers: NO_STORE })
     }
 
@@ -142,9 +144,9 @@ export async function GET(request: Request) {
         if (!allowed) {
           return NextResponse.json({ feedback: [] }, { headers: NO_STORE })
         }
-      } else if (grantAccess.mode === 'none') {
+      } else if (orgScope.mode !== 'disclosed' && grantAccess.mode === 'none') {
         return NextResponse.json({ feedback: [] }, { headers: NO_STORE })
-      } else if (grantAccess.mode === 'partner') {
+      } else if (orgScope.mode !== 'disclosed' && grantAccess.mode === 'partner') {
         const allowed = await projectInPartnerScope(supabase, grantAccess, projectId)
         if (!allowed) {
           return NextResponse.json({ feedback: [] }, { headers: NO_STORE })
@@ -160,7 +162,7 @@ export async function GET(request: Request) {
     }
 
     if (fundingCycleId) {
-      if (grantAccess.mode !== 'all') {
+      if (grantAccess.mode !== 'all' || orgScope.mode === 'disclosed') {
         return NextResponse.json({ grant_serials: [] }, { headers: NO_STORE })
       }
       const { data, error } = await supabase
@@ -185,11 +187,12 @@ export async function GET(request: Request) {
       return NextResponse.json({ projects }, { headers: NO_STORE })
     }
 
-    if (grantAccess.mode === 'none') {
+    // Coordinators: skip partner/none short-circuit; use access_grants (disclosed)
+    if (orgScope.mode !== 'disclosed' && grantAccess.mode === 'none') {
       return NextResponse.json([], { headers: NO_STORE })
     }
 
-    if (grantAccess.mode === 'partner') {
+    if (orgScope.mode !== 'disclosed' && grantAccess.mode === 'partner') {
       const projects = await fetchProjectsInGrantScope(supabase, grantAccess, orgScope)
       return NextResponse.json({ projects }, { headers: NO_STORE })
     }
@@ -198,10 +201,14 @@ export async function GET(request: Request) {
       .from('err_projects')
       .select('*')
       .or(SOURCE_FILTER)
-    allQuery = applyOrganizationIdFilter(allQuery, orgScope)
+    allQuery = applyOrganizationIdFilter(allQuery, orgScope, 'organization_id', 'f1')
     const { data, error } = await allQuery.order('submitted_at', { ascending: false })
     if (error) throw error
-    return NextResponse.json({ projects: data || [] }, { headers: NO_STORE })
+    const projects =
+      orgScope.mode === 'disclosed'
+        ? filterRowsByDisclosureStates(data || [], orgScope, 'f1')
+        : data || []
+    return NextResponse.json({ projects }, { headers: NO_STORE })
   } catch (e) {
     console.error('GET /api/f1/err/submissions:', e)
     return NextResponse.json({ error: 'Failed to load F1 submissions' }, { status: 500, headers: NO_STORE })

@@ -84,7 +84,12 @@ export async function GET(request: Request) {
       getUserOrgScope(),
     ])
 
-    if (roomAccess.mode === 'none' || orgScopeBlocksAllData(orgScope)) {
+    if (
+      roomAccess.mode === 'none' ||
+      orgScopeBlocksAllData(orgScope) ||
+      orgScope.mode === 'disclosed'
+    ) {
+      // Coordinators: dashboard categories not yet grant-type scoped — fail closed
       return NextResponse.json(
         { projectCount: 0, categories: [] },
         { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } }

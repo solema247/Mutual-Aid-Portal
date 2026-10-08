@@ -17,6 +17,7 @@ import {
   applyOrganizationIdFilter,
   getUserOrgScope,
   orgScopeBlocksAllData,
+  orgScopeBlocksResourceType,
 } from '@/lib/canvas/orgScope'
 import { resolveOrgDecisionKeyScope } from '@/lib/canvas/orgResourceScope'
 import {
@@ -103,12 +104,22 @@ export async function GET(request: Request) {
         stateOptions: [] as string[],
       },
     }
-    if (grantAccess.mode === 'none' || orgScopeBlocksAllData(orgScope)) {
+    if (orgScopeBlocksAllData(orgScope)) {
+      return NextResponse.json([], { headers: { 'Cache-Control': 'no-store' } })
+    }
+    if (orgScope.mode !== 'disclosed' && grantAccess.mode === 'none') {
+      return NextResponse.json([], { headers: { 'Cache-Control': 'no-store' } })
+    }
+    if (
+      orgScope.mode === 'disclosed' &&
+      orgScopeBlocksResourceType(orgScope, 'decisions') &&
+      orgScopeBlocksResourceType(orgScope, 'f1')
+    ) {
       return NextResponse.json(emptyByState, {
         headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' },
       })
     }
-    if (grantAccess.mode === 'partner') {
+    if (grantAccess.mode === 'partner' && orgScope.mode !== 'disclosed') {
       const assignedFromProjectsByState = new Map<string, number>()
       const committedByState = new Map<string, number>()
       const pendingByState = new Map<string, number>()
@@ -126,7 +137,7 @@ export async function GET(request: Request) {
               .from('err_projects')
               .select('expenses, funding_status, status, state, grant_id, grant_grid_id, grant_segment, date, date_transfer')
             query = applyGrantGridIdFilter(query, { ...grantAccess, grantGridIds: batch })
-            query = applyOrganizationIdFilter(query, orgScope)
+            query = applyOrganizationIdFilter(query, orgScope, 'organization_id', 'f1')
             const { data, error } = await query.range(from, from + pageSize - 1)
             if (error) throw error
             if (!data?.length) break
@@ -339,7 +350,7 @@ export async function GET(request: Request) {
             'expenses, funding_status, status, state, grant_id, grant_grid_id, grant_segment, date, date_transfer'
           )
           .range(from, from + pageSize - 1)
-        q = applyOrganizationIdFilter(q, orgScope)
+        q = applyOrganizationIdFilter(q, orgScope, 'organization_id', 'f1')
         const { data: page, error } = await q
         if (error) throw error
         if (!page?.length) break

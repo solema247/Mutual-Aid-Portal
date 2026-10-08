@@ -60,6 +60,18 @@ export async function resolveOrgDecisionKeyScope(
 ): Promise<OrgDecisionKeyScope> {
   if (orgScope.mode === 'none') return { mode: 'none' }
   if (orgScope.mode === 'all') return { mode: 'all' }
-  const keys = await loadOrgDecisionKeys(supabase, orgScope.organizationId)
-  return { mode: 'keys', keys }
+  if (orgScope.mode === 'org') {
+    const keys = await loadOrgDecisionKeys(supabase, orgScope.organizationId)
+    return { mode: 'keys', keys }
+  }
+  // disclosed: union decision keys from processor orgs that granted "decisions"
+  const { orgIdsGrantedForType } = await import('@/lib/canvas/orgScope')
+  const orgIds = orgIdsGrantedForType(orgScope, 'decisions')
+  if (orgIds.length === 0) return { mode: 'none' }
+  const allKeys = new Set<string>()
+  for (const orgId of orgIds) {
+    const keys = await loadOrgDecisionKeys(supabase, orgId)
+    for (const k of keys) allKeys.add(k)
+  }
+  return { mode: 'keys', keys: Array.from(allKeys) }
 }

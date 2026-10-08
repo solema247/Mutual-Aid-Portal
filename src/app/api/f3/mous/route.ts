@@ -25,8 +25,10 @@ import { emitF123Audit } from '@/lib/f123Audit'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import {
   applyOrganizationIdFilter,
+  filterRowsByDisclosureStates,
   getUserOrgScope,
   orgScopeBlocksAllData,
+  orgScopeBlocksResourceType,
   withOrganizationId,
 } from '@/lib/canvas/orgScope'
 
@@ -320,21 +322,31 @@ export async function GET(request: Request) {
         ...aggregateMouEnrichment([]),
       })
 
-    if (orgScopeBlocksAllData(orgScope)) return emptyMous()
+    if (orgScopeBlocksAllData(orgScope) || orgScopeBlocksResourceType(orgScope, 'mous')) {
+      return emptyMous()
+    }
     if (roomAccess.mode === 'none') return emptyMous()
-    if (roomAccess.mode !== 'room' && grantAccess.mode === 'none') return emptyMous()
+    if (
+      orgScope.mode !== 'disclosed' &&
+      roomAccess.mode !== 'room' &&
+      grantAccess.mode === 'none'
+    ) {
+      return emptyMous()
+    }
 
     // MOU ids with ≥1 project in scope: Base ERR by room, Partner by grants
     const scopedMouIds =
-      roomAccess.mode === 'room'
-        ? await fetchMouIdsForEmergencyRoom(roomAccess.emergencyRoomId)
-        : grantAccess.mode === 'partner'
-          ? await fetchMouIdsInGrantAccess(grantAccess)
-          : null
+      orgScope.mode === 'disclosed'
+        ? null
+        : roomAccess.mode === 'room'
+          ? await fetchMouIdsForEmergencyRoom(roomAccess.emergencyRoomId)
+          : grantAccess.mode === 'partner'
+            ? await fetchMouIdsInGrantAccess(grantAccess)
+            : null
 
     if (scopedMouIds != null && scopedMouIds.length === 0) return emptyMous()
 
-    const mous = await fetchAllPages((from, to) => {
+    const mousRaw = await fetchAllPages((from, to) => {
       let query = supabase
         .from('mous')
         .select('*')
@@ -342,10 +354,11 @@ export async function GET(request: Request) {
         .order('id', { ascending: true })
         .range(from, to)
 
-      query = applyOrganizationIdFilter(query, orgScope)
+      query = applyOrganizationIdFilter(query, orgScope, 'organization_id', 'mous')
 
       // Base ERR / Partner: scoped via linked projects (never state scope)
-      if (scopedMouIds == null) {
+      // Coordinators: state limits come from access_grants (post-filter)
+      if (scopedMouIds == null && orgScope.mode !== 'disclosed') {
         if (allowedStateNames !== null && allowedStateNames.length > 0) {
           query = query.in('state', allowedStateNames)
         }
@@ -355,6 +368,11 @@ export async function GET(request: Request) {
       }
       return query
     })
+
+    const mous =
+      orgScope.mode === 'disclosed'
+        ? filterRowsByDisclosureStates(mousRaw, orgScope, 'mous')
+        : mousRaw
 
     const scopedSet = scopedMouIds != null ? new Set(scopedMouIds) : null
     let list = scopedSet
