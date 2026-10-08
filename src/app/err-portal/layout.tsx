@@ -3,6 +3,7 @@
 import { useTranslation } from 'react-i18next'
 import { useState, useEffect } from 'react'
 import MainLayout from '@/components/layout/MainLayout'
+import PortalPageTransition from '@/components/PortalPageTransition'
 import PageExplainerHeader from '@/components/layout/PageExplainerHeader'
 import { PageExplainerProvider } from '@/contexts/PageExplainerContext'
 import type { SidebarItem, SidebarLinkItem } from '@/components/layout/Sidebar'
@@ -11,6 +12,7 @@ import { Users, ClipboardList, BarChart2, BarChart3, PieChart, UserCog, Home, Ch
 import { useAllowedFunctions } from '@/hooks/useAllowedFunctions'
 import { useCanvasSession } from '@/hooks/useCanvasSession'
 import { isModuleMounted } from '@/lib/canvas/mounts'
+import { isLocalizationHubOrg } from '@/lib/canvas/orgBrand'
 import { isStateManagementRole } from '@/lib/stateManagement/roles'
 import { canViewAuditLogUi } from '@/lib/auditLogAccess'
 
@@ -317,8 +319,13 @@ export default function ErrPortalLayout({
     user?.environment_display_name ||
     'Portal'
 
+  // Localization Hub branded loader only — other orgs/LCC get their own loaders later.
+  const lohubPageTransitions =
+    !canvasLoading && isLocalizationHubOrg(user?.organization_slug)
+
   return (
     <PageExplainerProvider>
+    <PortalPageTransition enabled={lohubPageTransitions}>
     <MainLayout
         sidebarItems={sidebarItems}
         headerTitle={headerTitle}
@@ -348,6 +355,7 @@ export default function ErrPortalLayout({
         </div>
       )}
     </MainLayout>
+    </PortalPageTransition>
     </PageExplainerProvider>
   )
 }

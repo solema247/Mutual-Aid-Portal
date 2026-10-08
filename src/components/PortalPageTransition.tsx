@@ -62,7 +62,19 @@ function isErrPortalRouteNavigation(
 
 type Phase = 'hidden' | 'shown' | 'fading'
 
-export default function PortalPageTransition({ children }: { children: ReactNode }) {
+type PortalPageTransitionProps = {
+  children: ReactNode
+  /**
+   * When false, children render with no overlay or navigation listeners.
+   * Use for org-specific brand loaders (e.g. Localization Hub only).
+   */
+  enabled?: boolean
+}
+
+export default function PortalPageTransition({
+  children,
+  enabled = true,
+}: PortalPageTransitionProps) {
   const pathname = usePathname()
   const pathnameRef = useRef(pathname)
   const prevPathRef = useRef(pathname)
@@ -93,10 +105,11 @@ export default function PortalPageTransition({ children }: { children: ReactNode
   }, [clearStuckTimer])
 
   const showTransition = useCallback(() => {
+    if (!enabled) return
     genRef.current += 1
     setPhase('shown')
     armStuckGuard()
-  }, [armStuckGuard])
+  }, [armStuckGuard, enabled])
 
   const finishAfterPaint = useCallback((gen: number) => {
     requestAnimationFrame(() => {
@@ -108,6 +121,12 @@ export default function PortalPageTransition({ children }: { children: ReactNode
   }, [])
 
   useEffect(() => {
+    if (!enabled) {
+      clearStuckTimer()
+      setPhase('hidden')
+      return
+    }
+
     const onPointerDown = (event: PointerEvent) => {
       if (event.defaultPrevented) return
       if (event.button !== 0) return
@@ -125,9 +144,11 @@ export default function PortalPageTransition({ children }: { children: ReactNode
 
     document.addEventListener('pointerdown', onPointerDown, true)
     return () => document.removeEventListener('pointerdown', onPointerDown, true)
-  }, [showTransition])
+  }, [enabled, showTransition, clearStuckTimer])
 
   useEffect(() => {
+    if (!enabled) return
+
     if (skipInitialPathRef.current) {
       skipInitialPathRef.current = false
       prevPathRef.current = pathname
@@ -145,9 +166,13 @@ export default function PortalPageTransition({ children }: { children: ReactNode
     }
 
     finishAfterPaint(gen)
-  }, [pathname, showTransition, finishAfterPaint])
+  }, [pathname, enabled, showTransition, finishAfterPaint])
 
   useEffect(() => () => clearStuckTimer(), [clearStuckTimer])
+
+  if (!enabled) {
+    return <>{children}</>
+  }
 
   const overlayVisible = phase !== 'hidden'
 
@@ -165,7 +190,7 @@ export default function PortalPageTransition({ children }: { children: ReactNode
       {overlayVisible ? (
         <div
           className={cn(
-            'fixed inset-0 z-[100] flex pointer-events-none items-center justify-center bg-background transition-opacity ease-out',
+            'fixed inset-0 z-[100] flex pointer-events-none items-center justify-center bg-background/55 backdrop-blur-[2px] transition-opacity ease-out',
             phase === 'fading' ? 'opacity-0' : 'opacity-100',
           )}
           style={{ transitionDuration: `${FADE_MS}ms` }}
