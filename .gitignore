@@ -88,6 +88,7 @@ scripts/cutover/verify-storage-bytes.js
 scripts/cutover/purge-staging-f4-sample.js
 scripts/cutover/purge-staging-f5-sample.js
 scripts/cutover/purge-staging-f3-signed-payment.js
+scripts/cutover/purge-staging-f3-pdfs.js
 scripts/cutover/purge-staging-f1-sample.js
 scripts/cutover/sync-f4-prod-to-staging.js
 scripts/cutover/_storage-compare/
