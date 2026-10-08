@@ -7,7 +7,7 @@ import PageExplainerHeader from '@/components/layout/PageExplainerHeader'
 import { PageExplainerProvider } from '@/contexts/PageExplainerContext'
 import type { SidebarItem, SidebarLinkItem } from '@/components/layout/Sidebar'
 import { useRouter } from 'next/navigation'
-import { Users, ClipboardList, BarChart2, BarChart3, PieChart, UserCog, Home, CheckSquare, BookOpen, PenTool, Cog, FileText, BookMarked, Ticket, ShieldCheck, Archive, Split, ArrowLeftRight, LayoutDashboard, MapPin, ScrollText, Layers } from 'lucide-react'
+import { Users, ClipboardList, BarChart2, BarChart3, PieChart, UserCog, Home, CheckSquare, BookOpen, PenTool, Cog, FileText, BookMarked, Ticket, ShieldCheck, Archive, Split, ArrowLeftRight, LayoutDashboard, MapPin, ScrollText, Layers, Eye, Inbox } from 'lucide-react'
 import { useAllowedFunctions } from '@/hooks/useAllowedFunctions'
 import { useCanvasSession } from '@/hooks/useCanvasSession'
 import { isModuleMounted } from '@/lib/canvas/mounts'
@@ -80,6 +80,11 @@ export default function ErrPortalLayout({
   const canViewDataArchive = can('data_archive_view_page') && mounted('data_archive')
   const canViewReportTracker = can('f4_f5_view_page') && mounted('report_tracker')
   const canViewEnvironment = mounted('environment_home')
+  const canViewOversight =
+    mounted('oversight') && user?.organization_type === 'coordinator'
+  const canViewAccessInbox =
+    mounted('access_inbox') ||
+    (user?.organization_type === 'coordinator' && !!user?.organization_id)
 
   const fSystemChildren: SidebarLinkItem[] = []
   if (canViewF1) {
@@ -112,6 +117,13 @@ export default function ErrPortalLayout({
   }
 
   const reportingGroupChildren: SidebarLinkItem[] = []
+  if (canViewOversight) {
+    reportingGroupChildren.push({
+      href: '/err-portal/oversight',
+      label: 'Oversight',
+      icon: <Eye className="h-5 w-5" />,
+    })
+  }
   if (canViewReportTracker) {
     reportingGroupChildren.push({
       href: '/err-portal/report-tracker',
@@ -177,6 +189,13 @@ export default function ErrPortalLayout({
       href: '/err-portal/environment',
       label: 'Environment',
       icon: <Layers className="h-5 w-5" />,
+    })
+  }
+  if (canViewAccessInbox) {
+    adminGroupChildren.push({
+      href: '/err-portal/access-requests',
+      label: user?.organization_type === 'processor' ? 'Access inbox' : 'Access requests',
+      icon: <Inbox className="h-5 w-5" />,
     })
   }
   if (canViewRooms) {

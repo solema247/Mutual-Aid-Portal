@@ -12,6 +12,7 @@ export type CanvasMePayload = {
   organization_id?: string
   organization_slug?: string
   organization_name?: string
+  organization_type?: string
   environment_id?: string
   environment_slug?: string
   environment_display_name?: string

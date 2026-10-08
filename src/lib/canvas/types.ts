@@ -30,6 +30,7 @@ export type ResolvedCanvasContext = {
  */
 export const FULL_PORTAL_MOUNT_CODES: readonly string[] = [
   'environment_home',
+  'access_inbox',
   'grant_decisions',
   'grant_grants',
   'grant_allocation',
@@ -37,6 +38,7 @@ export const FULL_PORTAL_MOUNT_CODES: readonly string[] = [
   'f2_approvals',
   'f3_mous',
   'f4_f5_reporting',
+  'oversight',
   'report_tracker',
   'project_management',
   'dashboard',
@@ -60,6 +62,9 @@ export const CANVAS_MIRROR_SKIP_TABLES: ReadonlySet<string> = new Set([
   'workflow_templates',
   'environment_mounts',
   'workflow_requests',
+  'disclosure_policies',
+  'access_requests',
+  'access_grants',
 ])
 
 export const CANVAS_ADMIN_ROLES = new Set(['admin', 'superadmin', 'support'])

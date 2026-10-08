@@ -69,6 +69,9 @@ export const AUDIT_ACTIONS = [
   'project.reporting_status_changed',
   'project.completed',
   'project.implemented_sector_changed',
+  // Canvas disclosure / access requests
+  'access_request.created',
+  'access_request.decided',
 ] as const
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number] | (string & {})
@@ -85,6 +88,7 @@ export const AUDIT_TARGET_TYPES = [
   'payment_file',
   'f4_summary',
   'f5_report',
+  'access_request',
 ] as const
 
 export type AuditTargetType = (typeof AUDIT_TARGET_TYPES)[number] | (string & {})

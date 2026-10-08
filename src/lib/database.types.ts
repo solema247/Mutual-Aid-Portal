@@ -775,6 +775,127 @@ export type Database = {
           },
         ]
       }
+      access_grants: {
+        Row: {
+          access_request_id: string | null
+          granted_at: string
+          granted_by: string | null
+          id: string
+          requesting_organization_id: string
+          resource_id: string
+          resource_type: string
+          target_organization_id: string
+        }
+        Insert: {
+          access_request_id?: string | null
+          granted_at?: string
+          granted_by?: string | null
+          id?: string
+          requesting_organization_id: string
+          resource_id: string
+          resource_type?: string
+          target_organization_id: string
+        }
+        Update: {
+          access_request_id?: string | null
+          granted_at?: string
+          granted_by?: string | null
+          id?: string
+          requesting_organization_id?: string
+          resource_id?: string
+          resource_type?: string
+          target_organization_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "access_grants_access_request_id_fkey"
+            columns: ["access_request_id"]
+            isOneToOne: false
+            referencedRelation: "access_requests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "access_grants_requesting_organization_id_fkey"
+            columns: ["requesting_organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "access_grants_target_organization_id_fkey"
+            columns: ["target_organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      access_requests: {
+        Row: {
+          created_at: string
+          decided_at: string | null
+          decided_by: string | null
+          decision_note: string | null
+          id: string
+          reason: string | null
+          requested_by: string | null
+          requesting_organization_id: string
+          resource_id: string | null
+          resource_type: string
+          scope: string
+          status: string
+          target_organization_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          decision_note?: string | null
+          id?: string
+          reason?: string | null
+          requested_by?: string | null
+          requesting_organization_id: string
+          resource_id?: string | null
+          resource_type?: string
+          scope?: string
+          status?: string
+          target_organization_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          decision_note?: string | null
+          id?: string
+          reason?: string | null
+          requested_by?: string | null
+          requesting_organization_id?: string
+          resource_id?: string | null
+          resource_type?: string
+          scope?: string
+          status?: string
+          target_organization_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "access_requests_requesting_organization_id_fkey"
+            columns: ["requesting_organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "access_requests_target_organization_id_fkey"
+            columns: ["target_organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       cycle_grant_inclusions: {
         Row: {
           amount_included: number
@@ -1047,6 +1168,47 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: []
+      }
+      disclosure_policies: {
+        Row: {
+          advertise_existence: boolean
+          created_at: string
+          disclose_content: boolean
+          id: string
+          organization_id: string
+          resource_type: string
+          stage_filter: string[] | null
+          updated_at: string
+        }
+        Insert: {
+          advertise_existence?: boolean
+          created_at?: string
+          disclose_content?: boolean
+          id?: string
+          organization_id: string
+          resource_type?: string
+          stage_filter?: string[] | null
+          updated_at?: string
+        }
+        Update: {
+          advertise_existence?: boolean
+          created_at?: string
+          disclose_content?: boolean
+          id?: string
+          organization_id?: string
+          resource_type?: string
+          stage_filter?: string[] | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "disclosure_policies_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       donor_forecasts: {
         Row: {
