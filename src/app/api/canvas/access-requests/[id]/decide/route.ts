@@ -54,6 +54,15 @@ export async function POST(
     return NextResponse.json({ error: 'decision must be approved or denied' }, { status: 400 })
   }
 
+  const decisionNote =
+    typeof body.decision_note === 'string' ? body.decision_note.trim() : ''
+  if (decision === 'denied' && !decisionNote) {
+    return NextResponse.json(
+      { error: 'A reason is required when denying an access request' },
+      { status: 400 }
+    )
+  }
+
   const { data: existing, error: fetchErr } = await supabase
     .from('access_requests')
     .select('*')
@@ -92,8 +101,7 @@ export async function POST(
       status: decision,
       decided_by: user.id,
       decided_at: now,
-      decision_note:
-        typeof body.decision_note === 'string' ? body.decision_note.trim() || null : null,
+      decision_note: decisionNote || null,
       updated_at: now,
     })
     .eq('id', id)

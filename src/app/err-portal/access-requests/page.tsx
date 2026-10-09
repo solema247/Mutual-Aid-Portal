@@ -71,6 +71,12 @@ export default function AccessRequestsPage() {
   }, [meLoading, mounted, isCoordinator, isProcessor, reload])
 
   async function decide(id: string, decision: 'approved' | 'denied') {
+    const note = noteById[id]?.trim() || ''
+    if (decision === 'denied' && !note) {
+      setError('A reason is required when denying an access request')
+      return
+    }
+
     setBusyId(id)
     setError(null)
     try {
@@ -79,7 +85,7 @@ export default function AccessRequestsPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           decision,
-          decision_note: noteById[id]?.trim() || undefined,
+          decision_note: note || undefined,
         }),
       })
       const data = await res.json().catch(() => ({}))
@@ -166,7 +172,7 @@ export default function AccessRequestsPage() {
                       <div className="space-y-2 pt-1">
                         <div className="space-y-1">
                           <Label htmlFor={`note-${r.id}`} className="text-xs">
-                            Decision note (optional)
+                            Decision note (required to deny)
                           </Label>
                           <Textarea
                             id={`note-${r.id}`}
@@ -175,6 +181,7 @@ export default function AccessRequestsPage() {
                             onChange={(e) =>
                               setNoteById((prev) => ({ ...prev, [r.id]: e.target.value }))
                             }
+                            placeholder="Explain why you are denying (or approving)"
                           />
                         </div>
                         <div className="flex gap-2">
@@ -188,7 +195,7 @@ export default function AccessRequestsPage() {
                           <Button
                             size="sm"
                             variant="outline"
-                            disabled={!!busyId}
+                            disabled={!!busyId || !(noteById[r.id]?.trim())}
                             onClick={() => void decide(r.id, 'denied')}
                           >
                             Deny
