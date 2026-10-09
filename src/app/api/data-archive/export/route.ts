@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { PassThrough, Readable } from 'stream'
 import archiver from 'archiver'
-import { requirePermission } from '@/lib/requirePermission'
+import { requireDataArchiveAccess } from '@/lib/requireDataArchiveAccess'
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin'
 import { collectArchiveFiles, safeName, type ArchiveProjectRow } from '@/lib/dataArchive'
 import { resolveProjectCompletionDate } from '@/lib/projectStatus'
@@ -25,7 +25,7 @@ function monthFolder(completedAt: string | null): string {
 }
 
 export async function POST(req: Request) {
-  const perm = await requirePermission('data_archive_download')
+  const perm = await requireDataArchiveAccess()
   if (perm instanceof NextResponse) return perm
 
   // The archive export is a nationwide dataset served via admin client: out of Base ERR scope

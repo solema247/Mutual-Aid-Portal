@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAllowedFunctions } from '@/hooks/useAllowedFunctions'
+import { useCanvasSession } from '@/hooks/useCanvasSession'
+import { canAccessDataArchive } from '@/lib/dataArchiveAccess'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
@@ -105,14 +107,16 @@ function FileBadge({ label, present }: { label: string; present: boolean }) {
 export default function DataArchivePage() {
   const router = useRouter()
   const { can, isLoading: permissionsLoading } = useAllowedFunctions()
+  const { me: user, isLoading: sessionLoading } = useCanvasSession()
   const canViewPage = can('data_archive_view_page')
-  const canDownload = can('data_archive_download')
+  const canDownload = canAccessDataArchive(user?.role)
+  const accessLoading = permissionsLoading || sessionLoading
 
   useEffect(() => {
-    if (!permissionsLoading && !canViewPage) {
+    if (!accessLoading && !canViewPage) {
       router.replace('/err-portal')
     }
-  }, [permissionsLoading, canViewPage, router])
+  }, [accessLoading, canViewPage, router])
 
   const [dateFilterMode, setDateFilterMode] = useState<DateFilterMode>('month')
   const [month, setMonth] = useState<string>(previousMonth())
@@ -167,8 +171,8 @@ export default function DataArchivePage() {
   }, [dateFilterMode, month, fromDate, toDate, includeUndated])
 
   useEffect(() => {
-    if (!permissionsLoading && canViewPage) loadRows()
-  }, [permissionsLoading, canViewPage, loadRows])
+    if (!accessLoading && canViewPage) loadRows()
+  }, [accessLoading, canViewPage, loadRows])
 
   const grantOptions = useMemo(() => {
     const map = new Map<string, string>()
@@ -251,7 +255,7 @@ export default function DataArchivePage() {
     }
   }
 
-  if (permissionsLoading || !canViewPage) return null
+  if (accessLoading || !canViewPage) return null
 
   return (
     <div className="space-y-6">
