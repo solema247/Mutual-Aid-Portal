@@ -221,8 +221,8 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Server not configured' }, { status: 500 })
   }
 
-  // Own-org audit plane: admins only see events acted by session-org members.
-  // Support / superadmin / fallback (mode all) keep portal-wide visibility.
+  // Own-org audit plane: session-org members' events only.
+  // Support with a real org session is portal-wide; fallback (mode none) fails closed; superadmin is org-scoped.
   const routeClient = getSupabaseRouteClient()
   const orgScope = await getUserOrgScope(routeClient)
   const orgScoped = shouldScopeUsersToSessionOrg(orgScope, auth.user.role)

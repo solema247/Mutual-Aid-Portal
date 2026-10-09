@@ -15,7 +15,7 @@ import { roleBypassesMountGating } from '@/lib/canvas/types'
  * Canvas org data plane.
  * - host org (DB org_type `processor`): own organization_id only
  * - coordinator: data from access_grants (host orgs × types × states)
- * - fallback: mode 'all' (staging / pre-SQL)
+ * - fallback / unresolved canvas: mode 'none' (fail closed — show nothing)
  */
 export type UserOrgScope =
   | { mode: 'all'; organizationId: null }
@@ -36,7 +36,6 @@ export type UserOrgScope =
       grantsByOrgType: Record<string, Record<string, string[] | null>>
     }
 
-const ALL_SCOPE: UserOrgScope = { mode: 'all', organizationId: null }
 const NONE_SCOPE: UserOrgScope = { mode: 'none', organizationId: null }
 
 export async function getUserOrgScope(
@@ -66,9 +65,9 @@ export async function getUserOrgScope(
     bypassMountGating: roleBypassesMountGating(userRow.role),
   })
 
-  // Staging / pre-migration: do not break existing queries
+  // Missing canvas / no membership: fail closed (do not leak portal-wide data)
   if (canvas.is_fallback || !canvas.organization.id) {
-    return ALL_SCOPE
+    return NONE_SCOPE
   }
 
   // Coordinators only see processor data they've been granted
@@ -105,10 +104,9 @@ export async function getUserOrgScope(
 
 /**
  * Legacy activities_raw_import / historical_financial_reports are LoHub-owned.
- * Only default-owner org scope (or pre-canvas fallback mode all) may include them.
+ * Only default-owner org scope may include them (never fallback / none / disclosed).
  */
 export function orgScopeIncludesHistoricalImports(scope: UserOrgScope): boolean {
-  if (scope.mode === 'all') return true
   if (scope.mode === 'org') return scope.isDefaultOwner
   return false
 }
@@ -180,6 +178,10 @@ export function applyOrganizationIdFilter<
     }
     return query.in(column, ids)
   }
+  if (scope.mode === 'none') {
+    return query.eq(column, '00000000-0000-0000-0000-000000000000')
+  }
+  // mode 'all' — no org filter (reserved; not used for canvas fallback)
   return query
 }
 
@@ -337,14 +339,16 @@ export async function loadSessionOrgMemberUserIds(
 }
 
 /**
- * Support / superadmin / fallback (mode all) see portal-wide users & audit.
- * Admins in an org (or coordinator session org) are membership-scoped.
+ * Support with a real org session sees portal-wide users & audit.
+ * Unresolved canvas (mode none) fails closed for everyone, including support.
+ * Superadmin / admin / coordinator with a session org are membership-scoped.
  */
 export function shouldScopeUsersToSessionOrg(
   scope: UserOrgScope,
   callerRole: string
 ): boolean {
-  if (callerRole === 'support' || callerRole === 'superadmin') return false
+  if (scope.mode === 'none') return true
+  if (callerRole === 'support') return false
   return sessionOrganizationId(scope) != null
 }
 

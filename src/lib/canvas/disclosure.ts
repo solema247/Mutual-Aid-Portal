@@ -375,7 +375,7 @@ export async function listOversightCatalogForCoordinator(
 }
 
 export async function emitAccessRequestAudit(args: {
-  action: 'access_request.created' | 'access_request.decided'
+  action: 'access_request.created' | 'access_request.decided' | 'access_request.revoked'
   actorUserId: string
   requestId: string
   endpoint: string

@@ -5,9 +5,8 @@ import {
 } from '@/lib/canvas/types'
 
 /**
- * When canvas tables are missing (e.g. staging) or membership cannot be loaded,
- * keep the app usable with a generic shell — no org identity from code.
- * Branding/org come from the DB once canvas SQL is applied.
+ * When canvas tables are missing or membership cannot be loaded, fail closed:
+ * no org identity, no mounts. Callers must not treat this as portal-wide access.
  */
 function canvasUnavailableFallback(): ResolvedCanvasContext {
   return {
@@ -26,7 +25,7 @@ function canvasUnavailableFallback(): ResolvedCanvasContext {
       header_title: 'Portal',
       organization_id: '',
     },
-    mounted_modules: [...FULL_PORTAL_MOUNT_CODES],
+    mounted_modules: [],
     is_fallback: true,
   }
 }
